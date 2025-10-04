@@ -11,6 +11,7 @@ import 'package:appflowy/workspace/presentation/settings/pages/account/password/
 import 'package:appflowy/workspace/presentation/settings/pages/account/password/setup_password.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/setting_third_party_login.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -89,13 +90,36 @@ class AccountSignInOutButton extends StatelessWidget {
   }
 
   Future<void> _showSignInDialog(BuildContext context) async {
+    var hasHandledSuccess = false;
+    
     await showDialog(
       context: context,
-      builder: (context) => BlocProvider<SignInBloc>(
+      builder: (dialogContext) => BlocProvider<SignInBloc>(
         create: (context) => getIt<SignInBloc>(),
-        child: const FlowyDialog(
-          constraints: BoxConstraints(maxHeight: 485, maxWidth: 375),
-          child: _SignInDialogContent(),
+        child: BlocListener<SignInBloc, SignInState>(
+          listener: (listenerContext, state) async {
+            Log.info('[AccountSignInOut] BlocListener触发: isSubmitting=${state.isSubmitting}, successOrFail=${state.successOrFail}');
+            
+            // 避免重复处理
+            if (hasHandledSuccess) {
+              Log.info('[AccountSignInOut] 已处理过登录成功，忽略');
+              return;
+            }
+            
+            // 监听登录成功状态
+            final successOrFail = state.successOrFail;
+            if (successOrFail != null && successOrFail.isSuccess) {
+              Log.info('[AccountSignInOut] 检测到登录成功！');
+              hasHandledSuccess = true;
+              // 登录成功后，Deep Link Handler 会自动调用 runAppFlowy()
+              // 这里不需要做任何操作，只需等待应用重启
+              Log.info('[AccountSignInOut] 等待应用重启...');
+            }
+          },
+          child: const FlowyDialog(
+            constraints: BoxConstraints(maxHeight: 485, maxWidth: 375),
+            child: _SignInDialogContent(),
+          ),
         ),
       ),
     );

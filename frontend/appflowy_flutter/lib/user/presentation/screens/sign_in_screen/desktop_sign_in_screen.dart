@@ -119,7 +119,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                     ],
                   ),
                 ),
-              ),
+            ),
           ),
         );
       },

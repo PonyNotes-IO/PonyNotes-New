@@ -34,7 +34,19 @@ class FlowyRunnerContext {
   final Directory applicationDataDirectory;
 }
 
+// 防止 runAppFlowy 被并发调用的锁
+final _runAppFlowyLock = Lock();
+
 Future<void> runAppFlowy({bool isAnon = false}) async {
+  // 使用锁确保同一时间只有一个 runAppFlowy 在执行
+  return _runAppFlowyLock.synchronized(() async {
+    Log.info('🟢 runAppFlowy: isAnon: $isAnon, acquiring lock...');
+    await _runAppFlowyImpl(isAnon: isAnon);
+    Log.info('🟢 runAppFlowy: completed and releasing lock');
+  });
+}
+
+Future<void> _runAppFlowyImpl({bool isAnon = false}) async {
   Log.info('restart AppFlowy: isAnon: $isAnon');
 
   if (kReleaseMode) {

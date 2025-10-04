@@ -31,13 +31,28 @@ class Log {
     dynamic error,
     StackTrace? stackTrace,
   ]) {
-    // only forward logs to flutter in debug mode, otherwise log to rust to
-    // persist logs in the file system
+    // ALWAYS write to file through Rust (even in debug mode)
+    // Add Flutter log marker prefix for easy identification in logs
+    String levelPrefix = _getFlutterLevelPrefix(rustLevel);
+    String formattedMessage = _formatMessageWithStackTrace(msg, stackTrace);
+    String markedMessage = "$levelPrefix $formattedMessage";
+    rust_log(rustLevel, toNativeUtf8(markedMessage));
+    
+    // Also output to Flutter console in debug mode for convenience
     if (shared.enableFlutterLog && kDebugMode) {
       shared._logger.log(msg, logLevel: level, stackTrace: stackTrace);
-    } else {
-      String formattedMessage = _formatMessageWithStackTrace(msg, stackTrace);
-      rust_log(rustLevel, toNativeUtf8(formattedMessage));
+    }
+  }
+
+  // Get Flutter log level prefix with emoji markers
+  static String _getFlutterLevelPrefix(int rustLevel) {
+    switch (rustLevel) {
+      case 0: return '🦋[FLUTTER-INFO]🦋';
+      case 1: return '🦋[FLUTTER-DEBUG]🦋';
+      case 2: return '🦋[FLUTTER-TRACE]🦋';
+      case 3: return '🦋[FLUTTER-WARN]🦋';
+      case 4: return '🦋[FLUTTER-ERROR]🦋';
+      default: return '🦋[FLUTTER-UNKNOWN]🦋';
     }
   }
 

@@ -129,11 +129,14 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     DeepLinkResult result,
   ) async {
     final deepLinkState = result.state;
+    Log.info('[SignInBloc] DeepLink状态变化: $deepLinkState');
 
     switch (deepLinkState) {
       case DeepLinkState.none:
+        Log.info('[SignInBloc] DeepLink状态: none');
         break;
       case DeepLinkState.loading:
+        Log.info('[SignInBloc] DeepLink状态: loading');
         emit(
           state.copyWith(
             isSubmitting: true,
@@ -143,17 +146,27 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
           ),
         );
       case DeepLinkState.finish:
+        Log.info('[SignInBloc] DeepLink状态: finish');
+        Log.info('  - result.result: ${result.result}');
         final newState = result.result?.fold(
-          (s) => state.copyWith(
-            isSubmitting: false,
-            successOrFail: FlowyResult.success(s),
-          ),
-          (f) => _stateFromCode(f),
+          (s) {
+            Log.info('[SignInBloc] DeepLink成功，设置successOrFail: ${s.email}');
+            return state.copyWith(
+              isSubmitting: false,
+              successOrFail: FlowyResult.success(s),
+            );
+          },
+          (f) {
+            Log.info('[SignInBloc] DeepLink失败: ${f.msg}');
+            return _stateFromCode(f);
+          },
         );
         if (newState != null) {
+          Log.info('[SignInBloc] emit新状态，successOrFail: ${newState.successOrFail}');
           emit(newState);
         }
       case DeepLinkState.error:
+        Log.info('[SignInBloc] DeepLink状态: error');
         emit(state.copyWith(isSubmitting: false));
     }
   }
@@ -273,17 +286,28 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       passcode: passcode,
     );
 
+    Log.info('🟣 [SignInBloc] signInWithPasscode result: ${result.isSuccess ? "success" : "failure"}');
+
     emit(
       result.fold(
         (gotrueTokenResponse) {
+          Log.info('🟣 [SignInBloc] 验证码登录成功，传递token给DeepLink');
+          Log.info('🟣 [SignInBloc] access_token: ${gotrueTokenResponse.hasAccessToken() ? "present" : "missing"}');
+          Log.info('🟣 [SignInBloc] refresh_token: ${gotrueTokenResponse.hasRefreshToken() ? "present" : "missing"}');
+          
           getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
             gotrueTokenResponse,
           );
+          
+          Log.info('🟣 [SignInBloc] emit state with isSubmitting=false');
           return state.copyWith(
             isSubmitting: false,
           );
         },
-        (error) => _stateFromCode(error),
+        (error) {
+          Log.error('🟣 [SignInBloc] 验证码登录失败: ${error.msg}');
+          return _stateFromCode(error);
+        },
       ),
     );
   }

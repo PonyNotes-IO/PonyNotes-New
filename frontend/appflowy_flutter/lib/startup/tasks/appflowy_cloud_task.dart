@@ -94,41 +94,59 @@ class AppFlowyCloudDeepLink {
   Future<void> passGotrueTokenResponse(
     GotrueTokenResponsePB gotrueTokenResponse,
   ) async {
+    Log.info('🔵 [DeepLink] passGotrueTokenResponse called');
     final uri = _buildDeepLinkUri(gotrueTokenResponse);
+    Log.info('🔵 [DeepLink] built URI: ${uri?.toString() ?? "null"}');
     await _handleUri(uri);
+    Log.info('🔵 [DeepLink] _handleUri completed');
   }
 
   Future<void> _handleUri(
     Uri? uri,
   ) async {
+    Log.info('🔵 [DeepLink] _handleUri called with uri: ${uri?.toString() ?? "null"}');
     _stateNotifier?.value = DeepLinkResult(state: DeepLinkState.none);
 
     if (uri == null) {
-      Log.error('onDeepLinkError: Unexpected empty deep link callback');
+      Log.error('🔵 [DeepLink] onDeepLinkError: Unexpected empty deep link callback');
       _completer?.complete(FlowyResult.failure(AuthError.emptyDeepLink));
       completer = null;
       return;
     }
 
+    Log.info('🔵 [DeepLink] calling processDeepLink');
     await _deepLinkHandlerRegistry.processDeepLink(
       uri: uri,
       onStateChange: (handler, state) {
+        Log.info('🔵 [DeepLink] onStateChange: handler=${handler.runtimeType}, state=$state');
         // only handle the login deep link
         if (handler is LoginDeepLinkHandler) {
           _stateNotifier?.value = DeepLinkResult(state: state);
         }
       },
       onResult: (handler, result) async {
+        Log.info('🔵 [DeepLink] onResult: handler=${handler.runtimeType}, result type=${result.runtimeType}');
         if (handler is LoginDeepLinkHandler &&
             result is FlowyResult<UserProfilePB, FlowyError>) {
+          Log.info('🔵 [DeepLink] LoginDeepLinkHandler result received, _completer=${_completer == null ? "null" : "present"}');
+          
+          // 先更新 _stateNotifier，让 SignInBloc 能收到结果
+          Log.info('🔵 [DeepLink] Updating _stateNotifier with result');
+          _stateNotifier?.value = DeepLinkResult(
+            state: DeepLinkState.finish,
+            result: result,
+          );
+          
           // If there is no completer, runAppFlowy() will be called.
           if (_completer == null) {
+            Log.info('🔵 [DeepLink] No completer, handling result directly');
             await result.fold(
-              (_) async {
+              (userProfile) async {
+                Log.info('🔵 [DeepLink] Login success! User: ${userProfile.email}, calling runAppFlowy()');
                 await runAppFlowy();
               },
               (err) {
-                Log.error(err);
+                Log.error('🔵 [DeepLink] Login failed: ${err.msg}');
                 final context = AppGlobals.rootNavKey.currentState?.context;
                 if (context != null) {
                   showToastNotification(
@@ -138,6 +156,7 @@ class AppFlowyCloudDeepLink {
               },
             );
           } else {
+            Log.info('🔵 [DeepLink] Completer present, completing it');
             _completer?.complete(result);
             completer = null;
           }

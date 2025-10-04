@@ -295,12 +295,12 @@ pub extern "C" fn rust_log(level: i64, data: *const c_char) {
   };
 
   match level {
-    0 => info!("[Flutter]: {}", log_str),
-    1 => debug!("[Flutter]: {}", log_str),
-    2 => trace!("[Flutter]: {}", log_str),
-    3 => warn!("[Flutter]: {}", log_str),
-    4 => error!("[Flutter]: {}", log_str),
-    _ => warn!("[flutter error]: Unsupported log level: {}", level),
+    0 => info!("{}", log_str),
+    1 => debug!("{}", log_str),
+    2 => trace!("{}", log_str),
+    3 => warn!("{}", log_str),
+    4 => error!("{}", log_str),
+    _ => warn!("Unsupported log level: {}", level),
   }
 }
 
