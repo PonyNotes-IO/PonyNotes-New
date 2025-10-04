@@ -36,6 +36,8 @@ pub const CLOUT_TYPE_STR: &str = "APPFLOWY_CLOUD_ENV_CLOUD_TYPE";
 pub enum AuthenticatorType {
   Local = 0,
   AppFlowyCloud = 2,
+  AppFlowyCloudSelfHost = 3,
+  AppFlowyCloudDevelop = 4,
 }
 
 impl AuthenticatorType {
@@ -51,6 +53,8 @@ impl AuthenticatorType {
     match s {
       "0" => AuthenticatorType::Local,
       "2" => AuthenticatorType::AppFlowyCloud,
+      "3" => AuthenticatorType::AppFlowyCloudSelfHost,
+      "4" => AuthenticatorType::AppFlowyCloudDevelop,
       _ => AuthenticatorType::Local,
     }
   }
@@ -59,5 +63,21 @@ impl AuthenticatorType {
   pub fn from_env() -> Self {
     let cloud_type_str = std::env::var(CLOUT_TYPE_STR).unwrap_or_default();
     AuthenticatorType::from_str(&cloud_type_str)
+  }
+
+  /// Returns true if this is a cloud-based authenticator type.
+  /// AppFlowyCloud, AppFlowyCloudSelfHost, and AppFlowyCloudDevelop are all cloud types.
+  pub fn is_cloud(&self) -> bool {
+    matches!(
+      self,
+      AuthenticatorType::AppFlowyCloud
+        | AuthenticatorType::AppFlowyCloudSelfHost
+        | AuthenticatorType::AppFlowyCloudDevelop
+    )
+  }
+
+  /// Returns true if this is local authenticator type.
+  pub fn is_local(&self) -> bool {
+    matches!(self, AuthenticatorType::Local)
   }
 }

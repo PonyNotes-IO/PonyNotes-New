@@ -42,7 +42,9 @@ pub struct ServerProvider {
 pub fn current_server_type() -> AuthType {
   match AuthenticatorType::from_env() {
     AuthenticatorType::Local => AuthType::Local,
-    AuthenticatorType::AppFlowyCloud => AuthType::AppFlowyCloud,
+    AuthenticatorType::AppFlowyCloud
+    | AuthenticatorType::AppFlowyCloudSelfHost
+    | AuthenticatorType::AppFlowyCloudDevelop => AuthType::AppFlowyCloud,
   }
 }
 
