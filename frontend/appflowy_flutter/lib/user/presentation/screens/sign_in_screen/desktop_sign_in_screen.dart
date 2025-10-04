@@ -6,6 +6,7 @@ import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -48,9 +49,9 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
         }
       },
       child: BlocBuilder<SignInBloc, SignInState>(
-        builder: (context, state) {
-          return Scaffold(
-            appBar: _buildAppBar(),
+      builder: (context, state) {
+        return Scaffold(
+          appBar: _buildAppBar(),
             backgroundColor: Colors.white,
             body: Container(
               width: double.infinity,
@@ -107,7 +108,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                       _EmailLoginSection(),
 
                       // 第三方登录部分
-                      if (isAuthEnabled) ...[
+                if (isAuthEnabled) ...[
                         const VSpace(40),
                         const _CustomOrDivider(text: "其他登录方式"),
                         const VSpace(40),
@@ -119,9 +120,9 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                   ),
                 ),
               ),
-            ),
-          );
-        },
+          ),
+        );
+      },
       ),
     );
   }
@@ -346,8 +347,35 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
         );
 
     showToastNotification(
-      message: "验证链接已发送，请查看您的邮箱",
+      message: "验证码已发送，请查看您的邮箱",
       type: ToastificationType.success,
+    );
+
+    // 跳转到验证码输入页面
+    // 先保存 bloc 引用，避免在 builder 中访问旧 context
+    final signInBloc = context.read<SignInBloc>();
+    final navigator = Navigator.of(context);
+    navigator.push(
+      MaterialPageRoute(
+        builder: (context) => BlocProvider.value(
+          value: signInBloc,
+          child: ContinueWithMagicLinkOrPasscodePage(
+            email: input,
+            backToLogin: () {
+              navigator.pop();
+            },
+            onEnterPasscode: (code) {
+              // 使用验证码登录 - 直接使用保存的 bloc 引用
+              signInBloc.add(
+                SignInEvent.signInWithPasscode(
+                  email: input,
+                  passcode: code,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
