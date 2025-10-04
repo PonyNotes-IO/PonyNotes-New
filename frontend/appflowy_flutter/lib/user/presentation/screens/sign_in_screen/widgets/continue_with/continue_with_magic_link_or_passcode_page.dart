@@ -129,7 +129,9 @@ class _ContinueWithMagicLinkOrPasscodePageState
         // 监听 isSubmitting 的变化
         if (_isLoading && !state.isSubmitting) {
           // 从loading变为非loading状态
-          setState(() => _isLoading = false);
+          if (mounted) {
+            setState(() => _isLoading = false);
+          }
           
           // 检查是否有错误
           final successOrFail = state.successOrFail;
@@ -137,16 +139,18 @@ class _ContinueWithMagicLinkOrPasscodePageState
             // 有错误，显示错误信息
             successOrFail.fold(
               (_) {},
-              (error) => setState(() => _errorMessage = error.msg),
+              (error) {
+                if (mounted) {
+                  setState(() => _errorMessage = error.msg);
+                }
+              },
             );
           } else if (successOrFail != null && successOrFail.isSuccess) {
-            // 登录成功，关闭验证码页面
-            setState(() => _errorMessage = '');
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && Navigator.canPop(context)) {
-                Navigator.pop(context);
-              }
-            });
+            // 登录成功，Deep Link Handler 会自动调用 runAppFlowy() 重启应用
+            // 这里不需要做任何导航操作，只需清除错误信息
+            if (mounted) {
+              setState(() => _errorMessage = '');
+            }
           }
         }
         },
