@@ -67,12 +67,13 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 ),
               ),
               child: Center(
-                child: Container(
-                  width: 380,
-                  padding: const EdgeInsets.symmetric(vertical: 40),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
+                child: SingleChildScrollView(
+                  child: Container(
+                    width: 380,
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                       // Logo部分 - 小马笔记 Logo
                       const _PonyNotesLogo(
                         size: Size.square(80),
@@ -117,12 +118,13 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
 
                       const VSpace(40),
                     ],
+                    ),
                   ),
                 ),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
       ),
     );
   }
@@ -341,13 +343,23 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
       return;
     }
 
-    // 发送登录请求
+    // 区分邮箱和手机号，发送相应的验证码
+    final bool isEmail = _isValidEmail(input);
+    final bool isPhone = _isValidPhone(input);
+    
+    // 清理手机号格式（移除+86等国际区号）
+    final String emailOrPhone = isPhone ? _cleanPhoneNumber(input) : input;
+    
+    // 发送登录请求（GoTrue 会自动识别是邮箱还是手机号）
     context.read<SignInBloc>().add(
-          SignInEvent.signInWithMagicLink(email: input),
+          SignInEvent.signInWithMagicLink(email: emailOrPhone),
         );
 
+    // 根据输入类型显示不同的提示信息
     showToastNotification(
-      message: "验证码已发送，请查看您的邮箱",
+      message: isEmail 
+          ? "验证码已发送，请查看您的邮箱" 
+          : "验证码已发送，请查看您的手机短信",
       type: ToastificationType.success,
     );
 
@@ -360,7 +372,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
         builder: (context) => BlocProvider.value(
           value: signInBloc,
           child: ContinueWithMagicLinkOrPasscodePage(
-            email: input,
+            email: emailOrPhone,
             backToLogin: () {
               navigator.pop();
             },
@@ -368,7 +380,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
               // 使用验证码登录 - 直接使用保存的 bloc 引用
               signInBloc.add(
                 SignInEvent.signInWithPasscode(
-                  email: input,
+                  email: emailOrPhone,
                   passcode: code,
                 ),
               );
@@ -377,6 +389,17 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
         ),
       ),
     );
+  }
+
+  // 清理手机号格式，移除国际区号
+  String _cleanPhoneNumber(String phone) {
+    String cleanPhone = phone.trim();
+    if (cleanPhone.startsWith('+86')) {
+      cleanPhone = cleanPhone.substring(3);
+    } else if (cleanPhone.startsWith('86') && cleanPhone.length == 13) {
+      cleanPhone = cleanPhone.substring(2);
+    }
+    return cleanPhone;
   }
 
   @override

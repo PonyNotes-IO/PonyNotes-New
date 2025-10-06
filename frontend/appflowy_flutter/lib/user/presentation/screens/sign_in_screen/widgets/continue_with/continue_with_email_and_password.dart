@@ -336,16 +336,16 @@ class _ContinueWithEmailAndPasswordState
     });
 
     try {
-      // TODO: 手机号登录功能需要后端支持
-      // 临时处理：提示用户使用邮箱登录
-      if (mounted) {
-        emailKey.currentState?.syncError(
-          errorText: '手机号登录功能暂未开启，请使用邮箱登录',
-        );
-      }
+      // 发送手机号验证码（GoTrue 会自动识别手机号）
+      final input = phone;
+      context
+          .read<SignInBloc>()
+          .add(SignInEvent.signInWithMagicLink(email: input));
+      _pushContinueWithMagicLinkOrPasscodePage(context, input);
     } catch (e) {
+      // 处理异常
       if (mounted) {
-        emailKey.currentState?.syncError(errorText: '发送短信验证码失败: $e');
+        _showUserCheckFailedDialog(context, phone, e.toString());
       }
     } finally {
       if (mounted) {

@@ -109,6 +109,7 @@ diesel::table! {
         email -> Text,
         auth_type -> Integer,
         updated_at -> BigInt,
+        phone_number -> Nullable<Text>,
     }
 }
 

@@ -22,6 +22,7 @@ pub struct UserTable {
   pub(crate) email: String,
   pub(crate) auth_type: i32,
   pub(crate) updated_at: i64,
+  pub(crate) phone_number: Option<String>,
 }
 
 #[allow(deprecated)]
@@ -37,6 +38,7 @@ impl From<(UserProfile, AuthType)> for UserTable {
       email: user_profile.email,
       auth_type: auth_type as i32,
       updated_at: user_profile.updated_at,
+      phone_number: None,
     }
   }
 }
