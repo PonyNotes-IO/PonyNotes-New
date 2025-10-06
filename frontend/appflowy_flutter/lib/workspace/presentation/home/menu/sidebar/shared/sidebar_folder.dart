@@ -1,12 +1,23 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favorite_folder.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/folder/_section_folder.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ai_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_calendar_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_home_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_favorite_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_my_team_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_share_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_publish_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_template_new_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_inbox_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ioi_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -32,18 +43,61 @@ class SidebarFolder extends StatelessWidget {
         return Column(
           children: [
             const VSpace(4.0),
+            // home button
+            const SidebarHomeButton(),
+            // AI button
+            const VSpace(4.0),
+            const SidebarAiButton(),
+            // calendar button
+            const VSpace(4.0),
+            const SidebarCalendarButton(),
+            // inbox button
+            const VSpace(4.0),
+            const SidebarInboxButton(),
             // favorite
-            BlocBuilder<FavoriteBloc, FavoriteState>(
+            const VSpace(4.0),
+            const SidebarFavoriteButton(),
+            // 我的空间 (原个人的功能)
+            const VSpace(4.0),
+            BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
               builder: (context, state) {
-                if (state.views.isEmpty) {
-                  return const SizedBox.shrink();
+                // 在非协作工作空间模式下显示个人空间（重命名为我的空间）
+                final isCollaborativeWorkspace =
+                    context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
+                
+                if (!isCollaborativeWorkspace) {
+                  return PersonalSectionFolder(
+                    views: state.section.publicViews,
+                  );
                 }
-                return FavoriteFolder(
-                  views: state.views.map((e) => e.item).toList(),
-                );
+                return const SizedBox.shrink();
               },
             ),
-            // public or private
+            // 我的团队
+            const VSpace(4.0),
+            const SidebarMyTeamButton(),
+            // IOI科技
+            const VSpace(4.0),
+            const SidebarIOIButton(),
+            // 共享
+            const VSpace(4.0),
+            const SidebarShareButton(),
+            // 发布
+            const VSpace(4.0),
+            const SidebarPublishButton(),
+            // 文件库
+            const VSpace(4.0),
+            const SidebarFileLibraryButton(),
+            // 模版
+            const VSpace(4.0),
+            const SidebarTemplateNewButton(),
+            // 回收站
+            const VSpace(4.0),
+            const SidebarTrashItem(),
+            // 设置
+            const VSpace(4.0),
+            const SidebarSettingsButton(),
+            // public or private (只在协作工作空间显示)
             BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
               builder: (context, state) {
                 // only show public and private section if the workspace is collaborative and not local
@@ -64,13 +118,7 @@ class SidebarFolder extends StatelessWidget {
                             views: state.section.privateViews,
                           ),
                         ]
-                      : [
-                          // personal
-                          const VSpace(sectionPadding),
-                          PersonalSectionFolder(
-                            views: state.section.publicViews,
-                          ),
-                        ],
+                      : [], // 非协作工作空间不显示底部的个人空间（已移至上方）
                 );
               },
             ),
@@ -105,9 +153,9 @@ class PublicSectionFolder extends SectionFolder {
 class PersonalSectionFolder extends SectionFolder {
   PersonalSectionFolder({super.key, required super.views})
       : super(
-          title: LocaleKeys.sideBar_personal.tr(),
+          title: "我的空间", // 直接使用中文文本
           spaceType: FolderSpaceType.public,
-          expandButtonTooltip: LocaleKeys.sideBar_clickToHidePersonal.tr(),
-          addButtonTooltip: LocaleKeys.sideBar_addAPage.tr(),
+          expandButtonTooltip: "点击隐藏我的空间", // 直接使用中文文本
+          addButtonTooltip: "添加页面到我的空间", // 直接使用中文文本
         );
 }
