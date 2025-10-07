@@ -45,7 +45,7 @@ class SidebarAiButton extends StatelessWidget {
     try {
       // 创建独立的AI聊天插件，不依赖于工作空间
       final standaloneAiChatPlugin = makePlugin(
-        pluginType: PluginType.chat,
+        pluginType: PluginType.standaloneAiChat,
         data: null, // 独立插件不需要数据
       );
 
