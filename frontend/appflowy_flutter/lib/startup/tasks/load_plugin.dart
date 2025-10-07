@@ -9,6 +9,7 @@ import 'package:appflowy/plugins/blank/blank.dart';
 import 'package:appflowy/plugins/document/document.dart';
 import 'package:appflowy/plugins/trash/trash.dart';
 import 'package:appflowy/plugins/import_page/import_page_plugin.dart';
+import 'package:appflowy/plugins/homepage/homepage.dart';
 
 class PluginLoadTask extends LaunchTask {
   const PluginLoadTask();
@@ -43,6 +44,10 @@ class PluginLoadTask extends LaunchTask {
     );
     registerPlugin(
       builder: ImportPagePluginBuilder(),
+    );
+    registerPlugin(
+      builder: HomePagePluginBuilder(),
+      config: HomePagePluginConfig(),
     );
   }
 }
