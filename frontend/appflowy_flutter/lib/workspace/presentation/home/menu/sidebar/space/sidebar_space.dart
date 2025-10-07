@@ -1,13 +1,11 @@
-import 'package:appflowy/features/shared_section/presentation/shared_section.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
+import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favorite_folder.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_folder.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/create_space_popup.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_space_header.dart';
@@ -48,7 +46,6 @@ class SidebarSpace extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentWorkspace =
         context.watch<UserWorkspaceBloc>().state.currentWorkspace;
-    final currentWorkspaceId = currentWorkspace?.workspaceId ?? '';
 
     // only show spaces if the user role is member or owner
     final currentUserRole = currentWorkspace?.role;
@@ -79,6 +76,18 @@ class SidebarSpace extends StatelessWidget {
             // favorite button
             const VSpace(4.0),
             const SidebarFavoriteButton(),
+            
+            // 我的空间 (原个人的功能，已移至上方合适位置)
+            const VSpace(4.0),
+            BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
+              builder: (context, state) {
+                // 始终显示我的空间（不管是否协作工作空间）
+                return PersonalSectionFolder(
+                  views: state.section.publicViews,
+                );
+              },
+            ),
+            
             // 我的团队
             const VSpace(4.0),
             const SidebarMyTeamButton(),
@@ -103,36 +112,11 @@ class SidebarSpace extends StatelessWidget {
             // 设置
             const VSpace(4.0),
             const SidebarSettingsButton(),
-            
-            const VSpace(16.0),
-            
-            // favorite folder (AppFlowy原有的)
-            BlocBuilder<FavoriteBloc, FavoriteState>(
-              builder: (context, state) {
-                if (state.views.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
-                  child: FavoriteFolder(
-                    views: state.views.map((e) => e.item).toList(),
-                  ),
-                );
-              },
-            ),
-
-            // shared
-            if (FeatureFlag.sharedSection.isOn) ...[
-              SharedSection(
-                key: ValueKey(currentWorkspaceId),
-                workspaceId: currentWorkspaceId,
-              ),
-            ],
 
             // spaces
             if (shouldShowSpaces) ...[
               // spaces
+              const VSpace(16.0),
               const _Space(),
             ],
 

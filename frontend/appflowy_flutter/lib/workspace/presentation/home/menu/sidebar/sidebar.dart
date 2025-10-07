@@ -26,11 +26,9 @@ import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/command_palette/command_palette.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/footer/sidebar_footer.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/footer/sidebar_upgrade_application_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/header/sidebar_top_menu.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_folder.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_new_page_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_space.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_migration.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_menu.dart';
@@ -367,16 +365,6 @@ class _SidebarState extends State<_Sidebar> {
               ),
             ],
 
-            if (context
-                    .read<UserWorkspaceBloc>()
-                    .state
-                    .currentWorkspace
-                    ?.role !=
-                AFRolePB.Guest) ...[
-              const VSpace(6.0),
-              // new page button
-              const SidebarNewPageButton(),
-            ],
 
             // scrollable document list
             const VSpace(12.0),
@@ -394,23 +382,11 @@ class _SidebarState extends State<_Sidebar> {
 
             _renderFolderOrSpace(menuHorizontalInset),
 
-            // trash
-            Padding(
-              padding: menuHorizontalInset +
-                  const EdgeInsets.symmetric(horizontal: 4.0),
-              child: const FlowyDivider(),
-            ),
             const VSpace(8),
 
             _renderUpgradeSpaceButton(menuHorizontalInset),
             _buildUpgradeApplicationButton(menuHorizontalInset),
 
-            const VSpace(8),
-            Padding(
-              padding: menuHorizontalInset +
-                  const EdgeInsets.symmetric(horizontal: 4.0),
-              child: const SidebarFooter(),
-            ),
             const VSpace(14),
           ],
         ),

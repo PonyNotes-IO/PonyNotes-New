@@ -30,7 +30,7 @@ class SidebarHomeButton extends StatelessWidget {
             ),
             borderRadius: theme.borderRadius.s,
             iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.dashboard_s,
+              FlowySvgs.icon_home_s,
               size: const Size.square(16.0),
             ),
           ),
@@ -44,7 +44,7 @@ class SidebarHomeButton extends StatelessWidget {
     try {
       // 创建主页插件
       final homePlugin = makePlugin(
-        pluginType: PluginType.blank,
+        pluginType: PluginType.homepage,
         data: null,
       );
 

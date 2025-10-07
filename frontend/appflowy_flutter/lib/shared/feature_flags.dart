@@ -103,7 +103,7 @@ enum FeatureFlag {
       // release this feature in version 0.5.9
       FeatureFlag.search,
       // release this feature in version 0.5.6
-      FeatureFlag.collaborativeWorkspace,
+      // FeatureFlag.collaborativeWorkspace, // 禁用协作工作空间功能
       FeatureFlag.membersSettings,
       // release this feature in version 0.5.4
       FeatureFlag.syncDatabase,
@@ -124,9 +124,10 @@ enum FeatureFlag {
       case FeatureFlag.syncDatabase:
       case FeatureFlag.spaceDesign:
       case FeatureFlag.inlineSubPageMention:
-      case FeatureFlag.collaborativeWorkspace:
+      // case FeatureFlag.collaborativeWorkspace: // 禁用协作工作空间功能
       case FeatureFlag.membersSettings:
         return true;
+      case FeatureFlag.collaborativeWorkspace: // 改为默认关闭
       case FeatureFlag.sharedSection:
       case FeatureFlag.unknown:
         return false;

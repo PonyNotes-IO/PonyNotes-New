@@ -13,10 +13,10 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_my_team_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_share_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_publish_button.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_template_new_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_inbox_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ioi_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_template_new_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_backend/log.dart';
@@ -91,7 +91,7 @@ class SidebarFolder extends StatelessWidget {
             // 文件库
             const VSpace(4.0),
             const SidebarFileLibraryButton(),
-            // 模版
+            // 模板
             const VSpace(4.0),
             const SidebarTemplateNewButton(),
             // 回收站

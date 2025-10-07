@@ -3,8 +3,11 @@ import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy/plugins/homepage/widgets/todo_plan_section.dart';
+import 'package:appflowy/plugins/standalone_ai_chat/presentation/widgets/ai_input_area.dart';
+import 'package:appflowy/plugins/standalone_ai_chat/models/chat_image.dart';
 import 'package:appflowy/core/config/ai_config.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -103,6 +106,38 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 处理来自AIInputArea的消息发送
+  void _handleMessageSent(String message, AIProvider? provider, List<ChatImage>? images) {
+    if (message.isEmpty) return;
+    
+    // 创建独立的AI聊天插件
+    try {
+      final standaloneAiChatPlugin = makePlugin(
+        pluginType: PluginType.standaloneAiChat,
+        data: {
+          'initialText': message,
+          'selectedModelName': provider?.name, // 传递选择的模型名称
+          'initialImages': images, // 传递选择的图片
+        },
+      );
+
+      // 在新标签页中打开独立AI聊天
+      getIt<TabsBloc>().add(
+        TabsEvent.openPlugin(
+          plugin: standaloneAiChatPlugin,
+        ),
+      );
+    } catch (e) {
+      // 显示错误消息
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('打开AI聊天时发生错误: $e'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -117,7 +152,7 @@ class _HomePageState extends State<HomePage> {
       greeting = "晚上好";
     }
 
-    final userName = widget.userProfile?.name ?? "用户";
+    final userName = widget.userProfile?.name ?? "燕萍";
 
     return Container(
       color: Theme.of(context).colorScheme.surface,
@@ -135,26 +170,36 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.only(bottom: 16.0),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.chat_bubble_outline,
-                    size: 22,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  Image.asset(
+                    'assets/images/home_ai_icon.png',
+                    width: 22,
+                    height: 18,
                   ),
                   const SizedBox(width: 8.0),
-                  Text(
+                  const Text(
                     "问AI",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      color: Color(0xFF636363),
                     ),
                   ),
                 ],
               ),
             ),
 
-            // 问AI区域 - 简化版本，点击跳转到AI聊天
-            _buildSimpleAIArea(),
+            // 问AI区域 - 复用AIInputArea组件，为主页定制更宽的显示
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return AIInputArea(
+                  onMessageSent: _handleMessageSent,
+                  customWidth: constraints.maxWidth, // 使用几乎全部可用宽度，只留8px左右边距
+                  customMargin: const EdgeInsets.symmetric(horizontal: 0.0), // 最小边距
+                  customToolbarPadding: const EdgeInsets.fromLTRB(20, 15, 20, 13), // 左右边距各20px
+                  customToolbarWidth: constraints.maxWidth - 40, // 工具栏宽度 = 容器宽度 - 左右边距(40)
+                );
+              },
+            ),
             const SizedBox(height: 50),
 
             // 最近访问标题
@@ -169,12 +214,12 @@ class _HomePageState extends State<HomePage> {
                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   ),
                   const SizedBox(width: 8.0),
-                  Text(
+                  const Text(
                     "最近访问",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      color: Color(0xFF636363),
                     ),
                   ),
                 ],
@@ -197,12 +242,12 @@ class _HomePageState extends State<HomePage> {
                     color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   ),
                   const SizedBox(width: 8.0),
-                  Text(
+                  const Text(
                     "待办计划",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      color: Color(0xFF636363),
                     ),
                   ),
                 ],
@@ -233,12 +278,14 @@ class _HomePageState extends State<HomePage> {
                 color: const Color(0xFFECECEC),
                 width: 0.59,
               ),
-              color: Theme.of(context).colorScheme.primaryContainer,
             ),
-            child: Icon(
-              Icons.person,
-              size: 32,
-              color: Theme.of(context).colorScheme.onPrimaryContainer,
+            child: ClipOval(
+              child: Image.asset(
+                'assets/images/home_avatar.png',
+                width: 60,
+                height: 60,
+                fit: BoxFit.cover,
+              ),
             ),
           ),
           const SizedBox(width: 20),
@@ -256,71 +303,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildSimpleAIArea() {
-    return InkWell(
-      onTap: _openAIChat,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 24,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                "在小马笔记可以问或找到每一件事…",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                ),
-              ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 16,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _openAIChat() {
-    try {
-      // 打开AI聊天页面
-      final aiChatPlugin = makePlugin(
-        pluginType: PluginType.chat,
-        data: null,
-      );
-
-      context.read<TabsBloc>().add(
-        TabsEvent.openPlugin(plugin: aiChatPlugin),
-      );
-    } catch (e) {
-      debugPrint('打开AI聊天失败: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('打开AI聊天失败: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    }
-  }
 
   Widget _buildRecentSection() {
     return BlocBuilder<RecentViewsBloc, RecentViewsState>(
