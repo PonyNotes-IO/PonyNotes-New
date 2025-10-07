@@ -89,7 +89,12 @@ class _NotificationButtonState extends State<NotificationButton> {
                       : null,
                   opacity: 0.7,
                 ),
-                onTap: onTap,
+                onTap: () {
+                  // 显示通知面板而不是折叠
+                  context.read<HomeSettingBloc>().add(
+                    HomeSettingEvent.collapseNotificationPanel(),
+                  );
+                },
               ),
             ),
           ),

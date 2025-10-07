@@ -1838,8 +1838,28 @@
     "emptyTitle": "都处理了！",
     "emptyBody": "没有待处理的通知或操作。享受平静。",
     "tabs": {
-      "inbox": "收件箱",
-      "upcoming": "即将推出"
+      "mention": "@提及通知",
+      "clip": "剪藏通知",
+      "reminder": "提醒通知",
+      "system": "系统通知"
+    },
+    "empty": {
+      "mention": {
+        "title": "暂无@提及通知",
+        "body": "当有人@提及您时，通知将显示在此处。"
+      },
+      "clip": {
+        "title": "暂无剪藏通知",
+        "body": "当您剪藏内容时，通知将显示在此处。"
+      },
+      "reminder": {
+        "title": "暂无提醒通知",
+        "body": "当您设置提醒时，通知将显示在此处。"
+      },
+      "system": {
+        "title": "暂无系统通知",
+        "body": "系统相关的通知将显示在此处。"
+      }
     },
     "actions": {
       "markAllRead": "标记为已读",

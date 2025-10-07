@@ -423,6 +423,7 @@ class _SidebarState extends State<_Sidebar> {
     final workspaceState = context.read<UserWorkspaceBloc>().state;
 
     if (!spaceState.isInitialized) {
+      Log.debug('SpaceBloc not initialized, showing empty widget');
       return const SizedBox.shrink();
     }
 
@@ -436,9 +437,18 @@ class _SidebarState extends State<_Sidebar> {
       context.read<SpaceBloc>().add(const SpaceEvent.didReceiveSpaceUpdate());
     }
 
-    return !containsSpace ||
-            spaceState.spaces.isEmpty ||
-            !workspaceState.isCollabWorkspaceOn
+    final shouldShowFolder = !containsSpace ||
+        spaceState.spaces.isEmpty ||
+        !workspaceState.isCollabWorkspaceOn;
+    
+    Log.debug(
+      'Sidebar render decision: containsSpace=$containsSpace, '
+      'spaces.length=${spaceState.spaces.length}, '
+      'isCollabWorkspaceOn=${workspaceState.isCollabWorkspaceOn}, '
+      'shouldShowFolder=$shouldShowFolder',
+    );
+
+    return shouldShowFolder
         ? Expanded(
             child: Padding(
               padding: menuHorizontalInset - const EdgeInsets.only(right: 6),

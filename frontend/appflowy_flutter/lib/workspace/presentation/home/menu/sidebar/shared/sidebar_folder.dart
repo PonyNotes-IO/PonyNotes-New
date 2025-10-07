@@ -19,6 +19,7 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ioi_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -36,10 +37,12 @@ class SidebarFolder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Log.debug('SidebarFolder.build() called');
     const sectionPadding = 16.0;
     return ValueListenableBuilder(
       valueListenable: getIt<MenuSharedState>().notifier,
       builder: (context, value, child) {
+        Log.debug('SidebarFolder building menu items');
         return Column(
           children: [
             const VSpace(4.0),

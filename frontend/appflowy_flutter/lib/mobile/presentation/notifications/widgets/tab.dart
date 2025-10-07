@@ -82,19 +82,28 @@ class _NotificationTabState extends State<NotificationTab>
 
   List<ReminderPB> _filterReminders(List<ReminderPB> reminders) {
     switch (widget.tabType) {
-      case NotificationTabType.inbox:
+      case NotificationTabType.mention:
+        // TODO: Filter by mention type when backend support is available
         return reminders.reversed
             .where((reminder) => !reminder.isArchived)
             .toList()
             .unique((reminder) => reminder.id);
-      case NotificationTabType.archive:
+      case NotificationTabType.clip:
+        // TODO: Filter by clip type when backend support is available
         return reminders.reversed
-            .where((reminder) => reminder.isArchived)
+            .where((reminder) => !reminder.isArchived)
             .toList()
             .unique((reminder) => reminder.id);
-      case NotificationTabType.unread:
+      case NotificationTabType.reminder:
+        // TODO: Filter by reminder type when backend support is available
         return reminders.reversed
-            .where((reminder) => !reminder.isRead)
+            .where((reminder) => !reminder.isArchived)
+            .toList()
+            .unique((reminder) => reminder.id);
+      case NotificationTabType.system:
+        // TODO: Filter by system type when backend support is available
+        return reminders.reversed
+            .where((reminder) => !reminder.isArchived)
             .toList()
             .unique((reminder) => reminder.id);
     }

@@ -1242,6 +1242,26 @@
         "label": "Show notifications icon",
         "hint": "Toggle off to hide the notification icon in the sidebar."
       },
+      "mentionNotifications": {
+        "label": "Mention notifications",
+        "hint": "Receive notifications when you are mentioned in comments or discussions."
+      },
+      "pendingNotifications": {
+        "label": "Pending notifications",
+        "hint": "Get notified about pending tasks and assignments."
+      },
+      "permissionChangeNotifications": {
+        "label": "Permission change notifications",
+        "hint": "Receive notifications when your permissions are changed."
+      },
+      "teamJoinNotifications": {
+        "label": "Team join notifications",
+        "hint": "Get notified when new members join your team."
+      },
+      "clipNotifications": {
+        "label": "Clip notifications",
+        "hint": "Receive notifications about clip activities and updates."
+      },
       "archiveNotifications": {
         "allSuccess": "Archived all notifications successfully",
         "success": "Archived notification successfully"
@@ -2519,8 +2539,28 @@
     "emptyTitle": "All caught up!",
     "emptyBody": "No pending notifications or actions. Enjoy the calm.",
     "tabs": {
-      "inbox": "Inbox",
-      "upcoming": "Upcoming"
+      "mention": "@Mention Notifications",
+      "clip": "Clip Notifications",
+      "reminder": "Reminder Notifications",
+      "system": "System Notifications"
+    },
+    "empty": {
+      "mention": {
+        "title": "No @Mention Notifications",
+        "body": "When someone @mentions you, notifications will appear here."
+      },
+      "clip": {
+        "title": "No Clip Notifications",
+        "body": "When you clip content, notifications will appear here."
+      },
+      "reminder": {
+        "title": "No Reminder Notifications",
+        "body": "When you set reminders, notifications will appear here."
+      },
+      "system": {
+        "title": "No System Notifications",
+        "body": "System-related notifications will appear here."
+      }
     },
     "actions": {
       "markAllRead": "Mark all as read",

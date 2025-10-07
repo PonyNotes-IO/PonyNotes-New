@@ -16,20 +16,24 @@ class EmptyNotification extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = switch (type) {
-      NotificationTabType.inbox =>
-        LocaleKeys.settings_notifications_emptyInbox_title.tr(),
-      NotificationTabType.archive =>
-        LocaleKeys.settings_notifications_emptyArchived_title.tr(),
-      NotificationTabType.unread =>
-        LocaleKeys.settings_notifications_emptyUnread_title.tr(),
+      NotificationTabType.mention =>
+        LocaleKeys.notificationHub_empty_mention_title.tr(),
+      NotificationTabType.clip =>
+        LocaleKeys.notificationHub_empty_clip_title.tr(),
+      NotificationTabType.reminder =>
+        LocaleKeys.notificationHub_empty_reminder_title.tr(),
+      NotificationTabType.system =>
+        LocaleKeys.notificationHub_empty_system_title.tr(),
     };
     final desc = switch (type) {
-      NotificationTabType.inbox =>
-        LocaleKeys.settings_notifications_emptyInbox_description.tr(),
-      NotificationTabType.archive =>
-        LocaleKeys.settings_notifications_emptyArchived_description.tr(),
-      NotificationTabType.unread =>
-        LocaleKeys.settings_notifications_emptyUnread_description.tr(),
+      NotificationTabType.mention =>
+        LocaleKeys.notificationHub_empty_mention_body.tr(),
+      NotificationTabType.clip =>
+        LocaleKeys.notificationHub_empty_clip_body.tr(),
+      NotificationTabType.reminder =>
+        LocaleKeys.notificationHub_empty_reminder_body.tr(),
+      NotificationTabType.system =>
+        LocaleKeys.notificationHub_empty_system_body.tr(),
     };
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,

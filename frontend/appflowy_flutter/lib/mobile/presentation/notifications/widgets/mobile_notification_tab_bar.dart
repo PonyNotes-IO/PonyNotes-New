@@ -58,11 +58,13 @@ class _MobileNotificationTabBarState extends State<MobileNotificationTabBar> {
               isScrollable: true,
               tabs: [
                 FlowyTabItem(
-                  label: LocaleKeys.notificationHub_tabs_inbox.tr(),
+                  // Using 'All' as a placeholder since this old version is no longer used
+                  label: LocaleKeys.notificationHub_actions_showAll.tr(),
                   isSelected: widget.controller.index == 0,
                 ),
                 FlowyTabItem(
-                  label: LocaleKeys.notificationHub_tabs_upcoming.tr(),
+                  // Using 'Unread' as a placeholder since this old version is no longer used
+                  label: LocaleKeys.notificationHub_actions_showUnreads.tr(),
                   isSelected: widget.controller.index == 1,
                 ),
               ],

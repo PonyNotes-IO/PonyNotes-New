@@ -11,6 +11,19 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/favorites/favo
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/create_space_popup.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_space_header.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ai_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_calendar_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_home_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_favorite_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_my_team_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_share_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_publish_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_template_new_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_inbox_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ioi_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -51,7 +64,49 @@ class SidebarSpace extends StatelessWidget {
         child: Column(
           children: [
             const VSpace(4.0),
-            // favorite
+            // PonyNotes 主菜单按钮
+            // home button
+            const SidebarHomeButton(),
+            // AI button
+            const VSpace(4.0),
+            const SidebarAiButton(),
+            // calendar button
+            const VSpace(4.0),
+            const SidebarCalendarButton(),
+            // inbox button
+            const VSpace(4.0),
+            const SidebarInboxButton(),
+            // favorite button
+            const VSpace(4.0),
+            const SidebarFavoriteButton(),
+            // 我的团队
+            const VSpace(4.0),
+            const SidebarMyTeamButton(),
+            // IOI科技
+            const VSpace(4.0),
+            const SidebarIOIButton(),
+            // 共享
+            const VSpace(4.0),
+            const SidebarShareButton(),
+            // 发布
+            const VSpace(4.0),
+            const SidebarPublishButton(),
+            // 文件库
+            const VSpace(4.0),
+            const SidebarFileLibraryButton(),
+            // 模版
+            const VSpace(4.0),
+            const SidebarTemplateNewButton(),
+            // 回收站
+            const VSpace(4.0),
+            const SidebarTrashItem(),
+            // 设置
+            const VSpace(4.0),
+            const SidebarSettingsButton(),
+            
+            const VSpace(16.0),
+            
+            // favorite folder (AppFlowy原有的)
             BlocBuilder<FavoriteBloc, FavoriteState>(
               builder: (context, state) {
                 if (state.views.isEmpty) {

@@ -30,7 +30,7 @@ class _SidebarUploadButtonState extends State<SidebarUploadButton> {
     try {
       // 创建导入页面插件
       final importPagePlugin = makePlugin(
-        pluginType: PluginType.document,
+        pluginType: PluginType.importPage,
         data: null,
       );
 

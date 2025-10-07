@@ -114,6 +114,10 @@ dependencies:
   package_info_plus: ^8.0.2
   path: ^1.8.3
   path_provider: ^2.0.15
+  pdf: ^3.11.1
+  syncfusion_flutter_pdf: ^27.2.5
+  pdfx: 2.6.0
+  flutter_markdown: ^0.6.18
   percent_indicator: 4.2.3
   permission_handler: ^11.3.1
   protobuf: ^3.1.0
