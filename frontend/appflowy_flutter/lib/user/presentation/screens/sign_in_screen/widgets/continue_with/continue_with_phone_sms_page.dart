@@ -252,18 +252,7 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
               color: const Color(0xFFEBEBEB),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: KeyboardListener(
-              focusNode: FocusNode(),
-              onKeyEvent: (KeyEvent event) {
-                if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
-                  if (_codeControllers[index].text.isEmpty && index > 0) {
-                    // 如果当前输入框为空且不是第一个，则跳到前一个输入框并清空
-                    _codeFocusNodes[index - 1].requestFocus();
-                    _codeControllers[index - 1].clear();
-                  }
-                }
-              },
-              child: TextField(
+            child: TextField(
                 controller: _codeControllers[index],
                 focusNode: _codeFocusNodes[index],
                 textAlign: TextAlign.center,
@@ -299,6 +288,12 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
                   setState(() => _errorMessage = '');
                 }
                 
+                if (value.isEmpty && index > 0) {
+                  // 如果当前输入框被清空且不是第一个，则跳到前一个输入框
+                  _codeFocusNodes[index - 1].requestFocus();
+                  return;
+                }
+                
                 // 只保留最后一个字符
                 if (value.length > 1) {
                   _codeControllers[index].text = value.substring(value.length - 1);
@@ -328,7 +323,6 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
               },
               ),
             ),
-          ),
         );
       }),
     );

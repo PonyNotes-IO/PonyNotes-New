@@ -24,7 +24,7 @@ class SidebarInboxButton extends StatelessWidget {
         ),
         borderRadius: theme.borderRadius.s,
         iconBuilder: (context, isHover, disabled) => FlowySvg(
-          FlowySvgs.icon_inbox_s,
+          FlowySvgs.messages_s,
           size: const Size.square(16.0),
           color: Theme.of(context).textTheme.bodyMedium?.color,
         ),

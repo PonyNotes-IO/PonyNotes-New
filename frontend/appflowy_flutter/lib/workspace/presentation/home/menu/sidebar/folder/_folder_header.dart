@@ -69,7 +69,7 @@ class _FolderHeaderState extends State<FolderHeader> {
               // 添加文件夹图标（只为"我的空间"显示）
               if (widget.title == "我的空间") ...[
                 FlowySvg(
-                  FlowySvgs.icon_folder_s,
+                  FlowySvgs.folder_m,
                   size: const Size.square(16.0),
                 ),
                 const HSpace(8.0),

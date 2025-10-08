@@ -83,7 +83,7 @@ class _NotificationButtonState extends State<NotificationButton> {
                 useIntrinsicWidth: true,
                 margin: EdgeInsets.zero,
                 text: FlowySvg(
-                  FlowySvgs.notification_m,
+                  FlowySvgs.notification_s,
                   color: widget.isHover
                       ? Theme.of(context).colorScheme.onSurface
                       : null,

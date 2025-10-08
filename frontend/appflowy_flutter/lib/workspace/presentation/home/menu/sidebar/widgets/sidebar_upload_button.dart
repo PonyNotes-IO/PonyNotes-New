@@ -64,7 +64,7 @@ class _SidebarUploadButtonState extends State<SidebarUploadButton> {
         useIntrinsicWidth: true,
         margin: EdgeInsets.zero,
         text: FlowySvg(
-          FlowySvgs.upload_m,
+          FlowySvgs.file_upload_s,
           color: widget.isHover
               ? Theme.of(context).colorScheme.onSurface
               : null,

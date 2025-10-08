@@ -27,7 +27,7 @@ class HomePagePluginBuilder extends PluginBuilder {
   String get menuName => "主页";
 
   @override
-  FlowySvgData get icon => FlowySvgs.icon_home_s;
+  FlowySvgData get icon => FlowySvgs.m_home_selected_m;
 
   @override
   PluginType get pluginType => PluginType.homepage;

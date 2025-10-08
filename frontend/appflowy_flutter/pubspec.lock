@@ -913,9 +913,11 @@ packages:
   flutter_math_fork:
     dependency: "direct main"
     description:
-      path: "/Users/kuncao/github.com/my-appflowy/flutter_math_fixed"
-      relative: false
-    source: path
+      path: "."
+      ref: main
+      resolved-ref: "90bde5de768a01f1aded058ae662cfb9383a7320"
+      url: "https://github.com/PonyNotes-IO/flutter_math_fixed.git"
+    source: git
     version: "0.7.4"
   flutter_plugin_android_lifecycle:
     dependency: transitive

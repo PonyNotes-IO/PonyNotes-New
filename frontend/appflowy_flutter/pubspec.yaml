@@ -180,7 +180,9 @@ dependency_overrides:
   http: ^1.0.0
   device_info_plus: ^11.2.2
   flutter_math_fork:
-    path: /Users/kuncao/github.com/my-appflowy/flutter_math_fixed
+    git:
+      url: https://github.com/PonyNotes-IO/flutter_math_fixed.git
+      ref: main
 
   url_protocol:
     git:
