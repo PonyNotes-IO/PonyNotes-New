@@ -694,15 +694,8 @@ class PageManager {
   }
 
   Widget stackTopBar({required HomeLayout layout}) {
-    return ChangeNotifierProvider.value(
-      value: _notifier,
-      child: Selector<PageNotifier, Widget>(
-        selector: (context, notifier) => notifier.titleWidget,
-        builder: (_, __, child) => MoveWindowDetector(
-          child: HomeTopBar(layout: layout),
-        ),
-      ),
-    );
+    // 所有页面都不显示顶部栏
+    return const SizedBox.shrink();
   }
 
   Widget stackWidget({
