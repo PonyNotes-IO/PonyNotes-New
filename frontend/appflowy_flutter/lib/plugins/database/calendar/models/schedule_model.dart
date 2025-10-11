@@ -319,6 +319,13 @@ class ScheduleModel extends ChangeNotifier {
     // 使用当前视图ID，如果没有设置则使用默认的新建日程视图ID
     final viewId = _currentViewId ?? _newScheduleViewId;
     
+    print('📅 开始创建日程:');
+    print('  - 标题: $title');
+    print('  - 描述: $description');
+    print('  - 开始时间: $startTime');
+    print('  - 结束时间: $endTime');
+    print('  - 视图ID: $viewId');
+    
     try {
       // 确保数据库控制器已初始化
       if (_databaseController == null) {
@@ -349,6 +356,7 @@ class ScheduleModel extends ChangeNotifier {
       
       
       // 使用 AppFlowy 标准的创建行方法
+      print('🔄 调用 RowBackendService.createRow...');
       final result = await RowBackendService.createRow(
         viewId: viewId,
         withCells: (builder) {
@@ -417,6 +425,7 @@ class ScheduleModel extends ChangeNotifier {
 
       return result.fold(
         (rowMeta) async {
+          print('✅ 行创建成功，ID: ${rowMeta.id}');
           
           // 现在需要设置结束时间到日期字段
           // 查找日期时间字段
@@ -484,12 +493,18 @@ class ScheduleModel extends ChangeNotifier {
           return rowMeta.id;
         },
         (error) {
+          print('❌ 行创建失败:');
+          print('  - 错误消息: ${error.msg}');
+          print('  - 错误代码: ${error.code}');
           
           // 抛出异常而不是创建本地示例
           throw Exception('创建日程失败: ${error.msg} (错误代码: ${error.code})');
         },
       );
     } catch (e, stackTrace) {
+      print('❌ createSchedule 异常:');
+      print('  - 异常: $e');
+      print('  - 堆栈: $stackTrace');
       
       // 重新抛出异常
       rethrow;

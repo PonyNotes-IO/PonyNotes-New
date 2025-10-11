@@ -425,11 +425,13 @@ class _ScheduleSidebarState extends State<ScheduleSidebar> {
 class ScheduleSidebarContent extends StatefulWidget {
   final String? databaseViewId;
   final Function(ScheduleItem)? onScheduleTap; // 点击日程的回调
+  final VoidCallback? onRefreshRequested; // 刷新请求回调
 
   const ScheduleSidebarContent({
     Key? key,
     this.databaseViewId,
     this.onScheduleTap,
+    this.onRefreshRequested,
   }) : super(key: key);
 
   @override
@@ -449,6 +451,11 @@ class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
     if (widget.databaseViewId != null && widget.databaseViewId!.isNotEmpty) {
       _scheduleModel.setViewId(widget.databaseViewId!);
     }
+  }
+
+  // 公共方法：刷新日程数据
+  void refreshData() {
+    _scheduleModel.refresh();
   }
 
   @override

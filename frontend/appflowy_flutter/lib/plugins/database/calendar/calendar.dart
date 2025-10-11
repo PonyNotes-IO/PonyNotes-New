@@ -21,6 +21,7 @@ import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/plugins/document/document_page.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'widgets/schedule_sidebar.dart';
 import 'package:flowy_infra/uuid.dart';
 import 'package:nanoid/nanoid.dart';
 import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
@@ -517,6 +518,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   void _showCreateScheduleDialog() {
     setState(() {
       _showNewEventPage = true;
+      _selectedNote = null; // 清除当前选中的笔记
+      _showEditEventPage = false; // 确保编辑日程页面关闭
+      _editingSchedule = null; // 清除编辑中的日程
     });
   }
 
@@ -544,7 +548,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         _selectedNote = null;
       } else {
         // 否则选中新笔记
-        _selectedNote = note;
+      _selectedNote = note;
       }
       _showNewEventPage = false;
       _showEditEventPage = false;
@@ -559,19 +563,49 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   void _onEventCreated(Map<String, dynamic> eventData) {
-    // TODO: 保存日程到数据库或状态管理
-    // 创建日程逻辑将在后续实现
+    // 日程已通过 ScheduleModel 保存到数据库
+    // 这里只需要刷新日历显示和显示成功提示
     
     final description = eventData['description'] as String;
     final isAllDay = eventData['isAllDay'] as bool;
     final startTime = eventData['startTime'] as TimeOfDay;
     final endTime = eventData['endTime'] as TimeOfDay;
+    final eventId = eventData['id'] as String?;
+    
+    print('📅 日程创建回调被调用:');
+    print('  - 描述: $description');
+    print('  - ID: $eventId');
+    print('  - 全天: $isAllDay');
+    print('  - 开始时间: $startTime');
+    print('  - 结束时间: $endTime');
+    
+    // 检查是否有有效的ID
+    if (eventId == null || eventId.isEmpty) {
+      print('❌ 错误: 日程ID为空，保存可能失败');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ 日程创建失败：未返回有效ID'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+    
+    // 刷新日历内容以显示新创建的日程
+    print('🔄 刷新日历内容...');
+    _calendarContentKey.currentState?.refreshData();
+    
+    // 刷新日程列表以显示新创建的日程
+    // 通过 ScheduleModel 的全局实例来刷新
+    // _scheduleSidebarKey.currentState?.refreshData();
     
     // 显示成功提示
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('日程创建成功: $description'),
+        content: Text('✅ 日程创建成功: $description'),
         backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
       ),
     );
     
@@ -582,11 +616,19 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   void _onEventUpdated(Map<String, dynamic> eventData) {
     final description = eventData['description'] as String;
     
+    // 刷新日历内容以显示更新的日程
+    _calendarContentKey.currentState?.refreshData();
+    
+    // 刷新日程列表以显示更新的日程
+    // 通过 ScheduleModel 的全局实例来刷新
+    // _scheduleSidebarKey.currentState?.refreshData();
+    
     // 显示成功提示
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('日程更新成功: $description'),
         backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
       ),
     );
     
@@ -595,11 +637,19 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   void _onEventDeleted(String scheduleId) {
+    // 刷新日历内容以移除已删除的日程
+    _calendarContentKey.currentState?.refreshData();
+    
+    // 刷新日程列表以移除已删除的日程
+    // 通过 ScheduleModel 的全局实例来刷新
+    // _scheduleSidebarKey.currentState?.refreshData();
+    
     // 显示成功提示
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('日程已删除'),
         backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
       ),
     );
     
@@ -882,17 +932,19 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             ),
         // 右侧详情区 - 分为日历视图和编辑区域
             Expanded(
-          child: _selectedNote != null || _showEditEventPage ? Container(
+          child: _selectedNote != null || _showNewEventPage || _showEditEventPage ? Container(
                 width: double.infinity,
                 height: double.infinity,
                 margin: EdgeInsets.only(left: 1,right: 1,bottom: 1),
                 color:
                     Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: _selectedNote != null
-                    ? _buildNoteEditArea()
+                child: _showNewEventPage 
+                  ? _buildNewEventView()
                   : _showEditEventPage && _editingSchedule != null
                     ? _buildEditEventView()
-                        : Container(),
+                    : _selectedNote != null
+                            ? _buildNoteEditArea()
+                            : Container(),
               ) :
               _buildDefaultView(),
             ),
