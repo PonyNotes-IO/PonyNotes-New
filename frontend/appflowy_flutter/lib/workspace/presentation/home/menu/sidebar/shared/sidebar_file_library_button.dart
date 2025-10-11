@@ -24,7 +24,7 @@ class SidebarFileLibraryButton extends StatelessWidget {
         ),
         borderRadius: theme.borderRadius.s,
         iconBuilder: (context, isHover, disabled) => FlowySvg(
-          FlowySvgs.file_s,
+          FlowySvgs.icon_file_library_s,
           size: const Size.square(16.0),
           color: Theme.of(context).textTheme.bodyMedium?.color,
         ),
@@ -36,7 +36,7 @@ class SidebarFileLibraryButton extends StatelessWidget {
     try {
       // 创建文件库插件
       final fileLibraryPlugin = makePlugin(
-        pluginType: PluginType.blank,
+        pluginType: PluginType.fileLibrary,
         data: null,
       );
 

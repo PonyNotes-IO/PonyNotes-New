@@ -11,6 +11,7 @@ import 'package:appflowy/plugins/trash/trash.dart';
 import 'package:appflowy/plugins/import_page/import_page_plugin.dart';
 import 'package:appflowy/plugins/homepage/homepage.dart';
 import 'package:appflowy/plugins/standalone_ai_chat/standalone_ai_chat_plugin.dart';
+import 'package:appflowy/plugins/file_library/file_library_plugin.dart';
 
 class PluginLoadTask extends LaunchTask {
   const PluginLoadTask();
@@ -53,6 +54,10 @@ class PluginLoadTask extends LaunchTask {
     registerPlugin(
       builder: StandaloneAiChatPluginBuilder(),
       config: StandaloneAiChatPluginConfig(),
+    );
+    registerPlugin(
+      builder: FileLibraryPluginBuilder(),
+      config: FileLibraryPluginConfig(),
     );
   }
 }
