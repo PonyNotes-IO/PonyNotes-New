@@ -153,12 +153,10 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
             // 本地文件分类
             ...localCategories.map((categoryData) {
               final category = categoryData['category'] as FileLibraryCategory;
-              final count = state.files.where((file) => category.matchesFileType(file.fileType)).length;
               return _buildCategoryItem(
                 category,
                 categoryData['name'] as String,
                 categoryData['icon'] as FlowySvgData,
-                count,
               );
             }),
             // 分割线
@@ -170,12 +168,10 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
             // 云盘分类
             ...cloudCategories.map((categoryData) {
               final category = categoryData['category'] as FileLibraryCategory;
-              final count = state.files.where((file) => category.matchesFileType(file.fileType)).length;
               return _buildCategoryItem(
                 category,
                 categoryData['name'] as String,
                 categoryData['icon'] as FlowySvgData,
-                count,
               );
             }),
           ],
@@ -184,7 +180,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
     );
   }
 
-  Widget _buildCategoryItem(FileLibraryCategory category, String name, FlowySvgData icon, int count) {
+  Widget _buildCategoryItem(FileLibraryCategory category, String name, FlowySvgData icon) {
     final isSelected = _selectedCategory == category;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -229,21 +225,6 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                   ),
                 ),
               ),
-              if (count > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    count.toString(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).textTheme.bodySmall?.color,
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
