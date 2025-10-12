@@ -8,6 +8,7 @@ export 'generate_router.dart';
 export 'hot_key.dart';
 export 'load_plugin.dart';
 export 'localization.dart';
+export 'media_kit_task.dart';
 export 'memory_leak_detector.dart';
 export 'platform_error_catcher.dart';
 export 'platform_service.dart';

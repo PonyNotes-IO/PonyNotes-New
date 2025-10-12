@@ -7,6 +7,7 @@ import 'package:flowy_infra/uuid.dart';
 import 'package:path/path.dart' as p;
 import 'package:file_picker/file_picker.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:media_kit/media_kit.dart';
 
 import 'file_library_models.dart';
 
@@ -131,6 +132,42 @@ class FileLibraryService {
     }
   }
 
+  /// 获取视频或音频文件的时长（秒）
+  /// 使用 media_kit 支持所有平台（包括 Windows）
+  Future<int?> _getMediaDuration(File file, MediaFileTypePB fileType) async {
+    if (fileType != MediaFileTypePB.Video && fileType != MediaFileTypePB.Audio) {
+      return null;
+    }
+
+    try {
+      // 使用 media_kit 创建播放器
+      final player = Player();
+      
+      try {
+        // 打开媒体文件
+        await player.open(Media(file.path));
+        
+        // 等待时长信息加载
+        // media_kit 的 duration 是一个 Stream，我们需要等待第一个非零值
+        final duration = await player.stream.duration.firstWhere(
+          (d) => d.inSeconds > 0,
+          orElse: () => Duration.zero,
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => Duration.zero,
+        );
+        
+        return duration.inSeconds > 0 ? duration.inSeconds : null;
+      } finally {
+        // 确保播放器资源被释放
+        await player.dispose();
+      }
+    } catch (e) {
+      // 如果无法获取时长，返回 null
+      return null;
+    }
+  }
+
   /// 从文件创建FileLibraryItem
   Future<FileLibraryItem?> _createFileLibraryItemFromFile(
     File file, {
@@ -232,6 +269,12 @@ class FileLibraryService {
           fileType = MediaFileTypePB.Other;
       }
       
+      // 对于视频和音频文件，尝试获取时长
+      int? duration;
+      if (fileType == MediaFileTypePB.Video || fileType == MediaFileTypePB.Audio) {
+        duration = await _getMediaDuration(file, fileType);
+      }
+      
       return FileLibraryItem(
         id: id,
         name: fileName,
@@ -241,6 +284,7 @@ class FileLibraryService {
         source: '文件库导入',
         createdAt: stat.changed,
         size: stat.size,
+        duration: duration,
       );
     } catch (e) {
       return null; // 如果处理失败，返回null

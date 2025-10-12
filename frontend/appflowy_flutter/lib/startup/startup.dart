@@ -139,6 +139,8 @@ class FlowyRunner {
         MemoryLeakDetectorTask(),
         DebugTask(),
         const FeatureFlagTask(),
+        // init media_kit for video/audio playback
+        const InitMediaKitTask(),
 
         // localization
         const InitLocalizationTask(),

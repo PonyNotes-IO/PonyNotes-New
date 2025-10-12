@@ -154,6 +154,9 @@ dependencies:
   talker: ^4.7.1
 
   analyzer: 6.11.0
+  media_kit: ^1.1.11
+  media_kit_video: ^1.2.5
+  media_kit_libs_windows_video: ^1.0.9
 
 dev_dependencies:
   # Introduce talker to log the bloc events, and only log the events in the development mode
