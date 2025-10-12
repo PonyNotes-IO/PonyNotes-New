@@ -160,6 +160,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   late ViewPB? _selectedNote; // 添加选中的笔记
   late GlobalKey<_CalendarContentState>
       _calendarContentKey; // 添加CalendarContent的key
+  
+  // 添加状态管理变量
+  late bool _isLoadingContent;
+  late Map<String, dynamic>? _cachedContent;
+  late DateTime? _lastLoadedDate;
 
   @override
   void initState() {
@@ -181,6 +186,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     _addPopoverController = PopoverController();
     _selectedNote = null;
     _calendarContentKey = GlobalKey<_CalendarContentState>();
+    
+    // 初始化新的状态变量
+    _isLoadingContent = false;
+    _cachedContent = null;
+    _lastLoadedDate = null;
 
     // 初始化时尝试创建或获取日历视图
     _initializeCalendarView();
@@ -972,6 +982,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   _showNewEventPage = false;
                   _showEditEventPage = false;
                   _editingSchedule = null;
+                  // 清除缓存，强制重新加载新日期的内容
+                  _cachedContent = null;
+                  _lastLoadedDate = null;
                 });
               },
               onPageChanged: (focusedDay) {
@@ -1024,39 +1037,83 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Widget _buildContentBasedOnDate() {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _getContentForSelectedDate(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
-        }
+    final selectedDate = _selectedDay ?? _focusedDay;
+    
+    // 检查是否需要重新加载数据
+    if (_lastLoadedDate == null || 
+        !_isSameDay(_lastLoadedDate!, selectedDate) || 
+        _cachedContent == null) {
+      _loadContentForDate(selectedDate);
+    }
+    
+    if (_isLoadingContent) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+    
+    final data = _cachedContent ?? {};
+    final notes = data['notes'] as List<ViewPB>? ?? [];
+    final schedules = data['schedules'] as List<ScheduleItem>? ?? [];
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Text('加载内容时出错: ${snapshot.error}'),
-          );
-        }
+    // 如果有笔记，默认显示第一条笔记
+    if (notes.isNotEmpty) {
+      return _buildNoteEditAreaForNote(notes.first);
+    }
+    
+    // 如果有日程没有笔记，显示第一条日程
+    if (schedules.isNotEmpty) {
+      return _buildScheduleEditArea(schedules.first);
+    }
 
-        final data = snapshot.data ?? {};
-        final notes = data['notes'] as List<ViewPB>? ?? [];
-        final schedules = data['schedules'] as List<ScheduleItem>? ?? [];
+    // 如果既没有笔记也没有日程，显示空状态
+    return _buildEmptyState();
+  }
 
-        // 如果有笔记，默认显示第一条笔记
-        if (notes.isNotEmpty) {
-          return _buildNoteEditAreaForNote(notes.first);
-        }
-        
-        // 如果有日程没有笔记，显示第一条日程
-        if (schedules.isNotEmpty) {
-          return _buildScheduleEditArea(schedules.first);
-        }
+  // 异步加载内容数据
+  Future<void> _loadContentForDate(DateTime date) async {
+    if (_isLoadingContent) return; // 防止重复加载
+    
+    setState(() {
+      _isLoadingContent = true;
+    });
+    
+    try {
+      // 获取笔记数据
+      final notes = await _getNotesForDate(date);
+      
+      // 获取日程数据
+      final schedules = await _getSchedulesForDate(date);
+      
+      if (mounted) {
+        setState(() {
+          _cachedContent = {
+            'notes': notes,
+            'schedules': schedules,
+          };
+          _lastLoadedDate = date;
+          _isLoadingContent = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _cachedContent = {
+            'notes': <ViewPB>[],
+            'schedules': <ScheduleItem>[],
+          };
+          _lastLoadedDate = date;
+          _isLoadingContent = false;
+        });
+      }
+    }
+  }
 
-        // 如果既没有笔记也没有日程，显示空状态
-        return _buildEmptyState();
-      },
-    );
+  // 比较两个日期是否为同一天
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+           date1.month == date2.month &&
+           date1.day == date2.day;
   }
 
   Future<Map<String, dynamic>> _getContentForSelectedDate() async {
@@ -1457,83 +1514,30 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       return Container();
     }
 
-    return Column(
-      children: [
-        // 编辑区域标题栏
-        Container(
-          height: 50,
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '编辑日记: ${_selectedNote!.name}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.close, size: 18),
-                onPressed: () {
-                  setState(() {
-                    _selectedNote = null;
-                  });
-                },
-                tooltip: '关闭编辑',
-                padding: EdgeInsets.zero,
-                constraints: BoxConstraints.tightFor(width: 32, height: 32),
-              ),
-            ],
-          ),
+    return MultiBlocProvider(
+      key: ValueKey('bloc_provider_${_selectedNote!.id}'), // 添加key强制重建
+      providers: [
+        BlocProvider<PageAccessLevelBloc>(
+          create: (context) => PageAccessLevelBloc(view: _selectedNote!)
+            ..add(const PageAccessLevelEvent.initial()),
         ),
-        // 编辑内容区域 - 使用文档编辑页面
-        Expanded(
-          child: MultiBlocProvider(
-            key: ValueKey('bloc_provider_${_selectedNote!.id}'), // 添加key强制重建
-            providers: [
-              BlocProvider<PageAccessLevelBloc>(
-                create: (context) => PageAccessLevelBloc(view: _selectedNote!)
-                  ..add(const PageAccessLevelEvent.initial()),
-              ),
-              BlocProvider<ViewInfoBloc>(
-                create: (context) => ViewInfoBloc(view: _selectedNote!)
-                  ..add(const ViewInfoEvent.started()),
-              ),
-            ],
-            child: DocumentPage(
-              key: ValueKey(_selectedNote!.id), // 添加key强制重建
-              view: _selectedNote!,
-              onDeleted: () {
-                // 当文档被删除时，关闭编辑区域
-                setState(() {
-                  _selectedNote = null;
-                });
-              },
-              tabs: [], // 空的tabs列表
-            ),
-          ),
+        BlocProvider<ViewInfoBloc>(
+          create: (context) => ViewInfoBloc(view: _selectedNote!)
+            ..add(const ViewInfoEvent.started()),
         ),
       ],
+      child: DocumentPage(
+        key: ValueKey(_selectedNote!.id), // 添加key强制重建
+        view: _selectedNote!,
+        onDeleted: () {
+          // 当文档被删除时，关闭编辑区域
+          setState(() {
+            _selectedNote = null;
+          });
+        },
+        tabs: [], // 空的tabs列表
+      ),
     );
-  }
-
-  Widget _buildNoteContentView() {
-    if (_selectedNote == null) {
-      return _buildDefaultView();
-    }
-
-    // 直接显示笔记内容，类似回收站的做法
-    return CalendarDocumentView(view: _selectedNote!);
   }
 }
 
