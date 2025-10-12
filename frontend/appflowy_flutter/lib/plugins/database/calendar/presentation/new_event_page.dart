@@ -121,7 +121,7 @@ class _NewEventPageState extends State<NewEventPage> {
     if (_description.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('请添加日程描述'),
+          content: Text('请添加日程说明'),
           backgroundColor: Theme.of(context).brightness == Brightness.dark 
             ? Colors.grey[800] 
             : Colors.grey[900],
@@ -660,7 +660,7 @@ class _NewEventPageState extends State<NewEventPage> {
                   // 全天选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.time_s,
+                      FlowySvgs.icon_time_calendar_lg,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
@@ -686,6 +686,7 @@ class _NewEventPageState extends State<NewEventPage> {
                         });
                       },
                       style: const ToggleStyle.mobile(),
+                      activeBackgroundColor: Color(0xFFF89575),
                       padding: EdgeInsets.zero,
                     ),
                     onTap: () {
@@ -693,12 +694,14 @@ class _NewEventPageState extends State<NewEventPage> {
                         _isAllDay = !_isAllDay;
                       });
                     },
+                    horizontalTitleGap: 8.0, // 默认值通常是16.0
+                    minLeadingWidth: 0, // 关键：设置为0
                   ),
                   
                   // 准时选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.clock_alarm_s,
+                      FlowySvgs.icon_alarm_clock_m,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
@@ -712,12 +715,14 @@ class _NewEventPageState extends State<NewEventPage> {
                     onTap: () {
                       _showReminderDialog();
                     },
+                    horizontalTitleGap: 8.0, // 默认值通常是16.0
+                    minLeadingWidth: 0, // 关键：设置为0
                   ),
                   
                   // 日程重复选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.reload_s,
+                      FlowySvgs.icon_repeat_calender_m,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
@@ -733,12 +738,13 @@ class _NewEventPageState extends State<NewEventPage> {
                         _isRepeat = !_isRepeat;
                       });
                     },
+                    horizontalTitleGap: 8.0, // 默认值通常是16.0
+                    minLeadingWidth: 0, // 关键：设置为0
                   ),
-                  
-                                  // 我的日历选项
+                 // 我的日历选项
                  ListTile(
                    leading: FlowySvg(
-                     FlowySvgs.group_s,
+                     FlowySvgs.icon_calendar_m,
                      color: theme.iconTheme.color,
                      size: const Size.square(24),
                    ),
@@ -752,12 +758,14 @@ class _NewEventPageState extends State<NewEventPage> {
                    onTap: () {
                      // 显示日历选择器
                    },
+                   horizontalTitleGap: 8.0, // 默认值通常是16.0
+                   minLeadingWidth: 0, // 关键：设置为0
                  ),
                  
                  // 添加说明选项
                  ListTile(
                    leading: FlowySvg(
-                     FlowySvgs.edit_s,
+                     FlowySvgs.icon_edit_m,
                      color: theme.iconTheme.color,
                      size: const Size.square(24),
                    ),
@@ -771,6 +779,8 @@ class _NewEventPageState extends State<NewEventPage> {
                     onTap: () {
                       _showDescriptionDialog();
                     },
+                   horizontalTitleGap: 8.0, // 默认值通常是16.0
+                   minLeadingWidth: 0, // 关键：设置为0
                   ),
                 ],
               ),

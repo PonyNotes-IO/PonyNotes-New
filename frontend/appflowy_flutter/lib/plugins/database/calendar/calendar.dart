@@ -967,7 +967,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 setState(() {
                   _selectedDay = selected;
                   _focusedDay = focused;
-                  // 切换日期时清空右侧区域
+                  // 切换日期时清空右侧区域，让_buildDefaultView自动选择内容
                   _selectedNote = null;
                   _showNewEventPage = false;
                   _showEditEventPage = false;
@@ -1017,7 +1017,284 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Widget _buildDefaultView() {
-    return Container();
+    return Container(
+      color: Theme.of(context).colorScheme.surface,
+      child: _buildContentBasedOnDate(),
+    );
+  }
+
+  Widget _buildContentBasedOnDate() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _getContentForSelectedDate(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('加载内容时出错: ${snapshot.error}'),
+          );
+        }
+
+        final data = snapshot.data ?? {};
+        final notes = data['notes'] as List<ViewPB>? ?? [];
+        final schedules = data['schedules'] as List<ScheduleItem>? ?? [];
+
+        // 如果有笔记，默认显示第一条笔记
+        if (notes.isNotEmpty) {
+          return _buildNoteEditAreaForNote(notes.first);
+        }
+        
+        // 如果有日程没有笔记，显示第一条日程
+        if (schedules.isNotEmpty) {
+          return _buildScheduleEditArea(schedules.first);
+        }
+
+        // 如果既没有笔记也没有日程，显示空状态
+        return _buildEmptyState();
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> _getContentForSelectedDate() async {
+    final selectedDate = _selectedDay ?? _focusedDay;
+    
+    // 获取笔记数据
+    final notes = await _getNotesForDate(selectedDate);
+    
+    // 获取日程数据
+    final schedules = await _getSchedulesForDate(selectedDate);
+    
+    return {
+      'notes': notes,
+      'schedules': schedules,
+    };
+  }
+
+  Future<List<ViewPB>> _getNotesForDate(DateTime date) async {
+    try {
+      final allViewsResult = await ViewBackendService.getAllViews();
+      
+      return await allViewsResult.fold(
+        (allViews) async {
+          final documentViews = allViews.items
+              .where((view) =>
+                  view.layout == ViewLayoutPB.Document &&
+                  view.name.isNotEmpty &&
+                  !_isSystemView(view.name))
+              .toList();
+
+          final selectedDateStart = DateTime(date.year, date.month, date.day);
+          final selectedDateEnd = selectedDateStart.add(Duration(days: 1));
+
+          return documentViews.where((view) {
+            final createTime = DateTime.fromMillisecondsSinceEpoch(
+              view.createTime.toInt() * 1000,
+            );
+            return createTime.isAfter(selectedDateStart) &&
+                createTime.isBefore(selectedDateEnd);
+          }).toList();
+        },
+        (error) async => [],
+      );
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<ScheduleItem>> _getSchedulesForDate(DateTime date) async {
+    ScheduleModel? scheduleModel;
+    try {
+      scheduleModel = ScheduleModel();
+      if (_currentViewId != null) {
+        scheduleModel.setViewId(_currentViewId!);
+      }
+      
+      await scheduleModel.refresh();
+      
+      // 过滤出当天的日程
+      final selectedDateStart = DateTime(date.year, date.month, date.day);
+      final selectedDateEnd = selectedDateStart.add(Duration(days: 1));
+      
+      return scheduleModel.schedules.where((schedule) {
+        final scheduleDate = schedule.startTime;
+        return scheduleDate.isAfter(selectedDateStart) &&
+            scheduleDate.isBefore(selectedDateEnd);
+      }).toList();
+    } catch (e) {
+      return [];
+    } finally {
+      // 确保释放资源
+      scheduleModel?.dispose();
+    }
+  }
+
+  bool _isSystemView(String viewName) {
+    final systemViewNames = [
+      'Workspace', 'workspace', 'Workspace Settings', 'Getting Started',
+      'Welcome', 'Home', 'Inbox', 'Favorites', 'Trash', 'Settings',
+      'Preferences', 'Help', 'About',
+    ];
+    return systemViewNames.contains(viewName) ||
+        viewName.toLowerCase().contains('workspace') ||
+        viewName.toLowerCase().contains('system') ||
+        viewName.toLowerCase().contains('setting');
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // 使用现有的空页面SVG图标
+          FlowySvg(
+            FlowySvgs.m_empty_page_xl,
+            size: const Size(120, 120),
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+          ),
+          const SizedBox(height: 24),
+          // 提示文字
+          Text(
+            '暂无日记与日程，赶紧创建吧~',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteEditAreaForNote(ViewPB note) {
+    return Column(
+      children: [
+        // 编辑区域标题栏
+        Container(
+          height: 50,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '编辑日记: ${note.name}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close, size: 18),
+                onPressed: () {
+                  setState(() {
+                    _selectedNote = null;
+                  });
+                },
+                tooltip: '关闭编辑',
+                padding: EdgeInsets.zero,
+                constraints: BoxConstraints.tightFor(width: 32, height: 32),
+              ),
+            ],
+          ),
+        ),
+        // 编辑内容区域
+        Expanded(
+          child: MultiBlocProvider(
+            key: ValueKey('bloc_provider_${note.id}'),
+            providers: [
+              BlocProvider<PageAccessLevelBloc>(
+                create: (context) => PageAccessLevelBloc(view: note)
+                  ..add(const PageAccessLevelEvent.initial()),
+              ),
+              BlocProvider<ViewInfoBloc>(
+                create: (context) => ViewInfoBloc(view: note)
+                  ..add(const ViewInfoEvent.started()),
+              ),
+            ],
+            child: DocumentPage(
+              key: ValueKey(note.id),
+              view: note,
+              onDeleted: () {
+                // 当文档被删除时，刷新默认视图
+                setState(() {});
+              },
+              tabs: [],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScheduleEditArea(ScheduleItem schedule) {
+    return Column(
+      children: [
+        // 编辑区域标题栏
+        Container(
+          height: 50,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '编辑日程: ${schedule.description}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close, size: 18),
+                onPressed: () {
+                  setState(() {
+                    _editingSchedule = null;
+                  });
+                },
+                tooltip: '关闭编辑',
+                padding: EdgeInsets.zero,
+                constraints: BoxConstraints.tightFor(width: 32, height: 32),
+              ),
+            ],
+          ),
+        ),
+        // 编辑内容区域
+        Expanded(
+          child: EditEventPage(
+            schedule: schedule,
+            onEventUpdated: _onEventUpdated,
+            onEventDeleted: _onEventDeleted,
+            onCancel: () {
+              setState(() {
+                _editingSchedule = null;
+              });
+            },
+            onSaveRequested: (saveCallback) {
+              _saveEventCallback = saveCallback;
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildNewEventView() {
