@@ -75,18 +75,21 @@ class FileLibraryService {
       await directory.create(recursive: true);
     }
     
+    // 生成UUID作为文件ID
+    final fileId = uuid();
+    
     // 生成新的文件名（保持原始名称，添加UUID避免冲突）
     final originalName = platformFile.name;
     final extension = p.extension(originalName);
     final nameWithoutExt = p.basenameWithoutExtension(originalName);
-    final newFileName = '${nameWithoutExt}_${uuid()}$extension';
+    final newFileName = '${nameWithoutExt}_$fileId$extension';
     final targetPath = p.join(libraryPath, newFileName);
     
     // 复制文件到文件库
     final targetFile = await sourceFile.copy(targetPath);
     
-    // 创建文件库项目
-    final fileItem = await _createFileLibraryItemFromFile(targetFile, originalName: originalName);
+    // 创建文件库项目，使用相同的fileId
+    final fileItem = await _createFileLibraryItemFromFile(targetFile, originalName: originalName, fileId: fileId);
     
     return fileItem;
   }
@@ -129,11 +132,30 @@ class FileLibraryService {
   }
 
   /// 从文件创建FileLibraryItem
-  Future<FileLibraryItem?> _createFileLibraryItemFromFile(File file, {String? originalName}) async {
+  Future<FileLibraryItem?> _createFileLibraryItemFromFile(
+    File file, {
+    String? originalName,
+    String? fileId,
+  }) async {
     try {
       final fileName = originalName ?? p.basename(file.path);
       final extension = p.extension(fileName).toLowerCase();
       final stat = await file.stat();
+      
+      // 如果没有提供fileId，尝试从文件名中提取
+      String id;
+      if (fileId != null) {
+        id = fileId;
+      } else {
+        // 从文件名中提取UUID（格式：name_uuid.ext）
+        final baseName = p.basenameWithoutExtension(file.path);
+        final parts = baseName.split('_');
+        if (parts.length >= 2) {
+          id = parts.last; // 最后一部分应该是UUID
+        } else {
+          id = uuid(); // 如果无法提取，生成新的
+        }
+      }
       
       // 根据扩展名确定文件类型
       MediaFileTypePB fileType;
@@ -211,7 +233,7 @@ class FileLibraryService {
       }
       
       return FileLibraryItem(
-        id: uuid(),
+        id: id,
         name: fileName,
         url: file.path, // 使用本地文件路径
         fileType: fileType,
