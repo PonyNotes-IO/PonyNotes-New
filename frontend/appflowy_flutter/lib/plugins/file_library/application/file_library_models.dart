@@ -65,6 +65,7 @@ class FileLibraryItem {
   final String source; // 来源：哪个数据库或文档
   final DateTime? createdAt;
   final int? size;
+  final int? duration; // 视频/音频时长，单位：秒
 
   const FileLibraryItem({
     required this.id,
@@ -75,6 +76,7 @@ class FileLibraryItem {
     required this.source,
     this.createdAt,
     this.size,
+    this.duration,
   });
 
   factory FileLibraryItem.fromMediaFile(
@@ -88,6 +90,7 @@ class FileLibraryItem {
       fileType: mediaFile.fileType,
       uploadType: mediaFile.uploadType,
       source: source,
+      duration: mediaFile.duration?.toInt(),
     );
   }
 }

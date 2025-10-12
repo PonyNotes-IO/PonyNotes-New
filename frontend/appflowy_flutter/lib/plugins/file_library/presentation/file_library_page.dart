@@ -47,21 +47,8 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                 backgroundColor: Colors.red,
               ),
             );
-          } else if (state.successMessage != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.successMessage!),
-                backgroundColor: Colors.green,
-              ),
-            );
-          } else if (state.infoMessage != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.infoMessage!),
-                backgroundColor: Colors.blue,
-              ),
-            );
           }
+          // 移除成功和信息提示，只保留错误提示
         },
         child: Container(
           width: double.infinity,
@@ -102,13 +89,16 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                           BlocBuilder<FileLibraryBloc, FileLibraryState>(
                             builder: (context, state) {
                               return FlowyIconButton(
-                                icon: const Icon(Icons.add, size: 18),
+                                icon: const FlowySvg(
+                                  FlowySvgs.fl_upload_m,
+                                  size: Size.square(18),
+                                ),
                                 onPressed: state.isImporting
                                     ? null
                                     : () {
                                         _bloc.add(const FileLibraryEvent.importPdfFile());
                                       },
-                                tooltipText: '导入PDF文件',
+                                tooltipText: '上传文件',
                                 hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                               );
                             },
@@ -357,7 +347,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '点击左上角的 + 按钮导入PDF文件',
+                  '点击左上角的上传按钮导入文件',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey,
@@ -446,14 +436,18 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                           color: Theme.of(context).textTheme.bodySmall?.color,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        file.source,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).textTheme.bodySmall?.color,
+                      // 对于视频和音频文件，显示时长
+                      if (file.fileType == MediaFileTypePB.Video || 
+                          file.fileType == MediaFileTypePB.Audio) ...[
+                        const SizedBox(width: 12),
+                        Text(
+                          _formatDuration(file.duration),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ],
@@ -538,6 +532,19 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
     if (size < 1024 * 1024) return '${(size / 1024).toStringAsFixed(1)}KB';
     if (size < 1024 * 1024 * 1024) return '${(size / (1024 * 1024)).toStringAsFixed(1)}MB';
     return '${(size / (1024 * 1024 * 1024)).toStringAsFixed(1)}GB';
+  }
+
+  String _formatDuration(int? seconds) {
+    if (seconds == null) return '未知';
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final secs = seconds % 60;
+    
+    if (hours > 0) {
+      return '${hours}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+    } else {
+      return '${minutes}:${secs.toString().padLeft(2, '0')}';
+    }
   }
 }
 

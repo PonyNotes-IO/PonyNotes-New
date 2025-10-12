@@ -61,6 +61,8 @@ pub struct MediaFile {
   pub url: String,
   pub upload_type: MediaUploadType,
   pub file_type: MediaFileType,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub duration: Option<i64>, // 视频/音频时长，单位：秒
 }
 
 impl MediaFile {
@@ -71,6 +73,7 @@ impl MediaFile {
       url: self.url.clone(),
       upload_type: self.upload_type.clone(),
       file_type: self.file_type.clone(),
+      duration: self.duration,
     }
   }
 }

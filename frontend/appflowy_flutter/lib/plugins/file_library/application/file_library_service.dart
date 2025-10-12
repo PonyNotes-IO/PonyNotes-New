@@ -19,13 +19,13 @@ class FileLibraryService {
     return p.join(appDataPath, _fileLibraryDir);
   }
 
-  /// 获取所有文件（包括导入的PDF文件）
+  /// 获取所有文件（只返回真实上传的文件）
   Future<List<FileLibraryItem>> getAllFiles() async {
     final libraryPath = await _fileLibraryPath;
     final directory = Directory(libraryPath);
     
     if (!directory.existsSync()) {
-      return _getMockFiles(); // 如果目录不存在，返回模拟数据
+      return []; // 如果目录不存在，返回空列表
     }
     
     final files = <FileLibraryItem>[];
@@ -40,21 +40,17 @@ class FileLibraryService {
       }
     }
     
-    // 添加模拟数据（可选，用于演示）
-    files.addAll(_getMockFiles());
-    
     // 按创建时间倒序排列
     files.sort((a, b) => (b.createdAt ?? DateTime.now()).compareTo(a.createdAt ?? DateTime.now()));
     
     return files;
   }
 
-  /// 导入PDF文件到文件库
+  /// 导入文件到文件库
   Future<FileLibraryItem?> importPdfFile() async {
-    // 使用文件选择器选择PDF文件
+    // 使用文件选择器选择任意类型文件
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
+      type: FileType.any,
       allowMultiple: false,
     );
     
@@ -116,7 +112,7 @@ class FileLibraryService {
     }
   }
 
-  /// 打开PDF文件
+  /// 打开文件
   Future<void> openPdfFile(FileLibraryItem item) async {
     if (item.uploadType == FileUploadTypePB.LocalFile) {
       // 本地文件，直接使用系统默认程序打开
@@ -142,43 +138,74 @@ class FileLibraryService {
       // 根据扩展名确定文件类型
       MediaFileTypePB fileType;
       switch (extension) {
+        // 文档类型
         case '.pdf':
+        case '.doc':
+        case '.docx':
+        case '.ppt':
+        case '.pptx':
+        case '.xls':
+        case '.xlsx':
           fileType = MediaFileTypePB.Document;
           break;
+        // 图片类型
         case '.jpg':
         case '.jpeg':
         case '.png':
         case '.gif':
         case '.bmp':
         case '.webp':
+        case '.svg':
+        case '.ico':
+        case '.tiff':
+        case '.tif':
           fileType = MediaFileTypePB.Image;
           break;
+        // 视频类型
         case '.mp4':
         case '.avi':
         case '.mov':
         case '.wmv':
         case '.flv':
+        case '.mkv':
+        case '.webm':
+        case '.m4v':
+        case '.3gp':
           fileType = MediaFileTypePB.Video;
           break;
+        // 音频类型
         case '.mp3':
         case '.wav':
         case '.aac':
         case '.flac':
+        case '.ogg':
+        case '.m4a':
+        case '.wma':
+        case '.opus':
           fileType = MediaFileTypePB.Audio;
           break;
+        // 压缩文件类型
         case '.zip':
         case '.rar':
         case '.7z':
         case '.tar':
         case '.gz':
+        case '.bz2':
+        case '.xz':
+        case '.iso':
           fileType = MediaFileTypePB.Archive;
           break;
+        // 文本类型
         case '.txt':
         case '.md':
-        case '.doc':
-        case '.docx':
+        case '.json':
+        case '.xml':
+        case '.csv':
+        case '.log':
+        case '.rtf':
           fileType = MediaFileTypePB.Text;
           break;
+        // 其他类型
         default:
           fileType = MediaFileTypePB.Other;
       }
@@ -198,70 +225,5 @@ class FileLibraryService {
     }
   }
 
-  /// 获取模拟文件数据
-  List<FileLibraryItem> _getMockFiles() {
-    return [
-      FileLibraryItem(
-        id: '1',
-        name: 'example-image.jpg',
-        url: 'https://picsum.photos/200/300',
-        fileType: MediaFileTypePB.Image,
-        uploadType: FileUploadTypePB.NetworkFile,
-        source: '示例数据库',
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-        size: 1024 * 1024, // 1MB
-      ),
-      FileLibraryItem(
-        id: '2',
-        name: 'document.pdf',
-        url: 'https://example.com/document.pdf',
-        fileType: MediaFileTypePB.Document,
-        uploadType: FileUploadTypePB.CloudFile,
-        source: '项目文档',
-        createdAt: DateTime.now().subtract(const Duration(days: 2)),
-        size: 2048 * 1024, // 2MB
-      ),
-      FileLibraryItem(
-        id: '3',
-        name: 'audio-sample.mp3',
-        url: 'https://example.com/audio.mp3',
-        fileType: MediaFileTypePB.Audio,
-        uploadType: FileUploadTypePB.LocalFile,
-        source: '音频库',
-        createdAt: DateTime.now().subtract(const Duration(days: 3)),
-        size: 5120 * 1024, // 5MB
-      ),
-      FileLibraryItem(
-        id: '4',
-        name: 'video-demo.mp4',
-        url: 'https://example.com/video.mp4',
-        fileType: MediaFileTypePB.Video,
-        uploadType: FileUploadTypePB.CloudFile,
-        source: '视频集合',
-        createdAt: DateTime.now().subtract(const Duration(days: 4)),
-        size: 10240 * 1024, // 10MB
-      ),
-      FileLibraryItem(
-        id: '5',
-        name: 'archive.zip',
-        url: 'https://example.com/archive.zip',
-        fileType: MediaFileTypePB.Archive,
-        uploadType: FileUploadTypePB.LocalFile,
-        source: '备份文件',
-        createdAt: DateTime.now().subtract(const Duration(days: 5)),
-        size: 15360 * 1024, // 15MB
-      ),
-      FileLibraryItem(
-        id: '6',
-        name: 'notes.txt',
-        url: 'https://example.com/notes.txt',
-        fileType: MediaFileTypePB.Text,
-        uploadType: FileUploadTypePB.NetworkFile,
-        source: '笔记本',
-        createdAt: DateTime.now().subtract(const Duration(days: 6)),
-        size: 1024, // 1KB
-      ),
-    ];
-  }
 }
 

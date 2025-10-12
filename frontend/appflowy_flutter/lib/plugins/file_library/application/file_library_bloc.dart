@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:appflowy_backend/protobuf/flowy-database2/media_entities.pbenum.dart';
 
 import 'file_library_models.dart';
 import 'file_library_service.dart';
@@ -85,7 +84,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
           isImporting: false,
           files: files,
           filteredFiles: filteredFiles,
-          successMessage: 'PDF文件导入成功：${importedFile.name}',
+          successMessage: '文件上传成功：${importedFile.name}',
         ));
       } else {
         emit(state.copyWith(
@@ -96,7 +95,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
     } catch (e) {
       emit(state.copyWith(
         isImporting: false,
-        error: '导入PDF文件失败：${e.toString()}',
+        error: '文件上传失败：${e.toString()}',
       ));
     }
   }
@@ -106,16 +105,10 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
     Emitter<FileLibraryState> emit,
   ) async {
     try {
-      if (fileItem.fileType == MediaFileTypePB.Document) {
-        await _service.openPdfFile(fileItem);
-        emit(state.copyWith(
-          successMessage: '正在打开文件：${fileItem.name}',
-        ));
-      } else {
-        emit(state.copyWith(
-          infoMessage: '暂不支持打开此类型文件',
-        ));
-      }
+      await _service.openPdfFile(fileItem);
+      emit(state.copyWith(
+        successMessage: '正在打开文件：${fileItem.name}',
+      ));
     } catch (e) {
       emit(state.copyWith(
         error: '打开文件失败：${e.toString()}',

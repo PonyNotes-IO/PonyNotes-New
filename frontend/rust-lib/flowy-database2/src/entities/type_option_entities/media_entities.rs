@@ -65,6 +65,9 @@ pub struct MediaFilePB {
 
   #[pb(index = 5)]
   pub file_type: MediaFileTypePB,
+
+  #[pb(index = 6, one_of)]
+  pub duration: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, ProtoBuf_Enum)]
@@ -126,6 +129,7 @@ impl From<MediaFile> for MediaFilePB {
       url: data.url,
       upload_type: data.upload_type.into(),
       file_type: data.file_type.into(),
+      duration: None, // TODO: 从元数据中获取视频/音频时长
     }
   }
 }
@@ -138,6 +142,7 @@ impl From<MediaFilePB> for MediaFile {
       url: data.url,
       upload_type: data.upload_type.into(),
       file_type: data.file_type.into(),
+      // Note: duration field is not stored in MediaFile, it's only in the protobuf layer
     }
   }
 }
