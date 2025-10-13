@@ -7,6 +7,7 @@ import 'package:appflowy_backend/protobuf/flowy-database2/media_entities.pbenum.
 
 import '../application/file_library_bloc.dart';
 import '../application/file_library_models.dart';
+import 'file_preview_thumbnail.dart';
 
 class FileLibraryPage extends StatefulWidget {
   const FileLibraryPage({super.key});
@@ -370,19 +371,11 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
         },
         child: Row(
           children: [
-            // 文件缩略图/图标
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: _getFileTypeColor(file.fileType).withOpacity(0.3),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(
-                _getFileTypeIcon(file.fileType),
-                color: _getFileTypeColor(file.fileType),
-                size: 24,
-              ),
+            // 文件预览缩略图
+            FilePreviewThumbnail(
+              key: ValueKey(file.url), // 使用文件 URL 作为唯一 key
+              file: file,
+              size: 48,
             ),
             const SizedBox(width: 12),
             // 文件信息
