@@ -1,3 +1,5 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
@@ -597,7 +599,7 @@ class _EditEventPageState extends State<EditEventPage> {
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(20),
-        child: CustomTimePickerBottomSheet(
+          child: CustomTimePickerBottomSheet(
           initialDate: isStartTime ? _startDate : _endDate,
           initialTime: isStartTime ? _startTime : _endTime,
           title: isStartTime ? '开始时间' : '结束时间',

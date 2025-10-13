@@ -1,3 +1,5 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
@@ -999,6 +1001,18 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
     });
   }
 
+  // 允许鼠标滚轮和拖拽的滚动行为，提升桌面端可用性
+  // 并开启常用指针设备支持
+  static const Set<PointerDeviceKind> _pointerKinds = <PointerDeviceKind>{
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.invertedStylus,
+    PointerDeviceKind.trackpad,
+  };
+  
+  ScrollBehavior get _pickerScrollBehavior => const _CupertinoPickerScrollBehavior();
+
   @override
   void dispose() {
     hourController.dispose();
@@ -1330,7 +1344,9 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                                     ),
                                   ),
                                   Expanded(
-                                    child: CupertinoPicker(
+                                    child: ScrollConfiguration(
+                                      behavior: _pickerScrollBehavior,
+                                      child: CupertinoPicker(
                                       scrollController: hourController,
                                       itemExtent: 28,
                                       onSelectedItemChanged: (index) {
@@ -1349,6 +1365,7 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                                           ),
                                         );
                                       }),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -1379,7 +1396,9 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                                     ),
                                   ),
                                   Expanded(
-                                    child: CupertinoPicker(
+                                    child: ScrollConfiguration(
+                                      behavior: _pickerScrollBehavior,
+                                      child: CupertinoPicker(
                                       scrollController: minuteController,
                                       itemExtent: 28,
                                       onSelectedItemChanged: (index) {
@@ -1398,6 +1417,7 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                                           ),
                                         );
                                       }),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -1417,6 +1437,19 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
     );
   }
 } 
+
+// 自定义滚动行为：允许鼠标、触控板、触屏等设备拖拽/滚轮滚动 CupertinoPicker
+class _CupertinoPickerScrollBehavior extends ScrollBehavior {
+  const _CupertinoPickerScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => _CustomTimePickerBottomSheetState._pointerKinds;
+
+  @override
+  Widget buildViewportChrome(BuildContext context, Widget child, AxisDirection axisDirection) {
+    return child;
+  }
+}
 
 // 提醒选择弹窗
 class ReminderSelectionDialog extends StatefulWidget {
@@ -1459,7 +1492,7 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
         borderRadius: BorderRadius.circular(16), // 更大的圆角
       ),
       child: Container(
-        width: 320, // 增加宽度
+        width: 510, // 增加宽度
         padding: const EdgeInsets.all(24), // 增加内边距
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1467,10 +1500,12 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
             // 标题栏
             Row(
               children: [
-                Icon(
-                  Icons.alarm,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 24,
+                InkWell(
+                  onTap: () => Navigator.pop(context),
+                  child: Icon(
+                    Icons.cancel,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1481,9 +1516,35 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
                       fontWeight: FontWeight.w600,
                       color: Theme.of(context).textTheme.titleLarge?.color,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-
+                // 保存按钮
+                ElevatedButton(
+                  onPressed: () {
+                    widget.onSave(_tempSelectedOption);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    '保存',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
               ],
             ),
             
@@ -1504,7 +1565,7 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
                     },
                     child: Container(
                       height: 48, // 增加选项高度
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      // padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
                           Radio<String>(
@@ -1517,7 +1578,6 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
                             },
                             activeColor: Theme.of(context).colorScheme.primary,
                           ),
-                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               option,
@@ -1536,62 +1596,6 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
             }).toList(),
             
             const SizedBox(height: 24),
-            
-            // 按钮栏
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // 取消按钮
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    '取消',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(width: 12),
-                
-                // 保存按钮
-                ElevatedButton(
-                  onPressed: () {
-                    widget.onSave(_tempSelectedOption);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    '保存',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
