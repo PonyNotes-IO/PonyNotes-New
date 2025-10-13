@@ -4,6 +4,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:intl/intl.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/media_entities.pbenum.dart';
+import 'package:appflowy_popover/appflowy_popover.dart';
 
 import '../application/file_library_bloc.dart';
 import '../application/file_library_models.dart';
@@ -20,6 +21,10 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
   late FileLibraryBloc _bloc;
   FileLibraryCategory _selectedCategory = FileLibraryCategory.all;
   String _sortBy = '添加日期';
+  
+  // Popover 控制器
+  final PopoverController _sortPopoverController = PopoverController();
+  final Map<String, PopoverController> _fileMenuControllers = {};
 
   @override
   void initState() {
@@ -269,34 +274,29 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
           ),
           const Spacer(),
           // 排序下拉菜单
-          PopupMenuButton<String>(
-            initialValue: _sortBy,
-            onSelected: (value) {
-              setState(() {
-                _sortBy = value;
-              });
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: '添加日期', child: Text('添加日期')),
-              const PopupMenuItem(value: '修改日期', child: Text('修改日期')),
-              const PopupMenuItem(value: '文件名', child: Text('文件名')),
-              const PopupMenuItem(value: '文件大小', child: Text('文件大小')),
-            ],
-            child: Row(
-              children: [
-                Text(
-                  _sortBy,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
+          AppFlowyPopover(
+            controller: _sortPopoverController,
+            direction: PopoverDirection.bottomWithRightAligned,
+            popupBuilder: (context) => _buildSortMenu(),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _sortBy,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                const FlowySvg(
-                  FlowySvgs.arrow_down_s,
-                  size: Size.square(16),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  const FlowySvg(
+                    FlowySvgs.arrow_down_s,
+                    size: Size.square(16),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -364,92 +364,198 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
           width: 0.5,
         ),
       ),
-      child: InkWell(
-        onTap: () {
-          // 双击打开文件
-          _bloc.add(FileLibraryEvent.openFile(file));
-        },
-        child: Row(
-          children: [
-            // 文件预览缩略图
-            FilePreviewThumbnail(
-              key: ValueKey(file.url), // 使用文件 URL 作为唯一 key
-              file: file,
-              size: 48,
-            ),
-            const SizedBox(width: 12),
-            // 文件信息
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        children: [
+          // 可点击区域（文件预览和信息）
+          Expanded(
+            child: InkWell(
+              onTap: () {
+                // 点击打开文件
+                _bloc.add(FileLibraryEvent.openFile(file));
+              },
+              child: Row(
                 children: [
-                  Text(
-                    file.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  // 文件预览缩略图
+                  FilePreviewThumbnail(
+                    key: ValueKey(file.url), // 使用文件 URL 作为唯一 key
+                    file: file,
+                    size: 48,
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        _formatDate(file.createdAt),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).textTheme.bodySmall?.color,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        _formatFileSize(file.size),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).textTheme.bodySmall?.color,
-                        ),
-                      ),
-                      // 对于视频和音频文件，显示时长
-                      if (file.fileType == MediaFileTypePB.Video || 
-                          file.fileType == MediaFileTypePB.Audio) ...[
-                        const SizedBox(width: 12),
+                  const SizedBox(width: 12),
+                  // 文件信息
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          _formatDuration(file.duration),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          file.name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(
+                              _formatDate(file.createdAt),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).textTheme.bodySmall?.color,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              _formatFileSize(file.size),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).textTheme.bodySmall?.color,
+                              ),
+                            ),
+                            // 对于视频和音频文件，显示时长
+                            if (file.fileType == MediaFileTypePB.Video || 
+                                file.fileType == MediaFileTypePB.Audio) ...[
+                              const SizedBox(width: 12),
+                              Text(
+                                _formatDuration(file.duration),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context).textTheme.bodySmall?.color,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ],
-                    ],
+                    ),
                   ),
                 ],
               ),
             ),
-            // 操作按钮
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'open':
-                    _bloc.add(FileLibraryEvent.openFile(file));
-                    break;
-                  case 'delete':
-                    _bloc.add(FileLibraryEvent.deleteFile(file.id));
-                    break;
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'open', child: Text('打开')),
-                const PopupMenuItem(value: 'delete', child: Text('删除')),
-              ],
-              child: const Icon(
-                Icons.more_horiz,
-                size: 20,
+          ),
+          // 操作按钮（独立，不在 InkWell 内）
+          AppFlowyPopover(
+            controller: _fileMenuControllers.putIfAbsent(
+              file.id,
+              () => PopoverController(),
+            ),
+            direction: PopoverDirection.bottomWithRightAligned,
+            popupBuilder: (context) => _buildFileMenu(file),
+            child: const Icon(
+              Icons.more_horiz,
+              size: 20,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 构建排序菜单
+  Widget _buildSortMenu() {
+    return Container(
+      width: 120,
+      padding: const EdgeInsets.all(4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildSortMenuItem('添加日期'),
+          _buildSortMenuItem('修改日期'),
+          _buildSortMenuItem('文件名'),
+          _buildSortMenuItem('文件大小'),
+        ],
+      ),
+    );
+  }
+
+  // 构建排序菜单项
+  Widget _buildSortMenuItem(String text) {
+    final isSelected = _sortBy == text;
+    return InkWell(
+      onTap: () {
+        _sortPopoverController.close();
+        setState(() {
+          _sortBy = text;
+        });
+      },
+      child: Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(fontSize: 14),
               ),
             ),
+            if (isSelected)
+              Icon(
+                Icons.check,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
           ],
         ),
+      ),
+    );
+  }
+
+  // 构建文件操作菜单
+  Widget _buildFileMenu(FileLibraryItem file) {
+    return Container(
+      width: 100,
+      padding: const EdgeInsets.all(4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InkWell(
+            onTap: () {
+              _fileMenuControllers[file.id]?.close();
+              _bloc.add(FileLibraryEvent.openFile(file));
+            },
+            child: Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.open_in_new, size: 18),
+                  SizedBox(width: 8),
+                  Text('打开', style: TextStyle(fontSize: 14)),
+                ],
+              ),
+            ),
+          ),
+          InkWell(
+            onTap: () {
+              _fileMenuControllers[file.id]?.close();
+              _bloc.add(FileLibraryEvent.deleteFile(file.id));
+            },
+            child: Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.delete_outline,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    '删除',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
