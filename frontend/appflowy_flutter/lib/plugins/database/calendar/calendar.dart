@@ -1,5 +1,6 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -11,23 +12,19 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
-import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
-import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/plugins/document/document_page.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../workspace/presentation/widgets/toggle/toggle.dart';
 import 'widgets/schedule_sidebar.dart';
 import 'package:flowy_infra/uuid.dart';
-import 'package:nanoid/nanoid.dart';
 import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
 import 'presentation/new_event_page.dart';
 import 'presentation/edit_event_page.dart';
-import 'widgets/schedule_sidebar.dart';
 import 'models/schedule_model.dart';
 import 'dart:ui' as ui;
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
@@ -35,7 +32,6 @@ import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/protobuf.dart';
-import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
 import 'package:appflowy/plugins/document/presentation/editor_page.dart';
 import 'package:appflowy/plugins/document/presentation/editor_style.dart';
 
@@ -160,7 +156,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   late ViewPB? _selectedNote; // 添加选中的笔记
   late GlobalKey<_CalendarContentState>
       _calendarContentKey; // 添加CalendarContent的key
-  
+  bool _isSubscribeSystemCalendar = false;
+
   // 添加状态管理变量
   late bool _isLoadingContent;
   late Map<String, dynamic>? _cachedContent;
@@ -186,7 +183,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     _addPopoverController = PopoverController();
     _selectedNote = null;
     _calendarContentKey = GlobalKey<_CalendarContentState>();
-    
+
     // 初始化新的状态变量
     _isLoadingContent = false;
     _cachedContent = null;
@@ -194,6 +191,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
     // 初始化时尝试创建或获取日历视图
     _initializeCalendarView();
+
+    // 调试：打印初始状态
+    print('日历组件初始化，订阅状态: $_isSubscribeSystemCalendar');
   }
 
   // 初始化日历视图
@@ -714,7 +714,10 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Widget _buildSettingsMenu() {
-    return Container(
+    print('_buildSettingsMenu 被调用，当前订阅状态: $_isSubscribeSystemCalendar');
+
+    return StatefulBuilder(
+      builder: (context, setPopupState) => Container(
       width: 350,
       padding: EdgeInsets.all(4),
       child: Column(
@@ -734,12 +737,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             ),
           ),
           // 订阅系统日历
-          InkWell(
-            onTap: () {
-              _settingsPopoverController.close();
-              // TODO: 切换订阅系统日历
-            },
-            child: Container(
+          Container(
               height: 42,
               padding: EdgeInsets.symmetric(horizontal: 12),
               child: Row(
@@ -748,28 +746,25 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   SizedBox(width: 10),
                   Text('订阅系统日历', style: TextStyle(fontSize: 14)),
                   Spacer(),
-                  Container(
-                    width: 36,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Container(
-                        width: 18,
-                        height: 18,
-                        margin: EdgeInsets.only(right: 1),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                Toggle(
+                  value: _isSubscribeSystemCalendar,
+                  onChanged: (value) {
+                    // 更新弹层内视图
+                    setPopupState(() {
+                      _isSubscribeSystemCalendar = value;
+                    });
+                    // 同步更新父级（外层可能依赖该状态）
+                    if (mounted) {
+                      setState(() {});
+                    }
+                    // 执行业务逻辑（订阅/取消订阅 + 刷新）
+                    _toggleSystemCalendarSubscription(value);
+                  },
+                  style: const ToggleStyle.mobile(),
+                  activeBackgroundColor: Color(0xFFF89575),
+                  padding: EdgeInsets.zero,
+                ),
+              ],
             ),
           ),
           // 日记模式
@@ -791,7 +786,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                     '默认',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                 ],
@@ -800,7 +795,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   @override
@@ -1038,20 +1033,20 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   Widget _buildContentBasedOnDate() {
     final selectedDate = _selectedDay ?? _focusedDay;
-    
+
     // 检查是否需要重新加载数据
-    if (_lastLoadedDate == null || 
-        !_isSameDay(_lastLoadedDate!, selectedDate) || 
+    if (_lastLoadedDate == null ||
+        !_isSameDay(_lastLoadedDate!, selectedDate) ||
         _cachedContent == null) {
       _loadContentForDate(selectedDate);
     }
-    
+
     if (_isLoadingContent) {
       return const Center(
         child: CircularProgressIndicator(),
       );
     }
-    
+
     final data = _cachedContent ?? {};
     final notes = data['notes'] as List<ViewPB>? ?? [];
     final schedules = data['schedules'] as List<ScheduleItem>? ?? [];
@@ -1060,7 +1055,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     if (notes.isNotEmpty) {
       return _buildNoteEditAreaForNote(notes.first);
     }
-    
+
     // 如果有日程没有笔记，显示第一条日程
     if (schedules.isNotEmpty) {
       return _buildScheduleEditArea(schedules.first);
@@ -1073,18 +1068,18 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   // 异步加载内容数据
   Future<void> _loadContentForDate(DateTime date) async {
     if (_isLoadingContent) return; // 防止重复加载
-    
+
     setState(() {
       _isLoadingContent = true;
     });
-    
+
     try {
       // 获取笔记数据
       final notes = await _getNotesForDate(date);
-      
+
       // 获取日程数据
       final schedules = await _getSchedulesForDate(date);
-      
+
       if (mounted) {
         setState(() {
           _cachedContent = {
@@ -1112,19 +1107,209 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   // 比较两个日期是否为同一天
   bool _isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year &&
-           date1.month == date2.month &&
-           date1.day == date2.day;
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  // 切换系统日历订阅状态
+  Future<void> _toggleSystemCalendarSubscription(bool value) async {
+    print('开始执行系统日历订阅操作: $value');
+
+    try {
+      // 订阅时先做权限检查与平台支持判断
+      if (value) {
+        // 尝试订阅系统日历
+        print('尝试订阅系统日历...');
+
+        final hasPermission = await PermissionChecker.checkCalendarPermission(context);
+        if (!hasPermission) {
+          // 恢复状态并提示不支持/未授权
+          if (mounted) {
+            setState(() {
+              _isSubscribeSystemCalendar = false;
+            });
+          }
+          _showClientNotSupportedMessage();
+          return;
+        }
+
+        await _subscribeToSystemCalendar();
+      } else {
+        // 取消订阅系统日历
+        print('取消订阅系统日历...');
+        await _unsubscribeFromSystemCalendar();
+      }
+
+      print('系统日历操作完成: $value');
+
+      // 刷新相关数据
+      await _refreshCalendarData();
+
+      // 显示成功提示
+      _showToggleSuccessMessage(value);
+
+      print('系统日历订阅状态切换成功: $value');
+
+    } catch (e) {
+      print('切换系统日历订阅状态失败: $e');
+
+      // 如果是权限插件错误，显示提示信息
+      if (e.toString().contains('MissingPluginException')) {
+        // 恢复状态并提示不支持
+        if (mounted) {
+          setState(() {
+            _isSubscribeSystemCalendar = !value;
+          });
+        }
+        _showClientNotSupportedMessage();
+        return;
+      }
+
+      // 其他错误，回滚状态
+      setState(() {
+        _isSubscribeSystemCalendar = !value;
+      });
+
+      // 显示错误提示
+      _showToggleErrorMessage();
+    }
+  }
+
+  // 订阅系统日历
+  Future<void> _subscribeToSystemCalendar() async {
+    try {
+      // TODO: 实现系统日历订阅逻辑
+      // 这里可以调用系统日历API来获取事件
+      print('订阅系统日历');
+
+      // 模拟获取系统日历事件
+      // 在实际实现中，这里应该调用系统日历API
+
+      // 模拟延迟，确保操作完成
+      await Future.delayed(Duration(milliseconds: 100));
+
+    } catch (e) {
+      print('订阅系统日历失败: $e');
+      // 抛出异常，让上层处理
+      rethrow;
+    }
+  }
+
+  // 取消订阅系统日历
+  Future<void> _unsubscribeFromSystemCalendar() async {
+    try {
+      // TODO: 实现取消系统日历订阅逻辑
+      print('取消订阅系统日历');
+
+      // 模拟延迟，确保操作完成
+      await Future.delayed(Duration(milliseconds: 100));
+
+    } catch (e) {
+      print('取消订阅系统日历失败: $e');
+      // 抛出异常，让上层处理
+      rethrow;
+    }
+  }
+
+  // 刷新日历数据
+  Future<void> _refreshCalendarData() async {
+    // 清除缓存，强制重新加载数据
+    _cachedContent = null;
+    _lastLoadedDate = null;
+
+    // 刷新日历内容
+    if (_calendarContentKey.currentState != null) {
+      _calendarContentKey.currentState!.refreshData();
+    }
+
+    // 重新加载当前日期的内容
+    final selectedDate = _selectedDay ?? _focusedDay;
+    await _loadContentForDate(selectedDate);
+
+    // 触发UI更新
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // 显示权限插件错误提示
+  void _showPermissionPluginError() {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('功能暂不可用'),
+        content: Text(
+          '系统日历权限功能在当前平台暂不可用。\n\n'
+          '请确保：\n'
+          '1. 应用已正确配置权限插件\n'
+          '2. 在支持的平台上运行（iOS/Android）\n'
+          '3. 已重新构建应用',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showClientNotSupportedMessage() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('当前客户端不支持或未授予日历权限'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  // 显示Toggle成功提示
+  void _showToggleSuccessMessage(bool isSubscribed) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isSubscribed ? '已订阅系统日历' : '已取消订阅系统日历',
+        ),
+        duration: Duration(seconds: 2),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+
+  // 显示Toggle错误提示
+  void _showToggleErrorMessage() {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('操作失败，请重试'),
+        duration: Duration(seconds: 2),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  // 调试方法：打印当前状态
+  void _debugPrintState() {
+    print('当前订阅状态: $_isSubscribeSystemCalendar');
   }
 
   Future<Map<String, dynamic>> _getContentForSelectedDate() async {
     final selectedDate = _selectedDay ?? _focusedDay;
-    
+
     // 获取笔记数据
     final notes = await _getNotesForDate(selectedDate);
-    
+
     // 获取日程数据
     final schedules = await _getSchedulesForDate(selectedDate);
-    
+
     return {
       'notes': notes,
       'schedules': schedules,
@@ -1134,7 +1319,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   Future<List<ViewPB>> _getNotesForDate(DateTime date) async {
     try {
       final allViewsResult = await ViewBackendService.getAllViews();
-      
+
       return await allViewsResult.fold(
         (allViews) async {
           final documentViews = allViews.items
@@ -1169,13 +1354,13 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       if (_currentViewId != null) {
         scheduleModel.setViewId(_currentViewId!);
       }
-      
+
       await scheduleModel.refresh();
-      
+
       // 过滤出当天的日程
       final selectedDateStart = DateTime(date.year, date.month, date.day);
       final selectedDateEnd = selectedDateStart.add(Duration(days: 1));
-      
+
       return scheduleModel.schedules.where((schedule) {
         final scheduleDate = schedule.startTime;
         return scheduleDate.isAfter(selectedDateStart) &&
@@ -1191,9 +1376,19 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   bool _isSystemView(String viewName) {
     final systemViewNames = [
-      'Workspace', 'workspace', 'Workspace Settings', 'Getting Started',
-      'Welcome', 'Home', 'Inbox', 'Favorites', 'Trash', 'Settings',
-      'Preferences', 'Help', 'About',
+      'Workspace',
+      'workspace',
+      'Workspace Settings',
+      'Getting Started',
+      'Welcome',
+      'Home',
+      'Inbox',
+      'Favorites',
+      'Trash',
+      'Settings',
+      'Preferences',
+      'Help',
+      'About',
     ];
     return systemViewNames.contains(viewName) ||
         viewName.toLowerCase().contains('workspace') ||
@@ -1217,8 +1412,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           Text(
             '暂无日记与日程，赶紧创建吧~',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-            ),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
           ),
         ],
       ),
@@ -1226,71 +1422,27 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Widget _buildNoteEditAreaForNote(ViewPB note) {
-    return Column(
-      children: [
-        // 编辑区域标题栏
-        Container(
-          height: 50,
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '编辑日记: ${note.name}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.close, size: 18),
-                onPressed: () {
-                  setState(() {
-                    _selectedNote = null;
-                  });
-                },
-                tooltip: '关闭编辑',
-                padding: EdgeInsets.zero,
-                constraints: BoxConstraints.tightFor(width: 32, height: 32),
-              ),
-            ],
-          ),
+    return MultiBlocProvider(
+      key: ValueKey('bloc_provider_${note.id}'),
+      providers: [
+        BlocProvider<PageAccessLevelBloc>(
+          create: (context) => PageAccessLevelBloc(view: note)
+            ..add(const PageAccessLevelEvent.initial()),
         ),
-        // 编辑内容区域
-        Expanded(
-          child: MultiBlocProvider(
-            key: ValueKey('bloc_provider_${note.id}'),
-            providers: [
-              BlocProvider<PageAccessLevelBloc>(
-                create: (context) => PageAccessLevelBloc(view: note)
-                  ..add(const PageAccessLevelEvent.initial()),
-              ),
-              BlocProvider<ViewInfoBloc>(
-                create: (context) => ViewInfoBloc(view: note)
-                  ..add(const ViewInfoEvent.started()),
-              ),
-            ],
-            child: DocumentPage(
-              key: ValueKey(note.id),
-              view: note,
-              onDeleted: () {
-                // 当文档被删除时，刷新默认视图
-                setState(() {});
-              },
-              tabs: [],
-            ),
-          ),
+        BlocProvider<ViewInfoBloc>(
+          create: (context) => ViewInfoBloc(view: note)
+            ..add(const ViewInfoEvent.started()),
         ),
       ],
+      child: DocumentPage(
+        key: ValueKey(note.id),
+        view: note,
+        onDeleted: () {
+          // 当文档被删除时，刷新默认视图
+          setState(() {});
+        },
+        tabs: [],
+      ),
     );
   }
 
@@ -1515,28 +1667,28 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     }
 
     return MultiBlocProvider(
-      key: ValueKey('bloc_provider_${_selectedNote!.id}'), // 添加key强制重建
-      providers: [
-        BlocProvider<PageAccessLevelBloc>(
-          create: (context) => PageAccessLevelBloc(view: _selectedNote!)
-            ..add(const PageAccessLevelEvent.initial()),
-        ),
-        BlocProvider<ViewInfoBloc>(
-          create: (context) => ViewInfoBloc(view: _selectedNote!)
-            ..add(const ViewInfoEvent.started()),
-        ),
-      ],
-      child: DocumentPage(
-        key: ValueKey(_selectedNote!.id), // 添加key强制重建
-        view: _selectedNote!,
-        onDeleted: () {
-          // 当文档被删除时，关闭编辑区域
-          setState(() {
-            _selectedNote = null;
-          });
-        },
-        tabs: [], // 空的tabs列表
-      ),
+            key: ValueKey('bloc_provider_${_selectedNote!.id}'), // 添加key强制重建
+            providers: [
+              BlocProvider<PageAccessLevelBloc>(
+                create: (context) => PageAccessLevelBloc(view: _selectedNote!)
+                  ..add(const PageAccessLevelEvent.initial()),
+              ),
+              BlocProvider<ViewInfoBloc>(
+                create: (context) => ViewInfoBloc(view: _selectedNote!)
+                  ..add(const ViewInfoEvent.started()),
+              ),
+            ],
+            child: DocumentPage(
+              key: ValueKey(_selectedNote!.id), // 添加key强制重建
+              view: _selectedNote!,
+              onDeleted: () {
+                // 当文档被删除时，关闭编辑区域
+                setState(() {
+                  _selectedNote = null;
+                });
+              },
+              tabs: [], // 空的tabs列表
+            ),
     );
   }
 }

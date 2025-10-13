@@ -48,6 +48,8 @@
 		</dict>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>AppFlowy needs access to your photos to let you add images to your documents</string>
+		<key>NSCalendarsUsageDescription</key>
+		<string>AppFlowy needs access to your calendar to sync your schedule and events</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>AppFlowy needs access to your photos to let you add images to your photo library</string>
 		<key>UIApplicationSupportsIndirectInputEvents</key>

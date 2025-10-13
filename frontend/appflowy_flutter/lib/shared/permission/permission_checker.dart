@@ -100,4 +100,59 @@ class PermissionChecker {
 
     return true;
   }
+
+  static Future<bool> checkCalendarPermission(BuildContext context) async {
+    try {
+      // 检查是否在支持的平台上
+      if (!UniversalPlatform.isAndroid && !UniversalPlatform.isIOS) {
+        print('日历权限检查仅在Android和iOS平台上支持');
+        return false;
+      }
+
+      // check the permission first
+      final status = await Permission.calendar.status;
+      // if the permission is permanently denied, we should open the app settings
+      if (status.isPermanentlyDenied && context.mounted) {
+        unawaited(
+          showFlowyMobileConfirmDialog(
+            context,
+            title: FlowyText.semibold(
+              '日历权限',
+              maxLines: 3,
+              textAlign: TextAlign.center,
+            ),
+            content: FlowyText(
+              '需要访问系统日历权限来同步您的日程安排。请在设置中允许访问日历。',
+              maxLines: 5,
+              textAlign: TextAlign.center,
+              fontSize: 12.0,
+            ),
+            actionAlignment: ConfirmDialogActionAlignment.vertical,
+            actionButtonTitle: '打开设置',
+            actionButtonColor: Colors.blue,
+            cancelButtonTitle: '不允许',
+            cancelButtonColor: Colors.blue,
+            onActionButtonPressed: openAppSettings,
+          ),
+        );
+
+        return false;
+      } else if (status.isDenied) {
+        final newStatus = await Permission.calendar.request();
+        if (newStatus.isDenied) {
+          return false;
+        }
+      }
+
+      return true;
+    } catch (e) {
+      print('检查日历权限时出错: $e');
+      // 如果是插件缺失错误，返回false
+      if (e.toString().contains('MissingPluginException')) {
+        return false;
+      }
+      // 其他错误也返回false
+      return false;
+    }
+  }
 }
