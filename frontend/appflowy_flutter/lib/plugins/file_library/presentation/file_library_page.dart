@@ -87,7 +87,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                           const Text(
                             '文件库',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 18,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -224,7 +224,8 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                 child: Text(
                   name,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 15,
+                    fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
                     color: isSelected 
                         ? Theme.of(context).colorScheme.primary
                         : Theme.of(context).textTheme.bodyMedium?.color,
@@ -243,6 +244,8 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       children: [
         // 工具栏
         _buildToolbar(),
+        // 排序区域
+        _buildSortSection(),
         // 文件列表
         Expanded(
           child: _buildFileList(),
@@ -255,6 +258,23 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
     return Container(
       height: 50,
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Row(
+        children: [
+          Text(
+            _selectedCategory.displayName,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSortSection() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24.0, 0, 24.0, 12.0),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
@@ -265,38 +285,28 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       ),
       child: Row(
         children: [
-          Text(
-            _selectedCategory.displayName,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const Spacer(),
           // 排序下拉菜单
           AppFlowyPopover(
             controller: _sortPopoverController,
-            direction: PopoverDirection.bottomWithRightAligned,
+            direction: PopoverDirection.bottomWithLeftAligned,
             popupBuilder: (context) => _buildSortMenu(),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _sortBy,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).textTheme.bodyMedium?.color,
-                    ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _sortBy,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).hintColor,
                   ),
-                  const SizedBox(width: 8),
-                  const FlowySvg(
-                    FlowySvgs.arrow_down_s,
-                    size: Size.square(16),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 6),
+                FlowySvg(
+                  FlowySvgs.arrow_down_s,
+                  size: const Size.square(16),
+                  color: Theme.of(context).hintColor,
+                ),
+              ],
             ),
           ),
         ],
@@ -461,10 +471,9 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _buildSortMenuItem('标题名称'),
+          _buildSortMenuItem('大小'),
           _buildSortMenuItem('添加日期'),
-          _buildSortMenuItem('修改日期'),
-          _buildSortMenuItem('文件名'),
-          _buildSortMenuItem('文件大小'),
         ],
       ),
     );
