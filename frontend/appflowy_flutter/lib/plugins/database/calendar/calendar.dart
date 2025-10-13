@@ -1718,10 +1718,20 @@ class _CalendarContentState extends State<CalendarContent> {
   List<ViewPB> _realNotes = [];
   bool _isLoading = false;
   ViewListener? _viewListener;
+  // 新增：用于刷新日程侧栏内容（不能引用私有State类型，使用非泛型GlobalKey）
+  final GlobalKey _scheduleContentKey = GlobalKey();
 
   // 公共方法：手动刷新数据
   void refreshData() {
     _loadNotesForDate();
+    // 同步刷新日程侧栏（通过dynamic调用，避免跨库私有类型）
+    final state = _scheduleContentKey.currentState;
+    if (state != null) {
+      try {
+        // ignore: avoid_dynamic_calls
+        (state as dynamic).refreshData();
+      } catch (_) {}
+    }
   }
 
   @override
@@ -1913,6 +1923,7 @@ class _CalendarContentState extends State<CalendarContent> {
           // 日程集成部分
           if (widget.viewId != null) ...[
             ScheduleSidebarContent(
+              key: _scheduleContentKey,
               databaseViewId: widget.viewId,
               onScheduleTap: widget.onScheduleTap,
             ),
