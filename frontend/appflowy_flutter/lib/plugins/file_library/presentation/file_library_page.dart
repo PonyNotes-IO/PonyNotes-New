@@ -353,6 +353,11 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
           );
         }
 
+        // 如果按日期排序，需要分组显示
+        if (state.sortBy == 'date') {
+          return _buildGroupedFileList(state.filteredFiles);
+        }
+
         return ListView.builder(
           padding: EdgeInsets.zero,
           itemCount: state.filteredFiles.length,
@@ -360,6 +365,60 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
             final file = state.filteredFiles[index];
             return _buildFileItem(file);
           },
+        );
+      },
+    );
+  }
+
+  // 按日期分组显示文件列表
+  Widget _buildGroupedFileList(List<FileLibraryItem> files) {
+    // 按日期分组
+    final Map<String, List<FileLibraryItem>> groupedFiles = {};
+    
+    for (final file in files) {
+      // 如果没有创建时间，使用一个默认分组
+      final dateTime = file.createdAt ?? DateTime.now();
+      final date = DateFormat('yyyy年M月d日').format(dateTime);
+      if (!groupedFiles.containsKey(date)) {
+        groupedFiles[date] = [];
+      }
+      groupedFiles[date]!.add(file);
+    }
+
+    // 获取排序后的日期列表
+    final sortedDates = groupedFiles.keys.toList()
+      ..sort((a, b) {
+        // 解析日期进行比较
+        final dateA = groupedFiles[a]!.first.createdAt ?? DateTime.now();
+        final dateB = groupedFiles[b]!.first.createdAt ?? DateTime.now();
+        return dateB.compareTo(dateA); // 降序排列，最新的在前面
+      });
+
+    return ListView.builder(
+      padding: EdgeInsets.zero,
+      itemCount: sortedDates.length,
+      itemBuilder: (context, groupIndex) {
+        final date = sortedDates[groupIndex];
+        final groupFiles = groupedFiles[date]!;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 日期分组头
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                date,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            // 该日期下的所有文件
+            ...groupFiles.map((file) => _buildFileItem(file)),
+          ],
         );
       },
     );

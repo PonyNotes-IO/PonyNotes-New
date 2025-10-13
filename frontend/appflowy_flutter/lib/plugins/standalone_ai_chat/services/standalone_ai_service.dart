@@ -22,7 +22,6 @@ class StandaloneAiService {
 
   /// 取消当前的AI请求
   void cancelCurrentRequest() {
-    debugPrint('🛑 取消当前AI请求');
     _currentClient?.close();
     _currentClient = null;
   }
@@ -41,11 +40,9 @@ class StandaloneAiService {
     required Function(String) onError,
     Function()? onComplete,
     List<ChatImage>? images,
-  }) async {
+  }  ) async {
     try {
-      print('🚀 开始发送AI请求: $message, 提供商: ${provider.displayName}');
       final config = _configService.getConfigForProvider(provider);
-      print('📋 获取到配置: API Base: ${config.apiBase}, Model: ${config.model}');
 
       switch (provider) {
         case AIProvider.deepseek:
@@ -59,7 +56,6 @@ class StandaloneAiService {
           break;
       }
     } catch (e) {
-      print('❌ AI服务发送消息失败: $e');
       onError('发送消息失败: $e');
     }
   }
@@ -74,12 +70,9 @@ class StandaloneAiService {
     List<ChatImage>? images,
   ) async {
     try {
-      print('🔗 开始调用DeepSeek API');
       _currentClient = http.Client();
       final client = _currentClient!;
-      final apiUrl = '${config.apiBase}/chat/completions'; // 添加chat/completions端点
-      print('🌐 API URL: $apiUrl');
-      print('🔑 API密钥: ${config.apiKey.substring(0, 10)}... (已截断显示)');
+      final apiUrl = '${config.apiBase}/chat/completions';
       
       final request = http.Request(
         'POST',
@@ -104,27 +97,19 @@ class StandaloneAiService {
       };
       
       request.body = jsonEncode(requestBody);
-      print('📤 发送请求体: ${jsonEncode(requestBody)}');
 
       final streamedResponse = await client.send(request);
-      print('📥 收到响应状态码: ${streamedResponse.statusCode}');
 
       if (streamedResponse.statusCode == 200) {
-        print('✅ DeepSeek API响应成功，开始处理流式响应');
-        // 处理流式响应
         await _handleStreamedResponse(streamedResponse, onResponse, onError, onComplete);
-        print('✅ DeepSeek API流式响应处理完成');
       } else {
         final responseBody = await streamedResponse.stream.bytesToString();
-        print('❌ DeepSeek API调用失败: ${streamedResponse.statusCode}, $responseBody');
         onError('DeepSeek API调用失败: ${streamedResponse.statusCode}, $responseBody');
       }
       
       client.close();
       _currentClient = null;
-      print('✅ DeepSeek API调用方法结束');
     } catch (e) {
-      print('❌ DeepSeek API调用异常: $e');
       onError('DeepSeek API调用异常: $e');
     }
   }
@@ -247,9 +232,7 @@ class StandaloneAiService {
       final streamedResponse = await client.send(request);
 
       if (streamedResponse.statusCode == 200) {
-        print('✅ 豆包API响应成功，开始处理流式响应');
         await _handleStreamedResponse(streamedResponse, onResponse, onError, onComplete);
-        print('✅ 豆包API流式响应处理完成');
       } else {
         final responseBody = await streamedResponse.stream.bytesToString();
         onError('豆包API调用失败: ${streamedResponse.statusCode}, $responseBody');
@@ -257,7 +240,6 @@ class StandaloneAiService {
       
       client.close();
       _currentClient = null;
-      print('✅ 豆包API调用方法结束');
     } catch (e) {
       onError('豆包API调用异常: $e');
     }
@@ -294,10 +276,8 @@ class StandaloneAiService {
               'url': base64Data,
             },
           });
-          print('📷 添加图片到消息内容: ${image.name ?? '未知'} (${image.fileSizeFormatted})');
         }
       } catch (e) {
-        print('❌ 处理图片失败: ${image.name}, 错误: $e');
         // 如果图片处理失败，添加文本描述
         content.add({
           'type': 'text',
@@ -326,7 +306,6 @@ class StandaloneAiService {
     bool isCompleted = false; // 防止重复调用onComplete
     
     try {
-
       await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
         buffer += chunk;
         final lines = buffer.split('\n');
@@ -337,14 +316,10 @@ class StandaloneAiService {
         // 处理完整的行
         for (int i = 0; i < lines.length - 1; i++) {
           final line = lines[i].trim();
-          print('🔍 处理行: "$line"');
           if (line.startsWith('data: ')) {
             final data = line.substring(6).trim();
-            print('📋 数据内容: "$data"');
             if (data == '[DONE]' || data.isEmpty) {
-              print('✅ 收到流结束信号: "$data"');
               if (!isCompleted) {
-                print('🎯 调用onComplete回调');
                 isCompleted = true;
                 onComplete?.call();
               }
@@ -353,7 +328,6 @@ class StandaloneAiService {
             
             try {
               final json = jsonDecode(data);
-              print('🔄 解析JSON: $json');
               
               // 尝试多种可能的内容路径
               String? content;
@@ -366,13 +340,11 @@ class StandaloneAiService {
               if (json['choices'] != null && json['choices'].isNotEmpty) {
                 final finishReason = json['choices'][0]['finish_reason'];
                 if (finishReason != null && finishReason != 'null') {
-                  print('✅ 收到完成原因: $finishReason');
                   if (content != null && content.isNotEmpty) {
                     fullResponse += content;
                     onResponse(content);
                   }
                   if (!isCompleted) {
-                    print('🎯 调用onComplete回调（finish_reason）');
                     isCompleted = true;
                     onComplete?.call();
                   }
@@ -381,26 +353,20 @@ class StandaloneAiService {
               }
               
               if (content != null && content.isNotEmpty) {
-                print('📨 收到内容片段: "$content" (长度: ${content.length})');
                 fullResponse += content;
-                print('📝 累积响应长度: ${fullResponse.length}');
-                onResponse(content); // 只发送新的内容片段，不是完整响应
+                onResponse(content);
               }
             } catch (e) {
-              print('❌ JSON解析错误: $e, 数据: "$data"');
               // 忽略JSON解析错误，继续处理下一行
               continue;
             }
           }
         }
       }
-      
-      print('🏁 流式响应循环结束，总响应长度: ${fullResponse.length}');
 
       // 处理剩余的buffer
       if (buffer.isNotEmpty && buffer.startsWith('data: ')) {
         final data = buffer.substring(6).trim();
-        print('📋 处理剩余数据: "$data"');
         if (data != '[DONE]' && data.isNotEmpty) {
           try {
             final json = jsonDecode(data);
@@ -413,14 +379,11 @@ class StandaloneAiService {
               // 检查是否有finish_reason表示结束
               final finishReason = choice['finish_reason'];
               if (finishReason != null && finishReason != 'null') {
-                print('✅ 剩余buffer中收到完成原因: $finishReason');
                 if (content != null && content.isNotEmpty) {
                   fullResponse += content;
                   onResponse(content);
                 }
-                print('🏁 流式响应完成，最终响应长度: ${fullResponse.length}');
                 if (!isCompleted) {
-                  print('🎯 调用onComplete回调（buffer finish_reason）');
                   isCompleted = true;
                   onComplete?.call();
                 }
@@ -430,28 +393,24 @@ class StandaloneAiService {
             
             if (content != null && content.isNotEmpty) {
               fullResponse += content;
-              onResponse(content); // 只发送新的内容片段
+              onResponse(content);
             }
           } catch (e) {
-            print('❌ 剩余buffer JSON解析错误: $e');
+            // 忽略JSON解析错误
           }
         }
       }
 
       if (fullResponse.isEmpty) {
         onError('AI响应为空');
-      } else {
-        print('✅ 流式响应处理完成，总响应长度: ${fullResponse.length}');
       }
       
       // Fallback: 如果还没有调用onComplete，在这里调用
       if (!isCompleted) {
-        print('🎯 Fallback调用onComplete回调');
         isCompleted = true;
         onComplete?.call();
       }
     } catch (e) {
-      print('❌ 处理流式响应失败: $e');
       onError('处理流式响应失败: $e');
       // 即使出错也要调用onComplete来重置UI状态
       if (!isCompleted) {
@@ -459,7 +418,6 @@ class StandaloneAiService {
         onComplete?.call();
       }
     }
-    print('🏁 _handleStreamedResponse 方法结束');
   }
 
   /// 检查AI服务可用性

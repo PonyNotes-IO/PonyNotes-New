@@ -18,15 +18,11 @@ class StandaloneAiChatPluginBuilder extends PluginBuilder {
     List<dynamic>? initialImages;
     AIProvider? selectedProvider;
     
-    debugPrint('🔧 StandaloneAiChatPluginBuilder.build 接收到的数据: $data (类型: ${data.runtimeType})');
-    
     // data 可以是 null（默认情况）、String、或 Map
     if (data == null) {
       // 默认情况，所有参数为null
-      debugPrint('🔧 使用默认参数（data为null）');
     } else if (data is String) {
       initialText = data;
-      debugPrint('🔧 解析String类型数据: "$initialText"');
     } else if (data is Map<String, dynamic>) {
       initialText = data['initialText'] as String?;
       selectedModel = data['selectedModel'] as AIModelPB?;
@@ -34,17 +30,9 @@ class StandaloneAiChatPluginBuilder extends PluginBuilder {
       selectedProvider = data['selectedProvider'] as AIProvider?;
       initialImages = data['initialImages'] as List<dynamic>?;
       
-      debugPrint('🔧 解析Map类型数据:');
-      debugPrint('  - initialText: "$initialText"');
-      debugPrint('  - selectedModelName: "$selectedModelName"');
-      debugPrint('  - selectedProvider: ${selectedProvider?.displayName}');
-      debugPrint('  - initialImages: $initialImages');
-      debugPrint('  - initialImages.length: ${initialImages?.length}');
-      
       // 如果有选择的提供商但没有模型名称，使用提供商的显示名称
       if (selectedProvider != null && selectedModelName == null) {
         selectedModelName = selectedProvider.displayName;
-        debugPrint('  - 从提供商获取模型名称: $selectedModelName');
       }
     }
     
@@ -86,15 +74,7 @@ class StandaloneAiChatPlugin extends Plugin {
     List<dynamic>? initialImages,
   }) : _pluginType = pluginType, 
        _instanceId = DateTime.now().millisecondsSinceEpoch,
-       initialImages = initialImages?.toList() { // 创建深拷贝
-    debugPrint('🔌 StandaloneAiChatPlugin 创建 (实例ID: $_instanceId):');
-    debugPrint('  - initialText: "$initialText"');
-    debugPrint('  - selectedModelName: "$selectedModelName"');
-    debugPrint('  - selectedProvider: ${selectedProvider?.displayName}');
-    debugPrint('  - initialImages: ${this.initialImages}');
-    debugPrint('  - initialImages.hashCode: ${this.initialImages.hashCode}');
-    debugPrint('  - this.hashCode: ${this.hashCode}');
-  }
+       initialImages = initialImages?.toList(); // 创建深拷贝
 
   final PluginType _pluginType;
   final int _instanceId;
@@ -106,12 +86,6 @@ class StandaloneAiChatPlugin extends Plugin {
 
   @override
   PluginWidgetBuilder get widgetBuilder {
-    debugPrint('📦 StandaloneAiChatPlugin.widgetBuilder getter 被调用 (实例ID: $_instanceId):');
-    debugPrint('  - this.initialImages: $initialImages');
-    debugPrint('  - this.initialImages.length: ${initialImages?.length}');
-    debugPrint('  - this.initialImages.hashCode: ${initialImages.hashCode}');
-    debugPrint('  - this.hashCode: ${this.hashCode}');
-    
     return StandaloneAiChatPluginDisplay(
       initialText: initialText,
       selectedModel: selectedModel,
@@ -162,15 +136,6 @@ class StandaloneAiChatPluginDisplay extends PluginWidgetBuilder {
     Map<String, dynamic>? data,
   }) {
     final userProfile = context.userProfile;
-
-    debugPrint('🏗️ StandaloneAiChatPluginDisplay.buildWidget:');
-    debugPrint('  - initialText: "$initialText"');
-    debugPrint('  - selectedModelName: "$selectedModelName"');
-    debugPrint('  - selectedProvider: ${selectedProvider?.displayName}');
-    debugPrint('  - initialImages: $initialImages');
-    debugPrint('  - initialImages.length: ${initialImages?.length}');
-    debugPrint('  - initialImages type: ${initialImages.runtimeType}');
-    debugPrint('  - this对象hashCode: ${this.hashCode}');
 
     if (userProfile == null) {
       return const Center(

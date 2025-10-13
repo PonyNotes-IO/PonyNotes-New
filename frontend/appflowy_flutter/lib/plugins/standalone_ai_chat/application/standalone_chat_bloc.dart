@@ -160,13 +160,10 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
 
   @override
   Future<void> close() async {
-    debugPrint('🔄 正在关闭StandaloneChatBloc...');
-    
     // 取消所有订阅
     await _streamSubscription?.cancel();
     _streamSubscription = null;
     
-    debugPrint('✅ StandaloneChatBloc已关闭');
     return super.close();
   }
 
@@ -176,15 +173,12 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
     AIProvider? provider,
     Emitter<StandaloneChatState> emit,
   ) async {
-    debugPrint('🚀🚀🚀 _handleSendMessage 被调用！消息: "$message", 提供商: ${provider?.displayName}');
     if (message.trim().isEmpty) return;
 
     // 确定使用的AI提供商
-    debugPrint('🔍 提供商选择: provider=$provider, state.selectedProvider=${state.selectedProvider}, configService.currentProvider=${_configService.currentProvider}');
     final selectedProvider = provider ?? 
         state.selectedProvider ?? 
         _configService.currentProvider;
-    debugPrint('✅ 最终选择的提供商: ${selectedProvider.displayName}');
 
     // 重置用户停止标志
     _isUserStopped = false;
