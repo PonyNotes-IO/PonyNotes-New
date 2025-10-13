@@ -20,7 +20,6 @@ class FileLibraryPage extends StatefulWidget {
 class _FileLibraryPageState extends State<FileLibraryPage> {
   late FileLibraryBloc _bloc;
   FileLibraryCategory _selectedCategory = FileLibraryCategory.all;
-  String _sortBy = '添加日期';
   
   // Popover 控制器
   final PopoverController _sortPopoverController = PopoverController();
@@ -273,44 +272,48 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
   }
 
   Widget _buildSortSection() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24.0, 0, 24.0, 12.0),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).dividerColor,
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          // 排序下拉菜单
-          AppFlowyPopover(
-            controller: _sortPopoverController,
-            direction: PopoverDirection.bottomWithLeftAligned,
-            popupBuilder: (context) => _buildSortMenu(),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _sortBy,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Theme.of(context).hintColor,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                FlowySvg(
-                  FlowySvgs.arrow_down_s,
-                  size: const Size.square(16),
-                  color: Theme.of(context).hintColor,
-                ),
-              ],
+    return BlocBuilder<FileLibraryBloc, FileLibraryState>(
+      builder: (context, state) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24.0, 0, 24.0, 12.0),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 0.5,
+              ),
             ),
           ),
-        ],
-      ),
+          child: Row(
+            children: [
+              // 排序下拉菜单
+              AppFlowyPopover(
+                controller: _sortPopoverController,
+                direction: PopoverDirection.bottomWithLeftAligned,
+                popupBuilder: (context) => _buildSortMenu(state.sortBy),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      state.sortBy,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).hintColor,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    FlowySvg(
+                      FlowySvgs.arrow_down_s,
+                      size: const Size.square(16),
+                      color: Theme.of(context).hintColor,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -464,30 +467,28 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
   }
 
   // 构建排序菜单
-  Widget _buildSortMenu() {
+  Widget _buildSortMenu(String currentSortBy) {
     return Container(
       width: 120,
       padding: const EdgeInsets.all(4),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildSortMenuItem('标题名称'),
-          _buildSortMenuItem('大小'),
-          _buildSortMenuItem('添加日期'),
+          _buildSortMenuItem('标题名称', currentSortBy),
+          _buildSortMenuItem('大小', currentSortBy),
+          _buildSortMenuItem('添加日期', currentSortBy),
         ],
       ),
     );
   }
 
   // 构建排序菜单项
-  Widget _buildSortMenuItem(String text) {
-    final isSelected = _sortBy == text;
+  Widget _buildSortMenuItem(String text, String currentSortBy) {
+    final isSelected = currentSortBy == text;
     return InkWell(
       onTap: () {
         _sortPopoverController.close();
-        setState(() {
-          _sortBy = text;
-        });
+        _bloc.add(FileLibraryEvent.sortChanged(text));
       },
       child: Container(
         height: 38,

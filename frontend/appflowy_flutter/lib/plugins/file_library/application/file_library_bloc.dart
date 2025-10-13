@@ -29,6 +29,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
       deleteFile: (fileId) => _onDeleteFile(fileId, emit),
       importPdfFile: () => _onImportPdfFile(emit),
       openFile: (fileItem) => _onOpenFile(fileItem, emit),
+      sortChanged: (sortBy) => _onSortChanged(sortBy, emit),
     );
   }
 
@@ -37,10 +38,11 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
 
     try {
       final files = await _service.getAllFiles();
+      final sortedFiles = _sortFiles(files, state.sortBy);
       emit(state.copyWith(
         isLoading: false,
         files: files,
-        filteredFiles: files,
+        filteredFiles: sortedFiles,
       ),);
     } catch (e) {
       emit(state.copyWith(
@@ -59,10 +61,12 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
         : state.files
             .where((file) => category.matchesFileType(file.fileType))
             .toList();
+    
+    final sortedFiles = _sortFiles(filteredFiles, state.sortBy);
 
     emit(state.copyWith(
       selectedCategory: category,
-      filteredFiles: filteredFiles,
+      filteredFiles: sortedFiles,
     ),);
   }
 
@@ -79,11 +83,13 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
             : files
                 .where((file) => state.selectedCategory.matchesFileType(file.fileType))
                 .toList();
+        
+        final sortedFiles = _sortFiles(filteredFiles, state.sortBy);
 
         emit(state.copyWith(
           isImporting: false,
           files: files,
-          filteredFiles: filteredFiles,
+          filteredFiles: sortedFiles,
           successMessage: '文件上传成功：${importedFile.name}',
         ));
       } else {
@@ -127,11 +133,13 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
               .where((file) =>
                   state.selectedCategory.matchesFileType(file.fileType),)
               .toList();
+      
+      final sortedFiles = _sortFiles(filteredFiles, state.sortBy);
 
       emit(state.copyWith(
         isLoading: false,
         files: files,
-        filteredFiles: filteredFiles,
+        filteredFiles: sortedFiles,
         error: null,
       ),);
     } catch (e) {
@@ -156,14 +164,54 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
               .where((file) =>
                   state.selectedCategory.matchesFileType(file.fileType),)
               .toList();
+      
+      final sortedFiles = _sortFiles(filteredFiles, state.sortBy);
 
       emit(state.copyWith(
         files: updatedFiles,
-        filteredFiles: filteredFiles,
+        filteredFiles: sortedFiles,
       ),);
     } catch (e) {
       emit(state.copyWith(error: e.toString()));
     }
+  }
+
+  Future<void> _onSortChanged(
+    String sortBy,
+    Emitter<FileLibraryState> emit,
+  ) async {
+    final sortedFiles = _sortFiles(state.filteredFiles, sortBy);
+    emit(state.copyWith(
+      sortBy: sortBy,
+      filteredFiles: sortedFiles,
+    ));
+  }
+
+  List<FileLibraryItem> _sortFiles(List<FileLibraryItem> files, String sortBy) {
+    final sortedFiles = List<FileLibraryItem>.from(files);
+    
+    switch (sortBy) {
+      case '标题名称':
+        sortedFiles.sort((a, b) => a.name.compareTo(b.name));
+        break;
+      case '大小':
+        sortedFiles.sort((a, b) {
+          final sizeA = a.size ?? 0;
+          final sizeB = b.size ?? 0;
+          return sizeB.compareTo(sizeA); // 从大到小
+        });
+        break;
+      case '添加日期':
+      default:
+        sortedFiles.sort((a, b) {
+          final dateA = a.createdAt ?? DateTime.now();
+          final dateB = b.createdAt ?? DateTime.now();
+          return dateB.compareTo(dateA); // 从新到旧
+        });
+        break;
+    }
+    
+    return sortedFiles;
   }
 }
 
@@ -176,6 +224,7 @@ class FileLibraryEvent with _$FileLibraryEvent {
   const factory FileLibraryEvent.deleteFile(String fileId) = _DeleteFile;
   const factory FileLibraryEvent.importPdfFile() = _ImportPdfFile;
   const factory FileLibraryEvent.openFile(FileLibraryItem fileItem) = _OpenFile;
+  const factory FileLibraryEvent.sortChanged(String sortBy) = _SortChanged;
 }
 
 @freezed
@@ -186,6 +235,7 @@ class FileLibraryState with _$FileLibraryState {
     @Default([]) List<FileLibraryItem> filteredFiles,
     @Default(false) bool isLoading,
     @Default(false) bool isImporting,
+    @Default('添加日期') String sortBy,
     String? error,
     String? successMessage,
     String? infoMessage,
