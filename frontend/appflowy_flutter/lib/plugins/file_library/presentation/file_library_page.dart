@@ -354,7 +354,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
         }
 
         // 如果按日期排序，需要分组显示
-        if (state.sortBy == 'date') {
+        if (state.sortBy == '添加日期') {
           return _buildGroupedFileList(state.filteredFiles);
         }
 
@@ -404,14 +404,27 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 如果不是第一个分组，添加分割线
+            if (groupIndex > 0)
+              Container(
+                margin: const EdgeInsets.only(top: 8, bottom: 8),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: Theme.of(context).dividerColor,
+                      width: 0.5,
+                    ),
+                  ),
+                ),
+              ),
             // 日期分组头
             Container(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
                 date,
                 style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -630,46 +643,6 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
   }
 
   // 辅助方法
-  IconData _getFileTypeIcon(MediaFileTypePB fileType) {
-    switch (fileType) {
-      case MediaFileTypePB.Document:
-        return Icons.picture_as_pdf;
-      case MediaFileTypePB.Image:
-        return Icons.image;
-      case MediaFileTypePB.Video:
-        return Icons.play_arrow;
-      case MediaFileTypePB.Audio:
-        return Icons.audiotrack;
-      case MediaFileTypePB.Archive:
-        return Icons.archive;
-      case MediaFileTypePB.Text:
-        return Icons.description;
-      case MediaFileTypePB.Other:
-      default:
-        return Icons.insert_drive_file;
-    }
-  }
-
-  Color _getFileTypeColor(MediaFileTypePB fileType) {
-    switch (fileType) {
-      case MediaFileTypePB.Document:
-        return Colors.red;
-      case MediaFileTypePB.Image:
-        return Colors.blue;
-      case MediaFileTypePB.Video:
-        return Colors.purple;
-      case MediaFileTypePB.Audio:
-        return Colors.orange;
-      case MediaFileTypePB.Archive:
-        return Colors.brown;
-      case MediaFileTypePB.Text:
-        return Colors.green;
-      case MediaFileTypePB.Other:
-      default:
-        return Colors.grey;
-    }
-  }
-
   String _formatDate(DateTime? date) {
     if (date == null) return '未知';
     return DateFormat('yyyy/MM/dd').format(date);
