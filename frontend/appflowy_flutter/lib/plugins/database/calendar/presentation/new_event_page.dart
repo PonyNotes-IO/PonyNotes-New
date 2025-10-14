@@ -7,6 +7,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import '../models/schedule_model.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
+import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/repeat_selector.dart';
 
 class NewEventPage extends StatefulWidget {
   final DateTime selectedDate;
@@ -34,6 +35,9 @@ class _NewEventPageState extends State<NewEventPage> {
   bool _isAllDay = false;
   bool _isImportant = false;
   bool _isRepeat = false;
+  String _repeatLabel = '任务重复'; // 无时显示“任务重复”
+  int _repeatType = 0; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
+  String? _repeatCustomSummary; // 自定义选项摘要，如“每1周的周二”
   String _calendar = '我的日历';
   String _description = '';
   String _reminderOption = '无';
@@ -729,16 +733,18 @@ class _NewEventPageState extends State<NewEventPage> {
                       size: const Size.square(24),
                     ),
                     title: Text(
-                      '日程重复',
+                      _repeatType == 0
+                          ? '任务重复'
+                          : (_repeatType == 99
+                              ? (_repeatCustomSummary ?? '自定义')
+                              : _repeatLabel),
                       style: TextStyle(
                         fontSize: 16,
                         color: theme.textTheme.bodyLarge?.color,
                       ),
                     ),
-                    onTap: () {
-                      setState(() {
-                        _isRepeat = !_isRepeat;
-                      });
+                  onTap: () {
+                    _showRepeatDialog();
                     },
                     horizontalTitleGap: 8.0, // 默认值通常是16.0
                     minLeadingWidth: 0, // 关键：设置为0
@@ -791,6 +797,70 @@ class _NewEventPageState extends State<NewEventPage> {
         ),
       ),
     );
+  }
+
+  void _showRepeatDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => RepeatSelectionDialog(
+        currentType: _repeatType,
+        currentCustomSummary: _repeatCustomSummary,
+        onSave: ({required int type, String? customSummary}) {
+          setState(() {
+            if (type == 0) {
+              _isRepeat = false;
+              _repeatType = 0;
+              _repeatLabel = '任务重复';
+              _repeatCustomSummary = null;
+            } else if (type == 99) {
+              _isRepeat = true;
+              _repeatType = 99;
+              _repeatCustomSummary = customSummary;
+              _repeatLabel = customSummary ?? '自定义';
+            } else {
+              _isRepeat = true;
+              _repeatType = type;
+              _repeatCustomSummary = null;
+              _repeatLabel = _repeatTypeName(type);
+            }
+          });
+        },
+      ),
+    );
+  }
+
+  String? _buildCustomSummary(int unit, int interval, Set<int> weekdays) {
+    switch (unit) {
+      case 0:
+        return '每$interval天';
+      case 1:
+        if (weekdays.isEmpty) return null;
+        const names = ['周一','周二','周三','周四','周五','周六','周日'];
+        final days = weekdays.toList()..sort();
+        final joined = days.map((i) => names[i]).join('、');
+        return '每$interval周的$joined';
+      case 2:
+        return '每$interval月';
+      case 3:
+        return '每$interval年';
+    }
+    return null;
+  }
+
+  String _repeatTypeName(int t) {
+    switch (t) {
+      case 1:
+        return '每天';
+      case 2:
+        return '每周';
+      case 3:
+        return '每年';
+      case 4:
+        return '法定工作日';
+      default:
+        return '任务重复';
+    }
   }
 
   void _showDescriptionDialog() {
