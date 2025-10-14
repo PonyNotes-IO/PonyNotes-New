@@ -28,6 +28,8 @@ PODS:
     - FlutterMacOS
   - local_notifier (0.1.0):
     - FlutterMacOS
+  - media_kit_video (0.0.1):
+    - FlutterMacOS
   - package_info_plus (0.0.1):
     - FlutterMacOS
   - path_provider_foundation (0.0.1):
@@ -43,13 +45,17 @@ PODS:
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
-  - Sparkle (2.7.0)
+  - Sparkle (2.8.0)
   - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
   - super_native_extensions (0.0.1):
     - FlutterMacOS
   - url_launcher_macos (0.0.1):
+    - FlutterMacOS
+  - volume_controller (0.0.1):
+    - FlutterMacOS
+  - wakelock_plus (0.0.1):
     - FlutterMacOS
   - webview_flutter_wkwebview (0.0.1):
     - Flutter
@@ -71,6 +77,7 @@ DEPENDENCIES:
   - hotkey_manager (from `Flutter/ephemeral/.symlinks/plugins/hotkey_manager/macos`)
   - irondash_engine_context (from `Flutter/ephemeral/.symlinks/plugins/irondash_engine_context/macos`)
   - local_notifier (from `Flutter/ephemeral/.symlinks/plugins/local_notifier/macos`)
+  - media_kit_video (from `Flutter/ephemeral/.symlinks/plugins/media_kit_video/macos`)
   - package_info_plus (from `Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
   - pdfx (from `Flutter/ephemeral/.symlinks/plugins/pdfx/macos`)
@@ -80,6 +87,8 @@ DEPENDENCIES:
   - sqflite_darwin (from `Flutter/ephemeral/.symlinks/plugins/sqflite_darwin/darwin`)
   - super_native_extensions (from `Flutter/ephemeral/.symlinks/plugins/super_native_extensions/macos`)
   - url_launcher_macos (from `Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos`)
+  - volume_controller (from `Flutter/ephemeral/.symlinks/plugins/volume_controller/macos`)
+  - wakelock_plus (from `Flutter/ephemeral/.symlinks/plugins/wakelock_plus/macos`)
   - webview_flutter_wkwebview (from `Flutter/ephemeral/.symlinks/plugins/webview_flutter_wkwebview/darwin`)
   - window_manager (from `Flutter/ephemeral/.symlinks/plugins/window_manager/macos`)
 
@@ -116,6 +125,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/irondash_engine_context/macos
   local_notifier:
     :path: Flutter/ephemeral/.symlinks/plugins/local_notifier/macos
+  media_kit_video:
+    :path: Flutter/ephemeral/.symlinks/plugins/media_kit_video/macos
   package_info_plus:
     :path: Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos
   path_provider_foundation:
@@ -134,6 +145,10 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/super_native_extensions/macos
   url_launcher_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
+  volume_controller:
+    :path: Flutter/ephemeral/.symlinks/plugins/volume_controller/macos
+  wakelock_plus:
+    :path: Flutter/ephemeral/.symlinks/plugins/wakelock_plus/macos
   webview_flutter_wkwebview:
     :path: Flutter/ephemeral/.symlinks/plugins/webview_flutter_wkwebview/darwin
   window_manager:
@@ -154,6 +169,7 @@ SPEC CHECKSUMS:
   hotkey_manager: b443f35f4d772162937aa73fd8995e579f8ac4e2
   irondash_engine_context: 893c7d96d20ce361d7e996f39d360c4c2f9869ba
   local_notifier: ebf072651e35ae5e47280ad52e2707375cb2ae4e
+  media_kit_video: 28d7d27611c7769a2464eb7621c37386a61dcc9a
   package_info_plus: f0052d280d17aa382b932f399edf32507174e870
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   pdfx: 1e79f57f7a6ce2f4a4c30f21fa54d3dc82441b51
@@ -161,13 +177,15 @@ SPEC CHECKSUMS:
   screen_retriever_macos: 452e51764a9e1cdb74b3c541238795849f21557f
   share_plus: 510bf0af1a42cd602274b4629920c9649c52f4cc
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
-  Sparkle: 9c328bdcfbcaf8f030c4b678eadfd0fcb03822d8
+  Sparkle: 16aaef9876ab6b3d49633d26e8e5b77e0d52b0e2
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
   super_native_extensions: c2795d6d9aedf4a79fae25cb6160b71b50549189
   url_launcher_macos: 0fba8ddabfc33ce0a9afe7c5fef5aab3d8d2d673
+  volume_controller: 5c068e6d085c80dadd33fc2c918d2114b775b3dd
+  wakelock_plus: 917609be14d812ddd9e9528876538b2263aaa03b
   webview_flutter_wkwebview: 1821ceac936eba6f7984d89a9f3bcb4dea99ebb2
   window_manager: e8d0b1431ab6c454f2b5c9ae26004bbfa43469aa
 
-PODFILE CHECKSUM: 0532f3f001ca3110b8be345d6491fff690e95823
+PODFILE CHECKSUM: 48ffbb6d36702db7f7d2889215dad419abfd9c09
 
 COCOAPODS: 1.16.2

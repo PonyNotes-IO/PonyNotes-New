@@ -37,6 +37,10 @@ fi
 printMessage "Installing sqlLite3."
 brew install sqlite3
 
+# For Video Block support
+printMessage "Installing mpv for video playback support."
+brew install mpv
+
 printMessage "Setting up Flutter"
 
 # Get the current Flutter version
