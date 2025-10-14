@@ -14,13 +14,11 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_home_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_favorite_button.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_my_team_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_share_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_publish_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_template_new_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_inbox_button.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ioi_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
@@ -88,12 +86,6 @@ class SidebarSpace extends StatelessWidget {
               },
             ),
             
-            // 我的团队
-            const VSpace(4.0),
-            const SidebarMyTeamButton(),
-            // IOI科技
-            const VSpace(4.0),
-            const SidebarIOIButton(),
             // 共享
             const VSpace(4.0),
             const SidebarShareButton(),
