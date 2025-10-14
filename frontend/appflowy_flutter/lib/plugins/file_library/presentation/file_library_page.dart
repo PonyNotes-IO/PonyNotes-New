@@ -1,10 +1,26 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:intl/intl.dart';
+import 'package:collection/collection.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/media_entities.pbenum.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_popover/appflowy_popover.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
+import 'package:appflowy/plugins/document/application/document_bloc.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_block.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/image/custom_image_block_component/custom_image_block_component.dart';
+import 'package:appflowy/startup/startup.dart';
 
 import '../application/file_library_bloc.dart';
 import '../application/file_library_models.dart';
@@ -596,7 +612,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
           InkWell(
             onTap: () {
               _fileMenuControllers[file.id]?.close();
-              _bloc.add(FileLibraryEvent.openFile(file));
+              _createNoteWithFile(file);
             },
             child: Container(
               height: 38,
@@ -757,6 +773,220 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
               ),
       ],
     );
+  }
+
+  // 用文件创建笔记
+  Future<void> _createNoteWithFile(FileLibraryItem file) async {
+    try {
+      // 1. 获取当前用户和工作空间信息
+      final userProfileResult = await UserEventGetUserProfile().send();
+      final userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => null,
+      );
+      
+      if (userProfile == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('无法获取用户信息'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
+      final workspaceResult = await FolderEventGetCurrentWorkspaceSetting().send();
+      
+      final workspaceId = workspaceResult.fold(
+        (workspace) => workspace.workspaceId,
+        (error) => null,
+      );
+      
+      if (workspaceId == null || workspaceId.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('无法获取当前工作空间'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // 2. 获取或创建私有空间（"我的空间"）
+      final workspaceService = WorkspaceService(
+        workspaceId: workspaceId,
+        userId: userProfile.id,
+      );
+      
+      // 先尝试获取所有公共和私有视图
+      final publicViewsResult = await workspaceService.getPublicViews();
+      final privateViewsResult = await workspaceService.getPrivateViews();
+      
+      final publicViews = publicViewsResult.fold(
+        (views) => views,
+        (error) => <ViewPB>[],
+      );
+      
+      final privateViews = privateViewsResult.fold(
+        (views) => views,
+        (error) => <ViewPB>[],
+      );
+      
+      final allViews = [...publicViews, ...privateViews];
+      
+      // 查找私有空间
+      ViewPB? privateSpace = allViews.firstWhereOrNull(
+        (view) => view.isSpace && view.spacePermission == SpacePermission.private,
+      );
+      
+      // 如果没有找到私有空间，创建一个
+      if (privateSpace == null) {
+        final createResult = await workspaceService.createView(
+          name: '我的空间',
+          viewSection: ViewSectionPB.Private,
+          extra: jsonEncode({
+            ViewExtKeys.isSpaceKey: true,
+            ViewExtKeys.spaceIconKey: '🏠',
+            ViewExtKeys.spaceIconColorKey: 'blue',
+            ViewExtKeys.spacePermissionKey: SpacePermission.private.index,
+            ViewExtKeys.spaceCreatedAtKey: DateTime.now().millisecondsSinceEpoch,
+          }),
+        );
+        
+        privateSpace = createResult.fold(
+          (space) => space,
+          (error) => null,
+        );
+        
+        if (privateSpace == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('无法创建"我的空间"'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
+      }
+      
+      // 3. 在"我的空间"下创建文档
+      // 注意：parentViewId 应该是工作空间ID，而不是空间ID
+      // section 参数决定了视图在哪个区域（Public/"我的空间"）
+      final result = await ViewBackendService.createView(
+        layoutType: ViewLayoutPB.Document,
+        parentViewId: workspaceId, // 使用工作空间ID作为parentViewId
+        name: '', // 空标题，会显示为"未命名页面"
+        openAfterCreate: false, // 先不自动打开，我们手动打开
+        index: 0,
+        section: ViewSectionPB.Public, // "我的空间"显示的是Public区域
+      );
+      
+      final createdView = result.fold(
+        (view) => view,
+        (error) => null,
+      );
+      
+      if (createdView == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('创建笔记失败'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+      
+      // 4. 使用 TabsBloc 打开文档
+      getIt<TabsBloc>().openPlugin(createdView);
+      
+      // 5. 等待文档打开并获取 EditorState
+      // 尝试多次获取 DocumentBloc，因为文档可能需要时间初始化
+      DocumentBloc? documentBloc;
+      for (int i = 0; i < 15; i++) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        documentBloc = DocumentBloc.findOpen(createdView.id);
+        if (documentBloc != null && documentBloc.state.editorState != null) {
+          break;
+        }
+      }
+      
+      if (documentBloc == null || documentBloc.state.editorState == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('无法访问文档编辑器，请手动插入文件'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+      
+      final editorState = documentBloc.state.editorState!;
+      
+      // 6. 在文档中插入文件或图片
+      final transaction = editorState.transaction;
+      
+      // 判断是否为图片文件
+      final isImage = _isImageFile(file.name);
+      
+      if (isImage) {
+        // 如果是图片，插入图片节点
+        transaction.insertNode(
+          [0],
+          customImageNode(
+            url: file.url,
+            type: CustomImageType.local,
+          ),
+        );
+      } else {
+        // 如果是其他文件，插入文件节点
+        transaction.insertNode(
+          [0],
+          fileNode(
+            url: file.url,
+            type: FileUrlType.local,
+            name: file.name,
+          ),
+        );
+      }
+      
+      await editorState.apply(transaction);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('笔记创建成功'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('创建笔记时发生错误: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // 判断文件是否为图片
+  bool _isImageFile(String fileName) {
+    final extension = fileName.toLowerCase().split('.').last;
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+    return imageExtensions.contains(extension);
   }
 }
 
