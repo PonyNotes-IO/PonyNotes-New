@@ -588,7 +588,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
   // 构建文件操作菜单
   Widget _buildFileMenu(FileLibraryItem file) {
     return Container(
-      width: 100,
+      width: 160,
       padding: const EdgeInsets.all(4),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -601,15 +601,27 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
             child: Container(
               height: 38,
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                children: [
-                  Icon(Icons.open_in_new, size: 18),
-                  SizedBox(width: 8),
-                  Text('打开', style: TextStyle(fontSize: 14)),
-                ],
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('用文件创建笔记', style: TextStyle(fontSize: 14)),
               ),
             ),
           ),
+          InkWell(
+            onTap: () {
+              _fileMenuControllers[file.id]?.close();
+              // TODO: 实现详情功能
+            },
+            child: Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('详情', style: TextStyle(fontSize: 14)),
+              ),
+            ),
+          ),
+          Divider(height: 1, thickness: 1),
           InkWell(
             onTap: () {
               _fileMenuControllers[file.id]?.close();
@@ -618,22 +630,15 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
             child: Container(
               height: 38,
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.delete_outline,
-                    size: 18,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '删除',
+                  style: TextStyle(
+                    fontSize: 14,
                     color: Theme.of(context).colorScheme.error,
                   ),
-                  SizedBox(width: 8),
-                  Text(
-                    '删除',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
