@@ -610,7 +610,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
           InkWell(
             onTap: () {
               _fileMenuControllers[file.id]?.close();
-              // TODO: 实现详情功能
+              _showFileDetailsDialog(file);
             },
             child: Container(
               height: 38,
@@ -672,6 +672,91 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
     } else {
       return '${minutes}:${secs.toString().padLeft(2, '0')}';
     }
+  }
+
+  String _getFileTypeText(MediaFileTypePB fileType) {
+    switch (fileType) {
+      case MediaFileTypePB.Image:
+        return '图片';
+      case MediaFileTypePB.Video:
+        return '视频';
+      case MediaFileTypePB.Audio:
+        return '音频';
+      case MediaFileTypePB.Document:
+        return '文档';
+      case MediaFileTypePB.Archive:
+        return '压缩文件';
+      case MediaFileTypePB.Other:
+        return '其他';
+      default:
+        return '未知';
+    }
+  }
+
+  // 显示文件详情对话框
+  void _showFileDetailsDialog(FileLibraryItem file) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('文件详情'),
+        content: Container(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('文件名', file.name),
+              SizedBox(height: 12),
+              _buildDetailRow('文件类型', _getFileTypeText(file.fileType)),
+              SizedBox(height: 12),
+              _buildDetailRow('文件大小', _formatFileSize(file.size)),
+              SizedBox(height: 12),
+              _buildDetailRow('创建时间', _formatDate(file.createdAt)),
+              if (file.duration != null) ...[
+                SizedBox(height: 12),
+                _buildDetailRow('时长', _formatDuration(file.duration)),
+              ],
+              SizedBox(height: 12),
+              _buildDetailRow('来源', file.source),
+              SizedBox(height: 12),
+              _buildDetailRow('文件路径', file.url, isPath: true),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {bool isPath = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: 4),
+        isPath
+            ? SelectableText(
+                value,
+                style: TextStyle(fontSize: 14),
+              )
+            : Text(
+                value,
+                style: TextStyle(fontSize: 14),
+              ),
+      ],
+    );
   }
 }
 
