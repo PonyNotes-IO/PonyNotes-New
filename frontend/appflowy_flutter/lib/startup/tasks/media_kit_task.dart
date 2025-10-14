@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:media_kit/media_kit.dart';
 
 import '../startup.dart';
@@ -9,7 +11,10 @@ class InitMediaKitTask extends LaunchTask {
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
     // Initialize media_kit for video/audio playback support
-    MediaKit.ensureInitialized();
+    // Skip initialization on macOS as it requires additional native libraries
+    if (!Platform.isMacOS) {
+      MediaKit.ensureInitialized();
+    }
   }
 
   @override

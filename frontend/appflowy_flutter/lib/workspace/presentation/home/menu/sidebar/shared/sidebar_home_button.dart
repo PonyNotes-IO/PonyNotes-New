@@ -30,7 +30,7 @@ class SidebarHomeButton extends StatelessWidget {
             ),
             borderRadius: theme.borderRadius.s,
             iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.m_home_selected_m,
+              FlowySvgs.icon_home_s,
               size: const Size.square(16.0),
             ),
           ),

@@ -30,7 +30,7 @@ class SidebarAiButton extends StatelessWidget {
             ),
             borderRadius: theme.borderRadius.s,
             iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.ai_chat_logo_s,
+              FlowySvgs.icon_ai_s,
               size: const Size.square(16.0),
               color: Theme.of(context).textTheme.bodyMedium?.color,
             ),
