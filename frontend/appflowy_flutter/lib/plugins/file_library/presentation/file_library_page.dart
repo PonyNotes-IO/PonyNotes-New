@@ -153,20 +153,19 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
   Widget _buildCategoryList() {
     return BlocBuilder<FileLibraryBloc, FileLibraryState>(
       builder: (context, state) {
-        final categories = [
+        final localCategories = [
           {'category': FileLibraryCategory.all, 'name': '全部文件', 'icon': FlowySvgs.dl_folder_s},
           {'category': FileLibraryCategory.image, 'name': '图片文件', 'icon': FlowySvgs.dl_image_s},
           {'category': FileLibraryCategory.document, 'name': '文档文件', 'icon': FlowySvgs.dl_document_s},
           {'category': FileLibraryCategory.audio, 'name': '音频文件', 'icon': FlowySvgs.dl_audio_s},
           {'category': FileLibraryCategory.video, 'name': '视频文件', 'icon': FlowySvgs.dl_video_s},
-          {'category': FileLibraryCategory.archive, 'name': '百度云盘', 'icon': FlowySvgs.baidu_cloud_disk_s},
-          {'category': FileLibraryCategory.text, 'name': '阿里云盘', 'icon': FlowySvgs.aliyun_drive_s},
-          {'category': FileLibraryCategory.other, 'name': '坚果云云盘', 'icon': FlowySvgs.nuts_cloud_disk_s},
         ];
 
-        // 分离本地文件类型和云盘类型
-        final localCategories = categories.take(5).toList(); // 全部文件到视频文件
-        final cloudCategories = categories.skip(5).toList(); // 百度云盘到坚果云云盘
+        final cloudDrives = [
+          {'name': '百度云盘', 'icon': FlowySvgs.baidu_cloud_disk_s},
+          {'name': '阿里云盘', 'icon': FlowySvgs.aliyun_drive_s},
+          {'name': '坚果云云盘', 'icon': FlowySvgs.nuts_cloud_disk_s},
+        ];
 
         return ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -186,13 +185,11 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
               height: 1,
               color: Theme.of(context).dividerColor.withOpacity(0.8),
             ),
-            // 云盘分类
-            ...cloudCategories.map((categoryData) {
-              final category = categoryData['category'] as FileLibraryCategory;
-              return _buildCategoryItem(
-                category,
-                categoryData['name'] as String,
-                categoryData['icon'] as FlowySvgData,
+            // 云盘分类（点击弹出对话框）
+            ...cloudDrives.map((driveData) {
+              return _buildCloudDriveItem(
+                driveData['name'] as String,
+                driveData['icon'] as FlowySvgData,
               );
             }),
           ],
@@ -245,6 +242,145 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                         ? Theme.of(context).colorScheme.primary
                         : Theme.of(context).textTheme.bodyMedium?.color,
                   ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 构建云盘项目（点击弹出对话框）
+  Widget _buildCloudDriveItem(String name, FlowySvgData icon) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: InkWell(
+        onTap: () => _showCloudDriveDialog(name),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              FlowySvg(
+                icon,
+                size: const Size.square(16),
+                color: Theme.of(context).iconTheme.color,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.normal,
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 显示云盘对话框
+  void _showCloudDriveDialog(String driveName) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: Container(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 标题和提示信息区域
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(top: 24.0, left: 24.0, right: 24.0, bottom: 16.0),
+                child: Column(
+                  children: [
+                    Text(
+                      '打开"$driveName"?',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '若要浏览和添加文件，请打开$driveName。',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              // 底部操作区域前的间距
+              const SizedBox(height: 8),
+              // 分割线
+              Container(
+                width: double.infinity,
+                height: 1,
+                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+              ),
+              // 底部操作区域
+              Container(
+                width: double.infinity,
+                height: 56,
+                child: Row(
+                  children: [
+                    // 取消区域
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Container(
+                          alignment: Alignment.center,
+                          child: Text(
+                            '取消',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 垂直分割线
+                    Container(
+                      width: 1,
+                      height: double.infinity,
+                      color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                    ),
+                    // 打开区域
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          // TODO: 这里可以添加打开云盘的逻辑
+                        },
+                        child: Container(
+                          alignment: Alignment.center,
+                          child: Text(
+                            '打开',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

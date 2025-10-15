@@ -106,12 +106,12 @@ class _TrashPageState extends State<TrashPage> {
                 lineHeight: 1.0,
               ),
               leftIcon: const FlowySvg(FlowySvgs.restore_s),
-              onTap: () => showCancelAndConfirmDialog(
+              onTap: () => showSimpleConfirmDialog(
                 context: context,
-                confirmLabel: LocaleKeys.trash_restore.tr(),
-                title: LocaleKeys.trash_confirmRestoreAll_title.tr(),
-                description: LocaleKeys.trash_confirmRestoreAll_caption.tr(),
-                onConfirm: (_) => context
+                message: '确定一键恢复回收站内容?',
+                confirmText: '恢复',
+                confirmTextColor: const Color(0xFF4CAF50), // 绿色
+                onConfirm: () => context
                     .read<TrashBloc>()
                     .add(const TrashEvent.restoreAll()),
               ),
@@ -125,10 +125,11 @@ class _TrashPageState extends State<TrashPage> {
                 lineHeight: 1.0,
               ),
               leftIcon: const FlowySvg(FlowySvgs.delete_s),
-              onTap: () => showConfirmDeletionDialog(
+              onTap: () => showSimpleConfirmDialog(
                 context: context,
-                name: LocaleKeys.trash_confirmDeleteAll_title.tr(),
-                description: LocaleKeys.trash_confirmDeleteAll_caption.tr(),
+                message: '确定一键清空回收站内容?',
+                confirmText: '清空',
+                confirmTextColor: const Color(0xFFFF6B35), // 橙色
                 onConfirm: () =>
                     context.read<TrashBloc>().add(const TrashEvent.deleteAll()),
               ),
@@ -156,23 +157,20 @@ class _TrashPageState extends State<TrashPage> {
             height: 42,
             child: TrashCell(
               object: object,
-              onRestore: () => showCancelAndConfirmDialog(
+              onRestore: () => showSimpleConfirmDialog(
                 context: context,
-                title:
-                    LocaleKeys.trash_restorePage_title.tr(args: [object.name]),
-                description: LocaleKeys.trash_restorePage_caption.tr(),
-                confirmLabel: LocaleKeys.trash_restore.tr(),
-                onConfirm: (_) => context
+                message: '你确定要恢复此页面吗？',
+                confirmText: '恢复',
+                confirmTextColor: const Color(0xFFFF6B35), // 橙色
+                onConfirm: () => context
                     .read<TrashBloc>()
                     .add(TrashEvent.putback(object.id)),
               ),
-              onDelete: () => showConfirmDeletionDialog(
+              onDelete: () => showSimpleConfirmDialog(
                 context: context,
-                name: object.name.trim().isEmpty
-                    ? LocaleKeys.menuAppHeader_defaultNewPageName.tr()
-                    : object.name,
-                description:
-                    LocaleKeys.deletePagePrompt_deletePermanentDescription.tr(),
+                message: '你确定要永久删除此页面吗？',
+                confirmText: '删除',
+                confirmTextColor: Theme.of(context).colorScheme.error,
                 onConfirm: () =>
                     context.read<TrashBloc>().add(TrashEvent.delete(object)),
               ),
