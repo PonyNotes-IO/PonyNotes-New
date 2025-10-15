@@ -24,6 +24,9 @@ import 'package:appflowy/startup/startup.dart';
 
 import '../application/file_library_bloc.dart';
 import '../application/file_library_models.dart';
+import '../application/file_library_service.dart';
+import '../services/baidu_cloud_service.dart';
+import '../presentation/baidu_cloud_file_picker.dart';
 import 'file_preview_thumbnail.dart';
 
 class FileLibraryPage extends StatefulWidget {
@@ -290,6 +293,130 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
 
   // 显示云盘对话框
   void _showCloudDriveDialog(String driveName) {
+    if (driveName == '百度云盘') {
+      _showBaiduCloudFileSelector();
+    } else {
+      // 其他云盘的简单确认对话框
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.0),
+          ),
+          child: Container(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 标题和提示信息区域
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.only(top: 24.0, left: 24.0, right: 24.0, bottom: 16.0),
+                  child: Column(
+                    children: [
+                      Text(
+                        '打开"$driveName"?',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '若要浏览和添加文件，请打开$driveName。',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                // 底部操作区域前的间距
+                const SizedBox(height: 8),
+                // 分割线
+                Container(
+                  width: double.infinity,
+                  height: 1,
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                ),
+                // 底部操作区域
+                Container(
+                  width: double.infinity,
+                  height: 56,
+                  child: Row(
+                    children: [
+                      // 取消区域
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => Navigator.of(context).pop(),
+                          child: Container(
+                            alignment: Alignment.center,
+                            child: Text(
+                              '取消',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // 垂直分割线
+                      Container(
+                        width: 1,
+                        height: double.infinity,
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                      ),
+                      // 打开区域
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            // 根据云盘名称调用相应的导入功能
+                            if (driveName == '阿里云盘') {
+                              // TODO: 实现阿里云盘导入
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('阿里云盘导入功能暂未实现'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                            } else if (driveName == '坚果云云盘') {
+                              // TODO: 实现坚果云导入
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('坚果云导入功能暂未实现'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                            }
+                          },
+                          child: Container(
+                            alignment: Alignment.center,
+                            child: Text(
+                              '打开',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  // 显示百度网盘文件选择器
+  void _showBaiduCloudFileSelector() {
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -308,7 +435,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                 child: Column(
                   children: [
                     Text(
-                      '打开"$driveName"?',
+                      '打开"百度网盘"?',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -316,7 +443,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '若要浏览和添加文件，请打开$driveName。',
+                      '若要浏览和添加文件，请打开百度网盘。',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                       ),
@@ -366,7 +493,8 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                       child: InkWell(
                         onTap: () {
                           Navigator.of(context).pop();
-                          // TODO: 这里可以添加打开云盘的逻辑
+                          // 打开百度网盘文件选择器
+                          _openBaiduCloudPicker();
                         },
                         child: Container(
                           alignment: Alignment.center,
@@ -388,6 +516,81 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
         ),
       ),
     );
+  }
+
+  // 打开百度网盘文件选择器
+  void _openBaiduCloudPicker() {
+    showDialog(
+      context: context,
+      builder: (context) => BaiduCloudFilePickerDialog(
+        onFilesSelected: (files) async {
+          Navigator.of(context).pop();
+          if (files.isNotEmpty) {
+            await _importBaiduCloudFiles(files);
+          }
+        },
+      ),
+    );
+  }
+
+  // 导入百度网盘文件
+  Future<void> _importBaiduCloudFiles(List<BaiduCloudFile> files) async {
+    try {
+      // 显示进度对话框
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text('正在导入 ${files.length} 个文件...'),
+            ],
+          ),
+        ),
+      );
+
+      // 调用服务导入文件
+      final service = FileLibraryService();
+      int successCount = 0;
+      
+      for (final file in files) {
+        final result = await service.importBaiduCloudFile(file);
+        if (result != null) {
+          successCount++;
+        }
+      }
+
+      // 关闭进度对话框
+      Navigator.of(context).pop();
+
+      // 显示结果
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('成功导入 $successCount/${files.length} 个文件'),
+          backgroundColor: successCount == files.length 
+              ? Colors.green 
+              : Colors.orange,
+        ),
+      );
+
+      // 刷新文件列表
+      context.read<FileLibraryBloc>().add(const FileLibraryEvent.refreshFiles());
+      
+    } catch (e) {
+      // 关闭进度对话框
+      Navigator.of(context).pop();
+      
+      // 显示错误
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('导入失败: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildMainContent() {

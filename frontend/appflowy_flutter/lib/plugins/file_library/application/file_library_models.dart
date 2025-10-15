@@ -90,7 +90,7 @@ class FileLibraryItem {
       fileType: mediaFile.fileType,
       uploadType: mediaFile.uploadType,
       source: source,
-      duration: mediaFile.duration?.toInt(),
+      duration: mediaFile.duration.toInt(),
     );
   }
 }
