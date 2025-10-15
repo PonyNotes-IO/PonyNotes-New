@@ -16,6 +16,9 @@ import 'package:appflowy/workspace/application/user/user_workspace_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/command_palette/command_palette.dart';
+import 'package:appflowy/core/config/kv.dart';
+import 'package:appflowy/startup/tasks/rust_sdk.dart';
+import 'dart:io';
 import 'package:appflowy/workspace/presentation/home/af_focus_manager.dart';
 import 'package:appflowy/workspace/presentation/home/errors/workspace_failed_screen.dart';
 import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
@@ -102,12 +105,36 @@ class DesktopHomeScreen extends StatelessWidget {
               ),
             ],
             child: Scaffold(
-              floatingActionButton: enableMemoryLeakDetect
-                  ? const FloatingActionButton(
-                      onPressed: dumpMemoryLeak,
-                      child: Icon(Icons.memory),
-                    )
-                  : null,
+              floatingActionButton: BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                buildWhen: (p, c) => p.menuStatus != c.menuStatus,
+                builder: (context, state) {
+                  final isMenuHidden = state.menuStatus == MenuStatus.hidden;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (enableMemoryLeakDetect)
+                        const FloatingActionButton(
+                          onPressed: dumpMemoryLeak,
+                          child: Icon(Icons.memory),
+                        ),
+                      const SizedBox(height: 12),
+                      if (isMenuHidden) ...[
+                        FloatingActionButton(
+                          tooltip: '显示侧边栏',
+                          onPressed: () {
+                            context.read<HomeSettingBloc>().add(
+                                  HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                                );
+                          },
+                          child: const Icon(Icons.menu_open),
+                        ),
+                        const SizedBox(height: 50),
+                      ],
+                    ],
+                  );
+                },
+              ),
               body: BlocListener<HomeBloc, HomeState>(
                 listenWhen: (p, c) => p.latestView != c.latestView,
                 listener: (context, state) {
