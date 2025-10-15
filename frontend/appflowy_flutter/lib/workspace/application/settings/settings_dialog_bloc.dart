@@ -14,17 +14,23 @@ part 'settings_dialog_bloc.freezed.dart';
 enum SettingsPage {
   // NEW
   account,
+  accountManagement,
   workspace,
-  manageData,
-  shortcuts,
-  ai,
+  workspaceManagement,
+  storage,
   plan,
   billing,
   sites,
+  sharing,
+  aboutXiaoma,
+  userProfile,
   // OLD
   notifications,
-  cloud,
   member,
+  manageData,
+  shortcuts,
+  ai,
+  cloud,
   featureFlags,
 }
 
@@ -110,8 +116,8 @@ class SettingsDialogBloc
     return result.fold(
       (cloudSetting) {
         final whiteList = [
-          "https://beta.appflowy.cloud",
-          "https://test.appflowy.cloud",
+          "https://api.xiaomabiji.com",
+          "https://api.xiaomabiji.com",
         ];
 
         return whiteList.contains(cloudSetting.serverUrl);

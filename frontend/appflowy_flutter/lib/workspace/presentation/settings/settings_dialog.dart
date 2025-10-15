@@ -10,11 +10,17 @@ import 'package:appflowy/workspace/application/settings/appflowy_cloud_urls_bloc
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/setting_ai_view/settings_ai_view.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/settings_account_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/account_management_view.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/settings_billing_view.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/settings_manage_data_view.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/settings_plan_view.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/settings_shortcuts_view.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/settings_workspace_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_workspace_management_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_storage_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_sharing_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_about_xiaoma_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/settings_user_profile_view.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/sites/settings_sites_view.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/af_dropdown_menu_entry.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_category.dart';
@@ -105,6 +111,7 @@ class SettingsDialog extends StatelessWidget {
                           context.read<SettingsDialogBloc>().state.page,
                           state.userProfile,
                           state.currentWorkspace?.role,
+                          context,
                         ),
                       );
                     },
@@ -123,6 +130,7 @@ class SettingsDialog extends StatelessWidget {
     SettingsPage page,
     UserProfilePB user,
     AFRolePB? currentWorkspaceMemberRole,
+    BuildContext context,
   ) {
     switch (page) {
       case SettingsPage.account:
@@ -131,10 +139,35 @@ class SettingsDialog extends StatelessWidget {
           didLogout: didLogout,
           didLogin: dismissDialog,
         );
+      case SettingsPage.accountManagement:
+        return AccountManagementView(
+          userProfile: user,
+          changeSelectedPage: (index) => context
+              .read<SettingsDialogBloc>()
+              .add(SettingsDialogEvent.setSelectedPage(index)),
+        );
       case SettingsPage.workspace:
         return SettingsWorkspaceView(
           userProfile: user,
           currentWorkspaceMemberRole: currentWorkspaceMemberRole,
+        );
+      case SettingsPage.workspaceManagement:
+        return SettingsWorkspaceManagementView(
+          userProfile: user,
+        );
+      case SettingsPage.storage:
+        return SettingsStorageView(
+          userProfile: user,
+        );
+      case SettingsPage.sharing:
+        return SettingsSharingView(
+          userProfile: user,
+        );
+      case SettingsPage.aboutXiaoma:
+        return const SettingsAboutXiaomaView();
+      case SettingsPage.userProfile:
+        return SettingsUserProfileView(
+          userProfile: user,
         );
       case SettingsPage.manageData:
         return SettingsManageDataView(
@@ -347,7 +380,7 @@ class _SelfHostSettingsState extends State<_SelfHostSettings> {
     );
   }
 
-  void _onSelected(AuthenticatorType type) {
+  void _onSelected(AuthenticatorType type) async {
     if (type == this.type) {
       return;
     }
@@ -364,6 +397,19 @@ class _SelfHostSettingsState extends State<_SelfHostSettings> {
       _saveUrl(
         cloudUrl: kAppflowyCloudUrl,
         webUrl: ShareConstants.defaultBaseWebDomain,
+        type: type,
+      );
+    } else if (type == AuthenticatorType.appflowyCloudDevelop) {
+      // 为开发模式添加保存逻辑，使用本地开发服务器地址
+      const developmentUrl = "http://localhost";
+      const developmentWebUrl = "https://test.xiaomabiji.com";
+      cloudUrlTextController.text = developmentUrl;
+      webUrlTextController.text = developmentWebUrl;
+
+      // 直接保存开发模式配置
+      _saveUrl(
+        cloudUrl: developmentUrl,
+        webUrl: developmentWebUrl,
         type: type,
       );
     }
@@ -418,6 +464,9 @@ class _SelfHostSettingsState extends State<_SelfHostSettings> {
   }
 
   Future<void> _fetchUrls() async {
+    // 首先获取当前的认证类型
+    final currentAuthType = await getAuthenticatorType();
+
     await Future.wait([
       getAppFlowyCloudUrl(),
       getAppFlowyShareDomain(),
@@ -429,11 +478,10 @@ class _SelfHostSettingsState extends State<_SelfHostSettings> {
       cloudUrlTextController.text = values[0];
       webUrlTextController.text = values[1];
 
-      if (kAppflowyCloudUrl != values[0]) {
-        setState(() {
-          type = AuthenticatorType.appflowyCloudSelfHost;
-        });
-      }
+      // 根据存储的认证类型来设置UI状态
+      setState(() {
+        type = currentAuthType;
+      });
     });
   }
 }
@@ -446,6 +494,8 @@ extension SettingsServerDropdownMenuExtension on AuthenticatorType {
         return LocaleKeys.settings_menu_cloudAppFlowy.tr();
       case AuthenticatorType.appflowyCloudSelfHost:
         return LocaleKeys.settings_menu_cloudAppFlowySelfHost.tr();
+      case AuthenticatorType.appflowyCloudDevelop:
+        return "小马笔记 Cloud (Development)";
       default:
         throw Exception('Unsupported server type: $this');
     }
@@ -463,10 +513,11 @@ class SettingsServerDropdownMenu extends StatelessWidget {
   final AuthenticatorType selectedServer;
   final void Function(AuthenticatorType type) onSelected;
 
-  // in the settings page from sign in page, we only support appflowy cloud and self-hosted
+  // in the settings page from sign in page, we support appflowy cloud, self-hosted and development
   static final supportedServers = [
     AuthenticatorType.appflowyCloud,
     AuthenticatorType.appflowyCloudSelfHost,
+    AuthenticatorType.appflowyCloudDevelop,
   ];
 
   @override
