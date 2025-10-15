@@ -56,7 +56,7 @@ class AddNewPageWidgetBottomSheet extends StatelessWidget {
           text: LocaleKeys.calendar_menuName.tr(),
           height: 52.0,
           leftIcon: const FlowySvg(
-            FlowySvgs.icon_calendar_s,
+            FlowySvgs.icon_calendar_m,
             size: Size.square(20),
           ),
           showTopBorder: false,

@@ -56,7 +56,7 @@ extension MinimalViewExtension on FolderViewMinimalPB {
   Widget defaultIcon({Size? size}) => FlowySvg(
         switch (layout) {
           ViewLayoutPB.Board => FlowySvgs.icon_board_s,
-          ViewLayoutPB.Calendar => FlowySvgs.icon_calendar_s,
+          ViewLayoutPB.Calendar => FlowySvgs.icon_calendar_m,
           ViewLayoutPB.Grid => FlowySvgs.icon_grid_s,
           ViewLayoutPB.Document => FlowySvgs.icon_document_s,
           ViewLayoutPB.Chat => FlowySvgs.chat_ai_page_s,
@@ -80,7 +80,7 @@ extension ViewExtension on ViewPB {
   Widget defaultIcon({Size? size}) => FlowySvg(
         switch (layout) {
           ViewLayoutPB.Board => FlowySvgs.icon_board_s,
-          ViewLayoutPB.Calendar => FlowySvgs.icon_calendar_s,
+          ViewLayoutPB.Calendar => FlowySvgs.icon_calendar_m,
           ViewLayoutPB.Grid => FlowySvgs.icon_grid_s,
           ViewLayoutPB.Document => FlowySvgs.icon_document_s,
           ViewLayoutPB.Chat => FlowySvgs.chat_ai_page_s,
@@ -318,7 +318,7 @@ extension ViewExtension on ViewPB {
 extension ViewLayoutExtension on ViewLayoutPB {
   FlowySvgData get icon => switch (this) {
         ViewLayoutPB.Board => FlowySvgs.icon_board_s,
-        ViewLayoutPB.Calendar => FlowySvgs.icon_calendar_s,
+        ViewLayoutPB.Calendar => FlowySvgs.icon_calendar_m,
         ViewLayoutPB.Grid => FlowySvgs.icon_grid_s,
         ViewLayoutPB.Document => FlowySvgs.icon_document_s,
         ViewLayoutPB.Chat => FlowySvgs.chat_ai_page_s,

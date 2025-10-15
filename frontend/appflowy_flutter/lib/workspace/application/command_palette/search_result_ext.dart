@@ -71,7 +71,7 @@ extension _ToViewIcon on ResultIconPB {
         "0" => FlowySvgs.icon_document_s,
         "1" => FlowySvgs.icon_grid_s,
         "2" => FlowySvgs.icon_board_s,
-        "3" => FlowySvgs.icon_calendar_s,
+        "3" => FlowySvgs.icon_calendar_m,
         "4" => FlowySvgs.chat_ai_page_s,
         _ => FlowySvgs.icon_document_s,
       };
