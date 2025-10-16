@@ -36,7 +36,7 @@ class SidebarInboxButton extends StatelessWidget {
     try {
       // 创建收件箱插件
       final inboxPlugin = makePlugin(
-        pluginType: PluginType.blank,
+        pluginType: PluginType.inbox,
         data: null,
       );
 
