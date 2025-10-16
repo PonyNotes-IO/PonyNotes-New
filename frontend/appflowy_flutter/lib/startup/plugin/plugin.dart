@@ -23,6 +23,7 @@ enum PluginType {
   homepage,
   standaloneAiChat,
   fileLibrary,
+  inbox,
 }
 
 typedef PluginId = String;
