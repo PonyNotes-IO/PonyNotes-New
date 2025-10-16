@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:appflowy_backend/protobuf/flowy-database2/file_entities.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/media_entities.pb.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
@@ -10,6 +11,8 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:media_kit/media_kit.dart';
 
 import 'file_library_models.dart';
+import '../services/baidu_cloud_service.dart';
+import '../services/baidu_cloud_config_service.dart';
 
 class FileLibraryService {
   static const String _fileLibraryDir = 'file_library';
@@ -95,6 +98,27 @@ class FileLibraryService {
     return fileItem;
   }
 
+  /// 从百度网盘导入文件
+  Future<List<FileLibraryItem>> importFromBaiduCloud() async {
+    // 检查配置是否有效
+    final configService = BaiduCloudConfigService.instance;
+    if (!configService.hasValidConfig) {
+      throw Exception('百度网盘配置无效，请检查.env.baidu文件');
+    }
+    
+    // 导入百度网盘服务
+    final baiduService = BaiduCloudService();
+    
+    // 检查是否已授权
+    if (!await baiduService.isAuthorized()) {
+      throw Exception('请先授权访问百度网盘');
+    }
+    
+    // 文件选择现在在UI层处理，这里直接返回空列表
+    // 实际的导入逻辑在 importBaiduCloudFile 方法中
+    return [];
+  }
+
   /// 删除文件
   Future<void> deleteFile(String fileId) async {
     final libraryPath = await _fileLibraryPath;
@@ -130,6 +154,44 @@ class FileLibraryService {
       // 网络文件，使用浏览器打开
       await afLaunchUrlString(item.url);
     }
+  }
+
+  /// 根据文件扩展名获取文件类型
+  MediaFileTypePB _getFileTypeFromExtension(String extension) {
+    final ext = extension.toLowerCase();
+    
+    // 图片文件
+    if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico'].contains(ext)) {
+      return MediaFileTypePB.Image;
+    }
+    
+    // 视频文件
+    if (['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.m4v'].contains(ext)) {
+      return MediaFileTypePB.Video;
+    }
+    
+    // 音频文件
+    if (['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a'].contains(ext)) {
+      return MediaFileTypePB.Audio;
+    }
+    
+    // 文档文件
+    if (['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'].contains(ext)) {
+      return MediaFileTypePB.Document;
+    }
+    
+    // 文本文件
+    if (['.txt', '.md', '.json', '.xml', '.csv', '.log'].contains(ext)) {
+      return MediaFileTypePB.Text;
+    }
+    
+    // 压缩文件
+    if (['.zip', '.rar', '.7z', '.tar', '.gz'].contains(ext)) {
+      return MediaFileTypePB.Archive;
+    }
+    
+    // 其他文件
+    return MediaFileTypePB.Other;
   }
 
   /// 获取视频或音频文件的时长（秒）
@@ -173,6 +235,7 @@ class FileLibraryService {
     File file, {
     String? originalName,
     String? fileId,
+    String? source,
   }) async {
     try {
       final fileName = originalName ?? p.basename(file.path);
@@ -281,7 +344,7 @@ class FileLibraryService {
         url: file.path, // 使用本地文件路径
         fileType: fileType,
         uploadType: FileUploadTypePB.LocalFile,
-        source: '文件库导入',
+        source: source ?? '文件库导入',
         createdAt: stat.changed,
         size: stat.size,
         duration: duration,
@@ -291,5 +354,57 @@ class FileLibraryService {
     }
   }
 
+  /// 导入百度网盘文件
+  Future<FileLibraryItem?> importBaiduCloudFile(BaiduCloudFile baiduFile) async {
+    try {
+      final baiduService = BaiduCloudService();
+      
+      // 下载文件到本地
+      final downloadUrl = await baiduService.getFileDownloadUrl(baiduFile.fsId);
+      if (downloadUrl == null) {
+        return null;
+      }
+      
+      final tempFile = File('${Directory.systemTemp.path}/${baiduFile.serverFilename}');
+      final localFile = await baiduService.downloadFile(downloadUrl, tempFile.path);
+      if (localFile == null) {
+        return null;
+      }
+      
+      // 将文件复制到文件库目录
+      final fileLibraryPath = await _fileLibraryPath;
+      final fileName = baiduFile.serverFilename;
+      final targetFile = File('$fileLibraryPath/$fileName');
+      
+      // 确保目标目录存在
+      await targetFile.parent.create(recursive: true);
+      
+      // 复制文件
+      await localFile.copy(targetFile.path);
+      
+      // 创建FileLibraryItem
+      final fileType = _getFileTypeFromExtension(baiduFile.fileExtension);
+      int? duration;
+      if (fileType == MediaFileTypePB.Video || fileType == MediaFileTypePB.Audio) {
+        duration = await _getMediaDuration(targetFile, fileType);
+      }
+      
+      return FileLibraryItem(
+        id: baiduFile.fsId,
+        name: baiduFile.serverFilename,
+        url: targetFile.path,
+        fileType: fileType,
+        uploadType: FileUploadTypePB.LocalFile,
+        source: '百度网盘导入',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(baiduFile.serverMtime * 1000),
+        size: baiduFile.size,
+        duration: duration,
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
 }
+
 

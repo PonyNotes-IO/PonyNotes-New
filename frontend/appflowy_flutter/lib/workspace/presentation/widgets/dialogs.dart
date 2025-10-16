@@ -658,3 +658,99 @@ Future<void> showCancelAndDeleteDialog({
     },
   );
 }
+
+/// iOS风格的简洁确认对话框
+Future<void> showSimpleConfirmDialog({
+  required BuildContext context,
+  required String message,
+  required String confirmText,
+  required VoidCallback onConfirm,
+  String? cancelText,
+  Color? confirmTextColor,
+}) {
+  return showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: Container(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 提示信息区域
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            // 分割线
+            Container(
+              width: double.infinity,
+              height: 1,
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            ),
+            // 底部操作区域
+            Container(
+              width: double.infinity,
+              height: 56,
+              child: Row(
+                children: [
+                  // 取消区域
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: Text(
+                          cancelText ?? LocaleKeys.button_cancel.tr(),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 垂直分割线
+                  Container(
+                    width: 1,
+                    height: double.infinity,
+                    color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  ),
+                  // 确认区域
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onConfirm();
+                      },
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: Text(
+                          confirmText,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: confirmTextColor ?? Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}

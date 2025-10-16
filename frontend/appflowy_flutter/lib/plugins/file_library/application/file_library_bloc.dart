@@ -28,6 +28,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
       refreshFiles: () => _onRefreshFiles(emit),
       deleteFile: (fileId) => _onDeleteFile(fileId, emit),
       importPdfFile: () => _onImportPdfFile(emit),
+      importFromBaiduCloud: () => _onImportFromBaiduCloud(emit),
       openFile: (fileItem) => _onOpenFile(fileItem, emit),
       sortChanged: (sortBy) => _onSortChanged(sortBy, emit),
     );
@@ -102,6 +103,42 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
       emit(state.copyWith(
         isImporting: false,
         error: '文件上传失败：${e.toString()}',
+      ));
+    }
+  }
+
+  Future<void> _onImportFromBaiduCloud(Emitter<FileLibraryState> emit) async {
+    emit(state.copyWith(isImporting: true));
+
+    try {
+      final importedFiles = await _service.importFromBaiduCloud();
+      if (importedFiles.isNotEmpty) {
+        // 重新加载文件列表
+        final files = await _service.getAllFiles();
+        final filteredFiles = state.selectedCategory == FileLibraryCategory.all
+            ? files
+            : files
+                .where((file) => state.selectedCategory.matchesFileType(file.fileType))
+                .toList();
+        
+        final sortedFiles = _sortFiles(filteredFiles, state.sortBy);
+
+        emit(state.copyWith(
+          isImporting: false,
+          files: files,
+          filteredFiles: sortedFiles,
+          successMessage: '从百度网盘导入成功：${importedFiles.length}个文件',
+        ));
+      } else {
+        emit(state.copyWith(
+          isImporting: false,
+          infoMessage: '用户取消了文件选择',
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        isImporting: false,
+        error: '从百度网盘导入失败：${e.toString()}',
       ));
     }
   }
@@ -223,6 +260,7 @@ class FileLibraryEvent with _$FileLibraryEvent {
   const factory FileLibraryEvent.refreshFiles() = _RefreshFiles;
   const factory FileLibraryEvent.deleteFile(String fileId) = _DeleteFile;
   const factory FileLibraryEvent.importPdfFile() = _ImportPdfFile;
+  const factory FileLibraryEvent.importFromBaiduCloud() = _ImportFromBaiduCloud;
   const factory FileLibraryEvent.openFile(FileLibraryItem fileItem) = _OpenFile;
   const factory FileLibraryEvent.sortChanged(String sortBy) = _SortChanged;
 }
@@ -241,4 +279,5 @@ class FileLibraryState with _$FileLibraryState {
     String? infoMessage,
   }) = _FileLibraryState;
 }
+
 
