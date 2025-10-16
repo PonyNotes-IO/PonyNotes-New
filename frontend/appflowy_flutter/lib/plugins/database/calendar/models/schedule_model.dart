@@ -1,12 +1,15 @@
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/calendar_entities.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/field_entities.pb.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy/plugins/database/application/row/row_service.dart';
 import 'package:appflowy/plugins/database/domain/date_cell_service.dart';
 import 'package:appflowy/plugins/database/domain/cell_service.dart';
 import 'package:appflowy/plugins/database/application/cell/cell_controller.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -15,6 +18,8 @@ import 'package:appflowy/plugins/database/application/database_controller.dart';
 import 'package:nanoid/nanoid.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flowy_infra/uuid.dart';
+
+import '../../application/field/field_info.dart';
 
 // 日程数据模型 - 基于 AppFlowy 数据库行
 class ScheduleItem {
@@ -319,18 +324,18 @@ class ScheduleModel extends ChangeNotifier {
     // 使用当前视图ID，如果没有设置则使用默认的新建日程视图ID
     final viewId = _currentViewId ?? _newScheduleViewId;
     
+    print('📅 开始创建日程:');
+    print('  - 标题: $title');
+    print('  - 描述: $description');
+    print('  - 开始时间: $startTime');
+    print('  - 结束时间: $endTime');
+    print('  - 视图ID: $viewId');
+    
     try {
-      // 确保数据库控制器已初始化
+      // 1) 确保数据库控制器已就绪（带重试）
+      await _ensureDatabaseReadyInternal(viewId);
       if (_databaseController == null) {
-        try {
-          await _initializeDatabaseListener(viewId);
-        } catch (e) {
-          throw Exception('数据库监听器初始化失败: $e');
-        }
-        
-        if (_databaseController == null) {
-          throw Exception('数据库控制器初始化失败');
-        }
+        throw Exception('数据库控制器初始化失败');
       }
       
       
@@ -349,9 +354,12 @@ class ScheduleModel extends ChangeNotifier {
       
       
       // 使用 AppFlowy 标准的创建行方法
-      final result = await RowBackendService.createRow(
-        viewId: viewId,
-        withCells: (builder) {
+      print('🔄 调用 RowBackendService.createRow...');
+
+      Future<FlowyResult<RowMetaPB, FlowyError>> _create() {
+        return RowBackendService.createRow(
+          viewId: viewId,
+          withCells: (builder) {
           
           // 查找主字段（通常是标题字段）
           final primaryField = fieldInfos.firstWhere(
@@ -412,17 +420,48 @@ class ScheduleModel extends ChangeNotifier {
             }
           }
           
-        },
-      );
+          },
+        );
+      }
 
-      return result.fold(
-        (rowMeta) async {
+      // 2) 尝试创建，遇到“Cancel database operation”进行恢复并重试
+      Future<RowMetaPB> _attemptCreateWithRecovery() async {
+        final first = await _create();
+        return first.fold(
+          (ok) async => ok,
+          (err) async {
+            if (err.msg.contains('Cancel database operation')) {
+              // 可能是打开阶段与创建竞争，重建监听器并重试
+              await Future.delayed(const Duration(milliseconds: 200));
+              try {
+                _disposeDatabaseListener();
+                await _initializeDatabaseListener(viewId);
+                await _ensureDatabaseReadyInternal(viewId);
+              } catch (_) {}
+              final retry = await _create();
+              return retry.fold((ok2) => ok2, (e2) => throw Exception(e2.msg));
+            }
+            throw Exception(err.msg);
+          },
+        );
+      }
+
+      final createdRowMeta = await _attemptCreateWithRecovery();
+
+      // 直接使用已得到的 RowMetaPB 继续流程
+      final rowMeta = createdRowMeta;
+      {
+          print('✅ 行创建成功，ID: ${rowMeta.id}');
           
           // 现在需要设置结束时间到日期字段
-          // 查找日期时间字段
-          final dateField = fieldInfos.where(
-            (field) => field.fieldType == FieldType.DateTime,
-          ).firstOrNull;
+          // 查找第一个日期时间字段（避免使用 firstOrNull 以兼容性更好）
+          FieldInfo? dateField;
+          for (final f in fieldInfos) {
+            if (f.fieldType == FieldType.DateTime) {
+              dateField = f;
+              break;
+            }
+          }
           
           if (dateField != null) {
             try {
@@ -482,18 +521,33 @@ class ScheduleModel extends ChangeNotifier {
           }
           
           return rowMeta.id;
-        },
-        (error) {
-          
-          // 抛出异常而不是创建本地示例
-          throw Exception('创建日程失败: ${error.msg} (错误代码: ${error.code})');
-        },
-      );
+      }
     } catch (e, stackTrace) {
+      print('❌ createSchedule 异常:');
+      print('  - 异常: $e');
+      print('  - 堆栈: $stackTrace');
       
       // 重新抛出异常
       rethrow;
     }
+  }
+
+  // 确保数据库控制器与字段控制器就绪（带轮询等待）
+  Future<void> _ensureDatabaseReadyInternal(String viewId) async {
+    if (_databaseController == null) {
+      await _initializeDatabaseListener(viewId);
+    }
+    // 等待字段控制器就绪
+    const int maxAttempts = 60; // 最长约3秒
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      final controller = _databaseController;
+      if (controller != null && controller.fieldController != null) {
+        return;
+      }
+      await Future.delayed(const Duration(milliseconds: 50));
+    }
+    // 超时仍未就绪
+    throw Exception('数据库控制器初始化失败');
   }
 
   // 更新日程

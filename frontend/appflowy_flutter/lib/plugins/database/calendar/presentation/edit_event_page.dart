@@ -1,9 +1,12 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
+import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/repeat_selector.dart';
 import '../models/schedule_model.dart';
 import 'new_event_page.dart'; // 重用一些组件
 
@@ -35,6 +38,9 @@ class _EditEventPageState extends State<EditEventPage> {
   late bool _isAllDay;
   late bool _isImportant;
   late bool _isRepeat;
+  String _repeatLabel = '任务重复';
+  int _repeatType = 0; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
+  String? _repeatCustomSummary;
   late String _calendar;
   late String _description;
   late String _reminderOption;
@@ -597,7 +603,7 @@ class _EditEventPageState extends State<EditEventPage> {
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(20),
-        child: CustomTimePickerBottomSheet(
+          child: CustomTimePickerBottomSheet(
           initialDate: isStartTime ? _startDate : _endDate,
           initialTime: isStartTime ? _startTime : _endTime,
           title: isStartTime ? '开始时间' : '结束时间',
@@ -696,7 +702,7 @@ class _EditEventPageState extends State<EditEventPage> {
                   // 全天选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.time_s,
+                      FlowySvgs.icon_time_calendar_lg,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
@@ -727,12 +733,14 @@ class _EditEventPageState extends State<EditEventPage> {
                         _isAllDay = !_isAllDay;
                       });
                     },
+                    horizontalTitleGap: 8.0,
+                    minLeadingWidth: 0,
                   ),
                   
                   // 准时选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.clock_alarm_s,
+                      FlowySvgs.icon_alarm_clock_m,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
@@ -746,33 +754,39 @@ class _EditEventPageState extends State<EditEventPage> {
                     onTap: () {
                       _showReminderDialog();
                     },
+                    horizontalTitleGap: 8.0,
+                    minLeadingWidth: 0,
                   ),
                   
                   // 日程重复选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.reload_s,
+                      FlowySvgs.icon_repeat_calender_m,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
                     title: Text(
-                      '日程重复',
+                      _repeatType == 0
+                          ? '任务重复'
+                          : (_repeatType == 99
+                              ? (_repeatCustomSummary ?? '自定义')
+                              : _repeatLabel),
                       style: TextStyle(
                         fontSize: 16,
                         color: theme.textTheme.bodyLarge?.color,
                       ),
                     ),
                     onTap: () {
-                      setState(() {
-                        _isRepeat = !_isRepeat;
-                      });
+                      _showRepeatDialog();
                     },
+                    horizontalTitleGap: 8.0,
+                    minLeadingWidth: 0,
                   ),
                   
                   // 我的日历选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.group_s,
+                      FlowySvgs.icon_calendar_m,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
@@ -786,12 +800,14 @@ class _EditEventPageState extends State<EditEventPage> {
                     onTap: () {
                       // 显示日历选择器
                     },
+                    horizontalTitleGap: 8.0,
+                    minLeadingWidth: 0,
                   ),
                   
                   // 添加说明选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.edit_s,
+                      FlowySvgs.icon_edit_m,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
@@ -805,6 +821,8 @@ class _EditEventPageState extends State<EditEventPage> {
                     onTap: () {
                       _showDescriptionDialog();
                     },
+                    horizontalTitleGap: 8.0,
+                    minLeadingWidth: 0,
                   ),
 
                   // 分隔线
@@ -997,5 +1015,52 @@ class _EditEventPageState extends State<EditEventPage> {
         );
       },
     );
+  }
+
+  void _showRepeatDialog() {
+    final theme = Theme.of(context);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => RepeatSelectionDialog(
+        currentType: _repeatType,
+        currentCustomSummary: _repeatCustomSummary,
+        onSave: ({required int type, String? customSummary}) {
+          setState(() {
+            if (type == 0) {
+              _isRepeat = false;
+              _repeatType = 0;
+              _repeatLabel = '任务重复';
+              _repeatCustomSummary = null;
+            } else if (type == 99) {
+              _isRepeat = true;
+              _repeatType = 99;
+              _repeatCustomSummary = customSummary;
+              _repeatLabel = customSummary ?? '自定义';
+            } else {
+              _isRepeat = true;
+              _repeatType = type;
+              _repeatCustomSummary = null;
+              _repeatLabel = _repeatTypeName(type);
+            }
+          });
+        },
+      ),
+    );
+  }
+
+  String _repeatTypeName(int t) {
+    switch (t) {
+      case 1:
+        return '每天';
+      case 2:
+        return '每周';
+      case 3:
+        return '每年';
+      case 4:
+        return '法定工作日';
+      default:
+        return '任务重复';
+    }
   }
 } 

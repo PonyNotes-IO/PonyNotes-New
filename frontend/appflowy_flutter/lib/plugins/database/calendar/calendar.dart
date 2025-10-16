@@ -1,5 +1,6 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -11,16 +12,19 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
-import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
-import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:appflowy/workspace/application/view/view_listener.dart';
+import 'package:appflowy/plugins/document/document_page.dart';
+import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../workspace/presentation/widgets/toggle/toggle.dart';
+import 'widgets/schedule_sidebar.dart';
 import 'package:flowy_infra/uuid.dart';
-import 'package:nanoid/nanoid.dart';
+import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
 import 'presentation/new_event_page.dart';
 import 'presentation/edit_event_page.dart';
-import 'widgets/schedule_sidebar.dart';
 import 'models/schedule_model.dart';
 import 'dart:ui' as ui;
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
@@ -28,7 +32,6 @@ import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/protobuf.dart';
-import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
 import 'package:appflowy/plugins/document/presentation/editor_page.dart';
 import 'package:appflowy/plugins/document/presentation/editor_style.dart';
 
@@ -92,7 +95,8 @@ class CalendarMainPlugin extends Plugin {
   PluginWidgetBuilder get widgetBuilder => CalendarMainWidgetBuilder();
 
   @override
-  PluginId get id => "CalendarMainStack"; // 使用固定ID，类似问AI的做法
+  PluginId get id =>
+      fixedUuid(12345, UuidType.privateSpace); // 使用与ScheduleModel相同的固定ID
 }
 
 class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
@@ -150,7 +154,14 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   late PopoverController _settingsPopoverController;
   late PopoverController _addPopoverController;
   late ViewPB? _selectedNote; // 添加选中的笔记
+  late GlobalKey<_CalendarContentState>
+      _calendarContentKey; // 添加CalendarContent的key
+  bool _isSubscribeSystemCalendar = false;
 
+  // 添加状态管理变量
+  late bool _isLoadingContent;
+  late Map<String, dynamic>? _cachedContent;
+  late DateTime? _lastLoadedDate;
 
   @override
   void initState() {
@@ -171,38 +182,46 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     _settingsPopoverController = PopoverController();
     _addPopoverController = PopoverController();
     _selectedNote = null;
+    _calendarContentKey = GlobalKey<_CalendarContentState>();
 
-    
+    // 初始化新的状态变量
+    _isLoadingContent = false;
+    _cachedContent = null;
+    _lastLoadedDate = null;
+
     // 初始化时尝试创建或获取日历视图
     _initializeCalendarView();
+
+    // 调试：打印初始状态
+    print('日历组件初始化，订阅状态: $_isSubscribeSystemCalendar');
   }
 
   // 初始化日历视图
   Future<void> _initializeCalendarView() async {
     try {
       // 使用与ScheduleModel相同的固定ViewId
-      final String fixedViewId = fixedUuid(12345, UuidType.privateSpace); // 使用与ScheduleModel相同的固定ID
-      
+      final String fixedViewId =
+          fixedUuid(12345, UuidType.privateSpace); // 使用与ScheduleModel相同的固定ID
+
       // 先检查视图是否已存在
       final result = await ViewBackendService.getView(fixedViewId);
-      
+
       await result.fold(
         (view) async {
           // 视图已存在，直接使用
           setState(() {
             _currentViewId = view.id;
           });
-  
         },
         (error) async {
           // 视图不存在，创建新视图
-          
+
           final createResult = await ViewBackendService.createOrphanView(
             viewId: fixedViewId,
             name: '日历视图',
             layoutType: ViewLayoutPB.Calendar,
           );
-          
+
           createResult.fold(
             (view) {
               setState(() {
@@ -218,14 +237,13 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           );
         },
       );
-      
+
       // 初始化完成后，等待一下让数据库初始化完成，然后刷新数据
       Future.delayed(Duration(milliseconds: 500), () {
         if (mounted) {
           setState(() {}); // 触发重建以加载真实数据
         }
       });
-      
     } catch (e) {
       // 使用固定ID作为后备
       setState(() {
@@ -234,67 +252,274 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     }
   }
 
+  // 等待系统初始化完成
+  Future<void> _waitForSystemInitialization() async {
+    int maxRetries = 10;
+    int retryCount = 0;
 
+    while (retryCount < maxRetries) {
+      try {
+        // 尝试获取所有视图来检查系统是否已初始化
+        final result = await ViewBackendService.getAllViews();
+
+        await result.fold(
+          (views) async {
+            // 系统已初始化，可以继续
+            return;
+          },
+          (error) async {
+            // 如果系统未初始化，等待一段时间后重试
+            if (error.msg.contains('Folder not initialized') ||
+                error.msg.contains('not initialized')) {
+              await Future.delayed(Duration(milliseconds: 500));
+              retryCount++;
+              if (retryCount < maxRetries) {
+                await _waitForSystemInitialization();
+              } else {
+                throw Exception('系统初始化超时，请稍后重试');
+              }
+            } else {
+              throw Exception('系统初始化失败: ${error.msg}');
+            }
+          },
+        );
+        break; // 成功则跳出循环
+      } catch (e) {
+        if (retryCount >= maxRetries - 1) {
+          throw Exception('系统初始化失败: $e');
+        }
+        await Future.delayed(Duration(milliseconds: 500));
+        retryCount++;
+      }
+    }
+  }
 
   void _showCreateDocumentDialog() {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         String documentTitle = '';
-        return AlertDialog(
-          title: Text('新建日记页'),
-          content: TextField(
-            onChanged: (value) {
-              documentTitle = value;
-            },
-            decoration: InputDecoration(
-              hintText: '输入日记标题',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: Text('取消'),
-            ),
-            TextButton(
-              onPressed: () async {
-                if (documentTitle.isNotEmpty) {
-                  try {
-                    // 创建新的文档
-                    final result = await ViewBackendService.createOrphanView(
-                      viewId: nanoid(),
-                      name: documentTitle,
-                      layoutType: ViewLayoutPB.Document,
-                    );
-                    
-                    result.fold(
-                      (view) {
-                        // 创建成功后打开新文档
-                        context.read<TabsBloc>().add(
-                          TabsEvent.openTab(plugin: view.plugin(), view: view),
-                        );
-                      },
-                      (error) {
-                        // 处理错误
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('创建文档失败: ${error.msg}')),
-                        );
-                      },
-                    );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('创建文档失败: $e')),
-                    );
-                  }
-                }
-                Navigator.of(context).pop();
-              },
-              child: Text('创建'),
-            ),
-          ],
+        bool isCreating = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('新建日记页'),
+              content: TextField(
+                onChanged: (value) {
+                  documentTitle = value;
+                },
+                decoration: InputDecoration(
+                  hintText: '输入日记标题',
+                  border: OutlineInputBorder(),
+                ),
+                enabled: !isCreating,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isCreating
+                      ? null
+                      : () {
+                          Navigator.of(context).pop();
+                        },
+                  child: Text('取消'),
+                ),
+                TextButton(
+                  onPressed: isCreating
+                      ? null
+                      : () async {
+                          if (documentTitle.trim().isNotEmpty) {
+                            setDialogState(() {
+                              isCreating = true;
+                            });
+
+                            try {
+                              // 验证标题长度
+                              if (documentTitle.length > 256) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('日记标题过长，请控制在256个字符以内'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                                setDialogState(() {
+                                  isCreating = false;
+                                });
+                                return;
+                              }
+
+                              // 等待系统初始化完成
+                              await _waitForSystemInitialization();
+
+                              // 获取当前用户和工作空间信息
+                              final userResult = await UserBackendService
+                                  .getCurrentUserProfile();
+                              final workspaceResult =
+                                  await FolderEventGetCurrentWorkspaceSetting()
+                                      .send();
+
+                              final userProfile = userResult.fold(
+                                  (user) => user, (error) => null);
+                              final workspaceId = workspaceResult.fold(
+                                (setting) => setting.workspaceId,
+                                (error) => null,
+                              );
+
+                              if (userProfile == null ||
+                                  workspaceId == null ||
+                                  workspaceId.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('无法获取当前用户或工作空间信息'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                                setDialogState(() {
+                                  isCreating = false;
+                                });
+                                return;
+                              }
+
+                              // 使用WorkspaceService创建文档视图
+                              final workspaceService = WorkspaceService(
+                                workspaceId: workspaceId,
+                                userId: userProfile.id,
+                              );
+
+                              // 创建Document类型的视图
+                              final result = await workspaceService.createView(
+                                name: documentTitle.trim(),
+                                viewSection: ViewSectionPB.Public, // 创建在公共区域
+                                layout: ViewLayoutPB.Document, // 使用Document类型
+                                setAsCurrent: true,
+                              );
+
+                              result.fold(
+                                (view) {
+                                  // 重置创建状态
+                                  setDialogState(() {
+                                    isCreating = false;
+                                  });
+
+                                  // 显示成功提示
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('日记创建成功: ${view.name}'),
+                                      backgroundColor: Colors.green,
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+
+                                  // 关闭对话框
+                                  Navigator.of(context).pop();
+
+                                  // 不自动打开新文档，避免TabBloc问题
+                                  // 用户可以通过点击日历中的日记来打开
+
+                                  // 刷新日历内容以显示新创建的日记
+                                  if (mounted) {
+                                    // 延迟刷新，确保数据库操作完成
+                                    Future.delayed(Duration(milliseconds: 1000),
+                                        () {
+                                      if (mounted) {
+                                        _calendarContentKey.currentState
+                                            ?.refreshData();
+                                      }
+                                    });
+                                  }
+                                },
+                                (error) {
+                                  setDialogState(() {
+                                    isCreating = false;
+                                  });
+
+                                  // 处理错误，提供更详细的错误信息
+                                  String errorMsg = '创建日记失败';
+                                  String debugInfo = '';
+
+                                  if (error.msg.contains('InvalidParams')) {
+                                    errorMsg = '参数无效，请检查标题格式';
+                                    debugInfo =
+                                        '错误代码: ${error.code}, 消息: ${error.msg}';
+                                  } else if (error.msg
+                                      .contains('ViewIdIsInvalid')) {
+                                    errorMsg = '视图ID无效';
+                                    debugInfo = '错误: ${error.msg}';
+                                  } else if (error.msg
+                                      .contains('ViewNameTooLong')) {
+                                    errorMsg = '日记标题过长';
+                                    debugInfo = '标题长度: ${documentTitle.length}';
+                                  } else if (error.msg
+                                      .contains('Folder not initialized')) {
+                                    errorMsg = '系统未完全初始化，请稍后重试';
+                                    debugInfo = '请等待系统完全启动后再创建日记';
+                                  } else {
+                                    errorMsg = '创建日记失败: ${error.msg}';
+                                    debugInfo = '错误代码: ${error.code}';
+                                  }
+
+                                  // 打印调试信息到控制台
+                                  print('日记创建失败: $errorMsg');
+                                  print('调试信息: $debugInfo');
+                                  print(
+                                      '使用的参数: name=${documentTitle.trim()}, layoutType=Document');
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(errorMsg),
+                                      backgroundColor: Colors.red,
+                                      duration: Duration(seconds: 6),
+                                      action: SnackBarAction(
+                                        label: '详情',
+                                        onPressed: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) => AlertDialog(
+                                              title: Text('错误详情'),
+                                              content: Text(
+                                                  '$errorMsg\n\n$debugInfo'),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.of(context)
+                                                          .pop(),
+                                                  child: Text('确定'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            } catch (e) {
+                              setDialogState(() {
+                                isCreating = false;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('创建日记失败: $e'),
+                                  backgroundColor: Colors.red,
+                                  duration: Duration(seconds: 4),
+                                ),
+                              );
+                            }
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('请输入日记标题'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                            return;
+                          }
+                        },
+                  child: Text('创建'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -303,6 +528,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   void _showCreateScheduleDialog() {
     setState(() {
       _showNewEventPage = true;
+      _selectedNote = null; // 清除当前选中的笔记
+      _showEditEventPage = false; // 确保编辑日程页面关闭
+      _editingSchedule = null; // 清除编辑中的日程
     });
   }
 
@@ -325,7 +553,13 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   // 处理点击笔记
   void _onNoteTap(ViewPB note) {
     setState(() {
-      _selectedNote = note;
+      // 如果点击的是当前选中的笔记，则取消选中
+      if (_selectedNote?.id == note.id) {
+        _selectedNote = null;
+      } else {
+        // 否则选中新笔记
+        _selectedNote = note;
+      }
       _showNewEventPage = false;
       _showEditEventPage = false;
     });
@@ -339,50 +573,96 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   void _onEventCreated(Map<String, dynamic> eventData) {
-    // TODO: 保存日程到数据库或状态管理
-    // 创建日程逻辑将在后续实现
-    
+    // 日程已通过 ScheduleModel 保存到数据库
+    // 这里只需要刷新日历显示和显示成功提示
+
     final description = eventData['description'] as String;
     final isAllDay = eventData['isAllDay'] as bool;
     final startTime = eventData['startTime'] as TimeOfDay;
     final endTime = eventData['endTime'] as TimeOfDay;
-    
+    final eventId = eventData['id'] as String?;
+
+    print('📅 日程创建回调被调用:');
+    print('  - 描述: $description');
+    print('  - ID: $eventId');
+    print('  - 全天: $isAllDay');
+    print('  - 开始时间: $startTime');
+    print('  - 结束时间: $endTime');
+
+    // 检查是否有有效的ID
+    if (eventId == null || eventId.isEmpty) {
+      print('❌ 错误: 日程ID为空，保存可能失败');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ 日程创建失败：未返回有效ID'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // 刷新日历内容以显示新创建的日程
+    print('🔄 刷新日历内容...');
+    _calendarContentKey.currentState?.refreshData();
+
+    // 刷新日程列表以显示新创建的日程
+    // 通过 ScheduleModel 的全局实例来刷新
+    // _scheduleSidebarKey.currentState?.refreshData();
+
     // 显示成功提示
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('日程创建成功: $description'),
+        content: Text('✅ 日程创建成功: $description'),
         backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
       ),
     );
-    
+
     // 隐藏新建日程界面
     _hideNewEventPage();
   }
 
   void _onEventUpdated(Map<String, dynamic> eventData) {
     final description = eventData['description'] as String;
-    
+
+    // 刷新日历内容以显示更新的日程
+    _calendarContentKey.currentState?.refreshData();
+
+    // 刷新日程列表以显示更新的日程
+    // 通过 ScheduleModel 的全局实例来刷新
+    // _scheduleSidebarKey.currentState?.refreshData();
+
     // 显示成功提示
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('日程更新成功: $description'),
         backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
       ),
     );
-    
+
     // 隐藏编辑日程界面
     _hideEditEventPage();
   }
 
   void _onEventDeleted(String scheduleId) {
+    // 刷新日历内容以移除已删除的日程
+    _calendarContentKey.currentState?.refreshData();
+
+    // 刷新日程列表以移除已删除的日程
+    // 通过 ScheduleModel 的全局实例来刷新
+    // _scheduleSidebarKey.currentState?.refreshData();
+
     // 显示成功提示
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('日程已删除'),
         backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
       ),
     );
-    
+
     // 隐藏编辑日程界面
     _hideEditEventPage();
   }
@@ -434,7 +714,10 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Widget _buildSettingsMenu() {
-    return Container(
+    print('_buildSettingsMenu 被调用，当前订阅状态: $_isSubscribeSystemCalendar');
+
+    return StatefulBuilder(
+      builder: (context, setPopupState) => Container(
       width: 350,
       padding: EdgeInsets.all(4),
       child: Column(
@@ -454,12 +737,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             ),
           ),
           // 订阅系统日历
-          InkWell(
-            onTap: () {
-              _settingsPopoverController.close();
-              // TODO: 切换订阅系统日历
-            },
-            child: Container(
+          Container(
               height: 42,
               padding: EdgeInsets.symmetric(horizontal: 12),
               child: Row(
@@ -468,28 +746,25 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   SizedBox(width: 10),
                   Text('订阅系统日历', style: TextStyle(fontSize: 14)),
                   Spacer(),
-                  Container(
-                    width: 36,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Container(
-                        width: 18,
-                        height: 18,
-                        margin: EdgeInsets.only(right: 1),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                Toggle(
+                  value: _isSubscribeSystemCalendar,
+                  onChanged: (value) {
+                    // 更新弹层内视图
+                    setPopupState(() {
+                      _isSubscribeSystemCalendar = value;
+                    });
+                    // 同步更新父级（外层可能依赖该状态）
+                    if (mounted) {
+                      setState(() {});
+                    }
+                    // 执行业务逻辑（订阅/取消订阅 + 刷新）
+                    _toggleSystemCalendarSubscription(value);
+                  },
+                  style: const ToggleStyle.mobile(),
+                  activeBackgroundColor: Color(0xFFF89575),
+                  padding: EdgeInsets.zero,
+                ),
+              ],
             ),
           ),
           // 日记模式
@@ -511,7 +786,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                     '默认',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                 ],
@@ -520,42 +795,39 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           ),
         ],
       ),
-    );
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      child: Row(
-                  children: [
-            // 左侧日历导航区
-            AnimatedContainer(
-              duration: Duration(milliseconds: 300),
-              width: _isSidebarExpanded ? 300 : 60,
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              clipBehavior: Clip.hardEdge,
-              child: OverflowBox(
-                alignment: Alignment.topLeft,
-                minWidth: 0,
-                maxWidth: _isSidebarExpanded ? 300 : 60,
-                child: Column(
-                children: [
-                  // 顶部工具栏，包含收起/展开按钮和其他操作按钮
-                  Container(
-                    height: 50,
-                    padding: EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          color: Theme.of(context).dividerColor,
-                          width: 0.5,
-                        ),
+    return Row(
+      children: [
+        // 左侧日历导航区
+        AnimatedContainer(
+          duration: Duration(milliseconds: 300),
+          width: _isSidebarExpanded ? 300 : 60,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          clipBehavior: Clip.hardEdge,
+          child: OverflowBox(
+            alignment: Alignment.topLeft,
+            minWidth: 0,
+            maxWidth: _isSidebarExpanded ? 300 : 60,
+            child: Column(
+              children: [
+                // 顶部工具栏，包含收起/展开按钮和其他操作按钮
+                Container(
+                  height: 50,
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Theme.of(context).dividerColor,
+                        width: 0.5,
                       ),
                     ),
-                    child: ClipRect(
-                      child: _isSidebarExpanded 
+                  ),
+                  child: ClipRect(
+                    child: _isSidebarExpanded
                         ? Row(
                             children: [
                               Expanded(
@@ -563,11 +835,32 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                                   padding: EdgeInsets.only(left: 8),
                                   child: Text(
                                     '日历',
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
+                                ),
+                              ),
+                              // 收起/展开按钮 (使用双箭头图标)
+                              SizedBox(
+                                width: 32,
+                                height: 32,
+                                child: IconButton(
+                                  icon: Icon(Icons.keyboard_double_arrow_left,
+                                      size: 18),
+                                  onPressed: () {
+                                    setState(() {
+                                      _isSidebarExpanded = !_isSidebarExpanded;
+                                    });
+                                  },
+                                  tooltip: '收起侧边栏',
+                                  padding: EdgeInsets.zero,
+                                  constraints: BoxConstraints.tightFor(
+                                      width: 32, height: 32),
                                 ),
                               ),
                               // 添加按钮
@@ -576,58 +869,47 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                                 height: 32,
                                 child: AppFlowyPopover(
                                   controller: _addPopoverController,
-                                  direction: PopoverDirection.bottomWithCenterAligned,
+                                  direction:
+                                      PopoverDirection.bottomWithCenterAligned,
                                   child: IconButton(
                                     icon: Icon(Icons.add, size: 18),
-                                    onPressed: () => _addPopoverController.show(),
+                                    onPressed: () =>
+                                        _addPopoverController.show(),
                                     tooltip: '添加新内容',
                                     padding: EdgeInsets.zero,
-                                    constraints: BoxConstraints.tightFor(width: 32, height: 32),
+                                    constraints: BoxConstraints.tightFor(
+                                        width: 32, height: 32),
                                   ),
                                   popupBuilder: (context) => _buildAddMenu(),
                                 ),
                               ),
-                              SizedBox(width: 4),
                               // 更多选项按钮
                               SizedBox(
                                 width: 32,
                                 height: 32,
                                 child: AppFlowyPopover(
                                   controller: _settingsPopoverController,
-                                  direction: PopoverDirection.bottomWithCenterAligned,
+                                  direction:
+                                      PopoverDirection.bottomWithCenterAligned,
                                   child: IconButton(
                                     icon: Icon(Icons.more_horiz, size: 18),
-                                    onPressed: () => _settingsPopoverController.show(),
+                                    onPressed: () =>
+                                        _settingsPopoverController.show(),
                                     tooltip: '更多选项',
                                     padding: EdgeInsets.zero,
-                                    constraints: BoxConstraints.tightFor(width: 32, height: 32),
+                                    constraints: BoxConstraints.tightFor(
+                                        width: 32, height: 32),
                                   ),
-                                  popupBuilder: (context) => _buildSettingsMenu(),
+                                  popupBuilder: (context) =>
+                                      _buildSettingsMenu(),
                                 ),
                               ),
-                              SizedBox(width: 4),
-                              // 收起/展开按钮 (使用双箭头图标)
-                              SizedBox(
-                                width: 32,
-                                height: 32,
-                                child: IconButton(
-                                  icon: Icon(Icons.keyboard_double_arrow_left, size: 18),
-                                  onPressed: () {
-                                    setState(() {
-                                      _isSidebarExpanded = !_isSidebarExpanded;
-                                    });
-                                  },
-                                  tooltip: '收起侧边栏',
-                                  padding: EdgeInsets.zero,
-                                  constraints: BoxConstraints.tightFor(width: 32, height: 32),
-                                ),
-                              ),
-                              SizedBox(width: 4),
                             ],
                           )
                         : Center(
                             child: IconButton(
-                              icon: Icon(Icons.keyboard_double_arrow_right, size: 22),
+                              icon: Icon(Icons.keyboard_double_arrow_right,
+                                  size: 22),
                               onPressed: () {
                                 setState(() {
                                   _isSidebarExpanded = !_isSidebarExpanded;
@@ -636,36 +918,42 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                               tooltip: '展开侧边栏',
                             ),
                           ),
-                    ),
                   ),
-                  // 右侧工具栏 - 已移除三个按钮
-                  // 侧边栏内容
-                  Expanded(
-                    child: _isSidebarExpanded ? _buildExpandedSidebar() : _buildCollapsedSidebar(),
-                  ),
-                ],
                 ),
-              ),
+                // 右侧工具栏 - 已移除三个按钮
+                // 侧边栏内容
+                Expanded(
+                  child: _isSidebarExpanded
+                      ? _buildExpandedSidebar()
+                      : _buildCollapsedSidebar(),
+                ),
+              ],
             ),
-            // 右侧详情区 - 完全铺满剩余空间
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                height: double.infinity,
-                color: Theme.of(context).colorScheme.surface,
-                child: _showNewEventPage 
-                  ? _buildNewEventView()
-                  : _showEditEventPage && _editingSchedule != null
-                    ? _buildEditEventView()
-                    : _selectedNote != null
-                      ? _buildNoteContentView()
-                      : _buildDefaultView(),
-              ),
-            ),
-        ],
-      ),
-          );
-    }
+          ),
+        ),
+        // 右侧详情区 - 分为日历视图和编辑区域
+        Expanded(
+          child: _selectedNote != null ||
+                  _showNewEventPage ||
+                  _showEditEventPage
+              ? Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  margin: EdgeInsets.only(left: 1, right: 1, bottom: 1),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: _showNewEventPage
+                      ? _buildNewEventView()
+                      : _showEditEventPage && _editingSchedule != null
+                          ? _buildEditEventView()
+                          : _selectedNote != null
+                              ? _buildNoteEditArea()
+                              : Container(),
+                )
+              : _buildDefaultView(),
+        ),
+      ],
+    );
+  }
 
   Widget _buildExpandedSidebar() {
     return Column(
@@ -684,6 +972,14 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 setState(() {
                   _selectedDay = selected;
                   _focusedDay = focused;
+                  // 切换日期时清空右侧区域，让_buildDefaultView自动选择内容
+                  _selectedNote = null;
+                  _showNewEventPage = false;
+                  _showEditEventPage = false;
+                  _editingSchedule = null;
+                  // 清除缓存，强制重新加载新日期的内容
+                  _cachedContent = null;
+                  _lastLoadedDate = null;
                 });
               },
               onPageChanged: (focusedDay) {
@@ -707,10 +1003,16 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             width: double.infinity,
             padding: const EdgeInsets.all(16), // 确保内容与侧边栏边缘有距离
             child: CalendarContent(
+              key: _calendarContentKey,
+              // 添加key以便调用刷新方法
               selectedDate: _selectedDay ?? _focusedDay,
-              viewId: _currentViewId, // 传递视图ID
-              onScheduleTap: _onScheduleTap, // 传递点击回调
-              onNoteTap: _onNoteTap, // 传递笔记点击回调
+              viewId: _currentViewId,
+              // 传递视图ID
+              onScheduleTap: _onScheduleTap,
+              // 传递点击回调
+              onNoteTap: _onNoteTap,
+              // 传递笔记点击回调
+              selectedNoteId: _selectedNote?.id, // 传递当前选中的笔记ID
             ),
           ),
         ),
@@ -718,12 +1020,490 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     );
   }
 
-    Widget _buildCollapsedSidebar() {
+  Widget _buildCollapsedSidebar() {
     return const SizedBox.shrink();
   }
 
   Widget _buildDefaultView() {
-    return Container();
+    return Container(
+      color: Theme.of(context).colorScheme.surface,
+      child: _buildContentBasedOnDate(),
+    );
+  }
+
+  Widget _buildContentBasedOnDate() {
+    final selectedDate = _selectedDay ?? _focusedDay;
+
+    // 检查是否需要重新加载数据
+    if (_lastLoadedDate == null ||
+        !_isSameDay(_lastLoadedDate!, selectedDate) ||
+        _cachedContent == null) {
+      _loadContentForDate(selectedDate);
+    }
+
+    if (_isLoadingContent) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    final data = _cachedContent ?? {};
+    final notes = data['notes'] as List<ViewPB>? ?? [];
+    final schedules = data['schedules'] as List<ScheduleItem>? ?? [];
+
+    // 如果有笔记，默认显示第一条笔记
+    if (notes.isNotEmpty) {
+      return _buildNoteEditAreaForNote(notes.first);
+    }
+
+    // 如果有日程没有笔记，显示第一条日程
+    if (schedules.isNotEmpty) {
+      return _buildScheduleEditArea(schedules.first);
+    }
+
+    // 如果既没有笔记也没有日程，显示空状态
+    return _buildEmptyState();
+  }
+
+  // 异步加载内容数据
+  Future<void> _loadContentForDate(DateTime date) async {
+    if (_isLoadingContent) return; // 防止重复加载
+
+    setState(() {
+      _isLoadingContent = true;
+    });
+
+    try {
+      // 获取笔记数据
+      final notes = await _getNotesForDate(date);
+
+      // 获取日程数据
+      final schedules = await _getSchedulesForDate(date);
+
+      if (mounted) {
+        setState(() {
+          _cachedContent = {
+            'notes': notes,
+            'schedules': schedules,
+          };
+          _lastLoadedDate = date;
+          _isLoadingContent = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _cachedContent = {
+            'notes': <ViewPB>[],
+            'schedules': <ScheduleItem>[],
+          };
+          _lastLoadedDate = date;
+          _isLoadingContent = false;
+        });
+      }
+    }
+  }
+
+  // 比较两个日期是否为同一天
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  // 切换系统日历订阅状态
+  Future<void> _toggleSystemCalendarSubscription(bool value) async {
+    print('开始执行系统日历订阅操作: $value');
+
+    try {
+      // 订阅时先做权限检查与平台支持判断
+      if (value) {
+        // 尝试订阅系统日历
+        print('尝试订阅系统日历...');
+
+        final hasPermission = await PermissionChecker.checkCalendarPermission(context);
+        if (!hasPermission) {
+          // 恢复状态并提示不支持/未授权
+          if (mounted) {
+            setState(() {
+              _isSubscribeSystemCalendar = false;
+            });
+          }
+          _showClientNotSupportedMessage();
+          return;
+        }
+
+        await _subscribeToSystemCalendar();
+      } else {
+        // 取消订阅系统日历
+        print('取消订阅系统日历...');
+        await _unsubscribeFromSystemCalendar();
+      }
+
+      print('系统日历操作完成: $value');
+
+      // 刷新相关数据
+      await _refreshCalendarData();
+
+      // 显示成功提示
+      _showToggleSuccessMessage(value);
+
+      print('系统日历订阅状态切换成功: $value');
+
+    } catch (e) {
+      print('切换系统日历订阅状态失败: $e');
+
+      // 如果是权限插件错误，显示提示信息
+      if (e.toString().contains('MissingPluginException')) {
+        // 恢复状态并提示不支持
+        if (mounted) {
+          setState(() {
+            _isSubscribeSystemCalendar = !value;
+          });
+        }
+        _showClientNotSupportedMessage();
+        return;
+      }
+
+      // 其他错误，回滚状态
+      setState(() {
+        _isSubscribeSystemCalendar = !value;
+      });
+
+      // 显示错误提示
+      _showToggleErrorMessage();
+    }
+  }
+
+  // 订阅系统日历
+  Future<void> _subscribeToSystemCalendar() async {
+    try {
+      // TODO: 实现系统日历订阅逻辑
+      // 这里可以调用系统日历API来获取事件
+      print('订阅系统日历');
+
+      // 模拟获取系统日历事件
+      // 在实际实现中，这里应该调用系统日历API
+
+      // 模拟延迟，确保操作完成
+      await Future.delayed(Duration(milliseconds: 100));
+
+    } catch (e) {
+      print('订阅系统日历失败: $e');
+      // 抛出异常，让上层处理
+      rethrow;
+    }
+  }
+
+  // 取消订阅系统日历
+  Future<void> _unsubscribeFromSystemCalendar() async {
+    try {
+      // TODO: 实现取消系统日历订阅逻辑
+      print('取消订阅系统日历');
+
+      // 模拟延迟，确保操作完成
+      await Future.delayed(Duration(milliseconds: 100));
+
+    } catch (e) {
+      print('取消订阅系统日历失败: $e');
+      // 抛出异常，让上层处理
+      rethrow;
+    }
+  }
+
+  // 刷新日历数据
+  Future<void> _refreshCalendarData() async {
+    // 清除缓存，强制重新加载数据
+    _cachedContent = null;
+    _lastLoadedDate = null;
+
+    // 刷新日历内容
+    if (_calendarContentKey.currentState != null) {
+      _calendarContentKey.currentState!.refreshData();
+    }
+
+    // 重新加载当前日期的内容
+    final selectedDate = _selectedDay ?? _focusedDay;
+    await _loadContentForDate(selectedDate);
+
+    // 触发UI更新
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // 显示权限插件错误提示
+  void _showPermissionPluginError() {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('功能暂不可用'),
+        content: Text(
+          '系统日历权限功能在当前平台暂不可用。\n\n'
+          '请确保：\n'
+          '1. 应用已正确配置权限插件\n'
+          '2. 在支持的平台上运行（iOS/Android）\n'
+          '3. 已重新构建应用',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showClientNotSupportedMessage() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('当前客户端不支持或未授予日历权限'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ),
+    );
+  }
+
+  // 显示Toggle成功提示
+  void _showToggleSuccessMessage(bool isSubscribed) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isSubscribed ? '已订阅系统日历' : '已取消订阅系统日历',
+        ),
+        duration: Duration(seconds: 2),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+
+  // 显示Toggle错误提示
+  void _showToggleErrorMessage() {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('操作失败，请重试'),
+        duration: Duration(seconds: 2),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  // 调试方法：打印当前状态
+  void _debugPrintState() {
+    print('当前订阅状态: $_isSubscribeSystemCalendar');
+  }
+
+  Future<Map<String, dynamic>> _getContentForSelectedDate() async {
+    final selectedDate = _selectedDay ?? _focusedDay;
+
+    // 获取笔记数据
+    final notes = await _getNotesForDate(selectedDate);
+
+    // 获取日程数据
+    final schedules = await _getSchedulesForDate(selectedDate);
+
+    return {
+      'notes': notes,
+      'schedules': schedules,
+    };
+  }
+
+  Future<List<ViewPB>> _getNotesForDate(DateTime date) async {
+    try {
+      final allViewsResult = await ViewBackendService.getAllViews();
+
+      return await allViewsResult.fold(
+        (allViews) async {
+          final documentViews = allViews.items
+              .where((view) =>
+                  view.layout == ViewLayoutPB.Document &&
+                  view.name.isNotEmpty &&
+                  !_isSystemView(view.name))
+              .toList();
+
+          final selectedDateStart = DateTime(date.year, date.month, date.day);
+          final selectedDateEnd = selectedDateStart.add(Duration(days: 1));
+
+          return documentViews.where((view) {
+            final createTime = DateTime.fromMillisecondsSinceEpoch(
+              view.createTime.toInt() * 1000,
+            );
+            return createTime.isAfter(selectedDateStart) &&
+                createTime.isBefore(selectedDateEnd);
+          }).toList();
+        },
+        (error) async => [],
+      );
+    } catch (e) {
+      return [];
+    }
+  }
+
+  Future<List<ScheduleItem>> _getSchedulesForDate(DateTime date) async {
+    ScheduleModel? scheduleModel;
+    try {
+      scheduleModel = ScheduleModel();
+      if (_currentViewId != null) {
+        scheduleModel.setViewId(_currentViewId!);
+      }
+
+      await scheduleModel.refresh();
+
+      // 过滤出当天的日程
+      final selectedDateStart = DateTime(date.year, date.month, date.day);
+      final selectedDateEnd = selectedDateStart.add(Duration(days: 1));
+
+      return scheduleModel.schedules.where((schedule) {
+        final scheduleDate = schedule.startTime;
+        return scheduleDate.isAfter(selectedDateStart) &&
+            scheduleDate.isBefore(selectedDateEnd);
+      }).toList();
+    } catch (e) {
+      return [];
+    } finally {
+      // 确保释放资源
+      scheduleModel?.dispose();
+    }
+  }
+
+  bool _isSystemView(String viewName) {
+    final systemViewNames = [
+      'Workspace',
+      'workspace',
+      'Workspace Settings',
+      'Getting Started',
+      'Welcome',
+      'Home',
+      'Inbox',
+      'Favorites',
+      'Trash',
+      'Settings',
+      'Preferences',
+      'Help',
+      'About',
+    ];
+    return systemViewNames.contains(viewName) ||
+        viewName.toLowerCase().contains('workspace') ||
+        viewName.toLowerCase().contains('system') ||
+        viewName.toLowerCase().contains('setting');
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // 使用现有的空页面SVG图标
+          FlowySvg(
+            FlowySvgs.m_empty_page_xl,
+            size: const Size(120, 120),
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+          ),
+          const SizedBox(height: 24),
+          // 提示文字
+          Text(
+            '暂无日记与日程，赶紧创建吧~',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoteEditAreaForNote(ViewPB note) {
+    return MultiBlocProvider(
+      key: ValueKey('bloc_provider_${note.id}'),
+      providers: [
+        BlocProvider<PageAccessLevelBloc>(
+          create: (context) => PageAccessLevelBloc(view: note)
+            ..add(const PageAccessLevelEvent.initial()),
+        ),
+        BlocProvider<ViewInfoBloc>(
+          create: (context) => ViewInfoBloc(view: note)
+            ..add(const ViewInfoEvent.started()),
+        ),
+      ],
+      child: DocumentPage(
+        key: ValueKey(note.id),
+        view: note,
+        onDeleted: () {
+          // 当文档被删除时，刷新默认视图
+          setState(() {});
+        },
+        tabs: [],
+      ),
+    );
+  }
+
+  Widget _buildScheduleEditArea(ScheduleItem schedule) {
+    return Column(
+      children: [
+        // 编辑区域标题栏
+        Container(
+          height: 50,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).dividerColor,
+                width: 0.5,
+              ),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '编辑日程: ${schedule.description}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close, size: 18),
+                onPressed: () {
+                  setState(() {
+                    _editingSchedule = null;
+                  });
+                },
+                tooltip: '关闭编辑',
+                padding: EdgeInsets.zero,
+                constraints: BoxConstraints.tightFor(width: 32, height: 32),
+              ),
+            ],
+          ),
+        ),
+        // 编辑内容区域
+        Expanded(
+          child: EditEventPage(
+            schedule: schedule,
+            onEventUpdated: _onEventUpdated,
+            onEventDeleted: _onEventDeleted,
+            onCancel: () {
+              setState(() {
+                _editingSchedule = null;
+              });
+            },
+            onSaveRequested: (saveCallback) {
+              _saveEventCallback = saveCallback;
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildNewEventView() {
@@ -749,8 +1529,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   child: Text(
                     '新建日程',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                 ),
                 // 取消按钮
@@ -804,7 +1584,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   Widget _buildEditEventView() {
     if (_editingSchedule == null) return _buildDefaultView();
-    
+
     return Container(
       color: Theme.of(context).colorScheme.surface,
       child: Column(
@@ -827,8 +1607,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   child: Text(
                     '编辑日程',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                 ),
                 // 取消按钮
@@ -881,13 +1661,35 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     );
   }
 
-  Widget _buildNoteContentView() {
+  Widget _buildNoteEditArea() {
     if (_selectedNote == null) {
-      return _buildDefaultView();
+      return Container();
     }
 
-    // 直接显示笔记内容，类似回收站的做法
-    return CalendarDocumentView(view: _selectedNote!);
+    return MultiBlocProvider(
+            key: ValueKey('bloc_provider_${_selectedNote!.id}'), // 添加key强制重建
+            providers: [
+              BlocProvider<PageAccessLevelBloc>(
+                create: (context) => PageAccessLevelBloc(view: _selectedNote!)
+                  ..add(const PageAccessLevelEvent.initial()),
+              ),
+              BlocProvider<ViewInfoBloc>(
+                create: (context) => ViewInfoBloc(view: _selectedNote!)
+                  ..add(const ViewInfoEvent.started()),
+              ),
+            ],
+            child: DocumentPage(
+              key: ValueKey(_selectedNote!.id), // 添加key强制重建
+              view: _selectedNote!,
+              onDeleted: () {
+                // 当文档被删除时，关闭编辑区域
+                setState(() {
+                  _selectedNote = null;
+                });
+              },
+              tabs: [], // 空的tabs列表
+            ),
+    );
   }
 }
 
@@ -897,6 +1699,7 @@ class CalendarContent extends StatefulWidget {
   final String? viewId;
   final Function(ScheduleItem)? onScheduleTap; // 点击日程的回调
   final Function(ViewPB)? onNoteTap; // 点击笔记的回调
+  final String? selectedNoteId; // 当前选中的笔记ID
 
   const CalendarContent({
     Key? key,
@@ -904,6 +1707,7 @@ class CalendarContent extends StatefulWidget {
     this.viewId,
     this.onScheduleTap,
     this.onNoteTap,
+    this.selectedNoteId,
   }) : super(key: key);
 
   @override
@@ -913,11 +1717,60 @@ class CalendarContent extends StatefulWidget {
 class _CalendarContentState extends State<CalendarContent> {
   List<ViewPB> _realNotes = [];
   bool _isLoading = false;
+  ViewListener? _viewListener;
+  // 新增：用于刷新日程侧栏内容（不能引用私有State类型，使用非泛型GlobalKey）
+  final GlobalKey _scheduleContentKey = GlobalKey();
+
+  // 公共方法：手动刷新数据
+  void refreshData() {
+    _loadNotesForDate();
+    // 同步刷新日程侧栏（通过dynamic调用，避免跨库私有类型）
+    final state = _scheduleContentKey.currentState;
+    if (state != null) {
+      try {
+        // ignore: avoid_dynamic_calls
+        (state as dynamic).refreshData();
+      } catch (_) {}
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _loadNotesForDate();
+    _setupViewListener();
+  }
+
+  // 设置视图监听器，监听视图变化
+  void _setupViewListener() {
+    // 监听工作空间级别的视图变化
+    _viewListener = ViewListener(viewId: 'workspace');
+    _viewListener?.start(
+      onViewUpdated: (view) {
+        // 当视图更新时，刷新日历数据
+        if (mounted) {
+          _loadNotesForDate();
+        }
+      },
+      onViewChildViewsUpdated: (childViews) {
+        // 当子视图更新时，刷新日历数据
+        if (mounted) {
+          _loadNotesForDate();
+        }
+      },
+      onViewDeleted: (view) {
+        // 当视图删除时，刷新日历数据
+        if (mounted) {
+          _loadNotesForDate();
+        }
+      },
+      onViewRestored: (view) {
+        // 当视图恢复时，刷新日历数据
+        if (mounted) {
+          _loadNotesForDate();
+        }
+      },
+    );
   }
 
   @override
@@ -926,6 +1779,41 @@ class _CalendarContentState extends State<CalendarContent> {
     if (oldWidget.selectedDate != widget.selectedDate) {
       _loadNotesForDate();
     }
+    // 如果视图ID发生变化，也重新加载数据
+    if (oldWidget.viewId != widget.viewId) {
+      _loadNotesForDate();
+    }
+  }
+
+  @override
+  void dispose() {
+    _viewListener?.stop();
+    super.dispose();
+  }
+
+  // 判断是否为系统视图
+  bool _isSystemView(String viewName) {
+    // 系统视图名称列表
+    final systemViewNames = [
+      'Workspace',
+      'workspace',
+      'Workspace Settings',
+      'Getting Started',
+      'Welcome',
+      'Home',
+      'Inbox',
+      'Favorites',
+      'Trash',
+      'Settings',
+      'Preferences',
+      'Help',
+      'About',
+    ];
+
+    return systemViewNames.contains(viewName) ||
+        viewName.toLowerCase().contains('workspace') ||
+        viewName.toLowerCase().contains('system') ||
+        viewName.toLowerCase().contains('setting');
   }
 
   Future<void> _loadNotesForDate() async {
@@ -936,14 +1824,18 @@ class _CalendarContentState extends State<CalendarContent> {
     try {
       // 获取所有视图
       final allViewsResult = await ViewBackendService.getAllViews();
-      
+
       await allViewsResult.fold(
         (allViews) async {
-          // 过滤出文档类型的视图（笔记），只包含有父页面的文档（排除根级页面如Workspace）
+          // 过滤出文档类型的视图（笔记），包括"我的空间"中的日记
+          // 显示所有Document类型的视图，包括孤儿视图和我的空间中的文档
           final documentViews = allViews.items
-              .where((view) => 
-                view.layout == ViewLayoutPB.Document && 
-                view.parentViewId.isNotEmpty)
+              .where((view) =>
+                  view.layout == ViewLayoutPB.Document &&
+                  // 显示所有文档，包括有父视图的（我的空间）和孤儿视图（日历创建）
+                  view.name.isNotEmpty && // 只过滤掉名称为空的文档
+                  // 排除系统视图，如"Workspace"等
+                  !_isSystemView(view.name)) // 排除系统视图
               .toList();
 
           // 根据选中日期过滤笔记
@@ -959,8 +1851,8 @@ class _CalendarContentState extends State<CalendarContent> {
             final createTime = DateTime.fromMillisecondsSinceEpoch(
               view.createTime.toInt() * 1000,
             );
-            return createTime.isAfter(selectedDateStart) && 
-                   createTime.isBefore(selectedDateEnd);
+            return createTime.isAfter(selectedDateStart) &&
+                createTime.isBefore(selectedDateEnd);
           }).toList();
 
           setState(() {
@@ -993,11 +1885,11 @@ class _CalendarContentState extends State<CalendarContent> {
           Text(
             '${widget.selectedDate.year}年${widget.selectedDate.month}月${widget.selectedDate.day}日',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 16),
-          
+
           // 显示加载状态
           if (_isLoading) ...[
             Center(
@@ -1019,15 +1911,19 @@ class _CalendarContentState extends State<CalendarContent> {
               child: Text(
                 '当天暂无笔记',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                ),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.6),
+                    ),
               ),
             ),
           ],
-          
+
           // 日程集成部分
           if (widget.viewId != null) ...[
             ScheduleSidebarContent(
+              key: _scheduleContentKey,
               databaseViewId: widget.viewId,
               onScheduleTap: widget.onScheduleTap,
             ),
@@ -1039,6 +1935,8 @@ class _CalendarContentState extends State<CalendarContent> {
   }
 
   Widget _buildNoteItem(ViewPB note) {
+    final isSelected = widget.selectedNoteId == note.id;
+
     return FlowyHover(
       style: HoverStyle(hoverColor: Theme.of(context).colorScheme.secondary),
       builder: (_, onHover) => GestureDetector(
@@ -1051,18 +1949,39 @@ class _CalendarContentState extends State<CalendarContent> {
         child: Container(
           height: 32,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+            border: isSelected
+                ? Border.all(
+                    color:
+                        Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                    width: 1,
+                  )
+                : null,
+          ),
           child: Row(
             children: [
               Icon(
-                Icons.description_outlined,
+                isSelected ? Icons.description : Icons.description_outlined,
                 size: 16,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   note.name,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.normal,
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1070,9 +1989,17 @@ class _CalendarContentState extends State<CalendarContent> {
               Text(
                 _formatCreateTime(note.createTime.toInt()),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                  fontSize: 11,
-                ),
+                      color: isSelected
+                          ? Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.7)
+                          : Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.5),
+                      fontSize: 11,
+                    ),
               ),
             ],
           ),
@@ -1085,8 +2012,9 @@ class _CalendarContentState extends State<CalendarContent> {
     final createTime = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final createDate = DateTime(createTime.year, createTime.month, createTime.day);
-    
+    final createDate =
+        DateTime(createTime.year, createTime.month, createTime.day);
+
     if (createDate == today) {
       return '${createTime.hour.toString().padLeft(2, '0')}:${createTime.minute.toString().padLeft(2, '0')}';
     } else {
@@ -1116,6 +2044,8 @@ class CalendarDocumentView extends StatefulWidget {
 class _CalendarDocumentViewState extends State<CalendarDocumentView> {
   late DocumentBloc _documentBloc;
   late ViewBloc _viewBloc;
+  int _retryCount = 0;
+  static const int _maxRetries = 3;
 
   @override
   void initState() {
@@ -1134,10 +2064,27 @@ class _CalendarDocumentViewState extends State<CalendarDocumentView> {
   }
 
   void _initializeBlocs() {
-    _documentBloc = DocumentBloc(documentId: widget.view.id)
-      ..add(const DocumentEvent.initial());
-    _viewBloc = ViewBloc(view: widget.view)
-      ..add(const ViewEvent.initial());
+    _documentBloc = DocumentBloc(documentId: widget.view.id);
+    _viewBloc = ViewBloc(view: widget.view);
+
+    // 延迟初始化，确保系统完全准备好
+    _retryInitialization();
+  }
+
+  void _retryInitialization() {
+    Future.delayed(Duration(milliseconds: 200 * (_retryCount + 1)), () {
+      if (mounted) {
+        _documentBloc.add(const DocumentEvent.initial());
+        _viewBloc.add(const ViewEvent.initial());
+
+        // 确保编辑器状态是可编辑的
+        Future.delayed(Duration(milliseconds: 100), () {
+          if (mounted && _documentBloc.state.editorState != null) {
+            _documentBloc.state.editorState!.editable = true;
+          }
+        });
+      }
+    });
   }
 
   void _disposeBlocs() {
@@ -1172,6 +2119,9 @@ class _CalendarDocumentViewState extends State<CalendarDocumentView> {
             return _buildErrorView(context, error);
           }
 
+          // 确保编辑器状态是可编辑的
+          editorState.editable = true;
+
           return _buildDocumentView(context, editorState);
         },
       ),
@@ -1194,41 +2144,74 @@ class _CalendarDocumentViewState extends State<CalendarDocumentView> {
                   Icon(
                     Icons.error_outline,
                     size: 48,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.5),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     '无法加载文档内容',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                    ),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.7),
+                        ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '此文档可能已被删除或损坏',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                    ),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.5),
+                        ),
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.3),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .errorContainer
+                            .withOpacity(0.3),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Theme.of(context).colorScheme.error.withOpacity(0.3),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .error
+                              .withOpacity(0.3),
                           width: 1,
                         ),
                       ),
                       child: Text(
                         '错误信息: ${error.msg}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    if (_retryCount < _maxRetries)
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _retryCount++;
+                          });
+                          _retryInitialization();
+                        },
+                        icon: Icon(Icons.refresh),
+                        label: Text('重试 (${_retryCount + 1}/$_maxRetries)'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      ),
                   ],
                 ],
               ),
@@ -1245,10 +2228,15 @@ class _CalendarDocumentViewState extends State<CalendarDocumentView> {
       final text = node.delta?.toPlainText() ?? '';
       return text.trim().isNotEmpty;
     });
-    
-    // 设置编辑器为只读状态
-    editorState.editable = false;
-    
+
+    // 强制设置编辑器为可编辑状态
+    editorState.editable = true;
+
+    // 确保编辑器能够接收焦点
+    editorState.selection ??= Selection.collapsed(
+      Position(path: [0], offset: 0),
+    );
+
     return Column(
       children: [
         _buildHeader(context),
@@ -1261,15 +2249,17 @@ class _CalendarDocumentViewState extends State<CalendarDocumentView> {
   }
 
   Widget _buildAppFlowyEditor(BuildContext context, EditorState editorState) {
-    final isRTL = context.read<AppearanceSettingsCubit>().state.layoutDirection ==
-        LayoutDirection.rtlLayout;
+    final isRTL =
+        context.read<AppearanceSettingsCubit>().state.layoutDirection ==
+            LayoutDirection.rtlLayout;
     final textDirection = isRTL ? ui.TextDirection.rtl : ui.TextDirection.ltr;
 
     return Directionality(
       textDirection: textDirection,
       child: AppFlowyEditorPage(
         editorState: editorState,
-        autoFocus: false,
+        autoFocus: true,
+        // 启用自动焦点
         useViewInfoBloc: false,
         styleCustomizer: EditorStyleCustomizer(
           context: context,
@@ -1279,7 +2269,7 @@ class _CalendarDocumentViewState extends State<CalendarDocumentView> {
         ),
         placeholderText: (node) {
           // 为空的段落节点提供占位符文本
-          if (node.type == ParagraphBlockKeys.type && 
+          if (node.type == ParagraphBlockKeys.type &&
               (node.delta?.toPlainText() ?? '').trim().isEmpty) {
             return '此文档暂无内容，点击编辑按钮开始添加内容';
           }
@@ -1288,8 +2278,6 @@ class _CalendarDocumentViewState extends State<CalendarDocumentView> {
       ),
     );
   }
-
-
 
   Widget _buildHeader(BuildContext context) {
     return Container(
@@ -1301,17 +2289,18 @@ class _CalendarDocumentViewState extends State<CalendarDocumentView> {
           Text(
             widget.view.name.isEmpty ? '无标题笔记' : widget.view.name,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontWeight: FontWeight.bold,
-            ),
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 8),
           // 创建时间
           Text(
             '创建时间：${_formatCreateTime(widget.view.createTime.toInt())}',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-            ),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
           ),
         ],
       ),

@@ -1,3 +1,5 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +7,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import '../models/schedule_model.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
+import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/repeat_selector.dart';
 
 class NewEventPage extends StatefulWidget {
   final DateTime selectedDate;
@@ -32,6 +35,9 @@ class _NewEventPageState extends State<NewEventPage> {
   bool _isAllDay = false;
   bool _isImportant = false;
   bool _isRepeat = false;
+  String _repeatLabel = '任务重复'; // 无时显示“任务重复”
+  int _repeatType = 0; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
+  String? _repeatCustomSummary; // 自定义选项摘要，如“每1周的周二”
   String _calendar = '我的日历';
   String _description = '';
   String _reminderOption = '无';
@@ -121,7 +127,7 @@ class _NewEventPageState extends State<NewEventPage> {
     if (_description.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('请添加日程描述'),
+          content: Text('请添加日程说明'),
           backgroundColor: Theme.of(context).brightness == Brightness.dark 
             ? Colors.grey[800] 
             : Colors.grey[900],
@@ -660,7 +666,7 @@ class _NewEventPageState extends State<NewEventPage> {
                   // 全天选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.time_s,
+                      FlowySvgs.icon_time_calendar_lg,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
@@ -686,6 +692,7 @@ class _NewEventPageState extends State<NewEventPage> {
                         });
                       },
                       style: const ToggleStyle.mobile(),
+                      activeBackgroundColor: Color(0xFFF89575),
                       padding: EdgeInsets.zero,
                     ),
                     onTap: () {
@@ -693,12 +700,14 @@ class _NewEventPageState extends State<NewEventPage> {
                         _isAllDay = !_isAllDay;
                       });
                     },
+                    horizontalTitleGap: 8.0, // 默认值通常是16.0
+                    minLeadingWidth: 0, // 关键：设置为0
                   ),
                   
                   // 准时选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.clock_alarm_s,
+                      FlowySvgs.icon_alarm_clock_m,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
@@ -712,33 +721,38 @@ class _NewEventPageState extends State<NewEventPage> {
                     onTap: () {
                       _showReminderDialog();
                     },
+                    horizontalTitleGap: 8.0, // 默认值通常是16.0
+                    minLeadingWidth: 0, // 关键：设置为0
                   ),
                   
                   // 日程重复选项
                   ListTile(
                     leading: FlowySvg(
-                      FlowySvgs.reload_s,
+                      FlowySvgs.icon_repeat_calender_m,
                       color: theme.iconTheme.color,
                       size: const Size.square(24),
                     ),
                     title: Text(
-                      '日程重复',
+                      _repeatType == 0
+                          ? '任务重复'
+                          : (_repeatType == 99
+                              ? (_repeatCustomSummary ?? '自定义')
+                              : _repeatLabel),
                       style: TextStyle(
                         fontSize: 16,
                         color: theme.textTheme.bodyLarge?.color,
                       ),
                     ),
-                    onTap: () {
-                      setState(() {
-                        _isRepeat = !_isRepeat;
-                      });
+                  onTap: () {
+                    _showRepeatDialog();
                     },
+                    horizontalTitleGap: 8.0, // 默认值通常是16.0
+                    minLeadingWidth: 0, // 关键：设置为0
                   ),
-                  
-                                  // 我的日历选项
+                 // 我的日历选项
                  ListTile(
                    leading: FlowySvg(
-                     FlowySvgs.group_s,
+                     FlowySvgs.icon_calendar_m,
                      color: theme.iconTheme.color,
                      size: const Size.square(24),
                    ),
@@ -752,12 +766,14 @@ class _NewEventPageState extends State<NewEventPage> {
                    onTap: () {
                      // 显示日历选择器
                    },
+                   horizontalTitleGap: 8.0, // 默认值通常是16.0
+                   minLeadingWidth: 0, // 关键：设置为0
                  ),
                  
                  // 添加说明选项
                  ListTile(
                    leading: FlowySvg(
-                     FlowySvgs.edit_s,
+                     FlowySvgs.icon_edit_m,
                      color: theme.iconTheme.color,
                      size: const Size.square(24),
                    ),
@@ -771,6 +787,8 @@ class _NewEventPageState extends State<NewEventPage> {
                     onTap: () {
                       _showDescriptionDialog();
                     },
+                   horizontalTitleGap: 8.0, // 默认值通常是16.0
+                   minLeadingWidth: 0, // 关键：设置为0
                   ),
                 ],
               ),
@@ -779,6 +797,70 @@ class _NewEventPageState extends State<NewEventPage> {
         ),
       ),
     );
+  }
+
+  void _showRepeatDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => RepeatSelectionDialog(
+        currentType: _repeatType,
+        currentCustomSummary: _repeatCustomSummary,
+        onSave: ({required int type, String? customSummary}) {
+          setState(() {
+            if (type == 0) {
+              _isRepeat = false;
+              _repeatType = 0;
+              _repeatLabel = '任务重复';
+              _repeatCustomSummary = null;
+            } else if (type == 99) {
+              _isRepeat = true;
+              _repeatType = 99;
+              _repeatCustomSummary = customSummary;
+              _repeatLabel = customSummary ?? '自定义';
+            } else {
+              _isRepeat = true;
+              _repeatType = type;
+              _repeatCustomSummary = null;
+              _repeatLabel = _repeatTypeName(type);
+            }
+          });
+        },
+      ),
+    );
+  }
+
+  String? _buildCustomSummary(int unit, int interval, Set<int> weekdays) {
+    switch (unit) {
+      case 0:
+        return '每$interval天';
+      case 1:
+        if (weekdays.isEmpty) return null;
+        const names = ['周一','周二','周三','周四','周五','周六','周日'];
+        final days = weekdays.toList()..sort();
+        final joined = days.map((i) => names[i]).join('、');
+        return '每$interval周的$joined';
+      case 2:
+        return '每$interval月';
+      case 3:
+        return '每$interval年';
+    }
+    return null;
+  }
+
+  String _repeatTypeName(int t) {
+    switch (t) {
+      case 1:
+        return '每天';
+      case 2:
+        return '每周';
+      case 3:
+        return '每年';
+      case 4:
+        return '法定工作日';
+      default:
+        return '任务重复';
+    }
   }
 
   void _showDescriptionDialog() {
@@ -988,6 +1070,18 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
       minuteController.jumpToItem(selectedMinute);
     });
   }
+
+  // 允许鼠标滚轮和拖拽的滚动行为，提升桌面端可用性
+  // 并开启常用指针设备支持
+  static const Set<PointerDeviceKind> _pointerKinds = <PointerDeviceKind>{
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.invertedStylus,
+    PointerDeviceKind.trackpad,
+  };
+  
+  ScrollBehavior get _pickerScrollBehavior => const _CupertinoPickerScrollBehavior();
 
   @override
   void dispose() {
@@ -1320,7 +1414,9 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                                     ),
                                   ),
                                   Expanded(
-                                    child: CupertinoPicker(
+                                    child: ScrollConfiguration(
+                                      behavior: _pickerScrollBehavior,
+                                      child: CupertinoPicker(
                                       scrollController: hourController,
                                       itemExtent: 28,
                                       onSelectedItemChanged: (index) {
@@ -1339,6 +1435,7 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                                           ),
                                         );
                                       }),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -1369,7 +1466,9 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                                     ),
                                   ),
                                   Expanded(
-                                    child: CupertinoPicker(
+                                    child: ScrollConfiguration(
+                                      behavior: _pickerScrollBehavior,
+                                      child: CupertinoPicker(
                                       scrollController: minuteController,
                                       itemExtent: 28,
                                       onSelectedItemChanged: (index) {
@@ -1388,6 +1487,7 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
                                           ),
                                         );
                                       }),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -1407,6 +1507,19 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
     );
   }
 } 
+
+// 自定义滚动行为：允许鼠标、触控板、触屏等设备拖拽/滚轮滚动 CupertinoPicker
+class _CupertinoPickerScrollBehavior extends ScrollBehavior {
+  const _CupertinoPickerScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => _CustomTimePickerBottomSheetState._pointerKinds;
+
+  @override
+  Widget buildViewportChrome(BuildContext context, Widget child, AxisDirection axisDirection) {
+    return child;
+  }
+}
 
 // 提醒选择弹窗
 class ReminderSelectionDialog extends StatefulWidget {
@@ -1449,7 +1562,7 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
         borderRadius: BorderRadius.circular(16), // 更大的圆角
       ),
       child: Container(
-        width: 320, // 增加宽度
+        width: 510, // 增加宽度
         padding: const EdgeInsets.all(24), // 增加内边距
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1457,10 +1570,12 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
             // 标题栏
             Row(
               children: [
-                Icon(
-                  Icons.alarm,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 24,
+                InkWell(
+                  onTap: () => Navigator.pop(context),
+                  child: Icon(
+                    Icons.cancel,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1471,9 +1586,35 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
                       fontWeight: FontWeight.w600,
                       color: Theme.of(context).textTheme.titleLarge?.color,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-
+                // 保存按钮
+                ElevatedButton(
+                  onPressed: () {
+                    widget.onSave(_tempSelectedOption);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    '保存',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
               ],
             ),
             
@@ -1494,7 +1635,7 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
                     },
                     child: Container(
                       height: 48, // 增加选项高度
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      // padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
                           Radio<String>(
@@ -1507,7 +1648,6 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
                             },
                             activeColor: Theme.of(context).colorScheme.primary,
                           ),
-                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               option,
@@ -1526,62 +1666,6 @@ class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
             }).toList(),
             
             const SizedBox(height: 24),
-            
-            // 按钮栏
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // 取消按钮
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    '取消',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(width: 12),
-                
-                // 保存按钮
-                ElevatedButton(
-                  onPressed: () {
-                    widget.onSave(_tempSelectedOption);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    '保存',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
