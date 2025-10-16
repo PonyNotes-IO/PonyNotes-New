@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:appflowy/plugins/import_page/visual_pdf_processor.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:appflowy_backend/log.dart';
@@ -11,9 +10,7 @@ import 'package:appflowy/plugins/document/application/document_data_pb_extension
 import 'package:path/path.dart' as p;
 import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'professional_pdf_processor.dart';
-import 'advanced_pdf_processor.dart';
-import 'ocr_pdf_processor.dart';
+import 'mineru_api_processor.dart';
 
 /// 增强的PDF导入对话框，提供多种处理模式和实时预览
 class EnhancedPdfImportDialog extends StatefulWidget {
@@ -40,10 +37,20 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final Size screenSize = MediaQuery.of(context).size;
+    final double dialogMaxWidth = 900;
+    final double dialogMaxHeight = 700;
+    final double dialogWidth = screenSize.width * 0.9 > dialogMaxWidth
+        ? dialogMaxWidth
+        : screenSize.width * 0.9;
+    final double dialogHeight = screenSize.height * 0.9 > dialogMaxHeight
+        ? dialogMaxHeight
+        : screenSize.height * 0.9;
+
     return Dialog(
       child: Container(
-        width: 900,
-        height: 700,
+        width: dialogWidth,
+        height: dialogHeight,
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,25 +225,45 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
           border: Border.all(color: Colors.red[200]!),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.error, color: Colors.red),
-                SizedBox(width: 8),
-                Text(
-                  '处理失败',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.red,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.error, color: Colors.red),
+                  SizedBox(width: 8),
+                  Text(
+                    '处理失败',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.red,
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(_processingError!),
+              const SizedBox(height: 12),
+              if (_buildErrorHints(_processingError!).isNotEmpty) ...[
+                const Text(
+                  '建议：',
+                  style: TextStyle(fontWeight: FontWeight.w600),
                 ),
+                const SizedBox(height: 6),
+                ..._buildErrorHints(_processingError!).map((h) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• '),
+                          Expanded(child: Text(h)),
+                        ],
+                      ),
+                    )),
               ],
-            ),
-            const SizedBox(height: 8),
-            Text(_processingError!),
-          ],
+            ],
+          ),
         ),
       );
     }
@@ -302,6 +329,26 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     );
   }
 
+  List<String> _buildErrorHints(String message) {
+    final lower = message.toLowerCase();
+    final hints = <String>[];
+    if (lower.contains('未授权') || lower.contains('401')) {
+      hints.add('请先登录 AppFlowy Cloud，然后重试导入。');
+    }
+    if (lower.contains('权限不足') || lower.contains('403')) {
+      hints.add('确认当前登录账号对文件存储有权限。');
+      hints.add('若使用反向代理，请放行 Authorization 头到 /api/file_storage/**，并允许 PUT/POST。');
+      hints.add('确保 APPFLOWY_CLOUD_URL 指向正确的 Cloud 根地址（含 http/https）。');
+    }
+    if (lower.contains('过大') || lower.contains('413')) {
+      hints.add('减小 PDF 文件体积，或在反向代理上增大 client_max_body_size。');
+    }
+    if (lower.contains('服务器错误') || RegExp(r'\b5\d{2}\b').hasMatch(lower)) {
+      hints.add('服务器暂时不可用，请稍后重试或检查 Cloud 服务端日志。');
+    }
+    return hints;
+  }
+
   Widget _buildActionButtons() {
     return Row(
       children: [
@@ -351,24 +398,53 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     });
 
     try {
-      // 读取PDF字节
-      _pdfBytes = await _selectedFile!.readAsBytes();
-      
       String content;
       
-      // 根据选择的模式处理PDF
+      // 根据选择的模式处理PDF，使用MinerU API
       switch (_importMode) {
         case PdfImportMode.professional:
-          content = await ProfessionalPdfProcessor.processPdfBytes(_selectedFile!);
+          // 使用MinerU API进行专业处理
+          content = await MinerUApiProcessor.processPdfFile(
+            _selectedFile!,
+            mode: MinerUMode.professional,
+            language: null, // 自动检测语言
+            enableOcr: false,
+            enableTable: false,
+            enableFormula: false,
+          );
           break;
         case PdfImportMode.advanced:
-          content = await AdvancedPdfProcessor.processPdfBytes(_pdfBytes!);
+          // 使用MinerU API进行高级处理
+          content = await MinerUApiProcessor.processPdfFile(
+            _selectedFile!,
+            mode: MinerUMode.advanced,
+            language: null, // 自动检测语言
+            enableOcr: false,
+            enableTable: true,
+            enableFormula: true,
+          );
           break;
         case PdfImportMode.ocr:
-          content = await OcrPdfProcessor.processPdfBytes(_pdfBytes!);
+          // 使用MinerU API进行OCR处理
+          content = await MinerUApiProcessor.processPdfFile(
+            _selectedFile!,
+            mode: MinerUMode.ocr,
+            language: null, // 自动检测语言
+            enableOcr: true,
+            enableTable: true,
+            enableFormula: false,
+          );
           break;
         case PdfImportMode.visual:
-          content = await VisualPdfProcessor.processPdfBytes(_pdfBytes!);
+          // 使用MinerU API进行复杂布局处理
+          content = await MinerUApiProcessor.processPdfFile(
+            _selectedFile!,
+            mode: MinerUMode.complexLayout,
+            language: null, // 自动检测语言
+            enableOcr: true,
+            enableTable: true,
+            enableFormula: true,
+          );
           break;
       }
 

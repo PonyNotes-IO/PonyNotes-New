@@ -22,6 +22,7 @@ import 'dart:typed_data';
 import 'package:html2md/html2md.dart' as html2md;
 import 'package:archive/archive.dart';
 import 'enhanced_pdf_import_dialog.dart';
+import 'mineru_api_processor.dart';
 import 'professional_html_parser.dart';
 import 'html_import_dialog.dart';
 
@@ -859,14 +860,23 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
   Future<String> _extractTextFromDocx(Uint8List bytes, String fileName) async {
     try {
       // 使用archive库解析DOCX文件（DOCX是ZIP格式）
-      final text = await _parseDocxContent(bytes);
-      
-      if (text.trim().isEmpty) {
-        return _createEmptyDocumentContent(fileName);
-      }
-      
-      // 将纯文本转换为Markdown格式
-      return _convertTextToMarkdown(text, fileName);
+      // final text = await _parseDocxContent(bytes);
+      //
+      // if (text.trim().isEmpty) {
+      //   return _createEmptyDocumentContent(fileName);
+      // }
+      //
+      // // 将纯文本转换为Markdown格式
+      // return _convertTextToMarkdown(text, fileName);
+      final content = await MinerUApiProcessor.processPdfBytes(
+        bytes,
+        mode: MinerUMode.ocr,
+        language: null, // 自动检测语言
+        enableOcr: true,
+        enableTable: true,
+        enableFormula: false,
+      );
+      return content;
     } catch (e) {
       Log.error('DOCX解析失败: $e');
       throw Exception('无法解析DOCX文件: $e');

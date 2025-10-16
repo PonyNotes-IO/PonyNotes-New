@@ -6,10 +6,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
-import 'advanced_pdf_processor.dart';
-import 'visual_pdf_processor.dart';
-import 'professional_pdf_processor.dart';
-import 'enhanced_pdf_processor.dart';
+import 'mineru_api_processor.dart';
 
 class PdfMetadata {
   const PdfMetadata({
@@ -147,6 +144,89 @@ class ImportService {
     throw Exception('Evernote import not yet implemented');
   }
 
+  /// Extract content and metadata from a PDF file using MinerU API with different modes
+  static Future<({String content, PdfMetadata metadata, Uint8List? pdfBytes})> extractPdfContentWithMinerU(
+    File file, {
+    MinerUMode mode = MinerUMode.professional,
+    String? language,
+    bool enableOcr = true,
+    bool enableFormula = false,
+  }) async {
+    try {
+      // Read the PDF file as bytes
+      final Uint8List bytes = await file.readAsBytes();
+      
+      // First extract metadata using Syncfusion (for compatibility)
+      PdfMetadata metadata;
+      try {
+        final PdfDocument document = PdfDocument(inputBytes: bytes);
+        metadata = _extractPdfMetadata(document);
+        document.dispose();
+      } catch (e) {
+        Log.error('Error extracting PDF metadata: $e');
+        metadata = const PdfMetadata();
+      }
+      
+      // Use MinerU API processor with specified mode
+      String content;
+      try {
+        content = await MinerUApiProcessor.processPdfFile(
+          file,
+          mode: mode,
+          language: language,
+          enableOcr: enableOcr,
+          enableFormula: enableFormula,
+        );
+        Log.info('Successfully processed PDF with MinerU API processor (mode: ${mode.name})');
+      } catch (mineruError) {
+        Log.error('MinerU API processor failed: $mineruError');
+        throw Exception('MinerU API处理失败: $mineruError');
+      }
+      
+      // Add metadata header if we have content
+      if (content.isNotEmpty) {
+        final StringBuffer headerBuffer = StringBuffer();
+        
+        if (metadata.title != null && metadata.title!.isNotEmpty) {
+          headerBuffer.writeln('# ${metadata.title}');
+          headerBuffer.writeln();
+        }
+        
+        if (metadata.author != null && metadata.author!.isNotEmpty) {
+          headerBuffer.writeln('**Author:** ${metadata.author}');
+        }
+        
+        if (metadata.subject != null && metadata.subject!.isNotEmpty) {
+          headerBuffer.writeln('**Subject:** ${metadata.subject}');
+        }
+        
+        if (metadata.creationDate != null) {
+          headerBuffer.writeln('**Created:** ${metadata.creationDate.toString().split(' ')[0]}');
+        }
+        
+        if (metadata.pageCount > 0) {
+          headerBuffer.writeln('**Pages:** ${metadata.pageCount}');
+        }
+        
+        if (headerBuffer.isNotEmpty) {
+          headerBuffer.writeln();
+          headerBuffer.writeln('---');
+          headerBuffer.writeln();
+          content = headerBuffer.toString() + content;
+        }
+      }
+      
+      return (
+        content: content.isEmpty ? 'No text content found in PDF' : content,
+        metadata: metadata,
+        pdfBytes: bytes,
+      );
+      
+    } catch (e) {
+      throw Exception('Failed to extract PDF content with MinerU: $e');
+    }
+  }
+
   /// Extract content and metadata from a PDF file with advanced options
   static Future<({String content, PdfMetadata metadata, Uint8List? pdfBytes})> extractPdfContent(File file) async {
     try {
@@ -164,49 +244,29 @@ class ImportService {
         metadata = const PdfMetadata();
       }
       
-      // Use enhanced PDF processor for maximum fidelity
+      // Use MinerU API processor for maximum fidelity and professional PDF processing
       String content;
       try {
-        content = await ProfessionalPdfProcessor.processPdfBytes(file);
-        Log.info('Successfully processed PDF with Rust processor');
-      } catch (rustError) {
-        Log.error('Rust PDF processor failed, trying enhanced processor: $rustError');
+        content = await MinerUApiProcessor.processPdfFile(
+          file,
+          enableFormula: true,
+        );
+        Log.info('Successfully processed PDF with MinerU API processor');
+      } catch (mineruError) {
+        Log.error('MinerU API processor failed, falling back to basic extraction: $mineruError');
         
-        // Fallback to enhanced processor
+        // Fallback to basic extraction using Syncfusion
         try {
-          content = await EnhancedPdfProcessor.processPdfBytes(bytes);
-          Log.info('Successfully processed PDF with enhanced processor');
-        } catch (enhancedError) {
-          Log.error('Enhanced PDF processor failed, trying visual processor: $enhancedError');
+          final PdfDocument document = PdfDocument(inputBytes: bytes);
+          final PdfTextExtractor extractor = PdfTextExtractor(document);
+          final String rawText = extractor.extractText();
+          document.dispose();
           
-          // Fallback to visual processor
-          try {
-            content = await VisualPdfProcessor.processPdfBytes(bytes);
-            Log.info('Successfully processed PDF with visual processor');
-          } catch (visualError) {
-            Log.error('Visual PDF processor failed, trying advanced processor: $visualError');
-            
-            // Fallback to advanced processor
-            try {
-              content = await AdvancedPdfProcessor.processPdfBytes(bytes);
-              Log.info('Successfully processed PDF with advanced processor');
-            } catch (advancedError) {
-              Log.error('Advanced PDF processor also failed, falling back to basic extraction: $advancedError');
-              
-              // Fallback to basic extraction
-              try {
-                final PdfDocument document = PdfDocument(inputBytes: bytes);
-                final PdfTextExtractor extractor = PdfTextExtractor(document);
-                final String rawText = extractor.extractText();
-                document.dispose();
-                
-                content = cleanPdfText(rawText);
-              } catch (fallbackError) {
-                Log.error('Fallback PDF extraction also failed: $fallbackError');
-                content = 'Failed to extract PDF content';
-              }
-            }
-          }
+          content = cleanPdfText(rawText);
+          Log.info('Successfully processed PDF with basic extraction');
+        } catch (fallbackError) {
+          Log.error('Fallback PDF extraction also failed: $fallbackError');
+          content = 'Failed to extract PDF content';
         }
       }
       
@@ -444,7 +504,7 @@ class ImportService {
     if (segments.length >= 2) {
       // Check that segments are not too long (likely not table cells if very long)
       final bool allSegmentsReasonable = segments.every((segment) => 
-          segment.trim().isNotEmpty && segment.trim().length < 100);
+          segment.trim().isNotEmpty && segment.trim().length < 100,);
       
       if (allSegmentsReasonable) {
         return true;
@@ -462,7 +522,7 @@ class ImportService {
     int maxColumns = 0;
     
     // Parse each line into columns
-    for (String line in tableLines) {
+    for (final String line in tableLines) {
       final List<String> columns = line
           .split(RegExp(r'\s{3,}'))
           .map((col) => col.trim())
@@ -478,7 +538,7 @@ class ImportService {
     if (rows.isEmpty || maxColumns < 2) return tableLines;
     
     // Normalize all rows to have the same number of columns
-    for (List<String> row in rows) {
+    for (final List<String> row in rows) {
       while (row.length < maxColumns) {
         row.add('');
       }
@@ -550,7 +610,7 @@ class ImportService {
     String cleaned = text;
     
     // Remove HTML tags
-    cleaned = cleaned.replaceAll(RegExp(r'<[^>]*>'), ' ');
+    cleaned = cleaned.replaceAll(RegExp('<[^>]*>'), ' ');
     
     // Decode common HTML entities
     final htmlEntities = {
@@ -585,8 +645,8 @@ class ImportService {
     });
     
     // Clean up Unicode entities (like &#x4e0a; for Chinese characters)
-    cleaned = cleaned.replaceAll(RegExp(r'&#x[0-9a-fA-F]+;'), '');
-    cleaned = cleaned.replaceAll(RegExp(r'&#[0-9]+;'), '');
+    cleaned = cleaned.replaceAll(RegExp('&#x[0-9a-fA-F]+;'), '');
+    cleaned = cleaned.replaceAll(RegExp('&#[0-9]+;'), '');
     
     // Remove CSS style attributes and other HTML attributes
     cleaned = cleaned.replaceAll(RegExp(r'style\s*=\s*"[^"]*"'), '');
