@@ -13,7 +13,7 @@ class ProfessionalHtmlParser {
       final document = html_parser.parse(htmlContent);
       
       // 提取文档标题
-      String title = _extractTitle(document, fileName);
+      final String title = _extractTitle(document, fileName);
       
       // 转换文档内容
       final buffer = StringBuffer();
@@ -276,7 +276,7 @@ class ProfessionalHtmlParser {
       r'[\u{1F1E0}-\u{1F1FF}]|'  // 旗帜
       r'[\u{2600}-\u{26FF}]|'    // 杂项符号
       r'[\u{2700}-\u{27BF}]',     // 装饰符号
-      unicode: true
+      unicode: true,
     );
     return emojiRegex.hasMatch(text);
   }
@@ -291,7 +291,7 @@ class ProfessionalHtmlParser {
         buffer.write(alt);
       } else if (alt.length <= 8) {
         // 对于短的alt文本，使用方括号包围
-        buffer.write('[${alt}]');
+        buffer.write('[$alt]');
       } else {
         // 对于较长的alt文本，截取并添加图标标识
         final shortAlt = alt.length > 15 ? '${alt.substring(0, 15)}...' : alt;

@@ -1,0 +1,20 @@
+[package]
+name = "html-to-markdown"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+regex = "1.10"             # 正则表达式处理
+anyhow = "1.0"             # 错误处理
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"         # JSON序列化
+env_logger = "0.10"        # 日志记录
+log = "0.4"                # 日志宏
+
+[[bin]]
+name = "html-to-markdown"
+path = "src/main.rs"
+
+[lib]
+name = "html_to_markdown"
+crate-type = ["cdylib", "rlib"]

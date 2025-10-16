@@ -8,14 +8,42 @@ enum HtmlImportMode {
 }
 
 class HtmlImportDialog extends StatefulWidget {
-  const HtmlImportDialog({super.key});
+  final HtmlImportMode? initialMode;
+  final Function(HtmlImportMode)? onModeSelected;
+  
+  const HtmlImportDialog({
+    super.key,
+    this.initialMode,
+    this.onModeSelected,
+  });
 
   @override
   State<HtmlImportDialog> createState() => _HtmlImportDialogState();
+
+  /// 显示HTML导入选项对话框
+  static Future<HtmlImportMode?> show(
+    BuildContext context, {
+    HtmlImportMode? initialMode,
+    Function(HtmlImportMode)? onModeSelected,
+  }) {
+    return showDialog<HtmlImportMode>(
+      context: context,
+      builder: (context) => HtmlImportDialog(
+        initialMode: initialMode,
+        onModeSelected: onModeSelected,
+      ),
+    );
+  }
 }
 
 class _HtmlImportDialogState extends State<HtmlImportDialog> {
-  HtmlImportMode _selectedMode = HtmlImportMode.smartParse;
+  late HtmlImportMode _selectedMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedMode = widget.initialMode ?? HtmlImportMode.smartParse;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +104,7 @@ class _HtmlImportDialogState extends State<HtmlImportDialog> {
               },
               title: const FlowyText.medium('传统解析', fontSize: 14),
               subtitle: const FlowyText.regular(
-                '使用html2md库进行转换，可能丢失部分格式',
+                '使用Flutter html2md库进行转换，适合简单HTML文档，可能丢失部分格式',
                 fontSize: 12,
               ),
             ),
@@ -92,6 +120,9 @@ class _HtmlImportDialogState extends State<HtmlImportDialog> {
         ),
         ElevatedButton(
           onPressed: () {
+            // 调用回调函数（如果提供）
+            widget.onModeSelected?.call(_selectedMode);
+            // 返回选中的模式
             Navigator.of(context).pop(_selectedMode);
           },
           child: const FlowyText.regular('确定', fontSize: 14),

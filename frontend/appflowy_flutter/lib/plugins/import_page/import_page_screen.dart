@@ -1,3 +1,4 @@
+import 'package:appflowy/plugins/import_page/rust_html_processor.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -524,7 +525,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
     }
   }
 
-  
+
   Future<void> _handleHtmlImport() async {
     try {
       // 先显示导入选项对话框
@@ -539,8 +540,8 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       // 获取当前工作空间
       final workspaceResult = await FolderEventReadCurrentWorkspace().send();
       final workspace = workspaceResult.fold(
-        (workspace) => workspace,
-        (error) => throw Exception('获取当前工作空间失败: $error'),
+            (workspace) => workspace,
+            (error) => throw Exception('获取当前工作空间失败: $error'),
       );
 
       // 直接在工作空间根目录下检查或创建"外部导入"项目
@@ -556,56 +557,86 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
 
       if (result != null && result.files.isNotEmpty) {
         final importValues = <ImportItemPayloadPB>[];
-        
+
         for (final file in result.files) {
           final path = file.path;
           if (path == null) continue;
-          
+
           final fileName = file.name;
           final name = p.basenameWithoutExtension(fileName);
-          
+
           // 读取HTML文件内容
           Log.info('📄 开始HTML导入处理: $name (模式: ${selectedMode.name})');
           final htmlContent = await File(path).readAsString();
-          
+
           // 根据选择的模式处理HTML
           String markdownContent;
-          switch (selectedMode) {
-            case HtmlImportMode.smartParse:
-              markdownContent = ProfessionalHtmlParser.convertHtmlToMarkdown(htmlContent, name);
-              Log.info('✅ 智能HTML解析完成，内容长度: ${markdownContent.length}');
-              break;
-              
-            case HtmlImportMode.showSource:
-              markdownContent = ProfessionalHtmlParser.createHtmlViewerContent(name, htmlContent);
-              Log.info('✅ HTML源代码显示内容创建完成，内容长度: ${markdownContent.length}');
-              break;
-              
-            case HtmlImportMode.legacyParse:
-              try {
-                markdownContent = html2md.convert(htmlContent);
-                Log.info('✅ 传统HTML转Markdown成功，内容长度: ${markdownContent.length}');
-              } catch (e) {
-                Log.error('❌ 传统HTML转Markdown失败: $e');
-                // 回退方案：直接清理HTML标签
-                markdownContent = _cleanHtmlToText(htmlContent, name);
+
+          // 首先尝试使用Rust HTML解析器（智能解析模式）
+          if (selectedMode == HtmlImportMode.smartParse) {
+            try {
+              final isAvailable = await RustHtmlProcessor.isAvailable();
+              if (isAvailable) {
+                markdownContent = await RustHtmlProcessor.processHtmlString(htmlContent, name, selectedMode);
+                Log.info('✅ Rust智能HTML解析完成，内容长度: ${markdownContent.length}');
+              } else {
+                throw Exception('Rust HTML解析器不可用');
               }
-              break;
+            } catch (rustError) {
+              Log.warn('Rust HTML解析器失败，回退到Dart解析: $rustError');
+              markdownContent = ProfessionalHtmlParser.convertHtmlToMarkdown(htmlContent, name);
+              Log.info('✅ Dart智能HTML解析完成，内容长度: ${markdownContent.length}');
+            }
+          } else {
+            // 其他模式使用原有实现
+            switch (selectedMode) {
+              case HtmlImportMode.showSource:
+                markdownContent = ProfessionalHtmlParser.createHtmlViewerContent(name, htmlContent);
+                Log.info('✅ HTML源代码显示内容创建完成，内容长度: ${markdownContent.length}');
+                break;
+
+              case HtmlImportMode.legacyParse:
+                try {
+                  // 使用html2md库进行传统解析
+                  Log.info('🔄 开始传统HTML解析 (html2md库)');
+
+                  // 预处理HTML内容，移除可能干扰解析的元素
+                  final cleanedHtml = _preprocessHtmlForLegacyParsing(htmlContent);
+
+                  // 使用html2md库转换
+                  markdownContent = html2md.convert(cleanedHtml);
+
+                  // 后处理，优化输出格式
+                  markdownContent = _postProcessLegacyMarkdown(markdownContent, name);
+
+                  Log.info('✅ 传统HTML转Markdown成功，内容长度: ${markdownContent.length}');
+                } catch (e) {
+                  Log.error('❌ 传统HTML转Markdown失败: $e');
+                  // 回退方案：直接清理HTML标签
+                  markdownContent = _cleanHtmlToText(htmlContent, name);
+                  Log.info('🔄 已回退到基础HTML清理方案');
+                }
+                break;
+              case HtmlImportMode.smartParse:
+              // 这种情况已经在上面处理了
+                markdownContent = ProfessionalHtmlParser.convertHtmlToMarkdown(htmlContent, name);
+                break;
+            }
           }
-          
+
           // 优化Markdown内容（除了源代码显示模式）
           if (selectedMode != HtmlImportMode.showSource) {
             markdownContent = _optimizeMarkdownContent(markdownContent, name);
           }
-          
+
           Log.info('📋 最终Markdown内容 (前500字符): ${markdownContent.substring(0, markdownContent.length > 500 ? 500 : markdownContent.length)}...');
-          
+
           // 将Markdown转换为Document格式
           final document = customMarkdownToDocument(markdownContent);
           Log.info('📄 Document转换完成，节点数量: ${document.root.children.length}');
-          
+
           final documentBytes = DocumentDataPBFromTo.fromDocument(document)?.writeToBuffer();
-          
+
           if (documentBytes != null) {
             Log.info('✅ 创建导入项目: $name (HTML -> Markdown -> Document)');
             importValues.add(
@@ -628,7 +659,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
           );
 
           importResult.fold(
-            (views) {
+                (views) {
               if (mounted) {
                 final fileCount = importValues.length;
                 final fileNames = result.files.map((f) => f.name).join(', ');
@@ -646,7 +677,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
                 }
               }
             },
-            (error) {
+                (error) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -682,7 +713,6 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
         return '传统解析';
     }
   }
-
   /// 清理HTML标签并转换为纯文本（回退方案）
   String _cleanHtmlToText(String htmlContent, String fileName) {
     Log.info('⚠️ 使用回退方案清理HTML内容');
@@ -1236,6 +1266,160 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
           }
           return match.group(0)!;
         });
+  }
+
+
+  /// 预处理HTML内容，为传统解析做准备
+  String _preprocessHtmlForLegacyParsing(String htmlContent) {
+    try {
+      String processed = htmlContent;
+
+      // 移除script和style标签及其内容
+      processed = processed.replaceAll(RegExp(r'<script[^>]*>.*?</script>', dotAll: true), '');
+      processed = processed.replaceAll(RegExp(r'<style[^>]*>.*?</style>', dotAll: true), '');
+
+      // 移除注释
+      processed = processed.replaceAll(RegExp(r'<!--.*?-->', dotAll: true), '');
+
+      // 处理br标签，确保换行
+      processed = processed.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+
+      // 处理div标签，添加换行
+      processed = processed.replaceAll(RegExp(r'</div>', caseSensitive: false), '\n');
+
+      // 处理p标签，确保段落分隔
+      processed = processed.replaceAll(RegExp(r'</p>', caseSensitive: false), '\n\n');
+
+      // 处理li标签，确保列表项分隔
+      processed = processed.replaceAll(RegExp(r'</li>', caseSensitive: false), '\n');
+
+      // 处理表格标签，确保表格结构
+      processed = processed.replaceAll(RegExp(r'</tr>', caseSensitive: false), '\n');
+      processed = processed.replaceAll(RegExp(r'</td>', caseSensitive: false), ' | ');
+      processed = processed.replaceAll(RegExp(r'</th>', caseSensitive: false), ' | ');
+
+      Log.info('✅ HTML预处理完成');
+      return processed;
+    } catch (e) {
+      Log.error('❌ HTML预处理失败: $e');
+      return htmlContent; // 返回原始内容
+    }
+  }
+
+  /// 后处理传统解析的Markdown内容
+  String _postProcessLegacyMarkdown(String markdownContent, String filename) {
+    try {
+      String processed = markdownContent;
+
+      // 添加文档标题
+      if (!processed.startsWith('#')) {
+        processed = '# $filename\n\n$processed';
+      }
+
+      // 清理多余的空行
+      processed = processed.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+
+      // 修复表格格式
+      processed = _fixTableFormat(processed);
+
+      // 修复列表格式
+      processed = _fixListFormat(processed);
+
+      // 清理行首行尾空白
+      final lines = processed.split('\n');
+      final cleanedLines = lines.map((line) => line.trim()).toList();
+      processed = cleanedLines.join('\n');
+
+      // 移除文档开头的空行
+      processed = processed.replaceFirst(RegExp(r'^\s*\n+'), '');
+
+      Log.info('✅ Markdown后处理完成');
+      return processed;
+    } catch (e) {
+      Log.error('❌ Markdown后处理失败: $e');
+      return markdownContent; // 返回原始内容
+    }
+  }
+
+  /// 修复表格格式
+  String _fixTableFormat(String content) {
+    try {
+      final lines = content.split('\n');
+      final List<String> result = [];
+      bool inTable = false;
+
+      for (int i = 0; i < lines.length; i++) {
+        final line = lines[i].trim();
+
+        // 检测表格行（包含 | 符号）
+        if (line.contains('|') && line.split('|').length > 2) {
+          if (!inTable) {
+            inTable = true;
+            result.add(''); // 添加空行分隔
+          }
+
+          // 清理表格行
+          String cleanLine = line
+              .replaceAll(RegExp(r'\|\s*'), '|') // 清理 | 前后的空格
+              .replaceAll(RegExp(r'\s*\|'), '|') // 清理 | 前的空格
+              .replaceAll(RegExp(r'\|+'), '|'); // 合并多个 |
+
+          // 确保行首行尾有 |
+          if (!cleanLine.startsWith('|')) cleanLine = '|$cleanLine';
+          if (!cleanLine.endsWith('|')) cleanLine = '$cleanLine|';
+
+          result.add(cleanLine);
+
+          // 如果是第一行表格数据，添加分隔行
+          if (inTable && result.length > 1 && !result.any((l) => l.contains('---'))) {
+            final cellCount = cleanLine.split('|').length - 2; // 减去首尾空元素
+            final separator = '|' + ' --- |' * cellCount;
+            result.add(separator);
+          }
+        } else {
+          if (inTable) {
+            inTable = false;
+            result.add(''); // 表格结束，添加空行
+          }
+          result.add(line);
+        }
+      }
+
+      return result.join('\n');
+    } catch (e) {
+      Log.error('❌ 表格格式修复失败: $e');
+      return content;
+    }
+  }
+
+  /// 修复列表格式
+  String _fixListFormat(String content) {
+    try {
+      final lines = content.split('\n');
+      final List<String> result = [];
+
+      for (final line in lines) {
+        final trimmed = line.trim();
+
+        // 检测列表项
+        if (trimmed.startsWith('- ') ||
+            trimmed.startsWith('* ') ||
+            RegExp(r'^\d+\.\s').hasMatch(trimmed)) {
+          result.add(trimmed);
+        } else if (trimmed.isNotEmpty) {
+          // 非空行
+          result.add(trimmed);
+        } else {
+          // 空行
+          result.add('');
+        }
+      }
+
+      return result.join('\n');
+    } catch (e) {
+      Log.error('❌ 列表格式修复失败: $e');
+      return content;
+    }
   }
   
 }
