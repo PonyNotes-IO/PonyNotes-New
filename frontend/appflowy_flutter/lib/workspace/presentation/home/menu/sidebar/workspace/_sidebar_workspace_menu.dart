@@ -10,7 +10,6 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sid
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_icon.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/members/workspace_member_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
-import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -395,12 +394,12 @@ class _WorkspaceDialogContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AFTextFieldDialog(
+    return NavigatorTextFieldDialog(
       title: LocaleKeys.workspace_create.tr(),
-      initialValue: '',
+      value: '',
       hintText: '',
-      selectAll: true,
-      onConfirm: (name) => onConfirm(name),
+      autoSelectAllText: true,
+      onConfirm: (name, _) => onConfirm(name),
     );
   }
 }

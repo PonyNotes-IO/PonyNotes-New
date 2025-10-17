@@ -163,10 +163,18 @@ impl FullIndexedDataWriter {
                     object_id
                   );
                   if let Err(err) = consumer.consume_indexed_data(uid, data).await {
-                    error!(
-                      "[Indexing] Failed to consume unindexed data: {}: {:?}",
-                      consumer_id, err
-                    );
+                    use flowy_error::ErrorCode;
+                    if err.code == ErrorCode::LocalEmbeddingNotReady {
+                      warn!(
+                        "[Indexing] Skip unindexed data for embedding (not ready): {}: {:?}",
+                        consumer_id, err
+                      );
+                    } else {
+                      error!(
+                        "[Indexing] Failed to consume unindexed data: {}: {:?}",
+                        consumer_id, err
+                      );
+                    }
                   }
                 }
               })
