@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import '../services/baidu_cloud_service.dart';
+import '../services/baidu_cloud_config_service.dart';
 
 /// 百度网盘文件选择对话框
 class BaiduCloudFilePickerDialog extends StatefulWidget {
@@ -65,14 +67,32 @@ class _BaiduCloudFilePickerDialogState extends State<BaiduCloudFilePickerDialog>
 
   Future<void> _authorize() async {
     try {
+      debugPrint('🔐 开始百度网盘授权流程');
+      
+      // 强制重新加载配置（如果之前加载失败的话）
+      await BaiduCloudConfigService.instance.loadConfig(force: true);
+      
       final authUrl = _baiduService.getAuthorizationUrl();
-      if (await canLaunchUrl(Uri.parse(authUrl))) {
-        await launchUrl(Uri.parse(authUrl));
+      debugPrint('🔗 授权URL: $authUrl');
+      
+      final uri = Uri.parse(authUrl);
+      final canLaunch = await canLaunchUrl(uri);
+      debugPrint('✅ 可以打开URL: $canLaunch');
+      
+      if (canLaunch) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        debugPrint('✅ 已打开浏览器');
         
-        // 显示输入授权码的对话框
+        // 显示输入授权码的对话框，带配置提示
         _showAuthCodeDialog();
+      } else {
+        debugPrint('❌ 无法打开URL');
+        setState(() {
+          _errorMessage = '无法打开浏览器，请手动访问授权页面';
+        });
       }
     } catch (e) {
+      debugPrint('❌ 授权失败: $e');
       setState(() {
         _errorMessage = '启动授权失败: $e';
       });
@@ -89,14 +109,18 @@ class _BaiduCloudFilePickerDialogState extends State<BaiduCloudFilePickerDialog>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('请在浏览器中完成授权，然后将获得的授权码粘贴到下方：'),
+            const Text(
+              '请在打开的浏览器中完成授权，然后将授权码粘贴到下方：',
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: codeController,
               decoration: const InputDecoration(
                 labelText: '授权码',
                 border: OutlineInputBorder(),
+                hintText: '粘贴授权码到这里',
               ),
+              maxLines: 2,
             ),
           ],
         ),
@@ -352,35 +376,40 @@ class _BaiduCloudFilePickerDialogState extends State<BaiduCloudFilePickerDialog>
 
   Widget _buildAuthorizationView() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.cloud, size: 64, color: Colors.blue),
-          const SizedBox(height: 16),
-          const Text(
-            '需要授权访问百度网盘',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.cloud, size: 64, color: Colors.blue),
+              const SizedBox(height: 16),
+              const Text(
+                '需要授权访问百度网盘',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '点击下方按钮进行授权，授权后即可选择网盘中的文件',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _authorize,
+                icon: const Icon(Icons.login),
+                label: const Text('授权登录'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('取消'),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          const Text(
-            '点击下方按钮进行授权，授权后即可选择网盘中的文件',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _authorize,
-            icon: const Icon(Icons.login),
-            label: const Text('授权登录'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
-          ),
-        ],
+        ),
       ),
     );
   }

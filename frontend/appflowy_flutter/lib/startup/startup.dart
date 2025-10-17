@@ -19,6 +19,7 @@ import 'entry_point.dart';
 import 'launch_configuration.dart';
 import 'plugin/plugin.dart';
 import 'tasks/af_navigator_observer.dart';
+import 'tasks/baidu_cloud_task.dart';
 import 'tasks/file_storage_task.dart';
 import 'tasks/prelude.dart';
 
@@ -151,6 +152,8 @@ class FlowyRunner {
         // Load Plugins, like document, grid ...
         const PluginLoadTask(),
         const FileStorageTask(),
+        // Load Baidu Cloud configuration
+        const BaiduCloudConfigTask(),
 
         // init the app widget
         // ignore in test mode

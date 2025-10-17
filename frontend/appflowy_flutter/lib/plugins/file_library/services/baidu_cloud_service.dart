@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:appflowy_backend/log.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,6 +19,11 @@ class BaiduCloudService {
   /// 获取授权URL
   String getAuthorizationUrl() {
     final config = _config;
+    Log.info('📋 配置状态: ${_configService.getConfigStatus()}');
+    Log.info('🔑 AppKey: ${config.appKey}');
+    Log.info('🔑 SecretKey: ${config.secretKey.isNotEmpty ? "已设置" : "未设置"}');
+    Log.info('✅ 配置有效: ${config.isValid}');
+    
     if (!config.isValid) {
       throw Exception('百度网盘配置无效，请检查.env.baidu文件');
     }
