@@ -13,6 +13,7 @@ import 'package:appflowy/plugins/homepage/homepage.dart';
 import 'package:appflowy/plugins/standalone_ai_chat/standalone_ai_chat_plugin.dart';
 import 'package:appflowy/plugins/file_library/file_library_plugin.dart';
 import 'package:appflowy/plugins/inbox/inbox_plugin.dart';
+import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
 
 class PluginLoadTask extends LaunchTask {
   const PluginLoadTask();
@@ -63,6 +64,9 @@ class PluginLoadTask extends LaunchTask {
     registerPlugin(
       builder: InboxPluginBuilder(),
       config: InboxPluginConfig(),
+    );
+    registerPlugin(
+      builder: WhiteboardPluginBuilder(),
     );
   }
 }

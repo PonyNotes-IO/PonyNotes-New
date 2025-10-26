@@ -1,9 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 class GridPluginBuilder implements PluginBuilder {
   @override
@@ -16,7 +14,7 @@ class GridPluginBuilder implements PluginBuilder {
   }
 
   @override
-  String get menuName => LocaleKeys.grid_menuName.tr();
+  String get menuName => "网格";
 
   @override
   FlowySvgData get icon => FlowySvgs.icon_grid_s;
