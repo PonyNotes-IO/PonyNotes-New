@@ -30,7 +30,8 @@ members = [
   "flowy-ai",
   "flowy-ai-pub",
   "flowy-storage-pub",
-  "flowy-sqlite-vec", "pdf-processor", "html-to-markdown",
+  "flowy-sqlite-vec",
+  "html-to-markdown",
 ]
 
 resolver = "2"

@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_bloc.dart';
 import 'package:appflowy/plugins/whiteboard/application/drawing_models.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_painter.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 
@@ -143,24 +144,45 @@ class WhiteboardPage extends StatefulWidget {
 }
 
 class _WhiteboardPageState extends State<WhiteboardPage> {
-  late final ExcalidrawWebView _excalidrawWebView;
   bool _useExcalidraw = true; // 控制是否使用Excalidraw，可以添加切换功能
+  Map<String, dynamic>? _initialData;
+  bool _isLoadingData = true;
+  int _webViewInstanceId = 0; // 用于生成唯一的WebView Key
 
   @override
   void initState() {
     super.initState();
-    _excalidrawWebView = ExcalidrawWebView(
-      viewId: widget.view.id,
-      onDataChanged: _onWhiteboardDataChanged,
-      onExport: _onWhiteboardExport,
-      onError: _onWhiteboardError,
-    );
+    _loadInitialData();
   }
 
-  void _onWhiteboardDataChanged(Map<String, dynamic> data) {
+  Future<void> _loadInitialData() async {
+    final service = WhiteboardDataService();
+    final data = await service.loadWhiteboardData(widget.view.id);
+    
+    if (mounted) {
+      setState(() {
+        _initialData = data;
+        _isLoadingData = false;
+      });
+    }
+  }
+
+  void _onWhiteboardDataChanged(Map<String, dynamic> data) async {
     // 处理白板数据变更
     print('Whiteboard data changed: $data');
-    // TODO: 保存数据到后端
+    
+    // 保存数据到本地
+    final service = WhiteboardDataService();
+    final success = await service.saveWhiteboardData(widget.view.id, data);
+    
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('保存白板数据失败'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
   }
 
   void _onWhiteboardExport(String format, dynamic data) {
@@ -184,6 +206,21 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingData) {
+      return Scaffold(
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('正在加载白板数据...'),
+            ],
+          ),
+        ),
+      );
+    }
+    
     return Scaffold(
           appBar: AppBar(
             title: Text('白板 - ${widget.view.name}'),
@@ -195,6 +232,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                 onPressed: () {
                   setState(() {
                     _useExcalidraw = !_useExcalidraw;
+                    // 切换编辑器时，增加实例ID，确保WebView重新创建
+                    _webViewInstanceId++;
                   });
                 },
                 tooltip: _useExcalidraw ? '切换到简单绘图' : '切换到专业白板',
@@ -257,7 +296,16 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   Widget _buildExcalidrawView() {
-    return _excalidrawWebView;
+    // 每次build都创建新的Widget实例，避免PlatformView重复创建错误
+    // 使用唯一的实例ID作为key，确保每次切换编辑器都创建全新的WebView，避免PlatformView ID冲突
+    return ExcalidrawWebView(
+      key: ValueKey('${widget.view.id}_instance_$_webViewInstanceId'), // 唯一实例ID确保PlatformView正确清理
+      viewId: widget.view.id,
+      initialData: _initialData,
+      onDataChanged: _onWhiteboardDataChanged,
+      onExport: _onWhiteboardExport,
+      onError: _onWhiteboardError,
+    );
   }
 
   Widget _buildLegacyView() {
@@ -442,11 +490,15 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     );
   }
 
-  void _saveWhiteboard() {
-    // TODO: 实现保存功能，与后端集成
-    if (mounted) {
+  void _saveWhiteboard() async {
+    // 主动触发数据保存
+    // 白板数据会在 onDataChanged 回调中自动保存，这里主动提示用户
+    if (_useExcalidraw && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('保存功能将在后续版本中实现')),
+        const SnackBar(
+          content: Text('白板数据自动保存中...'),
+          duration: Duration(seconds: 1),
+        ),
       );
     }
   }

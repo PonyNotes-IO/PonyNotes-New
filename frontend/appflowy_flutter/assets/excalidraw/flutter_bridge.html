@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+    <title>Excalidraw for PonyNotes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        #excalidraw-container {
+            width: 100%;
+            height: 100%;
+        }
+        
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-center;
+            z-index: 9999;
+        }
+        
+        .loading-overlay.hidden {
+            display: none;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #007AFF;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            margin-top: 20px;
+            color: #666;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <!-- 加载指示器 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">正在加载 Excalidraw...</div>
+    </div>
+    
+    <!-- 调试信息显示 -->
+    <div id="debug-info" style="position: fixed; top: 0; left: 0; background: rgba(0,0,0,0.8); color: #0f0; padding: 10px; z-index: 10000; font-family: monospace; font-size: 12px; max-width: 90%; word-break: break-all;">
+        <div>调试信息加载中...</div>
+    </div>
+    
+    <!-- Excalidraw 容器 -->
+    <div id="excalidraw-container">
+        <iframe id="excalidraw-iframe" src="" allow="clipboard-read; clipboard-write"></iframe>
+    </div>
+    
+    <script>
+        // 调试函数
+        function updateDebugInfo(message) {
+            const debugDiv = document.getElementById('debug-info');
+            if (debugDiv) {
+                debugDiv.innerHTML += '<div>' + message + '</div>';
+            }
+            console.log('[Flutter Bridge]', message);
+        }
+        
+        // 调试：打印当前页面URL
+        updateDebugInfo('Current URL: ' + window.location.href);
+        updateDebugInfo('Base URI: ' + document.baseURI);
+        updateDebugInfo('Protocol: ' + window.location.protocol);
+        
+        // 使用相对路径加载index.html（与flutter_bridge.html在同一目录）
+        const iframe = document.getElementById('excalidraw-iframe');
+        const iframeSrc = './index.html';
+        updateDebugInfo('Setting iframe src to: ' + iframeSrc);
+        
+        iframe.src = iframeSrc;
+        
+        // 监听iframe加载事件
+        iframe.onload = function() {
+            updateDebugInfo('✅ iframe loaded successfully');
+            
+            // 等待一段时间后检查iframe内容
+            setTimeout(() => {
+                try {
+                    // 尝试访问iframe内容
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (iframeDoc && iframeDoc.body) {
+                        updateDebugInfo('✅ iframe document accessible');
+                        updateDebugInfo('iframe body HTML length: ' + iframeDoc.body.innerHTML.length);
+                        updateDebugInfo('iframe #root element: ' + (iframeDoc.getElementById('root') ? 'found' : 'NOT FOUND'));
+                        
+                        // 检查是否有Excalidraw元素
+                        const excalidrawEl = iframeDoc.querySelector('.excalidraw');
+                        updateDebugInfo('Excalidraw element: ' + (excalidrawEl ? 'FOUND' : 'NOT FOUND'));
+                    } else {
+                        updateDebugInfo('❌ iframe body not found');
+                    }
+                } catch (e) {
+                    updateDebugInfo('⚠️ Cannot access iframe content (CORS): ' + e.message);
+                }
+            }, 2000);
+            
+            // 15秒后隐藏调试信息
+            setTimeout(() => {
+                const debugDiv = document.getElementById('debug-info');
+                if (debugDiv) debugDiv.style.display = 'none';
+            }, 15000);
+        };
+        
+        iframe.onerror = function(e) {
+            updateDebugInfo('❌ iframe load error: ' + e);
+        };
+        
+        // 监听来自iframe的消息
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.source === 'excalidraw-iframe') {
+                updateDebugInfo('📩 [iframe]: ' + event.data.message);
+            }
+        });
+    </script>
+    <script>
+        // 全局状态
+        let excalidrawAPI = null;
+        let isInitialized = false;
+        let initialData = null;
+        
+        // Flutter 通信桥接
+        const FlutterBridge = {
+            postMessage(type, payload) {
+                const message = JSON.stringify({ type, payload, timestamp: Date.now() });
+                
+                // 通过不同方式发送给 Flutter
+                if (window.ExcalidrawBridge && window.ExcalidrawBridge.postMessage) {
+                    window.ExcalidrawBridge.postMessage(message);
+                } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ExcalidrawBridge) {
+                    window.webkit.messageHandlers.ExcalidrawBridge.postMessage(message);
+                } else {
+                    console.log('[Bridge]', type, payload);
+                }
+            },
+            
+            sendError(error) {
+                this.postMessage('error', { 
+                    message: error.message || String(error),
+                    stack: error.stack 
+                });
+            },
+            
+            sendReady() {
+                this.postMessage('ready', { status: 'initialized' });
+            },
+            
+            sendDataChanged(data) {
+                this.postMessage('dataChanged', data);
+            },
+            
+            sendExport(format, data) {
+                this.postMessage('export', { format, data });
+            }
+        };
+        
+        // iframe 消息监听
+        window.addEventListener('message', function(event) {
+            // 仅接受来自同源的消息
+            if (event.origin !== window.location.origin) {
+                return;
+            }
+            
+            const data = event.data;
+            
+            // 处理来自 Excalidraw iframe 的消息
+            if (data.type === 'excalidraw-ready') {
+                console.log('Excalidraw iframe ready');
+                initializeExcalidraw();
+            } else if (data.type === 'excalidraw-change') {
+                // 白板内容发生变化
+                handleExcalidrawChange(data.payload);
+            }
+        });
+        
+        // 初始化 Excalidraw
+        function initializeExcalidraw() {
+            const iframe = document.getElementById('excalidraw-iframe');
+            
+            try {
+                // 隐藏加载指示器
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                
+                // 标记为已初始化
+                isInitialized = true;
+                
+                // 如果有初始数据，加载它
+                if (initialData) {
+                    loadExcalidrawData(initialData);
+                }
+                
+                // 通知 Flutter 初始化完成
+                FlutterBridge.sendReady();
+                
+            } catch (error) {
+                console.error('Error initializing Excalidraw:', error);
+                FlutterBridge.sendError(error);
+            }
+        }
+        
+        // 处理 Excalidraw 变更
+        function handleExcalidrawChange(payload) {
+            try {
+                FlutterBridge.sendDataChanged(payload);
+            } catch (error) {
+                console.error('Error handling excalidraw change:', error);
+                FlutterBridge.sendError(error);
+            }
+        }
+        
+        // ===================
+        // Flutter 调用的函数
+        // ===================
+        
+        /**
+         * 加载白板数据
+         * @param {Object} data - Excalidraw 数据格式
+         */
+        window.loadExcalidrawData = function(data) {
+            try {
+                initialData = data;
+                
+                if (!isInitialized) {
+                    console.log('Not initialized yet, data will be loaded after init');
+                    return;
+                }
+                
+                const iframe = document.getElementById('excalidraw-iframe');
+                if (iframe && iframe.contentWindow) {
+                    iframe.contentWindow.postMessage({
+                        type: 'load-data',
+                        payload: data
+                    }, window.location.origin);
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+                FlutterBridge.sendError(error);
+            }
+        };
+        
+        /**
+         * 获取当前白板数据
+         */
+        window.getExcalidrawData = function() {
+            try {
+                const iframe = document.getElementById('excalidraw-iframe');
+                if (iframe && iframe.contentWindow) {
+                    iframe.contentWindow.postMessage({
+                        type: 'get-data'
+                    }, window.location.origin);
+                }
+            } catch (error) {
+                console.error('Error getting data:', error);
+                FlutterBridge.sendError(error);
+            }
+        };
+        
+        /**
+         * 导出白板
+         * @param {string} format - 导出格式: 'png', 'svg', 'json'
+         */
+        window.exportExcalidraw = function(format) {
+            try {
+                const iframe = document.getElementById('excalidraw-iframe');
+                if (iframe && iframe.contentWindow) {
+                    iframe.contentWindow.postMessage({
+                        type: 'export',
+                        payload: { format }
+                    }, window.location.origin);
+                }
+            } catch (error) {
+                console.error('Error exporting:', error);
+                FlutterBridge.sendError(error);
+            }
+        };
+        
+        /**
+         * 设置主题
+         * @param {string} theme - 'light' or 'dark'
+         */
+        window.setTheme = function(theme) {
+            try {
+                const iframe = document.getElementById('excalidraw-iframe');
+                if (iframe && iframe.contentWindow) {
+                    iframe.contentWindow.postMessage({
+                        type: 'set-theme',
+                        payload: { theme }
+                    }, window.location.origin);
+                }
+            } catch (error) {
+                console.error('Error setting theme:', error);
+                FlutterBridge.sendError(error);
+            }
+        };
+        
+        /**
+         * 清空画布
+         */
+        window.clearCanvas = function() {
+            try {
+                const iframe = document.getElementById('excalidraw-iframe');
+                if (iframe && iframe.contentWindow) {
+                    iframe.contentWindow.postMessage({
+                        type: 'clear'
+                    }, window.location.origin);
+                }
+            } catch (error) {
+                console.error('Error clearing canvas:', error);
+                FlutterBridge.sendError(error);
+            }
+        };
+        
+        /**
+         * 撤销
+         */
+        window.undo = function() {
+            try {
+                const iframe = document.getElementById('excalidraw-iframe');
+                if (iframe && iframe.contentWindow) {
+                    iframe.contentWindow.postMessage({
+                        type: 'undo'
+                    }, window.location.origin);
+                }
+            } catch (error) {
+                console.error('Error undoing:', error);
+                FlutterBridge.sendError(error);
+            }
+        };
+        
+        /**
+         * 重做
+         */
+        window.redo = function() {
+            try {
+                const iframe = document.getElementById('excalidraw-iframe');
+                if (iframe && iframe.contentWindow) {
+                    iframe.contentWindow.postMessage({
+                        type: 'redo'
+                    }, window.location.origin);
+                }
+            } catch (error) {
+                console.error('Error redoing:', error);
+                FlutterBridge.sendError(error);
+            }
+        };
+        
+        // iframe 加载事件
+        document.getElementById('excalidraw-iframe').addEventListener('load', function() {
+            console.log('Excalidraw iframe loaded');
+            
+            // 注入自定义CSS到iframe
+            setTimeout(() => {
+                try {
+                    const iframe = document.getElementById('excalidraw-iframe');
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    
+                    // 创建style元素
+                    const style = iframeDoc.createElement('style');
+                    style.textContent = `
+                        /* PonyNotes 自定义 Excalidraw 深色工具栏主题 */
+                        .excalidraw .Island,
+                        .Island {
+                            background-color: #2c3e50 !important;
+                            color: #ffffff !important;
+                            border: 1px solid #34495e !important;
+                        }
+                        
+                        .excalidraw .ToolIcon,
+                        .ToolIcon,
+                        .excalidraw .ToolIcon__icon,
+                        .ToolIcon__icon,
+                        .excalidraw button,
+                        button {
+                            color: #ffffff !important;
+                        }
+                        
+                        .excalidraw .ToolIcon svg,
+                        .ToolIcon svg,
+                        button svg {
+                            fill: #ffffff !important;
+                            stroke: #ffffff !important;
+                        }
+                        
+                        .excalidraw .ToolIcon:hover,
+                        .ToolIcon:hover,
+                        .excalidraw button:hover,
+                        button:hover {
+                            background-color: #34495e !important;
+                        }
+                        
+                        .excalidraw .ToolIcon.is-active,
+                        .ToolIcon.is-active {
+                            background-color: #3498db !important;
+                        }
+                        
+                        /* 确保图标可见 */
+                        .excalidraw svg,
+                        svg {
+                            filter: none !important;
+                        }
+                    `;
+                    
+                    // 添加到iframe的head
+                    iframeDoc.head.appendChild(style);
+                    console.log('Custom CSS injected to iframe');
+                } catch (error) {
+                    console.error('Error injecting CSS to iframe:', error);
+                }
+                
+                initializeExcalidraw();
+            }, 1000);
+        });
+        
+        // 错误处理
+        window.addEventListener('error', function(event) {
+            console.error('Global error:', event.error);
+            FlutterBridge.sendError(event.error || event.message);
+        });
+        
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled rejection:', event.reason);
+            FlutterBridge.sendError(event.reason);
+        });
+        
+        // 通知 Flutter 页面已加载
+        console.log('Flutter bridge HTML loaded');
+    </script>
+</body>
+</html>
+

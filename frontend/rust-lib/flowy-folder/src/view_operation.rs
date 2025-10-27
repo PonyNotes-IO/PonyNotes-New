@@ -145,12 +145,52 @@ impl From<ViewLayoutPB> for ViewLayout {
       ViewLayoutPB::Board => ViewLayout::Board,
       ViewLayoutPB::Calendar => ViewLayout::Calendar,
       ViewLayoutPB::Chat => ViewLayout::Chat,
+      // 将新增的类型映射到 Document 处理器
+      ViewLayoutPB::Folder => ViewLayout::Document,
+      ViewLayoutPB::Notebook => ViewLayout::Document,
+      ViewLayoutPB::Whiteboard => ViewLayout::Document,
     }
   }
 }
 
 pub(crate) fn create_view(uid: i64, params: CreateViewParams, layout: ViewLayout) -> View {
   let time = timestamp();
+  
+  // Handle extra field for folder, notebook, and whiteboard types
+  let extra = match params.layout {
+    ViewLayoutPB::Folder => {
+      let mut extra_map = if let Some(extra) = &params.extra {
+        serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(extra)
+          .unwrap_or_default()
+      } else {
+        serde_json::Map::new()
+      };
+      extra_map.insert("view_type".to_string(), serde_json::Value::String("folder".to_string()));
+      Some(serde_json::to_string(&extra_map).unwrap_or_default())
+    },
+    ViewLayoutPB::Notebook => {
+      let mut extra_map = if let Some(extra) = &params.extra {
+        serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(extra)
+          .unwrap_or_default()
+      } else {
+        serde_json::Map::new()
+      };
+      extra_map.insert("view_type".to_string(), serde_json::Value::String("notebook".to_string()));
+      Some(serde_json::to_string(&extra_map).unwrap_or_default())
+    },
+    ViewLayoutPB::Whiteboard => {
+      let mut extra_map = if let Some(extra) = &params.extra {
+        serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(extra)
+          .unwrap_or_default()
+      } else {
+        serde_json::Map::new()
+      };
+      extra_map.insert("view_type".to_string(), serde_json::Value::String("whiteboard".to_string()));
+      Some(serde_json::to_string(&extra_map).unwrap_or_default())
+    },
+    _ => params.extra,
+  };
+
   View {
     id: params.view_id.to_string(),
     parent_view_id: params.parent_view_id.to_string(),
@@ -162,7 +202,7 @@ pub(crate) fn create_view(uid: i64, params: CreateViewParams, layout: ViewLayout
     created_by: Some(uid),
     last_edited_time: 0,
     last_edited_by: Some(uid),
-    extra: params.extra,
+    extra,
     children: Default::default(),
     is_locked: None,
   }
