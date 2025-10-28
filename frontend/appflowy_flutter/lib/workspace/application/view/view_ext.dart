@@ -10,6 +10,7 @@ import 'package:appflowy/plugins/database/grid/presentation/grid_page.dart';
 import 'package:appflowy/plugins/database/grid/presentation/mobile_grid_page.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/plugins/document/document.dart';
+import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
 import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
@@ -129,9 +130,9 @@ extension ViewExtension on ViewPB {
       case ViewLayoutPB.Chat:
         return AIChatPagePlugin(view: this);
       case ViewLayoutPB.Whiteboard:
-        return makePlugin(
-          pluginType: PluginType.whiteboard,
-          data: this,
+        return WhiteboardPlugin(
+          view: this,
+          pluginType: pluginType,
         );
     }
     throw UnimplementedError;

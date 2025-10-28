@@ -121,23 +121,42 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
   Future<void> _initializeExcalidraw() async {
     try {
+      print('🎨 [ExcalidrawWebView] Initializing Excalidraw...');
+      
       // 加载初始数据（如果有）
       if (widget.initialData != null) {
+        print('📦 [ExcalidrawWebView] Loading initial data: ${widget.initialData!.keys.length} keys');
+        final dataJson = jsonEncode(widget.initialData);
+        print('📝 [ExcalidrawWebView] Data JSON length: ${dataJson.length} chars');
+        
         await _controller.runJavaScript('''
+          console.log('[ExcalidrawWebView] Loading data into Excalidraw...');
           if (window.loadExcalidrawData) {
-            window.loadExcalidrawData(${jsonEncode(widget.initialData)});
+            window.loadExcalidrawData($dataJson);
+            console.log('[ExcalidrawWebView] Data loaded successfully');
+          } else {
+            console.error('[ExcalidrawWebView] window.loadExcalidrawData not found!');
           }
         ''');
+        print('✅ [ExcalidrawWebView] Initial data loaded');
+      } else {
+        print('⚠️ [ExcalidrawWebView] No initial data to load');
       }
       
       // 设置主题
       final theme = Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
+      print('🎨 [ExcalidrawWebView] Setting theme: $theme');
       await _controller.runJavaScript('''
+        console.log('[ExcalidrawWebView] Setting theme to $theme');
         if (window.setTheme) {
           window.setTheme('$theme');
+        } else {
+          console.error('[ExcalidrawWebView] window.setTheme not found!');
         }
       ''');
+      print('✅ [ExcalidrawWebView] Initialization complete');
     } catch (e) {
+      print('❌ [ExcalidrawWebView] Initialization failed: $e');
       widget.onError?.call('初始化Excalidraw失败: $e');
     }
   }
@@ -145,8 +164,11 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
   @override
   void dispose() {
-    // 停止本地HTTP服务器
-    _assetServer.stop();
+    // ⚠️ 不要停止本地HTTP服务器！
+    // LocalAssetServer是单例，被所有白板视图共享
+    // 如果在这里stop()，会导致其他白板视图的服务器也被停止
+    // 服务器应该在应用关闭时统一清理，而不是在每个Widget dispose时
+    // _assetServer.stop(); // ❌ 这会导致切换白板时服务器被停止
     
     // 清理WebViewController资源
     // 注意：webview_flutter 4.x版本的WebViewController没有显式的dispose方法
