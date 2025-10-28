@@ -3,9 +3,13 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/plugins/shared/share/share_bloc.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+// removed SecondaryTextButton to avoid dependency issues
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -68,24 +72,93 @@ class _ShareTabDescription extends StatelessWidget {
   }
 }
 
-class _ShareTabContent extends StatelessWidget {
+class _ShareTabContent extends StatefulWidget {
   const _ShareTabContent();
 
   @override
+  State<_ShareTabContent> createState() => _ShareTabContentState();
+}
+
+class _ShareTabContentState extends State<_ShareTabContent> {
+  bool _loading = true;
+  bool _isPublic = false;
+  ViewPB? _viewPB;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVisibility();
+  }
+
+  Future<void> _loadVisibility() async {
+    final state = context.read<ShareBloc>().state;
+    if (state.viewId.isEmpty) {
+      setState(() {
+        _loading = false;
+        _isPublic = false;
+      });
+      return;
+    }
+
+    final result = await ViewBackendService.getView(state.viewId);
+    result.fold((view) {
+      _viewPB = view;
+      // 无法直接获取可见性，这里仅结束加载；实际状态由本地切换维护
+      setState(() {
+        _loading = false;
+      });
+    }, (err) {
+      setState(() {
+        _isPublic = false;
+        _loading = false;
+      });
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ShareBloc, ShareState>(
-      builder: (context, state) {
+    return BlocListener<ShareBloc, ShareState>(
+      listener: (context, state) {
+        // whenever share state changes (e.g., viewId), reload visibility
+        _loadVisibility();
+      },
+      child: BlocBuilder<ShareBloc, ShareState>(
+        builder: (context, state) {
+        if (_loading) {
+          return const SizedBox(
+            height: 36,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+
         final shareUrl = ShareConstants.buildShareUrl(
           workspaceId: state.workspaceId,
           viewId: state.viewId,
         );
+
+        if (!_isPublic) {
+          return Container(
+            width: double.infinity,
+            alignment: Alignment.centerLeft,
+            child: PrimaryRoundedButton(
+              margin: const EdgeInsets.symmetric(vertical: 9.0, horizontal: 0),
+              text: '共享',
+              useIntrinsicWidth: false,
+              figmaLineHeight: 18.0,
+              onTap: () async {
+                await _setVisibility(true);
+              },
+            ),
+          );
+        }
+
         return Row(
           children: [
             Expanded(
               child: SizedBox(
                 height: 36,
                 child: FlowyTextField(
-                  text: shareUrl, // todo: add workspace id + view id
+                  text: shareUrl,
                   readOnly: true,
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -93,10 +166,7 @@ class _ShareTabContent extends StatelessWidget {
             ),
             const HSpace(8.0),
             PrimaryRoundedButton(
-              margin: const EdgeInsets.symmetric(
-                vertical: 9.0,
-                horizontal: 14.0,
-              ),
+              margin: const EdgeInsets.symmetric(vertical: 9.0, horizontal: 14.0),
               text: LocaleKeys.button_copyLink.tr(),
               figmaLineHeight: 18.0,
               leftIcon: FlowySvg(
@@ -105,10 +175,37 @@ class _ShareTabContent extends StatelessWidget {
               ),
               onTap: () => _copy(context, shareUrl),
             ),
+            const HSpace(8.0),
+            TextButton(
+              onPressed: () async {
+                await _setVisibility(false);
+              },
+              child: const Text('取消共享'),
+            ),
           ],
         );
-      },
+        },
+      ),
     );
+  }
+
+  Future<void> _setVisibility(bool public) async {
+    if (_viewPB == null) {
+      await _loadVisibility();
+      if (_viewPB == null) return;
+    }
+    setState(() => _loading = true);
+    // 恢复为：显式切换工作区可见性，匹配“我的空间展示”预期
+    final result = await ViewBackendService.updateViewsVisibility([_viewPB!], public);
+    result.fold((_) {
+      setState(() {
+        _isPublic = public;
+        _loading = false;
+      });
+    }, (err) {
+      setState(() => _loading = false);
+      showToastNotification(message: err.msg.isEmpty ? '操作失败' : err.msg);
+    });
   }
 
   void _copy(BuildContext context, String url) {
