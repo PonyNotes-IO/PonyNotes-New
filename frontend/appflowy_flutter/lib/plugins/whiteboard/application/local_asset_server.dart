@@ -30,12 +30,29 @@ class LocalAssetServer {
         print('📥 HTTP请求: ${request.method} /$requestPath');
 
         // 构建Flutter asset路径
+        // 支持两种路径格式：
+        // 1. /whiteboard/{viewId}/{resource} - 用于隔离 localStorage
+        // 2. /{resource} - 传统格式
         String assetPath;
-        if (requestPath.isEmpty || requestPath == '/') {
+        String cleanedPath = requestPath;
+        
+        // 如果路径以 /whiteboard/{viewId}/ 开头，移除该前缀
+        if (requestPath.startsWith('whiteboard/')) {
+          final parts = requestPath.split('/');
+          if (parts.length > 2) {
+            // 移除 whiteboard 和 viewId 部分，保留资源路径
+            cleanedPath = parts.sublist(2).join('/');
+          } else {
+            // 只有 whiteboard/viewId，返回 index.html
+            cleanedPath = '';
+          }
+        }
+        
+        if (cleanedPath.isEmpty || cleanedPath == '/') {
           assetPath = 'assets/excalidraw/index.html';
         } else {
           // 移除开头的 /（如果有）
-          final cleanPath = requestPath.startsWith('/') ? requestPath.substring(1) : requestPath;
+          final cleanPath = cleanedPath.startsWith('/') ? cleanedPath.substring(1) : cleanedPath;
           assetPath = 'assets/excalidraw/$cleanPath';
         }
 

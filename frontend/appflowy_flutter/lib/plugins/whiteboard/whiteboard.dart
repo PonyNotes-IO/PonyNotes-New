@@ -153,6 +153,11 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   @override
   void initState() {
     super.initState();
+    print('🎨 [WhiteboardPage] initState called');
+    print('🎨 [WhiteboardPage] view.id: ${widget.view.id}');
+    print('🎨 [WhiteboardPage] view.name: ${widget.view.name}');
+    print('🎨 [WhiteboardPage] view.layout: ${widget.view.layout}');
+    print('🎨 [WhiteboardPage] view.extra: ${widget.view.extra}');
     _loadInitialData();
   }
 

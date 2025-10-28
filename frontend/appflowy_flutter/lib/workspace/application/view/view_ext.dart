@@ -90,15 +90,17 @@ extension ViewExtension on ViewPB {
         size: size,
       );
 
-  PluginType get pluginType => switch (layout) {
-        ViewLayoutPB.Board => PluginType.board,
-        ViewLayoutPB.Calendar => PluginType.calendar,
-        ViewLayoutPB.Document => PluginType.document,
-        ViewLayoutPB.Grid => PluginType.grid,
-        ViewLayoutPB.Chat => PluginType.chat,
-        ViewLayoutPB.Whiteboard => PluginType.whiteboard,
-        _ => PluginType.document, // 临时处理：未知layout type返回document而不是抛异常
-      };
+  PluginType get pluginType {
+    return switch (layout) {
+      ViewLayoutPB.Board => PluginType.board,
+      ViewLayoutPB.Calendar => PluginType.calendar,
+      ViewLayoutPB.Document => PluginType.document,
+      ViewLayoutPB.Grid => PluginType.grid,
+      ViewLayoutPB.Chat => PluginType.chat,
+      ViewLayoutPB.Whiteboard => PluginType.whiteboard,
+      _ => PluginType.document,
+    };
+  }
 
   Plugin plugin({
     Map<String, dynamic> arguments = const {},

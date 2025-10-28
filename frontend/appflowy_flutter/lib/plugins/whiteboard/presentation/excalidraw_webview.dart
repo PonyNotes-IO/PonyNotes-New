@@ -102,11 +102,17 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 启动本地HTTP服务器
       final baseUrl = await _assetServer.start();
       
+      // ⚠️ CRITICAL: 使用带 viewId 的URL，这样每个白板都有独立的 localStorage 域
+      // 这是解决多白板数据隔离问题的关键！
+      final whiteboardUrl = '$baseUrl/whiteboard/${widget.viewId}/flutter_bridge.html';
+      
       print('✅ 服务器已启动: $baseUrl');
-      print('📄 加载URL: $baseUrl/flutter_bridge.html');
+      print('📄 加载URL (带viewId隔离): $whiteboardUrl');
+      print('🆔 ViewID: ${widget.viewId}');
       
       // 通过HTTP加载flutter_bridge.html，它会通过iframe加载完整的Excalidraw (index.html)
-      await _controller.loadRequest(Uri.parse('$baseUrl/flutter_bridge.html'));
+      // 每个白板使用不同的URL路径，从而拥有独立的 localStorage 存储空间
+      await _controller.loadRequest(Uri.parse(whiteboardUrl));
     } catch (e) {
       print('❌ 加载Excalidraw失败: $e');
       if (mounted) {

@@ -66,6 +66,7 @@ pub fn register_handlers(
 
   let database_folder_operation = Arc::new(DatabaseFolderOperation(database_manager));
   let chat_folder_operation = Arc::new(ChatFolderOperation(chat_manager));
+  
   folder_manager.register_operation_handler(ViewLayout::Board, database_folder_operation.clone());
   folder_manager.register_operation_handler(ViewLayout::Grid, database_folder_operation.clone());
   folder_manager.register_operation_handler(ViewLayout::Calendar, database_folder_operation);
