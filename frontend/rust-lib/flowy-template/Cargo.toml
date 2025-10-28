@@ -1,0 +1,21 @@
+[package]
+name = "flowy-template"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flowy-derive = { path = "../build-tool/flowy-derive" }
+flowy-error = { path = "../flowy-error" }
+flowy-sqlite = { path = "../flowy-sqlite" }
+flowy-template-pub = { path = "../flowy-template-pub" }
+lib-infra = { path = "../lib-infra" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+diesel = { version = "2.0", features = ["sqlite", "chrono", "uuid"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+anyhow = "1.0"
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }

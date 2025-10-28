@@ -25,6 +25,8 @@ enum PluginType {
   fileLibrary,
   inbox,
   whiteboard,
+  publish,
+  template
 }
 
 typedef PluginId = String;

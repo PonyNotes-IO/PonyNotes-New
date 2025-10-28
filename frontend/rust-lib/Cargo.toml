@@ -32,6 +32,10 @@ members = [
   "flowy-storage-pub",
   "flowy-sqlite-vec",
   "html-to-markdown",
+  "pdf-processor",
+  "html-to-markdown",
+  "flowy-template",
+  "flowy-template-pub"
 ]
 
 resolver = "2"
@@ -66,6 +70,8 @@ collab-integrate = { path = "collab-integrate" }
 flowy-date = { path = "flowy-date" }
 flowy-ai = { path = "flowy-ai" }
 flowy-ai-pub = { path = "flowy-ai-pub" }
+flowy-template = { path = "flowy-template" }
+flowy-template-pub = { path = "flowy-template-pub" }
 anyhow = "1.0"
 arc-swap = "1.7"
 tracing = "0.1.40"

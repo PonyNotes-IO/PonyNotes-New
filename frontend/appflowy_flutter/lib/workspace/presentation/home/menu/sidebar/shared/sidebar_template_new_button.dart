@@ -1,5 +1,8 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 
 class SidebarTemplateNewButton extends StatelessWidget {
@@ -15,8 +18,12 @@ class SidebarTemplateNewButton extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.start,
         size: AFButtonSize.l,
         onTap: () {
-          // 测试代码，打印日志
-          debugPrint('模版按钮被点击了');
+          // 打开模板插件
+          context.read<TabsBloc>().add(
+            TabsEvent.openPlugin(
+              plugin: makePlugin(pluginType: PluginType.template),
+            ),
+          );
         },
         padding: EdgeInsets.symmetric(
           horizontal: 8,

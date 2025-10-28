@@ -149,6 +149,24 @@ diesel::table! {
 }
 
 diesel::table! {
+    user_template_table (id) {
+        id -> Text,
+        user_id -> BigInt,
+        template_id -> Text,
+        title -> Text,
+        description -> Text,
+        category -> Text,
+        author -> Text,
+        preview_url -> Text,
+        featured -> Bool,
+        tags -> Text,
+        download_url -> Text,
+        created_at -> BigInt,
+        updated_at -> BigInt,
+    }
+}
+
+diesel::table! {
     workspace_shared_user (workspace_id, view_id, email) {
         workspace_id -> Text,
         view_id -> Text,
@@ -172,20 +190,21 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
-  af_collab_metadata,
-  chat_local_setting_table,
-  chat_message_table,
-  chat_table,
-  collab_snapshot,
-  index_collab_record_table,
-  local_ai_model_table,
-  upload_file_part,
-  upload_file_table,
-  user_data_migration_records,
-  user_table,
-  user_workspace_table,
-  workspace_members_table,
-  workspace_setting_table,
-  workspace_shared_user,
-  workspace_shared_view,
+    af_collab_metadata,
+    chat_local_setting_table,
+    chat_message_table,
+    chat_table,
+    collab_snapshot,
+    index_collab_record_table,
+    local_ai_model_table,
+    upload_file_part,
+    upload_file_table,
+    user_data_migration_records,
+    user_table,
+    user_workspace_table,
+    workspace_members_table,
+    workspace_setting_table,
+    workspace_shared_user,
+    workspace_shared_view,
+    user_template_table,
 );

@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/export/document_exporter.dart';
 import 'package:appflowy/workspace/application/settings/share/export_service.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/view/view_publish_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
@@ -16,6 +18,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'constants.dart';
+import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 
 part 'share_bloc.freezed.dart';
 
@@ -129,6 +132,7 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
       final result =
           await ViewBackendService.getPublishNameSpace().getOrThrow();
 
+      // 直接发布原笔记，不创建副本
       await ViewBackendService.publish(
         view,
         name: publishName,
@@ -150,6 +154,10 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
       );
 
       Log.info('publish success: ${result.namespace}/$publishName');
+      // 通知发布列表刷新
+      PublishRefresh.ping();
+      // 更新发布服务状态
+      ViewPublishService().markViewAsPublished(view.id);
     } catch (e) {
       Log.error('publish error: $e');
 
@@ -188,6 +196,13 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
         url: result.fold((_) => '', (_) => state.url),
       ),
     );
+
+    // 通知刷新：仅在成功取消发布时
+    result.onSuccess((_) {
+      PublishRefresh.ping();
+      // 更新发布服务状态
+      ViewPublishService().markViewAsUnpublished(view.id);
+    });
   }
 
   Future<void> _updatePublishStatus(Emitter<ShareState> emit) async {

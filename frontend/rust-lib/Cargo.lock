@@ -1802,6 +1802,7 @@ dependencies = [
  "r2d2",
  "serde_json",
  "time",
+ "uuid",
 ]
 
 [[package]]
@@ -2394,6 +2395,7 @@ dependencies = [
  "flowy-derive",
  "flowy-error",
  "flowy-notification",
+ "flowy-sqlite",
  "futures",
  "indexmap 2.9.0",
  "lazy_static",
@@ -2792,6 +2794,35 @@ dependencies = [
  "mime_guess",
  "serde",
  "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "flowy-template"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "diesel",
+ "flowy-derive",
+ "flowy-error",
+ "flowy-sqlite",
+ "flowy-template-pub",
+ "lib-infra",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "flowy-template-pub"
+version = "0.1.0"
+dependencies = [
+ "flowy-error",
+ "lib-infra",
+ "serde",
  "uuid",
 ]
 

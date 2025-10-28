@@ -1,0 +1,180 @@
+{
+  "templates": [
+    {
+      "id": "1",
+      "title": "Weekly To-Do List",
+      "description": "Stay organized and productive with this simple yet effective Weekly To-Do List Template",
+      "category": "project-management",
+      "author": "AppFlowy",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.png4CAF50/FFFFFF?text=Weekly+To-Do+List",
+      "featured": true,
+      "tags": ["productivity", "planning", "weekly"],
+      "downloadUrl": "https://appflowy.com/templates/weekly-todo-list"
+    },
+    {
+      "id": "2",
+      "title": "Bug Tracker",
+      "description": "Streamline your bug reporting and tracking with this easy-to-use template.",
+      "category": "engineering",
+      "author": "Robin, Founder at Blue Cat Reports",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.pngFF9800/FFFFFF?text=Bug+Tracker",
+      "featured": true,
+      "tags": ["development", "bug-tracking", "engineering"],
+      "downloadUrl": "https://appflowy.com/templates/bug-tracker"
+    },
+    {
+      "id": "3",
+      "title": "Project planning doc",
+      "description": "A comprehensive project planning document template for managing complex projects.",
+      "category": "project-management",
+      "author": "AppFlowy Team",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.png2196F3/FFFFFF?text=Project+Planning",
+      "featured": false,
+      "tags": ["project", "planning", "management"],
+      "downloadUrl": "https://appflowy.com/templates/project-planning"
+    },
+    {
+      "id": "4",
+      "title": "Engineering Sprint Planning",
+      "description": "Template for engineering sprint planning and task management.",
+      "category": "engineering",
+      "author": "Engineering Team",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.png9C27B0/FFFFFF?text=Sprint+Planning",
+      "featured": true,
+      "tags": ["sprint", "planning", "engineering", "agile"],
+      "downloadUrl": "https://appflowy.com/templates/sprint-planning"
+    },
+    {
+      "id": "5",
+      "title": "Startup Business Plan",
+      "description": "Comprehensive business plan template for startups and new ventures.",
+      "category": "startup",
+      "author": "Startup Advisor",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.pngFF5722/FFFFFF?text=Business+Plan",
+      "featured": true,
+      "tags": ["startup", "business", "planning", "strategy"],
+      "downloadUrl": "https://appflowy.com/templates/business-plan"
+    },
+    {
+      "id": "6",
+      "title": "Course Curriculum",
+      "description": "Template for designing and organizing educational course content.",
+      "category": "education",
+      "author": "Education Expert",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.png607D8B/FFFFFF?text=Course+Curriculum",
+      "featured": false,
+      "tags": ["education", "curriculum", "learning", "course"],
+      "downloadUrl": "https://appflowy.com/templates/course-curriculum"
+    },
+    {
+      "id": "7",
+      "title": "Marketing Campaign",
+      "description": "Template for planning and executing marketing campaigns.",
+      "category": "marketing",
+      "author": "Marketing Specialist",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.pngE91E63/FFFFFF?text=Marketing+Campaign",
+      "featured": true,
+      "tags": ["marketing", "campaign", "strategy", "promotion"],
+      "downloadUrl": "https://appflowy.com/templates/marketing-campaign"
+    },
+    {
+      "id": "8",
+      "title": "Team Management",
+      "description": "Template for managing teams, performance, and team dynamics.",
+      "category": "management",
+      "author": "Management Consultant",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.png795548/FFFFFF?text=Team+Management",
+      "featured": false,
+      "tags": ["management", "team", "leadership", "performance"],
+      "downloadUrl": "https://appflowy.com/templates/team-management"
+    },
+    {
+      "id": "9",
+      "title": "HR Recruitment",
+      "description": "Template for managing recruitment processes and candidate evaluation.",
+      "category": "hr",
+      "author": "HR Professional",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.png3F51B5/FFFFFF?text=HR+Recruitment",
+      "featured": false,
+      "tags": ["hr", "recruitment", "hiring", "candidates"],
+      "downloadUrl": "https://appflowy.com/templates/hr-recruitment"
+    },
+    {
+      "id": "10",
+      "title": "Sales CRM",
+      "description": "Customer relationship management template for sales teams.",
+      "category": "sales-crm",
+      "author": "Sales Manager",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.png009688/FFFFFF?text=Sales+CRM",
+      "featured": true,
+      "tags": ["sales", "crm", "customers", "relationships"],
+      "downloadUrl": "https://appflowy.com/templates/sales-crm"
+    },
+    {
+      "id": "11",
+      "title": "Team Meeting Notes",
+      "description": "Template for organizing and documenting team meetings.",
+      "category": "team-meeting",
+      "author": "Team Lead",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.pngFF9800/FFFFFF?text=Meeting+Notes",
+      "featured": false,
+      "tags": ["meeting", "notes", "team", "collaboration"],
+      "downloadUrl": "https://appflowy.com/templates/meeting-notes"
+    },
+    {
+      "id": "12",
+      "title": "Product Design Brief",
+      "description": "Template for product design planning and documentation.",
+      "category": "product-design",
+      "author": "Product Designer",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.png673AB7/FFFFFF?text=Product+Design",
+      "featured": true,
+      "tags": ["design", "product", "ux", "ui"],
+      "downloadUrl": "https://appflowy.com/templates/product-design"
+    },
+    {
+      "id": "13",
+      "title": "AI-Powered Content",
+      "description": "Template for creating AI-assisted content and documentation.",
+      "category": "ai-driven",
+      "author": "AI Specialist",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.png00BCD4/FFFFFF?text=AI+Content",
+      "featured": true,
+      "tags": ["ai", "content", "automation", "intelligence"],
+      "downloadUrl": "https://appflowy.com/templates/ai-content"
+    },
+    {
+      "id": "14",
+      "title": "Documentation Wiki",
+      "description": "Template for creating comprehensive documentation and wikis.",
+      "category": "wiki",
+      "author": "Technical Writer",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.png8BC34A/FFFFFF?text=Documentation",
+      "featured": false,
+      "tags": ["documentation", "wiki", "knowledge", "reference"],
+      "downloadUrl": "https://appflowy.com/templates/documentation"
+    },
+    {
+      "id": "15",
+      "title": "Database Schema",
+      "description": "Template for designing and documenting database schemas.",
+      "category": "database",
+      "author": "Database Architect",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.pngFFC107/FFFFFF?text=Database+Schema",
+      "featured": false,
+      "tags": ["database", "schema", "design", "architecture"],
+      "downloadUrl": "https://appflowy.com/templates/database-schema"
+    },
+    {
+      "id": "16",
+      "title": "Kanban Board",
+      "description": "Template for implementing Kanban methodology for project management.",
+      "category": "kanban",
+      "author": "Project Manager",
+      "previewUrl": "assets/images/built_in_cover_images/m_cover_image_1.pngFF5722/FFFFFF?text=Kanban+Board",
+      "featured": true,
+      "tags": ["kanban", "agile", "project", "management"],
+      "downloadUrl": "https://appflowy.com/templates/kanban-board"
+    }
+  ]
+}
