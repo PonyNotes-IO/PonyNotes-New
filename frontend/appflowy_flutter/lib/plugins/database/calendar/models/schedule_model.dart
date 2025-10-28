@@ -891,63 +891,56 @@ class ScheduleModel extends ChangeNotifier {
       final viewResult = await ViewBackendService.getView(viewId);
       await viewResult.fold(
         (view) async {
-          
-          // 创建数据库控制器
-          try {
-            _databaseController = DatabaseController(view: view);
-          } catch (e) {
-            throw Exception('创建数据库控制器失败: $e');
-          }
-          
-          // 设置数据库回调
-          _databaseCallbacks = DatabaseCallbacks(
-            onRowsCreated: (rows) async {
-              if (_isDisposed) return;
-              // 新创建的行，重新加载数据
-              await refresh();
-            },
-            onRowsUpdated: (rowIds, reason) async {
-              if (_isDisposed) return;
-              // 行更新，重新加载数据
-              await refresh();
-            },
-            onRowsDeleted: (rowIds) async {
-              if (_isDisposed) return;
-              // 行删除，重新加载数据
-              await refresh();
-            },
-          );
-          
-          // 添加监听器
-          if (_databaseController != null) {
-            _databaseController!.addListener(onDatabaseChanged: _databaseCallbacks);
-          }
-          
-          // 打开数据库连接
-          final openResult = await _databaseController!.open();
-          await openResult.fold(
-            (success) {
-              
-              // 等待一下让字段控制器初始化
-              Future.delayed(Duration(milliseconds: 100), () async {
-                try {
-                  // 打印字段信息 - 安全地访问字段控制器
-                  final fieldController = _databaseController?.fieldController;
-                  if (fieldController != null) {
-                    final fieldInfos = fieldController.fieldInfos;
-                  } else {
-                  }
-                } catch (e) {
-                }
-              });
-            },
-            (error) {
-              throw Exception('无法打开数据库连接: $error');
-            },
-          );
+          // 正常路径：视图存在
+          await _setupDatabaseWithView(view);
         },
-        (error) {
-          throw Exception('无法获取视图: $error');
+        (error) async {
+          // 恢复路径：尝试用相同ID创建孤儿视图（处理在回收站/私有分区/不存在等情况）
+          bool recovered = false;
+          try {
+            final createOrphan = await ViewBackendService.createOrphanView(
+              viewId: viewId,
+              name: '新建日程日历',
+              layoutType: ViewLayoutPB.Calendar,
+            );
+            await createOrphan.fold(
+              (v) async {
+                await _setupDatabaseWithView(v);
+                _currentViewId = v.id;
+                notifyListeners();
+                recovered = true;
+              },
+              (e) async {
+                recovered = false;
+              },
+            );
+          } catch (_) {
+            recovered = false;
+          }
+
+          // 再次回退：使用固定的新建视图ID创建
+          if (!recovered) {
+            try {
+              final fallbackId = _newScheduleViewId;
+              final createFallback = await ViewBackendService.createOrphanView(
+                viewId: fallbackId,
+                name: '新建日程日历',
+                layoutType: ViewLayoutPB.Calendar,
+              );
+              await createFallback.fold(
+                (v) async {
+                  await _setupDatabaseWithView(v);
+                  _currentViewId = v.id;
+                  notifyListeners();
+                },
+                (e) async {
+                  // 最终失败则静默返回，避免抛异常导致上层未捕获
+                },
+              );
+            } catch (_) {
+              // 静默返回
+            }
+          }
         },
       );
     } catch (e) {
@@ -976,5 +969,57 @@ class ScheduleModel extends ChangeNotifier {
     super.dispose();
   }
 } 
+
+extension _ScheduleModelSetup on ScheduleModel {
+  Future<void> _setupDatabaseWithView(ViewPB view) async {
+    // 创建数据库控制器
+    try {
+      _databaseController = DatabaseController(view: view);
+    } catch (e) {
+      throw Exception('创建数据库控制器失败: $e');
+    }
+
+    // 设置数据库回调
+    _databaseCallbacks = DatabaseCallbacks(
+      onRowsCreated: (rows) async {
+        if (_isDisposed) return;
+        await refresh();
+      },
+      onRowsUpdated: (rowIds, reason) async {
+        if (_isDisposed) return;
+        await refresh();
+      },
+      onRowsDeleted: (rowIds) async {
+        if (_isDisposed) return;
+        await refresh();
+      },
+    );
+
+    // 添加监听器
+    if (_databaseController != null) {
+      _databaseController!.addListener(onDatabaseChanged: _databaseCallbacks);
+    }
+
+    // 打开数据库连接
+    final openResult = await _databaseController!.open();
+    await openResult.fold(
+      (success) {
+        // 等待一下让字段控制器初始化
+        Future.delayed(const Duration(milliseconds: 100), () async {
+          try {
+            final fieldController = _databaseController?.fieldController;
+            if (fieldController != null) {
+              final fieldInfos = fieldController.fieldInfos;
+              // 可选：根据需要检查字段
+            }
+          } catch (_) {}
+        });
+      },
+      (error) {
+        throw Exception('无法打开数据库连接: $error');
+      },
+    );
+  }
+}
 
 // 使用AppFlowy内置的DatabaseEventGetAllCalendarEvents 
