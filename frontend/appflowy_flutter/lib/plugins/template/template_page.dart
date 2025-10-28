@@ -269,31 +269,34 @@ class _TemplatePageState extends State<TemplatePage>
                 // 宽屏：使用水平布局
                 layoutWidget = Row(
                   children: [
-                    TemplateSidebar(
-                      selectedCategory: selectedCategory,
-                      selectedView: selectedView,
-                      searchQuery: searchQuery,
-                      onCategoryChanged: (category) {
-                        if (mounted) {
-                          setState(() {
-                            selectedCategory = category;
-                          });
-                        }
-                      },
-                      onViewChanged: (view) {
-                        if (mounted) {
-                          setState(() {
-                            selectedView = view;
-                          });
-                        }
-                      },
-                      onSearchChanged: (query) {
-                        if (mounted) {
-                          setState(() {
-                            searchQuery = query;
-                          });
-                        }
-                      },
+                    SizedBox(
+                      width: 280,
+                      child: TemplateSidebar(
+                        selectedCategory: selectedCategory,
+                        selectedView: selectedView,
+                        searchQuery: searchQuery,
+                        onCategoryChanged: (category) {
+                          if (mounted) {
+                            setState(() {
+                              selectedCategory = category;
+                            });
+                          }
+                        },
+                        onViewChanged: (view) {
+                          if (mounted) {
+                            setState(() {
+                              selectedView = view;
+                            });
+                          }
+                        },
+                        onSearchChanged: (query) {
+                          if (mounted) {
+                            setState(() {
+                              searchQuery = query;
+                            });
+                          }
+                        },
+                      ),
                     ),
                     Expanded(
                       child: TemplateList(
