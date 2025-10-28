@@ -146,6 +146,7 @@ class WhiteboardPage extends StatefulWidget {
 class _WhiteboardPageState extends State<WhiteboardPage> {
   bool _useExcalidraw = true; // 控制是否使用Excalidraw，可以添加切换功能
   Map<String, dynamic>? _initialData;
+  Map<String, dynamic>? _currentData; // 当前白板数据（实时更新）
   bool _isLoadingData = true;
   int _webViewInstanceId = 0; // 用于生成唯一的WebView Key
 
@@ -156,32 +157,60 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   Future<void> _loadInitialData() async {
+    print('🔄 [Whiteboard] Loading initial data for view: ${widget.view.id}');
     final service = WhiteboardDataService();
     final data = await service.loadWhiteboardData(widget.view.id);
     
+    print('📦 [Whiteboard] Loaded data: ${data.isEmpty ? "空数据" : "有数据 (${data.keys.length} keys)"}');
+    
     if (mounted) {
       setState(() {
-        _initialData = data;
+        _initialData = data.isEmpty ? null : data;
+        _currentData = data.isEmpty ? null : data; // 同步当前数据
         _isLoadingData = false;
       });
     }
   }
 
+  /// 重新加载最新数据（用于视图切换）
+  Future<void> _reloadLatestData() async {
+    print('🔄 [Whiteboard] Reloading latest data for view: ${widget.view.id}');
+    final service = WhiteboardDataService();
+    final data = await service.loadWhiteboardData(widget.view.id);
+    
+    print('📦 [Whiteboard] Reloaded data: ${data.isEmpty ? "空数据" : "有数据 (${data.keys.length} keys)"}');
+    
+    if (mounted) {
+      setState(() {
+        _initialData = data.isEmpty ? null : data;
+        _currentData = data.isEmpty ? null : data;
+      });
+    }
+  }
+
   void _onWhiteboardDataChanged(Map<String, dynamic> data) async {
+    // 更新当前数据缓存
+    _currentData = data;
+    
     // 处理白板数据变更
-    print('Whiteboard data changed: $data');
+    print('📝 [Whiteboard] Data changed: ${data.keys.length} keys');
     
     // 保存数据到本地
     final service = WhiteboardDataService();
     final success = await service.saveWhiteboardData(widget.view.id, data);
     
-    if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('保存白板数据失败'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    if (success) {
+      print('✅ [Whiteboard] Data saved successfully');
+    } else {
+      print('❌ [Whiteboard] Data save failed');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('保存白板数据失败'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
     }
   }
 
@@ -195,13 +224,63 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   void _onWhiteboardError(String error) {
     // 处理错误
-    print('Whiteboard error: $error');
+    print('❌ [Whiteboard] Error: $error');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('白板错误: $error'),
         backgroundColor: Colors.red,
       ),
     );
+  }
+
+  /// 手动保存白板数据
+  Future<void> _saveWhiteboard() async {
+    print('💾 [Whiteboard] Manual save triggered');
+    
+    if (_currentData == null) {
+      print('⚠️ [Whiteboard] No data to save');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('没有数据需要保存'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+    
+    final service = WhiteboardDataService();
+    final success = await service.saveWhiteboardData(widget.view.id, _currentData!);
+    
+    if (mounted) {
+      if (success) {
+        print('✅ [Whiteboard] Manual save successful');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('白板已保存'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        print('❌ [Whiteboard] Manual save failed');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('保存失败，请重试'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -223,73 +302,197 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     
     return Scaffold(
           appBar: AppBar(
-            title: Text('白板 - ${widget.view.name}'),
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            surfaceTintColor: Colors.transparent,
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            foregroundColor: Theme.of(context).colorScheme.onSurface,
+            toolbarHeight: 64,
+            titleSpacing: 8,
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.palette_outlined,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        widget.view.name,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             actions: [
               // 切换编辑器按钮
-              IconButton(
-                icon: Icon(_useExcalidraw ? Icons.brush : Icons.draw),
-                onPressed: () {
-                  setState(() {
-                    _useExcalidraw = !_useExcalidraw;
-                    // 切换编辑器时，增加实例ID，确保WebView重新创建
-                    _webViewInstanceId++;
-                  });
-                },
-                tooltip: _useExcalidraw ? '切换到简单绘图' : '切换到专业白板',
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  color: _useExcalidraw 
+                    ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5)
+                    : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    _useExcalidraw ? Icons.brush : Icons.draw_outlined,
+                    size: 22,
+                  ),
+                  onPressed: () async {
+                    print('🔄 [Whiteboard] Switching editor mode...');
+                    
+                    // 如果当前是Excalidraw且有数据，先尝试保存
+                    if (_useExcalidraw && _currentData != null) {
+                      print('💾 [Whiteboard] Saving current Excalidraw data before switch...');
+                      final service = WhiteboardDataService();
+                      await service.saveWhiteboardData(widget.view.id, _currentData!);
+                    }
+                    
+                    // 切换编辑器
+                    setState(() {
+                      _useExcalidraw = !_useExcalidraw;
+                      // 切换编辑器时，增加实例ID，确保WebView重新创建
+                      _webViewInstanceId++;
+                    });
+                    
+                    // 如果切换到Excalidraw，重新加载最新数据
+                    if (_useExcalidraw) {
+                      print('🔄 [Whiteboard] Switched to Excalidraw, reloading data...');
+                      await _reloadLatestData();
+                    } else {
+                      print('🔄 [Whiteboard] Switched to simple drawing mode');
+                    }
+                  },
+                  tooltip: _useExcalidraw ? '切换到简单绘图' : '切换到专业白板',
+                  style: IconButton.styleFrom(
+                    foregroundColor: _useExcalidraw 
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
               ),
               // 导出按钮
               if (_useExcalidraw) ...[  
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.download),
-                  tooltip: '导出',
-                  onSelected: (format) {
-                    // 导出功能将在后续版本中实现
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('导出 $format 格式功能将在后续版本中实现')),
-                    );
-                  },
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(
-                      value: 'png',
-                      child: Row(
-                        children: [
-                          Icon(Icons.image),
-                          SizedBox(width: 8),
-                          Text('导出为 PNG'),
-                        ],
-                      ),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: PopupMenuButton<String>(
+                    icon: const Icon(Icons.download_outlined, size: 22),
+                    tooltip: '导出',
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const PopupMenuItem(
-                      value: 'svg',
-                      child: Row(
-                        children: [
-                          Icon(Icons.code),
-                          SizedBox(width: 8),
-                          Text('导出为 SVG'),
-                        ],
+                    offset: const Offset(0, 8),
+                    onSelected: (format) {
+                      // 导出功能将在后续版本中实现
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('导出 $format 格式功能将在后续版本中实现'),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      );
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'png',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.image_outlined,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 12),
+                            const Text('导出为 PNG'),
+                          ],
+                        ),
                       ),
-                    ),
-                    const PopupMenuItem(
-                      value: 'json',
-                      child: Row(
-                        children: [
-                          Icon(Icons.code),
-                          SizedBox(width: 8),
-                          Text('导出为 JSON'),
-                        ],
+                      PopupMenuItem(
+                        value: 'svg',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.code,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 12),
+                            const Text('导出为 SVG'),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                      PopupMenuItem(
+                        value: 'json',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.data_object,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                            const SizedBox(width: 12),
+                            const Text('导出为 JSON'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
               // 保存按钮
-              IconButton(
-                icon: const Icon(Icons.save),
-                onPressed: _saveWhiteboard,
-                tooltip: '保存',
+              Container(
+                margin: const EdgeInsets.only(left: 4, right: 12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.save_outlined, size: 22),
+                  onPressed: _saveWhiteboard,
+                  tooltip: '保存',
+                  style: IconButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
               ),
             ],
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(1),
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
           body: _useExcalidraw ? _buildExcalidrawView() : _buildLegacyView(),
         );
@@ -490,18 +693,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     );
   }
 
-  void _saveWhiteboard() async {
-    // 主动触发数据保存
-    // 白板数据会在 onDataChanged 回调中自动保存，这里主动提示用户
-    if (_useExcalidraw && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('白板数据自动保存中...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    }
-  }
 }
 
 class _ToolButton extends StatelessWidget {
