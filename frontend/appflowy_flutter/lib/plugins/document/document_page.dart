@@ -13,12 +13,15 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/shared_con
 import 'package:appflowy/plugins/document/presentation/editor_plugins/transaction_handler/editor_transaction_service.dart';
 import 'package:appflowy/plugins/document/presentation/editor_style.dart';
 import 'package:appflowy/shared/flowy_error_page.dart';
+import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
+import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -27,6 +30,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
+import 'package:appflowy/plugins/shared/share/share_button.dart';
 
 class DocumentPage extends StatefulWidget {
   const DocumentPage({
@@ -227,12 +232,45 @@ class _DocumentPageState extends State<DocumentPage>
         editorState: state.editorState!,
         child: Column(
           children: [
+            _buildTopActionsBar(context),
             // the banner only shows on desktop
             if (state.isDeleted && UniversalPlatform.isDesktop)
               buildBanner(context),
             Expanded(child: child),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTopActionsBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (FeatureFlag.syncDocument.isOn) ...[
+            DocumentCollaborators(
+              key: ValueKey('collaborators_${widget.view.id}'),
+              width: 120,
+              height: 32,
+              view: widget.view,
+            ),
+            const SizedBox(width: 16),
+          ] else
+            const SizedBox(width: 8),
+          ViewFavoriteButton(
+            key: ValueKey('favorite_button_${widget.view.id}'),
+            view: widget.view,
+          ),
+          const SizedBox(width: 10),
+          ShareButton(
+            key: ValueKey('share_button_${widget.view.id}'),
+            view: widget.view,
+          ),
+          const SizedBox(width: 4),
+          MoreViewActions(view: widget.view),
+        ],
       ),
     );
   }

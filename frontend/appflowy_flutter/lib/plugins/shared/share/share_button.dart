@@ -77,7 +77,7 @@ class ShareButton extends StatelessWidget {
                 ShareMenuTab.share,
                 ShareMenuTab.publish,
               ],
-              ShareMenuTab.exportAs,
+              // ShareMenuTab.exportAs,
             ];
 
             return ShareMenuButton(tabs: tabs);

@@ -11,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 
+import '../../../generated/flowy_svgs.g.dart';
+
 class ShareMenuButton extends StatefulWidget {
   const ShareMenuButton({
     super.key,
@@ -104,15 +106,29 @@ class _ShareMenuButtonState extends State<ShareMenuButton> {
               ),
             );
           },
-          child: AFFilledTextButton.primary(
-            text: LocaleKeys.shareAction_buttonText.tr(),
-            onTap: () {
+          child:
+          IconButton(
+            icon: FlowySvg(FlowySvgs.icon_share_m),
+            onPressed: () {
               popoverController.show();
-
               /// Fetch the shared users when the popover is shown
               context.read<ShareTabBloc>().add(ShareTabEvent.loadSharedUsers());
             },
+            padding: const EdgeInsets.all(8),
+            constraints: const BoxConstraints(
+              minWidth: 36,
+              minHeight: 36,
+            ),
           ),
+          // AFFilledTextButton.primary(
+          //   text: LocaleKeys.shareAction_buttonText.tr(),
+          //   onTap: () {
+          //     popoverController.show();
+          //
+          //     /// Fetch the shared users when the popover is shown
+          //     context.read<ShareTabBloc>().add(ShareTabEvent.loadSharedUsers());
+          //   },
+          // ),
         );
       },
     );
