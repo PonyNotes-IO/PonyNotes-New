@@ -146,7 +146,7 @@ class _ShareTabContentState extends State<_ShareTabContent> {
               useIntrinsicWidth: false,
               figmaLineHeight: 18.0,
               onTap: () async {
-                await _setVisibility(true);
+                await _setVisibility(false);
               },
             ),
           );
@@ -178,7 +178,7 @@ class _ShareTabContentState extends State<_ShareTabContent> {
             const HSpace(8.0),
             TextButton(
               onPressed: () async {
-                await _setVisibility(false);
+                await _setVisibility(true);
               },
               child: const Text('取消共享'),
             ),
@@ -195,11 +195,12 @@ class _ShareTabContentState extends State<_ShareTabContent> {
       if (_viewPB == null) return;
     }
     setState(() => _loading = true);
-    // 恢复为：显式切换工作区可见性，匹配“我的空间展示”预期
+    // 修复逻辑：public=true时显示在工作区，public=false时隐藏在工作区
+    // 但UI状态_isPublic表示是否显示分享链接，与实际的可见性相反
     final result = await ViewBackendService.updateViewsVisibility([_viewPB!], public);
     result.fold((_) {
       setState(() {
-        _isPublic = public;
+        _isPublic = !public; // UI状态与实际可见性相反
         _loading = false;
       });
     }, (err) {
