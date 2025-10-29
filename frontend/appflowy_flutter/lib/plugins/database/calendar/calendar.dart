@@ -194,6 +194,25 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     print('日历组件初始化，订阅状态: $_isSubscribeSystemCalendar');
   }
 
+  // 月份切换：delta为-1上一月，1下一月
+  void _changeMonth(int delta) {
+    // 切换到目标月份的1号，防止跨月天数差异导致越界
+    DateTime candidate = DateTime(_focusedDay.year, _focusedDay.month + delta, 1);
+    // 边界限制在允许范围内
+    final first = DateTime(_firstDay.year, _firstDay.month, 1);
+    final last = DateTime(_lastDay.year, _lastDay.month, 1);
+    if (candidate.isBefore(first)) {
+      candidate = first;
+    } else if (candidate.isAfter(last)) {
+      candidate = last;
+    }
+
+    setState(() {
+      _focusedDay = candidate;
+      // 不改变已选日期，仅改变聚焦月份
+    });
+  }
+
   // 初始化日历视图
   Future<void> _initializeCalendarView() async {
     try {
@@ -853,11 +872,53 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   Widget _buildExpandedSidebar() {
     return Column(
       children: [
+        // 顶部月份标题与左右切换箭头
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.only(left: 16, right: 8, top: 8, bottom: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${_focusedDay.year}年${_focusedDay.month}月',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w400,
+                    fontSize: 16
+                      ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints.tightFor(width: 28, height: 28),
+                  icon: Icon(Icons.chevron_left, size: 18),
+                  onPressed: () => _changeMonth(-1),
+                  tooltip: '上一月',
+                ),
+              ),
+              SizedBox(width: 4),
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints.tightFor(width: 28, height: 28),
+                  icon: Icon(Icons.chevron_right, size: 18),
+                  onPressed: () => _changeMonth(1),
+                  tooltip: '下一月',
+                ),
+              ),
+            ],
+          ),
+        ),
+
         // 日历组件 - 使用紧凑的固定高度
         Container(
-          height: 280, // 紧凑的固定高度，减少留白
           width: double.infinity,
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: ClipRect(
             child: DatePicker(
               isRange: false,
@@ -888,7 +949,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         // 分隔线
         Container(
           height: 1,
-          margin: EdgeInsets.symmetric(horizontal: 16),
+          margin: EdgeInsets.only(top: 12),
           color: Theme.of(context).dividerColor,
         ),
         SizedBox(height: 8),
