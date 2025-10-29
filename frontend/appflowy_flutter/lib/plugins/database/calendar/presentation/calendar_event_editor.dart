@@ -84,6 +84,10 @@ class EventEditorControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final calendarBloc = context.read<CalendarBloc>();
+    final popover = PopoverContainer.of(context);
+    final iconColor = Theme.of(context).iconTheme.color;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 0),
       child: Row(
@@ -96,16 +100,17 @@ class EventEditorControls extends StatelessWidget {
               icon: FlowySvg(
                 FlowySvgs.m_duplicate_s,
                 size: const Size.square(16),
-                color: Theme.of(context).iconTheme.color,
+                color: iconColor,
               ),
               onPressed: () {
-                context.read<CalendarBloc>().add(
-                      CalendarEvent.duplicateEvent(
-                        rowController.viewId,
-                        rowController.rowId,
-                      ),
-                    );
-                PopoverContainer.of(context).close();
+                // Use captured references to avoid ancestor lookup after disposal
+                popover.close();
+                calendarBloc.add(
+                  CalendarEvent.duplicateEvent(
+                    rowController.viewId,
+                    rowController.rowId,
+                  ),
+                );
               },
             ),
           ),
@@ -115,7 +120,7 @@ class EventEditorControls extends StatelessWidget {
             icon: FlowySvg(
               FlowySvgs.delete_s,
               size: const Size.square(16),
-              color: Theme.of(context).iconTheme.color,
+              color: iconColor,
             ),
             onPressed: () {
               showConfirmDeletionDialog(
@@ -123,13 +128,14 @@ class EventEditorControls extends StatelessWidget {
                 name: LocaleKeys.grid_row_label.tr(),
                 description: LocaleKeys.grid_row_deleteRowPrompt.tr(),
                 onConfirm: () {
-                  context.read<CalendarBloc>().add(
-                        CalendarEvent.deleteEvent(
-                          rowController.viewId,
-                          rowController.rowId,
-                        ),
-                      );
-                  PopoverContainer.of(context).close();
+                  // Use captured references; closing popover may dispose this subtree
+                  popover.close();
+                  calendarBloc.add(
+                    CalendarEvent.deleteEvent(
+                      rowController.viewId,
+                      rowController.rowId,
+                    ),
+                  );
                 },
               );
             },
@@ -140,10 +146,10 @@ class EventEditorControls extends StatelessWidget {
             icon: FlowySvg(
               FlowySvgs.full_view_s,
               size: const Size.square(16),
-              color: Theme.of(context).iconTheme.color,
+              color: iconColor,
             ),
             onPressed: () {
-              PopoverContainer.of(context).close();
+              popover.close();
               onExpand.call();
             },
           ),
@@ -169,9 +175,12 @@ class EventPropertyList extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<CalendarEventEditorBloc, CalendarEventEditorState>(
       builder: (context, state) {
-        final primaryFieldId = fieldController.fieldInfos
-            .firstWhereOrNull((fieldInfo) => fieldInfo.isPrimary)!
-            .id;
+        final primaryFieldInfo = fieldController.fieldInfos
+            .firstWhereOrNull((fieldInfo) => fieldInfo.isPrimary);
+        if (primaryFieldInfo == null) {
+          return const SizedBox.shrink();
+        }
+        final primaryFieldId = primaryFieldInfo.id;
         final reorderedList = List<CellContext>.from(state.cells)
           ..retainWhere((cell) => cell.fieldId != primaryFieldId);
 
