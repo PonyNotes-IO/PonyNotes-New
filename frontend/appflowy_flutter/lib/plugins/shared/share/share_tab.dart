@@ -3,15 +3,20 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/plugins/shared/share/share_bloc.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/util/log_utils.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
-import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 // removed SecondaryTextButton to avoid dependency issues
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../../features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 
 import 'constants.dart';
 
@@ -100,19 +105,61 @@ class _ShareTabContentState extends State<_ShareTabContent> {
       return;
     }
 
+    // Get the view information
     final result = await ViewBackendService.getView(state.viewId);
     result.fold((view) {
       _viewPB = view;
-      // 无法直接获取可见性，这里仅结束加载；实际状态由本地切换维护
-      setState(() {
-        _loading = false;
-      });
+      
+      // Check if the view is in private list (which means it's "shared" - hidden from workspace)
+      _checkIfViewIsPrivate(state.viewId);
     }, (err) {
       setState(() {
         _isPublic = false;
         _loading = false;
       });
     });
+  }
+
+  Future<void> _checkIfViewIsPrivate(String viewId) async {
+    try {
+      // Get current workspace ID
+      final workspaceBloc = context.read<UserWorkspaceBloc>();
+      final workspaceId = workspaceBloc.state.currentWorkspace?.workspaceId ?? '';
+      
+      if (workspaceId.isEmpty) {
+        setState(() {
+          _isPublic = false;
+          _loading = false;
+        });
+        return;
+      }
+      
+      // Get private views to check if current view is in the list
+      final payload = GetWorkspaceViewPB.create()..value = workspaceId;
+      final result = await FolderEventReadPrivateViews(payload).send();
+      
+      result.fold(
+        (privateViews) {
+          // If the view is in private list, it means it's "shared" (hidden from workspace)
+          final isInPrivateList = privateViews.items.any((view) => view.id == viewId);
+          setState(() {
+            _isPublic = isInPrivateList;
+            _loading = false;
+          });
+        },
+        (error) {
+          setState(() {
+            _isPublic = false;
+            _loading = false;
+          });
+        },
+      );
+    } catch (e) {
+      setState(() {
+        _isPublic = false;
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -141,7 +188,7 @@ class _ShareTabContentState extends State<_ShareTabContent> {
             width: double.infinity,
             alignment: Alignment.centerLeft,
             child: PrimaryRoundedButton(
-              margin: const EdgeInsets.symmetric(vertical: 9.0, horizontal: 0),
+              margin: const EdgeInsets.symmetric(vertical: 9.0),
               text: '共享',
               useIntrinsicWidth: false,
               figmaLineHeight: 18.0,
@@ -203,10 +250,30 @@ class _ShareTabContentState extends State<_ShareTabContent> {
         _isPublic = !public; // UI状态与实际可见性相反
         _loading = false;
       });
+      _notifySidebarsToRefresh();
     }, (err) {
       setState(() => _loading = false);
       showToastNotification(message: err.msg.isEmpty ? '操作失败' : err.msg);
     });
+  }
+
+  void _notifySidebarsToRefresh() {
+    LogUtils.info('Notifying sidebars to refresh after share/unshare');
+    
+    // Refresh My Space sections - this will also trigger SidebarShareButton's listener
+    try {
+      final uw = context.read<UserWorkspaceBloc>().state;
+      final workspaceId = uw.currentWorkspace?.workspaceId ?? '';
+      LogUtils.info('Workspace ID: $workspaceId');
+      if (workspaceId.isNotEmpty) {
+        final userProfile = uw.userProfile;
+        final sectionsBloc = BlocProvider.of<SidebarSectionsBloc>(context);
+        LogUtils.info('Refreshing sidebar sections');
+        sectionsBloc.add(SidebarSectionsEvent.reset(userProfile, workspaceId));
+      }
+    } catch (e) {
+      LogUtils.info('Failed to refresh sidebar sections: $e');
+    }
   }
 
   void _copy(BuildContext context, String url) {

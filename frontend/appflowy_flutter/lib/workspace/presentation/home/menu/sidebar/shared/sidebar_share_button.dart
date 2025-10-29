@@ -1,13 +1,18 @@
 import 'package:appflowy/features/shared_section/data/repositories/rust_shared_pages_repository_impl.dart';
 import 'package:appflowy/features/shared_section/logic/shared_section_bloc.dart';
-import 'package:appflowy/features/shared_section/presentation/widgets/shared_page_list.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
-import 'package:appflowy/workspace/application/view/view_bloc.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../../../../features/workspace/logic/workspace_bloc.dart';
+import '../../../../../application/menu/sidebar_sections_bloc.dart';
 
 class SidebarShareButton extends StatefulWidget {
   const SidebarShareButton({super.key});
@@ -18,6 +23,57 @@ class SidebarShareButton extends StatefulWidget {
 
 class _SidebarShareButtonState extends State<SidebarShareButton> {
   bool _isExpanded = false;
+  List<ViewPB> _userSharedNotes = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserSharedNotes();
+  }
+
+  Future<void> _loadUserSharedNotes() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      // Get current workspace ID
+      final workspaceBloc = context.read<UserWorkspaceBloc>();
+      final workspaceId = workspaceBloc.state.currentWorkspace?.workspaceId ?? '';
+      
+      if (workspaceId.isEmpty) {
+        Log.error('Workspace ID is empty');
+        setState(() => _isLoading = false);
+        return;
+      }
+      
+      // Get private views (these are the ones that are "shared" - hidden from workspace)
+      final payload = GetWorkspaceViewPB.create()..value = workspaceId;
+      final result = await FolderEventReadPrivateViews(payload).send();
+      
+      result.fold(
+        (privateViews) {
+          Log.debug('Found ${privateViews.items.length} private/shared notes');
+          
+          // Backend already filters out trash views, so we can use them directly
+          setState(() {
+            _userSharedNotes = privateViews.items;
+            _isLoading = false;
+          });
+        },
+        (error) {
+          Log.error('Failed to get private views: $error');
+          setState(() {
+            _isLoading = false;
+          });
+        },
+      );
+    } catch (e) {
+      Log.error('Exception in _loadUserSharedNotes: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,82 +84,122 @@ class _SidebarShareButtonState extends State<SidebarShareButton> {
         repository: RustSharePagesRepositoryImpl(),
         enablePolling: true,
       )..add(const SharedSectionInitEvent()),
-      child: BlocBuilder<SharedSectionBloc, SharedSectionState>(
-        builder: (context, state) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(theme.borderRadius.s),
-                  onTap: () {
-                    setState(() => _isExpanded = !_isExpanded);
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                    child: Row(
-                      children: [
-                        FlowySvg(
-                          FlowySvgs.shared_section_icon_m,
-                          size: const Size.square(16.0),
-                          color: Theme.of(context).textTheme.bodyMedium?.color,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: FlowyText.medium(
-                            '共享',
-                            fontSize: 14.0,
-                            figmaLineHeight: 17.0,
-                            color: AppFlowyTheme.of(context).textColorScheme.primary,
+      child: BlocListener<SidebarSectionsBloc, SidebarSectionsState>(
+        listenWhen: (prev, curr) => prev.section.privateViews.length != curr.section.privateViews.length,
+        listener: (prev, curr) {
+          Log.debug('Private views count changed, refreshing shared notes list');
+          // Log.debug('Previous private views: ${prev.section.privateViews.length}');
+          Log.debug('Current private views: ${curr.section.privateViews.length}');
+          // Only refresh when private views count changes (share/unshare actions)
+          _loadUserSharedNotes();
+        },
+        child: BlocBuilder<SharedSectionBloc, SharedSectionState>(
+          builder: (context, state) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(theme.borderRadius.s),
+                    onTap: () {
+                      setState(() => _isExpanded = !_isExpanded);
+                      if (_isExpanded) {
+                        _loadUserSharedNotes(); // Refresh when expanding
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                      child: Row(
+                        children: [
+                          FlowySvg(
+                            FlowySvgs.shared_section_icon_m,
+                            size: const Size.square(16.0),
+                            color: Theme.of(context).textTheme.bodyMedium?.color,
                           ),
-                        ),
-                        Icon(
-                          _isExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right,
-                          size: 16,
-                          color: Theme.of(context).textTheme.bodyMedium?.color,
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FlowyText.medium(
+                              '共享',
+                              fontSize: 14.0,
+                              figmaLineHeight: 17.0,
+                              color: AppFlowyTheme.of(context).textColorScheme.primary,
+                            ),
+                          ),
+                          Icon(
+                            _isExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right,
+                            size: 16,
+                            color: Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              if (_isExpanded)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 4.0),
-                  child: _buildSharedList(context, state),
-                ),
-            ],
-          );
-        },
+                if (_isExpanded)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 4.0),
+                    child: _buildUserSharedNotesList(context),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildSharedList(BuildContext context, SharedSectionState state) {
-    if (state.isLoading) {
+  Widget _buildUserSharedNotesList(BuildContext context) {
+    if (_isLoading) {
       return const Padding(
         padding: EdgeInsets.all(8.0),
         child: Center(child: CircularProgressIndicator.adaptive()),
       );
     }
-    if (state.sharedPages.isEmpty) {
+    
+    if (_userSharedNotes.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(left: 20.0, right: 8.0, top: 6.0, bottom: 6.0),
         child: FlowyText.small(
-          '暂无共享',
+          '暂无分享的笔记',
           color: Theme.of(context).colorScheme.outline,
         ),
       );
     }
-    return SharedPageList(
-      sharedPages: state.sharedPages,
-      onSetEditing: (context, value) {
-        context.read<ViewBloc>().add(ViewEvent.setIsEditing(value));
-      },
-      onAction: (_, __, ___) {},
-      onSelected: (ctx, view) => ctx.read<TabsBloc>().openPlugin(view),
-      onTertiarySelected: (ctx, view) => ctx.read<TabsBloc>().openTab(view),
+    
+    return Column(
+      children: _userSharedNotes.map((view) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2.0),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6.0),
+            onTap: () {
+              context.read<TabsBloc>().openPlugin(view);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              child: Row(
+                children: [
+                  FlowySvg(
+                    FlowySvgs.document_s,
+                    size: const Size.square(16.0),
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FlowyText.medium(
+                      view.name,
+                      fontSize: 13.0,
+                      figmaLineHeight: 16.0,
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
