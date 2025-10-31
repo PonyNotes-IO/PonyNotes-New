@@ -2396,7 +2396,6 @@ dependencies = [
  "flowy-derive",
  "flowy-error",
  "flowy-notification",
- "flowy-sqlite",
  "futures",
  "indexmap 2.9.0",
  "lazy_static",
@@ -2933,6 +2932,16 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "validator 0.18.1",
+]
+
+[[package]]
+name = "flowy-whiteboard-pub"
+version = "0.1.0"
+dependencies = [
+ "flowy-error",
+ "lib-infra",
+ "serde",
+ "uuid",
 ]
 
 [[package]]
