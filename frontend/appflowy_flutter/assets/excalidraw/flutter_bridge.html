@@ -84,6 +84,51 @@
     </div>
     
     <script>
+        // ========================================================================
+        // PonyNotes: 在父页面也禁用 localStorage（与 iframe 保持一致）
+        // ========================================================================
+        (function() {
+            console.log('[Flutter Bridge] 🔒 Disabling localStorage in parent frame');
+            
+            const mockStorage = {
+                length: 0,
+                _data: {},
+                getItem: function(key) {
+                    console.log('[Flutter Bridge] localStorage.getItem blocked:', key);
+                    return this._data[key] || null;
+                },
+                setItem: function(key, value) {
+                    console.log('[Flutter Bridge] localStorage.setItem blocked:', key);
+                    this._data[key] = String(value);
+                    this.length = Object.keys(this._data).length;
+                },
+                removeItem: function(key) {
+                    console.log('[Flutter Bridge] localStorage.removeItem blocked:', key);
+                    delete this._data[key];
+                    this.length = Object.keys(this._data).length;
+                },
+                clear: function() {
+                    console.log('[Flutter Bridge] localStorage.clear blocked');
+                    this._data = {};
+                    this.length = 0;
+                },
+                key: function(index) {
+                    const keys = Object.keys(this._data);
+                    return keys[index] || null;
+                }
+            };
+            
+            try {
+                Object.defineProperty(window, 'localStorage', {
+                    get: function() { return mockStorage; },
+                    configurable: false
+                });
+                console.log('[Flutter Bridge] ✅ localStorage disabled successfully');
+            } catch (e) {
+                console.error('[Flutter Bridge] ❌ Failed to disable localStorage:', e);
+            }
+        })();
+        
         // 调试函数
         function updateDebugInfo(message) {
             const debugDiv = document.getElementById('debug-info');
@@ -93,10 +138,17 @@
             console.log('[Flutter Bridge]', message);
         }
         
-        // 调试：打印当前页面URL
+        // 调试：打印当前页面URL和ViewID信息
         updateDebugInfo('Current URL: ' + window.location.href);
         updateDebugInfo('Base URI: ' + document.baseURI);
         updateDebugInfo('Protocol: ' + window.location.protocol);
+        
+        // 从URL路径中提取ViewID（格式：/whiteboard/{viewId}/flutter_bridge.html）
+        const pathParts = window.location.pathname.split('/');
+        const viewIdIndex = pathParts.indexOf('whiteboard') + 1;
+        const viewId = viewIdIndex > 0 && viewIdIndex < pathParts.length ? pathParts[viewIdIndex] : 'unknown';
+        updateDebugInfo('🆔 ViewID: ' + viewId);
+        updateDebugInfo('🔒 localStorage: DISABLED (managed by Flutter)');
         
         // 使用相对路径加载index.html（与flutter_bridge.html在同一目录）
         const iframe = document.getElementById('excalidraw-iframe');
@@ -200,11 +252,29 @@
             
             // 处理来自 Excalidraw iframe 的消息
             if (data.type === 'excalidraw-ready') {
-                console.log('Excalidraw iframe ready');
+                console.log('[Flutter Bridge] Excalidraw iframe ready');
                 initializeExcalidraw();
             } else if (data.type === 'excalidraw-change') {
+                console.log('[Flutter Bridge] 💾 Data change detected from iframe');
                 // 白板内容发生变化
                 handleExcalidrawChange(data.payload);
+            } else if (data.type === 'debug-log') {
+                // 处理来自 iframe 的调试日志
+                const logData = data.payload;
+                const logLevel = logData.level || 'info';
+                const logMessage = logData.message || '';
+                
+                // 输出到控制台
+                if (logLevel === 'error') {
+                    console.error('[iframe debug]', logMessage);
+                } else if (logLevel === 'warn') {
+                    console.warn('[iframe debug]', logMessage);
+                } else {
+                    console.log('[iframe debug]', logMessage);
+                }
+                
+                // 发送给 Flutter
+                FlutterBridge.postMessage('debug-log', logData);
             }
         });
         
@@ -236,9 +306,10 @@
         // 处理 Excalidraw 变更
         function handleExcalidrawChange(payload) {
             try {
+                console.log('[Flutter Bridge] 📤 Sending data change to Flutter, keys:', payload ? Object.keys(payload).length : 0);
                 FlutterBridge.sendDataChanged(payload);
             } catch (error) {
-                console.error('Error handling excalidraw change:', error);
+                console.error('[Flutter Bridge] ❌ Error handling excalidraw change:', error);
                 FlutterBridge.sendError(error);
             }
         }

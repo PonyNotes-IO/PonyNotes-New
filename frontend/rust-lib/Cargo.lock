@@ -2338,6 +2338,7 @@ dependencies = [
  "flowy-storage-pub",
  "flowy-user",
  "flowy-user-pub",
+ "flowy-whiteboard",
  "futures",
  "futures-core",
  "lib-dispatch",
@@ -2900,6 +2901,38 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "flowy-whiteboard"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "collab",
+ "collab-entity",
+ "collab-integrate",
+ "collab-plugins",
+ "dashmap 6.0.1",
+ "flowy-codegen",
+ "flowy-derive",
+ "flowy-error",
+ "flowy-folder",
+ "flowy-notification",
+ "futures",
+ "getrandom 0.2.10",
+ "lib-dispatch",
+ "lib-infra",
+ "protobuf",
+ "serde",
+ "serde_json",
+ "strum_macros 0.25.2",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "validator 0.18.1",
 ]
 
 [[package]]

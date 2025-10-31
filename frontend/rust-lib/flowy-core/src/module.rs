@@ -7,6 +7,7 @@ use flowy_folder::manager::FolderManager;
 use flowy_search::services::manager::SearchManager;
 use flowy_storage::manager::StorageManager;
 use flowy_user::user_manager::UserManager;
+use flowy_whiteboard::WhiteboardManager;
 use lib_dispatch::prelude::AFPlugin;
 
 pub fn make_plugins(
@@ -17,6 +18,7 @@ pub fn make_plugins(
   search_manager: Weak<SearchManager>,
   ai_manager: Weak<AIManager>,
   file_storage_manager: Weak<StorageManager>,
+  whiteboard_manager: Weak<WhiteboardManager>,
 ) -> Vec<AFPlugin> {
   let user_plugin = flowy_user::event_map::init(user_session);
   let folder_plugin = flowy_folder::event_map::init(folder_manager);
@@ -26,6 +28,7 @@ pub fn make_plugins(
   let search_plugin = flowy_search::event_map::init(search_manager);
   let ai_plugin = flowy_ai::event_map::init(ai_manager);
   let file_storage_plugin = flowy_storage::event_map::init(file_storage_manager);
+  let whiteboard_plugin = flowy_whiteboard::event_map::init(whiteboard_manager);
   vec![
     user_plugin,
     folder_plugin,
@@ -35,5 +38,6 @@ pub fn make_plugins(
     search_plugin,
     ai_plugin,
     file_storage_plugin,
+    whiteboard_plugin,
   ]
 }

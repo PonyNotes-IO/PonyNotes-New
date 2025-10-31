@@ -17,6 +17,7 @@ flowy-database-pub = { workspace = true }
 flowy-sqlite = { workspace = true }
 flowy-document = { workspace = true }
 flowy-document-pub = { workspace = true }
+flowy-whiteboard = { workspace = true }
 flowy-error = { workspace = true }
 flowy-server = { workspace = true }
 flowy-server-pub = { workspace = true }
@@ -78,6 +79,7 @@ dart = [
   "flowy-database2/dart",
   "flowy-ai/dart",
   "flowy-storage/dart",
+  "flowy-whiteboard/dart",
 ]
 openssl_vendored = ["flowy-sqlite/openssl_vendored"]
 

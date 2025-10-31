@@ -5,6 +5,10 @@ import 'package:appflowy/workspace/application/settings/application_data_storage
 import 'package:appflowy_backend/log.dart';
 import 'package:path/path.dart' as p;
 
+// TODO: 取消注释以下导入（需要先生成 protobuf 代码）
+// import 'package:appflowy_backend/protobuf/flowy-whiteboard/protobuf.dart';
+// import 'package:appflowy_backend/dispatch/dispatch.dart';
+
 /// Excalidraw 白板数据服务
 /// 负责白板数据的本地存储和加载
 class WhiteboardDataService {
@@ -28,24 +32,53 @@ class WhiteboardDataService {
     return p.join(directory, '$viewId.json');
   }
 
-  /// 保存白板数据到本地
+  /// 保存白板数据（优先使用 Collab，失败则回退到文件）
   /// 
   /// [viewId] 白板视图 ID
-  /// [data] Excalidraw 数据，格式：
-  /// ```json
-  /// {
-  ///   "type": "excalidraw",
-  ///   "version": 2,
-  ///   "source": "https://excalidraw.com",
-  ///   "elements": [ /* 绘图元素数组 */ ],
-  ///   "appState": { /* 应用状态 */ },
-  ///   "files": { /* 图片文件映射 */ }
-  /// }
-  /// ```
+  /// [data] Excalidraw 数据
   Future<bool> saveWhiteboardData(
     String viewId,
     Map<String, dynamic> data,
   ) async {
+    // TODO: 取消注释以启用 Collab 保存
+    // 1. 尝试保存到 Collab
+    // final collabSuccess = await _saveToCollab(viewId, data);
+    // if (collabSuccess) {
+    //   Log.info('[Whiteboard] ✅ Saved to Collab: $viewId');
+    //   return true;
+    // }
+    
+    // 2. 回退到文件系统（当前默认行为，向后兼容）
+    // Log.warn('[Whiteboard] ⚠️ Collab not available, using file system');
+    return await _saveToFile(viewId, data);
+  }
+
+  /// TODO: 取消注释以启用 Collab 保存
+  /// 保存到 Collab
+  // Future<bool> _saveToCollab(String viewId, Map<String, dynamic> data) async {
+  //   try {
+  //     final payload = UpdateWhiteboardPayloadPB(
+  //       viewId: viewId,
+  //       jsonData: jsonEncode(data),
+  //     );
+  //     
+  //     final result = await WhiteboardEventUpdateWhiteboard(payload).send();
+  //     
+  //     return result.fold(
+  //       (_) => true,
+  //       (error) {
+  //         Log.error('[Whiteboard] Collab save error: $error');
+  //         return false;
+  //       },
+  //     );
+  //   } catch (e, stackTrace) {
+  //     Log.error('[Whiteboard] Exception in _saveToCollab: $e\n$stackTrace');
+  //     return false;
+  //   }
+  // }
+
+  /// 保存到文件系统（保持原有实现不变）
+  Future<bool> _saveToFile(String viewId, Map<String, dynamic> data) async {
     try {
       final filePath = await _getWhiteboardFilePath(viewId);
       final file = File(filePath);
@@ -63,35 +96,82 @@ class WhiteboardDataService {
         flush: true,
       );
       
-      Log.info('Whiteboard data saved successfully: $viewId');
+      Log.info('[Whiteboard] Saved to file: $viewId');
       return true;
     } catch (e) {
-      Log.error('Failed to save whiteboard data: $e');
+      Log.error('[Whiteboard] Failed to save to file: $e');
       return false;
     }
   }
 
-  /// 从本地加载白板数据
+  /// 从本地加载白板数据（优先从 Collab，回退到文件）
   /// 
   /// [viewId] 白板视图 ID
   /// 返回 Excalidraw 数据，如果不存在则返回空白板
   Future<Map<String, dynamic>> loadWhiteboardData(String viewId) async {
+    // TODO: 取消注释以启用 Collab 加载
+    // 1. 尝试从 Collab 加载
+    // final collabData = await _loadFromCollab(viewId);
+    // if (collabData != null) {
+    //   Log.info('[Whiteboard] ✅ Loaded from Collab: $viewId');
+    //   return collabData;
+    // }
+    
+    // 2. 回退到文件系统
+    // Log.info('[Whiteboard] ℹ️ Collab not found, trying file system');
+    final fileData = await _loadFromFile(viewId);
+    
+    // TODO: 取消注释以启用自动迁移
+    // 3. 如果从文件加载成功，迁移到 Collab
+    // if (fileData['elements'] != null && (fileData['elements'] as List).isNotEmpty) {
+    //   Log.info('[Whiteboard] 📦 Migrating from file to Collab: $viewId');
+    //   await _saveToCollab(viewId, fileData);
+    // }
+    
+    return fileData;
+  }
+
+  /// TODO: 取消注释以启用 Collab 加载
+  /// 从 Collab 加载
+  // Future<Map<String, dynamic>?> _loadFromCollab(String viewId) async {
+  //   try {
+  //     final payload = ViewIdPB(value: viewId);
+  //     final result = await WhiteboardEventGetWhiteboardData(payload).send();
+  //     
+  //     return result.fold(
+  //       (data) {
+  //         final json = jsonDecode(data.jsonData) as Map<String, dynamic>;
+  //         return json;
+  //       },
+  //       (error) {
+  //         Log.debug('[Whiteboard] Collab load error (normal if new): $error');
+  //         return null;
+  //       },
+  //     );
+  //   } catch (e) {
+  //     Log.debug('[Whiteboard] Exception in _loadFromCollab: $e');
+  //     return null;
+  //   }
+  // }
+
+  /// 从文件加载（保持原有实现不变）
+  Future<Map<String, dynamic>> _loadFromFile(String viewId) async {
     try {
       final filePath = await _getWhiteboardFilePath(viewId);
       final file = File(filePath);
       
       if (!file.existsSync()) {
-        Log.info('Whiteboard data not found, returning empty: $viewId');
+        Log.info('[Whiteboard] File not found, returning empty: $viewId');
         return _createEmptyWhiteboardData();
       }
       
       final content = await file.readAsString();
       final data = jsonDecode(content) as Map<String, dynamic>;
       
-      Log.info('Whiteboard data loaded successfully: $viewId');
+      Log.info('[Whiteboard] Loaded from file: $viewId');
       return data;
     } catch (e) {
-      Log.error('Failed to load whiteboard data: $e');
+      Log.error('[Whiteboard] Failed to load from file: $e');
       return _createEmptyWhiteboardData();
     }
   }

@@ -97,21 +97,22 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
   Future<void> _loadExcalidrawHTML() async {
     try {
-      print('🔄 启动本地HTTP服务器...');
+      print('🔄 [ExcalidrawWebView] 启动本地HTTP服务器...');
       
       // 启动本地HTTP服务器
       final baseUrl = await _assetServer.start();
       
-      // ⚠️ CRITICAL: 使用带 viewId 的URL，这样每个白板都有独立的 localStorage 域
-      // 这是解决多白板数据隔离问题的关键！
+      // 使用带 viewId 的URL（用于调试和日志追踪）
+      // 注意：localStorage 已在 HTML 中被完全禁用，数据隔离由 Flutter 管理
       final whiteboardUrl = '$baseUrl/whiteboard/${widget.viewId}/flutter_bridge.html';
       
-      print('✅ 服务器已启动: $baseUrl');
-      print('📄 加载URL (带viewId隔离): $whiteboardUrl');
-      print('🆔 ViewID: ${widget.viewId}');
+      print('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
+      print('📄 [ExcalidrawWebView] 加载URL: $whiteboardUrl');
+      print('🆔 [ExcalidrawWebView] ViewID: ${widget.viewId}');
+      print('🔒 [ExcalidrawWebView] localStorage: DISABLED (数据由 Flutter 管理)');
+      print('💾 [ExcalidrawWebView] 数据源: ${widget.initialData != null ? "从文件加载 (${widget.initialData!.keys.length} keys)" : "新建空白板"}');
       
       // 通过HTTP加载flutter_bridge.html，它会通过iframe加载完整的Excalidraw (index.html)
-      // 每个白板使用不同的URL路径，从而拥有独立的 localStorage 存储空间
       await _controller.loadRequest(Uri.parse(whiteboardUrl));
     } catch (e) {
       print('❌ 加载Excalidraw失败: $e');
@@ -128,26 +129,33 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   Future<void> _initializeExcalidraw() async {
     try {
       print('🎨 [ExcalidrawWebView] Initializing Excalidraw...');
+      print('🆔 [ExcalidrawWebView] ViewID: ${widget.viewId}');
       
-      // 加载初始数据（如果有）
+      // 准备加载的数据（包含viewId）
+      Map<String, dynamic> dataToLoad = {};
       if (widget.initialData != null) {
-        print('📦 [ExcalidrawWebView] Loading initial data: ${widget.initialData!.keys.length} keys');
-        final dataJson = jsonEncode(widget.initialData);
-        print('📝 [ExcalidrawWebView] Data JSON length: ${dataJson.length} chars');
-        
-        await _controller.runJavaScript('''
-          console.log('[ExcalidrawWebView] Loading data into Excalidraw...');
-          if (window.loadExcalidrawData) {
-            window.loadExcalidrawData($dataJson);
-            console.log('[ExcalidrawWebView] Data loaded successfully');
-          } else {
-            console.error('[ExcalidrawWebView] window.loadExcalidrawData not found!');
-          }
-        ''');
-        print('✅ [ExcalidrawWebView] Initial data loaded');
+        dataToLoad = Map.from(widget.initialData!);
+        print('📦 [ExcalidrawWebView] Loading initial data: ${dataToLoad.keys.length} keys');
       } else {
-        print('⚠️ [ExcalidrawWebView] No initial data to load');
+        print('⚠️ [ExcalidrawWebView] No initial data, creating empty whiteboard');
       }
+      
+      // 🔑 关键：添加 viewId 到数据中
+      dataToLoad['viewId'] = widget.viewId;
+      
+      final dataJson = jsonEncode(dataToLoad);
+      print('📝 [ExcalidrawWebView] Data JSON length: ${dataJson.length} chars');
+      
+      await _controller.runJavaScript('''
+        console.log('[ExcalidrawWebView] Loading data into Excalidraw with viewId: ${widget.viewId}');
+        if (window.loadExcalidrawData) {
+          window.loadExcalidrawData($dataJson);
+          console.log('[ExcalidrawWebView] Data loaded successfully');
+        } else {
+          console.error('[ExcalidrawWebView] window.loadExcalidrawData not found!');
+        }
+      ''');
+      print('✅ [ExcalidrawWebView] Initial data loaded with viewId');
       
       // 设置主题
       final theme = Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
@@ -190,25 +198,55 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       switch (type) {
         case 'ready':
-          print('Excalidraw ready: $payload');
+        case 'excalidraw-ready':
+          print('✅ [Whiteboard] Excalidraw ready: $payload');
           if (mounted) {
             setState(() => _isLoading = false);
           }
+          // 初始化完成后，发送初始数据
+          _initializeExcalidraw();
           break;
         case 'dataChanged':
-          print('白板数据变更: $payload');
+        case 'excalidraw-change':
+          // 🔑 处理数据变更，包含 viewId 信息
+          final viewId = payload != null && payload is Map ? payload['viewId'] : null;
+          print('💾 [Whiteboard] 数据变更检测: viewId=$viewId, keys=${payload != null ? (payload is Map ? payload.keys.length : 'invalid') : 'null'}');
+          
+          // 确认 viewId 匹配
+          if (viewId != null && viewId != widget.viewId) {
+            print('⚠️ [Whiteboard] ViewID mismatch! Expected: ${widget.viewId}, Got: $viewId');
+          }
+          
           widget.onDataChanged?.call(payload);
           break;
+        case 'debug-log':
+          // 处理来自 iframe 的调试日志
+          final level = payload['level'] ?? 'info';
+          final msg = payload['message'] ?? '';
+          if (level == 'error') {
+            print('🔴 [Whiteboard Debug] $msg');
+          } else if (level == 'warn') {
+            print('⚠️ [Whiteboard Debug] $msg');
+          } else {
+            print('🔵 [Whiteboard Debug] $msg');
+          }
+          break;
         case 'export':
-          print('导出: ${payload['format']}');
+          print('📤 [Whiteboard] 导出: ${payload['format']}');
           widget.onExport?.call(payload['format'], payload['data']);
           break;
         case 'error':
-          print('Excalidraw错误: ${payload['message']}');
-          widget.onError?.call(payload['message']);
+        case 'excalidraw-error':
+          final errorMsg = payload is Map ? payload['message'] : payload.toString();
+          print('❌ [Whiteboard] Excalidraw错误: $errorMsg');
+          widget.onError?.call(errorMsg);
+          break;
+        case 'excalidraw-data':
+          // 获取数据响应
+          print('📦 [Whiteboard] 获取到数据: ${payload != null ? (payload is Map ? payload.keys.length : 'invalid') : 'null'} keys');
           break;
         default:
-          print('Unknown message type: $type');
+          print('❓ [Whiteboard] Unknown message type: $type');
       }
     } catch (e) {
       print('Error handling WebView message: $e');

@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Excalidraw Whiteboard</title>
+  <script>
+    // PonyNotes Debug: 最早期调试 - 在head中立即执行
+    (function() {
+      // 立即尝试向父窗口发送消息
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            source: 'excalidraw-iframe',
+            message: '🔥 IMMEDIATE: Script executed in HEAD!'
+          }, '*');
+        }
+      } catch (e) {
+        // ignore
+      }
+      
+      console.log('[EARLY DEBUG] index.html HEAD script loaded!');
+      
+      window.addEventListener('DOMContentLoaded', function() {
+        console.log('[EARLY DEBUG] DOMContentLoaded event fired');
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+              source: 'excalidraw-iframe',
+              message: '🎯 EARLY: DOMContentLoaded fired!'
+            }, '*');
+          }
+        } catch (e) {
+          console.error('[EARLY DEBUG] postMessage error:', e);
+        }
+      });
+    })();
+  </script>
+  <style>
+    /* PonyNotes 自定义 Excalidraw 主题样式 */
+    .excalidraw {
+      --island-bg-color: #2c3e50 !important;
+      --color-primary: #ffffff !important;
+      --color-primary-light: #ecf0f1 !important;
+      --color-primary-dark: #bdc3c7 !important;
+      --icon-fill-color: #ffffff !important;
+      --icon-stroke-color: #ffffff !important;
+      --button-color: #ffffff !important;
+      --button-hover-bg: #34495e !important;
+      --input-bg-color: #34495e !important;
+      --input-border-color: #4a5f7f !important;
+      --input-text-color: #ffffff !important;
+      --dropdown-bg-color: #2c3e50 !important;
+      --dropdown-text-color: #ffffff !important;
+      --dropdown-hover-bg: #34495e !important;
+    }
+    .excalidraw .Island {
+      background-color: #2c3e50 !important;
+      color: #ffffff !important;
+      border: 1px solid #34495e !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+    }
+    .excalidraw .ToolIcon,
+    .excalidraw .ToolIcon__icon {
+      color: #ffffff !important;
+      fill: #ffffff !important;
+      stroke: #ffffff !important;
+    }
+    .excalidraw .ToolIcon:hover {
+      background-color: #34495e !important;
+    }
+    .excalidraw .ToolIcon.is-active {
+      background-color: #3498db !important;
+      color: #ffffff !important;
+    }
+    .excalidraw label,
+    .excalidraw .excalidraw-label {
+      color: #ffffff !important;
+    }
+    .excalidraw input,
+    .excalidraw textarea,
+    .excalidraw select {
+      background-color: #34495e !important;
+      color: #ffffff !important;
+      border-color: #4a5f7f !important;
+    }
+    .excalidraw input::placeholder,
+    .excalidraw textarea::placeholder {
+      color: #95a5a6 !important;
+    }
+    .excalidraw button {
+      color: #ffffff !important;
+    }
+    .excalidraw button:hover {
+      background-color: #34495e !important;
+    }
+    .excalidraw .dropdown-menu,
+    .excalidraw .context-menu {
+      background-color: #2c3e50 !important;
+      border: 1px solid #34495e !important;
+    }
+    .excalidraw .dropdown-menu-item,
+    .excalidraw .context-menu-item {
+      color: #ffffff !important;
+    }
+    .excalidraw .dropdown-menu-item:hover,
+    .excalidraw .context-menu-item:hover {
+      background-color: #34495e !important;
+    }
+    .excalidraw .sidebar {
+      background-color: #2c3e50 !important;
+      color: #ffffff !important;
+    }
+    .excalidraw .separator {
+      background-color: #4a5f7f !important;
+    }
+    .excalidraw ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .excalidraw ::-webkit-scrollbar-track {
+      background: #34495e;
+    }
+    .excalidraw ::-webkit-scrollbar-thumb {
+      background: #4a5f7f;
+      border-radius: 4px;
+    }
+    .excalidraw ::-webkit-scrollbar-thumb:hover {
+      background: #5a6f8f;
+    }
+  </style>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover,shrink-to-fit=no"/>
+  <meta name="referrer" content="origin"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="theme-color" content="#121212"/>
+  <meta name="title" content="Free, collaborative whiteboard • Hand-drawn look & feel | Excalidraw"/>
+  <meta name="description" content="Excalidraw is a virtual collaborative whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them."/>
+  <meta name="image" content="https://excalidraw.com/og-image-3.png"/>
+  <meta property="og:site_name" content="Excalidraw"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:url" content="https://excalidraw.com"/>
+  <meta property="og:title" content="Excalidraw — Collaborative whiteboarding made easy"/>
+  <meta property="og:image:alt" content="Excalidraw logo"/>
+  <meta property="og:description" content="Excalidraw is a virtual collaborative whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them."/>
+  <meta property="og:image" content="https://excalidraw.com/og-image-3.png"/>
+  <meta property="twitter:card" content="summary_large_image"/>
+  <meta property="twitter:site" content="@excalidraw"/>
+  <meta property="twitter:url" content="https://excalidraw.com"/>
+  <meta property="twitter:title" content="Excalidraw — Collaborative whiteboarding made easy"/>
+  <meta property="twitter:description" content="Excalidraw is a virtual collaborative whiteboard tool that lets you easily sketch diagrams that have a hand-drawn feel to them."/>
+  <meta property="twitter:image" content="https://excalidraw.com/og-image-3.png"/>
+  <link rel="canonical" href="https://excalidraw.com"/>
+  <script>// PonyNotes: 禁用 localStorage 主题保存，完全由 Flutter 控制
+      try {
+        function setTheme(theme) {
+          if (theme === "dark") {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+        }
+
+        function getTheme() {
+          // PonyNotes: 不从 localStorage 读取，默认使用 light 主题
+          // Flutter 会在初始化后设置正确的主题
+          return "light";
+        }
+
+        setTheme(getTheme());
+      } catch (e) {
+        console.error("Error setting dark mode", e);
+      }</script><style>html.dark{background-color:#121212;color:#fff}</style><link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/><script>// Redirect Excalidraw+ users which have auto-redirect enabled.
+      //
+      // Redirect only the bare root path, so link/room/library urls are not
+      // redirected.
+      //
+      // Putting into index.html for best performance (can't redirect on server
+      // due to location.hash checks).
+      if (
+        window.location.pathname === "/" &&
+        !window.location.hash &&
+        !window.location.search &&
+        // if its present redirect
+        document.cookie.includes("excplus-autoredirect=true")
+      ) {
+        window.location.href = "https://app.excalidraw.com";
+      }</script><script>// Use local fonts instead of CDN for PonyNotes offline support
+        window.EXCALIDRAW_ASSET_PATH = [
+          "./fonts/",
+          "./",
+        ];</script><link rel="preload" href="https://excalidraw.nyc3.cdn.digitaloceanspaces.com/oss/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2" as="font" type="font/woff2" crossorigin="anonymous"/><link rel="preload" href="https://excalidraw.nyc3.cdn.digitaloceanspaces.com/oss/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTQ3j6zbXWjgeg.woff2" as="font" type="font/woff2" crossorigin="anonymous"/><link rel="preload" href="https://excalidraw.nyc3.cdn.digitaloceanspaces.com/oss/fonts/ComicShanns/ComicShanns-Regular-279a7b317d12eb88de06167bd672b4b4.woff2" as="font" type="font/woff2" crossorigin="anonymous"/><link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png"/><link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png"/><link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png"/><meta name="version" content="{version}"/><script>// setting this so that libraries installation reuses this window tab.
+      window.name = "_excalidraw";</script><style>body,html{margin:0;-webkit-text-size-adjust:100%;width:100%;height:100%;overflow:hidden}.visually-hidden{position:absolute!important;height:1px;width:1px;overflow:hidden;clip:rect(1px,1px,1px,1px);white-space:nowrap;user-select:none}#root{height:100%;-webkit-touch-callout:none;-webkit-user-select:none;-khtml-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}@media screen and (min-width:1200px){#root{-webkit-touch-callout:default;-webkit-user-select:auto;-khtml-user-select:auto;-moz-user-select:auto;-ms-user-select:auto;user-select:auto}}</style><script type="module" crossorigin src="./assets/index-6osuR8Hu.js"></script><link rel="stylesheet" crossorigin href="./assets/index-Pr12m4rJ.css"><link rel="sitemap" type="application/xml" title="Sitemap" href="./sitemap.xml"><link rel="manifest" href="./manifest.webmanifest"></head><body><noscript>You need to enable JavaScript to run this app.</noscript><header><h1 class="visually-hidden">Excalidraw</h1></header><div id="root"></div><script>// need to load this script dynamically bcs. of iframe embed tracking
+      var scriptEle = document.createElement("script");
+      scriptEle.setAttribute(
+        "src",
+        "https://scripts.simpleanalyticscdn.com/latest.js",
+      );
+      scriptEle.setAttribute("type", "text/javascript");
+      scriptEle.setAttribute("defer", true);
+      scriptEle.setAttribute("async", true);
+      // if iframe
+      if (window.self !== window.top) {
+        scriptEle.setAttribute("data-auto-collect", true);
+      }
+
+      document.body.appendChild(scriptEle);
+
+      // if iframe
+      if (window.self !== window.top) {
+        scriptEle.addEventListener("load", () => {
+          if (window.sa_pageview) {
+            window.window.sa_event(action, {
+              category: "iframe",
+              label: "embed",
+              value: window.location.pathname,
+            });
+          }
+        });
+      }</script><script>
+      // PonyNotes Debug: iframe内部状态报告
+      (function() {
+        console.log('[Excalidraw iframe] Script started');
+        
+        function reportToParent(message) {
+          try {
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({
+                source: 'excalidraw-iframe',
+                message: message
+              }, '*');
+            }
+          } catch (e) {
+            console.error('[Excalidraw iframe] postMessage failed:', e);
+          }
+        }
+        
+        // 立即报告iframe已加载
+        reportToParent('iframe script loaded');
+        console.log('[Excalidraw iframe] Document ready state:', document.readyState);
+        reportToParent('document readyState: ' + document.readyState);
+        
+        // DOM加载完成时报告
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function() {
+            console.log('[Excalidraw iframe] DOMContentLoaded');
+            reportToParent('DOMContentLoaded');
+            
+            const root = document.getElementById('root');
+            reportToParent('#root element: ' + (root ? 'found' : 'NOT FOUND'));
+            if (root) {
+              reportToParent('#root children count: ' + root.children.length);
+            }
+          });
+        } else {
+          console.log('[Excalidraw iframe] DOM already loaded');
+          reportToParent('DOM already loaded');
+          
+          const root = document.getElementById('root');
+          reportToParent('#root element: ' + (root ? 'found' : 'NOT FOUND'));
+          if (root) {
+            reportToParent('#root children count: ' + root.children.length);
+          }
+        }
+        
+        // 页面完全加载后检查Excalidraw元素
+        window.addEventListener('load', function() {
+          console.log('[Excalidraw iframe] Window loaded');
+          reportToParent('window loaded');
+          
+          setTimeout(function() {
+            const excalidrawEl = document.querySelector('.excalidraw');
+            reportToParent('.excalidraw element: ' + (excalidrawEl ? 'FOUND ✅' : 'NOT FOUND ❌'));
+            
+            const rootChildren = document.getElementById('root');
+            if (rootChildren) {
+              reportToParent('#root innerHTML length: ' + rootChildren.innerHTML.length);
+            }
+          }, 1000);
+        });
+      })();
+    </script>
+    
+    <script>
+      // ========================================================================
+      // PonyNotes: 全局禁用 localStorage 以实现多白板数据隔离
+      // ========================================================================
+      // 问题：所有白板共享同一个 http://localhost:port origin
+      // 浏览器的 localStorage 按照 origin 隔离，不按照 URL 路径隔离
+      // 导致所有白板实例读写同一个 localStorage 存储空间，数据混淆
+      // 
+      // 解决方案：拦截所有 localStorage 操作，完全禁用
+      // 白板数据完全由 Flutter 侧管理（文件系统或 Collab）
+      // ========================================================================
+      
+      (function() {
+        console.log('[PonyNotes] 🔒 Disabling localStorage for data isolation');
+        
+        // 保存原始 localStorage 引用（用于调试）
+        const originalLocalStorage = window.localStorage;
+        
+        // 创建一个空的 localStorage mock 对象
+        const mockStorage = {
+          length: 0,
+          _data: {}, // 内存临时存储（不持久化，仅用于兼容性）
+          
+          getItem: function(key) {
+            // 允许读取主题设置（但不从真实 localStorage 读取）
+            if (key === 'excalidraw-theme') {
+              return null; // 返回 null，让 Flutter 设置主题
+            }
+            // 其他键返回内存中的值（如果有）
+            console.log('[PonyNotes] localStorage.getItem blocked:', key);
+            return this._data[key] || null;
+          },
+          
+          setItem: function(key, value) {
+            // 完全阻止写入真实 localStorage
+            console.log('[PonyNotes] localStorage.setItem blocked:', key);
+            // 临时存储在内存中（仅用于兼容性，页面刷新后丢失）
+            this._data[key] = String(value);
+            this.length = Object.keys(this._data).length;
+          },
+          
+          removeItem: function(key) {
+            console.log('[PonyNotes] localStorage.removeItem blocked:', key);
+            delete this._data[key];
+            this.length = Object.keys(this._data).length;
+          },
+          
+          clear: function() {
+            console.log('[PonyNotes] localStorage.clear blocked');
+            this._data = {};
+            this.length = 0;
+          },
+          
+          key: function(index) {
+            const keys = Object.keys(this._data);
+            return keys[index] || null;
+          }
+        };
+        
+        // 使用 Object.defineProperty 替换全局 localStorage
+        try {
+          Object.defineProperty(window, 'localStorage', {
+            get: function() {
+              return mockStorage;
+            },
+            configurable: false
+          });
+          
+          console.log('[PonyNotes] ✅ localStorage successfully disabled');
+          console.log('[PonyNotes] ✅ All whiteboard data will be managed by Flutter');
+        } catch (e) {
+          console.error('[PonyNotes] ❌ Failed to disable localStorage:', e);
+          // 降级方案：至少清空现有的 localStorage
+          try {
+            originalLocalStorage.clear();
+            console.log('[PonyNotes] ⚠️ Fallback: cleared existing localStorage');
+          } catch (clearError) {
+            console.error('[PonyNotes] ❌ Failed to clear localStorage:', clearError);
+          }
+        }
+      })();
+    </script></body></html>
