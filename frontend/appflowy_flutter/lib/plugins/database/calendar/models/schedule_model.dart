@@ -9,6 +9,7 @@ import 'package:appflowy/plugins/database/application/row/row_service.dart';
 import 'package:appflowy/plugins/database/domain/date_cell_service.dart';
 import 'package:appflowy/plugins/database/domain/cell_service.dart';
 import 'package:appflowy/plugins/database/application/cell/cell_controller.dart';
+import 'package:appflowy/plugins/database/application/cell/cell_data_loader.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
@@ -202,16 +203,32 @@ class ScheduleModel extends ChangeNotifier {
       final payload = CalendarEventRequestPB.create()..viewId = viewId;
       final result = await DatabaseEventGetAllCalendarEvents(payload).send();
       
-      result.fold(
-        (events) {
-          // 转换为 ScheduleItem
-          final newSchedules = events.items.map((eventPB) {
-            return ScheduleItem.fromCalendarEventPB(eventPB);
-          }).toList();
-          
+      await result.fold(
+        (events) async {
+          // 先构建最小集，再用 cells 补齐其它字段
+          try {
+            await _ensureDatabaseReadyInternal(viewId);
+          } catch (_) {}
+
+          final fieldInfos = _databaseController?.fieldController.fieldInfos ?? [];
+          final Map<String, FieldInfo> fieldById = {
+            for (final f in fieldInfos) f.field.id: f,
+          };
+
+          final newSchedules = <ScheduleItem>[];
+          for (final eventPB in events.items) {
+            var item = ScheduleItem.fromCalendarEventPB(eventPB);
+            if (fieldInfos.isNotEmpty) {
+              try {
+                item = await _enrichFromCells(viewId, fieldInfos, fieldById, item, eventPB);
+              } catch (_) {}
+            }
+            newSchedules.add(item);
+          }
+
           _schedules.clear();
           _schedules.addAll(newSchedules);
-          
+
           if (!_isDisposed) {
             notifyListeners();
           }
@@ -233,34 +250,6 @@ class ScheduleModel extends ChangeNotifier {
     } finally {
       _setLoading(false);
     }
-  }
-
-  // 添加示例日程数据
-  void _addSampleSchedules() {
-    final now = DateTime.now();
-    final tomorrow = now.add(Duration(days: 1));
-    final yesterday = now.subtract(Duration(days: 1));
-    
-    _schedules.addAll([
-      ScheduleItem(
-        id: 'sample_1',
-        title: '明天早上去机场',
-        description: '${tomorrow.month}月${tomorrow.day}日 02:00-03:00, 我的日历',
-        startTime: DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 2, 0),
-        endTime: DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 3, 0),
-        color: Colors.blue,
-        dueDate: DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 3, 0),
-      ),
-      ScheduleItem(
-        id: 'sample_2',
-        title: '昨天的会议',
-        description: '${yesterday.month}月${yesterday.day}日 02:00-03:00, 我的日历',
-        startTime: DateTime(yesterday.year, yesterday.month, yesterday.day, 2, 0),
-        endTime: DateTime(yesterday.year, yesterday.month, yesterday.day, 3, 0),
-        color: Colors.green,
-        dueDate: DateTime(yesterday.year, yesterday.month, yesterday.day, 3, 0),
-      ),
-    ]);
   }
 
   // 固定的日历视图ID，专门用于独立的新建日程功能
@@ -360,66 +349,29 @@ class ScheduleModel extends ChangeNotifier {
         return RowBackendService.createRow(
           viewId: viewId,
           withCells: (builder) {
-          
-          // 查找主字段（通常是标题字段）
-          final primaryField = fieldInfos.firstWhere(
-            (field) => field.isPrimary,
-            orElse: () => fieldInfos.first,
-          );
-          
-          if (primaryField == null) {
-            throw Exception('无法找到主字段');
-          }
-          
-          // 设置标题
-          if (primaryField.fieldType == FieldType.RichText) {
-            builder.insertText(primaryField, title);
-          } else {
-            // 尝试找到第一个文本字段
-            final textField = fieldInfos.firstWhere(
-              (field) => field.fieldType == FieldType.RichText,
+            // 仅在创建时设置：标题 + 一个日期字段的开始时间
+            final primaryField = fieldInfos.firstWhere(
+              (field) => field.isPrimary,
+              orElse: () => fieldInfos.first,
+            );
+            if (primaryField.fieldType == FieldType.RichText) {
+              builder.insertText(primaryField, title);
+            } else {
+              final textField = fieldInfos.firstWhere(
+                (field) => field.fieldType == FieldType.RichText,
+                orElse: () => primaryField,
+              );
+              builder.insertText(textField, title);
+            }
+
+            // 选择第一个 DateTime 字段作为日历日期字段
+            final firstDateTimeField = fieldInfos.firstWhere(
+              (f) => f.fieldType == FieldType.DateTime,
               orElse: () => primaryField,
             );
-            builder.insertText(textField, title);
-          }
-          
-          // 查找并设置日期时间字段
-          for (var field in fieldInfos) {
-            
-            if (field.fieldType == FieldType.DateTime) {
-              // 根据字段名称判断是开始时间还是结束时间
-              final fieldName = field.name.toLowerCase();
-              if (fieldName.contains('start') || fieldName.contains('开始') || fieldName.contains('begin')) {
-                // 开始时间字段
-                builder.insertDate(field, startTime);
-              } else if (fieldName.contains('end') || fieldName.contains('结束') || fieldName.contains('finish')) {
-                // 结束时间字段
-                builder.insertDate(field, endTime);
-              } else {
-                // 其他日期时间字段（如 Date 字段）
-                // 对于单个日期时间字段，我们先设置开始时间
-                // 然后在创建行成功后，使用 DateCellBackendService 设置结束时间
-                builder.insertDate(field, startTime);
-              }
-            } else if (field.fieldType == FieldType.RichText && field.name.toLowerCase().contains('description')) {
-              // 描述字段
-              builder.insertText(field, description);
-            } else if (field.fieldType == FieldType.Checkbox) {
-              // 复选框字段 - 暂时跳过，因为 RowDataBuilder 不支持直接设置复选框值
-              if (field.name.toLowerCase().contains('all') || field.name.toLowerCase().contains('全天')) {
-              } else if (field.name.toLowerCase().contains('important') || field.name.toLowerCase().contains('重要')) {
-              }
-            } else if (field.fieldType == FieldType.SingleSelect) {
-              // 单选字段 - 暂时跳过，因为 RowDataBuilder 不支持直接设置选项
-              if (field.name.toLowerCase().contains('category') || field.name.toLowerCase().contains('分类')) {
-              }
-            } else if (field.fieldType == FieldType.MultiSelect) {
-              // 多选字段 - 暂时跳过，因为 RowDataBuilder 不支持直接设置选项
-              if (field.name.toLowerCase().contains('tag') || field.name.toLowerCase().contains('标签')) {
-              }
+            if (firstDateTimeField.fieldType == FieldType.DateTime) {
+              builder.insertDate(firstDateTimeField, startTime);
             }
-          }
-          
           },
         );
       }
@@ -484,6 +436,44 @@ class ScheduleModel extends ChangeNotifier {
               );
             } catch (e) {
             }
+          }
+
+          // 对除日期范围外的其他字段，按照编辑器逻辑逐一更新到单元格
+          for (final field in fieldInfos) {
+            final name = field.name.toLowerCase();
+            try {
+              if (field.fieldType == FieldType.RichText && name.contains('description')) {
+                await CellBackendService.updateCell(
+                  viewId: viewId,
+                  cellContext: CellContext(fieldId: field.field.id, rowId: rowMeta.id),
+                  data: description,
+                );
+              } else if (field.fieldType == FieldType.Checkbox && (name.contains('all') || name.contains('全天'))) {
+                await CellBackendService.updateCell(
+                  viewId: viewId,
+                  cellContext: CellContext(fieldId: field.field.id, rowId: rowMeta.id),
+                  data: isAllDay ? "Yes" : "No",
+                );
+              } else if (field.fieldType == FieldType.Checkbox && (name.contains('important') || name.contains('重要'))) {
+                await CellBackendService.updateCell(
+                  viewId: viewId,
+                  cellContext: CellContext(fieldId: field.field.id, rowId: rowMeta.id),
+                  data: isImportant ? "Yes" : "No",
+                );
+              } else if (field.fieldType == FieldType.RichText && (name.contains('category') || name.contains('分类'))) {
+                await CellBackendService.updateCell(
+                  viewId: viewId,
+                  cellContext: CellContext(fieldId: field.field.id, rowId: rowMeta.id),
+                  data: category,
+                );
+              } else if ((field.fieldType == FieldType.SingleSelect || field.fieldType == FieldType.RichText) && (name.contains('reminderoption') || name.contains('提醒'))) {
+                await CellBackendService.updateCell(
+                  viewId: viewId,
+                  cellContext: CellContext(fieldId: field.field.id, rowId: rowMeta.id),
+                  data: reminderOption.name,
+                );
+              }
+            } catch (_) {}
           }
           
           // 创建对应的本地 ScheduleItem
@@ -762,6 +752,123 @@ class ScheduleModel extends ChangeNotifier {
       }
       throw Exception('删除日程失败');
     }
+  }
+
+  // 读取单元格补齐：描述/全天/重要/分类/提醒/结束时间
+  Future<ScheduleItem> _enrichFromCells(
+    String viewId,
+    List<FieldInfo> fieldInfos,
+    Map<String, FieldInfo> fieldById,
+    ScheduleItem schedule,
+    CalendarEventPB eventPB,
+  ) async {
+    var enriched = schedule;
+
+    Future<String?> _getString(FieldInfo f) async {
+      final r = await CellBackendService.getCell(
+        viewId: viewId,
+        cellContext: CellContext(fieldId: f.field.id, rowId: schedule.id),
+      );
+      return r.fold(
+        (cell) => StringCellDataParser().parserData(cell.data),
+        (_) => null,
+      );
+    }
+
+    Future<bool?> _getCheckbox(FieldInfo f) async {
+      final r = await CellBackendService.getCell(
+        viewId: viewId,
+        cellContext: CellContext(fieldId: f.field.id, rowId: schedule.id),
+      );
+      return r.fold(
+        (cell) {
+          final s = StringCellDataParser().parserData(cell.data)?.trim();
+          if (s == null || s.isEmpty) return null;
+          final v = s.toLowerCase();
+          return v == 'yes' || v == 'true' || v == '1';
+        },
+        (_) => null,
+      );
+    }
+
+    Future<(DateTime?, DateTime?)> _getDateRange(FieldInfo f) async {
+      final r = await CellBackendService.getCell(
+        viewId: viewId,
+        cellContext: CellContext(fieldId: f.field.id, rowId: schedule.id),
+      );
+      return r.fold(
+        (cell) {
+          final pb = DateCellDataParser().parserData(cell.data);
+          if (pb == null) return (null, null);
+          DateTime? s;
+          DateTime? e;
+          if (pb.hasTimestamp()) {
+            s = DateTime.fromMillisecondsSinceEpoch(pb.timestamp.toInt() * 1000);
+          }
+          if (pb.hasEndTimestamp()) {
+            e = DateTime.fromMillisecondsSinceEpoch(pb.endTimestamp.toInt() * 1000);
+          }
+          return (s, e);
+        },
+        (_) => (null, null),
+      );
+    }
+
+    // 先优先用 calendar 的日期字段读取范围
+    final df = fieldById[eventPB.dateFieldId];
+    if (df != null && df.fieldType == FieldType.DateTime) {
+      final (s, e) = await _getDateRange(df);
+      if (s != null && e != null) {
+        enriched = enriched.copyWith(startTime: s, endTime: e);
+      }
+    }
+
+    for (final f in fieldInfos) {
+      final name = f.name.toLowerCase();
+      try {
+        if (f.fieldType == FieldType.DateTime) {
+          // 已通过 dateFieldId 优先补齐，这里可跳过其它日期字段，除非需要特定 end 字段
+          continue;
+        } else if (f.fieldType == FieldType.RichText) {
+          if (name.contains('description') || name.contains('描述')) {
+            final v = await _getString(f);
+            if (v != null && v.isNotEmpty) enriched = enriched.copyWith(description: v);
+          } else if (name.contains('category') || name.contains('分类')) {
+            final v = await _getString(f);
+            if (v != null && v.isNotEmpty) enriched = enriched.copyWith(category: v);
+          } else if (name.contains('reminderoption') || name.contains('提醒')) {
+            final v = await _getString(f);
+            if (v != null && v.isNotEmpty) {
+              final key = v.trim();
+              ReminderOption? ro;
+              for (final o in ReminderOption.values) {
+                if (o.name.toLowerCase() == key.toLowerCase()) {
+                  ro = o;
+                  break;
+                }
+              }
+              if (ro != null) enriched = enriched.copyWith(reminderOption: ro);
+            }
+          }
+        } else if (f.fieldType == FieldType.Checkbox) {
+          if (name.contains('all') || name.contains('全天')) {
+            final v = await _getCheckbox(f);
+            if (v != null) enriched = enriched.copyWith(isAllDay: v);
+          } else if (name.contains('important') || name.contains('重要')) {
+            final v = await _getCheckbox(f);
+            if (v != null) enriched = enriched.copyWith(isImportant: v);
+          }
+        } else if (f.fieldType == FieldType.Number) {
+          // 可按需扩展，如 priority/repeatType 等
+          continue;
+        } else if (f.fieldType == FieldType.SingleSelect || f.fieldType == FieldType.MultiSelect) {
+          // 可按需解析 SelectOptionCellDataPB 获取选项名称列表
+          continue;
+        }
+      } catch (_) {}
+    }
+
+    return enriched;
   }
 
   // 设置提醒（使用 AppFlowy 提醒系统）

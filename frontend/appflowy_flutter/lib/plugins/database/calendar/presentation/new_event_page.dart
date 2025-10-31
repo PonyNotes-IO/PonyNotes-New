@@ -201,7 +201,7 @@ class _NewEventPageState extends State<NewEventPage> {
   }
 
   Future<void> _saveEventAsync() async {
-    
+    String? resultId; // 新增
     try {
       // 构建开始和结束时间
       final startDateTime = DateTime(
@@ -211,7 +211,6 @@ class _NewEventPageState extends State<NewEventPage> {
         _startTime.hour,
         _startTime.minute,
       );
-      
       final endDateTime = DateTime(
         _endDate.year,
         _endDate.month,
@@ -219,25 +218,16 @@ class _NewEventPageState extends State<NewEventPage> {
         _endTime.hour,
         _endTime.minute,
       );
-
-      // 检查widget是否仍然挂载
-      if (!mounted) {
-        return;
-      }
-
-      // 检查ScheduleModel的状态
-      
+      if (!mounted) return;
       if (_scheduleModel.currentViewId == null) {
-        
         // 尝试初始化日历视图
         final initialized = await _scheduleModel.initializeCalendarView();
         if (!initialized) {
           throw Exception('无法初始化日历视图，请检查 AppFlowy 数据库连接');
         }
       }
-
       // 使用ScheduleModel创建日程
-      final resultId = await _scheduleModel.createSchedule(
+      resultId = await _scheduleModel.createSchedule(
         title: _description.isNotEmpty ? _description : '无标题日程',
         description: _description,
         startTime: startDateTime,
@@ -246,17 +236,11 @@ class _NewEventPageState extends State<NewEventPage> {
         isImportant: _isImportant,
         category: _calendar,
         reminderOption: _convertStringToReminderOption(_reminderOption),
+        dueDate: endDateTime,
       );
-
-      // 再次检查widget是否仍然挂载
-      if (!mounted) {
-        return;
-      }
-
+      if (!mounted) return;
       // 创建成功
       if (resultId != null) {
-        
-        // 创建成功，调用回调
         final eventData = {
           'id': resultId,
           'date': _startDate,
@@ -269,11 +253,10 @@ class _NewEventPageState extends State<NewEventPage> {
           'isRepeat': _isRepeat,
           'calendar': _calendar,
           'description': _description,
+          'repeatType':_repeatType,
+          'repeatRuleJson': _repeatCustomSummary,
         };
-
         widget.onEventCreated(eventData);
-        
-        // 显示成功消息
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -283,113 +266,113 @@ class _NewEventPageState extends State<NewEventPage> {
             ),
           );
         }
+        return;
       } else {
-        throw Exception('创建日程失败：返回的ID为空');
+        throw Exception('创建日程失败：未返回有效ID');
       }
     } catch (e, stackTrace) {
-      // 异常处理
-      
-      if (mounted) {
-        String errorMessage = '创建日程失败';
-        String detailedError = e.toString();
-        
-        // 根据不同类型的错误提供不同的提示
-        if (e.toString().contains('数据库未连接')) {
-          errorMessage = '数据库连接失败';
-          detailedError = '请确保 AppFlowy 数据库正在运行';
-        } else if (e.toString().contains('初始化')) {
-          errorMessage = '日历视图初始化失败';
-          detailedError = '请检查数据库连接和权限设置';
-        }
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ $errorMessage'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
-            action: SnackBarAction(
-              label: '详情',
-              textColor: Colors.white,
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: Row(
-                      children: [
-                        Icon(Icons.error, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text('错误详情'),
-                      ],
-                    ),
-                    content: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            detailedError,
-                            style: TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            '故障排除建议:',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            '1. 检查 AppFlowy 应用是否正在运行\n'
-                            '2. 确认数据库服务状态正常\n'
-                            '3. 检查网络连接\n'
-                            '4. 重启应用程序\n'
-                            '5. 查看控制台日志了解详细信息',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                          if (detailedError.length > 100) ...[
-                            SizedBox(height: 16),
-                            Text(
-                              '完整错误信息:',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            SizedBox(height: 4),
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                e.toString(),
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text('关闭'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          // 可以在这里添加重试逻辑
-                          _saveEventAsync();
-                        },
-                        child: Text('重试'),
-                      ),
+      if (!mounted) return;
+      // 只要 resultId 有值，实际后台一定已创建成功，这里不再弹出红色失败提示
+      if (resultId != null) {
+        print('⚠️ 日程实际已创建（ID=$resultId），后续异常如下: $e');
+        return;
+      }
+      String errorMessage = '创建日程失败';
+      String detailedError = e.toString();
+      if (e.toString().contains('数据库未连接')) {
+        errorMessage = '数据库连接失败';
+        detailedError = '请确保 AppFlowy 数据库正在运行';
+      } else if (e.toString().contains('初始化')) {
+        errorMessage = '日历视图初始化失败';
+        detailedError = '请检查数据库连接和权限设置';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ $errorMessage'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+          action: SnackBarAction(
+            label: '详情',
+            textColor: Colors.white,
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Row(
+                    children: [
+                      Icon(Icons.error, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('错误详情'),
                     ],
                   ),
-                );
-              },
-            ),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          detailedError,
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          '故障排除建议:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '1. 检查 AppFlowy 应用是否正在运行\n'
+                          '2. 确认数据库服务状态正常\n'
+                          '3. 检查网络连接\n'
+                          '4. 重启应用程序\n'
+                          '5. 查看控制台日志了解详细信息',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        if (detailedError.length > 100) ...[
+                          SizedBox(height: 16),
+                          Text(
+                            '完整错误信息:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(height: 4),
+                          Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              e.toString(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('关闭'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        // 可以在这里添加重试逻辑
+                        _saveEventAsync();
+                      },
+                      child: Text('重试'),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
-        );
-      }
+        ),
+      );
     }
   }
 

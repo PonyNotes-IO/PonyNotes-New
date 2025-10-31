@@ -20,7 +20,7 @@ import 'package:appflowy/plugins/document/document_page.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../workspace/presentation/widgets/toggle/toggle.dart';
-import 'widgets/schedule_sidebar.dart';
+import 'widgets/schedule_sidebar_content.dart';
 import 'package:flowy_infra/uuid.dart';
 import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
 import 'presentation/new_event_page.dart';
@@ -127,7 +127,10 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
   }) {
     // 不依赖context.userProfile，避免触发GET_VIEW_PB查询
     // 直接返回日历面板，避免视图查找错误
-    return CalendarMainPanel();
+    return BlocProvider<CalendarContentCubit>(
+      create: (_) => CalendarContentCubit(),
+      child: CalendarMainPanel(),
+    );
   }
 }
 
@@ -549,12 +552,14 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       _selectedNote = null; // 清除当前选中的笔记
       _showEditEventPage = false; // 确保编辑日程页面关闭
       _editingSchedule = null; // 清除编辑中的日程
+      _saveEventCallback = null; // 重置保存回调，避免使用上一次的引用
     });
   }
 
   void _hideNewEventPage() {
     setState(() {
       _showNewEventPage = false;
+      _saveEventCallback = null; // 关闭时重置回调
     });
   }
 
@@ -587,6 +592,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     setState(() {
       _showEditEventPage = false;
       _editingSchedule = null;
+      _saveEventCallback = null; // 关闭时重置回调
     });
   }
 
@@ -958,15 +964,12 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16), // 确保内容与侧边栏边缘有距离
-            child: BlocProvider(
-              create: (_) => CalendarContentCubit(),
-              child: CalendarContent(
-                selectedDate: _selectedDay ?? _focusedDay,
-                viewId: _currentViewId,
-                onScheduleTap: _onScheduleTap,
-                onNoteTap: _onNoteTap,
-                selectedNoteId: _selectedNote?.id,
-              ),
+            child: CalendarContent(
+              selectedDate: _selectedDay ?? _focusedDay,
+              viewId: _currentViewId,
+              onScheduleTap: _onScheduleTap,
+              onNoteTap: _onNoteTap,
+              selectedNoteId: _selectedNote?.id,
             ),
           ),
         ),
@@ -1312,8 +1315,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
       return scheduleModel.schedules.where((schedule) {
         final scheduleDate = schedule.startTime;
-        return scheduleDate.isAfter(selectedDateStart) &&
-            scheduleDate.isBefore(selectedDateEnd);
+        // 修正过滤：包含等于当天0点，排除下一天0点
+        return !scheduleDate.isBefore(selectedDateStart) && scheduleDate.isBefore(selectedDateEnd);
       }).toList();
     } catch (e) {
       return [];
@@ -1497,9 +1500,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 // 保存按钮
                 ElevatedButton(
                   onPressed: () {
-                    // 调用保存回调函数
-                    if (_saveEventCallback != null && _saveEventCallback!()) {
-                      _hideNewEventPage();
+                    // 调用保存回调函数；是否关闭由保存结果回调决定
+                    if (_saveEventCallback != null) {
+                      _saveEventCallback!();
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -1575,9 +1578,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 // 保存按钮
                 ElevatedButton(
                   onPressed: () {
-                    // 调用保存回调函数
-                    if (_saveEventCallback != null && _saveEventCallback!()) {
-                      _hideEditEventPage();
+                    // 调用保存回调函数；是否关闭由更新结果回调决定
+                    if (_saveEventCallback != null) {
+                      _saveEventCallback!();
                     }
                   },
                   style: ElevatedButton.styleFrom(

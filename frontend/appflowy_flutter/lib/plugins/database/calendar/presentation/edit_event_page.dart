@@ -410,9 +410,10 @@ class _EditEventPageState extends State<EditEventPage> {
     } catch (e) {
       
       if (mounted) {
-        // 检查是否是"Bad state: No element"错误，这通常意味着删除实际上成功了
+        // 只要异常信息中明确说明已经没有元素，也判定为成功
         if (e.toString().contains('Bad state: No element') || 
-            e.toString().contains('本地列表中未找到要删除的日程')) {
+            e.toString().contains('本地列表中未找到要删除的日程') || 
+            e.toString().contains('Not found')) {
           widget.onEventDeleted(widget.schedule.id);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -430,9 +431,9 @@ class _EditEventPageState extends State<EditEventPage> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('❌ 删除日程失败: ${e.toString()}'),
+              content: Text('❌ 日程删除失败'),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
+              duration: Duration(seconds: 4),
             ),
           );
         }
