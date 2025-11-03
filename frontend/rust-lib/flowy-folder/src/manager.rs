@@ -691,10 +691,11 @@ impl FolderManager {
       let folder = lock.read().await;
       if let Some(view) = folder.get_view(view_id) {
         // Drop the folder lock explicitly to avoid deadlock when following calls contains 'self'
+        let layout_pb = crate::entities::view_layout_pb_from_view(&view);
         drop(folder);
 
         let view_id = Uuid::from_str(view_id)?;
-        let handler = self.get_handler(&view.layout)?;
+        let handler = self.get_handler_for_layout_pb(&layout_pb)?;
         handler.close_view(&view_id).await?;
       }
     }
@@ -1218,7 +1219,8 @@ impl FolderManager {
             .with_context(format!("Can't duplicate the view({})", view_id))
         })?;
 
-      let handler = self.get_handler(&view.layout)?;
+      let layout_pb = crate::entities::view_layout_pb_from_view(&view);
+      let handler = self.get_handler_for_layout_pb(&layout_pb)?;
       info!(
         "{} duplicate view{}, name:{}, layout:{:?}",
         handler.name(),
@@ -1353,8 +1355,10 @@ impl FolderManager {
     // Get the view directly without calling get_current_view to avoid recursion
     let view = self.get_view_pb(&view_id).await.ok();
     if let Some(view) = &view {
-      let view_layout: ViewLayout = view.layout.clone().into();
-      if let Some(handle) = self.operation_handlers.get(&view_layout) {
+      // 🔧 Fix: Use get_handler_for_layout_pb instead of operation_handlers.get
+      // This ensures that Whiteboard, Folder, and Notebook views are routed to
+      // their correct handlers from extra_handlers
+      if let Ok(handle) = self.get_handler_for_layout_pb(&view.layout) {
         info!("Open view: {}-{}", view.name, view.id);
         let view_id = Uuid::from_str(&view.id)?;
         if let Err(err) = handle.open_view(&view_id).await {
@@ -2098,7 +2102,8 @@ impl FolderManager {
 
       if let Some(view) = view {
         let view_id = Uuid::from_str(view_id)?;
-        if let Ok(handler) = self.get_handler(&view.layout) {
+        let layout_pb = crate::entities::view_layout_pb_from_view(&view);
+        if let Ok(handler) = self.get_handler_for_layout_pb(&layout_pb) {
           handler.delete_view(&view_id).await?;
         }
       }
@@ -2235,7 +2240,8 @@ impl FolderManager {
     };
 
     if let Some((Some(old_view), Some(new_view))) = value {
-      if let Ok(handler) = self.get_handler(&old_view.layout) {
+      let layout_pb = crate::entities::view_layout_pb_from_view(&old_view);
+      if let Ok(handler) = self.get_handler_for_layout_pb(&layout_pb) {
         handler.did_update_view(&old_view, &new_view).await?;
       }
     }
