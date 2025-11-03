@@ -162,12 +162,7 @@ pub struct UpdateWhiteboardPayloadPB {
   pub json_data: String,
 }
 
-/// 视图 ID 参数
-#[derive(Default, ProtoBuf)]
-pub struct ViewIdPB {
-  #[pb(index = 1)]
-  pub value: String,
-}
+// ViewIdPB is imported from flowy_folder::entities
 
 /// 白板数据响应
 #[derive(Default, ProtoBuf)]

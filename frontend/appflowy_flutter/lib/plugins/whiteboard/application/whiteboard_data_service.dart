@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-whiteboard/entities.pb.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:path/path.dart' as p;
-
-// TODO: 取消注释以下导入（需要先生成 protobuf 代码）
-// import 'package:appflowy_backend/protobuf/flowy-whiteboard/protobuf.dart';
-// import 'package:appflowy_backend/dispatch/dispatch.dart';
 
 /// Excalidraw 白板数据服务
 /// 负责白板数据的本地存储和加载
@@ -32,7 +33,46 @@ class WhiteboardDataService {
     return p.join(directory, '$viewId.json');
   }
 
-  /// 保存白板数据（优先使用 Collab，失败则回退到文件）
+  /// 创建白板
+  /// 
+  /// [viewId] 白板视图 ID
+  /// [initialData] 可选的初始数据
+  Future<FlowyResult<void, FlowyError>> createWhiteboard({
+    required String viewId,
+    Map<String, dynamic>? initialData,
+  }) async {
+    try {
+      final payload = CreateWhiteboardPayloadPB()..viewId = viewId;
+      
+      if (initialData != null) {
+        payload.initialData = jsonEncode(initialData);
+      }
+      
+      final result = await WhiteboardEventCreateWhiteboard(payload).send();
+      return result;
+    } catch (e, stackTrace) {
+      Log.error('[Whiteboard] Exception in createWhiteboard: $e\n$stackTrace');
+      return FlowyResult.failure(FlowyError(msg: 'Failed to create whiteboard: $e'));
+    }
+  }
+
+  /// 打开白板
+  /// 
+  /// [viewId] 白板视图 ID
+  Future<FlowyResult<void, FlowyError>> openWhiteboard({
+    required String viewId,
+  }) async {
+    try {
+      final payload = ViewIdPB()..value = viewId;
+      final result = await WhiteboardEventOpenWhiteboard(payload).send();
+      return result;
+    } catch (e, stackTrace) {
+      Log.error('[Whiteboard] Exception in openWhiteboard: $e\n$stackTrace');
+      return FlowyResult.failure(FlowyError(msg: 'Failed to open whiteboard: $e'));
+    }
+  }
+
+  /// 保存白板数据（使用 Collab 后端，失败则回退到文件）
   /// 
   /// [viewId] 白板视图 ID
   /// [data] Excalidraw 数据
@@ -40,42 +80,58 @@ class WhiteboardDataService {
     String viewId,
     Map<String, dynamic> data,
   ) async {
-    // TODO: 取消注释以启用 Collab 保存
-    // 1. 尝试保存到 Collab
-    // final collabSuccess = await _saveToCollab(viewId, data);
-    // if (collabSuccess) {
-    //   Log.info('[Whiteboard] ✅ Saved to Collab: $viewId');
-    //   return true;
-    // }
+    Log.info('[Whiteboard] =====================================================');
+    Log.info('[Whiteboard] saveWhiteboardData() called');
+    Log.info('[Whiteboard] ViewID: $viewId');
+    Log.info('[Whiteboard] Data keys: ${data.keys.toList()}');
+    Log.info('[Whiteboard] =====================================================');
     
-    // 2. 回退到文件系统（当前默认行为，向后兼容）
-    // Log.warn('[Whiteboard] ⚠️ Collab not available, using file system');
-    return await _saveToFile(viewId, data);
+    // 1. 尝试保存到 Collab 后端
+    Log.info('[Whiteboard] Step 1: Trying to save to Collab backend...');
+    final collabSuccess = await _saveToCollab(viewId, data);
+    if (collabSuccess) {
+      Log.info('[Whiteboard] ✅ Saved to Collab successfully: $viewId');
+      return true;
+    }
+    
+    // 2. 回退到文件系统（向后兼容）
+    Log.warn('[Whiteboard] ⚠️ Collab save failed, falling back to file system');
+    final fileSuccess = await _saveToFile(viewId, data);
+    Log.info('[Whiteboard] File save result: $fileSuccess');
+    return fileSuccess;
   }
 
-  /// TODO: 取消注释以启用 Collab 保存
-  /// 保存到 Collab
-  // Future<bool> _saveToCollab(String viewId, Map<String, dynamic> data) async {
-  //   try {
-  //     final payload = UpdateWhiteboardPayloadPB(
-  //       viewId: viewId,
-  //       jsonData: jsonEncode(data),
-  //     );
-  //     
-  //     final result = await WhiteboardEventUpdateWhiteboard(payload).send();
-  //     
-  //     return result.fold(
-  //       (_) => true,
-  //       (error) {
-  //         Log.error('[Whiteboard] Collab save error: $error');
-  //         return false;
-  //       },
-  //     );
-  //   } catch (e, stackTrace) {
-  //     Log.error('[Whiteboard] Exception in _saveToCollab: $e\n$stackTrace');
-  //     return false;
-  //   }
-  // }
+  /// 保存到 Collab 后端
+  Future<bool> _saveToCollab(String viewId, Map<String, dynamic> data) async {
+    try {
+      Log.info('[Whiteboard] _saveToCollab: Creating payload...');
+      final jsonData = jsonEncode(data);
+      Log.info('[Whiteboard] _saveToCollab: JSON data length: ${jsonData.length} characters');
+      
+      final payload = UpdateWhiteboardPayloadPB()
+        ..viewId = viewId
+        ..jsonData = jsonData;
+      
+      Log.info('[Whiteboard] _saveToCollab: Sending WhiteboardEventUpdateWhiteboard event...');
+      final result = await WhiteboardEventUpdateWhiteboard(payload).send();
+      
+      return result.fold(
+        (_) {
+          Log.info('[Whiteboard] _saveToCollab: ✅ Success!');
+          return true;
+        },
+        (error) {
+          Log.error('[Whiteboard] _saveToCollab: ❌ Error: ${error.msg}');
+          Log.error('[Whiteboard] _saveToCollab: Error code: ${error.code}');
+          return false;
+        },
+      );
+    } catch (e, stackTrace) {
+      Log.error('[Whiteboard] _saveToCollab: ❌ Exception: $e');
+      Log.error('[Whiteboard] _saveToCollab: Stack trace: $stackTrace');
+      return false;
+    }
+  }
 
   /// 保存到文件系统（保持原有实现不变）
   Future<bool> _saveToFile(String viewId, Map<String, dynamic> data) async {
@@ -109,50 +165,53 @@ class WhiteboardDataService {
   /// [viewId] 白板视图 ID
   /// 返回 Excalidraw 数据，如果不存在则返回空白板
   Future<Map<String, dynamic>> loadWhiteboardData(String viewId) async {
-    // TODO: 取消注释以启用 Collab 加载
-    // 1. 尝试从 Collab 加载
-    // final collabData = await _loadFromCollab(viewId);
-    // if (collabData != null) {
-    //   Log.info('[Whiteboard] ✅ Loaded from Collab: $viewId');
-    //   return collabData;
-    // }
+    // 1. 先尝试打开白板（加载到内存）
+    await openWhiteboard(viewId: viewId);
     
-    // 2. 回退到文件系统
-    // Log.info('[Whiteboard] ℹ️ Collab not found, trying file system');
+    // 2. 尝试从 Collab 后端加载
+    final collabData = await _loadFromCollab(viewId);
+    if (collabData != null) {
+      Log.info('[Whiteboard] ✅ Loaded from Collab: $viewId');
+      return collabData;
+    }
+    
+    // 3. 回退到文件系统
+    Log.info('[Whiteboard] ℹ️ Collab not found, trying file system');
     final fileData = await _loadFromFile(viewId);
     
-    // TODO: 取消注释以启用自动迁移
-    // 3. 如果从文件加载成功，迁移到 Collab
-    // if (fileData['elements'] != null && (fileData['elements'] as List).isNotEmpty) {
-    //   Log.info('[Whiteboard] 📦 Migrating from file to Collab: $viewId');
-    //   await _saveToCollab(viewId, fileData);
-    // }
+    // 4. 如果从文件加载成功，迁移到 Collab
+    if (fileData['elements'] != null && (fileData['elements'] as List).isNotEmpty) {
+      Log.info('[Whiteboard] 📦 Migrating from file to Collab: $viewId');
+      await _saveToCollab(viewId, fileData);
+    }
     
     return fileData;
   }
 
-  /// TODO: 取消注释以启用 Collab 加载
-  /// 从 Collab 加载
-  // Future<Map<String, dynamic>?> _loadFromCollab(String viewId) async {
-  //   try {
-  //     final payload = ViewIdPB(value: viewId);
-  //     final result = await WhiteboardEventGetWhiteboardData(payload).send();
-  //     
-  //     return result.fold(
-  //       (data) {
-  //         final json = jsonDecode(data.jsonData) as Map<String, dynamic>;
-  //         return json;
-  //       },
-  //       (error) {
-  //         Log.debug('[Whiteboard] Collab load error (normal if new): $error');
-  //         return null;
-  //       },
-  //     );
-  //   } catch (e) {
-  //     Log.debug('[Whiteboard] Exception in _loadFromCollab: $e');
-  //     return null;
-  //   }
-  // }
+  /// 从 Collab 后端加载
+  Future<Map<String, dynamic>?> _loadFromCollab(String viewId) async {
+    try {
+      final payload = ViewIdPB()..value = viewId;
+      final result = await WhiteboardEventGetWhiteboardData(payload).send();
+      
+      return result.fold(
+        (data) {
+          if (data.jsonData.isEmpty) {
+            return null;
+          }
+          final json = jsonDecode(data.jsonData) as Map<String, dynamic>;
+          return json;
+        },
+        (error) {
+          Log.debug('[Whiteboard] Collab load error (normal if new): ${error.msg}');
+          return null;
+        },
+      );
+    } catch (e) {
+      Log.debug('[Whiteboard] Exception in _loadFromCollab: $e');
+      return null;
+    }
+  }
 
   /// 从文件加载（保持原有实现不变）
   Future<Map<String, dynamic>> _loadFromFile(String viewId) async {
@@ -176,22 +235,51 @@ class WhiteboardDataService {
     }
   }
 
+  /// 关闭白板
+  /// 
+  /// [viewId] 白板视图 ID
+  Future<FlowyResult<void, FlowyError>> closeWhiteboard({
+    required String viewId,
+  }) async {
+    try {
+      final payload = ViewIdPB()..value = viewId;
+      final result = await WhiteboardEventCloseWhiteboard(payload).send();
+      return result;
+    } catch (e, stackTrace) {
+      Log.error('[Whiteboard] Exception in closeWhiteboard: $e\n$stackTrace');
+      return FlowyResult.failure(FlowyError(msg: 'Failed to close whiteboard: $e'));
+    }
+  }
+
   /// 删除白板数据
   /// 
   /// [viewId] 白板视图 ID
   Future<bool> deleteWhiteboardData(String viewId) async {
     try {
+      // 1. 从 Collab 后端删除
+      final payload = ViewIdPB()..value = viewId;
+      final result = await WhiteboardEventDeleteWhiteboard(payload).send();
+      
+      final success = result.fold(
+        (_) => true,
+        (error) {
+          Log.error('[Whiteboard] Failed to delete from Collab: ${error.msg}');
+          return false;
+        },
+      );
+      
+      // 2. 删除文件系统中的数据
       final filePath = await _getWhiteboardFilePath(viewId);
       final file = File(filePath);
       
       if (file.existsSync()) {
         await file.delete();
-        Log.info('Whiteboard data deleted: $viewId');
+        Log.info('[Whiteboard] File data deleted: $viewId');
       }
       
-      return true;
+      return success;
     } catch (e) {
-      Log.error('Failed to delete whiteboard data: $e');
+      Log.error('[Whiteboard] Failed to delete whiteboard data: $e');
       return false;
     }
   }

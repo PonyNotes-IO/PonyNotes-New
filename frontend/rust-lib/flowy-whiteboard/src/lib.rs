@@ -1,7 +1,7 @@
 mod entities;
 mod event_handler;
 pub mod event_map;
-mod manager;
+pub mod manager;
 mod whiteboard;
 
 pub use entities::*;

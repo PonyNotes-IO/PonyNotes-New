@@ -14,7 +14,7 @@ use collab_plugins::CollabKVDB;
 use dashmap::DashMap;
 use flowy_error::{internal_error, ErrorCode, FlowyError, FlowyResult};
 use std::sync::{Arc, Weak};
-use tracing::{info, instrument, trace};
+use tracing::{error, info, trace};
 use uuid::Uuid;
 
 /// 白板用户服务 trait
@@ -95,61 +95,134 @@ impl WhiteboardManager {
   ///
   /// 如果白板已存在，返回错误
   /// 如果 data 为 None，将创建空白板
-  #[instrument(level = "info", skip(self, data))]
   pub async fn create_whiteboard(
     &self,
     view_id: &Uuid,
     data: Option<WhiteboardData>,
   ) -> FlowyResult<EncodedCollab> {
+    info!("[Whiteboard] 🔵 create_whiteboard called for view: {}", view_id);
+    
     // 检查是否已存在
+    info!("[Whiteboard] 🔵 Checking if whiteboard exists: {}", view_id);
     if self.is_whiteboard_exist(view_id).await.unwrap_or(false) {
+      info!("[Whiteboard] ⚠️ Whiteboard already exists: {}", view_id);
       return Err(FlowyError::new(
         ErrorCode::RecordAlreadyExists,
         format!("whiteboard {} already exists", view_id),
       ));
     }
+    info!("[Whiteboard] ✅ Whiteboard does not exist, proceeding with creation: {}", view_id);
 
     // 创建 EncodedCollab
+    info!("[Whiteboard] 🔵 Creating EncodedCollab for view: {}", view_id);
     let encoded_collab =
-      whiteboard_data_to_encoded_collab(&view_id.to_string(), data).await?;
+      whiteboard_data_to_encoded_collab(&view_id.to_string(), data)?;
+    info!("[Whiteboard] ✅ EncodedCollab created for view: {}", view_id);
 
     // 保存到磁盘
-    self
-      .persistence()?
+    info!("[Whiteboard] 🔵 Getting persistence for view: {}", view_id);
+    let persistence = match self.persistence() {
+      Ok(p) => {
+        info!("[Whiteboard] ✅ Got persistence for view: {}", view_id);
+        p
+      },
+      Err(e) => {
+        error!("[Whiteboard] ❌ Failed to get persistence for view: {}, error: {}", view_id, e);
+        return Err(e);
+      }
+    };
+    
+    info!("[Whiteboard] 🔵 Saving to disk for view: {}", view_id);
+    persistence
       .save_collab_to_disk(&view_id.to_string(), encoded_collab.clone())
-      .map_err(internal_error)?;
+      .map_err(|e| {
+        error!("[Whiteboard] ❌ Failed to save to disk for view: {}, error: {}", view_id, e);
+        internal_error(e)
+      })?;
 
-    info!("[Whiteboard] Created whiteboard: {}", view_id);
+    info!("[Whiteboard] ✅ Created and saved whiteboard: {}", view_id);
     Ok(encoded_collab)
   }
 
   /// 打开白板
   ///
   /// 如果白板已在缓存中，直接返回
-  /// 否则从磁盘加载
-  #[instrument(level = "info", skip(self))]
+  /// 否则从磁盘加载，如果不存在则创建空白板
   pub async fn open_whiteboard(&self, view_id: &Uuid) -> FlowyResult<Arc<RwLock<Whiteboard>>> {
+    info!("[Whiteboard] 🔵 open_whiteboard called for view: {}", view_id);
     // 检查缓存
     if let Some(whiteboard) = self.whiteboards.get(view_id) {
       trace!("[Whiteboard] Whiteboard {} found in cache", view_id);
       return Ok(whiteboard.clone());
     }
 
-    // 从磁盘加载
+    // 检查白板是否已存在
+    let exists = self.is_whiteboard_exist(view_id).await.unwrap_or(false);
+    info!("[Whiteboard] Whiteboard {} exists: {}", view_id, exists);
+
     let uid = self.user_service.user_id()?;
     let workspace_id = self.user_service.workspace_id()?;
     let collab_db = self.user_service.collab_db(uid)?;
 
-    let data_source = CollabPersistenceImpl::new(collab_db.clone(), uid, workspace_id)
-      .into_data_source();
+    let whiteboard = if exists {
+      // 从磁盘加载已存在的白板
+      info!("[Whiteboard] Loading existing whiteboard from disk: {}", view_id);
+      let data_source = CollabPersistenceImpl::new(collab_db.clone(), uid, workspace_id)
+        .into_data_source();
 
-    let collab = self
-      .build_collab(uid, view_id, data_source, true)
-      .await?;
+      let collab = self
+        .build_collab(uid, view_id, data_source, true)
+        .await?;
 
-    // 尝试打开
-    let whiteboard = Whiteboard::open(collab)
-      .map_err(|e| internal_error(format!("Failed to open whiteboard: {}", e)))?;
+      // 尝试打开，如果失败则说明 Collab 文档存在但数据结构未初始化
+      match Whiteboard::open(collab) {
+        Ok(wb) => wb,
+        Err(e) => {
+          info!("[Whiteboard] ⚠️ Failed to open whiteboard ({}), creating new data structure", e);
+          // Collab 文档存在但数据结构未初始化，重新创建数据结构
+          let data_source = CollabPersistenceImpl::new(collab_db.clone(), uid, workspace_id)
+            .into_data_source();
+          let collab = self
+            .build_collab(uid, view_id, data_source, true)
+            .await?;
+          let wb = Whiteboard::create(collab)
+            .map_err(|e| internal_error(format!("Failed to create whiteboard data structure: {}", e)))?;
+          
+          // 保存初始化后的数据结构到磁盘
+          let encoded = wb.encode_collab()
+            .map_err(internal_error)?;
+          self
+            .persistence()?
+            .save_collab_to_disk(&view_id.to_string(), encoded)
+            .map_err(internal_error)?;
+          
+          info!("[Whiteboard] ✅ Initialized whiteboard data structure and saved: {}", view_id);
+          wb
+        }
+      }
+    } else {
+      // 创建新的空白板
+      info!("[Whiteboard] Creating new empty whiteboard: {}", view_id);
+      let data_source = DataSource::Disk(None);
+
+      let collab = self
+        .build_collab(uid, view_id, data_source, true)
+        .await?;
+
+      let wb = Whiteboard::create(collab)
+        .map_err(|e| internal_error(format!("Failed to create whiteboard: {}", e)))?;
+      
+      // ✅ 保存到磁盘（触发持久化）
+      let encoded = wb.encode_collab()
+        .map_err(internal_error)?;
+      self
+        .persistence()?
+        .save_collab_to_disk(&view_id.to_string(), encoded)
+        .map_err(internal_error)?;
+      
+      info!("[Whiteboard] ✅ New whiteboard created and saved to disk: {}", view_id);
+      wb
+    };
 
     let whiteboard = Arc::new(RwLock::new(whiteboard));
     self.whiteboards.insert(*view_id, whiteboard.clone());
@@ -159,24 +232,34 @@ impl WhiteboardManager {
   }
 
   /// 更新白板数据
-  #[instrument(level = "debug", skip(self, json_data))]
   pub async fn update_whiteboard(
     &self,
     view_id: &Uuid,
     json_data: &str,
   ) -> FlowyResult<()> {
+    info!("[Whiteboard] Manager.update_whiteboard called");
+    info!("[Whiteboard] ViewID: {}", view_id);
+    info!("[Whiteboard] JSON data length: {} bytes", json_data.len());
+    
+    info!("[Whiteboard] Opening whiteboard...");
     let whiteboard = self.open_whiteboard(view_id).await?;
+    info!("[Whiteboard] ✅ Whiteboard opened");
+    
+    info!("[Whiteboard] Acquiring write lock...");
     let mut wb = whiteboard.write().await;
+    info!("[Whiteboard] ✅ Write lock acquired");
+    
+    info!("[Whiteboard] Calling wb.update_from_json...");
     wb.update_from_json(json_data)
       .map_err(|e| internal_error(format!("Failed to update whiteboard: {}", e)))?;
 
-    trace!("[Whiteboard] Updated whiteboard: {}", view_id);
+    info!("[Whiteboard] ✅✅✅ Updated whiteboard successfully: {}", view_id);
     Ok(())
   }
 
   /// 获取白板数据
-  #[instrument(level = "debug", skip(self))]
   pub async fn get_whiteboard_data(&self, view_id: &Uuid) -> FlowyResult<String> {
+    info!("[Whiteboard] 🔵 get_whiteboard_data called for view: {}", view_id);
     let whiteboard = self.open_whiteboard(view_id).await?;
     let wb = whiteboard.read().await;
     wb.to_json()
@@ -184,16 +267,16 @@ impl WhiteboardManager {
   }
 
   /// 关闭白板
-  #[instrument(level = "debug", skip(self))]
   pub async fn close_whiteboard(&self, view_id: &Uuid) -> FlowyResult<()> {
+    info!("[Whiteboard] 🔵 close_whiteboard called for view: {}", view_id);
     self.whiteboards.remove(view_id);
     info!("[Whiteboard] Closed whiteboard: {}", view_id);
     Ok(())
   }
 
   /// 删除白板
-  #[instrument(level = "debug", skip(self))]
   pub async fn delete_whiteboard(&self, view_id: &Uuid) -> FlowyResult<()> {
+    info!("[Whiteboard] 🔵 delete_whiteboard called for view: {}", view_id);
     // 从缓存中移除
     self.whiteboards.remove(view_id);
 
@@ -216,21 +299,30 @@ impl WhiteboardManager {
 
   /// 检查白板是否存在
   async fn is_whiteboard_exist(&self, view_id: &Uuid) -> FlowyResult<bool> {
+    info!("[Whiteboard] 🔵 Checking whiteboard existence for view: {}", view_id);
+    
     // 先检查缓存
     if self.whiteboards.contains_key(view_id) {
+      info!("[Whiteboard] ✅ Whiteboard found in cache: {}", view_id);
       return Ok(true);
     }
+    info!("[Whiteboard] 🔵 Whiteboard not in cache, checking disk for view: {}", view_id);
 
     // 检查磁盘
     let uid = self.user_service.user_id()?;
     let workspace_id = self.user_service.workspace_id()?;
     let collab_db = self.user_service.collab_db(uid)?;
+    info!("[Whiteboard] 🔵 Got collab_db for view: {}", view_id);
 
     if let Some(db) = collab_db.upgrade() {
+      info!("[Whiteboard] 🔵 Creating read transaction for view: {}", view_id);
       let read_txn = db.read_txn();
-      return Ok(read_txn.is_exist(uid, &workspace_id.to_string(), &view_id.to_string()));
+      let exists = read_txn.is_exist(uid, &workspace_id.to_string(), &view_id.to_string());
+      info!("[Whiteboard] ✅ Whiteboard exists on disk: {} for view: {}", exists, view_id);
+      return Ok(exists);
     }
 
+    info!("[Whiteboard] ⚠️ Could not upgrade collab_db for view: {}", view_id);
     Ok(false)
   }
 
@@ -246,7 +338,9 @@ impl WhiteboardManager {
     let workspace_id = self.user_service.workspace_id()?;
     let collab_db = self.user_service.collab_db(uid)?;
 
-    let object = collab_builder.collab_object(&workspace_id, uid, view_id, CollabType::Unknown)
+    // 🔧 使用 Document 类型而不是 Unknown，确保持久化插件正常工作
+    // TODO: 在 collab-entity 中添加 CollabType::Whiteboard 变体后，改用 Whiteboard 类型
+    let object = collab_builder.collab_object(&workspace_id, uid, view_id, CollabType::Document)
       .map_err(internal_error)?;
 
     collab_builder

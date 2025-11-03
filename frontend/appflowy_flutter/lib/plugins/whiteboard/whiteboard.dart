@@ -14,6 +14,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_bloc.dart';
 import 'package:appflowy/plugins/whiteboard/application/drawing_models.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
+import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_painter.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 
@@ -143,12 +144,19 @@ class WhiteboardPage extends StatefulWidget {
   State<WhiteboardPage> createState() => _WhiteboardPageState();
 }
 
+// 全局WebView实例计数器，确保每个WebView的Key绝对唯一
+int _globalWebViewInstanceCounter = 0;
+
 class _WhiteboardPageState extends State<WhiteboardPage> {
   bool _useExcalidraw = true; // 控制是否使用Excalidraw，可以添加切换功能
   Map<String, dynamic>? _initialData;
   Map<String, dynamic>? _currentData; // 当前白板数据（实时更新）
   bool _isLoadingData = true;
   int _webViewInstanceId = 0; // 用于生成唯一的WebView Key
+  bool _isDisposing = false; // 标记是否正在销毁
+  
+  // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
+  WhiteboardCollabAdapter? _collabAdapter;
 
   @override
   void initState() {
@@ -158,7 +166,49 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     print('🎨 [WhiteboardPage] view.name: ${widget.view.name}');
     print('🎨 [WhiteboardPage] view.layout: ${widget.view.layout}');
     print('🎨 [WhiteboardPage] view.extra: ${widget.view.extra}');
+    
+    // 初始化 Collab 适配器（模仿 DocumentBloc）
+    _initCollabAdapter();
+    
     _loadInitialData();
+  }
+
+  @override
+  void dispose() {
+    print('🗑️ [WhiteboardPage] dispose called for view: ${widget.view.id}');
+    _isDisposing = true;
+    
+    // 销毁 Collab 适配器（模仿 DocumentBloc）
+    _collabAdapter?.dispose();
+    _collabAdapter = null;
+    
+    // 关闭白板以释放后端资源
+    final service = WhiteboardDataService();
+    service.closeWhiteboard(viewId: widget.view.id).then((result) {
+      result.fold(
+        (_) => print('✅ [WhiteboardPage] Whiteboard closed successfully'),
+        (error) => print('⚠️ [WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
+      );
+    });
+    
+    super.dispose();
+  }
+
+  /// 初始化 Collab 适配器（完全模仿 DocumentBloc 的 TransactionAdapter）
+  void _initCollabAdapter() {
+    print('🔧 [WhiteboardPage] Initializing Collab Adapter (like DocumentBloc)');
+    _collabAdapter = WhiteboardCollabAdapter(
+      viewId: widget.view.id,
+      onDataChanged: (data) {
+        // 更新当前数据缓存（用于 UI 显示）
+        if (mounted && !_isDisposing) {
+          setState(() {
+            _currentData = data;
+          });
+        }
+      },
+    );
+    print('✅ [WhiteboardPage] Collab Adapter initialized');
   }
 
   Future<void> _loadInitialData() async {
@@ -168,13 +218,20 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     
     print('📦 [Whiteboard] Loaded data: ${data.isEmpty ? "空数据" : "有数据 (${data.keys.length} keys)"}');
     
-    if (mounted) {
+    // 生成新的唯一实例ID
+    _globalWebViewInstanceCounter++;
+    final uniqueInstanceId = _globalWebViewInstanceCounter;
+    
+    if (mounted && !_isDisposing) {
       setState(() {
         _initialData = data.isEmpty ? null : data;
         _currentData = data.isEmpty ? null : data; // 同步当前数据
         _isLoadingData = false;
+        _webViewInstanceId = uniqueInstanceId; // 使用全局唯一的实例ID
       });
     }
+    
+    print('🔑 [Whiteboard] Assigned unique instance ID: $_webViewInstanceId');
   }
 
   /// 重新加载最新数据（用于视图切换）
@@ -185,38 +242,41 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     
     print('📦 [Whiteboard] Reloaded data: ${data.isEmpty ? "空数据" : "有数据 (${data.keys.length} keys)"}');
     
-    if (mounted) {
+    // 生成新的唯一实例ID
+    _globalWebViewInstanceCounter++;
+    final uniqueInstanceId = _globalWebViewInstanceCounter;
+    
+    if (mounted && !_isDisposing) {
       setState(() {
         _initialData = data.isEmpty ? null : data;
         _currentData = data.isEmpty ? null : data;
+        _webViewInstanceId = uniqueInstanceId; // 更新为全局唯一的实例ID
       });
     }
+    
+    print('🔑 [Whiteboard] Assigned unique instance ID: $_webViewInstanceId');
   }
 
-  void _onWhiteboardDataChanged(Map<String, dynamic> data) async {
-    // 更新当前数据缓存
-    _currentData = data;
-    
-    // 处理白板数据变更
-    print('📝 [Whiteboard] Data changed: ${data.keys.length} keys');
-    
-    // 保存数据到本地
-    final service = WhiteboardDataService();
-    final success = await service.saveWhiteboardData(widget.view.id, data);
-    
-    if (success) {
-      print('✅ [Whiteboard] Data saved successfully');
-    } else {
-      print('❌ [Whiteboard] Data save failed');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('保存白板数据失败'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
+  /// 白板数据变更回调 - 完全模仿 DocumentBloc 的 transactionStream 监听
+  void _onWhiteboardDataChanged(Map<String, dynamic> data) {
+    if (_isDisposing) {
+      print('⚠️ [Whiteboard] Data change ignored - widget is disposing');
+      return;
     }
+    
+    print('📝 [WhiteboardPage] =====================================================');
+    print('📝 [WhiteboardPage] Data changed callback triggered (like EditorState.transactionStream)');
+    print('📝 [WhiteboardPage] ViewID: ${widget.view.id}');
+    print('📝 [WhiteboardPage] Data keys: ${data.keys.toList()}');
+    if (data.containsKey('elements')) {
+      final elements = data['elements'] as List?;
+      print('📝 [WhiteboardPage] Elements count: ${elements?.length ?? 0}');
+    }
+    print('📝 [WhiteboardPage] Forwarding to CollabAdapter (like TransactionAdapter.apply)...');
+    print('📝 [WhiteboardPage] =====================================================');
+    
+    // 转发给 CollabAdapter 处理（完全模仿 DocumentBloc 的 TransactionAdapter）
+    _collabAdapter?.onWhiteboardDataChanged(data);
   }
 
   void _onWhiteboardExport(String format, dynamic data) {
@@ -228,19 +288,49 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   void _onWhiteboardError(String error) {
+    if (_isDisposing) {
+      print('⚠️ [Whiteboard] Error ignored - widget is disposing: $error');
+      return; // 如果正在销毁，忽略错误通知
+    }
+    
     // 处理错误
     print('❌ [Whiteboard] Error: $error');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('白板错误: $error'),
-        backgroundColor: Colors.red,
-      ),
-    );
+    if (mounted && !_isDisposing) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('白板错误: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  /// 手动保存白板数据
+  /// 手动保存白板数据（现在通过 CollabAdapter 自动处理）
   Future<void> _saveWhiteboard() async {
-    print('💾 [Whiteboard] Manual save triggered');
+    print('💾 [Whiteboard] Manual save triggered - forcing immediate sync (like DocumentBloc)');
+    
+    // 强制立即同步（模仿 DocumentBloc 的行为）
+    await _collabAdapter?.forceSync();
+    
+    if (mounted) {
+      print('✅ [Whiteboard] Manual save completed via CollabAdapter');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('白板已保存'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// 旧的保存方法（已废弃）
+  Future<void> _saveWhiteboardOld() async {
+    print('💾 [Whiteboard] OLD Manual save triggered');
     
     if (_currentData == null) {
       print('⚠️ [Whiteboard] No data to save');
@@ -361,6 +451,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                     size: 22,
                   ),
                   onPressed: () async {
+                    if (_isDisposing) return; // 如果正在销毁，忽略操作
+                    
                     print('🔄 [Whiteboard] Switching editor mode...');
                     
                     // 如果当前是Excalidraw且有数据，先尝试保存
@@ -370,15 +462,23 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                       await service.saveWhiteboardData(widget.view.id, _currentData!);
                     }
                     
+                    // 生成新的全局唯一实例ID
+                    _globalWebViewInstanceCounter++;
+                    final uniqueInstanceId = _globalWebViewInstanceCounter;
+                    
                     // 切换编辑器
-                    setState(() {
-                      _useExcalidraw = !_useExcalidraw;
-                      // 切换编辑器时，增加实例ID，确保WebView重新创建
-                      _webViewInstanceId++;
-                    });
+                    if (mounted && !_isDisposing) {
+                      setState(() {
+                        _useExcalidraw = !_useExcalidraw;
+                        // 使用全局唯一的实例ID，确保WebView完全重新创建
+                        _webViewInstanceId = uniqueInstanceId;
+                      });
+                    }
+                    
+                    print('🔑 [Whiteboard] Editor switch - new instance ID: $_webViewInstanceId');
                     
                     // 如果切换到Excalidraw，重新加载最新数据
-                    if (_useExcalidraw) {
+                    if (_useExcalidraw && mounted && !_isDisposing) {
                       print('🔄 [Whiteboard] Switched to Excalidraw, reloading data...');
                       await _reloadLatestData();
                     } else {
@@ -504,10 +604,15 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   Widget _buildExcalidrawView() {
-    // 每次build都创建新的Widget实例，避免PlatformView重复创建错误
-    // 使用唯一的实例ID作为key，确保每次切换编辑器都创建全新的WebView，避免PlatformView ID冲突
+    // ✅ 每次build都创建新的Widget实例，避免PlatformView重复创建错误
+    // ✅ 使用全局唯一的实例ID作为key，确保绝对不会出现ID冲突
+    // 📌 Key的组成：viewId（白板ID） + 全局唯一的实例编号
+    // 🎯 这样即使快速切换白板视图，每个WebView的Key也是全局唯一的
+    final uniqueKey = '${widget.view.id}_global_$_webViewInstanceId';
+    print('🔑 [Whiteboard] Creating ExcalidrawWebView with unique key: $uniqueKey');
+    
     return ExcalidrawWebView(
-      key: ValueKey('${widget.view.id}_instance_$_webViewInstanceId'), // 唯一实例ID确保PlatformView正确清理
+      key: ValueKey(uniqueKey), // 全局唯一的Key，确保PlatformView正确创建和清理
       viewId: widget.view.id,
       initialData: _initialData,
       onDataChanged: _onWhiteboardDataChanged,

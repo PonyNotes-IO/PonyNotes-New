@@ -40,6 +40,7 @@ regex = "1.9.5"
 futures = "0.3.31"
 dashmap.workspace = true
 num_enum.workspace = true
+parking_lot = "0.12"
 
 
 [build-dependencies]

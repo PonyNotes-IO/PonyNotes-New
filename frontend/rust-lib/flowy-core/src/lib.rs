@@ -259,6 +259,7 @@ impl AppFlowyCore {
         Arc::downgrade(&document_manager),
         Arc::downgrade(&database_manager),
         Arc::downgrade(&ai_manager),
+        Arc::downgrade(&whiteboard_manager),
       );
 
       (

@@ -76,39 +76,58 @@ impl Whiteboard {
       .map_err(|e| anyhow!("Failed to serialize files: {}", e))?;
     self.data.insert(&mut txn, Self::FILES_KEY, files_json.as_str());
 
-    trace!("[Whiteboard] Data updated successfully");
+    // 显式 drop transaction，确保 CRDT 变更立即提交
+    drop(txn);
+    trace!("[Whiteboard] Data updated successfully and transaction committed");
     Ok(())
   }
 
   /// 从完整的 Excalidraw JSON 更新
   pub fn update_from_json(&mut self, json_str: &str) -> Result<(), Error> {
+    tracing::info!("[Whiteboard] Whiteboard.update_from_json called");
+    tracing::info!("[Whiteboard] JSON string length: {} bytes", json_str.len());
+    
+    tracing::info!("[Whiteboard] Parsing JSON...");
     let value: serde_json::Value = serde_json::from_str(json_str)
       .map_err(|e| anyhow!("Failed to parse JSON: {}", e))?;
+    tracing::info!("[Whiteboard] ✅ JSON parsed successfully");
 
+    tracing::info!("[Whiteboard] Starting transaction...");
     let mut txn = self.collab.context.transact_mut();
+    tracing::info!("[Whiteboard] ✅ Transaction started");
 
     // 更新 elements
     if let Some(elements) = value.get("elements") {
+      tracing::info!("[Whiteboard] Updating elements...");
       let json = serde_json::to_string(elements)
         .map_err(|e| anyhow!("Failed to serialize elements: {}", e))?;
       self.data.insert(&mut txn, Self::ELEMENTS_KEY, json.as_str());
+      tracing::info!("[Whiteboard] ✅ Elements updated");
     }
 
     // 更新 appState
     if let Some(app_state) = value.get("appState") {
+      tracing::info!("[Whiteboard] Updating appState...");
       let json = serde_json::to_string(app_state)
         .map_err(|e| anyhow!("Failed to serialize appState: {}", e))?;
       self.data.insert(&mut txn, Self::APP_STATE_KEY, json.as_str());
+      tracing::info!("[Whiteboard] ✅ AppState updated");
     }
 
     // 更新 files
     if let Some(files) = value.get("files") {
+      tracing::info!("[Whiteboard] Updating files...");
       let json = serde_json::to_string(files)
         .map_err(|e| anyhow!("Failed to serialize files: {}", e))?;
       self.data.insert(&mut txn, Self::FILES_KEY, json.as_str());
+      tracing::info!("[Whiteboard] ✅ Files updated");
     }
 
-    trace!("[Whiteboard] Data updated from JSON successfully");
+    // 🔑 关键：显式 drop transaction，确保 CRDT 变更立即提交并触发持久化
+    tracing::info!("[Whiteboard] Dropping transaction to commit changes...");
+    drop(txn);
+    tracing::info!("[Whiteboard] ✅✅✅ Transaction dropped! CRDT changes committed and should be persisted!");
+
     Ok(())
   }
 
@@ -178,20 +197,32 @@ impl std::borrow::Borrow<Collab> for Whiteboard {
 }
 
 /// 从 WhiteboardData 创建 EncodedCollab
-pub async fn whiteboard_data_to_encoded_collab(
+pub fn whiteboard_data_to_encoded_collab(
   object_id: &str,
   data: Option<WhiteboardData>,
 ) -> Result<EncodedCollab, Error> {
+  tracing::info!("[Whiteboard] 🔵 whiteboard_data_to_encoded_collab called for object_id: {}", object_id);
+  
   let collab = CollabBuilder::new(1, object_id, DataSource::Disk(None))
     .build()
     .map_err(|e| anyhow!("Failed to create collab: {}", e))?;
+  tracing::info!("[Whiteboard] ✅ Collab builder created for object_id: {}", object_id);
 
   let whiteboard = match data {
-    Some(data) => Whiteboard::create_with_data(collab, data)?,
-    None => Whiteboard::create(collab)?,
+    Some(data) => {
+      tracing::info!("[Whiteboard] 🔵 Creating whiteboard with data for object_id: {}", object_id);
+      Whiteboard::create_with_data(collab, data)?
+    },
+    None => {
+      tracing::info!("[Whiteboard] 🔵 Creating empty whiteboard for object_id: {}", object_id);
+      Whiteboard::create(collab)?
+    },
   };
+  tracing::info!("[Whiteboard] ✅ Whiteboard created for object_id: {}", object_id);
 
-  whiteboard.encode_collab()
+  let encoded = whiteboard.encode_collab()?;
+  tracing::info!("[Whiteboard] ✅ Whiteboard encoded for object_id: {}", object_id);
+  Ok(encoded)
 }
 
 #[cfg(test)]

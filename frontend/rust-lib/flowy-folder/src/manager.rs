@@ -76,6 +76,9 @@ pub struct FolderManager {
   pub(crate) collab_builder: Arc<AppFlowyCollabBuilder>,
   pub(crate) user: Arc<dyn FolderUser>,
   pub(crate) operation_handlers: FolderOperationHandlers,
+  /// Additional handlers for custom view types that don't have dedicated ViewLayout variants
+  /// These handlers are searched by their name() when get_handler_for_layout_pb is called
+  pub(crate) extra_handlers: Arc<parking_lot::RwLock<Vec<Arc<dyn FolderOperationHandler + Send + Sync>>>>,
   pub cloud_service: Weak<dyn FolderCloudService>,
   pub(crate) store_preferences: Arc<KVStorePreferences>,
   pub(crate) folder_ready_notifier: tokio::sync::watch::Sender<bool>,
@@ -100,6 +103,7 @@ impl FolderManager {
       mutex_folder: Default::default(),
       collab_builder,
       operation_handlers: Default::default(),
+      extra_handlers: Arc::new(parking_lot::RwLock::new(Vec::new())),
       cloud_service,
       store_preferences,
       folder_ready_notifier,
@@ -136,6 +140,12 @@ impl FolderManager {
     handler: Arc<dyn FolderOperationHandler + Send + Sync>,
   ) {
     self.operation_handlers.insert(layout, handler);
+  }
+  
+  /// Register an extra handler that doesn't have a corresponding ViewLayout variant
+  /// These handlers are identified by their name() and used for custom view types
+  pub fn register_extra_handler(&self, handler: Arc<dyn FolderOperationHandler + Send + Sync>) {
+    self.extra_handlers.write().push(handler);
   }
 
   #[instrument(level = "debug", skip(self), err)]
@@ -612,18 +622,37 @@ impl FolderManager {
     let index = params.index;
     let section = params.section.clone().unwrap_or(ViewSectionPB::Public);
     let is_private = section == ViewSectionPB::Private;
-    let view = create_view(self.user.user_id()?, params, view_layout);
+    
+    info!("[FolderManager] 🔵 Creating view object for view: {}", params.view_id);
+    let view = create_view(self.user.user_id()?, params.clone(), view_layout);
+    info!("[FolderManager] ✅ View object created for view: {}", view.id);
+    
+    info!("[FolderManager] 🔵 Loading folder lock for view: {}", view.id);
     if let Some(lock) = self.mutex_folder.load_full() {
+      info!("[FolderManager] ✅ Got folder lock for view: {}", view.id);
+      
+      info!("[FolderManager] 🔵 Acquiring folder write lock for view: {}", view.id);
       let mut folder = lock.write().await;
+      info!("[FolderManager] ✅ Acquired folder write lock for view: {}", view.id);
+      
+      info!("[FolderManager] 🔵 Inserting view into folder: {} at index: {:?}", view.id, index);
       folder.insert_view(view.clone(), index);
+      info!("[FolderManager] ✅ View inserted into folder: {}", view.id);
+      
       if is_private {
+        info!("[FolderManager] 🔵 Adding private view: {}", view.id);
         folder.add_private_view_ids(vec![view.id.clone()]);
       }
       if notify_workspace_update {
+        info!("[FolderManager] 🔵 Notifying workspace update for view: {}", view.id);
         notify_did_update_workspace(&workspace_id, &folder);
+        info!("[FolderManager] ✅ Workspace update notified for view: {}", view.id);
       }
+    } else {
+      error!("[FolderManager] ❌ Folder lock is not loaded for view: {}", view.id);
     }
 
+    info!("[FolderManager] ✅ create_view_with_params completed successfully for view: {}", view.id);
     Ok((view, encoded_collab))
   }
 
@@ -2237,6 +2266,35 @@ impl FolderManager {
   }
 
   fn get_handler_for_layout_pb(&self, layout_pb: &ViewLayoutPB) -> FlowyResult<Arc<dyn FolderOperationHandler>> {
+    // Special handling for Whiteboard, Folder, and Notebook types
+    // These types are mapped to ViewLayout::Document in the conversion, but we want to find
+    // their dedicated handlers by checking extra_handlers
+    if matches!(layout_pb, ViewLayoutPB::Whiteboard | ViewLayoutPB::Folder | ViewLayoutPB::Notebook) {
+      // Determine the target handler name
+      let target_handler_name = match layout_pb {
+        ViewLayoutPB::Whiteboard => "WhiteboardFolderOperationHandler",
+        ViewLayoutPB::Folder => "FolderFolderOperationHandler",
+        ViewLayoutPB::Notebook => "NotebookFolderOperationHandler",
+        _ => unreachable!(),
+      };
+      
+      // Search in extra_handlers first
+      {
+        let extra_handlers_guard = self.extra_handlers.read();
+        for handler in extra_handlers_guard.iter() {
+          if handler.name() == target_handler_name {
+            return Ok(handler.clone());
+          }
+        }
+      }
+      
+      // If no dedicated handler found, log a warning and fall back to Document handler
+      tracing::warn!(
+        "[FolderManager] No dedicated handler found for {:?}, falling back to Document handler",
+        layout_pb
+      );
+    }
+    
     let view_layout: ViewLayout = layout_pb.clone().into();
     self.get_handler(&view_layout)
   }
@@ -2596,6 +2654,8 @@ impl FolderManager {
   }
 
   pub async fn get_shared_view_section(&self, view_id: &str) -> FlowyResult<SharedViewSectionPB> {
+    tracing::info!("[FOLDER] 🔵 get_shared_view_section called for view_id: {}", view_id);
+    
     const MAX_LOOP_COUNT: usize = 20;
     let mut loop_count = 0;
     let mut current_view_id = view_id.to_string();
@@ -2605,35 +2665,85 @@ impl FolderManager {
       .load_full()
       .ok_or_else(folder_not_init_error)?;
     let folder = lock.read().await;
+    tracing::info!("[FOLDER] ✅ Got folder lock for view_id: {}", view_id);
 
     let flattened_shared_views = self.get_flatten_shared_pages().await?;
+    tracing::info!(
+      "[FOLDER] 📊 Flattened shared views count: {}, checking view_id: {}", 
+      flattened_shared_views.len(),
+      view_id
+    );
 
     // if the view is in the flattened_shared_views, return the section
     if flattened_shared_views.iter().any(|view| view.id == view_id) {
+      tracing::info!("[FOLDER] ✅ View {} found in shared views, returning SharedSection", view_id);
       return Ok(SharedViewSectionPB::SharedSection);
     }
+    tracing::info!("[FOLDER] 🔵 View {} not in shared views, checking parent hierarchy", view_id);
 
     loop {
       if loop_count >= MAX_LOOP_COUNT {
+        tracing::warn!(
+          "[FOLDER] ⚠️ Max loop count reached for view_id: {}, returning PublicSection", 
+          view_id
+        );
         return Ok(SharedViewSectionPB::PublicSection);
       }
       loop_count += 1;
 
-      let view = folder
-        .get_view(&current_view_id)
-        .ok_or_else(|| FlowyError::record_not_found().with_context("View not found"))?;
+      tracing::info!(
+        "[FOLDER] 🔵 Loop iteration {}: checking current_view_id: {}", 
+        loop_count, 
+        current_view_id
+      );
+
+      let view = match folder.get_view(&current_view_id) {
+        Some(v) => {
+          tracing::info!(
+            "[FOLDER] ✅ Found view: {} (loop {})", 
+            current_view_id, 
+            loop_count
+          );
+          v
+        },
+        None => {
+          tracing::warn!(
+            "[FOLDER] ⚠️ View not found: {} (loop {}), this might be a timing issue. Returning PublicSection as fallback.",
+            current_view_id,
+            loop_count
+          );
+          // 返回 PublicSection 作为默认值，避免在竞态条件下报错
+          return Ok(SharedViewSectionPB::PublicSection);
+        }
+      };
 
       if let Some(space_info) = view.space_info() {
-        return match space_info.space_permission {
-          SpacePermission::PublicToAll => Ok(SharedViewSectionPB::PublicSection),
-          _ => Ok(SharedViewSectionPB::PrivateSection),
+        let result = match space_info.space_permission {
+          SpacePermission::PublicToAll => SharedViewSectionPB::PublicSection,
+          _ => SharedViewSectionPB::PrivateSection,
         };
+        tracing::info!(
+          "[FOLDER] ✅ Found space_info for view {}, permission: {:?}, returning: {:?}",
+          current_view_id,
+          space_info.space_permission,
+          result
+        );
+        return Ok(result);
       }
 
       let parent_view_id = view.parent_view_id.clone();
+      tracing::info!(
+        "[FOLDER] 🔵 View {} has parent: {}", 
+        current_view_id, 
+        parent_view_id
+      );
 
       // If parent_view_id is the same as current view id, return public to avoid infinite loop
       if parent_view_id == current_view_id {
+        tracing::warn!(
+          "[FOLDER] ⚠️ Parent view_id equals current view_id: {}, avoiding infinite loop, returning PublicSection",
+          current_view_id
+        );
         return Ok(SharedViewSectionPB::PublicSection);
       }
 
