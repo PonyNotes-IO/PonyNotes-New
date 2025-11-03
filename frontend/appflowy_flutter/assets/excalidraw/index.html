@@ -871,17 +871,57 @@
         });
         
         // 页面加载完成后通知父窗口
-        window.addEventListener('load', function() {
-          setTimeout(function() {
+        // 使用 MutationObserver 监听 Excalidraw 元素的出现，而不是定时器
+        (function() {
+          let readySent = false;
+          
+          function checkAndSendReady() {
+            if (readySent) return;
+            
             const excalidrawEl = document.querySelector('.excalidraw');
             if (excalidrawEl) {
+              readySent = true;
               console.log('[Excalidraw iframe] ✅ Excalidraw element found, sending ready signal');
               sendToParent('excalidraw-ready', { ready: true });
-            } else {
-              console.warn('[Excalidraw iframe] ⚠️ Excalidraw element not found');
+              return true;
             }
-          }, 1500);
-        });
+            return false;
+          }
+          
+          // 立即检查一次（可能已经渲染好了）
+          if (checkAndSendReady()) return;
+          
+          // 使用 MutationObserver 监听 DOM 变化
+          const observer = new MutationObserver(function(mutations) {
+            if (checkAndSendReady()) {
+              observer.disconnect();
+            }
+          });
+          
+          // 监听 #root 元素的子树变化
+          const rootEl = document.getElementById('root');
+          if (rootEl) {
+            observer.observe(rootEl, {
+              childList: true,
+              subtree: true
+            });
+            console.log('[Excalidraw iframe] 👁️ Started observing #root for Excalidraw element');
+          } else {
+            console.error('[Excalidraw iframe] ❌ #root element not found');
+          }
+          
+          // 备用：10秒后仍未找到则报错
+          setTimeout(function() {
+            if (!readySent) {
+              observer.disconnect();
+              console.error('[Excalidraw iframe] ❌ Timeout: Excalidraw element not found after 10 seconds');
+              sendToParent('debug-log', {
+                level: 'error',
+                message: 'Excalidraw element not found after 10 seconds'
+              });
+            }
+          }, 10000);
+        })();
         
         console.log('[Excalidraw iframe] ✅ Data management script fully loaded');
       })();

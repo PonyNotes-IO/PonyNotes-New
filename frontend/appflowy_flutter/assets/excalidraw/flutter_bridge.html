@@ -73,8 +73,8 @@
         <div class="loading-text">正在加载 Excalidraw...</div>
     </div>
     
-    <!-- 调试信息显示 -->
-    <div id="debug-info" style="position: fixed; top: 0; left: 0; background: rgba(0,0,0,0.8); color: #0f0; padding: 10px; z-index: 10000; font-family: monospace; font-size: 12px; max-width: 90%; word-break: break-all;">
+    <!-- 调试信息显示 - 默认隐藏 -->
+    <div id="debug-info" style="display: none; position: fixed; top: 0; left: 0; background: rgba(0,0,0,0.8); color: #0f0; padding: 10px; z-index: 10000; font-family: monospace; font-size: 12px; max-width: 90%; word-break: break-all;">
         <div>调试信息加载中...</div>
     </div>
     
@@ -129,10 +129,15 @@
             }
         })();
         
+        // 调试开关 - 通过URL参数控制: ?debug=true
+        const urlParams = new URLSearchParams(window.location.search);
+        const enableDebug = urlParams.get('debug') === 'true';
+        
         // 调试函数
         function updateDebugInfo(message) {
             const debugDiv = document.getElementById('debug-info');
-            if (debugDiv) {
+            if (debugDiv && enableDebug) {
+                debugDiv.style.display = 'block';  // 显示调试div
                 debugDiv.innerHTML += '<div>' + message + '</div>';
             }
             console.log('[Flutter Bridge]', message);
@@ -280,9 +285,17 @@
         
         // 初始化 Excalidraw
         function initializeExcalidraw() {
+            // 防止重复初始化
+            if (isInitialized) {
+                console.log('[Flutter Bridge] Already initialized, skipping');
+                return;
+            }
+            
             const iframe = document.getElementById('excalidraw-iframe');
             
             try {
+                console.log('[Flutter Bridge] 🎨 Initializing Excalidraw...');
+                
                 // 隐藏加载指示器
                 document.getElementById('loadingOverlay').classList.add('hidden');
                 
@@ -291,14 +304,16 @@
                 
                 // 如果有初始数据，加载它
                 if (initialData) {
+                    console.log('[Flutter Bridge] Loading initial data...');
                     loadExcalidrawData(initialData);
                 }
                 
                 // 通知 Flutter 初始化完成
+                console.log('[Flutter Bridge] ✅ Initialization complete, sending ready signal to Flutter');
                 FlutterBridge.sendReady();
                 
             } catch (error) {
-                console.error('Error initializing Excalidraw:', error);
+                console.error('[Flutter Bridge] ❌ Error initializing Excalidraw:', error);
                 FlutterBridge.sendError(error);
             }
         }
@@ -452,7 +467,7 @@
         
         // iframe 加载事件
         document.getElementById('excalidraw-iframe').addEventListener('load', function() {
-            console.log('Excalidraw iframe loaded');
+            console.log('[Flutter Bridge] 📄 Excalidraw iframe loaded');
             
             // 注入自定义CSS到iframe
             setTimeout(() => {
@@ -508,13 +523,16 @@
                     
                     // 添加到iframe的head
                     iframeDoc.head.appendChild(style);
-                    console.log('Custom CSS injected to iframe');
+                    console.log('[Flutter Bridge] 🎨 Custom CSS injected to iframe');
                 } catch (error) {
-                    console.error('Error injecting CSS to iframe:', error);
+                    console.error('[Flutter Bridge] ❌ Error injecting CSS to iframe:', error);
                 }
                 
+                // 备用初始化：如果3秒后仍未收到 excalidraw-ready 消息，强制初始化
+                // 注意：initializeExcalidraw() 内部有防重复检查，安全调用
+                console.log('[Flutter Bridge] ⏱️ Starting 3s fallback timer for initialization');
                 initializeExcalidraw();
-            }, 1000);
+            }, 3000);
         });
         
         // 错误处理

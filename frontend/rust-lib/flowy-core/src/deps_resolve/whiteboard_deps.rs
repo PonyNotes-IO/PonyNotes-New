@@ -1,4 +1,5 @@
 use flowy_whiteboard::{WhiteboardManager, WhiteboardUserService};
+use flowy_whiteboard_pub::cloud::WhiteboardCloudService;
 use flowy_user::services::authenticate_user::AuthenticateUser;
 use flowy_error::FlowyError;
 use collab_integrate::collab_builder::AppFlowyCollabBuilder;
@@ -11,7 +12,8 @@ pub struct WhiteboardDepsResolver();
 impl WhiteboardDepsResolver {
   pub fn resolve(
     authenticate_user: Weak<AuthenticateUser>,
-    collab_builder: Arc<AppFlowyCollabBuilder>,
+    collab_builder: Weak<AppFlowyCollabBuilder>,
+    cloud_service: Arc<dyn WhiteboardCloudService>,
   ) -> Arc<WhiteboardManager> {
     let user_service = Arc::new(WhiteboardUserServiceImpl {
       authenticate_user,
@@ -19,7 +21,8 @@ impl WhiteboardDepsResolver {
     
     Arc::new(WhiteboardManager::new(
       user_service,
-      Arc::downgrade(&collab_builder),
+      collab_builder,
+      cloud_service,
     ))
   }
 }

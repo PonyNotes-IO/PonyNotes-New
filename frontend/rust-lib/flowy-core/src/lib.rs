@@ -250,7 +250,8 @@ impl AppFlowyCore {
 
       let whiteboard_manager = WhiteboardDepsResolver::resolve(
         Arc::downgrade(&authenticate_user),
-        collab_builder.clone(),
+        Arc::downgrade(&collab_builder),
+        server_provider.clone(),
       );
 
       // Register the folder operation handlers

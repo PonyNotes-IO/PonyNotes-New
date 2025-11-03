@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 flowy-error = { path = "../flowy-error" }
 lib-infra = { path = "../lib-infra" }
-serde = { version = "1.0", features = ["derive"] }
+collab = { workspace = true }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
 

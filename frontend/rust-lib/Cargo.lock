@@ -2339,6 +2339,7 @@ dependencies = [
  "flowy-user",
  "flowy-user-pub",
  "flowy-whiteboard",
+ "flowy-whiteboard-pub",
  "futures",
  "futures-core",
  "lib-dispatch",
@@ -2683,6 +2684,7 @@ dependencies = [
  "flowy-storage",
  "flowy-storage-pub",
  "flowy-user-pub",
+ "flowy-whiteboard-pub",
  "futures-util",
  "lazy_static",
  "lib-infra",
@@ -2919,6 +2921,7 @@ dependencies = [
  "flowy-error",
  "flowy-folder",
  "flowy-notification",
+ "flowy-whiteboard-pub",
  "futures",
  "getrandom 0.2.10",
  "lib-dispatch",
@@ -2939,9 +2942,9 @@ dependencies = [
 name = "flowy-whiteboard-pub"
 version = "0.1.0"
 dependencies = [
+ "collab",
  "flowy-error",
  "lib-infra",
- "serde",
  "uuid",
 ]
 

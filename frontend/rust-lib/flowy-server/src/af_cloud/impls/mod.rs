@@ -5,6 +5,7 @@ pub(crate) use file_storage::*;
 pub(crate) use folder::*;
 pub(crate) use search::*;
 pub(crate) use user::*;
+pub(crate) use whiteboard::*;
 
 mod chat;
 mod database;
@@ -14,3 +15,4 @@ mod folder;
 mod search;
 mod user;
 mod util;
+mod whiteboard;

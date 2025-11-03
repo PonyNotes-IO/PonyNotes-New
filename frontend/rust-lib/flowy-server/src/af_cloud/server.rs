@@ -28,7 +28,8 @@ use super::impls::AFCloudSearchCloudServiceImpl;
 use crate::AppFlowyServer;
 use crate::af_cloud::impls::{
   AFCloudDatabaseCloudServiceImpl, AFCloudDocumentCloudServiceImpl, AFCloudFileStorageServiceImpl,
-  AFCloudFolderCloudServiceImpl, AFCloudUserAuthServiceImpl, CloudChatServiceImpl,
+  AFCloudFolderCloudServiceImpl, AFCloudUserAuthServiceImpl, AFCloudWhiteboardCloudServiceImpl,
+  CloudChatServiceImpl,
 };
 use flowy_ai::offline::offline_message_sync::AutoSyncChatService;
 use flowy_ai_pub::user_service::AIUserService;
@@ -219,6 +220,13 @@ impl AppFlowyServer for AppFlowyCloudServer {
 
   fn document_service(&self) -> Arc<dyn DocumentCloudService> {
     Arc::new(AFCloudDocumentCloudServiceImpl {
+      inner: self.get_server_impl(),
+      logged_user: self.logged_user.clone(),
+    })
+  }
+
+  fn whiteboard_service(&self) -> Arc<dyn flowy_whiteboard_pub::cloud::WhiteboardCloudService> {
+    Arc::new(AFCloudWhiteboardCloudServiceImpl {
       inner: self.get_server_impl(),
       logged_user: self.logged_user.clone(),
     })

@@ -30,6 +30,7 @@ use flowy_folder_pub::cloud::{
 };
 use flowy_folder_pub::entities::PublishPayload;
 use flowy_search_pub::cloud::SearchCloudService;
+use flowy_whiteboard_pub::cloud::{WhiteboardCloudService, WhiteboardSnapshot};
 use flowy_server_pub::af_cloud_config::AFCloudConfiguration;
 use flowy_server_pub::guest_dto::{
   ListSharedViewResponse, RevokeSharedViewAccessRequest, ShareViewWithGuestRequest,
@@ -914,5 +915,58 @@ impl SearchCloudService for ServerProvider {
       },
       None => Err(FlowyError::internal().with_context("SearchCloudService not found")),
     }
+  }
+}
+
+#[async_trait]
+impl WhiteboardCloudService for ServerProvider {
+  async fn get_whiteboard_doc_state(
+    &self,
+    whiteboard_id: &Uuid,
+    workspace_id: &Uuid,
+  ) -> Result<Vec<u8>, FlowyError> {
+    let server = self.get_server()?;
+    server
+      .whiteboard_service()
+      .get_whiteboard_doc_state(whiteboard_id, workspace_id)
+      .await
+  }
+
+  async fn get_whiteboard_snapshots(
+    &self,
+    whiteboard_id: &Uuid,
+    limit: usize,
+    workspace_id: &str,
+  ) -> Result<Vec<WhiteboardSnapshot>, FlowyError> {
+    let server = self.get_server()?;
+    server
+      .whiteboard_service()
+      .get_whiteboard_snapshots(whiteboard_id, limit, workspace_id)
+      .await
+  }
+
+  async fn get_whiteboard_data(
+    &self,
+    whiteboard_id: &Uuid,
+    workspace_id: &Uuid,
+  ) -> Result<Option<String>, FlowyError> {
+    let server = self.get_server()?;
+    server
+      .whiteboard_service()
+      .get_whiteboard_data(whiteboard_id, workspace_id)
+      .await
+  }
+
+  async fn create_whiteboard_collab(
+    &self,
+    workspace_id: &Uuid,
+    whiteboard_id: &Uuid,
+    encoded_collab: EncodedCollab,
+  ) -> Result<(), FlowyError> {
+    let server = self.get_server()?;
+    server
+      .whiteboard_service()
+      .create_whiteboard_collab(workspace_id, whiteboard_id, encoded_collab)
+      .await
   }
 }

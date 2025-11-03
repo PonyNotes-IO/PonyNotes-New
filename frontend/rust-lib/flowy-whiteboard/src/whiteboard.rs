@@ -198,12 +198,22 @@ impl std::borrow::Borrow<Collab> for Whiteboard {
 
 /// 从 WhiteboardData 创建 EncodedCollab
 pub fn whiteboard_data_to_encoded_collab(
+  uid: i64,
   object_id: &str,
+  device_id: &str,
   data: Option<WhiteboardData>,
 ) -> Result<EncodedCollab, Error> {
-  tracing::info!("[Whiteboard] 🔵 whiteboard_data_to_encoded_collab called for object_id: {}", object_id);
+  tracing::info!(
+    "[Whiteboard] 🔵 whiteboard_data_to_encoded_collab called for object_id: {}, uid: {}, device_id: {}", 
+    object_id, uid, device_id
+  );
   
-  let collab = CollabBuilder::new(1, object_id, DataSource::Disk(None))
+  if device_id.is_empty() {
+    return Err(anyhow!("device_id cannot be empty"));
+  }
+  
+  let collab = CollabBuilder::new(uid, object_id, DataSource::Disk(None))
+    .with_device_id(device_id)
     .build()
     .map_err(|e| anyhow!("Failed to create collab: {}", e))?;
   tracing::info!("[Whiteboard] ✅ Collab builder created for object_id: {}", object_id);

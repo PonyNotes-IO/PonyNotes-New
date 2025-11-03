@@ -1,6 +1,5 @@
 use bytes::Bytes;
 use collab::entity::EncodedCollab;
-use collab_entity::CollabType;
 use collab_folder::hierarchy_builder::NestedViewBuilder;
 use collab_folder::ViewLayout;
 use flowy_error::FlowyError;
