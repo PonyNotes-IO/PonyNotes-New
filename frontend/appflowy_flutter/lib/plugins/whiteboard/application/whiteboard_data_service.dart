@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -14,14 +15,32 @@ import 'package:path/path.dart' as p;
 /// 负责白板数据的本地存储和加载
 class WhiteboardDataService {
   /// 获取白板数据存储目录
+  /// 修复：使用与 Collab DB 一致的路径结构 {basePath}/{userId}/whiteboards/
   Future<String> _getWhiteboardDirectory() async {
-    final path = await getIt<ApplicationDataStorage>().getPath();
-    final whiteboardPath = p.join(path, 'whiteboards');
+    // 1. 获取基础路径
+    final basePath = await getIt<ApplicationDataStorage>().getPath();
     
-    // 确保目录存在
+    // 2. 获取当前用户 ID
+    final userProfileResult = await UserBackendService.getCurrentUserProfile();
+    final userId = userProfileResult.fold(
+      (profile) => profile.id.toString(),
+      (error) {
+        Log.error('[Whiteboard] Failed to get user profile: ${error.msg}');
+        // 回退到不带用户ID的路径（向后兼容）
+        return '';
+      },
+    );
+    
+    // 3. 构建路径：{basePath}/{userId}/whiteboards/
+    final whiteboardPath = userId.isNotEmpty 
+        ? p.join(basePath, userId, 'whiteboards')
+        : p.join(basePath, 'whiteboards');  // 回退路径
+    
+    // 4. 确保目录存在
     final directory = Directory(whiteboardPath);
     if (!directory.existsSync()) {
       await directory.create(recursive: true);
+      Log.info('[Whiteboard] Created directory: $whiteboardPath');
     }
     
     return whiteboardPath;
