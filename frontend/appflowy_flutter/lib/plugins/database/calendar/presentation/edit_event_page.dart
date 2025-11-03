@@ -7,6 +7,8 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/repeat_selector.dart';
+import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import '../models/schedule_model.dart';
 import 'new_event_page.dart'; // 重用一些组件
 
@@ -16,6 +18,7 @@ class EditEventPage extends StatefulWidget {
   final Function(String) onEventDeleted; // 删除回调
   final VoidCallback onCancel;
   final Function(bool Function())? onSaveRequested;
+  final ScheduleModel scheduleModel; // 外层传入的 ScheduleModel
 
   const EditEventPage({
     Key? key,
@@ -23,6 +26,7 @@ class EditEventPage extends StatefulWidget {
     required this.onEventUpdated,
     required this.onEventDeleted,
     required this.onCancel,
+    required this.scheduleModel,
     this.onSaveRequested,
   }) : super(key: key);
 
@@ -43,15 +47,13 @@ class _EditEventPageState extends State<EditEventPage> {
   String? _repeatCustomSummary;
   late String _calendar;
   late String _description;
-  late String _reminderOption;
+  ReminderOption _reminderOption = ReminderOption.none;
   
-  // 使用ScheduleModel来管理日程
-  late ScheduleModel _scheduleModel;
+  // 使用外层传入的 ScheduleModel（不在本页创建/销毁）
 
   @override
   void initState() {
     super.initState();
-    _scheduleModel = ScheduleModel();
     
     // 从传入的日程初始化数据
     _initializeFromSchedule();
@@ -78,46 +80,13 @@ class _EditEventPageState extends State<EditEventPage> {
     _isRepeat = false; // 暂时不支持重复
     _calendar = schedule.category;
     _description = schedule.title; // 使用title作为description
-    _reminderOption = _getReminderOptionText(schedule.reminderOption);
-  }
-
-  String _getReminderOptionText(ReminderOption option) {
-    switch (option) {
-      case ReminderOption.none:
-        return '无';
-      case ReminderOption.atTimeOfEvent:
-        return '准时';
-      case ReminderOption.fiveMinsBefore:
-        return '提前5分钟';
-      case ReminderOption.tenMinsBefore:
-        return '提前10分钟';
-      case ReminderOption.fifteenMinsBefore:
-        return '提前15分钟';
-      case ReminderOption.thirtyMinsBefore:
-        return '提前30分钟';
-      case ReminderOption.oneHourBefore:
-        return '提前1个小时';
-      case ReminderOption.twoHoursBefore:
-        return '提前2个小时';
-      case ReminderOption.oneDayBefore:
-        return '提前1天';
-      case ReminderOption.twoDaysBefore:
-        return '提前2天';
-      case ReminderOption.oneWeekBefore:
-        return '提前1周';
-      case ReminderOption.onDayOfEvent:
-        return '当天';
-      case ReminderOption.custom:
-        return '自定义';
-      default:
-        return '无';
-    }
+    _reminderOption = schedule.reminderOption;
   }
 
   // 初始化日历视图
   Future<void> _initializeCalendarView() async {
     try {
-      final success = await _scheduleModel.initializeCalendarView();
+      final success = await widget.scheduleModel.initializeCalendarView();
       if (success) {
       } else {
         if (mounted) {
@@ -145,7 +114,6 @@ class _EditEventPageState extends State<EditEventPage> {
 
   @override
   void dispose() {
-    _scheduleModel.dispose();
     super.dispose();
   }
 
@@ -179,9 +147,6 @@ class _EditEventPageState extends State<EditEventPage> {
       _endTime.hour,
       _endTime.minute,
     );
-
-    // 验证时间合法性
-    final now = DateTime.now();
     
     // 检查时间是否在1970年之后
     if (startDateTime.year < 1970 || endDateTime.year < 1970) {
@@ -195,10 +160,8 @@ class _EditEventPageState extends State<EditEventPage> {
       return false;
     }
 
-    // 移除过去时间检查 - 允许用户自由设置任何时间
-
     // 检查结束时间是否在开始时间之后
-    if (endDateTime.isBefore(startDateTime) || endDateTime.isAtSameMomentAs(startDateTime)) {
+    if (!_isAllDay && (endDateTime.isBefore(startDateTime) || endDateTime.isAtSameMomentAs(startDateTime))) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('❌ 结束时间必须在开始时间之后'),
@@ -254,10 +217,10 @@ class _EditEventPageState extends State<EditEventPage> {
 
       // 检查ScheduleModel的状态
       
-      if (_scheduleModel.currentViewId == null) {
+      if (widget.scheduleModel.currentViewId == null) {
         
         // 尝试初始化日历视图
-        final initialized = await _scheduleModel.initializeCalendarView();
+        final initialized = await widget.scheduleModel.initializeCalendarView();
         if (!initialized) {
           throw Exception('无法初始化日历视图，请检查 AppFlowy 数据库连接');
         }
@@ -266,6 +229,7 @@ class _EditEventPageState extends State<EditEventPage> {
       // 使用ScheduleModel更新日程
       
       // 创建更新后的ScheduleItem
+      // 重要：显式保留原来的 reminderId，确保更新提醒时能找到原有的提醒ID
       final updatedSchedule = widget.schedule.copyWith(
         title: _description.isNotEmpty ? _description : '无标题日程',
         description: _description,
@@ -273,9 +237,12 @@ class _EditEventPageState extends State<EditEventPage> {
         endTime: endDateTime,
         isAllDay: _isAllDay,
         isImportant: _isImportant,
+        reminderOption: _reminderOption, // 直接使用 ReminderOption
+        // 显式保留原来的 reminderId，确保更新提醒时能找到原有的提醒ID
+        reminderId: widget.schedule.reminderId,
       );
       
-      final success = await _scheduleModel.updateSchedule(updatedSchedule);
+      final success = await widget.scheduleModel.updateSchedule(updatedSchedule);
 
       // 再次检查widget是否仍然挂载
       if (!mounted) {
@@ -376,14 +343,14 @@ class _EditEventPageState extends State<EditEventPage> {
 
     try {
       
-      if (_scheduleModel.currentViewId == null) {
-        final initialized = await _scheduleModel.initializeCalendarView();
+      if (widget.scheduleModel.currentViewId == null) {
+        final initialized = await widget.scheduleModel.initializeCalendarView();
         if (!initialized) {
           throw Exception('无法初始化日历视图，请检查 AppFlowy 数据库连接');
         }
       }
 
-      final success = await _scheduleModel.deleteSchedule(widget.schedule.id);
+      final success = await widget.scheduleModel.deleteSchedule(widget.schedule.id);
       
       if (!mounted) return;
 
@@ -738,7 +705,7 @@ class _EditEventPageState extends State<EditEventPage> {
                     minLeadingWidth: 0,
                   ),
                   
-                  // 准时选项
+                  // 提醒选项
                   ListTile(
                     leading: FlowySvg(
                       FlowySvgs.icon_alarm_clock_m,
@@ -746,7 +713,7 @@ class _EditEventPageState extends State<EditEventPage> {
                       size: const Size.square(24),
                     ),
                     title: Text(
-                      _reminderOption,
+                      _getReminderOptionLabel(_reminderOption, !_isAllDay),
                       style: TextStyle(
                         fontSize: 16,
                         color: theme.textTheme.bodyLarge?.color,
@@ -1001,6 +968,21 @@ class _EditEventPageState extends State<EditEventPage> {
     );
   }
 
+
+  // 获取提醒选项的显示标签（与 reminder_selector.dart 逻辑一致）
+  String _getReminderOptionLabel(ReminderOption option, bool hasTime) {
+    String label = option.label;
+    // 对于 withoutTime 的选项，显示时间信息（与 reminder_selector.dart 逻辑一致）
+    if (option.withoutTime && !option.timeExempt) {
+      const time = "09:00";
+      final t = TimeFormatPB.TwentyFourHour == TimeFormatPB.TwelveHour 
+          ? "$time AM" 
+          : time;
+      label = "$label ($t)";
+    }
+    return label;
+  }
+
   void _showReminderDialog() {
     showDialog(
       context: context,
@@ -1008,6 +990,8 @@ class _EditEventPageState extends State<EditEventPage> {
       builder: (BuildContext context) {
         return ReminderSelectionDialog(
           currentOption: _reminderOption,
+          hasTime: !_isAllDay, // 如果不是全天，则包含时间
+          timeFormat: TimeFormatPB.TwentyFourHour, // 默认使用24小时制
           onSave: (selectedOption) {
             setState(() {
               _reminderOption = selectedOption;
@@ -1063,5 +1047,197 @@ class _EditEventPageState extends State<EditEventPage> {
       default:
         return '任务重复';
     }
+  }
+}
+
+// 提醒选择对话框（与 reminder_selector.dart 逻辑一致）
+class ReminderSelectionDialog extends StatefulWidget {
+  final ReminderOption currentOption;
+  final bool hasTime;
+  final TimeFormatPB timeFormat;
+  final Function(ReminderOption) onSave;
+
+  const ReminderSelectionDialog({
+    Key? key,
+    required this.currentOption,
+    required this.hasTime,
+    required this.timeFormat,
+    required this.onSave,
+  }) : super(key: key);
+
+  @override
+  State<ReminderSelectionDialog> createState() => _ReminderSelectionDialogState();
+}
+
+class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
+  late ReminderOption _tempSelectedOption;
+
+  @override
+  void initState() {
+    super.initState();
+    _tempSelectedOption = widget.currentOption;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
+    // 获取可用选项（与 reminder_selector.dart 逻辑一致）
+    final options = ReminderOption.values.toList();
+    
+    // 如果当前选项不是 custom，则移除 custom 选项
+    if (widget.currentOption != ReminderOption.custom) {
+      options.remove(ReminderOption.custom);
+    }
+    
+    // 根据 hasTime 过滤选项（与 reminder_selector.dart 逻辑一致）
+    options.removeWhere(
+      (o) => !o.timeExempt && (!widget.hasTime ? !o.withoutTime : o.requiresNoTime),
+    );
+    
+    // 构建选项列表
+    final optionWidgets = options.map((o) {
+      String label = o.label;
+      // 对于 withoutTime 的选项，显示时间信息（与 reminder_selector.dart 逻辑一致）
+      if (o.withoutTime && !o.timeExempt) {
+        const time = "09:00";
+        final t = widget.timeFormat == TimeFormatPB.TwelveHour ? "$time AM" : time;
+        label = "$label ($t)";
+      }
+      
+      return Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () {
+              setState(() {
+                _tempSelectedOption = o;
+              });
+            },
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Radio<ReminderOption>(
+                    value: o,
+                    groupValue: _tempSelectedOption,
+                    onChanged: (value) {
+                      setState(() {
+                        _tempSelectedOption = value!;
+                      });
+                    },
+                    activeColor: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                  ),
+                  if (o == _tempSelectedOption)
+                    Icon(
+                      Icons.check,
+                      color: theme.colorScheme.primary,
+                      size: 20,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
+
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        width: 510,
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            // 限制对话框最大高度，超过则滚动
+            maxHeight: 520,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+          children: [
+            // 标题栏
+            Row(
+              children: [
+                InkWell(
+                  onTap: () => Navigator.pop(context),
+                  child: Icon(
+                    Icons.close,
+                    size: 24,
+                    color: theme.iconTheme.color,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '提醒时间',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: theme.textTheme.titleLarge?.color,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                // 保存按钮
+                ElevatedButton(
+                  onPressed: () {
+                    widget.onSave(_tempSelectedOption);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    '保存',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // 选项列表（可滚动，避免超出边界）
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: optionWidgets,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+          ],
+          ),
+        ),
+      ),
+    );
   }
 } 

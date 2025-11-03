@@ -145,11 +145,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   late DateTime? _selectedDay;
   late DateTime _firstDay;
   late DateTime _lastDay;
-  late int _currentMonthIndex;
-  late int _currentYear;
-  late List<CalendarEvent> _events;
   late bool _showNewEventPage;
   late bool _showEditEventPage; // 显示编辑日程页面
+  late ScheduleModel _scheduleModel; // 添加日程模型
   late ScheduleItem? _editingSchedule; // 正在编辑的日程
   late Function()? _saveEventCallback;
   late String? _currentViewId; // 添加当前视图ID
@@ -172,9 +170,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     _selectedDay = DateTime.now();
     _firstDay = DateTime.now().subtract(Duration(days: 365));
     _lastDay = DateTime.now().add(Duration(days: 365));
-    _currentMonthIndex = DateTime.now().month;
-    _currentYear = DateTime.now().year;
-    _events = [];
     _showNewEventPage = false;
     _showEditEventPage = false;
     _editingSchedule = null;
@@ -184,6 +179,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     _settingsPopoverController = PopoverController();
     _addPopoverController = PopoverController();
     _selectedNote = null;
+    // 初始化日程模型
+    _scheduleModel = ScheduleModel();
 
     // 初始化新的状态变量
     _isLoadingContent = false;
@@ -964,12 +961,12 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16), // 确保内容与侧边栏边缘有距离
-            child: CalendarContent(
-              selectedDate: _selectedDay ?? _focusedDay,
-              viewId: _currentViewId,
-              onScheduleTap: _onScheduleTap,
-              onNoteTap: _onNoteTap,
-              selectedNoteId: _selectedNote?.id,
+              child: CalendarContent(
+                selectedDate: _selectedDay ?? _focusedDay,
+                viewId: _currentViewId,
+                onScheduleTap: _onScheduleTap,
+                onNoteTap: _onNoteTap,
+                selectedNoteId: _selectedNote?.id,
             ),
           ),
         ),
@@ -1248,26 +1245,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     );
   }
 
-  // 调试方法：打印当前状态
-  void _debugPrintState() {
-    print('当前订阅状态: $_isSubscribeSystemCalendar');
-  }
-
-  Future<Map<String, dynamic>> _getContentForSelectedDate() async {
-    final selectedDate = _selectedDay ?? _focusedDay;
-
-    // 获取笔记数据
-    final notes = await _getNotesForDate(selectedDate);
-
-    // 获取日程数据
-    final schedules = await _getSchedulesForDate(selectedDate);
-
-    return {
-      'notes': notes,
-      'schedules': schedules,
-    };
-  }
-
   Future<List<ViewPB>> _getNotesForDate(DateTime date) async {
     try {
       final allViewsResult = await ViewBackendService.getAllViews();
@@ -1300,29 +1277,25 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Future<List<ScheduleItem>> _getSchedulesForDate(DateTime date) async {
-    ScheduleModel? scheduleModel;
+
     try {
-      scheduleModel = ScheduleModel();
       if (_currentViewId != null) {
-        scheduleModel.setViewId(_currentViewId!);
+        _scheduleModel.setViewId(_currentViewId!);
       }
 
-      await scheduleModel.refresh();
+      await _scheduleModel.refresh();
 
       // 过滤出当天的日程
       final selectedDateStart = DateTime(date.year, date.month, date.day);
       final selectedDateEnd = selectedDateStart.add(Duration(days: 1));
 
-      return scheduleModel.schedules.where((schedule) {
+      return _scheduleModel.schedules.where((schedule) {
         final scheduleDate = schedule.startTime;
         // 修正过滤：包含等于当天0点，排除下一天0点
         return !scheduleDate.isBefore(selectedDateStart) && scheduleDate.isBefore(selectedDateEnd);
       }).toList();
     } catch (e) {
       return [];
-    } finally {
-      // 确保释放资源
-      scheduleModel?.dispose();
     }
   }
 
@@ -1442,6 +1415,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         Expanded(
           child: EditEventPage(
             schedule: schedule,
+            scheduleModel: _scheduleModel,
             onEventUpdated: _onEventUpdated,
             onEventDeleted: _onEventDeleted,
             onCancel: () {
@@ -1599,6 +1573,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           // 编辑日程内容
           Expanded(
             child: EditEventPage(
+              scheduleModel: _scheduleModel,
               schedule: _editingSchedule!,
               onEventUpdated: _onEventUpdated,
               onEventDeleted: _onEventDeleted,
@@ -1750,6 +1725,14 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+    // 确保释放资源
+    _scheduleModel.dispose();
+
   }
 }
 
