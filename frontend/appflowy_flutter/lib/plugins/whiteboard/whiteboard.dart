@@ -21,10 +21,17 @@ import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
   Plugin build(dynamic data) {
+    print('🏗️ [WhiteboardPluginBuilder] build() called');
+    print('🏗️ [WhiteboardPluginBuilder] data type: ${data.runtimeType}');
+    
     if (data is ViewPB) {
+      print('🏗️ [WhiteboardPluginBuilder] Creating WhiteboardPlugin for view: ${data.id}');
+      print('🏗️ [WhiteboardPluginBuilder] View name: ${data.name}');
+      print('🏗️ [WhiteboardPluginBuilder] View layout: ${data.layout}');
       return WhiteboardPlugin(pluginType: pluginType, view: data);
     }
 
+    print('❌ [WhiteboardPluginBuilder] Invalid data type, throwing exception');
     throw FlowyPluginException.invalidData;
   }
 
@@ -46,6 +53,7 @@ class WhiteboardPlugin extends Plugin {
     required ViewPB view,
     required PluginType pluginType,
   }) : notifier = ViewPluginNotifier(view: view) {
+    print('🎯 [WhiteboardPlugin] Constructor called for view: ${view.id}');
     _pluginType = pluginType;
   }
 
@@ -68,8 +76,10 @@ class WhiteboardPlugin extends Plugin {
 
   @override
   void init() {
+    print('🔧 [WhiteboardPlugin] init() called for view: ${notifier.view.id}');
     _pageAccessLevelBloc = PageAccessLevelBloc(view: notifier.view)
       ..add(const PageAccessLevelEvent.initial());
+    print('✅ [WhiteboardPlugin] init() completed');
   }
 
   @override
@@ -94,20 +104,34 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    return MultiBlocProvider(
+    print('🎨 [WhiteboardPluginWidgetBuilder] buildWidget() called');
+    print('🎨 [WhiteboardPluginWidgetBuilder] view: ${notifier.view.id}');
+    print('🎨 [WhiteboardPluginWidgetBuilder] view name: ${notifier.view.name}');
+    print('🎨 [WhiteboardPluginWidgetBuilder] PluginContext: $context');
+    print('🎨 [WhiteboardPluginWidgetBuilder] shrinkWrap: $shrinkWrap');
+    print('🎨 [WhiteboardPluginWidgetBuilder] data: $data');
+    
+    print('🎨 [WhiteboardPluginWidgetBuilder] Creating MultiBlocProvider...');
+    final widget = MultiBlocProvider(
       providers: [
         BlocProvider(
-          create: (context) => WhiteboardBloc(),
+          create: (providerContext) {
+            print('🎨 [WhiteboardPluginWidgetBuilder] Creating WhiteboardBloc');
+            return WhiteboardBloc();
+          },
         ),
         BlocProvider<PageAccessLevelBloc>.value(
           value: pageAccessLevelBloc,
         ),
       ],
       child: WhiteboardPage(
+        key: ValueKey('whiteboard_page_${notifier.view.id}'),
         view: notifier.view,
         onViewChanged: (view) => notifier.view = view,
       ),
     );
+    print('🎨 [WhiteboardPluginWidgetBuilder] MultiBlocProvider created, returning widget');
+    return widget;
   }
 
   @override
@@ -131,17 +155,22 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
 }
 
 class WhiteboardPage extends StatefulWidget {
-  const WhiteboardPage({
+  WhiteboardPage({
     super.key,
     required this.view,
     required this.onViewChanged,
-  });
+  }) {
+    print('🏗️ [WhiteboardPage] Constructor called for view: ${view.id} (${view.name})');
+  }
 
   final ViewPB view;
   final Function(ViewPB) onViewChanged;
 
   @override
-  State<WhiteboardPage> createState() => _WhiteboardPageState();
+  State<WhiteboardPage> createState() {
+    print('🏭 [WhiteboardPage] createState() called for view: ${view.id} (${view.name})');
+    return _WhiteboardPageState();
+  }
 }
 
 // 全局WebView实例计数器，确保每个WebView的Key绝对唯一
@@ -380,7 +409,10 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    print('🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData');
+    
     if (_isLoadingData) {
+      print('⏳ [WhiteboardPage] Showing loading indicator');
       return Scaffold(
         body: const Center(
           child: Column(
@@ -395,6 +427,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       );
     }
     
+    print('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
           appBar: AppBar(
             elevation: 0,

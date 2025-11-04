@@ -211,18 +211,34 @@
         let isInitialized = false;
         let initialData = null;
         
-        // Flutter 通信桥接
+        // Flutter 通信桥接 (支持 flutter_inappwebview)
         const FlutterBridge = {
-            postMessage(type, payload) {
+            async postMessage(type, payload) {
                 const message = JSON.stringify({ type, payload, timestamp: Date.now() });
                 
-                // 通过不同方式发送给 Flutter
-                if (window.ExcalidrawBridge && window.ExcalidrawBridge.postMessage) {
+                // 方式 1: flutter_inappwebview (优先，支持 Windows/macOS/iOS/Android)
+                if (typeof window.flutter_inappwebview !== 'undefined') {
+                    try {
+                        const result = await window.flutter_inappwebview.callHandler('ExcalidrawBridge', message);
+                        // console.log('[Bridge] Message sent via flutter_inappwebview, result:', result);
+                        return result;
+                    } catch (error) {
+                        console.error('[Bridge] Error sending via flutter_inappwebview:', error);
+                    }
+                }
+                // 方式 2: webview_flutter (旧版本兼容)
+                else if (window.ExcalidrawBridge && window.ExcalidrawBridge.postMessage) {
                     window.ExcalidrawBridge.postMessage(message);
-                } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ExcalidrawBridge) {
+                    console.log('[Bridge] Message sent via webview_flutter (legacy)');
+                }
+                // 方式 3: iOS WKWebView
+                else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ExcalidrawBridge) {
                     window.webkit.messageHandlers.ExcalidrawBridge.postMessage(message);
-                } else {
-                    console.log('[Bridge]', type, payload);
+                    console.log('[Bridge] Message sent via WKWebView');
+                }
+                // 降级：仅控制台输出
+                else {
+                    console.log('[Bridge] No Flutter bridge available, logging to console:', type, payload);
                 }
             },
             
@@ -544,6 +560,29 @@
         window.addEventListener('unhandledrejection', function(event) {
             console.error('Unhandled rejection:', event.reason);
             FlutterBridge.sendError(event.reason);
+        });
+        
+        // 检测 Flutter 桥接类型
+        function detectFlutterBridge() {
+            if (typeof window.flutter_inappwebview !== 'undefined') {
+                console.log('🌐 [Flutter Bridge] Using flutter_inappwebview (Windows/macOS/iOS/Android support)');
+                return 'flutter_inappwebview';
+            } else if (window.ExcalidrawBridge && window.ExcalidrawBridge.postMessage) {
+                console.log('🌐 [Flutter Bridge] Using webview_flutter (legacy)');
+                return 'webview_flutter';
+            } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.ExcalidrawBridge) {
+                console.log('🌐 [Flutter Bridge] Using WKWebView (iOS)');
+                return 'wkwebview';
+            } else {
+                console.warn('⚠️ [Flutter Bridge] No Flutter bridge detected!');
+                return null;
+            }
+        }
+        
+        // 页面加载完成后检测桥接
+        window.addEventListener('DOMContentLoaded', () => {
+            const bridgeType = detectFlutterBridge();
+            console.log('🚀 [Flutter Bridge] HTML loaded, bridge type:', bridgeType);
         });
         
         // 通知 Flutter 页面已加载

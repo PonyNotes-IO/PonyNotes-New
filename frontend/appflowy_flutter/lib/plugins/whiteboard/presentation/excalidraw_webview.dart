@@ -1,11 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy/plugins/whiteboard/application/local_asset_server.dart';
 
 /// Excalidraw WebView 组件
+/// 使用 flutter_inappwebview 实现跨平台支持（包括 Windows）
 /// 集成 Excalidraw 编辑器和 excalidraw-libraries 图形库
 class ExcalidrawWebView extends StatefulWidget {
   const ExcalidrawWebView({
@@ -28,71 +27,34 @@ class ExcalidrawWebView extends StatefulWidget {
 }
 
 class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
-  late final WebViewController _controller;
+  InAppWebViewController? _controller;
   bool _isLoading = true;
   String? _loadingError;
   final _assetServer = LocalAssetServer();
+  String? _whiteboardUrl;
+  late InAppWebViewSettings _settings;
 
   @override
   void initState() {
     super.initState();
-    _initializeWebView();
+    _initializeSettings();
+    _loadExcalidrawHTML();
   }
 
-  void _initializeWebView() {
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted);
-    
-    // 只在非 macOS 平台设置背景色，避免 macOS 上的 opaque 错误
-    if (!Platform.isMacOS) {
-      _controller.setBackgroundColor(const Color(0x00000000));
-    }
-    
-    _controller
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onProgress: (int progress) {
-            // 更新加载进度
-            if (mounted) {
-              setState(() {
-                // 可以在这里更新进度条
-              });
-            }
-          },
-          onPageStarted: (String url) {
-            if (mounted) {
-              setState(() {
-                _isLoading = true;
-                _loadingError = null;
-              });
-            }
-          },
-          onPageFinished: (String url) {
-            if (mounted) {
-              setState(() => _isLoading = false);
-              _initializeExcalidraw();
-            }
-          },
-          onWebResourceError: (WebResourceError error) {
-            if (mounted) {
-              setState(() {
-                _isLoading = false;
-                _loadingError = error.description;
-              });
-            }
-            widget.onError?.call('WebView加载错误: ${error.description}');
-          },
-        ),
-      )
-      ..addJavaScriptChannel(
-        'ExcalidrawBridge',
-        onMessageReceived: (JavaScriptMessage message) {
-          _handleWebViewMessage(message.message);
-        },
-      );
-
-    // 加载本地HTML文件
-    _loadExcalidrawHTML();
+  void _initializeSettings() {
+    _settings = InAppWebViewSettings(
+      javaScriptEnabled: true,
+      transparentBackground: true,
+      useShouldOverrideUrlLoading: true,
+      mediaPlaybackRequiresUserGesture: false,
+      cacheEnabled: false,
+      // Android 特定设置
+      useHybridComposition: true,
+      thirdPartyCookiesEnabled: false,
+      // iOS 特定设置
+      allowsInlineMediaPlayback: true,
+      allowsBackForwardNavigationGestures: false,
+    );
   }
 
   Future<void> _loadExcalidrawHTML() async {
@@ -104,16 +66,29 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       
       // 使用带 viewId 的URL（用于调试和日志追踪）
       // 注意：localStorage 已在 HTML 中被完全禁用，数据隔离由 Flutter 管理
-      final whiteboardUrl = '$baseUrl/whiteboard/${widget.viewId}/flutter_bridge.html';
+      final url = '$baseUrl/whiteboard/${widget.viewId}/flutter_bridge.html';
       
       print('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
-      print('📄 [ExcalidrawWebView] 加载URL: $whiteboardUrl');
+      print('📄 [ExcalidrawWebView] 加载URL: $url');
       print('🆔 [ExcalidrawWebView] ViewID: ${widget.viewId}');
       print('🔒 [ExcalidrawWebView] localStorage: DISABLED (数据由 Flutter 管理)');
       print('💾 [ExcalidrawWebView] 数据源: ${widget.initialData != null ? "从文件加载 (${widget.initialData!.keys.length} keys)" : "新建空白板"}');
       
-      // 通过HTTP加载flutter_bridge.html，它会通过iframe加载完整的Excalidraw (index.html)
-      await _controller.loadRequest(Uri.parse(whiteboardUrl));
+      // ✅ 关键：设置 URL 并触发重新构建
+      if (mounted) {
+        setState(() {
+          _whiteboardUrl = url;
+        });
+      }
+      
+      // 如果 controller 已创建，直接加载 URL
+      if (_controller != null && mounted) {
+        await _controller!.loadUrl(
+          urlRequest: URLRequest(url: WebUri(_whiteboardUrl!)),
+        );
+      }
+      // 否则在 build 方法中通过 initialUrlRequest 加载
+      
     } catch (e) {
       print('❌ 加载Excalidraw失败: $e');
       if (mounted) {
@@ -124,6 +99,24 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       }
       widget.onError?.call('加载Excalidraw失败: $e');
     }
+  }
+
+  void _setupJavaScriptHandlers(InAppWebViewController controller) {
+    // 注册 JavaScript Handler（替代 addJavaScriptChannel）
+    controller.addJavaScriptHandler(
+      handlerName: 'ExcalidrawBridge',
+      callback: (args) {
+        if (args.isNotEmpty) {
+          final message = args[0];
+          if (message is String) {
+            _handleWebViewMessage(message);
+          } else if (message is Map) {
+            // 如果 JS 端直接传递对象，转换为 JSON 字符串
+            _handleWebViewMessage(jsonEncode(message));
+          }
+        }
+      },
+    );
   }
 
   Future<void> _initializeExcalidraw() async {
@@ -146,7 +139,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       final dataJson = jsonEncode(dataToLoad);
       print('📝 [ExcalidrawWebView] Data JSON length: ${dataJson.length} chars');
       
-      await _controller.runJavaScript('''
+      await _controller?.evaluateJavascript(source: '''
         console.log('[ExcalidrawWebView] Loading data into Excalidraw with viewId: ${widget.viewId}');
         if (window.loadExcalidrawData) {
           window.loadExcalidrawData($dataJson);
@@ -160,7 +153,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 设置主题
       final theme = Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
       print('🎨 [ExcalidrawWebView] Setting theme: $theme');
-      await _controller.runJavaScript('''
+      await _controller?.evaluateJavascript(source: '''
         console.log('[ExcalidrawWebView] Setting theme to $theme');
         if (window.setTheme) {
           window.setTheme('$theme');
@@ -184,9 +177,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     // 服务器应该在应用关闭时统一清理，而不是在每个Widget dispose时
     // _assetServer.stop(); // ❌ 这会导致切换白板时服务器被停止
     
-    // 清理WebViewController资源
-    // 注意：webview_flutter 4.x版本的WebViewController没有显式的dispose方法
-    // 但我们仍然需要重写dispose以确保State正确清理
+    // flutter_inappwebview 的 controller 会自动清理
     super.dispose();
   }
 
@@ -257,7 +248,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 导出绘图
   Future<void> exportDrawing(String format) async {
     try {
-      await _controller.runJavaScript('''
+      await _controller?.evaluateJavascript(source: '''
         if (window.exportExcalidraw) {
           window.exportExcalidraw('$format');
         }
@@ -270,7 +261,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 获取当前白板数据
   Future<void> getData() async {
     try {
-      await _controller.runJavaScript('''
+      await _controller?.evaluateJavascript(source: '''
         if (window.getExcalidrawData) {
           window.getExcalidrawData();
         }
@@ -283,7 +274,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 加载白板数据
   Future<void> loadData(Map<String, dynamic> data) async {
     try {
-      await _controller.runJavaScript('''
+      await _controller?.evaluateJavascript(source: '''
         if (window.loadExcalidrawData) {
           window.loadExcalidrawData(${jsonEncode(data)});
         }
@@ -296,7 +287,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 清空画布
   Future<void> clearCanvas() async {
     try {
-      await _controller.runJavaScript('''
+      await _controller?.evaluateJavascript(source: '''
         if (window.clearCanvas) {
           window.clearCanvas();
         }
@@ -309,7 +300,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 撤销操作
   Future<void> undo() async {
     try {
-      await _controller.runJavaScript('''
+      await _controller?.evaluateJavascript(source: '''
         if (window.undo) {
           window.undo();
         }
@@ -322,7 +313,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 重做操作
   Future<void> redo() async {
     try {
-      await _controller.runJavaScript('''
+      await _controller?.evaluateJavascript(source: '''
         if (window.redo) {
           window.redo();
         }
@@ -335,7 +326,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 更新主题
   Future<void> updateTheme(String theme) async {
     try {
-      await _controller.runJavaScript('''
+      await _controller?.evaluateJavascript(source: '''
         if (window.setTheme) {
           window.setTheme('$theme');
         }
@@ -386,9 +377,90 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       );
     }
 
+    // 如果 URL 还未准备好，显示加载指示器
+    if (_whiteboardUrl == null) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
     return Stack(
       children: [
-        WebViewWidget(controller: _controller),
+        InAppWebView(
+          // ❌ 不要使用 widget.key！会导致热重启时 view id 冲突
+          // ✅ InAppWebView 不需要 key，因为父 widget 已经有唯一 key 了
+          initialUrlRequest: URLRequest(
+            url: WebUri(_whiteboardUrl!),
+          ),
+          initialSettings: _settings,
+          
+          onWebViewCreated: (controller) {
+            _controller = controller;
+            _setupJavaScriptHandlers(controller);
+            print('🌐 [ExcalidrawWebView] WebView created');
+          },
+          
+          shouldOverrideUrlLoading: (controller, navigationAction) async {
+            // 允许加载本地服务器的所有资源
+            final url = navigationAction.request.url.toString();
+            if (url.startsWith('http://localhost:') || url.startsWith('http://127.0.0.1:')) {
+              print('✅ [ExcalidrawWebView] Allowing navigation to: $url');
+              return NavigationActionPolicy.ALLOW;
+            }
+            print('⚠️ [ExcalidrawWebView] Blocking navigation to: $url');
+            return NavigationActionPolicy.CANCEL;
+          },
+          
+          onLoadStart: (controller, url) {
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+                _loadingError = null;
+              });
+            }
+            print('🔄 [ExcalidrawWebView] Loading started: $url');
+          },
+          
+          onLoadStop: (controller, url) async {
+            if (mounted) {
+              setState(() => _isLoading = false);
+              await _initializeExcalidraw();
+            }
+            print('✅ [ExcalidrawWebView] Loading finished: $url');
+          },
+          
+          onProgressChanged: (controller, progress) {
+            // 可以在这里更新进度条
+            // print('📊 [ExcalidrawWebView] Loading progress: $progress%');
+          },
+          
+          onLoadError: (controller, url, code, message) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _loadingError = message;
+              });
+            }
+            print('❌ [ExcalidrawWebView] Load error: $message (code: $code)');
+            widget.onError?.call('WebView加载错误: $message');
+          },
+          
+          onLoadHttpError: (controller, url, statusCode, description) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _loadingError = 'HTTP错误 $statusCode: $description';
+              });
+            }
+            print('❌ [ExcalidrawWebView] HTTP error: $statusCode - $description');
+          },
+          
+          onConsoleMessage: (controller, consoleMessage) {
+            // 打印 WebView 控制台消息（用于调试）
+            print('[WebView Console] ${consoleMessage.message}');
+          },
+        ),
+        
         if (_isLoading)
           Container(
             color: Colors.white.withOpacity(0.9),
