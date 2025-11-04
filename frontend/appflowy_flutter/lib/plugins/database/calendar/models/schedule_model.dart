@@ -14,6 +14,7 @@ import 'package:appflowy/plugins/database/application/cell/cell_controller.dart'
 import 'package:appflowy/plugins/database/application/cell/cell_data_loader.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
+import 'package:appflowy/user/application/reminder/reminder_extension.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -479,14 +480,19 @@ class ScheduleModel extends ChangeNotifier {
     print('  - 开始时间: $startTime');
     print('  - 结束时间: $endTime');
     print('  - 视图ID: $viewId');
+    print('  - 传入的 isAllDay 参数: $isAllDay');
 
-    // 判断是否为全天事件：开始和结束时间在同一天，且都是 00:00
-    final isAllDayEvent = ScheduleItem._isAllDayEvent(
-      startTime: startTime,
-      endTime: endTime,
-    );
+    // 判断是否为全天事件：优先使用传入的 isAllDay 参数
+    // 如果 isAllDay 为 true，直接使用；否则根据时间判断
+    final isAllDayEvent = isAllDay 
+        ? true 
+        : ScheduleItem._isAllDayEvent(
+            startTime: startTime,
+            endTime: endTime,
+          );
 
-    print('  - 全天事件: $isAllDayEvent');
+    print('  - 最终判断的全天事件: $isAllDayEvent');
+    print('  - 提醒选项: $reminderOption');
 
     try {
       // 1) 确保数据库控制器已就绪（带重试）
@@ -584,16 +590,23 @@ class ScheduleModel extends ChangeNotifier {
         // 将 dateService 定义在更外层，以便后续提醒处理可以使用
         DateCellBackendService? dateService;
         if (dateField != null) {
+          print('📅 [ScheduleModel] createSchedule 找到日期字段: ${dateField.name} (${dateField.field.id})');
           dateService = DateCellBackendService(
             viewId: viewId,
             fieldId: dateField.field.id,
             rowId: rowMeta.id,
           );
+        } else {
+          print('⚠️ [ScheduleModel] createSchedule 未找到日期字段，无法设置提醒');
+        }
 
+        // 更新日期字段（如果 dateService 已初始化）
+        if (dateService != null) {
           try {
             // 使用 DateCellBackendService 设置日期
             // 全天事件：isRange=false, includeTime=false，只保存日期，不传 endDate
             // 非全天事件：isRange=true, includeTime=true，保存日期和时间范围
+            print('📅 [ScheduleModel] createSchedule 更新日期字段');
             final updateResult = await dateService.update(
               date: isAllDayEvent ? startTime.withoutTime : startTime,
               endDate: isAllDayEvent ? null : endTime, // 全天不传 endDate
@@ -602,11 +615,11 @@ class ScheduleModel extends ChangeNotifier {
             );
 
             updateResult.fold(
-              (_) => {},
-              (error) => {},
+              (_) => print('✅ [ScheduleModel] createSchedule 日期字段更新成功'),
+              (error) => print('⚠️ [ScheduleModel] createSchedule 日期字段更新失败: $error'),
             );
           } catch (e) {
-            print('⚠️ 更新结束时间到日期单元格失败: $e');
+            print('⚠️ [ScheduleModel] createSchedule 更新日期单元格失败: $e');
           }
         }
 
@@ -669,30 +682,61 @@ class ScheduleModel extends ChangeNotifier {
         }
 
         // 如果设置了提醒选项，先写入日期单元格的 reminderId，再创建系统提醒
+        print('🔔 [ScheduleModel] createSchedule 检查提醒设置:');
+        print('  - reminderOption: $reminderOption');
+        print('  - dateService: ${dateService != null ? "已初始化" : "未初始化"}');
+        print('  - isAllDayEvent: $isAllDayEvent');
+        
         if (reminderOption != ReminderOption.none && dateService != null) {
           final reminderId = nanoid();
+          print('🔔 [ScheduleModel] createSchedule 开始创建提醒: $reminderId');
           try {
             // 先将 reminderId 写入日期单元格
-            await dateService.update(reminderId: reminderId);
+            print('  📝 写入 reminderId 到日期单元格: $reminderId');
+            final reminderUpdateResult = await dateService.update(reminderId: reminderId);
+            reminderUpdateResult.fold(
+              (_) => print('  ✅ reminderId 写入成功'),
+              (error) => print('  ❌ reminderId 写入失败: $error'),
+            );
 
-            // 创建系统提醒
+            // 计算提醒时间
+            final baseTime = isAllDayEvent ? startTime.withoutTime : startTime;
+            final scheduledAt = reminderOption.getNotificationDateTime(baseTime);
+            print('  ⏰ 提醒时间计算:');
+            print('    - 基础时间: $baseTime');
+            print('    - 提醒选项: $reminderOption');
+            print('    - 计算后的提醒时间: $scheduledAt');
+
+            // 创建系统提醒（与 DateCellEditorBloc 和 updateSchedule 逻辑一致）
+            print('  📢 创建 ReminderBloc 提醒事件');
             final reminderBloc = getIt<ReminderBloc>();
+            final includeTime = !isAllDayEvent;
+            final dateForMeta = isAllDayEvent ? startTime.withoutTime : startTime;
+            print('  📋 提醒元数据:');
+            print('    - includeTime: $includeTime');
+            print('    - rowId: ${rowMeta.id}');
+            print('    - date: $dateForMeta');
+            print('    - scheduledAt: $scheduledAt');
+            
             reminderBloc.add(
               ReminderEvent.addById(
                 reminderId: reminderId,
                 objectId: viewId,
                 meta: {
-                  'rowId': rowMeta.id,
-                  'title': title,
+                  ReminderMetaKeys.includeTime: includeTime.toString(),
+                  ReminderMetaKeys.rowId: rowMeta.id,
+                  ReminderMetaKeys.date: dateForMeta.millisecondsSinceEpoch.toString(),
                 },
                 scheduledAt: Int64(
-                  reminderOption
-                          .getNotificationDateTime(startTime)
-                          .millisecondsSinceEpoch ~/
-                      1000,
+                  scheduledAt.millisecondsSinceEpoch ~/ 1000,
                 ),
               ),
             );
+
+            // 等待 ReminderBloc 状态落地，避免刷新读取旧值
+            print('  ⏳ 等待 ReminderBloc 状态落地...');
+            await _waitReminderUpdated(reminderId, scheduledAt);
+            print('  ✅ ReminderBloc 状态已落地');
 
             // 更新本地 ScheduleItem 的 reminderId
             final updatedSchedule =
@@ -700,19 +744,25 @@ class ScheduleModel extends ChangeNotifier {
             final index = _schedules.indexWhere((s) => s.id == rowMeta.id);
             if (index != -1) {
               _schedules[index] = updatedSchedule;
+              if (!_isDisposed) {
+                notifyListeners(); // 立即通知UI更新
+              }
+              print('  ✅ 本地 ScheduleItem 已更新 reminderId: $reminderId');
+            } else {
+              print('  ⚠️ 本地列表中未找到日程，无法更新 reminderId');
             }
-          } catch (e) {
-            print('⚠️ 设置提醒失败: $e');
+            print('✅ [ScheduleModel] createSchedule 创建提醒成功: $reminderId');
+          } catch (e, stackTrace) {
+            print('⚠️ [ScheduleModel] createSchedule 设置提醒失败: $e');
+            print('  📍 堆栈: $stackTrace');
+          }
+        } else {
+          if (reminderOption == ReminderOption.none) {
+            print('ℹ️ [ScheduleModel] createSchedule 提醒选项为 none，跳过提醒创建');
+          } else if (dateService == null) {
+            print('⚠️ [ScheduleModel] createSchedule dateService 为 null，无法创建提醒');
           }
         }
-
-        // 创建成功后，刷新数据以获取最新的事件列表
-        try {
-          await refresh();
-        } catch (refreshError) {
-          print('⚠️ 刷新日程列表失败: $refreshError');
-        }
-
         return rowMeta.id;
       }
     } catch (e, stackTrace) {
@@ -1121,19 +1171,20 @@ class ScheduleModel extends ChangeNotifier {
           print('⚠️ [ScheduleModel] updateSchedule 部分可选字段更新失败，但关键字段更新成功');
         }
 
-        // 如果本地列表中没有该日程，进行一次乐观插入，随后异步刷新校准
+        // 如果本地列表中没有该日程，进行一次乐观插入
         if (index == -1) {
           _schedules.add(schedule);
         }
-
-        // 成功后刷新未完成/已完成列表（派生自 _schedules），并与数据库对齐
-        // 立即通知一次，保证界面两段列表即时更新
+        
+        // 通知UI更新（数据库回调会自动触发 refresh，这里只做本地状态同步）
         if (!_isDisposed) {
           notifyListeners();
         }
-        await refresh();
-        print('✅ [ScheduleModel] updateSchedule 更新成功，已触发未完成/已完成列表刷新');
-        return true; // 不再因为本地列表未命中而跳过提醒更新
+        
+        print('✅ [ScheduleModel] updateSchedule 更新成功');
+        // 注意：不在此处调用 refresh()，数据库回调会自动触发刷新
+        // 这样可以避免重复刷新，同时确保数据一致性
+        return true;
       } else {
         print('❌ [ScheduleModel] updateSchedule 关键字段（日期和标题）都更新失败');
         return false;
@@ -1176,7 +1227,7 @@ class ScheduleModel extends ChangeNotifier {
     } catch (e) {
       // 即使本地操作失败，如果数据库删除成功，我们仍然应该刷新数据
       if (e.toString().contains('Bad state: No element')) {
-        refresh(); // 刷新数据以保持同步
+        await refresh(); // 刷新数据以保持同步
         return true; // 数据库删除可能已经成功了
       }
       throw Exception('删除日程失败');
@@ -1305,6 +1356,7 @@ class ScheduleModel extends ChangeNotifier {
       // 如果日期单元格有 reminderId，推断 ReminderOption
       if (reminderId != null && reminderId.isNotEmpty) {
         print('    🔔 [enrichFromCells] 找到提醒ID: $reminderId');
+        print('    🔔 [enrichFromCells] 当前日程的 reminderOption: ${enriched.reminderOption.name}');
         // 只从 ReminderBloc 获取（权威源）；避免读取本地旧缓存造成回退为老选项
         try {
           final reminderBloc = getIt<ReminderBloc>();
@@ -1326,13 +1378,27 @@ class ScheduleModel extends ChangeNotifier {
               reminderOption: optionFromBloc,
             );
           } else {
-            print(
-                '    ⚠️ [enrichFromCells] ReminderBloc 未命中，仅设置 reminderId，等待下一次刷新');
-            enriched = enriched.copyWith(reminderId: reminderId);
+            // ReminderBloc 中未找到，但保留已有的 reminderOption（如果存在）
+            // 这样可以避免在刷新时丢失刚刚创建的提醒选项
+            if (enriched.reminderOption != ReminderOption.none) {
+              print(
+                  '    ⚠️ [enrichFromCells] ReminderBloc 未命中，但保留已有的 reminderOption: ${enriched.reminderOption.name}');
+              enriched = enriched.copyWith(reminderId: reminderId);
+            } else {
+              print(
+                  '    ⚠️ [enrichFromCells] ReminderBloc 未命中，且没有已有的 reminderOption，仅设置 reminderId');
+              enriched = enriched.copyWith(reminderId: reminderId);
+            }
           }
         } catch (e) {
-          print('    ❌ [enrichFromCells] 处理提醒时出错，仅设置 reminderId: $e');
-          enriched = enriched.copyWith(reminderId: reminderId);
+          print('    ❌ [enrichFromCells] 处理提醒时出错: $e');
+          // 出错时也保留已有的 reminderOption
+          if (enriched.reminderOption != ReminderOption.none) {
+            print('    ⚠️ [enrichFromCells] 保留已有的 reminderOption: ${enriched.reminderOption.name}');
+            enriched = enriched.copyWith(reminderId: reminderId);
+          } else {
+            enriched = enriched.copyWith(reminderId: reminderId);
+          }
         }
       }
     } else {

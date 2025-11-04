@@ -1,16 +1,15 @@
 
 // 统一的日记和日程展示组件
-import 'package:appflowy/plugins/database/calendar/widgets/schedule_sidebar_content.dart';
+import 'package:appflowy/plugins/database/calendar/presentation/widgets/schedule_sidebar_content.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-
-import '../../../../workspace/application/view/view_listener.dart';
-import '../../../../workspace/application/view/view_service.dart';
-import '../application/calendar_content_cubit.dart';
-import '../models/schedule_model.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../../workspace/application/view/view_listener.dart';
+import '../../../../../workspace/application/view/view_service.dart';
+import '../../application/calendar_content_cubit.dart';
+import '../../models/schedule_model.dart';
 
 class CalendarContent extends StatefulWidget {
   final DateTime selectedDate;

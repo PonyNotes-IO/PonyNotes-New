@@ -8,6 +8,8 @@ import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import '../models/schedule_model.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/repeat_selector.dart';
+import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
+import 'widgets/reminder_selection_dialog.dart';
 
 class NewEventPage extends StatefulWidget {
   final DateTime selectedDate;
@@ -40,32 +42,10 @@ class _NewEventPageState extends State<NewEventPage> {
   String? _repeatCustomSummary; // 自定义选项摘要，如“每1周的周二”
   String _calendar = '我的日历';
   String _description = '';
-  String _reminderOption = '无';
+  ReminderOption _reminderOption = ReminderOption.none;
   
   // 使用ScheduleModel来管理日程
   late ScheduleModel _scheduleModel;
-
-  // 字符串提醒选项转换为ReminderOption枚举
-  ReminderOption _convertStringToReminderOption(String reminderString) {
-    switch (reminderString) {
-      case '无':
-        return ReminderOption.none;
-      case '准时':
-        return ReminderOption.atTimeOfEvent;
-      case '提前5分钟':
-        return ReminderOption.fiveMinsBefore;
-      case '提前30分钟':
-        return ReminderOption.thirtyMinsBefore;
-      case '提前1个小时':
-        return ReminderOption.oneHourBefore;
-      case '提前1天':
-        return ReminderOption.oneDayBefore;
-      case '自定义':
-        return ReminderOption.custom;
-      default:
-        return ReminderOption.none;
-    }
-  }
 
   @override
   void initState() {
@@ -235,7 +215,7 @@ class _NewEventPageState extends State<NewEventPage> {
         isAllDay: _isAllDay,
         isImportant: _isImportant,
         category: _calendar,
-        reminderOption: _convertStringToReminderOption(_reminderOption),
+        reminderOption: _reminderOption,
         dueDate: endDateTime,
       );
       if (!mounted) return;
@@ -695,7 +675,7 @@ class _NewEventPageState extends State<NewEventPage> {
                       size: const Size.square(24),
                     ),
                     title: Text(
-                      _reminderOption,
+                      _getReminderOptionLabel(_reminderOption, !_isAllDay),
                       style: TextStyle(
                         fontSize: 16,
                         color: theme.textTheme.bodyLarge?.color,
@@ -993,6 +973,21 @@ class _NewEventPageState extends State<NewEventPage> {
     );
   }
 
+  // 获取提醒选项的显示标签（与 reminder_selector.dart 逻辑一致）
+  String _getReminderOptionLabel(ReminderOption option, bool hasTime) {
+    String label = option.label;
+    // 对于 withoutTime 的选项，显示时间信息（与 reminder_selector.dart 逻辑一致）
+    if (option.withoutTime && !option.timeExempt) {
+      const time = "09:00";
+      // 使用24小时制（与弹框中的 timeFormat 保持一致）
+      final t = TimeFormatPB.TwentyFourHour == TimeFormatPB.TwelveHour 
+          ? "$time AM" 
+          : time;
+      label = "$label ($t)";
+    }
+    return label;
+  }
+
   void _showReminderDialog() {
     showDialog(
       context: context,
@@ -1000,6 +995,8 @@ class _NewEventPageState extends State<NewEventPage> {
       builder: (BuildContext context) {
         return ReminderSelectionDialog(
           currentOption: _reminderOption,
+          hasTime: !_isAllDay, // 如果不是全天，则包含时间
+          timeFormat: TimeFormatPB.TwentyFourHour, // 默认使用24小时制
           onSave: (selectedOption) {
             setState(() {
               _reminderOption = selectedOption;
@@ -1503,155 +1500,3 @@ class _CupertinoPickerScrollBehavior extends ScrollBehavior {
     return child;
   }
 }
-
-// 提醒选择弹窗
-class ReminderSelectionDialog extends StatefulWidget {
-  final String currentOption;
-  final Function(String) onSave;
-
-  const ReminderSelectionDialog({
-    Key? key,
-    required this.currentOption,
-    required this.onSave,
-  }) : super(key: key);
-
-  @override
-  State<ReminderSelectionDialog> createState() => _ReminderSelectionDialogState();
-}
-
-class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
-  late String _tempSelectedOption;
-
-  @override
-  void initState() {
-    super.initState();
-    _tempSelectedOption = widget.currentOption; // 使用当前选项作为初始值
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final options = [
-      '无',
-      '准时',
-      '提前5分钟',
-      '提前30分钟',
-      '提前1个小时',
-      '提前1天',
-      '自定义'
-    ];
-
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16), // 更大的圆角
-      ),
-      child: Container(
-        width: 510, // 增加宽度
-        padding: const EdgeInsets.all(24), // 增加内边距
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // 标题栏
-            Row(
-              children: [
-                InkWell(
-                  onTap: () => Navigator.pop(context),
-                  child: Icon(
-                    Icons.cancel,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    '提醒时间',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).textTheme.titleLarge?.color,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                // 保存按钮
-                ElevatedButton(
-                  onPressed: () {
-                    widget.onSave(_tempSelectedOption);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    '保存',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            
-            const SizedBox(height: 20),
-            
-            // 选项列表
-            ...options.map((option) {
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
-                    onTap: () {
-                      setState(() {
-                        _tempSelectedOption = option;
-                      });
-                    },
-                    child: Container(
-                      height: 48, // 增加选项高度
-                      // padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Radio<String>(
-                            value: option,
-                            groupValue: _tempSelectedOption,
-                            onChanged: (value) {
-                              setState(() {
-                                _tempSelectedOption = value!;
-                              });
-                            },
-                            activeColor: Theme.of(context).colorScheme.primary,
-                          ),
-                          Expanded(
-                            child: Text(
-                              option,
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Theme.of(context).textTheme.bodyMedium?.color,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-            
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-} 

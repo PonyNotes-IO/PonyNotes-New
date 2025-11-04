@@ -1,5 +1,5 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/plugins/database/calendar/widgets/calendar_content_widget.dart';
+import 'package:appflowy/plugins/database/calendar/presentation/widgets/calendar_content_widget.dart';
 import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
@@ -20,7 +20,7 @@ import 'package:appflowy/plugins/document/document_page.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../workspace/presentation/widgets/toggle/toggle.dart';
-import 'widgets/schedule_sidebar_content.dart';
+import 'presentation/widgets/schedule_sidebar_content.dart';
 import 'package:flowy_infra/uuid.dart';
 import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
 import 'presentation/new_event_page.dart';
@@ -1144,7 +1144,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
     } catch (e) {
       print('订阅系统日历失败: $e');
-      // 抛出异常，让上层处理
       rethrow;
     }
   }
@@ -1277,14 +1276,15 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Future<List<ScheduleItem>> _getSchedulesForDate(DateTime date) async {
-
     try {
-      if (_currentViewId != null) {
+      // 确保视图ID已设置（只在未设置时设置一次，避免重复触发刷新）
+      if (_currentViewId != null && _scheduleModel.currentViewId != _currentViewId) {
         _scheduleModel.setViewId(_currentViewId!);
+        // setViewId 内部会异步刷新，这里不等待，直接使用当前内存数据
       }
 
-      await _scheduleModel.refresh();
-
+      // 直接使用内存中的数据，避免每次调用都触发数据库刷新
+      // 数据库回调（onRowsUpdated/onRowsCreated/onRowsDeleted）会自动保持数据同步
       // 过滤出当天的日程
       final selectedDateStart = DateTime(date.year, date.month, date.day);
       final selectedDateEnd = selectedDateStart.add(Duration(days: 1));

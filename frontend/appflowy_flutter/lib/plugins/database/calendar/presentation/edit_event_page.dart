@@ -1,3 +1,4 @@
+import 'package:appflowy/util/int64_extension.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -7,8 +8,12 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/repeat_selector.dart';
+import 'widgets/reminder_selection_dialog.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:collection/collection.dart';
 import '../models/schedule_model.dart';
 import 'new_event_page.dart'; // 重用一些组件
 
@@ -88,6 +93,8 @@ class _EditEventPageState extends State<EditEventPage> {
     try {
       final success = await widget.scheduleModel.initializeCalendarView();
       if (success) {
+        // 如果日程有 reminderId 但 reminderOption 为 none，尝试从 ReminderBloc 读取
+        await _refreshReminderIfNeeded();
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -108,6 +115,67 @@ class _EditEventPageState extends State<EditEventPage> {
             duration: Duration(seconds: 3),
           ),
         );
+      }
+    }
+  }
+
+  // 如果日程有 reminderId 但 reminderOption 为 none，尝试从 ReminderBloc 读取
+  Future<void> _refreshReminderIfNeeded() async {
+    final schedule = widget.schedule;
+    if (schedule.reminderId != null && 
+        schedule.reminderId!.isNotEmpty && 
+        schedule.reminderOption == ReminderOption.none) {
+      try {
+        print('🔄 [EditEventPage] 检测到有 reminderId 但 reminderOption 为 none，尝试从 ReminderBloc 读取');
+        final reminderBloc = getIt<ReminderBloc>();
+        final reminder = reminderBloc.state.reminders.firstWhereOrNull(
+              (r) => r.id == schedule.reminderId,
+            ) ??
+            reminderBloc.state.allReminders.firstWhereOrNull(
+              (r) => r.id == schedule.reminderId,
+            );
+        
+        if (reminder != null) {
+          final scheduledAt = reminder.scheduledAt.toDateTime();
+          final optionFromBloc = ReminderOption.fromDateDifference(
+            schedule.startTime,
+            scheduledAt,
+          );
+          print('✅ [EditEventPage] 从 ReminderBloc 读取到提醒选项: ${optionFromBloc.name}');
+          if (mounted) {
+            setState(() {
+              _reminderOption = optionFromBloc;
+            });
+          }
+        } else {
+          print('⚠️ [EditEventPage] ReminderBloc 中未找到提醒，等待状态同步');
+          // 等待一段时间后重试（最多等待1秒）
+          for (int i = 0; i < 10; i++) {
+            await Future.delayed(const Duration(milliseconds: 100));
+            final retryReminder = reminderBloc.state.reminders.firstWhereOrNull(
+                  (r) => r.id == schedule.reminderId,
+                ) ??
+                reminderBloc.state.allReminders.firstWhereOrNull(
+                  (r) => r.id == schedule.reminderId,
+                );
+            if (retryReminder != null) {
+              final scheduledAt = retryReminder.scheduledAt.toDateTime();
+              final optionFromBloc = ReminderOption.fromDateDifference(
+                schedule.startTime,
+                scheduledAt,
+              );
+              print('✅ [EditEventPage] 重试后从 ReminderBloc 读取到提醒选项: ${optionFromBloc.name}');
+              if (mounted) {
+                setState(() {
+                  _reminderOption = optionFromBloc;
+                });
+              }
+              break;
+            }
+          }
+        }
+      } catch (e) {
+        print('⚠️ [EditEventPage] 从 ReminderBloc 读取提醒失败: $e');
       }
     }
   }
@@ -1049,195 +1117,3 @@ class _EditEventPageState extends State<EditEventPage> {
     }
   }
 }
-
-// 提醒选择对话框（与 reminder_selector.dart 逻辑一致）
-class ReminderSelectionDialog extends StatefulWidget {
-  final ReminderOption currentOption;
-  final bool hasTime;
-  final TimeFormatPB timeFormat;
-  final Function(ReminderOption) onSave;
-
-  const ReminderSelectionDialog({
-    Key? key,
-    required this.currentOption,
-    required this.hasTime,
-    required this.timeFormat,
-    required this.onSave,
-  }) : super(key: key);
-
-  @override
-  State<ReminderSelectionDialog> createState() => _ReminderSelectionDialogState();
-}
-
-class _ReminderSelectionDialogState extends State<ReminderSelectionDialog> {
-  late ReminderOption _tempSelectedOption;
-
-  @override
-  void initState() {
-    super.initState();
-    _tempSelectedOption = widget.currentOption;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
-    // 获取可用选项（与 reminder_selector.dart 逻辑一致）
-    final options = ReminderOption.values.toList();
-    
-    // 如果当前选项不是 custom，则移除 custom 选项
-    if (widget.currentOption != ReminderOption.custom) {
-      options.remove(ReminderOption.custom);
-    }
-    
-    // 根据 hasTime 过滤选项（与 reminder_selector.dart 逻辑一致）
-    options.removeWhere(
-      (o) => !o.timeExempt && (!widget.hasTime ? !o.withoutTime : o.requiresNoTime),
-    );
-    
-    // 构建选项列表
-    final optionWidgets = options.map((o) {
-      String label = o.label;
-      // 对于 withoutTime 的选项，显示时间信息（与 reminder_selector.dart 逻辑一致）
-      if (o.withoutTime && !o.timeExempt) {
-        const time = "09:00";
-        final t = widget.timeFormat == TimeFormatPB.TwelveHour ? "$time AM" : time;
-        label = "$label ($t)";
-      }
-      
-      return Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () {
-              setState(() {
-                _tempSelectedOption = o;
-              });
-            },
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Radio<ReminderOption>(
-                    value: o,
-                    groupValue: _tempSelectedOption,
-                    onChanged: (value) {
-                      setState(() {
-                        _tempSelectedOption = value!;
-                      });
-                    },
-                    activeColor: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: theme.textTheme.bodyMedium?.color,
-                      ),
-                    ),
-                  ),
-                  if (o == _tempSelectedOption)
-                    Icon(
-                      Icons.check,
-                      color: theme.colorScheme.primary,
-                      size: 20,
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }).toList();
-
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Container(
-        width: 510,
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            // 限制对话框最大高度，超过则滚动
-            maxHeight: 520,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-          children: [
-            // 标题栏
-            Row(
-              children: [
-                InkWell(
-                  onTap: () => Navigator.pop(context),
-                  child: Icon(
-                    Icons.close,
-                    size: 24,
-                    color: theme.iconTheme.color,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    '提醒时间',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: theme.textTheme.titleLarge?.color,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                // 保存按钮
-                ElevatedButton(
-                  onPressed: () {
-                    widget.onSave(_tempSelectedOption);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    '保存',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // 选项列表（可滚动，避免超出边界）
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: optionWidgets,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-          ],
-          ),
-        ),
-      ),
-    );
-  }
-} 

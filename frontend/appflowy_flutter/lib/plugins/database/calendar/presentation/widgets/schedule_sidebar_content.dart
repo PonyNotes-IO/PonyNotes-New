@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/schedule_model.dart';
+
+import '../../models/schedule_model.dart';
 
 // 不带滚动条的日程内容组件，用于嵌入到外部的统一滚动视图中
 class ScheduleSidebarContent extends StatefulWidget {
