@@ -8,12 +8,14 @@ class ScheduleSidebarContent extends StatefulWidget {
   final String? databaseViewId;
   final Function(ScheduleItem)? onScheduleTap; // 点击日程的回调
   final VoidCallback? onRefreshRequested; // 刷新请求回调
+  final DateTime? selectedDate; // 选中日期，用于过滤日程
 
   const ScheduleSidebarContent({
     Key? key,
     this.databaseViewId,
     this.onScheduleTap,
     this.onRefreshRequested,
+    this.selectedDate,
   }) : super(key: key);
 
   @override
@@ -32,6 +34,22 @@ class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
     
     if (widget.databaseViewId != null && widget.databaseViewId!.isNotEmpty) {
       _scheduleModel.setViewId(widget.databaseViewId!);
+    }
+  }
+
+  @override
+  void didUpdateWidget(ScheduleSidebarContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 如果选中日期或视图ID变化，更新回调
+    if (oldWidget.selectedDate != widget.selectedDate ||
+        oldWidget.databaseViewId != widget.databaseViewId ||
+        oldWidget.onScheduleTap != widget.onScheduleTap) {
+      _onScheduleTap = widget.onScheduleTap;
+      if (widget.databaseViewId != null && 
+          widget.databaseViewId!.isNotEmpty &&
+          _scheduleModel.currentViewId != widget.databaseViewId) {
+        _scheduleModel.setViewId(widget.databaseViewId!);
+      }
     }
   }
 
@@ -60,10 +78,33 @@ class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
   }
 
   Widget _buildScheduleContent(BuildContext context, ScheduleModel model) {
-    final incompleteSchedules = model.incompleteSchedules;
-    final completedSchedules = model.completedSchedules;
+    // 根据选中日期过滤日程
+    List<ScheduleItem> filteredSchedules = model.schedules;
+    if (widget.selectedDate != null) {
+      final selectedDateStart = DateTime(
+        widget.selectedDate!.year,
+        widget.selectedDate!.month,
+        widget.selectedDate!.day,
+      );
+      final selectedDateEnd = selectedDateStart.add(const Duration(days: 1));
+      
+      filteredSchedules = model.schedules.where((schedule) {
+        final scheduleDate = schedule.startTime;
+        // 包含等于当天0点，排除下一天0点
+        return !scheduleDate.isBefore(selectedDateStart) && 
+               scheduleDate.isBefore(selectedDateEnd);
+      }).toList();
+    }
 
-    if (model.schedules.isEmpty) {
+    // 分离未完成和已完成的日程
+    final incompleteSchedules = filteredSchedules
+        .where((s) => !s.isCompleted)
+        .toList();
+    final completedSchedules = filteredSchedules
+        .where((s) => s.isCompleted)
+        .toList();
+
+    if (filteredSchedules.isEmpty) {
       return const SizedBox.shrink(); // 显示空白而不是"暂无日程"提示
     }
 

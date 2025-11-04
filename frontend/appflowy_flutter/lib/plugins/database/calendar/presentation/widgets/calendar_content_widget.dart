@@ -115,6 +115,7 @@ class _CalendarContentState extends State<CalendarContent> {
             ),
           ),
           const SizedBox(height: 16),
+          
           if (_isLoading) ...[
             Center(
               child: Padding(
@@ -122,30 +123,85 @@ class _CalendarContentState extends State<CalendarContent> {
                 child: CircularProgressIndicator(),
               ),
             ),
-          ] else if (_realNotes.isNotEmpty) ...[
-            ...(_realNotes.map((note) => _buildNoteItem(note))),
-            const SizedBox(height: 16),
           ] else ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                '当天暂无笔记',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withOpacity(0.6),
+            // 优先展示笔记
+            if (_realNotes.isNotEmpty) ...[
+              ...(_realNotes.map((note) => _buildNoteItem(note))),
+              const SizedBox(height: 16),
+              // 有笔记时也显示日程（如果有）
+              if (widget.viewId != null) ...[
+                ScheduleSidebarContent(
+                  databaseViewId: widget.viewId,
+                  onScheduleTap: widget.onScheduleTap,
+                  selectedDate: widget.selectedDate,
                 ),
+              ],
+            ] else ...[
+              // 没有笔记，显示"当天暂无笔记"提示
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Text(
+                  '当天暂无笔记',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.6),
+                  ),
+                ),
+              ),
+              // 显示日程（如果有）
+              if (widget.viewId != null) ...[
+                ScheduleSidebarContent(
+                  databaseViewId: widget.viewId,
+                  onScheduleTap: widget.onScheduleTap,
+                  selectedDate: widget.selectedDate,
+                ),
+              ] else ...[
+                // 既没有笔记也没有日程（没有viewId），显示空布局
+                _buildEmptyState(context),
+              ],
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.calendar_today_outlined,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '当天暂无笔记和日程',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withOpacity(0.6),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '点击日历创建新日程',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withOpacity(0.4),
               ),
             ),
           ],
-          if (widget.viewId != null) ...[
-            ScheduleSidebarContent(
-              databaseViewId: widget.viewId,
-              onScheduleTap: widget.onScheduleTap,
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
