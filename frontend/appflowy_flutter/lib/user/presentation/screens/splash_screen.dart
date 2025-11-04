@@ -60,16 +60,41 @@ class SplashScreen extends StatelessWidget {
     BuildContext context,
     Authenticated authenticated,
   ) async {
-    final result = await FolderEventGetCurrentWorkspaceSetting().send();
-    result.fold(
-      (workspaceSetting) {
-        // After login, replace Splash screen by corresponding home screen
-        getIt<SplashRouter>().goHomeScreen(
-          context,
-        );
-      },
-      (error) => handleOpenWorkspaceError(context, error),
-    );
+    // 🔧 修复登录后卡住问题：添加重试逻辑，等待 Folder 初始化完成
+    // 原因：runAppFlowy() 重新初始化应用时，Folder 可能还未完全初始化
+    int retryCount = 0;
+    const maxRetries = 20; // 最多等待10秒（每次500ms）
+    const retryDelay = Duration(milliseconds: 500);
+    
+    while (retryCount < maxRetries) {
+      final result = await FolderEventGetCurrentWorkspaceSetting().send();
+      
+      final success = result.fold(
+        (workspaceSetting) {
+          // After login, replace Splash screen by corresponding home screen
+          getIt<SplashRouter>().goHomeScreen(
+            context,
+          );
+          return true;
+        },
+        (error) {
+          // 如果是 "Folder not initialized" 错误，继续重试
+          if (error.msg.contains('Folder not initialized') && retryCount < maxRetries - 1) {
+            return false;
+          }
+          // 其他错误或重试次数耗尽，显示错误
+          handleOpenWorkspaceError(context, error);
+          return true;
+        },
+      );
+      
+      if (success) {
+        break;
+      }
+      
+      retryCount++;
+      await Future.delayed(retryDelay);
+    }
   }
 
   void _handleUnauthenticated(BuildContext context, Unauthenticated result) {

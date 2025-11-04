@@ -173,19 +173,38 @@ impl WhiteboardManager {
   /// 否则从磁盘加载，如果本地不存在则尝试从云端获取
   pub async fn open_whiteboard(&self, view_id: &Uuid) -> FlowyResult<Arc<RwLock<Whiteboard>>> {
     info!("[Whiteboard] 🔵 open_whiteboard called for view: {}", view_id);
+    
     // 检查缓存
     if let Some(whiteboard) = self.whiteboards.get(view_id) {
       trace!("[Whiteboard] Whiteboard {} found in cache", view_id);
       return Ok(whiteboard.clone());
     }
 
-    // 检查白板是否已存在于本地磁盘
-    let exists = self.is_whiteboard_exist(view_id).await.unwrap_or(false);
-    info!("[Whiteboard] Whiteboard {} exists on local disk: {}", view_id, exists);
+    // 创建白板实例（会自动配置持久化）
+    let whiteboard = self.create_whiteboard_instance(view_id, true).await?;
+    
+    // 缓存
+    self.whiteboards.insert(*view_id, whiteboard.clone());
 
+    info!("[Whiteboard] ✅ Opened whiteboard: {}", view_id);
+    Ok(whiteboard)
+  }
+
+  /// 创建白板实例（内部方法）
+  /// 
+  /// sync_enable: 是否启用云端同步
+  async fn create_whiteboard_instance(
+    &self,
+    view_id: &Uuid,
+    sync_enable: bool,
+  ) -> FlowyResult<Arc<RwLock<Whiteboard>>> {
     let uid = self.user_service.user_id()?;
     let workspace_id = self.user_service.workspace_id()?;
     let collab_db = self.user_service.collab_db(uid)?;
+
+    // 检查白板是否已存在于本地磁盘
+    let exists = self.is_whiteboard_exist(view_id).await.unwrap_or(false);
+    info!("[Whiteboard] Whiteboard {} exists on local disk: {}", view_id, exists);
 
     // 确定数据源：本地磁盘 或 云端
     let data_source = if exists {
@@ -215,11 +234,12 @@ impl WhiteboardManager {
       }
     };
 
+    // ✅ 使用 build_collab 构建 Collab（会自动添加 RocksdbDiskPlugin）
     let collab = self
-      .build_collab(uid, view_id, data_source, true)
+      .build_collab(uid, view_id, data_source, sync_enable)
       .await?;
 
-    // 尝试打开白板，如果失败则创建新的
+    // 尝试打开白板，如果失败则创建新的数据结构
     let whiteboard = match Whiteboard::open(collab) {
       Ok(wb) => {
         info!("[Whiteboard] ✅ Successfully opened whiteboard: {}", view_id);
@@ -235,12 +255,14 @@ impl WhiteboardManager {
         };
         
         let collab = self
-          .build_collab(uid, view_id, data_source, true)
+          .build_collab(uid, view_id, data_source, sync_enable)
           .await?;
+          
         let wb = Whiteboard::create(collab)
           .map_err(|e| internal_error(format!("Failed to create whiteboard data structure: {}", e)))?;
         
         // 保存初始化后的数据结构到磁盘
+        // 注意：由于已经添加了 RocksdbDiskPlugin，这次保存后，后续的编辑会自动持久化
         let encoded = wb.encode_collab()
           .map_err(internal_error)?;
         self
@@ -253,11 +275,7 @@ impl WhiteboardManager {
       }
     };
 
-    let whiteboard = Arc::new(RwLock::new(whiteboard));
-    self.whiteboards.insert(*view_id, whiteboard.clone());
-
-    info!("[Whiteboard] Opened whiteboard: {}", view_id);
-    Ok(whiteboard)
+    Ok(Arc::new(RwLock::new(whiteboard)))
   }
 
   /// 更新白板数据
@@ -355,13 +373,13 @@ impl WhiteboardManager {
     Ok(false)
   }
 
-  /// 为白板创建 Collab 对象
+  /// 为白板创建 Collab 对象（带自动持久化插件）
   async fn build_collab(
     &self,
     uid: i64,
     view_id: &Uuid,
     data_source: DataSource,
-    _sync_enable: bool,
+    sync_enable: bool,
   ) -> FlowyResult<collab::preclude::Collab> {
     let collab_builder = self.collab_builder()?;
     let workspace_id = self.user_service.workspace_id()?;
@@ -372,10 +390,19 @@ impl WhiteboardManager {
     let object = collab_builder.collab_object(&workspace_id, uid, view_id, CollabType::Document)
       .map_err(internal_error)?;
 
-    collab_builder
+    // ✅ 关键修复：使用 AppFlowyCollabBuilder::build_collab 而非直接构建
+    // 这会自动添加 RocksdbDiskPlugin，确保编辑后自动持久化
+    let mut collab = collab_builder
       .build_collab(&object, &collab_db, data_source)
       .await
-      .map_err(internal_error)
+      .map_err(internal_error)?;
+    
+    // ✅ 如果需要同步，初始化 collab（启动所有插件包括 RocksdbDiskPlugin）
+    if sync_enable {
+      collab.initialize();
+    }
+    
+    Ok(collab)
   }
 
   /// 获取编码的 Collab 数据
