@@ -424,7 +424,10 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           onLoadStop: (controller, url) async {
             if (mounted) {
               setState(() => _isLoading = false);
-              await _initializeExcalidraw();
+              // ⚠️ 不要在这里初始化！
+              // Excalidraw 需要时间来加载和初始化
+              // 应该等待 'excalidraw-ready' 消息后再初始化
+              // await _initializeExcalidraw(); // ❌ 这会导致过早调用，window.loadExcalidrawData 还未定义
             }
             print('✅ [ExcalidrawWebView] Loading finished: $url');
           },

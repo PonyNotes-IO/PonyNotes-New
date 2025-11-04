@@ -39,6 +39,20 @@
         return `whiteboard_unknown_${key}`;
       }
       
+      // 🔑 定义全局消息发送函数（供localStorage使用）
+      function sendToParent(type, payload) {
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+              type: type,
+              payload: payload
+            }, '*');
+          }
+        } catch (e) {
+          console.error('[PonyNotes Storage] ❌ Error sending message to parent:', e);
+        }
+      }
+      
       // 创建隔离的localStorage代理
       const isolatedStorage = {
         getItem: function(key) {
@@ -52,6 +66,43 @@
           const prefixedKey = getPrefixedKey(key);
           console.log(`[PonyNotes Storage] setItem("${key}") -> prefixed: "${prefixedKey}"`);
           originalLocalStorage.setItem(prefixedKey, value);
+          
+          // 🚀 关键修复：立即通知 Flutter 数据已变化
+          // 只处理 Excalidraw 相关的 key
+          if (key && (key.includes('excalidraw') || key.startsWith('excalidraw'))) {
+            console.log(`[PonyNotes Storage] 🚀 Excalidraw data changed, notifying parent immediately...`);
+            sendToParent('debug-log', {
+              level: 'info',
+              message: '[PonyNotes Storage] 🚀 localStorage.setItem triggered for key: ' + key
+            });
+            
+            try {
+              // 尝试解析数据
+              const parsedData = JSON.parse(value);
+              
+              // 添加 viewId
+              if (currentViewId) {
+                parsedData.viewId = currentViewId;
+              }
+              
+              // 立即发送 excalidraw-change 消息
+              sendToParent('excalidraw-change', parsedData);
+              
+              sendToParent('debug-log', {
+                level: 'info',
+                message: '[PonyNotes Storage] ✅ Immediately notified parent: excalidraw-change, elements: ' + (parsedData.elements ? parsedData.elements.length : 0)
+              });
+              
+              console.log(`[PonyNotes Storage] ✅ Sent excalidraw-change to parent, elements: ${parsedData.elements ? parsedData.elements.length : 0}`);
+            } catch (parseError) {
+              // 如果不是 JSON，可能是其他类型的数据，忽略
+              console.log(`[PonyNotes Storage] ⚠️ Could not parse value as JSON (might be non-Excalidraw data):`, parseError.message);
+              sendToParent('debug-log', {
+                level: 'warn',
+                message: '[PonyNotes Storage] ⚠️ setItem for key ' + key + ' but data is not valid JSON'
+              });
+            }
+          }
         },
         
         removeItem: function(key) {
@@ -721,12 +772,35 @@
         ];
         
         // 策略2: 使用轮询检测数据变化（优先使用API）
+        let pollCount = 0;
         setInterval(function() {
+          pollCount++;
+          
+          // 心跳日志（每10次轮询输出一次，避免日志过多）
+          if (pollCount % 10 === 1) {
+            sendToParent('debug-log', {
+              level: 'info',
+              message: '[Excalidraw iframe] ⏰ Polling tick #' + pollCount
+            });
+          }
+          
           try {
             let dataSnapshot = null;
             
+            // 检查 Excalidraw API 是否可用
+            const hasAPI = !!window.excalidrawAPI;
+            const hasGetSceneElements = hasAPI && typeof window.excalidrawAPI.getSceneElements === 'function';
+            
+            // 首次轮询时记录 API 状态
+            if (pollCount === 1) {
+              sendToParent('debug-log', {
+                level: 'info',
+                message: '[Excalidraw iframe] 🔍 API Status: hasAPI=' + hasAPI + ', hasGetSceneElements=' + hasGetSceneElements
+              });
+            }
+            
             // 优先使用Excalidraw API获取数据
-            if (window.excalidrawAPI && typeof window.excalidrawAPI.getSceneElements === 'function') {
+            if (hasAPI && hasGetSceneElements) {
               try {
                 const elements = window.excalidrawAPI.getSceneElements();
                 const appState = window.excalidrawAPI.getAppState();
@@ -762,13 +836,27 @@
                   }
                   
                   // 发送到父窗口
+                  sendToParent('debug-log', {
+                    level: 'info',
+                    message: '[Excalidraw iframe] 📤 About to send excalidraw-change message to parent'
+                  });
+                  
                   sendToParent('excalidraw-change', sceneData);
+                  
                   sendToParent('debug-log', {
                     level: 'info',
                     message: '[Excalidraw iframe] ✅ Data change notified (API), elements: ' + (elements || []).length
                   });
                   
                   return; // 数据已发送，跳过localStorage检查
+                } else {
+                  // 记录无变化的情况（每30次轮询记录一次）
+                  if (pollCount % 30 === 0) {
+                    sendToParent('debug-log', {
+                      level: 'info',
+                      message: '[Excalidraw iframe] ℹ️ No data change detected (poll #' + pollCount + ')'
+                    });
+                  }
                 }
               } catch (apiError) {
                 // API失败，继续尝试localStorage
