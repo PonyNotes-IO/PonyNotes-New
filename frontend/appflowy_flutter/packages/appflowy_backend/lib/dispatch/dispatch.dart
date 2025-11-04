@@ -29,6 +29,8 @@ import 'package:protobuf/protobuf.dart';
 import '../protobuf/flowy-date/entities.pb.dart';
 import '../protobuf/flowy-date/event_map.pb.dart';
 
+import '../protobuf/flowy-whiteboard/entities.pb.dart';
+import '../protobuf/flowy-whiteboard/event_map.pbenum.dart';
 import 'error.dart';
 
 part 'dart_event/flowy-folder/dart_event.dart';
