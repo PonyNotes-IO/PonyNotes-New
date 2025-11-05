@@ -1283,18 +1283,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         // setViewId 内部会异步刷新，这里不等待，直接使用当前内存数据
       }
 
-      // 直接使用内存中的数据，避免每次调用都触发数据库刷新
+      // 使用 ScheduleModel.getSchedulesForDate 方法，该方法会自动展开重复日程
       // 数据库回调（onRowsUpdated/onRowsCreated/onRowsDeleted）会自动保持数据同步
-      // 过滤出当天的日程
-      final selectedDateStart = DateTime(date.year, date.month, date.day);
-      final selectedDateEnd = selectedDateStart.add(Duration(days: 1));
-
-      return _scheduleModel.schedules.where((schedule) {
-        final scheduleDate = schedule.startTime;
-        // 修正过滤：包含等于当天0点，排除下一天0点
-        return !scheduleDate.isBefore(selectedDateStart) && scheduleDate.isBefore(selectedDateEnd);
-      }).toList();
+      return _scheduleModel.getSchedulesForDate(date);
     } catch (e) {
+      print('⚠️ [Calendar] _getSchedulesForDate 异常: $e');
       return [];
     }
   }
@@ -1495,6 +1488,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           // 新建日程内容
           Expanded(
             child: NewEventPage(
+              scheduleModel: _scheduleModel,
               selectedDate: _selectedDay ?? _focusedDay,
               onEventCreated: _onEventCreated,
               onCancel: _hideNewEventPage,

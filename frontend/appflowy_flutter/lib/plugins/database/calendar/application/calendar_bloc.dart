@@ -1,8 +1,12 @@
 import 'package:appflowy/plugins/database/application/cell/cell_cache.dart';
+import 'package:appflowy/plugins/database/application/cell/cell_controller.dart';
 import 'package:appflowy/plugins/database/application/defines.dart';
 import 'package:appflowy/plugins/database/application/field/field_controller.dart';
 import 'package:appflowy/plugins/database/application/field/field_info.dart';
 import 'package:appflowy/plugins/database/application/row/row_service.dart';
+import 'package:appflowy/plugins/database/domain/cell_service.dart';
+import 'package:appflowy/plugins/database/application/cell/cell_data_loader.dart';
+import 'package:appflowy_backend/protobuf/flowy-database2/cell_entities.pb.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
@@ -13,6 +17,7 @@ import 'package:calendar_view/calendar_view.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'dart:convert';
 
 import '../../application/database_controller.dart';
 import '../../application/row/row_cache.dart';
@@ -250,9 +255,17 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
   }
 
   Future<CalendarEventData<CalendarDayEvent>?> _loadEvent(RowId rowId) async {
+    final eventPB = await _loadEventPB(rowId);
+    if (eventPB == null) {
+      return null;
+    }
+    return _calendarEventDataFromEventPB(eventPB);
+  }
+
+  Future<CalendarEventPB?> _loadEventPB(RowId rowId) async {
     final payload = DatabaseViewRowIdPB(viewId: viewId, rowId: rowId);
     return DatabaseEventGetCalendarEvent(payload).send().fold(
-      (eventPB) => _calendarEventDataFromEventPB(eventPB),
+      (eventPB) => eventPB,
       (r) {
         Log.error(r);
         return null;
@@ -264,13 +277,200 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
     final payload = CalendarEventRequestPB.create()..viewId = viewId;
     final result = await DatabaseEventGetAllCalendarEvents(payload).send();
     result.fold(
-      (events) {
+      (events) async {
         if (!isClosed) {
-          add(CalendarEvent.didLoadAllEvents(events.items));
+          // 展开重复事件
+          final expandedEvents = await _expandRecurringEvents(events.items);
+          add(CalendarEvent.didLoadAllEvents(expandedEvents));
         }
       },
       (r) => Log.error(r),
     );
+  }
+
+  // 展开重复事件：为每个重复事件生成未来几个月的实例
+  Future<List<CalendarEventPB>> _expandRecurringEvents(
+    List<CalendarEventPB> eventPBs,
+  ) async {
+    final expandedEvents = <CalendarEventPB>[];
+    final now = DateTime.now();
+    // 生成未来6个月的事件
+    final endDate = DateTime(now.year, now.month + 6, 1);
+
+    for (final eventPB in eventPBs) {
+      // 添加原始事件
+      expandedEvents.add(eventPB);
+
+      // 读取重复信息
+      final repeatInfo = await _getRepeatInfo(eventPB);
+      if (repeatInfo == null || !repeatInfo['isRepeat'] || repeatInfo['repeatType'] == 0) {
+        continue; // 没有重复，跳过
+      }
+
+      final startDate = DateTime.fromMillisecondsSinceEpoch(
+        eventPB.timestamp.toInt() * 1000,
+      );
+      final repeatType = repeatInfo['repeatType'] as int;
+      final repeatRuleJson = repeatInfo['repeatRuleJson'] as String?;
+
+      // 生成重复事件实例（未来6个月）
+      var currentDate = DateTime(startDate.year, startDate.month, startDate.day);
+      while (currentDate.isBefore(endDate)) {
+        currentDate = currentDate.add(const Duration(days: 1));
+
+        // 检查是否匹配重复规则
+        if (_matchesRepeatRule(currentDate, startDate, repeatType, repeatRuleJson)) {
+          // 创建重复事件的副本
+          final repeatedEvent = CalendarEventPB()
+            ..rowMeta = eventPB.rowMeta.clone()
+            ..dateFieldId = eventPB.dateFieldId
+            ..title = eventPB.title
+            ..timestamp = Int64((currentDate.millisecondsSinceEpoch ~/ 1000));
+          
+          // 修改事件ID以区分重复实例（使用日期后缀）
+          repeatedEvent.rowMeta.id = '${eventPB.rowMeta.id}_${currentDate.year}_${currentDate.month}_${currentDate.day}';
+          
+          expandedEvents.add(repeatedEvent);
+        }
+      }
+    }
+
+    return expandedEvents;
+  }
+
+  // 从数据库读取重复信息
+  Future<Map<String, dynamic>?> _getRepeatInfo(CalendarEventPB eventPB) async {
+    try {
+      final fieldInfos = fieldController.fieldInfos;
+      // 查找重复字段
+      FieldInfo? repeatField;
+      for (final field in fieldInfos) {
+        final name = field.name.toLowerCase();
+        if (field.fieldType == FieldType.RichText && 
+            (name.contains('repeat') || name.contains('重复'))) {
+          repeatField = field;
+          break;
+        }
+      }
+
+      if (repeatField == null) {
+        return null;
+      }
+
+      // 读取重复字段的值
+      final cellContext = CellContext(
+        fieldId: repeatField.field.id,
+        rowId: eventPB.rowMeta.id,
+      );
+      final cellResult = await CellBackendService.getCell(
+        viewId: viewId,
+        cellContext: cellContext,
+      );
+
+      return cellResult.fold(
+        (cell) {
+          final jsonString = StringCellDataParser().parserData(cell.data);
+          if (jsonString == null || jsonString.isEmpty) {
+            return null;
+          }
+          try {
+            return jsonDecode(jsonString) as Map<String, dynamic>;
+          } catch (e) {
+            Log.error('Failed to parse repeat info: $e');
+            return null;
+          }
+        },
+        (_) => null,
+      );
+    } catch (e) {
+      Log.error('Failed to get repeat info: $e');
+      return null;
+    }
+  }
+
+  // 判断日期是否匹配重复规则（与 ScheduleModel 中的逻辑一致）
+  bool _matchesRepeatRule(
+    DateTime date,
+    DateTime startDate,
+    int repeatType,
+    String? repeatRuleJson,
+  ) {
+    final dateOnly = DateTime(date.year, date.month, date.day);
+    final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+
+    // 如果日期在开始日期之前，不匹配
+    if (dateOnly.isBefore(startDateOnly)) {
+      return false;
+    }
+
+    // 如果日期正好是开始日期，不匹配（已经在原始事件中）
+    if (dateOnly.isAtSameMomentAs(startDateOnly)) {
+      return false;
+    }
+
+    switch (repeatType) {
+      case 1: // 每天
+        return true;
+
+      case 2: // 每周
+        return date.weekday == startDate.weekday;
+
+      case 3: // 每年
+        return date.month == startDate.month && date.day == startDate.day;
+
+      case 4: // 法定工作日
+        // 跳过周末
+        if (date.weekday == 6 || date.weekday == 7) {
+          return false;
+        }
+        return true;
+
+      case 99: // 自定义
+        return _matchesCustomRule(date, startDate, repeatRuleJson);
+
+      default:
+        return false;
+    }
+  }
+
+  // 匹配自定义规则
+  bool _matchesCustomRule(DateTime date, DateTime startDate, String? repeatRuleJson) {
+    if (repeatRuleJson == null || repeatRuleJson.isEmpty) {
+      return false;
+    }
+
+    try {
+      final rule = jsonDecode(repeatRuleJson) as Map<String, dynamic>;
+      final unit = rule['unit'] ?? 1; // 0=天 1=周 2=月 3=年
+      final interval = rule['interval'] ?? 1;
+      final weekdays = rule['weekdays'] as List<dynamic>?;
+
+      if (unit == 1 && weekdays != null && weekdays.isNotEmpty) {
+        // 每周的特定星期几
+        // 自定义对话框保存的 weekday 索引为 0..6（周一..周日），
+        // Dart DateTime.weekday 为 1..7（周一..周日），需要 +1 映射
+        final weekdayList = weekdays.map((e) => (e as int) + 1).toList();
+        if (!weekdayList.contains(date.weekday)) {
+          return false;
+        }
+
+        final dateOnly = DateTime(date.year, date.month, date.day);
+        final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+        final daysDiff = dateOnly.difference(startDateOnly).inDays;
+
+        if (interval == 1) {
+          return daysDiff >= 0;
+        }
+
+        final weeksDiff = daysDiff ~/ 7;
+        return weeksDiff >= 0 && weeksDiff % interval == 0;
+      }
+
+      return false;
+    } catch (e) {
+      Log.error('Failed to parse custom repeat rule: $e');
+      return false;
+    }
   }
 
   List<CalendarEventData<CalendarDayEvent>> _calendarEventDataFromEventPBs(
@@ -330,16 +530,8 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
         if (isClosed) {
           return;
         }
-        for (final row in rows) {
-          if (row.isHiddenInView) {
-            add(CalendarEvent.openRowDetail(row.rowMeta));
-          } else {
-            final event = await _loadEvent(row.rowMeta.id);
-            if (event != null) {
-              add(CalendarEvent.didReceiveEvent(event));
-            }
-          }
-        }
+        // 当创建新事件时，重新加载所有事件以包含重复展开
+        _loadAllEvents();
       },
       onRowsDeleted: (rowIds) {
         if (isClosed) {
@@ -351,17 +543,9 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
         if (isClosed) {
           return;
         }
-        for (final id in rowIds) {
-          final event = await _loadEvent(id);
-          if (event != null) {
-            if (isEventDayChanged(event)) {
-              add(CalendarEvent.didDeleteEvents([id]));
-              add(CalendarEvent.didReceiveEvent(event));
-            } else {
-              add(CalendarEvent.didUpdateEvent(event));
-            }
-          }
-        }
+        // 当更新事件时，重新加载所有事件以包含重复展开
+        // 这样可以确保重复事件的更新也能正确显示
+        _loadAllEvents();
       },
       onNumOfRowsChanged: (rows, rowById, reason) {
         reason.maybeWhen(

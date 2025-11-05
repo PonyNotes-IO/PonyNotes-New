@@ -78,22 +78,11 @@ class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
   }
 
   Widget _buildScheduleContent(BuildContext context, ScheduleModel model) {
-    // 根据选中日期过滤日程
+    // 根据选中日期过滤日程，使用 getSchedulesForDate 方法以支持重复日程展开
     List<ScheduleItem> filteredSchedules = model.schedules;
     if (widget.selectedDate != null) {
-      final selectedDateStart = DateTime(
-        widget.selectedDate!.year,
-        widget.selectedDate!.month,
-        widget.selectedDate!.day,
-      );
-      final selectedDateEnd = selectedDateStart.add(const Duration(days: 1));
-      
-      filteredSchedules = model.schedules.where((schedule) {
-        final scheduleDate = schedule.startTime;
-        // 包含等于当天0点，排除下一天0点
-        return !scheduleDate.isBefore(selectedDateStart) && 
-               scheduleDate.isBefore(selectedDateEnd);
-      }).toList();
+      // 使用 getSchedulesForDate 方法，该方法会自动展开重复日程
+      filteredSchedules = model.getSchedulesForDate(widget.selectedDate!);
     }
 
     // 分离未完成和已完成的日程

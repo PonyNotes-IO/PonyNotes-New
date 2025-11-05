@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -185,7 +186,7 @@ class _RepeatSelectionDialogState extends State<RepeatSelectionDialog> {
                     Padding(
                       padding: const EdgeInsets.only(left: 48, bottom: 8),
                       child: Text(
-                        tempCustomSummary!,
+                        _extractSummaryFromJson(tempCustomSummary!),
                         style: TextStyle(
                           fontSize: 13,
                           color: theme.textTheme.bodySmall?.color?.withOpacity(0.8),
@@ -215,6 +216,16 @@ class _RepeatSelectionDialogState extends State<RepeatSelectionDialog> {
     }
     widget.onSave(type: tempValue, customSummary: null);
     Navigator.pop(context);
+  }
+
+  // 从 JSON 中提取显示摘要
+  String _extractSummaryFromJson(String jsonStr) {
+    try {
+      final data = jsonDecode(jsonStr);
+      return data['summary'] ?? jsonStr;
+    } catch (e) {
+      return jsonStr; // 如果不是 JSON，直接返回原字符串
+    }
   }
 }
 
@@ -486,7 +497,14 @@ class _CustomRepeatDialogState extends State<CustomRepeatDialog> {
       );
       return;
     }
-    Navigator.pop(context, summary);
+    // 返回 JSON 格式的规则数据，同时保留显示文本
+    final jsonData = jsonEncode({
+      'unit': unit,
+      'interval': interval,
+      'weekdays': selectedWeekdays.toList()..sort(),
+      'summary': summary, // 保留显示文本用于 UI 显示
+    });
+    Navigator.pop(context, jsonData);
   }
 
   String? _buildCustomSummary(int unit, int interval, Set<int> weekdays) {

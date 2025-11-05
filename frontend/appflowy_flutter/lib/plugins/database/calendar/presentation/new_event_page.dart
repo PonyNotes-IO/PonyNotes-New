@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -16,9 +17,11 @@ class NewEventPage extends StatefulWidget {
   final Function(Map<String, dynamic>) onEventCreated;
   final VoidCallback onCancel;
   final Function(bool Function())? onSaveRequested;
+  final ScheduleModel scheduleModel; // 外层传入的 ScheduleModel
 
   const NewEventPage({
     Key? key,
+    required this.scheduleModel,
     required this.selectedDate,
     required this.onEventCreated,
     required this.onCancel,
@@ -43,15 +46,13 @@ class _NewEventPageState extends State<NewEventPage> {
   String _calendar = '我的日历';
   String _description = '';
   ReminderOption _reminderOption = ReminderOption.none;
-  
   // 使用ScheduleModel来管理日程
   late ScheduleModel _scheduleModel;
 
   @override
   void initState() {
     super.initState();
-    _scheduleModel = ScheduleModel();
-    
+    _scheduleModel = widget.scheduleModel;
     // 初始化日历视图
     _initializeCalendarView();
     
@@ -98,7 +99,8 @@ class _NewEventPageState extends State<NewEventPage> {
 
   @override
   void dispose() {
-    _scheduleModel.dispose();
+    // 注意：_scheduleModel 是从外部传入的共享实例，不应该在这里 dispose
+    // ScheduleModel 的生命周期应该由创建它的地方（calendar.dart）管理
     super.dispose();
   }
 
@@ -217,6 +219,9 @@ class _NewEventPageState extends State<NewEventPage> {
         category: _calendar,
         reminderOption: _reminderOption,
         dueDate: endDateTime,
+        isRepeat: _isRepeat,
+        repeatType: _repeatType,
+        repeatRuleJson: _repeatCustomSummary,
       );
       if (!mounted) return;
       // 创建成功
@@ -780,7 +785,8 @@ class _NewEventPageState extends State<NewEventPage> {
               _isRepeat = true;
               _repeatType = 99;
               _repeatCustomSummary = customSummary;
-              _repeatLabel = customSummary ?? '自定义';
+              // 从 JSON 中提取显示文本
+              _repeatLabel = _extractSummaryFromJson(customSummary ?? '自定义');
             } else {
               _isRepeat = true;
               _repeatType = type;
@@ -823,6 +829,16 @@ class _NewEventPageState extends State<NewEventPage> {
         return '法定工作日';
       default:
         return '任务重复';
+    }
+  }
+
+  // 从 JSON 中提取显示摘要
+  String _extractSummaryFromJson(String jsonStr) {
+    try {
+      final data = jsonDecode(jsonStr);
+      return data['summary'] ?? jsonStr;
+    } catch (e) {
+      return jsonStr; // 如果不是 JSON，直接返回原字符串
     }
   }
 

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
@@ -82,7 +83,14 @@ class _EditEventPageState extends State<EditEventPage> {
     _endTime = TimeOfDay.fromDateTime(schedule.endTime);
     _isAllDay = schedule.isAllDay;
     _isImportant = schedule.isImportant;
-    _isRepeat = false; // 暂时不支持重复
+    _isRepeat = schedule.isRepeat;
+    _repeatType = schedule.repeatType;
+    _repeatCustomSummary = schedule.repeatRuleJson;
+    _repeatLabel = _repeatType == 0
+        ? '任务重复'
+        : (_repeatType == 99
+            ? _extractSummaryFromJson(_repeatCustomSummary ?? '自定义')
+            : _repeatTypeName(_repeatType));
     _calendar = schedule.category;
     _description = schedule.title; // 使用title作为description
     _reminderOption = schedule.reminderOption;
@@ -308,6 +316,10 @@ class _EditEventPageState extends State<EditEventPage> {
         reminderOption: _reminderOption, // 直接使用 ReminderOption
         // 显式保留原来的 reminderId，确保更新提醒时能找到原有的提醒ID
         reminderId: widget.schedule.reminderId,
+        // 更新重复信息
+        isRepeat: _isRepeat,
+        repeatType: _repeatType,
+        repeatRuleJson: _repeatCustomSummary,
       );
       
       final success = await widget.scheduleModel.updateSchedule(updatedSchedule);
@@ -804,9 +816,7 @@ class _EditEventPageState extends State<EditEventPage> {
                     title: Text(
                       _repeatType == 0
                           ? '任务重复'
-                          : (_repeatType == 99
-                              ? (_repeatCustomSummary ?? '自定义')
-                              : _repeatLabel),
+                          : _repeatLabel,
                       style: TextStyle(
                         fontSize: 16,
                         color: theme.textTheme.bodyLarge?.color,
@@ -1089,7 +1099,8 @@ class _EditEventPageState extends State<EditEventPage> {
               _isRepeat = true;
               _repeatType = 99;
               _repeatCustomSummary = customSummary;
-              _repeatLabel = customSummary ?? '自定义';
+              // 从 JSON 中提取显示文本
+              _repeatLabel = _extractSummaryFromJson(customSummary ?? '自定义');
             } else {
               _isRepeat = true;
               _repeatType = type;
@@ -1114,6 +1125,16 @@ class _EditEventPageState extends State<EditEventPage> {
         return '法定工作日';
       default:
         return '任务重复';
+    }
+  }
+
+  // 从 JSON 中提取显示摘要
+  String _extractSummaryFromJson(String jsonStr) {
+    try {
+      final data = jsonDecode(jsonStr);
+      return data['summary'] ?? jsonStr;
+    } catch (e) {
+      return jsonStr; // 如果不是 JSON，直接返回原字符串
     }
   }
 }
