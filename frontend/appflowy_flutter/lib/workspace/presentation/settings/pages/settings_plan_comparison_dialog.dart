@@ -157,7 +157,6 @@ class _SettingsPlanComparisonDialogState
                                 ..._planLabels.map(
                                   (e) => _ComparisonCell(
                                     label: e.label,
-                                    tooltip: e.tooltip,
                                   ),
                                 ),
                               ],
@@ -221,32 +220,56 @@ class _SettingsPlanComparisonDialogState
                             },
                           ),
                           _PlanTable(
-                            title: LocaleKeys
-                                .settings_comparePlanDialog_proPlan_title
-                                .tr(),
-                            description: LocaleKeys
-                                .settings_comparePlanDialog_proPlan_description
-                                .tr(),
-                            price: LocaleKeys
-                                .settings_comparePlanDialog_proPlan_price
-                                .tr(
-                              args: [SubscriptionPlanPB.Pro.priceAnnualBilling],
-                            ),
-                            priceInfo: LocaleKeys
-                                .settings_comparePlanDialog_proPlan_priceInfo
-                                .tr(
-                              args: [SubscriptionPlanPB.Pro.priceMonthBilling],
-                            ),
-                            cells: _proLabels,
+                            title: '学生版',
+                            description: '适合学生使用的经济实惠方案',
+                            price: '¥30/年',
+                            priceInfo: '或 ¥3/月',
+                            cells: _studentLabels,
                             isCurrent:
-                                currentInfo.plan == WorkspacePlanPB.ProPlan,
-                            buttonType: WorkspacePlanPB.ProPlan.buttonTypeFor(
+                                currentInfo.plan == WorkspacePlanPB.StudentPlan,
+                            buttonType: WorkspacePlanPB.StudentPlan.buttonTypeFor(
                               currentInfo.plan,
                             ),
                             onSelected: () =>
                                 context.read<SettingsPlanBloc>().add(
                                       const SettingsPlanEvent.addSubscription(
-                                        SubscriptionPlanPB.Pro,
+                                        SubscriptionPlanPB.Student,
+                                      ),
+                                    ),
+                          ),
+                          _PlanTable(
+                            title: '标准版',
+                            description: '适合个人和小团队的标准方案',
+                            price: '¥80/年',
+                            priceInfo: '或 ¥8/月',
+                            cells: _standardLabels,
+                            isCurrent:
+                                currentInfo.plan == WorkspacePlanPB.StandardPlan,
+                            buttonType: WorkspacePlanPB.StandardPlan.buttonTypeFor(
+                              currentInfo.plan,
+                            ),
+                            onSelected: () =>
+                                context.read<SettingsPlanBloc>().add(
+                                      const SettingsPlanEvent.addSubscription(
+                                        SubscriptionPlanPB.Standard,
+                                      ),
+                                    ),
+                          ),
+                          _PlanTable(
+                            title: '团队版',
+                            description: '适合团队协作的专业方案',
+                            price: '¥180/年',
+                            priceInfo: '或 ¥18/月',
+                            cells: _teamLabels,
+                            isCurrent:
+                                currentInfo.plan == WorkspacePlanPB.TeamPlan,
+                            buttonType: WorkspacePlanPB.TeamPlan.buttonTypeFor(
+                              currentInfo.plan,
+                            ),
+                            onSelected: () =>
+                                context.read<SettingsPlanBloc>().add(
+                                      const SettingsPlanEvent.addSubscription(
+                                        SubscriptionPlanPB.Team,
                                       ),
                                     ),
                           ),
@@ -283,14 +306,30 @@ extension _ButtonTypeFrom on WorkspacePlanPB {
       return _PlanButtonType.none;
     }
 
-    // Free plan, can downgrade if not on the free plan
-    if (this == WorkspacePlanPB.FreePlan && other != WorkspacePlanPB.FreePlan) {
+    // Compare plan levels: Free=0, Student=1, Standard=2, Team=3
+    final thisLevel = _planLevel(this);
+    final otherLevel = _planLevel(other);
+
+    // If target plan level is lower than current plan, it's a downgrade
+    if (thisLevel < otherLevel) {
       return _PlanButtonType.downgrade;
     }
 
-    // Else we can assume it's an upgrade
+    // Otherwise it's an upgrade
     return _PlanButtonType.upgrade;
   }
+}
+
+/// Returns the numeric level of a plan for comparison
+/// Free=0, Student=1, Standard=2, Team=3
+int _planLevel(WorkspacePlanPB plan) {
+  return switch (plan) {
+    WorkspacePlanPB.FreePlan => 0,
+    WorkspacePlanPB.StudentPlan => 1,
+    WorkspacePlanPB.StandardPlan => 2,
+    WorkspacePlanPB.TeamPlan => 3,
+    _ => 0, // Default to Free plan level for unknown plans
+  };
 }
 
 class _PlanTable extends StatelessWidget {
@@ -427,13 +466,11 @@ class _ComparisonCell extends StatelessWidget {
   const _ComparisonCell({
     this.label,
     this.icon,
-    this.tooltip,
     this.isHighlighted = false,
   });
 
   final String? label;
   final FlowySvgData? icon;
-  final String? tooltip;
   final bool isHighlighted;
 
   @override
@@ -465,14 +502,6 @@ class _ComparisonCell extends StatelessWidget {
               ),
             ),
           ],
-          if (tooltip != null)
-            FlowyTooltip(
-              message: tooltip,
-              child: FlowySvg(
-                FlowySvgs.information_s,
-                color: AFThemeExtension.of(context).strongText,
-              ),
-            ),
         ],
       ),
     );
@@ -637,51 +666,28 @@ class _Heading extends StatelessWidget {
 }
 
 class _PlanItem {
-  const _PlanItem({required this.label, this.tooltip});
+  const _PlanItem({required this.label});
 
   final String label;
-  final String? tooltip;
 }
 
 final _planLabels = [
-  _PlanItem(
-    label: LocaleKeys.settings_comparePlanDialog_planLabels_itemOne.tr(),
-  ),
-  _PlanItem(
-    label: LocaleKeys.settings_comparePlanDialog_planLabels_itemTwo.tr(),
-  ),
-  _PlanItem(
-    label: LocaleKeys.settings_comparePlanDialog_planLabels_itemThree.tr(),
-  ),
-  _PlanItem(
-    label: LocaleKeys.settings_comparePlanDialog_planLabels_itemFour.tr(),
-  ),
-  _PlanItem(
-    label: LocaleKeys.settings_comparePlanDialog_planLabels_itemFive.tr(),
-    tooltip: LocaleKeys.settings_comparePlanDialog_planLabels_tooltipFive.tr(),
-  ),
-  _PlanItem(
-    label:
-        LocaleKeys.settings_comparePlanDialog_planLabels_intelligentSearch.tr(),
-  ),
-  _PlanItem(
-    label: LocaleKeys.settings_comparePlanDialog_planLabels_itemSix.tr(),
-    tooltip: LocaleKeys.settings_comparePlanDialog_planLabels_tooltipSix.tr(),
-  ),
-  _PlanItem(
-    label: LocaleKeys.settings_comparePlanDialog_planLabels_itemSeven.tr(),
-    tooltip: LocaleKeys.settings_comparePlanDialog_planLabels_tooltipSix.tr(),
-  ),
-  _PlanItem(
-    label: LocaleKeys.settings_comparePlanDialog_planLabels_itemFileUpload.tr(),
-  ),
-  _PlanItem(
-    label:
-        LocaleKeys.settings_comparePlanDialog_planLabels_customNamespace.tr(),
-    tooltip: LocaleKeys
-        .settings_comparePlanDialog_planLabels_customNamespaceTooltip
-        .tr(),
-  ),
+  const _PlanItem(label: '页面/块数量'),
+  const _PlanItem(label: '云存储空间'),
+  const _PlanItem(label: '导入与导出'),
+  const _PlanItem(label: '收件箱'),
+  const _PlanItem(label: '多端同步（iPad、Mac、Windows、Web）'),
+  const _PlanItem(label: '支持 API'),
+  const _PlanItem(label: '版本历史'),
+  const _PlanItem(label: 'AI对话'),
+  const _PlanItem(label: '图片生成'),
+  const _PlanItem(label: '分享链接'),
+  const _PlanItem(label: '发布'),
+  const _PlanItem(label: '工作区成员'),
+  const _PlanItem(label: '协作工作区'),
+  const _PlanItem(label: '页面权限管理'),
+  const _PlanItem(label: '空间/成员管理'),
+  const _PlanItem(label: '空间/成员分组'),
 ];
 
 class _CellItem {
@@ -692,74 +698,77 @@ class _CellItem {
 }
 
 final List<_CellItem> _freeLabels = [
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_freeLabels_itemOne.tr(),
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_freeLabels_itemTwo.tr(),
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_freeLabels_itemThree.tr(),
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_freeLabels_itemFour.tr(),
-    icon: FlowySvgs.check_m,
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_freeLabels_itemFive.tr(),
-  ),
-  _CellItem(
-    label:
-        LocaleKeys.settings_comparePlanDialog_freeLabels_intelligentSearch.tr(),
-    icon: FlowySvgs.check_m,
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_freeLabels_itemSix.tr(),
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_freeLabels_itemSeven.tr(),
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_freeLabels_itemFileUpload.tr(),
-  ),
-  const _CellItem(
-    label: '',
-  ),
+  const _CellItem(label: '无限制'),  // 页面/块数量
+  const _CellItem(label: '-'),       // 云存储
+  const _CellItem(icon: FlowySvgs.check_m),  // 导入与导出
+  const _CellItem(label: '-'),       // 收件箱
+  const _CellItem(label: '-'),       // 多端同步
+  const _CellItem(label: '-'),       // 支持 API
+  const _CellItem(label: '-'),       // 版本历史
+  const _CellItem(label: '-'),       // AI对话
+  const _CellItem(label: '-'),       // 图片生成
+  const _CellItem(label: '-'),       // 分享链接
+  const _CellItem(label: '-'),       // 发布
+  const _CellItem(label: '-'),       // 工作区成员
+  const _CellItem(label: '-'),       // 协作工作区
+  const _CellItem(label: '-'),       // 页面权限管理
+  const _CellItem(label: '-'),       // 空间/成员管理
+  const _CellItem(label: '-'),       // 空间/成员分组
 ];
 
-final List<_CellItem> _proLabels = [
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_proLabels_itemOne.tr(),
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_proLabels_itemTwo.tr(),
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_proLabels_itemThree.tr(),
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_proLabels_itemFour.tr(),
-    icon: FlowySvgs.check_m,
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_proLabels_itemFive.tr(),
-  ),
-  _CellItem(
-    label:
-        LocaleKeys.settings_comparePlanDialog_proLabels_intelligentSearch.tr(),
-    icon: FlowySvgs.check_m,
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_proLabels_itemSix.tr(),
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_proLabels_itemSeven.tr(),
-  ),
-  _CellItem(
-    label: LocaleKeys.settings_comparePlanDialog_proLabels_itemFileUpload.tr(),
-  ),
-  const _CellItem(
-    label: '',
-    icon: FlowySvgs.check_m,
-  ),
+final List<_CellItem> _studentLabels = [
+  const _CellItem(label: '无限制'),  // 页面/块数量
+  const _CellItem(label: '2GB'),      // 云存储
+  const _CellItem(icon: FlowySvgs.check_m),  // 导入与导出
+  const _CellItem(label: '-'),        // 收件箱
+  const _CellItem(icon: FlowySvgs.check_m),  // 多端同步
+  const _CellItem(label: '-'),        // 支持 API
+  const _CellItem(label: '7天'),      // 版本历史
+  const _CellItem(label: '10次/月'),  // AI对话
+  const _CellItem(label: '-'),        // 图片生成
+  const _CellItem(icon: FlowySvgs.check_m),  // 分享链接
+  const _CellItem(icon: FlowySvgs.check_m),  // 发布
+  const _CellItem(label: '2'),        // 工作区成员
+  const _CellItem(label: '仅限1个'),  // 协作工作区
+  const _CellItem(label: '仅查看'),   // 页面权限管理
+  const _CellItem(icon: FlowySvgs.check_m),  // 空间/成员管理
+  const _CellItem(label: '-'),        // 空间/成员分组
+];
+
+final List<_CellItem> _standardLabels = [
+  const _CellItem(label: '无限制'),  // 页面/块数量
+  const _CellItem(label: '10GB'),     // 云存储
+  const _CellItem(icon: FlowySvgs.check_m),  // 导入与导出
+  const _CellItem(icon: FlowySvgs.check_m),  // 收件箱
+  const _CellItem(icon: FlowySvgs.check_m),  // 多端同步
+  const _CellItem(icon: FlowySvgs.check_m),  // 支持 API
+  const _CellItem(label: '7天'),      // 版本历史
+  const _CellItem(label: '40次/月'),  // AI对话
+  const _CellItem(label: '10张/月'),  // 图片生成
+  const _CellItem(icon: FlowySvgs.check_m),  // 分享链接
+  const _CellItem(icon: FlowySvgs.check_m),  // 发布
+  const _CellItem(label: '5'),        // 工作区成员
+  const _CellItem(icon: FlowySvgs.check_m),  // 协作工作区
+  const _CellItem(label: '10个访客编辑'),  // 页面权限管理
+  const _CellItem(icon: FlowySvgs.check_m),  // 空间/成员管理
+  const _CellItem(label: '-'),        // 空间/成员分组
+];
+
+final List<_CellItem> _teamLabels = [
+  const _CellItem(label: '无限制'),  // 页面/块数量
+  const _CellItem(label: '20GB'),     // 云存储
+  const _CellItem(icon: FlowySvgs.check_m),  // 导入与导出
+  const _CellItem(icon: FlowySvgs.check_m),  // 收件箱
+  const _CellItem(icon: FlowySvgs.check_m),  // 多端同步
+  const _CellItem(icon: FlowySvgs.check_m),  // 支持 API
+  const _CellItem(label: '30天'),     // 版本历史
+  const _CellItem(label: '120次/月'), // AI对话
+  const _CellItem(label: '20张/月'),  // 图片生成
+  const _CellItem(icon: FlowySvgs.check_m),  // 分享链接
+  const _CellItem(icon: FlowySvgs.check_m),  // 发布
+  const _CellItem(label: '10'),       // 工作区成员
+  const _CellItem(icon: FlowySvgs.check_m),  // 协作工作区
+  const _CellItem(label: '50个访客编辑'),  // 页面权限管理
+  const _CellItem(icon: FlowySvgs.check_m),  // 空间/成员管理
+  const _CellItem(icon: FlowySvgs.check_m),  // 空间/成员分组
 ];

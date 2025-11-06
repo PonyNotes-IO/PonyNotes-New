@@ -1,9 +1,12 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/email_binding_dialog.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_svg/flowy_svg.dart';
@@ -13,10 +16,12 @@ class AccountManagementView extends StatefulWidget {
   const AccountManagementView({
     super.key,
     required this.userProfile,
+    required this.workspaceId,
     required this.changeSelectedPage,
   });
 
   final UserProfilePB userProfile;
+  final String workspaceId;
   final Function changeSelectedPage;
 
   @override
@@ -24,50 +29,77 @@ class AccountManagementView extends StatefulWidget {
 }
 
 class _AccountManagementViewState extends State<AccountManagementView> {
-  int selectedPlan = 0; // 0: 免费, 1: 标准, 2: 高级, 3: 专业, 4: 超级会员
+  WorkspaceSubscriptionInfoPB? _subscriptionInfo;
+  bool _isLoading = true;
 
-  final List<Map<String, dynamic>> plans = [
-    {
-      'title': '免费账户',
-      'price': '¥0',
-      'period': '',
-      'color': const Color(0xFFFF6B47),
-      'tag': '',
-      'isPopular': false,
-    },
-    {
-      'title': '标准账户',
-      'price': '¥20.00',
-      'period': '/月',
-      'color': const Color(0xFF4CAF50),
-      'tag': '',
-      'isPopular': false,
-    },
-    {
-      'title': '高级账户',
-      'price': '¥35.00',
-      'period': '/月',
-      'color': const Color(0xFF2196F3),
-      'tag': '',
-      'isPopular': false,
-    },
-    {
-      'title': '专业账户',
-      'price': '¥45.00',
-      'period': '/月',
-      'color': const Color(0xFF9C27B0),
-      'tag': '',
-      'isPopular': false,
-    },
-    {
-      'title': '超级会员',
-      'price': '¥24.83',
-      'period': '/月',
-      'color': const Color(0xFFFF9800),
-      'tag': '',
-      'isPopular': false,
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadSubscriptionInfo();
+  }
+
+  Future<void> _loadSubscriptionInfo() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final result = await UserBackendService.getWorkspaceSubscriptionInfo(widget.workspaceId);
+    
+    result.fold(
+      (info) {
+        if (mounted) {
+          setState(() {
+            _subscriptionInfo = info;
+            _isLoading = false;
+          });
+        }
+      },
+      (error) {
+        Log.error('Failed to load subscription info: ${error.msg}');
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      },
+    );
+  }
+
+  // 根据订阅计划返回对应的配置
+  Map<String, dynamic> _getPlanConfig(WorkspacePlanPB plan) {
+    switch (plan) {
+      case WorkspacePlanPB.FreePlan:
+        return {
+          'title': '免费版',
+          'color': const Color(0xFFFF6B47),
+          'tag': '',
+        };
+      case WorkspacePlanPB.StudentPlan:
+        return {
+          'title': '学生版',
+          'color': const Color(0xFF4CAF50),
+          'tag': '学生专享',
+        };
+      case WorkspacePlanPB.StandardPlan:
+        return {
+          'title': '标准版',
+          'color': const Color(0xFF2196F3),
+          'tag': '最受欢迎',
+        };
+      case WorkspacePlanPB.TeamPlan:
+        return {
+          'title': '团队版',
+          'color': const Color(0xFF9C27B0),
+          'tag': '',
+        };
+      default:
+        return {
+          'title': '免费版',
+          'color': const Color(0xFFFF6B47),
+          'tag': '',
+        };
+    }
+  }
 
   final List<Map<String, dynamic>> benefits = [
     {
@@ -104,102 +136,16 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     return SettingsBody(
       title: "我的账户",
       children: [
-        // 账户类型选择区域
+        // 账户类型显示区域
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-              // 账户类型选择
-              Row(
-                children: plans.asMap().entries.map((entry) {
-                  int index = entry.key;
-                  Map<String, dynamic> plan = entry.value;
-                  bool isSelected = selectedPlan == index;
-                  
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          selectedPlan = index;
-                        });
-                      },
-                      child: Container(
-                        margin: EdgeInsets.only(
-                          right: index < plans.length - 1 ? theme.spacing.s : 0,
-                        ),
-                        padding: EdgeInsets.all(theme.spacing.m),
-                        decoration: BoxDecoration(
-                          color: isSelected ? plan['color'].withOpacity(0.1) : Colors.transparent,
-                          border: Border.all(
-                            color: isSelected ? plan['color'] : theme.borderColorScheme.primary.withOpacity(0.2),
-                            width: isSelected ? 2 : 1,
-                          ),
-                          borderRadius: BorderRadius.circular(theme.spacing.s),
-                        ),
-                        child: Column(
-                          children: [
-                            // 标签
-                            if (plan['tag'].isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: plan['color'],
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: FlowyText(
-                                  plan['tag'],
-                                  fontSize: 10,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            if (plan['isPopular'])
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFF6B47),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const FlowyText(
-                                  '推荐',
-                                  fontSize: 10,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            const VSpace(8),
-                            // 账户类型
-                            FlowyText(
-                              plan['title'],
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: theme.textColorScheme.primary,
-                            ),
-                            const VSpace(4),
-                            // 价格
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              textBaseline: TextBaseline.alphabetic,
-                              children: [
-                                FlowyText(
-                                  plan['price'],
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: theme.textColorScheme.primary,
-                                ),
-                                if (plan['period'].isNotEmpty)
-                                  FlowyText(
-                                    plan['period'],
-                                    fontSize: 12,
-                                    color: theme.textColorScheme.secondary,
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
+            if (_isLoading)
+              const Center(
+                child: CircularProgressIndicator(),
+              )
+            else
+              _buildPlanStatusRow(context),
               
               const VSpace(32),
               
@@ -282,6 +228,77 @@ class _AccountManagementViewState extends State<AccountManagementView> {
             ],
           ),
       ],
+    );
+  }
+
+  // 构建四个计划状态的行
+  Widget _buildPlanStatusRow(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    
+    // 定义所有计划的配置
+    final allPlans = [
+      WorkspacePlanPB.FreePlan,
+      WorkspacePlanPB.StudentPlan,
+      WorkspacePlanPB.StandardPlan,
+      WorkspacePlanPB.TeamPlan,
+    ];
+
+    // 获取当前用户的计划
+    final currentPlan = _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
+
+    return Row(
+      children: allPlans.map((plan) {
+        final config = _getPlanConfig(plan);
+        final isCurrentPlan = plan == currentPlan;
+        
+        return Expanded(
+          child: Container(
+            margin: EdgeInsets.only(
+              right: plan != WorkspacePlanPB.TeamPlan ? theme.spacing.s : 0,
+            ),
+            child: Column(
+              children: [
+                // 圆圈指示器
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isCurrentPlan 
+                        ? config['color'].withOpacity(0.1) 
+                        : Colors.transparent,
+                    border: Border.all(
+                      color: isCurrentPlan 
+                          ? config['color'] 
+                          : theme.borderColorScheme.primary.withOpacity(0.2),
+                      width: 2,
+                    ),
+                  ),
+                  child: Center(
+                    child: isCurrentPlan
+                        ? Icon(
+                            Icons.check,
+                            color: config['color'],
+                            size: 24,
+                          )
+                        : null,
+                  ),
+                ),
+                const VSpace(8),
+                // 计划名称
+                FlowyText(
+                  config['title'],
+                  fontSize: 14,
+                  fontWeight: isCurrentPlan ? FontWeight.w600 : FontWeight.normal,
+                  color: isCurrentPlan 
+                      ? theme.textColorScheme.primary 
+                      : theme.textColorScheme.secondary,
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
   

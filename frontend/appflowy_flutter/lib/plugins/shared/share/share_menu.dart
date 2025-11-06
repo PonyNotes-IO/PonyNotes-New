@@ -149,7 +149,7 @@ class _ShareMenuState extends State<ShareMenu>
                   .state
                   .workspaceSubscriptionInfo
                   ?.plan ==
-              WorkspacePlanPB.ProPlan;
+              WorkspacePlanPB.StandardPlan;
 
           return share_section.ShareTab(
             workspaceId: workspaceId,

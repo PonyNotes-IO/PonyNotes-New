@@ -71,7 +71,7 @@ class _DomainMoreActionState extends State<DomainMoreAction> {
 
     final plan = context.read<SettingsSitesBloc>().state.subscriptionInfo?.plan;
 
-    if (plan != WorkspacePlanPB.ProPlan) {
+    if (plan != WorkspacePlanPB.StandardPlan) {
       return _buildForbiddenActionButton(
         context,
         tooltipMessage: LocaleKeys.settings_sites_namespace_upgradeToPro.tr(),

@@ -145,16 +145,35 @@ pub fn get_ast_enums(ast: &syn::File) -> Vec<FlowyEnum> {
   ast.items.iter().for_each(|item| {
     // https://docs.rs/syn/1.0.54/syn/enum.Item.html
     if let Item::Enum(item_enum) = item {
-      let attrs = flowy_ast::enum_from_ast(
-        &ast_result,
-        &item_enum.ident,
-        &item_enum.variants,
-        &ast.attrs,
-      );
-      flowy_enums.push(FlowyEnum {
-        name: item_enum.ident.to_string(),
-        attrs,
+      // Only include enums with ProtoBuf_Enum derive
+      let has_protobuf_enum = item_enum.attrs.iter().any(|attr| {
+        if let Ok(meta) = attr.parse_meta() {
+          if let syn::Meta::List(list) = meta {
+            if list.path.is_ident("derive") {
+              return list.nested.iter().any(|nested| {
+                if let syn::NestedMeta::Meta(syn::Meta::Path(path)) = nested {
+                  return path.is_ident("ProtoBuf_Enum");
+                }
+                false
+              });
+            }
+          }
+        }
+        false
       });
+
+      if has_protobuf_enum {
+        let attrs = flowy_ast::enum_from_ast(
+          &ast_result,
+          &item_enum.ident,
+          &item_enum.variants,
+          &ast.attrs,
+        );
+        flowy_enums.push(FlowyEnum {
+          name: item_enum.ident.to_string(),
+          attrs,
+        });
+      }
     }
   });
   ast_result.check().unwrap();

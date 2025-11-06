@@ -987,11 +987,13 @@
         "currentPlan": {
           "bannerLabel": "Current plan",
           "freeTitle": "Free",
-          "proTitle": "Pro",
+          "studentTitle": "Student",
+          "standardTitle": "Standard",
           "teamTitle": "Team",
-          "freeInfo": "Perfect for individuals up to 2 members to organize everything",
-          "proInfo": "Perfect for small and medium teams up to 10 members.",
-          "teamInfo": "Perfect for all productive and well-organized teams..",
+          "freeInfo": "Perfect for local use with unlimited features",
+          "studentInfo": "Perfect for students with 2GB cloud storage and 2 members",
+          "standardInfo": "Perfect for individuals and small teams with 10GB storage and 5 members",
+          "teamInfo": "Perfect for productive teams with 20GB storage and 10 members",
           "upgrade": "Change plan",
           "canceledInfo": "Your plan is cancelled, you will be downgraded to the Free plan on {}."
         },

@@ -373,7 +373,7 @@ class _PlanUsageSummary extends StatelessWidget {
                 onTap: () async {
                   context.read<SettingsPlanBloc>().add(
                         const SettingsPlanEvent.addSubscription(
-                          SubscriptionPlanPB.Pro,
+                          SubscriptionPlanPB.Standard,
                         ),
                       );
                   await Future.delayed(const Duration(seconds: 2), () {});

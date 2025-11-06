@@ -242,7 +242,7 @@ class SettingsSitesBloc extends Bloc<SettingsSitesEvent, SettingsSitesState> {
     final userService = UserBackendService(userId: user.id);
     final result = await userService.createSubscription(
       workspaceId,
-      SubscriptionPlanPB.Pro,
+      SubscriptionPlanPB.Standard,
     );
 
     result.onSuccess((s) {

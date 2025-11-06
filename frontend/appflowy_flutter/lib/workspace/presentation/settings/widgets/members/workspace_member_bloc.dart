@@ -344,7 +344,7 @@ class WorkspaceMemberBloc
     if (plan == WorkspacePlanPB.FreePlan) {
       final checkoutLink = await _userBackendService.createSubscription(
         workspaceId,
-        SubscriptionPlanPB.Pro,
+        SubscriptionPlanPB.Standard,
       );
 
       checkoutLink.fold(

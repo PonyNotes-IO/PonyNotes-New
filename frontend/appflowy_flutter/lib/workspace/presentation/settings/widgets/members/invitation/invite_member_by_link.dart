@@ -92,21 +92,42 @@ class _Description extends StatelessWidget {
 
     // check the current workspace member count, if it exceed the limit, show a upgrade dialog.
     // prevent hard code here, because the member count may exceed the limit after the invite link is generated.
-    if (inviteLink == null &&
-        subscriptionInfo?.plan == WorkspacePlanPB.FreePlan &&
-        state.members.length >= 2) {
-      await showConfirmDialog(
-        context: context,
-        title:
-            LocaleKeys.settings_appearance_members_inviteFailedDialogTitle.tr(),
-        description:
-            LocaleKeys.settings_appearance_members_inviteFailedMemberLimit.tr(),
-        confirmLabel: LocaleKeys.upgradePlanModal_actionButton.tr(),
-        onConfirm: (_) => context
-            .read<WorkspaceMemberBloc>()
-            .add(const WorkspaceMemberEvent.upgradePlan()),
-      );
-      return;
+    if (inviteLink == null && subscriptionInfo != null) {
+      int memberLimit = 0;
+      String upgradeToPlan = '';
+      
+      switch (subscriptionInfo.plan) {
+        case WorkspacePlanPB.FreePlan:
+          // Free plan for local use, no cloud member limit
+          break;
+        case WorkspacePlanPB.StudentPlan:
+          memberLimit = 2;
+          upgradeToPlan = '标准版';
+          break;
+        case WorkspacePlanPB.StandardPlan:
+          memberLimit = 5;
+          upgradeToPlan = '团队版';
+          break;
+        case WorkspacePlanPB.TeamPlan:
+          memberLimit = 10;
+          break;
+      }
+      
+      if (memberLimit > 0 && state.members.length >= memberLimit) {
+        await showConfirmDialog(
+          context: context,
+          title:
+              LocaleKeys.settings_appearance_members_inviteFailedDialogTitle.tr(),
+          description: upgradeToPlan.isNotEmpty
+              ? '已达到当前计划的成员数量上限（$memberLimit人），请升级到$upgradeToPlan解锁更多成员'
+              : LocaleKeys.settings_appearance_members_inviteFailedMemberLimit.tr(),
+          confirmLabel: LocaleKeys.upgradePlanModal_actionButton.tr(),
+          onConfirm: (_) => context
+              .read<WorkspaceMemberBloc>()
+              .add(const WorkspaceMemberEvent.upgradePlan()),
+        );
+        return;
+      }
     }
 
     if (inviteLink != null) {

@@ -8,8 +8,10 @@ extension SubscriptionInfoHelpers on WorkspaceSubscriptionInfoPB {
   String get label => switch (plan) {
         WorkspacePlanPB.FreePlan =>
           LocaleKeys.settings_planPage_planUsage_currentPlan_freeTitle.tr(),
-        WorkspacePlanPB.ProPlan =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_proTitle.tr(),
+        WorkspacePlanPB.StudentPlan =>
+          LocaleKeys.settings_planPage_planUsage_currentPlan_studentTitle.tr(),
+        WorkspacePlanPB.StandardPlan =>
+          LocaleKeys.settings_planPage_planUsage_currentPlan_standardTitle.tr(),
         WorkspacePlanPB.TeamPlan =>
           LocaleKeys.settings_planPage_planUsage_currentPlan_teamTitle.tr(),
         _ => 'N/A',
@@ -18,8 +20,10 @@ extension SubscriptionInfoHelpers on WorkspaceSubscriptionInfoPB {
   String get info => switch (plan) {
         WorkspacePlanPB.FreePlan =>
           LocaleKeys.settings_planPage_planUsage_currentPlan_freeInfo.tr(),
-        WorkspacePlanPB.ProPlan =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_proInfo.tr(),
+        WorkspacePlanPB.StudentPlan =>
+          LocaleKeys.settings_planPage_planUsage_currentPlan_studentInfo.tr(),
+        WorkspacePlanPB.StandardPlan =>
+          LocaleKeys.settings_planPage_planUsage_currentPlan_standardInfo.tr(),
         WorkspacePlanPB.TeamPlan =>
           LocaleKeys.settings_planPage_planUsage_currentPlan_teamInfo.tr(),
         _ => 'N/A',
@@ -38,8 +42,10 @@ extension AllSubscriptionLabels on SubscriptionPlanPB {
   String get label => switch (this) {
         SubscriptionPlanPB.Free =>
           LocaleKeys.settings_planPage_planUsage_currentPlan_freeTitle.tr(),
-        SubscriptionPlanPB.Pro =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_proTitle.tr(),
+        SubscriptionPlanPB.Student =>
+          LocaleKeys.settings_planPage_planUsage_currentPlan_studentTitle.tr(),
+        SubscriptionPlanPB.Standard =>
+          LocaleKeys.settings_planPage_planUsage_currentPlan_standardTitle.tr(),
         SubscriptionPlanPB.Team =>
           LocaleKeys.settings_planPage_planUsage_currentPlan_teamTitle.tr(),
         SubscriptionPlanPB.AiMax =>
@@ -67,7 +73,8 @@ extension WorkspaceAddonsExt on WorkspaceSubscriptionInfoPB {
 extension ToRecognizable on SubscriptionPlanPB {
   String? toRecognizable() => switch (this) {
         SubscriptionPlanPB.Free => 'free',
-        SubscriptionPlanPB.Pro => 'pro',
+        SubscriptionPlanPB.Student => 'student',
+        SubscriptionPlanPB.Standard => 'standard',
         SubscriptionPlanPB.Team => 'team',
         SubscriptionPlanPB.AiMax => 'ai_max',
         SubscriptionPlanPB.AiLocal => 'ai_local',
@@ -86,21 +93,23 @@ extension PlanHelper on SubscriptionPlanPB {
       };
 
   String get priceMonthBilling => switch (this) {
-        SubscriptionPlanPB.Free => 'US\$0',
-        SubscriptionPlanPB.Pro => 'US\$12.5',
-        SubscriptionPlanPB.Team => 'US\$15',
-        SubscriptionPlanPB.AiMax => 'US\$10',
-        SubscriptionPlanPB.AiLocal => 'US\$10',
-        _ => 'US\$0',
+        SubscriptionPlanPB.Free => '¥0',
+        SubscriptionPlanPB.Student => '¥3',
+        SubscriptionPlanPB.Standard => '¥8',
+        SubscriptionPlanPB.Team => '¥18',
+        SubscriptionPlanPB.AiMax => '¥10',
+        SubscriptionPlanPB.AiLocal => '¥10',
+        _ => '¥0',
       };
 
   String get priceAnnualBilling => switch (this) {
-        SubscriptionPlanPB.Free => 'US\$0',
-        SubscriptionPlanPB.Pro => 'US\$10',
-        SubscriptionPlanPB.Team => 'US\$12.5',
-        SubscriptionPlanPB.AiMax => 'US\$8',
-        SubscriptionPlanPB.AiLocal => 'US\$8',
-        _ => 'US\$0',
+        SubscriptionPlanPB.Free => '¥0',
+        SubscriptionPlanPB.Student => '¥30',
+        SubscriptionPlanPB.Standard => '¥80',
+        SubscriptionPlanPB.Team => '¥180',
+        SubscriptionPlanPB.AiMax => '¥96',
+        SubscriptionPlanPB.AiLocal => '¥96',
+        _ => '¥0',
       };
 }
 

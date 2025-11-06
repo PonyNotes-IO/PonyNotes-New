@@ -150,6 +150,7 @@ class SettingsDialog extends StatelessWidget {
       case SettingsPage.accountManagement:
         return AccountManagementView(
           userProfile: user,
+          workspaceId: workspace.workspaceId,
           changeSelectedPage: (index) => context
               .read<SettingsDialogBloc>()
               .add(SettingsDialogEvent.setSelectedPage(index)),

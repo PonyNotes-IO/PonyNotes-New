@@ -765,7 +765,14 @@
     "planPage": {
       "planUsage": {
         "currentPlan": {
-          "freeTitle": "免费"
+          "freeTitle": "免费版",
+          "studentTitle": "学生版",
+          "standardTitle": "标准版",
+          "teamTitle": "团队版",
+          "freeInfo": "适合本地使用，功能无限制",
+          "studentInfo": "适合学生使用，2GB云存储，2个成员",
+          "standardInfo": "适合个人和小团队，10GB存储，5个成员",
+          "teamInfo": "适合高效团队，20GB存储，10个成员"
         }
       }
     },

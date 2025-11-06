@@ -1,9 +1,145 @@
 use client_api::entity::billing_dto::{
-  Currency, RecurringInterval, SubscriptionPlan, SubscriptionPlanDetail,
-  WorkspaceSubscriptionStatus, WorkspaceUsageAndLimit,
+  Currency, RecurringInterval, SubscriptionPlanDetail,
+  WorkspaceUsageAndLimit,
 };
+use client_api::entity::billing_dto::WorkspaceSubscriptionStatus as CloudWorkspaceSubscriptionStatus;
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
+use std::fmt;
+use std::str::FromStr;
 use validator::Validate;
+
+// Local definition of SubscriptionPlan to support Basic variant
+// This mirrors the backend definition but is independent to avoid version conflicts
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SubscriptionPlan {
+  Free = 0,
+  Basic = 1,
+  Pro = 2,
+  Team = 3,
+  AiMax = 4,
+  AiLocal = 5,
+}
+
+// Local wrapper for WorkspaceSubscriptionStatus to use our local SubscriptionPlan
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceSubscriptionStatus {
+  pub workspace_id: String,
+  pub workspace_plan: SubscriptionPlan,
+  pub recurring_interval: RecurringInterval,
+  pub subscription_status: SubscriptionStatus,
+  pub subscription_quantity: u64,
+  pub cancel_at: Option<i64>,
+  pub current_period_end: i64,
+}
+
+#[derive(Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SubscriptionStatus {
+  Active = 0,
+  Canceled = 1,
+  Incomplete = 2,
+  IncompleteExpired = 3,
+  PastDue = 4,
+  Paused = 5,
+  Trialing = 6,
+  Unpaid = 7,
+}
+
+// Convert from Cloud API type to local type
+impl From<CloudWorkspaceSubscriptionStatus> for WorkspaceSubscriptionStatus {
+  fn from(cloud: CloudWorkspaceSubscriptionStatus) -> Self {
+    Self {
+      workspace_id: cloud.workspace_id,
+      workspace_plan: cloud.workspace_plan.into(),
+      recurring_interval: cloud.recurring_interval,
+      subscription_status: cloud.subscription_status.into(),
+      subscription_quantity: cloud.subscription_quantity,
+      cancel_at: cloud.cancel_at,
+      current_period_end: cloud.current_period_end,
+    }
+  }
+}
+
+impl From<client_api::entity::billing_dto::SubscriptionStatus> for SubscriptionStatus {
+  fn from(status: client_api::entity::billing_dto::SubscriptionStatus) -> Self {
+    use client_api::entity::billing_dto::SubscriptionStatus as CloudStatus;
+    match status {
+      CloudStatus::Active => SubscriptionStatus::Active,
+      CloudStatus::Canceled => SubscriptionStatus::Canceled,
+      CloudStatus::Incomplete => SubscriptionStatus::Incomplete,
+      CloudStatus::IncompleteExpired => SubscriptionStatus::IncompleteExpired,
+      CloudStatus::PastDue => SubscriptionStatus::PastDue,
+      CloudStatus::Paused => SubscriptionStatus::Paused,
+      CloudStatus::Trialing => SubscriptionStatus::Trialing,
+      CloudStatus::Unpaid => SubscriptionStatus::Unpaid,
+    }
+  }
+}
+
+impl From<client_api::entity::billing_dto::SubscriptionPlan> for SubscriptionPlan {
+  fn from(plan: client_api::entity::billing_dto::SubscriptionPlan) -> Self {
+    use client_api::entity::billing_dto::SubscriptionPlan as CloudPlan;
+    match plan {
+      CloudPlan::Free => SubscriptionPlan::Free,
+      CloudPlan::Pro => SubscriptionPlan::Pro,
+      CloudPlan::Team => SubscriptionPlan::Team,
+      CloudPlan::AiMax => SubscriptionPlan::AiMax,
+      CloudPlan::AiLocal => SubscriptionPlan::AiLocal,
+    }
+  }
+}
+
+impl Default for SubscriptionPlan {
+  fn default() -> Self {
+    SubscriptionPlan::Free
+  }
+}
+
+impl fmt::Display for SubscriptionPlan {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      SubscriptionPlan::Free => write!(f, "free"),
+      SubscriptionPlan::Basic => write!(f, "basic"),
+      SubscriptionPlan::Pro => write!(f, "pro"),
+      SubscriptionPlan::Team => write!(f, "team"),
+      SubscriptionPlan::AiMax => write!(f, "ai_max"),
+      SubscriptionPlan::AiLocal => write!(f, "ai_local"),
+    }
+  }
+}
+
+impl FromStr for SubscriptionPlan {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s.to_lowercase().as_str() {
+      "free" => Ok(SubscriptionPlan::Free),
+      "basic" => Ok(SubscriptionPlan::Basic),
+      "pro" => Ok(SubscriptionPlan::Pro),
+      "team" => Ok(SubscriptionPlan::Team),
+      "ai_max" => Ok(SubscriptionPlan::AiMax),
+      "ai_local" => Ok(SubscriptionPlan::AiLocal),
+      _ => Err(format!("Unknown subscription plan: {}", s)),
+    }
+  }
+}
+
+impl TryFrom<i16> for SubscriptionPlan {
+  type Error = String;
+
+  fn try_from(value: i16) -> Result<Self, Self::Error> {
+    match value {
+      0 => Ok(SubscriptionPlan::Free),
+      1 => Ok(SubscriptionPlan::Basic),
+      2 => Ok(SubscriptionPlan::Pro),
+      3 => Ok(SubscriptionPlan::Team),
+      4 => Ok(SubscriptionPlan::AiMax),
+      5 => Ok(SubscriptionPlan::AiLocal),
+      _ => Err(format!("Unknown subscription plan value: {}", value)),
+    }
+  }
+}
 
 use flowy_derive::{ProtoBuf, ProtoBuf_Enum};
 use flowy_user_pub::cloud::{AFWorkspaceSettings, AFWorkspaceSettingsChange};
@@ -385,19 +521,21 @@ impl From<RecurringInterval> for RecurringIntervalPB {
 pub enum SubscriptionPlanPB {
   #[default]
   Free = 0,
-  Pro = 1,
-  Team = 2,
+  Student = 1,
+  Standard = 2,
+  Team = 3,
 
   // Add-ons
-  AiMax = 3,
-  AiLocal = 4,
+  AiMax = 4,
+  AiLocal = 5,
 }
 
 impl From<WorkspacePlanPB> for SubscriptionPlanPB {
   fn from(value: WorkspacePlanPB) -> Self {
     match value {
       WorkspacePlanPB::FreePlan => SubscriptionPlanPB::Free,
-      WorkspacePlanPB::ProPlan => SubscriptionPlanPB::Pro,
+      WorkspacePlanPB::StudentPlan => SubscriptionPlanPB::Student,
+      WorkspacePlanPB::StandardPlan => SubscriptionPlanPB::Standard,
       WorkspacePlanPB::TeamPlan => SubscriptionPlanPB::Team,
     }
   }
@@ -406,9 +544,10 @@ impl From<WorkspacePlanPB> for SubscriptionPlanPB {
 impl From<SubscriptionPlanPB> for SubscriptionPlan {
   fn from(value: SubscriptionPlanPB) -> Self {
     match value {
-      SubscriptionPlanPB::Pro => SubscriptionPlan::Pro,
-      SubscriptionPlanPB::Team => SubscriptionPlan::Team,
       SubscriptionPlanPB::Free => SubscriptionPlan::Free,
+      SubscriptionPlanPB::Student => SubscriptionPlan::Basic,
+      SubscriptionPlanPB::Standard => SubscriptionPlan::Pro,
+      SubscriptionPlanPB::Team => SubscriptionPlan::Team,
       SubscriptionPlanPB::AiMax => SubscriptionPlan::AiMax,
       SubscriptionPlanPB::AiLocal => SubscriptionPlan::AiLocal,
     }
@@ -418,11 +557,39 @@ impl From<SubscriptionPlanPB> for SubscriptionPlan {
 impl From<SubscriptionPlan> for SubscriptionPlanPB {
   fn from(value: SubscriptionPlan) -> Self {
     match value {
-      SubscriptionPlan::Pro => SubscriptionPlanPB::Pro,
-      SubscriptionPlan::Team => SubscriptionPlanPB::Team,
       SubscriptionPlan::Free => SubscriptionPlanPB::Free,
+      SubscriptionPlan::Basic => SubscriptionPlanPB::Student,
+      SubscriptionPlan::Pro => SubscriptionPlanPB::Standard,
+      SubscriptionPlan::Team => SubscriptionPlanPB::Team,
       SubscriptionPlan::AiMax => SubscriptionPlanPB::AiMax,
       SubscriptionPlan::AiLocal => SubscriptionPlanPB::AiLocal,
+    }
+  }
+}
+
+impl From<SubscriptionPlanPB> for client_api::entity::billing_dto::SubscriptionPlan {
+  fn from(value: SubscriptionPlanPB) -> Self {
+    use client_api::entity::billing_dto::SubscriptionPlan as CloudPlan;
+    match value {
+      SubscriptionPlanPB::Free => CloudPlan::Free,
+      SubscriptionPlanPB::Student => CloudPlan::Pro, // Map Student to Pro for cloud
+      SubscriptionPlanPB::Standard => CloudPlan::Pro,
+      SubscriptionPlanPB::Team => CloudPlan::Team,
+      SubscriptionPlanPB::AiMax => CloudPlan::AiMax,
+      SubscriptionPlanPB::AiLocal => CloudPlan::AiLocal,
+    }
+  }
+}
+
+impl From<client_api::entity::billing_dto::SubscriptionPlan> for SubscriptionPlanPB {
+  fn from(value: client_api::entity::billing_dto::SubscriptionPlan) -> Self {
+    use client_api::entity::billing_dto::SubscriptionPlan as CloudPlan;
+    match value {
+      CloudPlan::Free => SubscriptionPlanPB::Free,
+      CloudPlan::Pro => SubscriptionPlanPB::Standard,
+      CloudPlan::Team => SubscriptionPlanPB::Team,
+      CloudPlan::AiMax => SubscriptionPlanPB::AiMax,
+      CloudPlan::AiLocal => SubscriptionPlanPB::AiLocal,
     }
   }
 }
@@ -453,6 +620,10 @@ pub struct WorkspaceUsagePB {
   pub ai_responses_unlimited: bool,
   #[pb(index = 9)]
   pub local_ai: bool,
+  #[pb(index = 10)]
+  pub ai_image_responses_count: u64,
+  #[pb(index = 11)]
+  pub ai_image_responses_count_limit: u64,
 }
 
 impl From<WorkspaceUsageAndLimit> for WorkspaceUsagePB {
@@ -467,6 +638,8 @@ impl From<WorkspaceUsageAndLimit> for WorkspaceUsagePB {
       ai_responses_count_limit: workspace_usage.ai_responses_count_limit as u64,
       ai_responses_unlimited: workspace_usage.ai_responses_unlimited,
       local_ai: workspace_usage.local_ai,
+      ai_image_responses_count: workspace_usage.ai_image_responses_count as u64,
+      ai_image_responses_count_limit: workspace_usage.ai_image_responses_count_limit as u64,
     }
   }
 }
@@ -551,6 +724,13 @@ impl WorkspaceSubscriptionInfoPB {
   }
 }
 
+impl From<Vec<CloudWorkspaceSubscriptionStatus>> for WorkspaceSubscriptionInfoPB {
+  fn from(cloud_subs: Vec<CloudWorkspaceSubscriptionStatus>) -> Self {
+    let subs: Vec<WorkspaceSubscriptionStatus> = cloud_subs.into_iter().map(|s| s.into()).collect();
+    Self::from(subs)
+  }
+}
+
 impl From<Vec<WorkspaceSubscriptionStatus>> for WorkspaceSubscriptionInfoPB {
   fn from(subs: Vec<WorkspaceSubscriptionStatus>) -> Self {
     let mut plan = WorkspacePlanPB::FreePlan;
@@ -561,8 +741,12 @@ impl From<Vec<WorkspaceSubscriptionStatus>> for WorkspaceSubscriptionInfoPB {
         SubscriptionPlan::Free => {
           plan = WorkspacePlanPB::FreePlan;
         },
+        SubscriptionPlan::Basic => {
+          plan = WorkspacePlanPB::StudentPlan;
+          plan_subscription = sub.into();
+        },
         SubscriptionPlan::Pro => {
-          plan = WorkspacePlanPB::ProPlan;
+          plan = WorkspacePlanPB::StandardPlan;
           plan_subscription = sub.into();
         },
         SubscriptionPlan::Team => {
@@ -605,8 +789,9 @@ impl From<Vec<WorkspaceSubscriptionStatus>> for WorkspaceSubscriptionInfoPB {
 pub enum WorkspacePlanPB {
   #[default]
   FreePlan = 0,
-  ProPlan = 1,
-  TeamPlan = 2,
+  StudentPlan = 1,
+  StandardPlan = 2,
+  TeamPlan = 3,
 }
 
 impl From<WorkspacePlanPB> for i64 {
@@ -619,8 +804,9 @@ impl From<i64> for WorkspacePlanPB {
   fn from(value: i64) -> Self {
     match value {
       0 => WorkspacePlanPB::FreePlan,
-      1 => WorkspacePlanPB::ProPlan,
-      2 => WorkspacePlanPB::TeamPlan,
+      1 => WorkspacePlanPB::StudentPlan,
+      2 => WorkspacePlanPB::StandardPlan,
+      3 => WorkspacePlanPB::TeamPlan,
       _ => WorkspacePlanPB::FreePlan,
     }
   }

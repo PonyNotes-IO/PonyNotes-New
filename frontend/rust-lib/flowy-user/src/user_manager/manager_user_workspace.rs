@@ -756,7 +756,7 @@ impl UserManager {
     let workspace_id = Uuid::from_str(&success.workspace_id)?;
     let plans = PeriodicallyCheckBillingState::new(
       workspace_id,
-      success.plan.map(SubscriptionPlan::from),
+      success.plan.map(|p| p.into()),
       self.cloud_service.clone(),
       Arc::downgrade(&self.authenticate_user),
     )

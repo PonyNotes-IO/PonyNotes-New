@@ -292,7 +292,7 @@ impl UserCloudService for LocalServerUserServiceImpl {
       ai_responses_count: i64::MAX,
       ai_responses_count_limit: i64::MAX,
       ai_image_responses_count: i64::MAX,
-      ai_image_responses_count_limit: 0,
+      ai_image_responses_count_limit: i64::MAX,
       local_ai: true,
       ai_responses_unlimited: true,
     })
