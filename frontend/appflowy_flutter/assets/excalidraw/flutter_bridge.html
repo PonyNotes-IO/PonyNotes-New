@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
     <title>Excalidraw for PonyNotes</title>
+    <script>
+        // 🔥 最早执行的日志 - 确认 HTML 已加载
+        console.log('🔥🔥🔥 [Flutter Bridge] HTML LOADED - flutter_bridge.html is executing! 🔥🔥🔥');
+        console.log('[Flutter Bridge] window.location:', window.location.href);
+        console.log('[Flutter Bridge] document.readyState:', document.readyState);
+    </script>
     <style>
         * {
             margin: 0;
@@ -264,8 +270,17 @@
         
         // iframe 消息监听
         window.addEventListener('message', function(event) {
+            // 🔍 调试：记录所有收到的消息
+            console.log('[Flutter Bridge] 📨 Received message:', {
+                origin: event.origin,
+                expectedOrigin: window.location.origin,
+                type: event.data?.type,
+                hasPayload: !!event.data?.payload
+            });
+            
             // 仅接受来自同源的消息
             if (event.origin !== window.location.origin) {
+                console.warn('[Flutter Bridge] ⚠️ Rejected message from different origin:', event.origin);
                 return;
             }
             
@@ -274,6 +289,8 @@
             // 处理来自 Excalidraw iframe 的消息
             if (data.type === 'excalidraw-ready') {
                 console.log('[Flutter Bridge] Excalidraw iframe ready');
+                // 转发 ready 消息给 Flutter
+                FlutterBridge.postMessage('excalidraw-ready', data.payload || { ready: true });
                 initializeExcalidraw();
             } else if (data.type === 'excalidraw-change') {
                 console.log('[Flutter Bridge] 💾 Data change detected from iframe');
