@@ -127,9 +127,9 @@ class ScheduleItem {
       category: '数据库',
       color: Colors.blue,
       dueDate: endTime, // 使用结束时间作为截止日期
-      isRepeat: eventPB.repeatType != 0,
-      repeatType: eventPB.repeatType,
-      repeatRuleJson: eventPB.repeatRuleJson,
+      isRepeat: false,
+      repeatType: 0,
+      repeatRuleJson: "",
     );
   }
 
