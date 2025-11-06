@@ -42,7 +42,6 @@ class ScheduleItem {
   final String? reminderId; // AppFlowy 提醒ID
   final ReminderOption reminderOption; // 提醒选项
   final DateTime? dueDate; // 截止日期
-  final bool isRepeat; // 是否重复
   final int repeatType; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
   final String? repeatRuleJson; // 自定义重复规则JSON（如"每1周的周一"）
 
@@ -59,7 +58,6 @@ class ScheduleItem {
     this.reminderId,
     this.reminderOption = ReminderOption.none,
     this.dueDate,
-    this.isRepeat = false,
     this.repeatType = 0,
     this.repeatRuleJson,
   });
@@ -127,7 +125,6 @@ class ScheduleItem {
       category: '数据库',
       color: Colors.blue,
       dueDate: endTime, // 使用结束时间作为截止日期
-      isRepeat: false,
       repeatType: 0,
       repeatRuleJson: "",
     );
@@ -146,7 +143,6 @@ class ScheduleItem {
     String? reminderId,
     ReminderOption? reminderOption,
     DateTime? dueDate,
-    bool? isRepeat,
     int? repeatType,
     String? repeatRuleJson,
   }) {
@@ -163,7 +159,6 @@ class ScheduleItem {
       reminderId: reminderId ?? this.reminderId,
       reminderOption: reminderOption ?? this.reminderOption,
       dueDate: dueDate ?? this.dueDate,
-      isRepeat: isRepeat ?? this.isRepeat,
       repeatType: repeatType ?? this.repeatType,
       repeatRuleJson: repeatRuleJson ?? this.repeatRuleJson,
     );
@@ -172,13 +167,11 @@ class ScheduleItem {
 
 // 重复规则处理类
 class RecurrenceRule {
-  final bool isRepeat;
   final int repeatType; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
   final String? repeatRuleJson; // 自定义规则JSON
   final DateTime startDate; // 原始开始日期
 
   RecurrenceRule({
-    required this.isRepeat,
     required this.repeatType,
     this.repeatRuleJson,
     required this.startDate,
@@ -186,7 +179,7 @@ class RecurrenceRule {
 
   // 判断某个日期是否匹配重复规则
   bool matchesDate(DateTime date) {
-    if (!isRepeat || repeatType == 0) {
+    if (repeatType == 0) {
       return false;
     }
 
@@ -268,6 +261,8 @@ class RecurrenceRule {
       }
 
       // TODO: 处理其他自定义规则（每月、每年等）
+
+
       return false;
     } catch (e) {
       print('⚠️ [RecurrenceRule] 解析自定义规则失败: $e');
@@ -489,7 +484,6 @@ class ScheduleModel extends ChangeNotifier {
             print('    - 分类: ${item.category}');
             print('    - 提醒ID: ${item.reminderId}');
             print('    - 提醒选项: ${item.reminderOption}');
-            print('    - 是否重复：${item.isRepeat}');
             print('    - 重复类型: ${item.repeatType}');
             print('    - 重复规则: ${item.repeatRuleJson}');
             
@@ -510,7 +504,6 @@ class ScheduleModel extends ChangeNotifier {
                 print('    - 提醒ID: ${item.reminderId}');
                 print('    - 提醒选项: ${item.reminderOption}');
                 print('    - 截止日期: ${item.dueDate}');
-                print('    - 是否重复：${item.isRepeat}');
                 print('    - 重复类型: ${item.repeatType}');
                 print('    - 重复规则: ${item.repeatRuleJson}');
               } catch (e, stackTrace) {
@@ -621,7 +614,6 @@ class ScheduleModel extends ChangeNotifier {
     bool isAllDay = false,
     ReminderOption reminderOption = ReminderOption.none,
     DateTime? dueDate,
-    bool isRepeat = false,
     int repeatType = 0,
     String? repeatRuleJson,
   }) async {
@@ -852,7 +844,6 @@ class ScheduleModel extends ChangeNotifier {
           // 单独处理重复字段：确保字段存在后再保存
           try {
             print('🔁 [ScheduleModel] createSchedule 开始保存重复信息');
-            print('  - isRepeat: $isRepeat');
             print('  - repeatType: $repeatType');
             print('  - repeatRuleJson: $repeatRuleJson');
             
@@ -860,8 +851,7 @@ class ScheduleModel extends ChangeNotifier {
             final repeatField = await _ensureRepeatField(viewId, fieldInfos);
             if (repeatField != null) {
               // 保存重复信息到数据库
-              final repeatData = isRepeat ? jsonEncode({
-                'isRepeat': isRepeat,
+              final repeatData = repeatType != 0 ? jsonEncode({
                 'repeatType': repeatType,
                 'repeatRuleJson': repeatRuleJson ?? '',
               }) : '';
@@ -905,7 +895,6 @@ class ScheduleModel extends ChangeNotifier {
             color: color,
             reminderOption: reminderOption,
             dueDate: dueDate ?? endTime, // 如果没有指定截止日期，使用结束时间
-          isRepeat: isRepeat,
           repeatType: repeatType,
           repeatRuleJson: repeatRuleJson,
           );
@@ -1349,7 +1338,6 @@ class ScheduleModel extends ChangeNotifier {
       // 单独处理重复字段：确保字段存在后再保存
       try {
         print('🔁 [ScheduleModel] updateSchedule 开始更新重复信息');
-        print('  - isRepeat: ${schedule.isRepeat}');
         print('  - repeatType: ${schedule.repeatType}');
         print('  - repeatRuleJson: ${schedule.repeatRuleJson}');
         
@@ -1357,8 +1345,7 @@ class ScheduleModel extends ChangeNotifier {
         final repeatField = await _ensureRepeatField(viewId, fieldInfos);
         if (repeatField != null) {
           // 保存重复信息到数据库
-          final repeatData = schedule.isRepeat ? jsonEncode({
-            'isRepeat': schedule.isRepeat,
+          final repeatData = schedule.repeatType != 0 ? jsonEncode({
             'repeatType': schedule.repeatType,
             'repeatRuleJson': schedule.repeatRuleJson ?? '',
           }) : '';
@@ -1657,7 +1644,7 @@ class ScheduleModel extends ChangeNotifier {
       );
     }
 
-    Future<(DateTime?, DateTime?, bool?, bool?, String?)>
+    Future<(DateTime?, DateTime?, bool?, bool?, String?,int?,String?)>
         _getDateRangeWithExtra(FieldInfo f) async {
       final r = await CellBackendService.getCell(
         viewId: viewId,
@@ -1666,13 +1653,15 @@ class ScheduleModel extends ChangeNotifier {
       return r.fold(
         (cell) {
           final pb = DateCellDataParser().parserData(cell.data);
-          if (pb == null) return (null, null, null, null, null);
+          if (pb == null) return (null, null, null, null, null,0,"");
           DateTime? s;
           DateTime? e;
           bool? includeTime;
           bool? isRange;
           String? reminderId;
-          
+          int? repeatType;
+          String? repeatCustomSummary;
+
           if (pb.hasTimestamp()) {
             s = DateTime.fromMillisecondsSinceEpoch(
                 pb.timestamp.toInt() * 1000);
@@ -1695,9 +1684,13 @@ class ScheduleModel extends ChangeNotifier {
           if (pb.reminderId.isNotEmpty) {
             reminderId = pb.reminderId;
           }
-          return (s, e, includeTime, isRange, reminderId);
+          // 读取 repeatType
+          repeatType = pb.repeatType;
+          // 读取 repeatCustomSummary
+          repeatCustomSummary = pb.repeatRuleJson;
+          return (s, e, includeTime, isRange, reminderId,repeatType,repeatCustomSummary);
         },
-        (_) => (null, null, null, null, null),
+        (_) => (null, null, null, null, null,0,""),
       );
     }
 
@@ -1705,10 +1698,10 @@ class ScheduleModel extends ChangeNotifier {
     final df = fieldById[eventPB.dateFieldId];
     if (df != null && df.fieldType == FieldType.DateTime) {
       print('    📅 [enrichFromCells] 读取日期字段: ${df.name} (${df.field.id})');
-      final (s, e, includeTime, isRange, reminderId) =
+      final (s, e, includeTime, isRange, reminderId,repeatType,repeatRuleJson) =
           await _getDateRangeWithExtra(df);
       print(
-          '    📅 [enrichFromCells] 日期数据: 开始=$s, 结束=$e, includeTime=$includeTime, isRange=$isRange, reminderId=$reminderId');
+          '    📅 [enrichFromCells] 日期数据: 开始=$s, 结束=$e, includeTime=$includeTime, isRange=$isRange, reminderId=$reminderId,repeatType=$repeatType,repeatRuleJson=$repeatRuleJson');
       
       if (s != null) {
         // 如果有结束时间则使用，否则结束时间等于开始时间（全天事件）
@@ -1820,15 +1813,13 @@ class ScheduleModel extends ChangeNotifier {
             if (v != null && v.isNotEmpty) {
               try {
                 final repeatData = jsonDecode(v) as Map<String, dynamic>;
-                final isRepeat = repeatData['isRepeat'] as bool? ?? false;
                 final repeatType = repeatData['repeatType'] as int? ?? 0;
                 final repeatRuleJson = repeatData['repeatRuleJson'] as String?;
                 enriched = enriched.copyWith(
-                  isRepeat: isRepeat,
                   repeatType: repeatType,
                   repeatRuleJson: repeatRuleJson,
                 );
-                print('    ✅ [enrichFromCells] 更新了重复信息: isRepeat=$isRepeat, repeatType=$repeatType');
+                print('    ✅ [enrichFromCells] 更新了重复信息: repeatType=$repeatType');
               } catch (e) {
                 print('    ⚠️ [enrichFromCells] 解析重复信息失败: $e');
               }
@@ -1935,14 +1926,13 @@ class ScheduleModel extends ChangeNotifier {
       }
 
       // 如果日程设置了重复，检查是否匹配重复规则
-      if (schedule.isRepeat) {
+      if (schedule.repeatType != 0) {
         print('  🔁 检查重复日程: ${schedule.title}');
         print('    - 开始日期: $scheduleDate');
         print('    - 重复类型: ${schedule.repeatType}');
         print('    - 目标日期: $targetDate');
         
         final rule = RecurrenceRule(
-          isRepeat: schedule.isRepeat,
           repeatType: schedule.repeatType,
           repeatRuleJson: schedule.repeatRuleJson,
           startDate: schedule.startTime,

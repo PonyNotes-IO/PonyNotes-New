@@ -49,6 +49,8 @@ impl CellDataProtobufEncoder for DateTypeOption {
       include_time,
       is_range,
       reminder_id,
+      repeat_type: Some(cell_data.repeat_type),
+      repeat_rule_json: Some(cell_data.repeat_rule_json.clone()),
     }
   }
 }
@@ -169,33 +171,33 @@ impl CellDataChangeset for DateTypeOption {
       return Ok((Cell::from(&cell_data), cell_data));
     }
 
-    let DateCellData {
-      timestamp,
-      end_timestamp,
-      include_time,
-      is_range: _,
-      reminder_id,
-    } = cell_data;
-
     // update include_time and reminder_id if necessary
-    let include_time = changeset.include_time.unwrap_or(include_time);
-    let reminder_id = changeset.reminder_id.unwrap_or(reminder_id);
+    let include_time = changeset.include_time.unwrap_or(cell_data.include_time);
+    let reminder_id = changeset.reminder_id.unwrap_or(cell_data.reminder_id);
 
-    let timestamp = changeset.timestamp.or(timestamp);
+    let timestamp = changeset.timestamp.or(cell_data.timestamp);
     let end_timestamp = if is_range && timestamp.is_some() {
-      changeset.end_timestamp.or(end_timestamp).or(timestamp)
+      changeset.end_timestamp.or(cell_data.end_timestamp).or(timestamp)
     } else {
       None
     };
 
-    let cell_data = DateCellData {
+    let mut cell_data = DateCellData {
       timestamp,
       end_timestamp,
       include_time,
       is_range,
       reminder_id,
+      ..cell_data
     };
 
+    // apply repeat fields from changeset if provided
+    if let Some(rule) = changeset.repeat_rule_json {
+      cell_data.repeat_rule_json = rule;
+    }
+    if let Some(rt) = changeset.repeat_type {
+      cell_data.repeat_type = rt;
+    }
     Ok((Cell::from(&cell_data), cell_data))
   }
 }

@@ -192,6 +192,8 @@ pub struct DateCellChangeset {
   pub is_range: Option<bool>,
   pub clear_flag: Option<bool>,
   pub reminder_id: Option<String>,
+  pub repeat_type: Option<i32>,
+  pub repeat_rule_json: Option<String>,
 }
 
 pub struct DateCellDataParser();

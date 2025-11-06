@@ -39,7 +39,6 @@ class _NewEventPageState extends State<NewEventPage> {
   late DateTime _endDate;
   bool _isAllDay = false;
   bool _isImportant = false;
-  bool _isRepeat = false;
   String _repeatLabel = '任务重复'; // 无时显示“任务重复”
   int _repeatType = 0; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
   String? _repeatCustomSummary; // 自定义选项摘要，如“每1周的周二”
@@ -219,7 +218,6 @@ class _NewEventPageState extends State<NewEventPage> {
         category: _calendar,
         reminderOption: _reminderOption,
         dueDate: endDateTime,
-        isRepeat: _isRepeat,
         repeatType: _repeatType,
         repeatRuleJson: _repeatCustomSummary,
       );
@@ -235,7 +233,6 @@ class _NewEventPageState extends State<NewEventPage> {
           'endDate': _endDate,
           'isAllDay': _isAllDay,
           'isImportant': _isImportant,
-          'isRepeat': _isRepeat,
           'calendar': _calendar,
           'description': _description,
           'repeatType':_repeatType,
@@ -777,18 +774,15 @@ class _NewEventPageState extends State<NewEventPage> {
         onSave: ({required int type, String? customSummary}) {
           setState(() {
             if (type == 0) {
-              _isRepeat = false;
               _repeatType = 0;
               _repeatLabel = '任务重复';
               _repeatCustomSummary = null;
             } else if (type == 99) {
-              _isRepeat = true;
               _repeatType = 99;
               _repeatCustomSummary = customSummary;
               // 从 JSON 中提取显示文本
               _repeatLabel = _extractSummaryFromJson(customSummary ?? '自定义');
             } else {
-              _isRepeat = true;
               _repeatType = type;
               _repeatCustomSummary = null;
               _repeatLabel = _repeatTypeName(type);

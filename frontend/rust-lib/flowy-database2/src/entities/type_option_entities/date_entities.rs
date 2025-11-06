@@ -25,6 +25,12 @@ pub struct DateCellDataPB {
 
   #[pb(index = 5)]
   pub reminder_id: String,
+
+  #[pb(index = 6, one_of)]
+  pub repeat_type: Option<i32>,
+
+  #[pb(index = 7, one_of)]
+  pub repeat_rule_json: Option<String>,
 }
 
 impl From<&DateCellDataPB> for DateCellData {
@@ -35,6 +41,9 @@ impl From<&DateCellDataPB> for DateCellData {
       include_time: data.include_time,
       is_range: data.is_range,
       reminder_id: data.reminder_id.to_owned(),
+      repeat_type: data.repeat_type.unwrap_or_default(),
+      repeat_rule_json: data.repeat_rule_json.clone().unwrap_or_default(),
+      ..Default::default()
     }
   }
 }
@@ -61,6 +70,12 @@ pub struct DateCellChangesetPB {
 
   #[pb(index = 7, one_of)]
   pub reminder_id: Option<String>,
+
+  #[pb(index = 8, one_of)]
+  pub repeat_type: Option<i32>,
+
+  #[pb(index = 9, one_of)]
+  pub repeat_rule_json: Option<String>,
 }
 
 // Date

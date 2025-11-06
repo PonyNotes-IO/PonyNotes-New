@@ -718,6 +718,8 @@ pub(crate) async fn update_date_cell_handler(
     is_range: data.is_range,
     clear_flag: data.clear_flag,
     reminder_id: data.reminder_id,
+    repeat_type: data.repeat_type,
+    repeat_rule_json: data.repeat_rule_json,
   };
 
   let database_editor = manager

@@ -47,7 +47,6 @@ class _EditEventPageState extends State<EditEventPage> {
   late DateTime _endDate;
   late bool _isAllDay;
   late bool _isImportant;
-  late bool _isRepeat;
   String _repeatLabel = '任务重复';
   int _repeatType = 0; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
   String? _repeatCustomSummary;
@@ -83,7 +82,6 @@ class _EditEventPageState extends State<EditEventPage> {
     _endTime = TimeOfDay.fromDateTime(schedule.endTime);
     _isAllDay = schedule.isAllDay;
     _isImportant = schedule.isImportant;
-    _isRepeat = schedule.isRepeat;
     _repeatType = schedule.repeatType;
     _repeatCustomSummary = schedule.repeatRuleJson;
     _repeatLabel = _repeatType == 0
@@ -316,8 +314,6 @@ class _EditEventPageState extends State<EditEventPage> {
         reminderOption: _reminderOption, // 直接使用 ReminderOption
         // 显式保留原来的 reminderId，确保更新提醒时能找到原有的提醒ID
         reminderId: widget.schedule.reminderId,
-        // 更新重复信息
-        isRepeat: _isRepeat,
         repeatType: _repeatType,
         repeatRuleJson: _repeatCustomSummary,
       );
@@ -331,7 +327,6 @@ class _EditEventPageState extends State<EditEventPage> {
 
       // 更新成功
       if (success) {
-        
         // 创建更新后的事件数据
         final eventData = {
           'id': widget.schedule.id,
@@ -342,7 +337,6 @@ class _EditEventPageState extends State<EditEventPage> {
           'endDate': _endDate,
           'isAllDay': _isAllDay,
           'isImportant': _isImportant,
-          'isRepeat': _isRepeat,
           'calendar': _calendar,
           'description': _description,
         };
@@ -1081,7 +1075,6 @@ class _EditEventPageState extends State<EditEventPage> {
   }
 
   void _showRepeatDialog() {
-    final theme = Theme.of(context);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1091,18 +1084,15 @@ class _EditEventPageState extends State<EditEventPage> {
         onSave: ({required int type, String? customSummary}) {
           setState(() {
             if (type == 0) {
-              _isRepeat = false;
               _repeatType = 0;
               _repeatLabel = '任务重复';
               _repeatCustomSummary = null;
             } else if (type == 99) {
-              _isRepeat = true;
               _repeatType = 99;
               _repeatCustomSummary = customSummary;
               // 从 JSON 中提取显示文本
               _repeatLabel = _extractSummaryFromJson(customSummary ?? '自定义');
             } else {
-              _isRepeat = true;
               _repeatType = type;
               _repeatCustomSummary = null;
               _repeatLabel = _repeatTypeName(type);
