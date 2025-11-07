@@ -9,11 +9,219 @@
   // ${fileExtname}: the current opened file's extension
   // ${cwd}: the current working directory of the spawned process
   "tasks": [
+    // ============================================
+    // 环境配置任务
+    // ============================================
     {
-      "label": "AF: Clean + Rebuild All",
+      "label": "AF: Switch to Development Env",
+      "type": "shell",
+      "command": "cp",
+      "args": [
+        "${workspaceFolder}/appflowy_flutter/env_config_templates/development.env",
+        "${workspaceFolder}/appflowy_flutter/dev.env"
+      ],
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-Command",
+          "Copy-Item",
+          "-Path",
+          "'${workspaceFolder}\\appflowy_flutter\\env_config_templates\\development.env'",
+          "-Destination",
+          "'${workspaceFolder}\\appflowy_flutter\\dev.env'",
+          "-Force"
+        ]
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "AF: Switch to Staging Env",
+      "type": "shell",
+      "command": "cp",
+      "args": [
+        "${workspaceFolder}/appflowy_flutter/env_config_templates/staging.env",
+        "${workspaceFolder}/appflowy_flutter/dev.env"
+      ],
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-Command",
+          "Copy-Item",
+          "-Path",
+          "'${workspaceFolder}\\appflowy_flutter\\env_config_templates\\staging.env'",
+          "-Destination",
+          "'${workspaceFolder}\\appflowy_flutter\\dev.env'",
+          "-Force"
+        ]
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "AF: Switch to Production Env",
+      "type": "shell",
+      "command": "cp",
+      "args": [
+        "${workspaceFolder}/appflowy_flutter/env_config_templates/production.env",
+        "${workspaceFolder}/appflowy_flutter/dev.env"
+      ],
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-Command",
+          "Copy-Item",
+          "-Path",
+          "'${workspaceFolder}\\appflowy_flutter\\env_config_templates\\production.env'",
+          "-Destination",
+          "'${workspaceFolder}\\appflowy_flutter\\dev.env'",
+          "-Force"
+        ]
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    // ============================================
+    // 轻量级快速编译前端任务 - 仅切换环境（推荐日常使用）
+    // ============================================
+    {
+      "label": "AF: Quick Build (Development)",
       "type": "shell",
       "dependsOrder": "sequence",
       "dependsOn": [
+        "AF: Switch to Development Env"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "AF: Quick Build (Staging)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Staging Env"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "AF: Quick Build (Production)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Production Env"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    // ============================================
+    // 完整编译前端任务 - 包含依赖和代码生成（首次或大改动后使用）
+    // ============================================
+    {
+      "label": "AF: Full Build Frontend (Development)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "AF: Full Build Frontend (Production)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Production Env",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    // ============================================
+    // 编译前后端任务（不清理）- 支持环境选择
+    // ============================================
+    {
+      "label": "AF: Build Full Stack (Development)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
+        "AF: Build Appflowy Core",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "AF: Build Full Stack (Production)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Production Env",
+        "AF: Build Appflowy Core",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    // ============================================
+    // 完整编译任务（清理 + 重新编译）- 支持环境选择
+    // ============================================
+    {
+      "label": "AF: Clean + Rebuild All (Development)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
         "AF: Dart Clean",
         "AF: Flutter Clean",
         "AF: Build Appflowy Core",
@@ -28,10 +236,52 @@
       }
     },
     {
-      "label": "AF: Clean + Rebuild All (iOS)",
+      "label": "AF: Clean + Rebuild All (Staging)",
       "type": "shell",
       "dependsOrder": "sequence",
       "dependsOn": [
+        "AF: Switch to Staging Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "AF: Clean + Rebuild All (Production)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Production Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    // ============================================
+    // iOS 完整编译任务 - 支持环境选择
+    // ============================================
+    {
+      "label": "AF: Clean + Rebuild All (iOS - Development)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
         "AF: Dart Clean",
         "AF: Flutter Clean",
         "AF: Build Appflowy Core For iOS",
@@ -46,10 +296,52 @@
       }
     },
     {
-      "label": "AF: Clean + Rebuild All (iOS Simulator)",
+      "label": "AF: Clean + Rebuild All (iOS - Staging)",
       "type": "shell",
       "dependsOrder": "sequence",
       "dependsOn": [
+        "AF: Switch to Staging Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core For iOS",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "AF: Clean + Rebuild All (iOS - Production)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Production Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core For iOS",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    // ============================================
+    // iOS Simulator 完整编译任务 - 支持环境选择
+    // ============================================
+    {
+      "label": "AF: Clean + Rebuild All (iOS Simulator - Development)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
         "AF: Dart Clean",
         "AF: Flutter Clean",
         "AF: Build Appflowy Core For iOS Simulator",
@@ -64,10 +356,52 @@
       }
     },
     {
-      "label": "AF: Clean + Rebuild All (Android)",
+      "label": "AF: Clean + Rebuild All (iOS Simulator - Staging)",
       "type": "shell",
       "dependsOrder": "sequence",
       "dependsOn": [
+        "AF: Switch to Staging Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core For iOS Simulator",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "AF: Clean + Rebuild All (iOS Simulator - Production)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Production Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core For iOS Simulator",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    // ============================================
+    // Android 完整编译任务 - 支持环境选择
+    // ============================================
+    {
+      "label": "AF: Clean + Rebuild All (Android - Development)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
         "AF: Dart Clean",
         "AF: Flutter Clean",
         "AF: Build Appflowy Core For Android",
@@ -81,6 +415,105 @@
         "panel": "new"
       }
     },
+    {
+      "label": "AF: Clean + Rebuild All (Android - Staging)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Staging Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core For Android",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "AF: Clean + Rebuild All (Android - Production)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Production Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core For Android",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Sv Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    // ============================================
+    // 仅前端代码生成任务 - 支持环境选择
+    // ============================================
+    {
+      "label": "AF: Code Gen (Development)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
+        "AF: Flutter Clean",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "AF: Code Gen (Staging)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Staging Env",
+        "AF: Flutter Clean",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "AF: Code Gen (Production)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Production Env",
+        "AF: Flutter Clean",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    // ============================================
+    // 基础构建任务（原有的底层任务）
+    // ============================================
     {
       "label": "AF: Build Appflowy Core",
       "type": "shell",
@@ -123,26 +556,6 @@
       "group": "build",
       "options": {
         "cwd": "${workspaceFolder}"
-      }
-    },
-    {
-      "label": "AF: Code Gen",
-      "type": "shell",
-      "dependsOrder": "sequence",
-      "dependsOn": [
-        "AF: Flutter Clean",
-        "AF: Flutter Pub Get",
-        "AF: Generate Language Files",
-        "AF: Generate Freezed Files",
-        "AF: Generate Svg Files"
-      ],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "presentation": {
-        "reveal": "always",
-        "panel": "new"
       }
     },
     {

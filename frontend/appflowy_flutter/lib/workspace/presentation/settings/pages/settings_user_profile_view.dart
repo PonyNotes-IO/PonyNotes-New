@@ -1,13 +1,16 @@
 import 'dart:io';
 
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_util.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_category.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_input_field.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
-import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
-import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 
 class SettingsUserProfileView extends StatefulWidget {
@@ -25,6 +28,7 @@ class SettingsUserProfileView extends StatefulWidget {
 class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
   late String _name;
   late String _avatarUrl;
+  bool _isUploading = false;
 
   @override
   void initState() {
@@ -47,25 +51,43 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
             Center(
               child: Column(
                 children: [
-                  GestureDetector(
-                    onTap: _uploadAvatar,
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.orange.withOpacity(0.5),
-                          width: 2,
-                          style: BorderStyle.solid,
+                  Stack(
+                    children: [
+                      GestureDetector(
+                        onTap: _isUploading ? null : _uploadAvatar,
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.orange.withOpacity(0.5),
+                              width: 2,
+                              style: BorderStyle.solid,
+                            ),
+                          ),
+                          child: ClipOval(
+                            child: _avatarUrl.isNotEmpty
+                                ? _buildAvatar(_avatarUrl)
+                                : _buildDefaultAvatar(),
+                          ),
                         ),
                       ),
-                      child: ClipOval(
-                        child: _avatarUrl.isNotEmpty
-                            ? _buildNetworkAvatar(_avatarUrl)
-                            : _buildDefaultAvatar(),
-                      ),
-                    ),
+                      if (_isUploading)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.black54,
+                            ),
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -98,10 +120,8 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
                     value: _name,
                     placeholder: "我的名称",
                     onSave: (value) {
-                      setState(() {
-                        _name = value;
-                      });
-                      // TODO: 保存到后端
+                      if (value.trim().isEmpty) return;
+                      _updateUserName(value);
                     },
                   ),
                 ),
@@ -114,14 +134,26 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
     );
   }
 
-  Widget _buildNetworkAvatar(String url) {
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
-        return _buildDefaultAvatar();
-      },
-    );
+  Widget _buildAvatar(String url) {
+    // 判断是本地路径还是网络 URL
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return _buildDefaultAvatar();
+        },
+      );
+    } else if (File(url).existsSync()) {
+      return Image.file(
+        File(url),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return _buildDefaultAvatar();
+        },
+      );
+    }
+    return _buildDefaultAvatar();
   }
 
   Widget _buildDefaultAvatar() {
@@ -130,29 +162,149 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
       height: double.infinity,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.orange.withOpacity(0.1),
+        color: Colors.white,
       ),
-      child: Icon(
-        Icons.person,
-        size: 50,
-        color: Colors.orange,
+      child: Center(
+        child: FlowySvg(
+          FlowySvgs.pony_notes_logo_xl,
+          size: const Size(100, 100),
+          blendMode: null,
+        ),
       ),
     );
   }
 
-  void _uploadAvatar() async {
+  Future<void> _uploadAvatar() async {
+    if (_isUploading) return;
+
+    // 选择图片文件
     final result = await getIt<FilePickerService>().pickFiles(
       dialogTitle: '',
       type: FileType.image,
     );
 
-    if (result != null && result.files.isNotEmpty) {
-      final file = File(result.files.first.path!);
-      setState(() {
-        _avatarUrl = file.path;
-      });
-      // TODO: 上传到后端
+    if (result == null || result.files.isEmpty) return;
+
+    final localImagePath = result.files.first.path;
+    if (localImagePath == null) return;
+
+    setState(() => _isUploading = true);
+
+    try {
+      // 获取当前用户配置，判断是本地模式还是云端模式
+      final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => null,
+      );
+
+      if (userProfile == null) {
+        Log.error('Failed to get user profile');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('获取用户信息失败')),
+          );
+        }
+        setState(() => _isUploading = false);
+        return;
+      }
+
+      final isLocalMode = userProfile.workspaceType == WorkspaceTypePB.LocalW;
+      String? uploadedUrl;
+
+      if (isLocalMode) {
+        // 本地模式：保存到应用数据目录
+        Log.info('Uploading avatar in local mode');
+        uploadedUrl = await saveImageToLocalStorage(localImagePath);
+      } else {
+        // 云端模式：上传到 AppFlowy Cloud Storage
+        Log.info('Uploading avatar to cloud storage');
+        final (url, errorMsg) = await saveImageToCloudStorage(
+          localImagePath,
+          userProfile.id.toString(),
+        );
+        uploadedUrl = url;
+        if (errorMsg != null && errorMsg.isNotEmpty) {
+          Log.error('Upload avatar error: $errorMsg');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('上传失败: $errorMsg')),
+            );
+          }
+        }
+      }
+
+      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+        // 调用后端 API 更新用户头像
+        final userService = UserBackendService(userId: widget.userProfile.id);
+        final updateResult = await userService.updateUserProfile(
+          iconUrl: uploadedUrl,
+        );
+        
+        updateResult.fold(
+          (success) {
+            Log.info('Avatar updated successfully');
+            // 更新本地 UI
+            if (mounted) {
+              setState(() {
+                _avatarUrl = uploadedUrl!;
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('头像上传成功')),
+              );
+            }
+          },
+          (error) {
+            Log.error('Failed to update avatar: $error');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('更新头像失败: ${error.msg}')),
+              );
+            }
+          },
+        );
+      }
+    } catch (e) {
+      Log.error('Upload avatar exception: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('上传异常: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
     }
+  }
+
+  Future<void> _updateUserName(String newName) async {
+    if (newName == _name) return;
+
+    final userService = UserBackendService(userId: widget.userProfile.id);
+    final result = await userService.updateUserProfile(name: newName);
+    
+    result.fold(
+      (success) {
+        Log.info('User name updated successfully');
+        if (mounted) {
+          setState(() {
+            _name = newName;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('名称更新成功')),
+          );
+        }
+      },
+      (error) {
+        Log.error('Update user name error: $error');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('更新失败: ${error.msg}')),
+          );
+        }
+      },
+    );
   }
 }
 

@@ -1,5 +1,4 @@
 // lib/env/env.dart
-import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:envied/envied.dart';
 
@@ -7,13 +6,10 @@ part 'env.g.dart';
 
 @Envied(path: '.env')
 abstract class Env {
-  // This flag is used to decide if users can dynamically configure cloud settings. It turns true when a .env file exists containing the APPFLOWY_CLOUD_URL variable. By default, this is set to false.
+  // Disable custom cloud configuration - environment is determined at compile time
+  // 禁用自定义云配置 - 环境在编译时确定，用户不能手动切换
   static bool get enableCustomCloud {
-    return Env.authenticatorType ==
-            AuthenticatorType.appflowyCloudSelfHost.value ||
-        Env.authenticatorType == AuthenticatorType.appflowyCloud.value ||
-        Env.authenticatorType == AuthenticatorType.appflowyCloudDevelop.value &&
-            _Env.afCloudUrl.isEmpty;
+    return false;
   }
 
   @EnviedField(

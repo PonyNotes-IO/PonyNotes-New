@@ -110,9 +110,9 @@ class MobileSignInScreen extends StatelessWidget {
           },
         ),
         const HSpace(24),
-        isLocalAuthEnabled
-            ? const ChangeCloudModeButton()
-            : const SignInAnonymousButtonV2(),
+        // Server configuration is now compile-time only
+        // Always show anonymous button regardless of auth mode
+        const SignInAnonymousButtonV2(),
       ],
     );
   }

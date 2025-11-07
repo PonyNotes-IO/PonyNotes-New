@@ -70,38 +70,12 @@ class SignInAnonymousButtonV2 extends StatelessWidget {
   }
 }
 
-class ChangeCloudModeButton extends StatelessWidget {
-  const ChangeCloudModeButton({
-    super.key,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    return AFGhostIconTextButton(
-      text: LocaleKeys.signIn_switchToAppFlowyCloud.tr(),
-      textColor: (context, isHovering, disabled) {
-        return theme.textColorScheme.secondary;
-      },
-      size: AFButtonSize.s,
-      padding: EdgeInsets.symmetric(
-        horizontal: theme.spacing.m,
-        vertical: theme.spacing.xs,
-      ),
-      onTap: () async {
-        await useAppFlowyBetaCloudWithURL(
-          kAppflowyCloudUrl,
-          AuthenticatorType.appflowyCloud,
-        );
-        await runAppFlowy();
-      },
-      iconBuilder: (context, isHovering, disabled) {
-        return FlowySvg(
-          FlowySvgs.cloud_mode_m,
-          size: Size.square(20),
-          color: theme.textColorScheme.secondary,
-        );
-      },
-    );
-  }
-}
+// Removed: ChangeCloudModeButton
+// Server configuration is now determined at compile time via environment files.
+// Users cannot switch cloud mode at runtime.
+// To change environment, modify the .env file and restart the application.
+//
+// 已移除：ChangeCloudModeButton
+// 服务器配置现在通过环境文件在编译时确定。
+// 用户无法在运行时切换云模式。
+// 要更改环境，请修改 .env 文件并重启应用程序。

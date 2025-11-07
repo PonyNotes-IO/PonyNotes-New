@@ -51,13 +51,6 @@ class SettingsMenu extends StatelessWidget {
             _buildUserInfoCard(context),
             const VSpace(16),
             SettingsMenuElement(
-              page: SettingsPage.accountManagement,
-              selectedPage: currentPage,
-              label: LocaleKeys.settings_accountPage_menuLabel.tr(),
-              changeSelectedPage: changeSelectedPage,
-              showArrow: false, // 我的账户不显示箭头
-            ),
-            SettingsMenuElement(
               page: SettingsPage.workspace,
               selectedPage: currentPage,
               label: "通用设置",
@@ -135,8 +128,8 @@ class SettingsMenu extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
     
     return GestureDetector(
-      onTap: () => changeSelectedPage(SettingsPage.userProfile),
-            child: Container(
+      onTap: () => changeSelectedPage(SettingsPage.accountManagement),
+      child: Container(
         padding: EdgeInsets.all(theme.spacing.m),
         decoration: BoxDecoration(
           color: theme.surfaceContainerColorScheme.layer01,
@@ -165,16 +158,30 @@ class SettingsMenu extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF8B5A3C),
+                  color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
-                  child: Icon(
-                    Icons.person,
-                    color: Colors.white,
-                    size: 28,
-                  ),
+                  child: userProfile.iconUrl.isNotEmpty
+                      ? Image.network(
+                          userProfile.iconUrl,
+                          fit: BoxFit.cover,
+                          width: 48,
+                          height: 48,
+                          errorBuilder: (context, error, stackTrace) {
+                            return FlowySvg(
+                              FlowySvgs.pony_notes_logo_xl,
+                              size: const Size(32, 32),
+                              blendMode: null,
+                            );
+                          },
+                        )
+                      : FlowySvg(
+                          FlowySvgs.pony_notes_logo_xl,
+                          size: const Size(32, 32),
+                          blendMode: null,
+                        ),
                 ),
               ),
               const HSpace(12),

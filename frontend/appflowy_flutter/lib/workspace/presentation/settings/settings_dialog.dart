@@ -1,5 +1,6 @@
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/shared/appflowy_cache_manager.dart';
@@ -41,6 +42,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'pages/setting_ai_view/local_settings_ai_view.dart';
 import 'widgets/setting_cloud.dart';
+import 'package:appflowy/env/env.dart';
 
 @visibleForTesting
 const kSelfHostedTextInputFieldKey =
@@ -267,8 +269,10 @@ class _SimpleSettingsDialogState extends State<SimpleSettingsDialog> {
               _LanguageSettings(key: ValueKey('language${settings.hashCode}')),
               const VSpace(22.0),
 
-              // self-host cloud
-              _SelfHostSettings(key: ValueKey('selfhost${settings.hashCode}')),
+              // Server configuration is now determined at compile time
+              // Users cannot change server settings at runtime
+              // 服务器配置现在在编译时确定，用户无法在运行时更改
+              _ServerInfoDisplay(key: ValueKey('serverinfo${settings.hashCode}')),
               const VSpace(22.0),
 
               // support
@@ -295,10 +299,163 @@ class _LanguageSettings extends StatelessWidget {
   }
 }
 
-class _SelfHostSettings extends StatefulWidget {
-  const _SelfHostSettings({
+/// Displays current server configuration (read-only)
+/// 显示当前服务器配置（只读）
+class _ServerInfoDisplay extends StatelessWidget {
+  const _ServerInfoDisplay({
     super.key,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final authenticatorType = AuthenticatorType.fromValue(Env.authenticatorType);
+    
+    String environmentName;
+    String serverUrl;
+    String webDomain;
+    Color statusColor;
+    
+    switch (authenticatorType) {
+      case AuthenticatorType.appflowyCloudDevelop:
+        environmentName = "开发环境 (Development)";
+        serverUrl = "${Env.afCloudUrl}:8000";
+        webDomain = Env.baseWebDomain;
+        statusColor = const Color(0xFFFFB020);
+        break;
+      case AuthenticatorType.appflowyCloud:
+        environmentName = "生产环境 (Production)";
+        serverUrl = Env.afCloudUrl;
+        webDomain = Env.baseWebDomain;
+        statusColor = const Color(0xFF00BCF0);
+        break;
+      case AuthenticatorType.appflowyCloudSelfHost:
+        environmentName = "自托管 (Self-Host)";
+        serverUrl = Env.afCloudUrl;
+        webDomain = Env.baseWebDomain;
+        statusColor = const Color(0xFF9B59B6);
+        break;
+      case AuthenticatorType.local:
+        environmentName = "本地模式 (Local)";
+        serverUrl = "本地存储";
+        webDomain = "无";
+        statusColor = const Color(0xFF7F8C8D);
+        break;
+    }
+    
+    return SettingsCategory(
+      title: "服务器配置",
+      children: [
+        // Environment indicator
+        Row(
+          children: [
+            FlowyText("当前环境", fontSize: 14),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: statusColor, width: 1),
+              ),
+              child: FlowyText(
+                environmentName,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: statusColor,
+              ),
+            ),
+          ],
+        ),
+        const VSpace(12),
+        
+        // Server URL
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: FlowyText(
+                "服务器地址",
+                fontSize: 14,
+                color: theme.textColorScheme.secondary,
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: FlowyText(
+                serverUrl,
+                fontSize: 14,
+                maxLines: 2,
+                textAlign: TextAlign.end,
+              ),
+            ),
+          ],
+        ),
+        const VSpace(8),
+        
+        // Web domain
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 2,
+              child: FlowyText(
+                "Web 域名",
+                fontSize: 14,
+                color: theme.textColorScheme.secondary,
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: FlowyText(
+                webDomain,
+                fontSize: 14,
+                maxLines: 2,
+                textAlign: TextAlign.end,
+              ),
+            ),
+          ],
+        ),
+        const VSpace(12),
+        
+        // Info message
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.surfaceContainerColorScheme.layer02,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: FlowySvg(
+                  FlowySvgs.information_s,
+                  size: const Size.square(16),
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+              const HSpace(8),
+              Expanded(
+                child: FlowyText(
+                  "服务器配置在编译时确定，如需更改请修改环境配置文件后重新编译",
+                  fontSize: 12,
+                  maxLines: 3,
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SelfHostSettings extends StatefulWidget {
+  const _SelfHostSettings();
 
   @override
   State<_SelfHostSettings> createState() => _SelfHostSettingsState();

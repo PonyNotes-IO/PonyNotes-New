@@ -21,7 +21,7 @@ node_modules
 
 **/resources/proto
 
-# ignore settings.json
+# ignore personal settings.json (allow other .vscode files to be committed)
 frontend/.vscode/settings.json
 
 # Commit the highest level pubspec.lock, but ignore the others
@@ -42,3 +42,92 @@ frontend/*.deb
 **/Cargo.toml.bak
 
 **/.cargo/**
+
+# Flutter/Dart build outputs
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+
+# Flutter web build
+**/web/build/
+
+# Android build files
+**/android/local.properties
+**/android/.gradle/
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/gradle-wrapper.jar
+**/android/**/GeneratedPluginRegistrant.java
+**/android/key.properties
+**/android/.cxx/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+
+# iOS build files
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/ios/.generated/
+
+# macOS build files
+**/macos/Flutter/ephemeral/
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+**/macos/Pods/
+**/macos/.symlinks/
+**/macos/build/
+
+# Windows build files
+**/windows/flutter/ephemeral/
+
+# CMake build files
+**/CMakeCache.txt
+**/CMakeFiles/
+**/cmake_install.cmake
+**/CMakeConfigureLog.yaml
+**/CMakeDetermineCompilerABI_*.bin
+**/.cmake/
+**/cmake.check_cache
+**/feature_tests.bin
+**/feature_tests.c
+**/feature_tests.cpp
+**/a.exe
+**/a.out
+
+# Error and log files
+**/error-*.json
+**/query.json
+**/*.log
+
+# IDE and editor files
+# Allow .vscode directory but ignore personal settings
+**/.vscode/settings.json
+!**/.vscode/settings.json.example
+**/.vs/
+
+# macOS specific
+**/.DS_Store
+**/._*
+
+# Flutter generated files
+**/generated_plugin_registrant.dart
+**/GeneratedPluginRegistrant.swift
+**/GeneratedPluginRegistrant.m
+**/generated_plugins.cmake
+
+# Dart coverage
+**/coverage/
+
+# Development environment files
+**/dev.env
+!**/dev.env.example
+**/*.env
+!**/*.env.example
