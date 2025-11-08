@@ -4,7 +4,13 @@ import '../ai_welcome_theme.dart';
 /// AI欢迎页面顶部头像和文字区域
 /// 对应设计图中的 block_1 区域
 class AIWelcomeHeader extends StatelessWidget {
-  const AIWelcomeHeader({super.key});
+  const AIWelcomeHeader({
+    super.key,
+    this.onChatHistoryTap,
+  });
+
+  /// 点击聊天记录按钮的回调
+  final VoidCallback? onChatHistoryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +55,9 @@ class AIWelcomeHeader extends StatelessWidget {
                   style: AIWelcomeTheme.titleStyle(context),
                 ),
               ),
+              // 聊天记录按钮
+              if (onChatHistoryTap != null)
+                _buildChatHistoryButton(context),
             ],
           ),
           const SizedBox(height: 20), // 主标题和副标题之间的间距
@@ -59,6 +68,46 @@ class AIWelcomeHeader extends StatelessWidget {
             textAlign: TextAlign.left,
           ),
         ],
+      ),
+    );
+  }
+
+  /// 构建聊天记录按钮
+  Widget _buildChatHistoryButton(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onChatHistoryTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withOpacity(0.5),
+              width: 1,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.history,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '聊天记录',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

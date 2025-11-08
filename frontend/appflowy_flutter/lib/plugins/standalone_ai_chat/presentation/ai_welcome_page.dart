@@ -11,9 +11,13 @@ class AIWelcomePage extends StatelessWidget {
   const AIWelcomePage({
     super.key,
     required this.onMessageSent,
+    this.onChatHistoryTap,
   });
 
   final Function(String message, AIProvider? provider, List<ChatImage>? images) onMessageSent;
+  
+  /// 点击聊天记录按钮的回调
+  final VoidCallback? onChatHistoryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +26,9 @@ class AIWelcomePage extends StatelessWidget {
       body: Column(
         children: [
           // 顶部头像和欢迎文字区域
-          const AIWelcomeHeader(),
+          AIWelcomeHeader(
+            onChatHistoryTap: onChatHistoryTap,
+          ),
           // 输入交互区域
           AIInputArea(
             onMessageSent: onMessageSent,

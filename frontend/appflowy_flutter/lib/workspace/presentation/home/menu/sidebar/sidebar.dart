@@ -9,9 +9,7 @@ import 'package:appflowy/plugins/blank/blank.dart';
 import 'package:appflowy/plugins/document/presentation/editor_notification.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/loading.dart';
-import 'package:appflowy/shared/version_checker/version_checker.dart';
 import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/startup/tasks/device_info_task.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
@@ -26,7 +24,6 @@ import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/command_palette/command_palette.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/footer/sidebar_upgrade_application_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/header/sidebar_top_menu.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_folder.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_space.dart';
@@ -35,7 +32,6 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sid
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_cloud_sync_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_upload_button.dart';
 import 'package:appflowy/workspace/presentation/notifications/widgets/notification_button.dart';
-import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
@@ -308,9 +304,6 @@ class _SidebarState extends State<_Sidebar> {
   final _isHovered = ValueNotifier(false);
   final _scrollOffset = ValueNotifier<double>(0);
 
-  // mute the update button during the current application lifecycle.
-  final _muteUpdateButton = ValueNotifier(false);
-
   @override
   void initState() {
     super.initState();
@@ -385,7 +378,8 @@ class _SidebarState extends State<_Sidebar> {
             const VSpace(8),
 
             _renderUpgradeSpaceButton(menuHorizontalInset),
-            _buildUpgradeApplicationButton(menuHorizontalInset),
+            // 已移除自动更新提示横幅
+            // _buildUpgradeApplicationButton(menuHorizontalInset),
 
             const VSpace(14),
           ],
@@ -475,41 +469,6 @@ class _SidebarState extends State<_Sidebar> {
           );
   }
 
-  Widget _buildUpgradeApplicationButton(EdgeInsets menuHorizontalInset) {
-    return ValueListenableBuilder(
-      valueListenable: _muteUpdateButton,
-      builder: (_, mute, child) {
-        if (mute) {
-          return const SizedBox.shrink();
-        }
-
-        return ValueListenableBuilder(
-          valueListenable: ApplicationInfo.latestVersionNotifier,
-          builder: (_, latestVersion, child) {
-            if (!ApplicationInfo.isUpdateAvailable) {
-              return const SizedBox.shrink();
-            }
-
-            return Padding(
-              padding: menuHorizontalInset +
-                  const EdgeInsets.only(
-                    left: 4.0,
-                    right: 4.0,
-                  ),
-              child: SidebarUpgradeApplicationButton(
-                onUpdateButtonTap: () {
-                  versionChecker.checkForUpdate();
-                },
-                onCloseButtonTap: () {
-                  _muteUpdateButton.value = true;
-                },
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 
   void _onScrollChanged() {
     setState(() => _isScrolling = true);

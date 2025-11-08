@@ -395,6 +395,15 @@ class _ChatMessageListState extends State<_ChatMessageList> {
   final ScrollController _scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    // 在页面初始化时加载历史消息
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<StandaloneChatBloc>().add(const StandaloneChatEvent.loadHistory());
+    });
+  }
+
+  @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();

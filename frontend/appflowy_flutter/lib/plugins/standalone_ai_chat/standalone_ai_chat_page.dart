@@ -173,6 +173,14 @@ class _StandaloneAiChatPageState extends State<StandaloneAiChatPage> {
     }
   }
   
+  /// 打开聊天记录（从欢迎页面切换到聊天界面，显示历史记录）
+  void _openChatHistory() {
+    setState(() {
+      _showWelcomePage = false;
+    });
+    // 不需要发送消息，聊天界面会自动加载历史记录
+  }
+  
   /// 发送待处理的消息
   void _sendPendingMessage() {
     final hasMessage = _pendingMessage != null && _pendingMessage!.isNotEmpty;
@@ -252,6 +260,7 @@ class _StandaloneAiChatPageState extends State<StandaloneAiChatPage> {
           if (_showWelcomePage) {
             return AIWelcomePage(
               onMessageSent: _switchToChatPage,
+              onChatHistoryTap: _openChatHistory,
             );
           }
 

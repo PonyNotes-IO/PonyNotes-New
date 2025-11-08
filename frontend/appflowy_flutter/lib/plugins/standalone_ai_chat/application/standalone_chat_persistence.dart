@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:appflowy/core/config/ai_config.dart';
 import 'standalone_chat_bloc.dart';
 
 /// 独立AI聊天持久化服务
-/// 负责与Rust后端进行数据交互，保存和加载聊天记录
+/// 使用 shared_preferences 进行本地持久化存储
 class StandaloneChatPersistence {
   static StandaloneChatPersistence? _instance;
   static StandaloneChatPersistence get instance => 
@@ -14,21 +16,30 @@ class StandaloneChatPersistence {
   // 独立聊天的固定ID，用于标识这是独立AI聊天
   static const String standaloneChatId = 'standalone_ai_chat';
   static const String standaloneWorkspaceId = 'standalone_workspace';
+  
+  // SharedPreferences 存储键
+  static const String _storageKey = 'standalone_chat_messages';
 
-  /// 保存消息到后端数据库
+  /// 保存消息到本地存储
   Future<void> saveMessage(ChatMessage message) async {
     try {
-      // 创建消息数据结构 - 为将来与Rust后端集成保留
-      // final messageData = {
-      //   'id': message.id,
-      //   'content': message.content,
-      //   'isUser': message.isUser,
-      //   'timestamp': message.timestamp.millisecondsSinceEpoch,
-      //   'aiProvider': message.aiProvider?.id,
-      // };
-
-      // 调用Rust后端保存消息
-      await _saveMessageToBackend(message);
+      // 加载现有消息
+      final messages = await loadMessages();
+      
+      // 检查消息是否已存在（避免重复）
+      final existingIndex = messages.indexWhere((m) => m.id == message.id);
+      if (existingIndex >= 0) {
+        // 更新现有消息
+        messages[existingIndex] = message;
+        debugPrint('🔄 更新现有消息: ${message.id}');
+      } else {
+        // 添加新消息
+        messages.add(message);
+        debugPrint('➕ 添加新消息: ${message.id}');
+      }
+      
+      // 保存到 SharedPreferences
+      await _saveMessagesToStorage(messages);
       
       debugPrint('✅ 消息已保存: ${message.content.length > 50 ? message.content.substring(0, 50) + '...' : message.content}');
     } catch (e) {
@@ -37,13 +48,23 @@ class StandaloneChatPersistence {
     }
   }
 
-  /// 从后端数据库加载消息
+  /// 从本地存储加载消息
   Future<List<ChatMessage>> loadMessages() async {
     try {
       debugPrint('🔄 开始加载历史消息...');
       
-      // 从Rust后端加载消息
-      final messages = await _loadMessagesFromBackend();
+      final prefs = await SharedPreferences.getInstance();
+      final messagesJson = prefs.getStringList(_storageKey) ?? [];
+      
+      final messages = messagesJson.map((jsonStr) {
+        try {
+          final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+          return _messageFromJson(json);
+        } catch (e) {
+          debugPrint('⚠️ 解析消息失败: $e');
+          return null;
+        }
+      }).whereType<ChatMessage>().toList();
       
       debugPrint('✅ 加载了 ${messages.length} 条历史消息');
       return messages;
@@ -56,7 +77,8 @@ class StandaloneChatPersistence {
   /// 清空所有消息
   Future<void> clearMessages() async {
     try {
-      await _clearMessagesFromBackend();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_storageKey);
       debugPrint('✅ 已清空所有聊天记录');
     } catch (e) {
       debugPrint('❌ 清空聊天记录失败: $e');
@@ -64,95 +86,58 @@ class StandaloneChatPersistence {
     }
   }
 
-  /// 调用Rust后端保存消息
-  Future<void> _saveMessageToBackend(ChatMessage message) async {
-    try {
-      // 构造消息内容 - 为将来与Rust后端集成保留
-      // final messageContent = jsonEncode({
-      //   'id': message.id,
-      //   'content': message.content,
-      //   'isUser': message.isUser,
-      //   'timestamp': message.timestamp.millisecondsSinceEpoch,
-      //   'aiProvider': message.aiProvider?.id,
-      // });
-
-      // 创建聊天消息PB对象 - 为将来与Rust后端集成保留
-      // final chatMessagePB = ChatMessagePB()
-      //   ..messageId = Int64.parseInt(message.id)
-      //   ..content = messageContent
-      //   ..authorType = Int64(message.isUser ? 1 : 2)
-      //   ..createdAt = Int64(message.timestamp.millisecondsSinceEpoch);
-
-      // 如果聊天不存在，先创建聊天
-      await _ensureChatExists();
-
-      // 保存消息 - 这里使用简化的方式，直接存储JSON字符串
-      // 真正的实现需要与Rust后端的具体API对接
-      debugPrint('📝 尝试保存消息到后端: ${message.content.length > 20 ? message.content.substring(0, 20) + '...' : message.content}');
-      
-      // TODO: 这里需要根据实际的Rust后端API来实现
-      // 现在先用调试信息模拟保存过程
-      await Future.delayed(const Duration(milliseconds: 10));
-      
-    } catch (e) {
-      debugPrint('后端保存失败: $e');
-      rethrow;
-    }
+  /// 保存消息列表到存储
+  Future<void> _saveMessagesToStorage(List<ChatMessage> messages) async {
+    final prefs = await SharedPreferences.getInstance();
+    final messagesJson = messages.map((m) => jsonEncode(_messageToJson(m))).toList();
+    await prefs.setStringList(_storageKey, messagesJson);
   }
-
-  /// 从Rust后端加载消息
-  Future<List<ChatMessage>> _loadMessagesFromBackend() async {
-    try {
-      // TODO: 这里需要根据实际的Rust后端API来实现
-      // 现在先返回空列表，模拟加载过程
-      await Future.delayed(const Duration(milliseconds: 50));
-      
-      debugPrint('🔍 尝试从后端加载消息...');
-      
-      // 这里应该调用类似的API:
-      // final result = await AIEventGetChatMessages(GetChatMessagesPB()
-      //   ..chatId = standaloneChatId).send();
-      
-      return <ChatMessage>[];
-    } catch (e) {
-      debugPrint('后端加载失败: $e');
-      return <ChatMessage>[];
-    }
+  
+  /// 将 ChatMessage 转换为 JSON
+  Map<String, dynamic> _messageToJson(ChatMessage message) {
+    return {
+      'id': message.id,
+      'content': message.content,
+      'isUser': message.isUser,
+      'timestamp': message.timestamp.millisecondsSinceEpoch,
+      'aiProvider': message.aiProvider?.id,
+      'provider': message.provider?.id,
+      'isStreaming': message.isStreaming,
+      'hasError': message.hasError,
+      'imageIds': message.imageIds,
+    };
   }
-
-  /// 从Rust后端清空消息
-  Future<void> _clearMessagesFromBackend() async {
-    try {
-      // TODO: 这里需要根据实际的Rust后端API来实现
-      await Future.delayed(const Duration(milliseconds: 30));
-      
-      debugPrint('🗑️ 尝试清空后端消息...');
-      
-      // 这里应该调用类似的API:
-      // await AIEventClearChatMessages(ClearChatMessagesPB()
-      //   ..chatId = standaloneChatId).send();
-      
-    } catch (e) {
-      debugPrint('后端清空失败: $e');
-      rethrow;
+  
+  /// 从 JSON 创建 ChatMessage
+  ChatMessage _messageFromJson(Map<String, dynamic> json) {
+    // 解析 AI 提供商
+    AIProvider? aiProvider;
+    final providerIdFromAiProvider = json['aiProvider'] as String?;
+    final providerIdFromProvider = json['provider'] as String?;
+    final providerId = providerIdFromAiProvider ?? providerIdFromProvider;
+    
+    if (providerId != null) {
+      try {
+        aiProvider = AIProvider.values.firstWhere(
+          (p) => p.id == providerId,
+          orElse: () => AIProvider.deepseek,
+        );
+      } catch (e) {
+        debugPrint('⚠️ 无法解析 AI 提供商: $providerId');
+      }
     }
-  }
-
-  /// 确保聊天存在
-  Future<void> _ensureChatExists() async {
-    try {
-      // TODO: 检查聊天是否存在，如果不存在则创建
-      // 这里应该调用类似的API:
-      // final result = await AIEventCreateChat(CreateChatPB()
-      //   ..chatId = standaloneChatId
-      //   ..name = '独立AI聊天').send();
-      
-      debugPrint('🔍 确保独立聊天存在...');
-      await Future.delayed(const Duration(milliseconds: 5));
-    } catch (e) {
-      debugPrint('创建聊天失败: $e');
-      // 不抛出异常，继续尝试保存消息
-    }
+    
+    return ChatMessage(
+      id: json['id'] as String,
+      content: json['content'] as String,
+      isUser: json['isUser'] as bool,
+      timestamp: DateTime.fromMillisecondsSinceEpoch(json['timestamp'] as int),
+      aiProvider: aiProvider,
+      provider: aiProvider,
+      isStreaming: json['isStreaming'] as bool? ?? false,
+      hasError: json['hasError'] as bool? ?? false,
+      imageIds: (json['imageIds'] as List<dynamic>?)?.cast<String>() ?? [],
+    );
   }
 
   /// 获取聊天统计信息

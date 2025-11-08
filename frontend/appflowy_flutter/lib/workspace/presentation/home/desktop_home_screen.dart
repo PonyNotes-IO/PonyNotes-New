@@ -227,15 +227,27 @@ class DesktopHomeScreen extends StatelessWidget {
         layout.showMenu ? const SidebarResizer() : const SizedBox.shrink();
     final editPanel = _buildEditPanel(context, layout: layout);
 
-    return _layoutWidgets(
-      layout: layout,
-      homeStack: homeStack,
-      sidebar: sidebar,
-      editPanel: editPanel,
-      bubble: const QuestionBubble(),
-      homeMenuResizer: homeMenuResizer,
-      notificationPanel: notificationPanel,
-      sliderHoverTrigger: sliderHoverTrigger,
+    // 使用 BlocBuilder 监听 TabsBloc 状态变化，以便在切换标签时更新问号按钮的显示
+    return BlocBuilder<TabsBloc, TabsState>(
+      buildWhen: (previous, current) => 
+        previous.currentPageManager.plugin.pluginType != 
+        current.currentPageManager.plugin.pluginType,
+      builder: (context, tabsState) {
+        // 检查当前是否是自定义AI聊天页面
+        final currentPlugin = tabsState.currentPageManager.plugin;
+        final isStandaloneAiChat = currentPlugin.pluginType == PluginType.standaloneAiChat;
+
+        return _layoutWidgets(
+          layout: layout,
+          homeStack: homeStack,
+          sidebar: sidebar,
+          editPanel: editPanel,
+          bubble: isStandaloneAiChat ? const SizedBox.shrink() : const QuestionBubble(),
+          homeMenuResizer: homeMenuResizer,
+          notificationPanel: notificationPanel,
+          sliderHoverTrigger: sliderHoverTrigger,
+        );
+      },
     );
   }
 

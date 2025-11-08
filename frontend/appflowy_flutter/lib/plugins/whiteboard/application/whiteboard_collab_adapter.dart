@@ -123,12 +123,36 @@ class WhiteboardCollabAdapter {
     await _syncImmediately();
   }
 
-  /// 销毁适配器
-  void dispose() {
+  /// 销毁适配器（模仿 TransactionAdapter 的 dispose）
+  /// 
+  /// **关键**：在销毁前执行最后一次同步，确保数据不丢失
+  Future<void> dispose() async {
+    Log.info('[WhiteboardCollabAdapter] =====================================================');
     Log.info('[WhiteboardCollabAdapter] Disposing adapter for viewId: $viewId');
-    _disposed = true;
+    Log.info('[WhiteboardCollabAdapter] Will perform final sync before disposal...');
+    
+    // 取消防抖定时器
     _debounceTimer?.cancel();
     _debounceTimer = null;
+    
+    // **核心修复**：在销毁前执行最后一次同步（确保数据不丢失）
+    if (_pendingData != null && !_isSyncing) {
+      Log.info('[WhiteboardCollabAdapter] 🚨 FINAL SYNC before disposal (has pending data)');
+      try {
+        await _syncImmediately();
+        Log.info('[WhiteboardCollabAdapter] ✅ Final sync completed successfully');
+      } catch (e) {
+        Log.error('[WhiteboardCollabAdapter] ❌ Final sync failed: $e');
+      }
+    } else {
+      Log.info('[WhiteboardCollabAdapter] No pending data, skipping final sync');
+    }
+    
+    // 标记为已销毁
+    _disposed = true;
     _pendingData = null;
+    
+    Log.info('[WhiteboardCollabAdapter] Adapter disposed for viewId: $viewId');
+    Log.info('[WhiteboardCollabAdapter] =====================================================');
   }
 }
