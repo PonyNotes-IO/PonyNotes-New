@@ -39,6 +39,9 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   // 🚀 新增：自动保存定时器
   Timer? _autoSaveTimer;
   String? _lastSavedDataHash; // 用于检测数据是否真正变化
+  
+  // 🔧 新增：WebView 就绪状态标记
+  bool _isWebViewReady = false;
 
   /// 获取唯一的 WebView key
   /// 优先使用父组件传递的唯一 key，如果没有则使用 viewId
@@ -92,6 +95,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       
       // 使用带 viewId 的URL（用于调试和日志追踪）
       // 注意：localStorage 已在 HTML 中被完全禁用，数据隔离由 Flutter 管理
+      // 加载 flutter_bridge.html（作为 Flutter 和 Excalidraw iframe 的桥梁）
       final url = '$baseUrl/whiteboard/${widget.viewId}/flutter_bridge.html';
       
       print('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
@@ -144,6 +148,74 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       },
     );
   }
+  
+  /// 🔧 安全的 evaluateJavascript 包装函数
+  /// 包含错误处理、重试机制和详细日志
+  Future<dynamic> _safeEvaluateJavascript({
+    required String source,
+    String? description,
+    int maxRetries = 3,
+    Duration retryDelay = const Duration(milliseconds: 500),
+  }) async {
+    if (_controller == null) {
+      print('❌ [SafeEval] Controller is null, cannot evaluate JavaScript');
+      throw Exception('WebView controller is not available');
+    }
+    
+    if (!_isWebViewReady) {
+      print('⚠️ [SafeEval] WebView is not ready yet, waiting...');
+      // 等待 WebView 就绪，最多等待 5 秒
+      for (int i = 0; i < 10; i++) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (_isWebViewReady) {
+          break;
+        }
+      }
+      if (!_isWebViewReady) {
+        print('❌ [SafeEval] WebView still not ready after waiting');
+        throw Exception('WebView is not ready');
+      }
+    }
+    
+    final desc = description ?? 'JavaScript';
+    print('🔧 [SafeEval] Executing: $desc');
+    
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final result = await _controller!.evaluateJavascript(source: source);
+        print('✅ [SafeEval] Success: $desc (attempt $attempt)');
+        return result;
+      } catch (e) {
+        final errorStr = e.toString();
+        print('❌ [SafeEval] Attempt $attempt/$maxRetries failed: $desc');
+        print('❌ [SafeEval] Error: $errorStr');
+        
+        // 检查是否是 MissingPluginException
+        if (errorStr.contains('MissingPluginException') || 
+            errorStr.contains('No implementation found')) {
+          print('⚠️ [SafeEval] Plugin not registered, waiting and retrying...');
+          if (attempt < maxRetries) {
+            await Future.delayed(retryDelay * attempt); // 递增延迟
+            continue;
+          } else {
+            print('❌ [SafeEval] Max retries reached, plugin still not available');
+            throw Exception('WebView plugin not available: $errorStr');
+          }
+        }
+        
+        // 其他错误，如果是最后一次尝试则抛出
+        if (attempt == maxRetries) {
+          print('❌ [SafeEval] Max retries reached, throwing error');
+          rethrow;
+        }
+        
+        // 等待后重试
+        await Future.delayed(retryDelay * attempt);
+      }
+    }
+    
+    throw Exception('Failed to evaluate JavaScript after $maxRetries attempts');
+  }
 
   Future<void> _initializeExcalidraw() async {
     try {
@@ -165,31 +237,38 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       final dataJson = jsonEncode(dataToLoad);
       print('📝 [ExcalidrawWebView] Data JSON length: ${dataJson.length} chars');
       
-      await _controller?.evaluateJavascript(source: '''
-        console.log('[ExcalidrawWebView] Loading data into Excalidraw with viewId: ${widget.viewId}');
-        if (window.loadExcalidrawData) {
-          window.loadExcalidrawData($dataJson);
-          console.log('[ExcalidrawWebView] Data loaded successfully');
-        } else {
-          console.error('[ExcalidrawWebView] window.loadExcalidrawData not found!');
-        }
-      ''');
+      await _safeEvaluateJavascript(
+        source: '''
+          console.log('[ExcalidrawWebView] Loading data into Excalidraw with viewId: ${widget.viewId}');
+          if (window.loadExcalidrawData) {
+            window.loadExcalidrawData($dataJson);
+            console.log('[ExcalidrawWebView] Data loaded successfully');
+          } else {
+            console.error('[ExcalidrawWebView] window.loadExcalidrawData not found!');
+          }
+        ''',
+        description: 'Load initial data',
+      );
       print('✅ [ExcalidrawWebView] Initial data loaded with viewId');
       
       // 设置主题
       final theme = Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
       print('🎨 [ExcalidrawWebView] Setting theme: $theme');
-      await _controller?.evaluateJavascript(source: '''
-        console.log('[ExcalidrawWebView] Setting theme to $theme');
-        if (window.setTheme) {
-          window.setTheme('$theme');
-        } else {
-          console.error('[ExcalidrawWebView] window.setTheme not found!');
-        }
-      ''');
+      await _safeEvaluateJavascript(
+        source: '''
+          console.log('[ExcalidrawWebView] Setting theme to $theme');
+          if (window.setTheme) {
+            window.setTheme('$theme');
+          } else {
+            console.error('[ExcalidrawWebView] window.setTheme not found!');
+          }
+        ''',
+        description: 'Set theme',
+      );
       print('✅ [ExcalidrawWebView] Initialization complete');
     } catch (e) {
       print('❌ [ExcalidrawWebView] Initialization failed: $e');
+      print('❌ [ExcalidrawWebView] Error details: ${e.toString()}');
       widget.onError?.call('初始化Excalidraw失败: $e');
     }
   }
@@ -210,25 +289,30 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         // 这会通过 iframe postMessage 机制获取当前画布数据
         // 数据会通过 'excalidraw-data' 消息返回到 _handleWebViewMessage
         print('🔄 [AutoSave] Requesting current canvas data...');
-        await _controller!.evaluateJavascript(source: '''
-          (function() {
-            try {
-              if (window.getExcalidrawData) {
-                console.log('[AutoSave] Calling window.getExcalidrawData()');
-                window.getExcalidrawData();
-                return true;
-              } else {
-                console.error('[AutoSave] window.getExcalidrawData not found!');
+        await _safeEvaluateJavascript(
+          source: '''
+            (function() {
+              try {
+                if (window.getExcalidrawData) {
+                  console.log('[AutoSave] Calling window.getExcalidrawData()');
+                  window.getExcalidrawData();
+                  return true;
+                } else {
+                  console.error('[AutoSave] window.getExcalidrawData not found!');
+                  return false;
+                }
+              } catch (e) {
+                console.error('[AutoSave] Error calling getExcalidrawData:', e);
                 return false;
               }
-            } catch (e) {
-              console.error('[AutoSave] Error calling getExcalidrawData:', e);
-              return false;
-            }
-          })();
-        ''');
+            })();
+          ''',
+          description: 'AutoSave: Get canvas data',
+          maxRetries: 2, // 自动保存失败时不要重试太多次
+        );
       } catch (e) {
         print('⚠️ [AutoSave] Error: $e');
+        // 自动保存失败不应该影响应用运行，只记录日志
       }
     });
   }
@@ -245,8 +329,9 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       print('⏰ [AutoSave] Timer cancelled for viewId: ${widget.viewId}');
     }
     
-    // 清理 controller 引用
+    // 清理 controller 引用和状态
     _controller = null;
+    _isWebViewReady = false;
     
     // ⚠️ 不要停止本地HTTP服务器！
     // LocalAssetServer是单例，被所有白板视图共享
@@ -385,12 +470,16 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 导出绘图
   Future<void> exportDrawing(String format) async {
     try {
-      await _controller?.evaluateJavascript(source: '''
-        if (window.exportExcalidraw) {
-          window.exportExcalidraw('$format');
-        }
-      ''');
+      await _safeEvaluateJavascript(
+        source: '''
+          if (window.exportExcalidraw) {
+            window.exportExcalidraw('$format');
+          }
+        ''',
+        description: 'Export drawing',
+      );
     } catch (e) {
+      print('❌ [Export] Failed: $e');
       widget.onError?.call('导出失败: $e');
     }
   }
@@ -398,12 +487,16 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 获取当前白板数据
   Future<void> getData() async {
     try {
-      await _controller?.evaluateJavascript(source: '''
-        if (window.getExcalidrawData) {
-          window.getExcalidrawData();
-        }
-      ''');
+      await _safeEvaluateJavascript(
+        source: '''
+          if (window.getExcalidrawData) {
+            window.getExcalidrawData();
+          }
+        ''',
+        description: 'Get data',
+      );
     } catch (e) {
+      print('❌ [GetData] Failed: $e');
       widget.onError?.call('获取数据失败: $e');
     }
   }
@@ -411,12 +504,16 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 加载白板数据
   Future<void> loadData(Map<String, dynamic> data) async {
     try {
-      await _controller?.evaluateJavascript(source: '''
-        if (window.loadExcalidrawData) {
-          window.loadExcalidrawData(${jsonEncode(data)});
-        }
-      ''');
+      await _safeEvaluateJavascript(
+        source: '''
+          if (window.loadExcalidrawData) {
+            window.loadExcalidrawData(${jsonEncode(data)});
+          }
+        ''',
+        description: 'Load data',
+      );
     } catch (e) {
+      print('❌ [LoadData] Failed: $e');
       widget.onError?.call('加载数据失败: $e');
     }
   }
@@ -424,12 +521,16 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 清空画布
   Future<void> clearCanvas() async {
     try {
-      await _controller?.evaluateJavascript(source: '''
-        if (window.clearCanvas) {
-          window.clearCanvas();
-        }
-      ''');
+      await _safeEvaluateJavascript(
+        source: '''
+          if (window.clearCanvas) {
+            window.clearCanvas();
+          }
+        ''',
+        description: 'Clear canvas',
+      );
     } catch (e) {
+      print('❌ [ClearCanvas] Failed: $e');
       widget.onError?.call('清空画布失败: $e');
     }
   }
@@ -437,12 +538,16 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 撤销操作
   Future<void> undo() async {
     try {
-      await _controller?.evaluateJavascript(source: '''
-        if (window.undo) {
-          window.undo();
-        }
-      ''');
+      await _safeEvaluateJavascript(
+        source: '''
+          if (window.undo) {
+            window.undo();
+          }
+        ''',
+        description: 'Undo',
+      );
     } catch (e) {
+      print('❌ [Undo] Failed: $e');
       widget.onError?.call('撤销失败: $e');
     }
   }
@@ -450,12 +555,16 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 重做操作
   Future<void> redo() async {
     try {
-      await _controller?.evaluateJavascript(source: '''
-        if (window.redo) {
-          window.redo();
-        }
-      ''');
+      await _safeEvaluateJavascript(
+        source: '''
+          if (window.redo) {
+            window.redo();
+          }
+        ''',
+        description: 'Redo',
+      );
     } catch (e) {
+      print('❌ [Redo] Failed: $e');
       widget.onError?.call('重做失败: $e');
     }
   }
@@ -463,12 +572,16 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 更新主题
   Future<void> updateTheme(String theme) async {
     try {
-      await _controller?.evaluateJavascript(source: '''
-        if (window.setTheme) {
-          window.setTheme('$theme');
-        }
-      ''');
+      await _safeEvaluateJavascript(
+        source: '''
+          if (window.setTheme) {
+            window.setTheme('$theme');
+          }
+        ''',
+        description: 'Update theme',
+      );
     } catch (e) {
+      print('❌ [UpdateTheme] Failed: $e');
       widget.onError?.call('更新主题失败: $e');
     }
   }
@@ -545,12 +658,18 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             print('🌐 [ExcalidrawWebView] WebView created for viewId: ${widget.viewId}');
             print('🌐 [ExcalidrawWebView] WebView key: $webViewKey');
             print('🌐 [ExcalidrawWebView] 视图已创建: ${widget.viewId}');
+            print('🌐 [ExcalidrawWebView] Controller assigned, waiting for page load...');
+            
+            // ⚠️ 注意：此时 WebView 还未就绪，不能立即调用 evaluateJavascript
+            // _isWebViewReady 将在 onLoadStop 中设置为 true
             
             // 🚀 在 WebView 创建后启动自动保存
             // 延迟3秒，确保 Excalidraw 完全初始化
             Future.delayed(const Duration(seconds: 3), () {
-              if (mounted && _controller != null) {
+              if (mounted && _controller != null && _isWebViewReady) {
                 _startAutoSave();
+              } else {
+                print('⚠️ [ExcalidrawWebView] AutoSave delayed: WebView not ready yet');
               }
             });
           },
@@ -578,21 +697,39 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           
           onLoadStop: (controller, url) async {
             if (mounted) {
-              setState(() => _isLoading = false);
+              setState(() {
+                _isLoading = false;
+                _isWebViewReady = true; // 标记 WebView 已就绪
+              });
+              print('✅ [ExcalidrawWebView] Loading finished: $url');
+              print('✅ [ExcalidrawWebView] WebView marked as ready');
+              
               // ⚠️ 不要在这里初始化！
               // Excalidraw 需要时间来加载和初始化
               // 应该等待 'excalidraw-ready' 消息后再初始化
               // await _initializeExcalidraw(); // ❌ 这会导致过早调用，window.loadExcalidrawData 还未定义
               
-              // 🔍 测试：执行一段 JavaScript，看看 console.log 是否被捕获
-              await controller.evaluateJavascript(source: '''
-                console.log('🧪 [TEST] Console test from Dart - this should appear in logs!');
-                console.error('🧪 [TEST] Error test from Dart');
-                console.warn('🧪 [TEST] Warning test from Dart');
-              ''');
-              print('🧪 [TEST] JavaScript console test executed');
+              // 🔍 延迟测试：等待 WebView 完全就绪后再测试 JavaScript
+              Future.delayed(const Duration(milliseconds: 500), () async {
+                if (mounted && _controller != null) {
+                  try {
+                    await _safeEvaluateJavascript(
+                      source: '''
+                        console.log('🧪 [TEST] Console test from Dart - this should appear in logs!');
+                        console.error('🧪 [TEST] Error test from Dart');
+                        console.warn('🧪 [TEST] Warning test from Dart');
+                      ''',
+                      description: 'Test JavaScript execution',
+                      maxRetries: 1, // 测试只重试一次
+                    );
+                    print('🧪 [TEST] JavaScript console test executed successfully');
+                  } catch (e) {
+                    print('⚠️ [TEST] JavaScript test failed: $e');
+                    // 测试失败不应该影响应用运行
+                  }
+                }
+              });
             }
-            print('✅ [ExcalidrawWebView] Loading finished: $url');
           },
           
           onProgressChanged: (controller, progress) {

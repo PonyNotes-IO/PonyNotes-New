@@ -966,10 +966,12 @@
         "currentPlan": {
           "bannerLabel": "目前方案",
           "freeTitle": "免費版",
-          "proTitle": "專業版",
+          "studentTitle": "學生版",
+          "standardTitle": "標準版",
           "teamTitle": "團隊",
           "freeInfo": "非常適合最多 2 名個人使用，以整理所有內容",
-          "proInfo": "非常適合小型和中型團隊，最多 10 名成員。",
+          "studentInfo": "適合學生使用，2GB雲存儲，2個成員",
+          "standardInfo": "適合個人和小團隊，10GB存儲，5個成員",
           "teamInfo": "非常適合所有高效且井然有序的團隊。",
           "upgrade": "變更計劃",
           "canceledInfo": "您的方案已取消，您將在 {} 時降級為免費方案。"

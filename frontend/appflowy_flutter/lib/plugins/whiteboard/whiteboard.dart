@@ -1,5 +1,6 @@
 library;
 
+import 'package:appflowy/util/log_utils.dart' as log_utils;
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/util.dart';
@@ -18,6 +19,7 @@ import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapte
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_painter.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 
+// FORCE REBUILD - 2025-11-08 15:15 - Changed LogUtils to print() for debugging
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
   Plugin build(dynamic data) {
@@ -30,7 +32,7 @@ class WhiteboardPluginBuilder extends PluginBuilder {
       print('🏗️ [WhiteboardPluginBuilder] View layout: ${data.layout}');
       return WhiteboardPlugin(pluginType: pluginType, view: data);
     }
-
+    
     print('❌ [WhiteboardPluginBuilder] Invalid data type, throwing exception');
     throw FlowyPluginException.invalidData;
   }
@@ -357,64 +359,15 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     }
   }
 
-  /// 旧的保存方法（已废弃）
-  Future<void> _saveWhiteboardOld() async {
-    print('💾 [Whiteboard] OLD Manual save triggered');
-    
-    if (_currentData == null) {
-      print('⚠️ [Whiteboard] No data to save');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('没有数据需要保存'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
-    
-    final service = WhiteboardDataService();
-    final success = await service.saveWhiteboardData(widget.view.id, _currentData!);
-    
-    if (mounted) {
-      if (success) {
-        print('✅ [Whiteboard] Manual save successful');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('白板已保存'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      } else {
-        print('❌ [Whiteboard] Manual save failed');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('保存失败，请重试'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    print('🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData');
-    print('🖼️ [WhiteboardPage] _useExcalidraw: $_useExcalidraw');
-    print('🖼️ [WhiteboardPage] viewId: ${widget.view.id}');
+    log_utils.LogUtils.info('🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData');
+    log_utils.LogUtils.info('🖼️ [WhiteboardPage] _useExcalidraw: $_useExcalidraw');
+    log_utils.LogUtils.info('🖼️ [WhiteboardPage] viewId: ${widget.view.id}');
     
     if (_isLoadingData) {
-      print('⏳ [WhiteboardPage] Showing loading indicator');
+      log_utils.LogUtils.info('⏳ [WhiteboardPage] Showing loading indicator');
       return Scaffold(
         body: const Center(
           child: Column(
@@ -429,8 +382,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       );
     }
     
-    print('✅ [WhiteboardPage] Building whiteboard content');
-    print('✅ [WhiteboardPage] Will call: ${_useExcalidraw ? "_buildExcalidrawView()" : "_buildLegacyView()"}');
+    log_utils.LogUtils.info('✅ [WhiteboardPage] Building whiteboard content');
+    log_utils.LogUtils.info('✅ [WhiteboardPage] Will call: ${_useExcalidraw ? "_buildExcalidrawView()" : "_buildLegacyView()"}');
     return Scaffold(
           appBar: AppBar(
             elevation: 0,

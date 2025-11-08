@@ -152,6 +152,10 @@ class FlowyRunner {
         // Load Plugins, like document, grid ...
         const PluginLoadTask(),
         const FileStorageTask(),
+        // Preload whiteboard resources (Excalidraw WebView)
+        // This should be after PluginLoadTask to ensure whiteboard plugin is loaded
+        // and before InitAppWidgetTask to preload resources before UI is shown
+        const WhiteboardPreloadTask(),
         // Load Baidu Cloud configuration
         const BaiduCloudConfigTask(),
 
