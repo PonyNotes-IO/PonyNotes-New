@@ -2,16 +2,19 @@ use flowy_derive::ProtoBuf;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Excalidraw 白板数据
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct WhiteboardData {
-  #[serde(default)]
-  pub elements: Vec<ExcalidrawElement>,
-  #[serde(default, rename = "appState")]
-  pub app_state: AppState,
-  #[serde(default)]
-  pub files: HashMap<String, FileData>,
-}
+pub struct WhiteboardData(pub HashMap<String, serde_json::Value>);
+
+/// Excalidraw 白板数据
+// #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+// pub struct WhiteboardData {
+//   #[serde(default)]
+//   pub elements: Vec<ExcalidrawElement>,
+//   #[serde(default, rename = "appState")]
+//   pub app_state: AppState,
+//   #[serde(default)]
+//   pub files: HashMap<String, FileData>,
+// }
 
 /// Excalidraw 元素（简化版，只包含核心字段）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,14 +105,6 @@ pub struct FileData {
 }
 
 impl WhiteboardData {
-  /// 创建空白板
-  pub fn empty() -> Self {
-    Self {
-      elements: vec![],
-      app_state: AppState::default(),
-      files: HashMap::new(),
-    }
-  }
 
   /// 从 JSON 字符串解析
   pub fn from_json(json: &str) -> Result<Self, serde_json::Error> {
@@ -128,15 +123,7 @@ impl WhiteboardData {
 
   /// 转换为完整的 Excalidraw JSON 格式
   pub fn to_excalidraw_json(&self) -> Result<String, serde_json::Error> {
-    let json = serde_json::json!({
-      "type": "excalidraw",
-      "version": 2,
-      "source": "https://excalidraw.com",
-      "elements": self.elements,
-      "appState": self.app_state,
-      "files": self.files,
-    });
-    serde_json::to_string(&json)
+    serde_json::to_string(&self.0)
   }
 }
 
@@ -147,7 +134,7 @@ impl WhiteboardData {
 pub struct CreateWhiteboardPayloadPB {
   #[pb(index = 1)]
   pub view_id: String,
-  
+
   #[pb(index = 2, one_of)]
   pub initial_data: Option<String>,
 }
@@ -157,7 +144,7 @@ pub struct CreateWhiteboardPayloadPB {
 pub struct UpdateWhiteboardPayloadPB {
   #[pb(index = 1)]
   pub view_id: String,
-  
+
   #[pb(index = 2)]
   pub json_data: String,
 }
@@ -169,7 +156,7 @@ pub struct UpdateWhiteboardPayloadPB {
 pub struct WhiteboardDataPB {
   #[pb(index = 1)]
   pub view_id: String,
-  
+
   #[pb(index = 2)]
   pub json_data: String,
 }

@@ -1,6 +1,5 @@
 library;
 
-import 'package:appflowy/util/log_utils.dart' as log_utils;
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/util.dart';
@@ -19,7 +18,6 @@ import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapte
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_painter.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 
-// FORCE REBUILD - 2025-11-08 15:15 - Changed LogUtils to print() for debugging
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
   Plugin build(dynamic data) {
@@ -32,7 +30,7 @@ class WhiteboardPluginBuilder extends PluginBuilder {
       print('🏗️ [WhiteboardPluginBuilder] View layout: ${data.layout}');
       return WhiteboardPlugin(pluginType: pluginType, view: data);
     }
-    
+
     print('❌ [WhiteboardPluginBuilder] Invalid data type, throwing exception');
     throw FlowyPluginException.invalidData;
   }
@@ -289,7 +287,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   /// 白板数据变更回调 - 完全模仿 DocumentBloc 的 transactionStream 监听
-  void _onWhiteboardDataChanged(Map<String, dynamic> data) {
+  void _onWhiteboardDataChanged(String type, Map<String, dynamic> data) {
     if (_isDisposing) {
       print('⚠️ [Whiteboard] Data change ignored - widget is disposing');
       return;
@@ -299,15 +297,11 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     print('📝 [WhiteboardPage] Data changed callback triggered (like EditorState.transactionStream)');
     print('📝 [WhiteboardPage] ViewID: ${widget.view.id}');
     print('📝 [WhiteboardPage] Data keys: ${data.keys.toList()}');
-    if (data.containsKey('elements')) {
-      final elements = data['elements'] as List?;
-      print('📝 [WhiteboardPage] Elements count: ${elements?.length ?? 0}');
-    }
     print('📝 [WhiteboardPage] Forwarding to CollabAdapter (like TransactionAdapter.apply)...');
     print('📝 [WhiteboardPage] =====================================================');
     
     // 转发给 CollabAdapter 处理（完全模仿 DocumentBloc 的 TransactionAdapter）
-    _collabAdapter?.onWhiteboardDataChanged(data);
+    _collabAdapter?.onWhiteboardDataChanged(type,data);
   }
 
   void _onWhiteboardExport(String format, dynamic data) {
@@ -359,15 +353,62 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     }
   }
 
+  /// 旧的保存方法（已废弃）
+  Future<void> _saveWhiteboardOld() async {
+    print('💾 [Whiteboard] OLD Manual save triggered');
+    
+    if (_currentData == null) {
+      print('⚠️ [Whiteboard] No data to save');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('没有数据需要保存'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+    
+    final service = WhiteboardDataService();
+    final success = await service.saveWhiteboardData(widget.view.id, _currentData!);
+    
+    if (mounted) {
+      if (success) {
+        print('✅ [Whiteboard] Manual save successful');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('白板已保存'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        print('❌ [Whiteboard] Manual save failed');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('保存失败，请重试'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    log_utils.LogUtils.info('🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData');
-    log_utils.LogUtils.info('🖼️ [WhiteboardPage] _useExcalidraw: $_useExcalidraw');
-    log_utils.LogUtils.info('🖼️ [WhiteboardPage] viewId: ${widget.view.id}');
+    print('🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData');
     
     if (_isLoadingData) {
-      log_utils.LogUtils.info('⏳ [WhiteboardPage] Showing loading indicator');
+      print('⏳ [WhiteboardPage] Showing loading indicator');
       return Scaffold(
         body: const Center(
           child: Column(
@@ -382,8 +423,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       );
     }
     
-    log_utils.LogUtils.info('✅ [WhiteboardPage] Building whiteboard content');
-    log_utils.LogUtils.info('✅ [WhiteboardPage] Will call: ${_useExcalidraw ? "_buildExcalidrawView()" : "_buildLegacyView()"}');
+    print('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
           appBar: AppBar(
             elevation: 0,
@@ -593,9 +633,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   Widget _buildExcalidrawView() {
-    print('🚀🚀🚀 [Whiteboard] _buildExcalidrawView() called!');
-    print('🚀🚀🚀 [Whiteboard] viewId: ${widget.view.id}');
-    print('🚀🚀🚀 [Whiteboard] _useExcalidraw: $_useExcalidraw');
     // ✅ 每次build都创建新的Widget实例，避免PlatformView重复创建错误
     // ✅ 使用全局唯一的实例ID作为key，确保绝对不会出现ID冲突
     // 📌 Key的组成：viewId（白板ID） + 全局唯一的实例编号
