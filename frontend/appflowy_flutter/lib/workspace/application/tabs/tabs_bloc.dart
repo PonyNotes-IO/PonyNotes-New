@@ -247,9 +247,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     Future.microtask(() async {
       try {
         await _recentService.updateRecentViews([viewId], true);
-        Log.debug('已添加视图到最近访问: $viewId');
+        // Log.debug('已添加视图到最近访问: $viewId'); // PonyNotes: 关闭非白板日志
       } catch (e) {
-        Log.error('添加视图到最近访问失败: $viewId, 错误: $e');
+        // Log.error('添加视图到最近访问失败: $viewId, 错误: $e'); // PonyNotes: 关闭非白板日志
       }
     });
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -29,16 +30,38 @@ class ExcalidrawWebView extends StatefulWidget {
 class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   InAppWebViewController? _controller;
   bool _isLoading = true;
+  bool isInitialized = false; // 标记 Excalidraw 是否已初始化
   String? _loadingError;
   final _assetServer = LocalAssetServer();
   String? _whiteboardUrl;
   late InAppWebViewSettings _settings;
+  
+  // 🚀 新增：自动保存定时器
+  Timer? _autoSaveTimer;
+  String? _lastSavedDataHash; // 用于检测数据是否真正变化
+
+  /// 获取唯一的 WebView key
+  /// 优先使用父组件传递的唯一 key，如果没有则使用 viewId
+  String _getUniqueWebViewKey() {
+    if (widget.key is ValueKey) {
+      final valueKey = widget.key as ValueKey;
+      // 父组件传递的 key 格式：'${viewId}_global_${instanceId}'
+      // 确保 value 是字符串类型
+      final keyValue = valueKey.value?.toString() ?? widget.viewId;
+      return 'inappwebview_$keyValue';
+    }
+    // 如果没有 key 或 key 不是 ValueKey，使用 viewId
+    return 'inappwebview_${widget.viewId}';
+  }
 
   @override
   void initState() {
     super.initState();
+    print('🚀 [ExcalidrawWebView] initState() called for viewId: ${widget.viewId}');
     _initializeSettings();
     _loadExcalidrawHTML();
+    // 🚀 延迟启动自动保存，等待 WebView 完全初始化
+    // 不在这里立即启动，而是在 onWebViewCreated 中启动
   }
 
   void _initializeSettings() {
@@ -48,6 +71,9 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       useShouldOverrideUrlLoading: true,
       mediaPlaybackRequiresUserGesture: false,
       cacheEnabled: false,
+      // 🔧 启用调试和控制台日志
+      isInspectable: true, // 允许调试（macOS/iOS）
+      clearCache: false, // 保留缓存以提高性能
       // Android 特定设置
       useHybridComposition: true,
       thirdPartyCookiesEnabled: false,
@@ -168,9 +194,60 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     }
   }
 
+  /// 🚀 启动自动保存定时器
+  /// 每2秒通过 getExcalidrawData() 获取当前画布数据并保存
+  void _startAutoSave() {
+    print('⏰ [AutoSave] Starting auto-save timer (interval: 2 seconds)');
+    print('⏰ [AutoSave] Will use window.getExcalidrawData() to fetch canvas data');
+    
+    _autoSaveTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (_controller == null || !mounted || !isInitialized) {
+        return;
+      }
+      
+      try {
+        // 🔑 关键修改：调用 window.getExcalidrawData() 触发数据获取
+        // 这会通过 iframe postMessage 机制获取当前画布数据
+        // 数据会通过 'excalidraw-data' 消息返回到 _handleWebViewMessage
+        print('🔄 [AutoSave] Requesting current canvas data...');
+        await _controller!.evaluateJavascript(source: '''
+          (function() {
+            try {
+              if (window.getExcalidrawData) {
+                console.log('[AutoSave] Calling window.getExcalidrawData()');
+                window.getExcalidrawData();
+                return true;
+              } else {
+                console.error('[AutoSave] window.getExcalidrawData not found!');
+                return false;
+              }
+            } catch (e) {
+              console.error('[AutoSave] Error calling getExcalidrawData:', e);
+              return false;
+            }
+          })();
+        ''');
+      } catch (e) {
+        print('⚠️ [AutoSave] Error: $e');
+      }
+    });
+  }
+
 
   @override
   void dispose() {
+    print('🗑️ [ExcalidrawWebView] dispose() called for viewId: ${widget.viewId}');
+    
+    // 🚀 清理自动保存定时器
+    if (_autoSaveTimer != null) {
+      _autoSaveTimer!.cancel();
+      _autoSaveTimer = null;
+      print('⏰ [AutoSave] Timer cancelled for viewId: ${widget.viewId}');
+    }
+    
+    // 清理 controller 引用
+    _controller = null;
+    
     // ⚠️ 不要停止本地HTTP服务器！
     // LocalAssetServer是单例，被所有白板视图共享
     // 如果在这里stop()，会导致其他白板视图的服务器也被停止
@@ -179,20 +256,28 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     
     // flutter_inappwebview 的 controller 会自动清理
     super.dispose();
+    print('✅ [ExcalidrawWebView] dispose() completed for viewId: ${widget.viewId}');
   }
 
   void _handleWebViewMessage(String message) {
     try {
+      print('🔔 [ExcalidrawWebView] Received message (length: ${message.length})');
+      
       final data = jsonDecode(message);
       final type = data['type'] as String;
       final payload = data['payload'];
 
+      print('🔔 [ExcalidrawWebView] Message type: $type');
+      
       switch (type) {
         case 'ready':
         case 'excalidraw-ready':
           print('✅ [Whiteboard] Excalidraw ready: $payload');
           if (mounted) {
-            setState(() => _isLoading = false);
+            setState(() {
+              _isLoading = false;
+              isInitialized = true; // 标记为已初始化
+            });
           }
           // 初始化完成后，发送初始数据
           _initializeExcalidraw();
@@ -201,11 +286,33 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         case 'excalidraw-change':
           // 🔑 处理数据变更，包含 viewId 信息
           final viewId = payload != null && payload is Map ? payload['viewId'] : null;
-          print('💾 [Whiteboard] 数据变更检测: viewId=$viewId, keys=${payload != null ? (payload is Map ? payload.keys.length : 'invalid') : 'null'}');
+          final elementsCount = payload != null && payload is Map && payload['elements'] is List ? (payload['elements'] as List).length : 0;
+          
+          print('💾💾💾 [Whiteboard] 🚨 DATA CHANGE DETECTED! 🚨');
+          print('💾 [Whiteboard] viewId: $viewId (expected: ${widget.viewId})');
+          print('💾 [Whiteboard] Elements count: $elementsCount');
+          print('💾 [Whiteboard] Payload keys: ${payload != null && payload is Map ? payload.keys.toList() : 'null'}');
+          
+          // 🔍 打印完整 payload 以便调试
+          if (payload is Map) {
+            print('💾 [Whiteboard] 📄 Full payload: $payload');
+            if (payload.containsKey('elements')) {
+              final elements = payload['elements'];
+              if (elements is List && elements.isNotEmpty) {
+                print('💾 [Whiteboard] 📄 First element: ${elements.first}');
+              }
+            }
+          }
           
           // 确认 viewId 匹配
           if (viewId != null && viewId != widget.viewId) {
             print('⚠️ [Whiteboard] ViewID mismatch! Expected: ${widget.viewId}, Got: $viewId');
+          }
+          
+          if (elementsCount == 0) {
+            print('⚠️⚠️⚠️ [Whiteboard] WARNING: Elements count is 0! No content to save!');
+          } else {
+            print('✅ [Whiteboard] Elements detected: $elementsCount items');
           }
           
           widget.onDataChanged?.call(payload);
@@ -233,8 +340,38 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           widget.onError?.call(errorMsg);
           break;
         case 'excalidraw-data':
-          // 获取数据响应
-          print('📦 [Whiteboard] 获取到数据: ${payload != null ? (payload is Map ? payload.keys.length : 'invalid') : 'null'} keys');
+          // 🔑 获取数据响应（来自自动保存的 getExcalidrawData 调用）
+          if (payload != null && payload is Map) {
+            // 转换为 Map<String, dynamic>
+            final dataMap = Map<String, dynamic>.from(payload);
+            final elementsCount = dataMap['elements'] is List ? (dataMap['elements'] as List).length : 0;
+            print('📦 [AutoSave] Received canvas data: elements=$elementsCount, keys=${dataMap.keys.length}');
+            
+            // 计算数据哈希值
+            final dataStr = jsonEncode(dataMap);
+            final dataHash = dataStr.hashCode.toString();
+            
+            // 检查数据是否真的变化了
+            if (_lastSavedDataHash == dataHash) {
+              // 数据没变化，跳过保存
+              print('⏭️ [AutoSave] Data unchanged, skipping save');
+              return;
+            }
+            
+            // 数据变化了，保存！
+            print('💾 [AutoSave] Data changed detected, saving... (hash: $dataHash)');
+            print('📦 [AutoSave] Elements: $elementsCount items');
+            
+            // 通知上层保存
+            widget.onDataChanged?.call(dataMap);
+            
+            // 更新最后保存的哈希值
+            _lastSavedDataHash = dataHash;
+            
+            print('✅ [AutoSave] Data saved successfully');
+          } else {
+            print('⚠️ [AutoSave] Received invalid data: ${payload?.runtimeType}');
+          }
           break;
         default:
           print('❓ [Whiteboard] Unknown message type: $type');
@@ -384,11 +521,19 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       );
     }
 
+    // 🔑 获取唯一的 WebView key
+    final webViewKey = _getUniqueWebViewKey();
+    print('🔑 [ExcalidrawWebView] Creating InAppWebView with key: $webViewKey');
+    print('🔑 [ExcalidrawWebView] ViewId: ${widget.viewId}');
+    print('🔑 [ExcalidrawWebView] Widget key: ${widget.key}');
+    
     return Stack(
       children: [
         InAppWebView(
-          // ❌ 不要使用 widget.key！会导致热重启时 view id 冲突
-          // ✅ InAppWebView 不需要 key，因为父 widget 已经有唯一 key 了
+          // ✅ 使用父组件传递的唯一 key 来生成 InAppWebView 的 key
+          // 父组件的 key 格式：'${viewId}_global_${instanceId}'
+          // 这样可以确保每个 WebView 实例都有全局唯一的 key，避免平台视图 ID 冲突
+          key: ValueKey(webViewKey),
           initialUrlRequest: URLRequest(
             url: WebUri(_whiteboardUrl!),
           ),
@@ -397,7 +542,17 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           onWebViewCreated: (controller) {
             _controller = controller;
             _setupJavaScriptHandlers(controller);
-            print('🌐 [ExcalidrawWebView] WebView created');
+            print('🌐 [ExcalidrawWebView] WebView created for viewId: ${widget.viewId}');
+            print('🌐 [ExcalidrawWebView] WebView key: $webViewKey');
+            print('🌐 [ExcalidrawWebView] 视图已创建: ${widget.viewId}');
+            
+            // 🚀 在 WebView 创建后启动自动保存
+            // 延迟3秒，确保 Excalidraw 完全初始化
+            Future.delayed(const Duration(seconds: 3), () {
+              if (mounted && _controller != null) {
+                _startAutoSave();
+              }
+            });
           },
           
           shouldOverrideUrlLoading: (controller, navigationAction) async {
@@ -428,6 +583,14 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               // Excalidraw 需要时间来加载和初始化
               // 应该等待 'excalidraw-ready' 消息后再初始化
               // await _initializeExcalidraw(); // ❌ 这会导致过早调用，window.loadExcalidrawData 还未定义
+              
+              // 🔍 测试：执行一段 JavaScript，看看 console.log 是否被捕获
+              await controller.evaluateJavascript(source: '''
+                console.log('🧪 [TEST] Console test from Dart - this should appear in logs!');
+                console.error('🧪 [TEST] Error test from Dart');
+                console.warn('🧪 [TEST] Warning test from Dart');
+              ''');
+              print('🧪 [TEST] JavaScript console test executed');
             }
             print('✅ [ExcalidrawWebView] Loading finished: $url');
           },
@@ -459,8 +622,21 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           },
           
           onConsoleMessage: (controller, consoleMessage) {
-            // 打印 WebView 控制台消息（用于调试）
-            print('[WebView Console] ${consoleMessage.message}');
+            // 🔍 测试：打印所有控制台消息，不过滤
+            final level = consoleMessage.messageLevel;
+            final message = consoleMessage.message;
+            
+            // 先打印一个标记，确认这个回调被调用了
+            print('🔔 [WebView Console] Callback triggered! Level: $level');
+            
+            if (level == ConsoleMessageLevel.ERROR) {
+              print('🔴 [WebView Console ERROR] $message');
+            } else if (level == ConsoleMessageLevel.WARNING) {
+              print('⚠️ [WebView Console WARN] $message');
+            } else {
+              // 🔍 暂时打印所有日志，不过滤
+              print('📺 [WebView Console] $message');
+            }
           },
         ),
         

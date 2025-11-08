@@ -12,6 +12,7 @@ import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -204,7 +205,7 @@ class _MobileHomePageTabState extends State<MobileHomePageTab>
     if (context.read<SpaceBloc>().state.spaces.isNotEmpty) {
       context.read<SpaceBloc>().add(
             SpaceEvent.createPage(
-              name: '',
+              name: layout.defaultName,
               layout: layout,
               openAfterCreate: true,
             ),

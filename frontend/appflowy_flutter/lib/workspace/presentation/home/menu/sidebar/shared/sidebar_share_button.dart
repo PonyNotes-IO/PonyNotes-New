@@ -52,7 +52,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton> {
       
       result.fold(
         (privateViews) {
-          Log.debug('Found ${privateViews.items.length} private/shared notes');
+          // Log.debug('Found ${privateViews.items.length} private/shared notes'); // PonyNotes: 关闭非白板日志
           
           // Backend already filters out trash views, so we can use them directly
           setState(() {
@@ -87,9 +87,9 @@ class _SidebarShareButtonState extends State<SidebarShareButton> {
       child: BlocListener<SidebarSectionsBloc, SidebarSectionsState>(
         listenWhen: (prev, curr) => prev.section.privateViews.length != curr.section.privateViews.length,
         listener: (prev, curr) {
-          Log.debug('Private views count changed, refreshing shared notes list');
+          // Log.debug('Private views count changed, refreshing shared notes list'); // PonyNotes: 关闭非白板日志
           // Log.debug('Previous private views: ${prev.section.privateViews.length}');
-          Log.debug('Current private views: ${curr.section.privateViews.length}');
+          // Log.debug('Current private views: ${curr.section.privateViews.length}'); // PonyNotes: 关闭非白板日志
           // Only refresh when private views count changes (share/unshare actions)
           _loadUserSharedNotes();
         },

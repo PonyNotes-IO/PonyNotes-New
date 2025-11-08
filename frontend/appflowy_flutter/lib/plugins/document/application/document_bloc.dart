@@ -246,20 +246,31 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
   }
 
   Future<EditorState?> _initAppFlowyEditorState(DocumentDataPB data) async {
+    Log.info('[DocumentBloc] _initAppFlowyEditorState START for documentId: $documentId');
     if (enableDocumentInternalLog) {
       Log.info('document data: ${data.toProto3Json()}');
     }
 
+    Log.info('[DocumentBloc] Calling data.toDocument()...');
     final document = data.toDocument();
+    Log.info('[DocumentBloc] data.toDocument() completed, document is null: ${document == null}');
     if (document == null) {
+      Log.error('[DocumentBloc] document is null for documentId: $documentId');
       assert(false, 'document is null');
       return null;
     }
 
+    Log.info('[DocumentBloc] Creating EditorState...');
     final editorState = EditorState(document: document);
+    Log.info('[DocumentBloc] EditorState created successfully');
 
+    Log.info('[DocumentBloc] Creating DocumentCollabAdapter...');
     _documentCollabAdapter = DocumentCollabAdapter(editorState, documentId);
+    Log.info('[DocumentBloc] DocumentCollabAdapter created successfully');
+    
+    Log.info('[DocumentBloc] Creating DocumentRules...');
     _documentRules = DocumentRules(editorState: editorState);
+    Log.info('[DocumentBloc] DocumentRules created successfully');
 
     // subscribe to the document change from the editor
     _transactionSubscription = editorState.transactionStream.listen(
@@ -303,10 +314,13 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
       },
     );
 
+    Log.info('[DocumentBloc] Adding selection listener...');
     editorState.selectionNotifier.addListener(_debounceOnSelectionUpdate);
+    Log.info('[DocumentBloc] Selection listener added');
 
     // output the log from the editor when debug mode
     if (kDebugMode) {
+      Log.info('[DocumentBloc] Setting up editor log configuration...');
       editorState.logConfiguration
         ..level = AppFlowyEditorLogLevel.all
         ..handler = (log) {
@@ -314,8 +328,10 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
             // Log.info(log);
           }
         };
+      Log.info('[DocumentBloc] Editor log configuration set up');
     }
 
+    Log.info('[DocumentBloc] _initAppFlowyEditorState END, returning editorState for documentId: $documentId');
     return editorState;
   }
 

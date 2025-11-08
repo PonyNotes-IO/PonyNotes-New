@@ -1,9 +1,11 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/folder/_folder_header.dart';
@@ -96,8 +98,8 @@ class _SectionFolderState extends State<SectionFolder> {
             .add(const FolderEvent.expandOrUnExpand(isExpanded: true));
       },
       // 只为"我的空间"提供选择菜单功能
-      parentViewId: widget.title == "我的空间" ? parentViewId : null,
-      onViewSelected: widget.title == "我的空间" ? _onViewSelected : null,
+      parentViewId: widget.title == LocaleKeys.space_mySpace.tr() ? parentViewId : null,
+      onViewSelected: widget.title == LocaleKeys.space_mySpace.tr() ? _onViewSelected : null,
     );
   }
 
@@ -114,11 +116,7 @@ class _SectionFolderState extends State<SectionFolder> {
     
     if (parentViewId == null) return;
 
-    // 根据插件类型确定视图名称
-    final viewName = ![ViewLayoutPB.Document, ViewLayoutPB.Chat]
-            .contains(pluginBuilder.layoutType)
-        ? LocaleKeys.menuAppHeader_defaultNewPageName.tr()
-        : '';
+    final viewName = pluginBuilder.layoutType?.defaultName ?? '';
 
     try {
       // 使用ViewBackendService创建指定类型的视图
@@ -133,11 +131,36 @@ class _SectionFolderState extends State<SectionFolder> {
       );
 
       result.fold(
-        (view) {
+        (view) async {
           // 创建成功，展开文件夹以显示新创建的视图
           context
               .read<FolderBloc>()
               .add(const FolderEvent.expandOrUnExpand(isExpanded: true));
+          
+          // 为 Folder 和 Notebook 设置 extra 字段和默认 emoji 图标
+          if (pluginBuilder.layoutType == ViewLayoutPB.Folder) {
+            // 设置文件夹的 extra 字段
+            await ViewBackendService.updateView(
+              viewId: view.id,
+              extra: '{"view_type": "folder"}',
+            );
+            // 设置文件夹的默认 emoji 图标 📂
+            await ViewBackendService.updateViewIcon(
+              view: view,
+              viewIcon: EmojiIconData.emoji('📂'),
+            );
+          } else if (pluginBuilder.layoutType == ViewLayoutPB.Notebook) {
+            // 设置笔记本的 extra 字段
+            await ViewBackendService.updateView(
+              viewId: view.id,
+              extra: '{"view_type": "notebook"}',
+            );
+            // 设置笔记本的默认 emoji 图标 📓
+            await ViewBackendService.updateViewIcon(
+              view: view,
+              viewIcon: EmojiIconData.emoji('📓'),
+            );
+          }
           
           // 不需要手动刷新，系统会自动更新侧边栏
         },
@@ -162,7 +185,7 @@ class _SectionFolderState extends State<SectionFolder> {
     }
 
     // 为"我的空间"的子项目设置适当的缩进级别
-    final bool isMySpaceSection = widget.title == "我的空间";
+    final bool isMySpaceSection = widget.title == LocaleKeys.space_mySpace.tr();
     final int itemLevel = isMySpaceSection ? 1 : 0; // 我的空间下的项目缩进一级
 
     return widget.views.map(

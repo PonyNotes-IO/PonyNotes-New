@@ -385,9 +385,9 @@ impl WhiteboardManager {
     let workspace_id = self.user_service.workspace_id()?;
     let collab_db = self.user_service.collab_db(uid)?;
 
-    // 🔧 使用 Document 类型而不是 Unknown，确保持久化插件正常工作
+    // 🔧 使用 Unknown 类型，避免服务器端的 Document 类型验证错误
     // TODO: 在 collab-entity 中添加 CollabType::Whiteboard 变体后，改用 Whiteboard 类型
-    let object = collab_builder.collab_object(&workspace_id, uid, view_id, CollabType::Document)
+    let object = collab_builder.collab_object(&workspace_id, uid, view_id, CollabType::Unknown)
       .map_err(internal_error)?;
 
     // ✅ 关键修复：使用 AppFlowyCollabBuilder::build_collab 而非直接构建

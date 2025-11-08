@@ -2275,12 +2275,14 @@ impl FolderManager {
     // Special handling for Whiteboard, Folder, and Notebook types
     // These types are mapped to ViewLayout::Document in the conversion, but we want to find
     // their dedicated handlers by checking extra_handlers
+    // Note: Folder and Notebook views reuse DocumentFolderOperationHandler (just different icons in UI)
     if matches!(layout_pb, ViewLayoutPB::Whiteboard | ViewLayoutPB::Folder | ViewLayoutPB::Notebook) {
       // Determine the target handler name
       let target_handler_name = match layout_pb {
         ViewLayoutPB::Whiteboard => "WhiteboardFolderOperationHandler",
-        ViewLayoutPB::Folder => "FolderFolderOperationHandler",
-        ViewLayoutPB::Notebook => "NotebookFolderOperationHandler",
+        // Folder and Notebook views reuse Document handler - only icons differ in UI
+        ViewLayoutPB::Folder => "DocumentFolderOperationHandler",
+        ViewLayoutPB::Notebook => "DocumentFolderOperationHandler",
         _ => unreachable!(),
       };
       
@@ -2291,6 +2293,13 @@ impl FolderManager {
           if handler.name() == target_handler_name {
             return Ok(handler.clone());
           }
+        }
+      }
+      
+      // If not found in extra_handlers, try operation_handlers (for Document handler)
+      if matches!(layout_pb, ViewLayoutPB::Folder | ViewLayoutPB::Notebook) {
+        if let Some(handler) = self.operation_handlers.get(&ViewLayout::Document) {
+          return Ok(handler.clone());
         }
       }
       

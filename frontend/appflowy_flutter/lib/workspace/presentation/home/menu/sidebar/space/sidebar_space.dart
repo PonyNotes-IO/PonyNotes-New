@@ -3,6 +3,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_folder.dart';
@@ -226,7 +227,7 @@ class _SpaceState extends State<_Space> {
   ) {
     context.read<SpaceBloc>().add(
           SpaceEvent.createPage(
-            name: '',
+            name: layout.defaultName,
             layout: layout,
             index: 0,
             openAfterCreate: true,

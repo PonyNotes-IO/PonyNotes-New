@@ -64,44 +64,51 @@
         
         setItem: function(key, value) {
           const prefixedKey = getPrefixedKey(key);
-          console.log(`[PonyNotes Storage] setItem("${key}") -> prefixed: "${prefixedKey}"`);
+          console.log(`[PonyNotes Storage] 🔥🔥🔥 setItem("${key}") -> prefixed: "${prefixedKey}", value length: ${value ? value.length : 0}`);
           originalLocalStorage.setItem(prefixedKey, value);
           
           // 🚀 关键修复：立即通知 Flutter 数据已变化
-          // 只处理 Excalidraw 相关的 key
-          if (key && (key.includes('excalidraw') || key.startsWith('excalidraw'))) {
-            console.log(`[PonyNotes Storage] 🚀 Excalidraw data changed, notifying parent immediately...`);
-            sendToParent('debug-log', {
-              level: 'info',
-              message: '[PonyNotes Storage] 🚀 localStorage.setItem triggered for key: ' + key
-            });
+          // ⚠️ 监听所有 key，不只是 excalidraw 开头的！
+          console.log(`[PonyNotes Storage] 🔍 Checking key "${key}"`);
+          
+          // 🔥 尝试解析并发送所有可能包含 elements 的数据
+          try {
+            // 尝试解析数据
+            const parsedData = JSON.parse(value);
             
-            try {
-              // 尝试解析数据
-              const parsedData = JSON.parse(value);
+            // 🔍 检查数据是否包含 elements 数组（这是 Excalidraw 数据的标志）
+            if (parsedData && typeof parsedData === 'object') {
+              const hasElements = Array.isArray(parsedData.elements);
+              const hasAppState = parsedData.appState && typeof parsedData.appState === 'object';
+              const elementsCount = hasElements ? parsedData.elements.length : 0;
               
-              // 添加 viewId
-              if (currentViewId) {
-                parsedData.viewId = currentViewId;
+              console.log(`[PonyNotes Storage] 🔍 Parsed data - hasElements: ${hasElements}, elementsCount: ${elementsCount}, hasAppState: ${hasAppState}`);
+              
+              // 🔥 如果有 elements 字段，就认为这是 Excalidraw 数据，立即发送！
+              if (hasElements) {
+                console.log(`[PonyNotes Storage] 🚀 FOUND EXCALIDRAW DATA! Key: "${key}", elements: ${elementsCount}`);
+                
+                // 添加 viewId
+                if (currentViewId) {
+                  parsedData.viewId = currentViewId;
+                }
+                
+                // 立即发送 excalidraw-change 消息
+                sendToParent('excalidraw-change', parsedData);
+                
+                sendToParent('debug-log', {
+                  level: 'info',
+                  message: `[PonyNotes Storage] ✅ Sent excalidraw-change for key "${key}", elements: ${elementsCount}`
+                });
+                
+                console.log(`[PonyNotes Storage] ✅ Sent excalidraw-change to parent, key: "${key}", elements: ${elementsCount}`);
+              } else {
+                console.log(`[PonyNotes Storage] ℹ️ Key "${key}" has no elements array, skipping`);
               }
-              
-              // 立即发送 excalidraw-change 消息
-              sendToParent('excalidraw-change', parsedData);
-              
-              sendToParent('debug-log', {
-                level: 'info',
-                message: '[PonyNotes Storage] ✅ Immediately notified parent: excalidraw-change, elements: ' + (parsedData.elements ? parsedData.elements.length : 0)
-              });
-              
-              console.log(`[PonyNotes Storage] ✅ Sent excalidraw-change to parent, elements: ${parsedData.elements ? parsedData.elements.length : 0}`);
-            } catch (parseError) {
-              // 如果不是 JSON，可能是其他类型的数据，忽略
-              console.log(`[PonyNotes Storage] ⚠️ Could not parse value as JSON (might be non-Excalidraw data):`, parseError.message);
-              sendToParent('debug-log', {
-                level: 'warn',
-                message: '[PonyNotes Storage] ⚠️ setItem for key ' + key + ' but data is not valid JSON'
-              });
             }
+          } catch (parseError) {
+            // 如果不是 JSON，忽略（可能是字符串数据）
+            console.log(`[PonyNotes Storage] ℹ️ Key "${key}" is not JSON, skipping`);
           }
         },
         

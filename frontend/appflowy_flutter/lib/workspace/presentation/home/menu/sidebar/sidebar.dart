@@ -260,9 +260,9 @@ class HomeSideBar extends StatelessWidget {
       final space =
           (await ViewBackendService.getView(firstAncestor.id)).toNullable();
       if (space != null) {
-        Log.info(
-          'Switching space from (${firstAncestor.name}-${firstAncestor.id}) to (${space.name}-${space.id})',
-        );
+        // Log.info( // PonyNotes: 关闭非白板日志
+        //   'Switching space from (${firstAncestor.name}-${firstAncestor.id}) to (${space.name}-${space.id})',
+        // );
         spaceBloc.add(SpaceEvent.open(space: space, afterOpen: afterOpen));
       }
     }
@@ -399,7 +399,7 @@ class _SidebarState extends State<_Sidebar> {
     final workspaceState = context.read<UserWorkspaceBloc>().state;
 
     if (!spaceState.isInitialized) {
-      Log.debug('SpaceBloc not initialized, showing empty widget');
+      // Log.debug('SpaceBloc not initialized, showing empty widget'); // PonyNotes: 关闭非白板日志
       return const SizedBox.shrink();
     }
 
@@ -417,12 +417,12 @@ class _SidebarState extends State<_Sidebar> {
         spaceState.spaces.isEmpty ||
         !workspaceState.isCollabWorkspaceOn;
     
-    Log.debug(
-      'Sidebar render decision: containsSpace=$containsSpace, '
-      'spaces.length=${spaceState.spaces.length}, '
-      'isCollabWorkspaceOn=${workspaceState.isCollabWorkspaceOn}, '
-      'shouldShowFolder=$shouldShowFolder',
-    );
+    // Log.debug( // PonyNotes: 关闭非白板日志
+    //   'Sidebar render decision: containsSpace=$containsSpace, '
+    //   'spaces.length=${spaceState.spaces.length}, '
+    //   'isCollabWorkspaceOn=${workspaceState.isCollabWorkspaceOn}, '
+    //   'shouldShowFolder=$shouldShowFolder',
+    // );
 
     return shouldShowFolder
         ? Expanded(
@@ -662,7 +662,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     FlowyText.medium(
-                      '小马笔记',
+                      LocaleKeys.sidebar_appName.tr(),
                       color: Theme.of(context).colorScheme.tertiary,
                       overflow: TextOverflow.ellipsis,
                       fontSize: 15.0,

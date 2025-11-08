@@ -1,7 +1,9 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
@@ -67,7 +69,7 @@ class _FolderHeaderState extends State<FolderHeader> {
           text: Row(
             children: [
               // 添加文件夹图标（只为"我的空间"显示）
-              if (widget.title == "我的空间") ...[
+              if (widget.title == LocaleKeys.space_mySpace.tr()) ...[
                 FlowySvg(
                   FlowySvgs.folder_m,
                   size: const Size.square(16.0),
@@ -103,6 +105,7 @@ class _FolderHeaderState extends State<FolderHeader> {
             // 这里可以处理编辑状态，暂时留空
           },
           onSelected: widget.onViewSelected!,
+          tooltipText: widget.addButtonTooltip,
         ),
       );
     }

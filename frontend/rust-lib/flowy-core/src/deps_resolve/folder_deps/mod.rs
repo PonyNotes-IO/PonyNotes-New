@@ -1,6 +1,8 @@
 mod folder_deps_chat_impl;
 mod folder_deps_database_impl;
 mod folder_deps_doc_impl;
+mod folder_deps_folder_impl;
+mod folder_deps_notebook_impl;
 mod folder_deps_whiteboard_impl;
 
 use crate::server_layer::ServerProvider;
@@ -25,6 +27,10 @@ use std::sync::{Arc, Weak};
 use crate::deps_resolve::folder_deps::folder_deps_chat_impl::ChatFolderOperation;
 use crate::deps_resolve::folder_deps::folder_deps_database_impl::DatabaseFolderOperation;
 use crate::deps_resolve::folder_deps::folder_deps_doc_impl::DocumentFolderOperation;
+// FolderFolderOperation and NotebookFolderOperation are no longer used
+// Folder and Notebook views reuse DocumentFolderOperation (only icons differ in UI)
+// use crate::deps_resolve::folder_deps::folder_deps_folder_impl::FolderFolderOperation;
+// use crate::deps_resolve::folder_deps::folder_deps_notebook_impl::NotebookFolderOperation;
 use crate::deps_resolve::folder_deps::folder_deps_whiteboard_impl::WhiteboardFolderOperation;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use flowy_folder_pub::query::{FolderQueryService, FolderService, FolderViewEdit, QueryCollab};
@@ -64,20 +70,24 @@ pub fn register_handlers(
   chat_manager: Weak<AIManager>,
   whiteboard_manager: Weak<flowy_whiteboard::manager::WhiteboardManager>,
 ) {
-  let document_folder_operation = Arc::new(DocumentFolderOperation(document_manager));
+  let document_folder_operation = Arc::new(DocumentFolderOperation(document_manager.clone()));
   folder_manager.register_operation_handler(ViewLayout::Document, document_folder_operation);
 
   let database_folder_operation = Arc::new(DatabaseFolderOperation(database_manager));
   let chat_folder_operation = Arc::new(ChatFolderOperation(chat_manager));
   let whiteboard_folder_operation = Arc::new(WhiteboardFolderOperation(whiteboard_manager));
+  // Folder and Notebook views reuse DocumentFolderOperation - only icons differ in UI
+  // No need to register FolderFolderOperation or NotebookFolderOperation
   
   folder_manager.register_operation_handler(ViewLayout::Board, database_folder_operation.clone());
   folder_manager.register_operation_handler(ViewLayout::Grid, database_folder_operation.clone());
   folder_manager.register_operation_handler(ViewLayout::Calendar, database_folder_operation);
   folder_manager.register_operation_handler(ViewLayout::Chat, chat_folder_operation);
   
-  // Register whiteboard handler as an extra handler (since ViewLayout doesn't have Whiteboard variant)
+  // Register whiteboard handler as extra handler
+  // (since ViewLayout doesn't have Whiteboard variant)
   // It will be routed by get_handler_for_layout_pb() which searches extra_handlers by name
+  // Note: Folder and Notebook views reuse DocumentFolderOperation, so no need to register them
   folder_manager.register_extra_handler(whiteboard_folder_operation);
 }
 

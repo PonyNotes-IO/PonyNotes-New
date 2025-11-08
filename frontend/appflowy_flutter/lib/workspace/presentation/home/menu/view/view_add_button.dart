@@ -14,6 +14,7 @@ class ViewAddButton extends StatelessWidget {
     required this.onEditing,
     required this.onSelected,
     this.isHovered = false,
+    this.tooltipText,
   });
 
   final String parentViewId;
@@ -26,6 +27,7 @@ class ViewAddButton extends StatelessWidget {
     bool createNewView,
   ) onSelected;
   final bool isHovered;
+  final String? tooltipText;
 
   List<PopoverAction> get _actions {
     return [
@@ -54,7 +56,7 @@ class ViewAddButton extends StatelessWidget {
         minWidth: 200,
       ),
       buildChild: (popover) {
-        return FlowyIconButton(
+        final button = FlowyIconButton(
           width: 24,
           icon: FlowySvg(
             FlowySvgs.view_item_add_s,
@@ -65,6 +67,16 @@ class ViewAddButton extends StatelessWidget {
             popover.show();
           },
         );
+        
+        // 如果有tooltip文本，则包装在FlowyTooltip中
+        if (tooltipText != null && tooltipText!.isNotEmpty) {
+          return FlowyTooltip(
+            message: tooltipText!,
+            child: button,
+          );
+        }
+        
+        return button;
       },
       onSelected: (action, popover) {
         onEditing(false);

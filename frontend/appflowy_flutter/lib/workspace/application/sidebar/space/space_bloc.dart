@@ -127,7 +127,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               if (createNewPageByDefault) {
                 add(
                   SpaceEvent.createPage(
-                    name: '',
+                    name: ViewLayoutPB.Document.defaultName,
                     index: 0,
                     layout: ViewLayoutPB.Document,
                     openAfterCreate: openAfterCreate,

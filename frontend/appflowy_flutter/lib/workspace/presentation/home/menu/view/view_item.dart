@@ -581,8 +581,10 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
             ),
           ),
         );
-        // only support add button for document layout
-        if (widget.view.layout == ViewLayoutPB.Document) {
+        // support add button for document, folder, and notebook layouts
+        if (widget.view.layout == ViewLayoutPB.Document ||
+            widget.view.layout == ViewLayoutPB.Folder ||
+            widget.view.layout == ViewLayoutPB.Notebook) {
           // + button
           children.add(const HSpace(8.0));
           children.add(_buildViewAddButton(context));
@@ -823,12 +825,10 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     bool createNewView,
   ) {
     final viewBloc = context.read<ViewBloc>();
-
-    // the name of new document should be empty
-    final viewName = ![ViewLayoutPB.Document, ViewLayoutPB.Chat]
-            .contains(pluginBuilder.layoutType)
-        ? LocaleKeys.menuAppHeader_defaultNewPageName.tr()
-        : '';
+    final viewName = pluginBuilder.layoutType?.defaultName ?? '';
+    
+    Log.info('🔵 [VIEW_ITEM] Creating view with layout: ${pluginBuilder.layoutType}, viewName: "$viewName"');
+    
     viewBloc.add(
       ViewEvent.createView(
         viewName,

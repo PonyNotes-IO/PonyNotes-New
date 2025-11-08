@@ -41,28 +41,29 @@ pub fn create_log_filter(
     .into_iter()
     .map(|crate_name| format!("{}={}", crate_name, level))
     .collect::<Vec<String>>();
-  filters.push(format!("flowy_core={}", level));
-  filters.push(format!("flowy_folder={}", level));
-  filters.push(format!("collab_sync={}", level));
-  filters.push(format!("collab_folder={}", level));
-  filters.push(format!("collab_database={}", level));
-  filters.push(format!("collab_plugins={}", level));
-  filters.push(format!("collab_integrate={}", level));
-  filters.push(format!("collab={}", level));
-  filters.push(format!("flowy_user={}", level));
-  filters.push(format!("flowy_document={}", level));
-  filters.push(format!("flowy_database2={}", level));
-  filters.push(format!("flowy_server={}", level));
-  filters.push(format!("flowy_notification={}", "info"));
-  filters.push(format!("lib_infra={}", level));
-  filters.push(format!("flowy_search={}", level));
-  filters.push(format!("flowy_chat={}", level));
-  filters.push(format!("af_local_ai={}", level));
-  filters.push(format!("af_plugin={}", level));
-  filters.push(format!("flowy_ai={}", level));
-  filters.push(format!("flowy_ai_pub={}", level));
-  filters.push(format!("flowy_storage={}", level));
-  filters.push(format!("flowy_sqlite_vec={}", level));
+  // PonyNotes: 只保留白板相关模块的详细日志，其他模块只记录警告以上级别
+  filters.push(format!("flowy_core={}", "warn"));
+  filters.push(format!("flowy_folder={}", "warn"));
+  filters.push(format!("collab_sync={}", "warn"));
+  filters.push(format!("collab_folder={}", "warn"));
+  filters.push(format!("collab_database={}", "warn"));
+  filters.push(format!("collab_plugins={}", level)); // 白板相关，保留详细日志
+  filters.push(format!("collab_integrate={}", "warn"));
+  filters.push(format!("collab={}", "warn"));
+  filters.push(format!("flowy_user={}", "warn"));
+  filters.push(format!("flowy_document={}", "warn"));
+  filters.push(format!("flowy_database2={}", "warn"));
+  filters.push(format!("flowy_server={}", "warn"));
+  filters.push(format!("flowy_notification={}", "warn"));
+  filters.push(format!("lib_infra={}", "warn"));
+  filters.push(format!("flowy_search={}", "warn"));
+  filters.push(format!("flowy_chat={}", "warn"));
+  filters.push(format!("af_local_ai={}", "warn"));
+  filters.push(format!("af_plugin={}", "warn"));
+  filters.push(format!("flowy_ai={}", "warn"));
+  filters.push(format!("flowy_ai_pub={}", "warn"));
+  filters.push(format!("flowy_storage={}", "warn"));
+  filters.push(format!("flowy_sqlite_vec={}", "warn"));
   // Enable the frontend logs. DO NOT DISABLE.
   // These logs are essential for debugging and verifying frontend behavior.
   filters.push(format!("dart_ffi={}", level));

@@ -63,8 +63,8 @@ class _SidebarNewPageButtonState extends State<SidebarNewPageButton> {
     final spaceState = context.read<SpaceBloc>().state;
     if (spaceState.spaces.isNotEmpty) {
       context.read<SpaceBloc>().add(
-            const SpaceEvent.createPage(
-              name: '',
+            SpaceEvent.createPage(
+              name: ViewLayoutPB.Document.defaultName,
               index: 0,
               layout: ViewLayoutPB.Document,
               openAfterCreate: true,
@@ -73,7 +73,7 @@ class _SidebarNewPageButtonState extends State<SidebarNewPageButton> {
     } else {
       context.read<SidebarSectionsBloc>().add(
             SidebarSectionsEvent.createRootViewInSection(
-              name: '',
+              name: ViewLayoutPB.Document.defaultName,
               viewSection: section,
               index: 0,
             ),

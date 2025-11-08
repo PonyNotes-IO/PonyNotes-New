@@ -410,6 +410,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   @override
   Widget build(BuildContext context) {
     print('🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData');
+    print('🖼️ [WhiteboardPage] _useExcalidraw: $_useExcalidraw');
+    print('🖼️ [WhiteboardPage] viewId: ${widget.view.id}');
     
     if (_isLoadingData) {
       print('⏳ [WhiteboardPage] Showing loading indicator');
@@ -428,6 +430,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     }
     
     print('✅ [WhiteboardPage] Building whiteboard content');
+    print('✅ [WhiteboardPage] Will call: ${_useExcalidraw ? "_buildExcalidrawView()" : "_buildLegacyView()"}');
     return Scaffold(
           appBar: AppBar(
             elevation: 0,
@@ -637,6 +640,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   Widget _buildExcalidrawView() {
+    print('🚀🚀🚀 [Whiteboard] _buildExcalidrawView() called!');
+    print('🚀🚀🚀 [Whiteboard] viewId: ${widget.view.id}');
+    print('🚀🚀🚀 [Whiteboard] _useExcalidraw: $_useExcalidraw');
     // ✅ 每次build都创建新的Widget实例，避免PlatformView重复创建错误
     // ✅ 使用全局唯一的实例ID作为key，确保绝对不会出现ID冲突
     // 📌 Key的组成：viewId（白板ID） + 全局唯一的实例编号

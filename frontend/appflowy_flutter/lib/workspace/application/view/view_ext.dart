@@ -54,17 +54,33 @@ class ViewExtKeys {
 }
 
 extension MinimalViewExtension on FolderViewMinimalPB {
-  Widget defaultIcon({Size? size}) => FlowySvg(
-        switch (layout) {
-          ViewLayoutPB.Board => FlowySvgs.icon_board_s,
-          ViewLayoutPB.Calendar => FlowySvgs.icon_calendar_m,
-          ViewLayoutPB.Grid => FlowySvgs.icon_grid_s,
-          ViewLayoutPB.Document => FlowySvgs.icon_document_s,
-          ViewLayoutPB.Chat => FlowySvgs.chat_ai_page_s,
-          _ => FlowySvgs.icon_document_s,
-        },
-        size: size,
+  Widget defaultIcon({Size? size}) {
+    // 为 Folder 和 Notebook 返回 emoji 图标
+    if (layout == ViewLayoutPB.Folder) {
+      return const Text(
+        '📂',
+        style: TextStyle(fontSize: 16.0),
       );
+    } else if (layout == ViewLayoutPB.Notebook) {
+      return const Text(
+        '📓',
+        style: TextStyle(fontSize: 16.0),
+      );
+    }
+    
+    // 其他类型返回 SVG 图标
+    return FlowySvg(
+      switch (layout) {
+        ViewLayoutPB.Board => FlowySvgs.icon_board_s,
+        ViewLayoutPB.Calendar => FlowySvgs.icon_calendar_m,
+        ViewLayoutPB.Grid => FlowySvgs.icon_grid_s,
+        ViewLayoutPB.Document => FlowySvgs.icon_document_s,
+        ViewLayoutPB.Chat => FlowySvgs.chat_ai_page_s,
+        _ => FlowySvgs.icon_document_s,
+      },
+      size: size,
+    );
+  }
 }
 
 extension ViewExtension on ViewPB {
@@ -78,17 +94,33 @@ extension ViewExtension on ViewPB {
         PluginType.calendar,
       ].contains(pluginType);
 
-  Widget defaultIcon({Size? size}) => FlowySvg(
-        switch (layout) {
-          ViewLayoutPB.Board => FlowySvgs.icon_board_s,
-          ViewLayoutPB.Calendar => FlowySvgs.icon_calendar_m,
-          ViewLayoutPB.Grid => FlowySvgs.icon_grid_s,
-          ViewLayoutPB.Document => FlowySvgs.icon_document_s,
-          ViewLayoutPB.Chat => FlowySvgs.chat_ai_page_s,
-          _ => FlowySvgs.icon_document_s,
-        },
-        size: size,
+  Widget defaultIcon({Size? size}) {
+    // 为 Folder 和 Notebook 返回 emoji 图标
+    if (layout == ViewLayoutPB.Folder) {
+      return const Text(
+        '📂',
+        style: TextStyle(fontSize: 16.0),
       );
+    } else if (layout == ViewLayoutPB.Notebook) {
+      return const Text(
+        '📓',
+        style: TextStyle(fontSize: 16.0),
+      );
+    }
+    
+    // 其他类型返回 SVG 图标
+    return FlowySvg(
+      switch (layout) {
+        ViewLayoutPB.Board => FlowySvgs.icon_board_s,
+        ViewLayoutPB.Calendar => FlowySvgs.icon_calendar_m,
+        ViewLayoutPB.Grid => FlowySvgs.icon_grid_s,
+        ViewLayoutPB.Document => FlowySvgs.icon_document_s,
+        ViewLayoutPB.Chat => FlowySvgs.chat_ai_page_s,
+        _ => FlowySvgs.icon_document_s,
+      },
+      size: size,
+    );
+  }
 
   PluginType get pluginType {
     return switch (layout) {
@@ -98,6 +130,8 @@ extension ViewExtension on ViewPB {
       ViewLayoutPB.Grid => PluginType.grid,
       ViewLayoutPB.Chat => PluginType.chat,
       ViewLayoutPB.Whiteboard => PluginType.whiteboard,
+      ViewLayoutPB.Folder => PluginType.folder,
+      ViewLayoutPB.Notebook => PluginType.notebook,
       _ => PluginType.document,
     };
   }
@@ -117,6 +151,8 @@ extension ViewExtension on ViewPB {
           initialRowId: rowId,
         );
       case ViewLayoutPB.Document:
+      case ViewLayoutPB.Folder:
+      case ViewLayoutPB.Notebook:
         final selectionValue = arguments[PluginArgumentKeys.selection];
         Selection? initialSelection;
         if (selectionValue is Selection) initialSelection = selectionValue;
@@ -359,8 +395,16 @@ extension ViewLayoutExtension on ViewLayoutPB {
         _ => false, // 临时处理：未知layout type返回false而不是抛异常
       };
 
+  /// Returns the localized default name for each view layout type
   String get defaultName => switch (this) {
-        ViewLayoutPB.Document => '',
+        ViewLayoutPB.Document => LocaleKeys.menuAppHeader_defaultNewDocumentName.tr(),
+        ViewLayoutPB.Grid => LocaleKeys.menuAppHeader_defaultNewGridName.tr(),
+        ViewLayoutPB.Board => LocaleKeys.menuAppHeader_defaultNewBoardName.tr(),
+        ViewLayoutPB.Calendar => LocaleKeys.menuAppHeader_defaultNewCalendarName.tr(),
+        ViewLayoutPB.Chat => LocaleKeys.menuAppHeader_defaultNewChatName.tr(),
+        ViewLayoutPB.Whiteboard => LocaleKeys.menuAppHeader_defaultNewWhiteboardName.tr(),
+        ViewLayoutPB.Folder => LocaleKeys.menuAppHeader_defaultNewFolderName.tr(),
+        ViewLayoutPB.Notebook => LocaleKeys.menuAppHeader_defaultNewNotebookName.tr(),
         _ => LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
       };
 

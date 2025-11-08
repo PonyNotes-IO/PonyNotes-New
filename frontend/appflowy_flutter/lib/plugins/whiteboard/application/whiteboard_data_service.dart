@@ -124,8 +124,29 @@ class WhiteboardDataService {
   Future<bool> _saveToCollab(String viewId, Map<String, dynamic> data) async {
     try {
       Log.info('[Whiteboard] _saveToCollab: Creating payload...');
+      
+      // 🔍 打印 data 结构以便调试
+      Log.info('[Whiteboard] 📊 Data structure:');
+      Log.info('[Whiteboard]   - Keys: ${data.keys.toList()}');
+      if (data.containsKey('elements')) {
+        final elements = data['elements'];
+        if (elements is List) {
+          Log.info('[Whiteboard]   - elements type: List, length: ${elements.length}');
+          if (elements.isNotEmpty) {
+            Log.info('[Whiteboard]   - First element: ${elements.first}');
+          } else {
+            Log.info('[Whiteboard]   - ⚠️  elements is EMPTY!');
+          }
+        } else {
+          Log.info('[Whiteboard]   - ⚠️  elements is NOT a List: ${elements.runtimeType}');
+        }
+      } else {
+        Log.info('[Whiteboard]   - ⚠️  NO elements key found!');
+      }
+      
       final jsonData = jsonEncode(data);
       Log.info('[Whiteboard] _saveToCollab: JSON data length: ${jsonData.length} characters');
+      Log.info('[Whiteboard] 📄 Full JSON: $jsonData');
       
       final payload = UpdateWhiteboardPayloadPB()
         ..viewId = viewId

@@ -305,6 +305,14 @@
     "moreButtonToolTip": "更多按钮工具",
     "addPageTooltip": "在其中快速添加页面",
     "defaultNewPageName": "未命名页面",
+    "defaultNewDocumentName": "未命名文档",
+    "defaultNewGridName": "未命名网格",
+    "defaultNewBoardName": "未命名看板",
+    "defaultNewCalendarName": "未命名日历",
+    "defaultNewChatName": "未命名AI对话",
+    "defaultNewWhiteboardName": "未命名白板",
+    "defaultNewFolderName": "未命名文件夹",
+    "defaultNewNotebookName": "未命名笔记本",
     "renameDialog": "重命名",
     "pageNameSuffix": "复制"
   },
@@ -2090,10 +2098,61 @@
     "placeholder": "输入你要搜索的内容..."
   },
   "space": {
-    "defaultSpaceName": "一般"
+    "defaultSpaceName": "一般",
+    "mySpace": "我的空间"
+  },
+  "sidebar": {
+    "appName": "小马笔记",
+    "template": "模版",
+    "share": "共享",
+    "publish": "发布",
+    "noSharedNotes": "暂无分享的笔记",
+    "noPublished": "暂无发布",
+    "import": "导入"
+  },
+  "repeat": {
+    "title": "任务重复",
+    "save": "保存",
+    "none": "无",
+    "daily": "每天",
+    "weekly": "每周",
+    "yearly": "每年",
+    "workdays": "法定工作日",
+    "custom": "自定义",
+    "customEdit": "自定义编辑",
+    "frequency": "频率",
+    "skipHolidays": "跳过法定节假日",
+    "skipWeekend": "跳过周末",
+    "pleaseCompleteCustom": "请先完善自定义重复设置",
+    "pleaseSelectWeekday": "请在自定义中至少选择一个星期几",
+    "pleaseCompleteOptions": "请完善自定义选项",
+    "unitDay": "天",
+    "unitWeek": "周",
+    "unitMonth": "月",
+    "unitYear": "年",
+    "monday": "周一",
+    "tuesday": "周二",
+    "wednesday": "周三",
+    "thursday": "周四",
+    "friday": "周五",
+    "saturday": "周六",
+    "sunday": "周日",
+    "weekdayOne": "一",
+    "weekdayTwo": "二",
+    "weekdayThree": "三",
+    "weekdayFour": "四",
+    "weekdayFive": "五",
+    "weekdaySix": "六",
+    "weekdaySeven": "日"
   },
   "publish": {
-    "saveThisPage": "使用此模板创建"
+    "saveThisPage": "使用此模板创建",
+    "retry": "重试",
+    "noPublished": "暂无发布",
+    "selectItemToView": "从左侧选择一个发布项查看内容",
+    "selectFavoriteToView": "选择左侧最爱项查看内容",
+    "selectPublishToView": "选择左侧发布项查看内容",
+    "noFavorites": "暂无最爱"
   },
   "web": {
     "continueWithGoogle": "使用 Google 账户登录",

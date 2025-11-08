@@ -6,6 +6,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/command_palette/widgets/recent_views_list.dart';
 import 'package:appflowy/workspace/presentation/command_palette/widgets/search_field.dart';
 import 'package:appflowy/workspace/presentation/command_palette/widgets/search_results_list.dart';
@@ -191,7 +192,7 @@ class CommandPaletteModal extends StatelessWidget {
           if (currentWorkspace != null && spaceBloc != null) {
             spaceBloc.add(
               SpaceEvent.createPage(
-                name: '',
+                name: ViewLayoutPB.Chat.defaultName,
                 layout: ViewLayoutPB.Chat,
                 index: 0,
                 openAfterCreate: true,

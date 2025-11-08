@@ -34,12 +34,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       (event, emit) async {
         await event.map(
           initial: (_Initial value) {
-            Log.info('[HOME_BLOC] 🚀 HomeBloc initial event triggered');
-            Log.info('[HOME_BLOC] 📝 Workspace ID: ${workspaceSetting.workspaceId}');
-            Log.info('[HOME_BLOC] 📝 Latest view ID: ${workspaceSetting.latestView.id}');
+            // Log.info('[HOME_BLOC] 🚀 HomeBloc initial event triggered'); // PonyNotes: 关闭非白板日志
+            // Log.info('[HOME_BLOC] 📝 Workspace ID: ${workspaceSetting.workspaceId}');
+            // Log.info('[HOME_BLOC] 📝 Latest view ID: ${workspaceSetting.latestView.id}');
             Future.delayed(const Duration(milliseconds: 300), () {
               if (!isClosed) {
-                Log.info('[HOME_BLOC] ⏰ 300ms delay completed, triggering didReceiveWorkspaceSetting');
+                // Log.info('[HOME_BLOC] ⏰ 300ms delay completed, triggering didReceiveWorkspaceSetting');
                 add(HomeEvent.didReceiveWorkspaceSetting(workspaceSetting));
               } else {
                 Log.warn('[HOME_BLOC] ⚠️ HomeBloc was closed before delayed event could fire');
@@ -62,37 +62,37 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           },
           didReceiveWorkspaceSetting: (_DidReceiveWorkspaceSetting value) async {
             // the latest view is shared across all the members of the workspace.
-            Log.info('[HOME_BLOC] 📨 Received workspace setting');
-            Log.info('[HOME_BLOC] 📝 Workspace ID: ${value.setting.workspaceId}');
-            Log.info('[HOME_BLOC] 📝 Latest view ID: ${value.setting.latestView.id}');
-            Log.info('[HOME_BLOC] 📝 Latest view name: ${value.setting.latestView.name}');
-            Log.info('[HOME_BLOC] 📊 Has latest view: ${value.setting.hasLatestView()}');
+            // Log.info('[HOME_BLOC] 📨 Received workspace setting'); // PonyNotes: 关闭非白板日志
+            // Log.info('[HOME_BLOC] 📝 Workspace ID: ${value.setting.workspaceId}');
+            // Log.info('[HOME_BLOC] 📝 Latest view ID: ${value.setting.latestView.id}');
+            // Log.info('[HOME_BLOC] 📝 Latest view name: ${value.setting.latestView.name}');
+            // Log.info('[HOME_BLOC] 📊 Has latest view: ${value.setting.hasLatestView()}');
 
             final latestView = value.setting.hasLatestView()
                 ? value.setting.latestView
                 : state.latestView;
                 
-            Log.info('[HOME_BLOC] 📝 Resolved latest view: ${latestView?.name}');
-            Log.info('[HOME_BLOC] 📝 Latest view ID: ${latestView?.id}');
-            Log.info('[HOME_BLOC] 📝 Latest view isSpace: ${latestView?.isSpace}');
-            Log.info('[HOME_BLOC] 📝 Current state latest view: ${state.latestView?.name}');
+            // Log.info('[HOME_BLOC] 📝 Resolved latest view: ${latestView?.name}'); // PonyNotes: 关闭非白板日志
+            // Log.info('[HOME_BLOC] 📝 Latest view ID: ${latestView?.id}');
+            // Log.info('[HOME_BLOC] 📝 Latest view isSpace: ${latestView?.isSpace}');
+            // Log.info('[HOME_BLOC] 📝 Current state latest view: ${state.latestView?.name}');
 
             ViewPB? validLatestView;
             if (latestView != null) {
               // Prefer non-space views, but allow space views if they're the only option
               // This prevents black screen when new workspace only has space-type default views
               if (!latestView.isSpace) {
-                Log.info('[HOME_BLOC] ✅ Using non-space view as valid latest view');
+                // Log.info('[HOME_BLOC] ✅ Using non-space view as valid latest view'); // PonyNotes: 关闭非白板日志
                 validLatestView = latestView;
               } else {
                 // If it's a space view, only use it if we don't have a current valid view
                 // This ensures we show something rather than a black screen
                 validLatestView = state.latestView ?? latestView;
-                Log.info('[HOME_BLOC] 🏠 Using space view as fallback: ${validLatestView.name}');
+                // Log.info('[HOME_BLOC] 🏠 Using space view as fallback: ${validLatestView.name}');
               }
             } else {
               // If no latest view exists (new workspace), try to find and set a default view
-              Log.info('[HOME_BLOC] 🔍 No latest view found, attempting to find default view for new workspace');
+              // Log.info('[HOME_BLOC] 🔍 No latest view found, attempting to find default view for new workspace'); // PonyNotes: 关闭非白板日志
               try {
                 // Get current user profile to get userId
                 final userResult = await UserBackendService.getCurrentUserProfile();
@@ -138,37 +138,37 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               }
             }
             
-            Log.info('[HOME_BLOC] 🎯 Final validLatestView determined');
-            Log.info('[HOME_BLOC] 📝 Final view name: ${validLatestView?.name}');
-            Log.info('[HOME_BLOC] 📝 Final view ID: ${validLatestView?.id}');
-            Log.info('[HOME_BLOC] 📝 Final view isSpace: ${validLatestView?.isSpace}');
+            // Log.info('[HOME_BLOC] 🎯 Final validLatestView determined'); // PonyNotes: 关闭非白板日志
+            // Log.info('[HOME_BLOC] 📝 Final view name: ${validLatestView?.name}');
+            // Log.info('[HOME_BLOC] 📝 Final view ID: ${validLatestView?.id}');
+            // Log.info('[HOME_BLOC] 📝 Final view isSpace: ${validLatestView?.isSpace}');
             
             // If we still don't have a valid view, ensure TabsBloc shows homepage
             if (validLatestView == null) {
               Log.warn('[HOME_BLOC] ⚠️ No valid view found, TabsBloc should show homepage for blank plugin');
             }
             
-            Log.info('[HOME_BLOC] 🔄 About to emit final state');
+            // Log.info('[HOME_BLOC] 🔄 About to emit final state'); // PonyNotes: 关闭非白板日志
             emit(
               state.copyWith(
                 workspaceSetting: value.setting,
                 latestView: validLatestView,
               ),
             );
-            Log.info('[HOME_BLOC] ✅ Final state emitted successfully');
+            // Log.info('[HOME_BLOC] ✅ Final state emitted successfully');
           },
           switchWorkspace: (_SwitchWorkspace value) async {
-            Log.info('[HOME_BLOC] 🔄 Switching workspace to: ${value.workspaceId}');
+            // Log.info('[HOME_BLOC] 🔄 Switching workspace to: ${value.workspaceId}'); // PonyNotes: 关闭非白板日志
             
             // Stop the current workspace listener
             await _workspaceListener.stop();
-            Log.info('[HOME_BLOC] ⏹️ Old workspace listener stopped');
+            // Log.info('[HOME_BLOC] ⏹️ Old workspace listener stopped');
             
             // Create a new listener for the new workspace
             _workspaceListener = FolderListener(
               workspaceId: value.workspaceId,
             );
-            Log.info('[HOME_BLOC] 🔄 New workspace listener created for: ${value.workspaceId}');
+            // Log.info('[HOME_BLOC] 🔄 New workspace listener created for: ${value.workspaceId}');
             
             // Start the new listener
             _workspaceListener.start(
@@ -181,7 +181,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 );
               },
             );
-            Log.info('[HOME_BLOC] ✅ New workspace listener started');
+            // Log.info('[HOME_BLOC] ✅ New workspace listener started'); // PonyNotes: 关闭非白板日志
             
             // Request the latest workspace setting for the new workspace
             // 🔧 FIX: Add retry mechanism for folder initialization
@@ -199,13 +199,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     const retryDelay = Duration(milliseconds: 500); // 增加重试间隔
     
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      Log.info('[HOME_BLOC] 🔄 Requesting workspace setting (attempt $attempt/$maxRetries)');
+      // Log.info('[HOME_BLOC] 🔄 Requesting workspace setting (attempt $attempt/$maxRetries)'); // PonyNotes: 关闭非白板日志
       
       final result = await FolderEventReadCurrentWorkspace().send();
       
       final success = result.fold(
         (workspace) {
-          Log.info('[HOME_BLOC] ✅ Retrieved workspace setting for: ${workspace.id}');
+          // Log.info('[HOME_BLOC] ✅ Retrieved workspace setting for: ${workspace.id}'); // PonyNotes: 关闭非白板日志
           
           // 🔧 FIX: Check if BLoC is still open before emitting
           if (isClosed) {

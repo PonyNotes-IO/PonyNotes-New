@@ -148,9 +148,9 @@ class PublicSectionFolder extends SectionFolder {
 class PersonalSectionFolder extends SectionFolder {
   PersonalSectionFolder({super.key, required super.views})
       : super(
-          title: "我的空间", // 直接使用中文文本
+          title: LocaleKeys.space_mySpace.tr(),
           spaceType: FolderSpaceType.public,
-          expandButtonTooltip: "点击隐藏我的空间", // 直接使用中文文本
-          addButtonTooltip: "添加页面到我的空间", // 直接使用中文文本
+          expandButtonTooltip: LocaleKeys.sideBar_clickToHidePersonal.tr(),
+          addButtonTooltip: LocaleKeys.sideBar_addAPage.tr(),
         );
 }
