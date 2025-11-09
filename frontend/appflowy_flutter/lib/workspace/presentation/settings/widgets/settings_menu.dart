@@ -142,14 +142,6 @@ class SettingsMenu extends StatelessWidget {
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 账号标题
-          FlowyText(
-            '账号',
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: theme.textColorScheme.primary,
-          ),
-          const VSpace(16),
           // 用户信息行
           Row(
             children: [
@@ -222,51 +214,12 @@ class SettingsMenu extends StatelessWidget {
               ),
             ],
           ),
-          const VSpace(20),
-                     // 权益图标行
-           Row(
-             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-             children: [
-               _buildBenefitIcon(context, const Color(0xFFFF9F7A), '权益一'),
-               _buildBenefitIcon(context, const Color(0xFF7FD4A3), '权益二'),
-               _buildBenefitIcon(context, const Color(0xFF7AB8FF), '权益三'),
-               _buildBenefitIcon(context, const Color(0xFFE07AFF), '权益四'),
-               _buildBenefitIcon(context, const Color(0xFFFF7AB8), '权益五'),
-             ],
-           ),
         ],
       ),
     ),
     );
   }
 
-  Widget _buildBenefitIcon(BuildContext context, Color color, String label) {
-    final theme = AppFlowyTheme.of(context);
-    
-    return Column(
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            Icons.star,
-            color: Colors.white,
-            size: 24,
-          ),
-        ),
-        const VSpace(8),
-        FlowyText(
-          label,
-          fontSize: 12,
-          color: theme.textColorScheme.secondary,
-        ),
-      ],
-    );
-  }
 }
 
 class SimpleSettingsMenu extends StatelessWidget {

@@ -21,6 +21,20 @@ enum NotificationTabType {
         return LocaleKeys.notificationHub_tabs_system.tr();
     }
   }
+
+  /// Get the string value for meta storage
+  String get value {
+    switch (this) {
+      case NotificationTabType.mention:
+        return 'mention';
+      case NotificationTabType.clip:
+        return 'clip';
+      case NotificationTabType.reminder:
+        return 'reminder';
+      case NotificationTabType.system:
+        return 'system';
+    }
+  }
 }
 
 class NotificationTabBar extends StatelessWidget {

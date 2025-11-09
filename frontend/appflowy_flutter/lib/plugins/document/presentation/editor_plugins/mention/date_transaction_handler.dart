@@ -152,6 +152,7 @@ class DateTransactionHandler extends MentionTransactionHandler {
         meta: {
           ReminderMetaKeys.includeTime: data.includeTime.toString(),
           ReminderMetaKeys.blockId: node.id,
+          ReminderMetaKeys.notificationType: 'reminder',
         },
       ),
     );
@@ -189,6 +190,7 @@ class DateTransactionHandler extends MentionTransactionHandler {
         meta: {
           ReminderMetaKeys.includeTime: data.includeTime.toString(),
           ReminderMetaKeys.blockId: node.id,
+          ReminderMetaKeys.notificationType: 'reminder',
         },
       ),
     );

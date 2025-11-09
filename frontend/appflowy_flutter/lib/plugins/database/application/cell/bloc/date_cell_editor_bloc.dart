@@ -209,6 +209,7 @@ class DateCellEditorBloc
           meta: {
             ReminderMetaKeys.includeTime: state.includeTime.toString(),
             ReminderMetaKeys.rowId: cellController.rowId,
+            ReminderMetaKeys.notificationType: 'reminder',
           },
           scheduledAt: Int64(
             option.getNotificationDateTime(dateTime).millisecondsSinceEpoch ~/

@@ -917,6 +917,7 @@ class ScheduleModel extends ChangeNotifier {
                   ReminderMetaKeys.includeTime: includeTime.toString(),
                   ReminderMetaKeys.rowId: rowMeta.id,
                   ReminderMetaKeys.date: dateForMeta.millisecondsSinceEpoch.toString(),
+                  ReminderMetaKeys.notificationType: 'reminder',
                   },
                   scheduledAt: Int64(
                   scheduledAt.millisecondsSinceEpoch ~/ 1000,
@@ -1306,6 +1307,7 @@ class ScheduleModel extends ChangeNotifier {
                     meta: {
                       'rowId': schedule.id,
                       'title': schedule.title,
+                      ReminderMetaKeys.notificationType: 'reminder',
                     },
                     scheduledAt: Int64(
                     schedule.reminderOption
@@ -1809,6 +1811,7 @@ class ScheduleModel extends ChangeNotifier {
           meta: {
             'rowId': schedule.id,
             'title': schedule.title,
+            ReminderMetaKeys.notificationType: 'reminder',
           },
           scheduledAt: Int64(
             schedule.reminderOption

@@ -7,6 +7,7 @@ class ReminderMetaKeys {
   static String createdAt = "created_at";
   static String isArchived = "is_archived";
   static String date = "date";
+  static String notificationType = "notification_type";
 }
 
 enum ReminderType {
@@ -62,5 +63,25 @@ extension ReminderExtension on ReminderPB {
     }
 
     return ReminderType.other;
+  }
+
+  /// Get notification type from meta, with fallback to message content analysis
+  /// Returns null if type cannot be determined
+  String? get notificationType {
+    final typeStr = meta[ReminderMetaKeys.notificationType];
+    if (typeStr != null && typeStr.isNotEmpty) {
+      return typeStr;
+    }
+    
+    // Fallback to message content analysis for backward compatibility
+    if (message.contains('@')) {
+      return 'mention';
+    } else if (message.contains('剪藏') || message.contains('Clip')) {
+      return 'clip';
+    } else if (message.contains('提醒') || message.contains('Reminder')) {
+      return 'reminder';
+    } else {
+      return 'system';
+    }
   }
 }

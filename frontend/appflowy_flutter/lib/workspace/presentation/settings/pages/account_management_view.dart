@@ -1,4 +1,3 @@
-import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
@@ -9,7 +8,6 @@ import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
-import 'package:flowy_svg/flowy_svg.dart';
 import 'package:flutter/material.dart';
 
 class AccountManagementView extends StatefulWidget {
@@ -101,34 +99,6 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     }
   }
 
-  final List<Map<String, dynamic>> benefits = [
-    {
-      'icon': FlowySvgs.rights_ai_xl,
-      'title': '小马AI',
-      'color': const Color(0xFFFF9F7A),
-    },
-    {
-      'icon': FlowySvgs.rights_calendar_xl,
-      'title': '小马日历',
-      'color': const Color(0xFF7FD4A3),
-    },
-    {
-      'icon': FlowySvgs.rights_collect_xl,
-      'title': '小马收藏夹',
-      'color': const Color(0xFF7AB8FF),
-    },
-    {
-      'icon': FlowySvgs.rights_cs_xl,
-      'title': '云端同步',
-      'color': const Color(0xFFE07AFF),
-    },
-    {
-      'icon': FlowySvgs.rights_storage_xl,
-      'title': '100T空间',
-      'color': const Color(0xFFFF7AB8),
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
@@ -146,45 +116,6 @@ class _AccountManagementViewState extends State<AccountManagementView> {
               )
             else
               _buildPlanStatusRow(context),
-              
-              const VSpace(32),
-              
-              // 获赠权益标题
-              FlowyText(
-                '获赠权益',
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: theme.textColorScheme.primary,
-              ),
-              
-              const VSpace(16),
-              
-              // 权益图标行
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: benefits.map((benefit) {
-                    return Expanded(
-                      child: Column(
-                        children: [
-                          FlowySvg(
-                            benefit['icon'],
-                            color: benefit['color'],
-                            size: const Size.square(40),
-                          ),
-                          const VSpace(8),
-                          FlowyText(
-                            benefit['title'],
-                            fontSize: 12,
-                            color: theme.textColorScheme.secondary,
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
               
               const VSpace(32),
               
