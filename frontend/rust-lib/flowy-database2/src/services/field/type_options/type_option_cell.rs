@@ -6,6 +6,7 @@ use crate::services::field::{
 };
 use crate::services::sort::SortCondition;
 use collab::preclude::Any;
+use collab::util::AnyMapExt;
 use collab_database::fields::Field;
 use collab_database::fields::checkbox_type_option::CheckboxTypeOption;
 use collab_database::fields::checklist_type_option::ChecklistTypeOption;
@@ -212,15 +213,30 @@ where
 
   fn get_cell_data(&self, cell: &Cell, field: &Field) -> Option<T::CellData> {
     let field_type_of_cell = get_field_type_from_cell(cell)?;
+    
+    // 检查缓存
     if let Some(cell_data) = self.get_cell_data_from_cache(cell, field) {
+      tracing::info!(
+        "📦 [TypeOptionCellDataHandler::get_cell_data] 从缓存读取数据"
+      );
       return Some(cell_data);
     }
+
+    tracing::info!(
+      "📖 [TypeOptionCellDataHandler::get_cell_data] 缓存未命中，开始解码 Cell"
+    );
 
     // If the field type of the cell is the same as the field type of the handler, we can directly decode the cell.
     // Otherwise, we need to transform the cell to the field type of the handler.
     let cell_data = if field_type_of_cell == self.field_type {
+      tracing::info!(
+        "📖 [TypeOptionCellDataHandler::get_cell_data] 使用 decode_cell 解码"
+      );
       Some(self.decode_cell(cell).unwrap_or_default())
     } else if is_type_option_cell_transformable(field_type_of_cell, self.field_type) {
+      tracing::info!(
+        "📖 [TypeOptionCellDataHandler::get_cell_data] 使用 decode_cell_with_transform 解码"
+      );
       Some(
         self
           .decode_cell_with_transform(cell, field_type_of_cell, field)
@@ -231,6 +247,9 @@ where
     };
 
     if let Some(data) = &cell_data {
+      tracing::info!(
+        "💾 [TypeOptionCellDataHandler::get_cell_data] 将解码结果存入缓存"
+      );
       self.set_cell_data_in_cache(cell, data.clone(), field);
     }
 
@@ -269,8 +288,34 @@ where
     cell: &Cell,
     field_rev: &Field,
   ) -> FlowyResult<CellProtobufBlob> {
+    tracing::info!("📤 [TypeOptionCellDataHandler::handle_get_protobuf_cell_data] 开始获取 protobuf 数据");
+    
+    // 检查 Cell 中存储的数据类型
+    if let Some(bytes_vec) = cell.get_as::<Vec<u8>>(CELL_DATA) {
+      tracing::info!(
+        "📤 [TypeOptionCellDataHandler::handle_get_protobuf_cell_data] Cell 中包含 Vec<u8> 数据，长度: {}",
+        bytes_vec.len()
+      );
+    } else if let Some(s) = cell.get_as::<String>(CELL_DATA) {
+      tracing::warn!(
+        "⚠️ [TypeOptionCellDataHandler::handle_get_protobuf_cell_data] Cell 中包含 String 数据: {}",
+        s
+      );
+    } else {
+      tracing::warn!(
+        "⚠️ [TypeOptionCellDataHandler::handle_get_protobuf_cell_data] Cell 中未找到数据"
+      );
+    }
+    
     let cell_data = self.get_cell_data(cell, field_rev).unwrap_or_default();
-    CellProtobufBlob::from(self.protobuf_encode(cell_data))
+    tracing::info!(
+      "📤 [TypeOptionCellDataHandler::handle_get_protobuf_cell_data] 获取到 cell_data，准备编码为 protobuf"
+    );
+    let pb = self.protobuf_encode(cell_data);
+    tracing::info!(
+      "📤 [TypeOptionCellDataHandler::handle_get_protobuf_cell_data] protobuf 编码完成"
+    );
+    CellProtobufBlob::from(pb)
   }
 
   fn handle_cell_changeset(

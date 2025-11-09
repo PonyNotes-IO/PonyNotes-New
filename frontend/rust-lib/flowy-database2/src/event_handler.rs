@@ -711,6 +711,43 @@ pub(crate) async fn update_date_cell_handler(
   let manager = upgrade_manager(manager)?;
   let data = data.into_inner();
   let cell_id: CellIdParams = data.cell_id.try_into()?;
+  
+  // 对于 repeat_type 和 repeat_rule_json，它们已经是 Option 类型
+  // 如果字段存在（Some），即使值是默认值，也要使用它
+  // 如果字段不存在（None），则使用 None，让 apply_changeset 使用旧值
+  let repeat_type = data.repeat_type;
+  let repeat_rule_json = data.repeat_rule_json.clone();
+  
+  tracing::info!(
+    "📥 [update_date_cell_handler] 接收到的 DateCellChangesetPB: repeat_type={:?}, repeat_rule_json={:?}",
+    repeat_type,
+    repeat_rule_json
+  );
+  
+  // 检查 Protobuf 字段是否被正确设置
+  // 注意：在 Protobuf 中，one_of 字段如果设置为默认值（0 或空字符串），
+  // 序列化时可能不会包含该字段，导致反序列化时得到 None
+  // 我们需要确保即使值是默认值，也要正确传递
+  let repeat_type = if repeat_type.is_some() {
+    repeat_type
+  } else {
+    // 如果 Protobuf 中没有设置，检查是否是默认值的情况
+    // 对于 one_of 字段，如果未设置，返回 None（让 apply_changeset 使用旧值）
+    None
+  };
+  
+  let repeat_rule_json = if repeat_rule_json.is_some() {
+    repeat_rule_json
+  } else {
+    None
+  };
+  
+  tracing::info!(
+    "📥 [update_date_cell_handler] 处理后的值: repeat_type={:?}, repeat_rule_json={:?}",
+    repeat_type,
+    repeat_rule_json
+  );
+  
   let cell_changeset = DateCellChangeset {
     timestamp: data.timestamp,
     end_timestamp: data.end_timestamp,
@@ -718,9 +755,15 @@ pub(crate) async fn update_date_cell_handler(
     is_range: data.is_range,
     clear_flag: data.clear_flag,
     reminder_id: data.reminder_id,
-    repeat_type: data.repeat_type,
-    repeat_rule_json: data.repeat_rule_json,
+    repeat_type,
+    repeat_rule_json,
   };
+  
+  tracing::info!(
+    "📥 [update_date_cell_handler] 创建 DateCellChangeset: repeat_type={:?}, repeat_rule_json={:?}",
+    cell_changeset.repeat_type,
+    cell_changeset.repeat_rule_json
+  );
 
   let database_editor = manager
     .get_database_editor_with_view_id(&cell_id.view_id)

@@ -166,4 +166,15 @@ collab-plugins = { version = "0.2", git = "https://github.com/PonyNotes-IO/AppFl
 collab-user = { version = "0.2", git = "https://github.com/PonyNotes-IO/AppFlowy-Collab", branch = "dev" }
 collab-importer = { version = "0.1", git = "https://github.com/PonyNotes-IO/AppFlowy-Collab", branch = "dev" }
 
+#collab = { path = "../../../AppFlowy-Collab/collab" }
+#collab-entity = { path = "../../../AppFlowy-Collab/collab-entity" }
+#collab-folder = { path = "../../../AppFlowy-Collab/collab-folder" }
+#collab-document = { path = "../../../AppFlowy-Collab/collab-document" }
+#collab-database = { path = "../../../AppFlowy-Collab/collab-database" }
+#collab-plugins = { path = "../../../AppFlowy-Collab/collab-plugins" }
+#collab-user = { path = "../../../AppFlowy-Collab/collab-user" }
+#collab-importer = { path = "../../../AppFlowy-Collab/collab-importer" }
+
+
+
 langchain-rust = { version = "4.6.0", git = "https://github.com/appflowy/langchain-rust", branch = "af" }

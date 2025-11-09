@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AppFlowy Scheme 测试页面</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border-color 0.3s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    button {
+      padding: 14px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .btn-success {
+      background: #4caf50;
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: #45a049;
+    }
+
+    .info-box {
+      background: #f8f9fa;
+      border-left: 4px solid #667eea;
+      padding: 16px;
+      border-radius: 4px;
+      margin-top: 20px;
+      font-size: 14px;
+      color: #555;
+    }
+
+    .info-box h3 {
+      color: #333;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .info-box code {
+      background: #e9ecef;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #d63384;
+    }
+
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .status.info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+
+    .quick-test {
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .quick-test h3 {
+      color: #333;
+      margin-bottom: 15px;
+      font-size: 18px;
+    }
+
+    .quick-test-buttons {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+    }
+
+    .quick-test-btn {
+      padding: 10px;
+      font-size: 13px;
+      background: #f0f0f0;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .quick-test-btn:hover {
+      background: #e0e0e0;
+      transform: translateY(-1px);
+    }
+
+    .url-display {
+      background: #f8f9fa;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      word-break: break-all;
+      color: #495057;
+      border: 1px solid #dee2e6;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 20px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .quick-test-buttons {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 AppFlowy Scheme 测试</h1>
+    <p class="subtitle">测试深度链接跳转到APP并打开指定笔记</p>
+
+    <div class="form-group">
+      <label for="viewId">笔记 ID (View ID):</label>
+      <input 
+        type="text" 
+        id="viewId" 
+        placeholder="请输入笔记ID，例如: note-123"
+        value=""
+      >
+    </div>
+
+    <div class="button-group">
+      <button class="btn-primary" onclick="openNote('note')">
+        📝 方式1: 使用 note 路径打开
+      </button>
+      <button class="btn-primary" onclick="openNote('open')">
+        🔓 方式2: 使用 open 路径打开
+      </button>
+      <button class="btn-primary" onclick="openNote('')">
+        ⚡ 方式3: 直接使用 scheme 打开
+      </button>
+      <button class="btn-secondary" onclick="openNoteWithIframe()">
+        🖼️ 方式4: 使用 iframe 方式打开 (推荐移动端)
+      </button>
+      <button class="btn-success" onclick="copyUrl()">
+        📋 复制深度链接URL
+      </button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div class="info-box">
+      <h3>📖 使用说明</h3>
+      <p>1. 在上方输入框中输入笔记的 <code>viewId</code></p>
+      <p>2. 点击任意按钮测试不同的打开方式</p>
+      <p>3. 如果APP已安装，会自动跳转并打开对应笔记</p>
+      <p>4. 如果APP未安装，页面会保持当前状态（可添加跳转应用商店逻辑）</p>
+    </div>
+
+    <div class="quick-test">
+      <h3>⚡ 快速测试</h3>
+      <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+        使用预设的测试ID快速测试：
+      </p>
+      <div class="quick-test-buttons">
+        <button class="quick-test-btn" onclick="quickTest('test-note-001')">
+          test-note-001
+        </button>
+        <button class="quick-test-btn" onclick="quickTest('test-note-002')">
+          test-note-002
+        </button>
+        <button class="quick-test-btn" onclick="quickTest('demo-view-id')">
+          demo-view-id
+        </button>
+        <button class="quick-test-btn" onclick="quickTest('sample-123')">
+          sample-123
+        </button>
+      </div>
+    </div>
+
+    <div id="urlDisplay" class="url-display" style="display: none;">
+      <strong>生成的深度链接URL:</strong><br>
+      <span id="urlText"></span>
+    </div>
+  </div>
+
+  <script>
+    // 显示状态消息
+    function showStatus(message, type = 'info') {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = message;
+      statusEl.className = `status show ${type}`;
+      
+      // 3秒后自动隐藏
+      setTimeout(() => {
+        statusEl.classList.remove('show');
+      }, 3000);
+    }
+
+    // 获取输入的viewId
+    function getViewId() {
+      const viewId = document.getElementById('viewId').value.trim();
+      if (!viewId) {
+        showStatus('❌ 请输入笔记ID', 'error');
+        return null;
+      }
+      return viewId;
+    }
+
+    // 生成深度链接URL
+    function generateDeepLink(viewId, path = 'note') {
+      const encodedViewId = encodeURIComponent(viewId);
+      if (path) {
+        return `appflowy-flutter://${path}?viewId=${encodedViewId}`;
+      } else {
+        return `appflowy-flutter://?viewId=${encodedViewId}`;
+      }
+    }
+
+    // 显示生成的URL
+    function displayUrl(url) {
+      const urlDisplay = document.getElementById('urlDisplay');
+      const urlText = document.getElementById('urlText');
+      urlText.textContent = url;
+      urlDisplay.style.display = 'block';
+    }
+
+    // 方式1-3: 直接跳转
+    function openNote(path) {
+      const viewId = getViewId();
+      if (!viewId) return;
+
+      const deepLink = generateDeepLink(viewId, path);
+      displayUrl(deepLink);
+      
+      console.log('尝试打开深度链接:', deepLink);
+      showStatus(`🔄 正在打开: ${viewId}`, 'info');
+
+      // 记录开始时间
+      const startTime = Date.now();
+      let isAppOpened = false;
+
+      // 监听页面可见性变化
+      const visibilityHandler = () => {
+        if (document.hidden) {
+          isAppOpened = true;
+          showStatus('✅ 成功打开APP！', 'success');
+        }
+      };
+      
+      document.addEventListener('visibilitychange', visibilityHandler);
+
+      // 尝试打开APP
+      try {
+        window.location.href = deepLink;
+      } catch (error) {
+        console.error('打开深度链接失败:', error);
+        showStatus('❌ 打开失败: ' + error.message, 'error');
+      }
+
+      // 超时检测
+      setTimeout(() => {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+        
+        if (!isAppOpened && !document.hidden) {
+          const elapsed = Date.now() - startTime;
+          if (elapsed > 2000) {
+            showStatus('⚠️ APP可能未安装或无法打开，请检查是否已安装AppFlowy', 'error');
+          }
+        }
+      }, 2500);
+    }
+
+    // 方式4: 使用iframe方式（推荐移动端）
+    function openNoteWithIframe() {
+      const viewId = getViewId();
+      if (!viewId) return;
+
+      const deepLink = generateDeepLink(viewId, 'note');
+      displayUrl(deepLink);
+      
+      console.log('使用iframe方式打开:', deepLink);
+      showStatus('🔄 正在使用iframe方式打开...', 'info');
+
+      try {
+        // 创建隐藏的iframe
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.src = deepLink;
+        
+        // 添加到页面
+        document.body.appendChild(iframe);
+        
+        showStatus('✅ 已发送打开请求（iframe方式）', 'success');
+        
+        // 2秒后移除iframe
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            document.body.removeChild(iframe);
+          }
+        }, 2000);
+      } catch (error) {
+        console.error('iframe方式打开失败:', error);
+        showStatus('❌ 打开失败: ' + error.message, 'error');
+      }
+    }
+
+    // 快速测试
+    function quickTest(viewId) {
+      document.getElementById('viewId').value = viewId;
+      openNote('note');
+    }
+
+    // 复制URL到剪贴板
+    function copyUrl() {
+      const viewId = getViewId();
+      if (!viewId) return;
+
+      const deepLink = generateDeepLink(viewId, 'note');
+      
+      // 使用现代 Clipboard API
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(deepLink).then(() => {
+          showStatus('✅ URL已复制到剪贴板！', 'success');
+        }).catch(err => {
+          console.error('复制失败:', err);
+          fallbackCopy(deepLink);
+        });
+      } else {
+        fallbackCopy(deepLink);
+      }
+    }
+
+    // 备用复制方法
+    function fallbackCopy(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      
+      try {
+        document.execCommand('copy');
+        showStatus('✅ URL已复制到剪贴板！', 'success');
+      } catch (err) {
+        console.error('复制失败:', err);
+        showStatus('❌ 复制失败，请手动复制', 'error');
+        displayUrl(text);
+      }
+      
+      document.body.removeChild(textarea);
+    }
+
+    // 从URL参数获取viewId（如果是从其他页面跳转过来的）
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const viewId = urlParams.get('viewId') || urlParams.get('id');
+      
+      if (viewId) {
+        document.getElementById('viewId').value = viewId;
+        showStatus(`📥 已从URL参数获取viewId: ${viewId}`, 'info');
+        
+        // 可选：自动打开
+        // setTimeout(() => openNote('note'), 500);
+      }
+    });
+
+    // 回车键快速打开
+    document.getElementById('viewId').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        openNote('note');
+      }
+    });
+  </script>
+</body>
+</html>
+

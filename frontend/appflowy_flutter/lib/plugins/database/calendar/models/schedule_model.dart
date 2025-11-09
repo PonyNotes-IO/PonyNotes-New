@@ -3,6 +3,7 @@ import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:calendar_view/calendar_view.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/calendar_entities.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/field_entities.pb.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -788,12 +789,14 @@ class ScheduleModel extends ChangeNotifier {
               // 使用 DateCellBackendService 设置日期
               // 全天事件：isRange=false, includeTime=false，只保存日期，不传 endDate
               // 非全天事件：isRange=true, includeTime=true，保存日期和时间范围
-            print('📅 [ScheduleModel] createSchedule 更新日期字段');
+              print('📅 [ScheduleModel] createSchedule 更新日期字段');
               final updateResult = await dateService.update(
                 date: isAllDayEvent ? startTime.withoutTime : startTime,
                 endDate: isAllDayEvent ? null : endTime, // 全天不传 endDate
                 isRange: !isAllDayEvent, // 全天为 false，非全天为 true
                 includeTime: !isAllDayEvent, // 全天为 false，非全天为 true
+                repeatType: repeatType,
+                repeatRuleJson: repeatRuleJson ?? '',
               );
               
               updateResult.fold(
@@ -841,45 +844,7 @@ class ScheduleModel extends ChangeNotifier {
             }
           }
           
-          // 单独处理重复字段：确保字段存在后再保存
-          try {
-            print('🔁 [ScheduleModel] createSchedule 开始保存重复信息');
-            print('  - repeatType: $repeatType');
-            print('  - repeatRuleJson: $repeatRuleJson');
-            
-            // 确保重复字段存在
-            final repeatField = await _ensureRepeatField(viewId, fieldInfos);
-            if (repeatField != null) {
-              // 保存重复信息到数据库
-              final repeatData = repeatType != 0 ? jsonEncode({
-                'repeatType': repeatType,
-                'repeatRuleJson': repeatRuleJson ?? '',
-              }) : '';
-              
-              print('  - 重复数据JSON: $repeatData');
-              
-              final updateResult = await CellBackendService.updateCell(
-                viewId: viewId,
-                cellContext:
-                    CellContext(fieldId: repeatField.field.id, rowId: rowMeta.id),
-                data: repeatData,
-              );
-              
-              updateResult.fold(
-                (_) {
-                  print('✅ [ScheduleModel] createSchedule 重复信息保存成功');
-                },
-                (error) {
-                  print('❌ [ScheduleModel] createSchedule 重复信息保存失败: ${error.msg}');
-                },
-              );
-            } else {
-              print('⚠️ [ScheduleModel] createSchedule 无法创建或找到重复字段');
-            }
-          } catch (e, stackTrace) {
-            print('❌ [ScheduleModel] createSchedule 保存重复信息异常: $e');
-            print('📍 堆栈: $stackTrace');
-          }
+          // 重复信息不再使用自定义字段保存，改由日期单元格的 repeatType/repeatRuleJson 承载
           
           // 创建对应的本地 ScheduleItem
           final newSchedule = ScheduleItem(
@@ -888,15 +853,15 @@ class ScheduleModel extends ChangeNotifier {
             description: description,
             startTime: isAllDayEvent ? startTime.withoutTime : startTime,
             endTime: isAllDayEvent ? endTime.withoutTime : endTime,
-          isAllDay: isAllDayEvent,
-          // 设置 isAllDay 属性
+            isAllDay: isAllDayEvent,
+            // 设置 isAllDay 属性
             isImportant: isImportant,
             category: category,
             color: color,
             reminderOption: reminderOption,
             dueDate: dueDate ?? endTime, // 如果没有指定截止日期，使用结束时间
-          repeatType: repeatType,
-          repeatRuleJson: repeatRuleJson,
+            repeatType: repeatType,
+            repeatRuleJson: repeatRuleJson,
           );
           
           // 添加到本地列表
@@ -908,10 +873,10 @@ class ScheduleModel extends ChangeNotifier {
           }
           
           // 如果设置了提醒选项，先写入日期单元格的 reminderId，再创建系统提醒
-        print('🔔 [ScheduleModel] createSchedule 检查提醒设置:');
-        print('  - reminderOption: $reminderOption');
-        print('  - dateService: ${dateService != null ? "已初始化" : "未初始化"}');
-        print('  - isAllDayEvent: $isAllDayEvent');
+          print('🔔 [ScheduleModel] createSchedule 检查提醒设置:');
+          print('  - reminderOption: $reminderOption');
+          print('  - dateService: ${dateService != null ? "已初始化" : "未初始化"}');
+          print('  - isAllDayEvent: $isAllDayEvent');
         
           if (reminderOption != ReminderOption.none && dateService != null) {
             final reminderId = nanoid();
@@ -1052,49 +1017,7 @@ class ScheduleModel extends ChangeNotifier {
     }
   }
 
-  // 确保重复字段存在（如果不存在则创建）
-  Future<FieldInfo?> _ensureRepeatField(String viewId, List<FieldInfo> fieldInfos) async {
-    // 先查找是否已存在重复字段
-    try {
-      final existingRepeatField = fieldInfos.firstWhere(
-        (f) {
-          final name = f.name.toLowerCase();
-          return f.fieldType == FieldType.RichText && 
-                 (name.contains('repeat') || name.contains('重复'));
-        },
-      );
-      // 如果找到了，直接返回
-      print('✅ [ScheduleModel] 找到已存在的重复字段: ${existingRepeatField.name}');
-      return existingRepeatField;
-    } catch (_) {
-      // 字段不存在，需要创建
-      print('📋 [ScheduleModel] 重复字段不存在，开始创建...');
-      try {
-        final createResult = await FieldBackendService.createField(
-          viewId: viewId,
-          fieldType: FieldType.RichText,
-          fieldName: 'Repeat',
-        );
-        
-        return createResult.fold(
-          (field) {
-            print('✅ [ScheduleModel] 重复字段创建成功: ${field.name} (${field.id})');
-            // 创建字段后，等待一小段时间让后端同步
-            // 然后从后端重新获取字段列表，确保字段信息完整
-            return FieldInfo.initial(field);
-          },
-          (error) {
-            print('❌ [ScheduleModel] 重复字段创建失败: ${error.msg}');
-            return null;
-          },
-        );
-      } catch (e, stackTrace) {
-        print('❌ [ScheduleModel] 创建重复字段异常: $e');
-        print('📍 堆栈: $stackTrace');
-        return null;
-      }
-    }
-  }
+  // 不再创建或依赖自定义 Repeat 字段，重复信息由日期字段承载
 
   // 更新日程
   Future<bool> updateSchedule(ScheduleItem schedule) async {
@@ -1220,6 +1143,8 @@ class ScheduleModel extends ChangeNotifier {
             print('  - 结束时间: ${schedule.endTime}');
             print('  - 提醒选项: ${schedule.reminderOption}');
             print('  - 当前 reminderId: $existingReminderId');
+            print('  - 重复类型: ${schedule.repeatType}');
+            print('  - 重复规则: ${schedule.repeatRuleJson}');
             
             // 重要：更新日期字段时，不传入 reminderId 参数（与 DateCellEditorBloc._updateDateData 逻辑一致）
             // DateCellEditorBloc 在更新日期时不会更新 reminderId，reminderId 只在创建/删除提醒时更新
@@ -1231,6 +1156,8 @@ class ScheduleModel extends ChangeNotifier {
               endDate: isAllDayEvent ? null : schedule.endTime, // 全天不传 endDate
               isRange: !isAllDayEvent, // 全天为 false，非全天为 true
               includeTime: !isAllDayEvent, // 全天为 false，非全天为 true
+              repeatType: schedule.repeatType,
+              repeatRuleJson: schedule.repeatRuleJson ?? '',
               // 不传入 reminderId，让现有的 reminderId 保持不变
             );
             
@@ -1238,6 +1165,9 @@ class ScheduleModel extends ChangeNotifier {
               (_) {
                 dateUpdated = true;
                 print('✅ [ScheduleModel] updateSchedule 日期字段更新成功');
+                
+                // 立即验证：从数据库读取保存的数据（异步执行，不阻塞）
+                _verifySavedData(viewId, field.field.id, schedule.id, schedule.repeatType, schedule.repeatRuleJson ?? '');
               },
               (error) {
                 hasCriticalErrors = true;
@@ -1335,50 +1265,7 @@ class ScheduleModel extends ChangeNotifier {
         }
       }
       
-      // 单独处理重复字段：确保字段存在后再保存
-      try {
-        print('🔁 [ScheduleModel] updateSchedule 开始更新重复信息');
-        print('  - repeatType: ${schedule.repeatType}');
-        print('  - repeatRuleJson: ${schedule.repeatRuleJson}');
-        
-        // 确保重复字段存在
-        final repeatField = await _ensureRepeatField(viewId, fieldInfos);
-        if (repeatField != null) {
-          // 保存重复信息到数据库
-          final repeatData = schedule.repeatType != 0 ? jsonEncode({
-            'repeatType': schedule.repeatType,
-            'repeatRuleJson': schedule.repeatRuleJson ?? '',
-          }) : '';
-          
-          print('  - 重复数据JSON: $repeatData');
-          
-          final updateResult = await CellBackendService.updateCell(
-            viewId: viewId,
-            cellContext: CellContext(
-              fieldId: repeatField.field.id,
-              rowId: schedule.id,
-            ),
-            data: repeatData,
-          );
-          
-          updateResult.fold(
-            (_) {
-              print('✅ [ScheduleModel] updateSchedule 重复信息更新成功');
-            },
-            (error) {
-              hasOptionalErrors = true;
-              print('❌ [ScheduleModel] updateSchedule 重复信息更新失败: ${error.msg}');
-            },
-          );
-        } else {
-          print('⚠️ [ScheduleModel] updateSchedule 无法创建或找到重复字段');
-          hasOptionalErrors = true;
-        }
-      } catch (e, stackTrace) {
-        hasOptionalErrors = true;
-        print('❌ [ScheduleModel] updateSchedule 更新重复信息异常: $e');
-        print('📍 堆栈: $stackTrace');
-      }
+      // 重复信息不再使用自定义字段保存，改由日期单元格的 repeatType/repeatRuleJson 承载
       
       // 如果关键字段（日期或标题）更新成功，则认为整体更新成功
       // 日期字段是最重要的，如果日期更新成功，即使其他字段失败也返回成功
@@ -1652,15 +1539,38 @@ class ScheduleModel extends ChangeNotifier {
       );
       return r.fold(
         (cell) {
+          // 只在调试模式下打印详细日志
+          if (kDebugMode) {
+            print('    🔍 [_getDateRangeWithExtra] 原始 cell.data 长度: ${cell.data.length}');
+          }
           final pb = DateCellDataParser().parserData(cell.data);
-          if (pb == null) return (null, null, null, null, null,0,"");
+          if (pb == null) {
+            if (kDebugMode) {
+              print('    ❌ [_getDateRangeWithExtra] DateCellDataParser 返回 null');
+            }
+            return (null, null, null, null, null,0,"");
+          }
+          
+          if (kDebugMode) {
+            print('    🔍 [_getDateRangeWithExtra] 解析后的 DateCellDataPB:');
+            print('      - hasTimestamp: ${pb.hasTimestamp()}');
+            print('      - hasEndTimestamp: ${pb.hasEndTimestamp()}');
+            print('      - includeTime: ${pb.includeTime}');
+            print('      - isRange: ${pb.isRange}');
+            print('      - reminderId: ${pb.reminderId}');
+            print('      - hasRepeatType: ${pb.hasRepeatType()}');
+            print('      - repeatType: ${pb.repeatType}');
+            print('      - hasRepeatRuleJson: ${pb.hasRepeatRuleJson()}');
+            print('      - repeatRuleJson: ${pb.repeatRuleJson}');
+          }
+          
           DateTime? s;
           DateTime? e;
           bool? includeTime;
           bool? isRange;
           String? reminderId;
           int? repeatType;
-          String? repeatCustomSummary;
+          String? repeatRuleJson;
 
           if (pb.hasTimestamp()) {
             s = DateTime.fromMillisecondsSinceEpoch(
@@ -1684,13 +1594,42 @@ class ScheduleModel extends ChangeNotifier {
           if (pb.reminderId.isNotEmpty) {
             reminderId = pb.reminderId;
           }
-          // 读取 repeatType
-          repeatType = pb.repeatType;
-          // 读取 repeatCustomSummary
-          repeatCustomSummary = pb.repeatRuleJson;
-          return (s, e, includeTime, isRange, reminderId,repeatType,repeatCustomSummary);
+          
+          // 读取 repeatType 和 repeatRuleJson
+          // 注意：repeatType 和 repeatRuleJson 是 one_of 字段，需要先检查 hasXxx()
+          // 如果 hasXxx() 返回 true，说明字段存在，直接读取值（即使值是默认值 0 或空字符串）
+          // 如果 hasXxx() 返回 false，说明字段不存在（可能是旧数据或未设置），使用默认值
+          // 这与 reminderId 的处理方式类似：reminderId 是普通字段，总是存在，所以直接检查 isNotEmpty
+          if (pb.hasRepeatType()) {
+            repeatType = pb.repeatType;
+            if (kDebugMode) {
+              print('    ✅ [_getDateRangeWithExtra] 读取到 repeatType: $repeatType (hasRepeatType=true)');
+            }
+          } else {
+            // 字段不存在，使用默认值（这是正常的，旧数据可能没有这个字段）
+            repeatType = 0; // 默认值：无重复
+            // 移除警告信息，因为这是正常的处理逻辑，不是错误
+          }
+          
+          if (pb.hasRepeatRuleJson()) {
+            // 字段存在，读取值（即使是空字符串也要读取）
+            final ruleJson = pb.repeatRuleJson;
+            repeatRuleJson = ruleJson.isEmpty ? null : ruleJson;
+            if (kDebugMode) {
+              print('    ✅ [_getDateRangeWithExtra] 读取到 repeatRuleJson: "$repeatRuleJson" (hasRepeatRuleJson=true)');
+            }
+          } else {
+            // 字段不存在，使用默认值（这是正常的，旧数据可能没有这个字段）
+            repeatRuleJson = null; // 默认值：无自定义规则
+            // 移除警告信息，因为这是正常的处理逻辑，不是错误
+          }
+          
+          return (s, e, includeTime, isRange, reminderId,repeatType,repeatRuleJson);
         },
-        (_) => (null, null, null, null, null,0,""),
+        (_) {
+          print('    ❌ [_getDateRangeWithExtra] CellBackendService.getCell 失败');
+          return (null, null, null, null, null,0,"");
+        },
       );
     }
 
@@ -1723,12 +1662,16 @@ class ScheduleModel extends ChangeNotifier {
           startTime: finalStartTime,
           endTime: finalEndTime,
           isAllDay: isAllDayEvent, // 设置 isAllDay 属性
+          repeatType: repeatType ?? 0, // 更新重复类型
+          repeatRuleJson: repeatRuleJson, // 更新重复规则
         );
         
         print(
             '    ✅ [enrichFromCells] 更新了开始时间和结束时间: $finalStartTime -> $finalEndTime');
         print(
             '    📅 [enrichFromCells] 全天事件: $isAllDayEvent (includeTime=$includeTime, isRange=$isRange)');
+        print(
+            '    🔁 [enrichFromCells] 重复类型: $repeatType, 重复规则: $repeatRuleJson');
       }
 
       // 如果日期单元格有 reminderId，推断 ReminderOption
@@ -1806,25 +1749,9 @@ class ScheduleModel extends ChangeNotifier {
               enriched = enriched.copyWith(category: v);
               print('    ✅ [enrichFromCells] 更新了分类');
             }
-          } else if (name.contains('repeat') || name.contains('重复')) {
-            // 读取重复信息
-            final v = await _getString(f);
-            print('    🔁 [enrichFromCells] 读取重复字段 "${f.name}": $v');
-            if (v != null && v.isNotEmpty) {
-              try {
-                final repeatData = jsonDecode(v) as Map<String, dynamic>;
-                final repeatType = repeatData['repeatType'] as int? ?? 0;
-                final repeatRuleJson = repeatData['repeatRuleJson'] as String?;
-                enriched = enriched.copyWith(
-                  repeatType: repeatType,
-                  repeatRuleJson: repeatRuleJson,
-                );
-                print('    ✅ [enrichFromCells] 更新了重复信息: repeatType=$repeatType');
-              } catch (e) {
-                print('    ⚠️ [enrichFromCells] 解析重复信息失败: $e');
-              }
-            }
           }
+          // 注意：重复信息（repeatType 和 repeatRuleJson）现在存储在日期字段中，
+          // 不再从单独的 "Repeat" 字段读取。已在日期字段读取时更新（见第 1609-1610 行）。
           // 注意：提醒选项不再从单独的字段读取，而是从日期单元格的 reminderId 读取
           // 这与 calendar_event_editor 的处理方式一致（见 DateCellEditorState.initial）
         } else if (f.fieldType == FieldType.Checkbox) {
@@ -2112,6 +2039,77 @@ class ScheduleModel extends ChangeNotifier {
     }
     _databaseController = null;
     _databaseCallbacks = null;
+  }
+
+  // 验证保存的数据
+  Future<void> _verifySavedData(
+    String viewId,
+    String fieldId,
+    String rowId,
+    int expectedRepeatType,
+    String expectedRepeatRuleJson,
+  ) async {
+    try {
+      print('🔍 [ScheduleModel] 开始验证保存的数据...');
+      print('  - viewId: $viewId');
+      print('  - fieldId: $fieldId');
+      print('  - rowId: $rowId');
+      print('  - 期望 repeatType: $expectedRepeatType');
+      print('  - 期望 repeatRuleJson: "$expectedRepeatRuleJson"');
+      
+      // 等待一小段时间，确保数据已保存到数据库
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      final verifyResult = await CellBackendService.getCell(
+        viewId: viewId,
+        cellContext: CellContext(
+          fieldId: fieldId,
+          rowId: rowId,
+        ),
+      );
+      
+      verifyResult.fold(
+        (cell) {
+          print('📦 [ScheduleModel] 从数据库读取到 Cell 数据，长度: ${cell.data.length}');
+          final pb = DateCellDataParser().parserData(cell.data);
+          if (pb != null) {
+            print('✅ [ScheduleModel] 验证结果 - DateCellDataPB:');
+            print('  - hasTimestamp: ${pb.hasTimestamp()}');
+            print('  - timestamp: ${pb.timestamp}');
+            print('  - hasEndTimestamp: ${pb.hasEndTimestamp()}');
+            print('  - endTimestamp: ${pb.endTimestamp}');
+            print('  - includeTime: ${pb.includeTime}');
+            print('  - isRange: ${pb.isRange}');
+            print('  - reminderId: ${pb.reminderId}');
+            print('  - hasRepeatType: ${pb.hasRepeatType()}');
+            print('  - repeatType: ${pb.repeatType}');
+            print('  - hasRepeatRuleJson: ${pb.hasRepeatRuleJson()}');
+            print('  - repeatRuleJson: "${pb.repeatRuleJson}"');
+            
+            // 验证保存的值是否与期望值一致
+            if (pb.hasRepeatType() && pb.repeatType == expectedRepeatType) {
+              print('✅ [ScheduleModel] repeatType 验证成功: ${pb.repeatType}');
+            } else {
+              print('❌ [ScheduleModel] repeatType 验证失败: 期望=$expectedRepeatType, 实际=${pb.repeatType}, hasRepeatType=${pb.hasRepeatType()}');
+            }
+            
+            if (pb.hasRepeatRuleJson() && pb.repeatRuleJson == expectedRepeatRuleJson) {
+              print('✅ [ScheduleModel] repeatRuleJson 验证成功: "${pb.repeatRuleJson}"');
+            } else {
+              print('❌ [ScheduleModel] repeatRuleJson 验证失败: 期望="$expectedRepeatRuleJson", 实际="${pb.repeatRuleJson}", hasRepeatRuleJson=${pb.hasRepeatRuleJson()}');
+            }
+          } else {
+            print('❌ [ScheduleModel] 无法解析 DateCellDataPB');
+          }
+        },
+        (error) {
+          print('❌ [ScheduleModel] 验证失败：无法读取 Cell: ${error.msg}');
+        },
+      );
+    } catch (e, stackTrace) {
+      print('❌ [ScheduleModel] 验证异常: $e');
+      print('📍 堆栈: $stackTrace');
+    }
   }
 
   @override

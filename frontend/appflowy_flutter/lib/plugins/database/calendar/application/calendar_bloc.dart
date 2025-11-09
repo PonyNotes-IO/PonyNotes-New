@@ -303,7 +303,7 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
 
       // 读取重复信息
       final repeatInfo = await _getRepeatInfo(eventPB);
-      if (repeatInfo == null || !repeatInfo['isRepeat'] || repeatInfo['repeatType'] == 0) {
+      if (repeatInfo == null || repeatInfo['repeatType'] == 0) {
         continue; // 没有重复，跳过
       }
 

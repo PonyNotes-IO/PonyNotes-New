@@ -5,13 +5,14 @@ use crate::services::calculations::Calculation;
 use crate::services::cell::{CellCache, apply_cell_changeset, get_cell_protobuf, stringify_cell};
 use crate::services::database::database_observe::*;
 use crate::services::database::util::database_view_setting_pb_from_view;
+use collab::util::AnyMapExt;
 use crate::services::database_view::{
   DatabaseViewChanged, DatabaseViewEditor, DatabaseViewOperation, DatabaseViews, EditorByViewId,
 };
 use crate::services::field::checklist_filter::ChecklistCellChangeset;
 use crate::services::field::type_option_transform::transform_type_option;
 use crate::services::field::{
-  SelectOptionCellChangeset, StringCellData, TypeOptionCellDataHandler, TypeOptionCellExt,
+  CELL_DATA, SelectOptionCellChangeset, StringCellData, TypeOptionCellDataHandler, TypeOptionCellExt,
   default_type_option_data_from_type, select_type_option_from_field, type_option_data_from_pb,
 };
 use crate::services::field_settings::{FieldSettings, default_field_settings_by_layout_map};
@@ -569,6 +570,10 @@ impl DatabaseEditor {
       let cells = self.get_cells_for_field(view_id, field_id).await;
       for cell in cells {
         if let Some(new_cell) = cell.cell.clone() {
+          // 确保 row 已经被初始化和 finalized，以便数据能正确保存到 collab_database
+          if self.finalized_rows.get(cell.row_id.as_str()).await.is_none() {
+            self.init_database_row(&cell.row_id).await?;
+          }
           self
             .update_cell(view_id, &cell.row_id, &new_field_id, new_cell)
             .await?;
@@ -1001,6 +1006,24 @@ impl DatabaseEditor {
   ) -> FlowyResult<()> {
     // Get the old row before updating the cell. It would be better to get the old cell
     let old_row = self.get_row(view_id, row_id).await;
+    
+    // 添加调试日志，检查保存的 Cell 数据格式
+    if let Some(bytes_vec) = new_cell.get_as::<Vec<u8>>(CELL_DATA) {
+      tracing::info!(
+        "💾 [DatabaseEditor::update_cell] 保存 Vec<u8> 格式的 Cell，长度: {}, field_id: {}, row_id: {}",
+        bytes_vec.len(),
+        field_id,
+        row_id
+      );
+    } else if let Some(s) = new_cell.get_as::<String>(CELL_DATA) {
+      tracing::warn!(
+        "⚠️ [DatabaseEditor::update_cell] 保存 String 格式的 Cell: {}, field_id: {}, row_id: {}",
+        s,
+        field_id,
+        row_id
+      );
+    }
+    
     trace!("[Database Row]: update cell: {:?}", new_cell);
     self
       .update_row(row_id.clone(), |row_update| {
@@ -1011,6 +1034,28 @@ impl DatabaseEditor {
           });
       })
       .await?;
+
+    // 保存后立即验证：从数据库读取 Cell，确认数据是否正确保存
+    let saved_cell = {
+      let database = self.database.read().await;
+      database.get_cell(field_id, row_id).await.cell
+    };
+    
+    if let Some(saved_cell) = saved_cell {
+      if let Some(bytes_vec) = saved_cell.get_as::<Vec<u8>>(CELL_DATA) {
+        tracing::info!(
+          "✅ [DatabaseEditor::update_cell] 验证保存成功：从数据库读取到 Vec<u8> 格式，长度: {}",
+          bytes_vec.len()
+        );
+      } else if let Some(s) = saved_cell.get_as::<String>(CELL_DATA) {
+        tracing::error!(
+          "❌ [DatabaseEditor::update_cell] 验证保存失败：从数据库读取到 String 格式: {}，说明数据格式被转换了！",
+          s
+        );
+      }
+    } else {
+      tracing::warn!("⚠️ [DatabaseEditor::update_cell] 验证保存：从数据库读取的 Cell 为 None");
+    }
 
     self
       .did_update_row(view_id, row_id, field_id, old_row)

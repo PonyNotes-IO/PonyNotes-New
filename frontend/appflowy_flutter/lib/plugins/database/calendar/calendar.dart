@@ -45,7 +45,6 @@ class CalendarEvent {
   final TimeOfDay endTime;
   final bool isAllDay;
   final bool isImportant;
-  final bool isRepeat;
   final String calendar;
 
   CalendarEvent({
@@ -57,7 +56,6 @@ class CalendarEvent {
     required this.endTime,
     required this.isAllDay,
     required this.isImportant,
-    required this.isRepeat,
     required this.calendar,
   });
 }
