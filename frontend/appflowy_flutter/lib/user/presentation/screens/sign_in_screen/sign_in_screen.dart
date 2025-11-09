@@ -33,7 +33,15 @@ class SignInScreen extends StatelessWidget {
     if (successOrFail != null) {
       successOrFail.fold(
         (userProfile) {
-          getIt<AuthRouter>().goHomeScreen(context, userProfile);
+          // 检查 context 是否仍然有效
+          if (!context.mounted) {
+            return;
+          }
+          // 使用根导航器确保导航不会因为 context 失效而失败
+          final rootContext = Navigator.of(context, rootNavigator: true).context;
+          if (rootContext.mounted) {
+            getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
+          }
         },
         (error) {
           Log.error('Sign in error: $error');

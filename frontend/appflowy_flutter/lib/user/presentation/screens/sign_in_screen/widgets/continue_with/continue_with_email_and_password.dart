@@ -298,19 +298,37 @@ class _ContinueWithEmailAndPasswordState
   void _signInWithEmail(BuildContext context, String input) async {
     if (_isLoading) return;
 
+    // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
+    final signInBloc = context.read<SignInBloc>();
+    signInBloc.add(const SignInEvent.cancel());
+    
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // 直接跳转到邮箱验证码登录，不再检查用户状态
-      // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
-      context.read<SignInBloc>().add(const SignInEvent.cancel());
+      // 先检查用户是否设置了密码
+      signInBloc.add(
+        SignInEvent.checkPasswordStatus(
+          email: input,
+        ),
+      );
       
-      context
-          .read<SignInBloc>()
-          .add(SignInEvent.signInWithMagicLink(email: input));
-      _pushContinueWithMagicLinkOrPasscodePage(context, input);
+      // 等待密码状态检查完成
+      await Future.delayed(const Duration(milliseconds: 800));
+      
+      // 获取当前状态
+      final currentState = signInBloc.state;
+      if (mounted) {
+        if (currentState.passwordIsSet == true) {
+          // 用户已设置密码，跳转到密码登录页面
+          _pushContinueWithPasswordPage(context, input);
+        } else {
+          // 用户未设置密码，发送验证码并跳转到验证码输入页面
+          signInBloc.add(SignInEvent.signInWithMagicLink(email: input));
+          _pushContinueWithMagicLinkOrPasscodePage(context, input);
+        }
+      }
     } catch (e) {
       // 处理异常
       if (mounted) {
@@ -329,19 +347,36 @@ class _ContinueWithEmailAndPasswordState
     if (_isLoading) return;
     
     // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
-    context.read<SignInBloc>().add(const SignInEvent.cancel());
+    final signInBloc = context.read<SignInBloc>();
+    signInBloc.add(const SignInEvent.cancel());
     
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // 发送手机号验证码（GoTrue 会自动识别手机号）
-      final input = phone;
-      context
-          .read<SignInBloc>()
-          .add(SignInEvent.signInWithMagicLink(email: input));
-      _pushContinueWithMagicLinkOrPasscodePage(context, input);
+      // 先检查用户是否设置了密码
+      signInBloc.add(
+        SignInEvent.checkPasswordStatus(
+          phone: phone,
+        ),
+      );
+      
+      // 等待密码状态检查完成
+      await Future.delayed(const Duration(milliseconds: 800));
+      
+      // 获取当前状态
+      final currentState = signInBloc.state;
+      if (mounted) {
+        if (currentState.passwordIsSet == true) {
+          // 用户已设置密码，跳转到密码登录页面
+          _pushContinueWithPasswordPage(context, phone);
+        } else {
+          // 用户未设置密码，发送验证码并跳转到验证码输入页面
+          signInBloc.add(SignInEvent.signInWithMagicLink(email: phone));
+          _pushContinueWithMagicLinkOrPasscodePage(context, phone);
+        }
+      }
     } catch (e) {
       // 处理异常
       if (mounted) {

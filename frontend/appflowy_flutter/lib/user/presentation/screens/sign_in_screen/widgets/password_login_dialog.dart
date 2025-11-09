@@ -1,0 +1,309 @@
+import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+
+/// 密码登录对话框组件
+/// 按照设计图二实现：账号密码登录页面
+class PasswordLoginDialog extends StatefulWidget {
+  const PasswordLoginDialog({
+    super.key,
+    required this.phoneOrEmail,
+    required this.onPasswordLogin,
+    required this.onSwitchToVerificationCode,
+  });
+
+  final String phoneOrEmail;
+  final ValueChanged<String> onPasswordLogin;
+  final VoidCallback onSwitchToVerificationCode;
+
+  @override
+  State<PasswordLoginDialog> createState() => _PasswordLoginDialogState();
+}
+
+class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
+  final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _passwordFocusNode = FocusNode();
+  String _errorMessage = '';
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _passwordFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _handlePasswordLogin() {
+    final password = _passwordController.text.trim();
+    
+    if (password.isEmpty) {
+      setState(() {
+        _errorMessage = '请输入密码';
+      });
+      return;
+    }
+
+    setState(() {
+      _errorMessage = '';
+    });
+
+    widget.onPasswordLogin(password);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<SignInBloc, SignInState>(
+      listener: (context, state) {
+        // 监听登录错误
+        if (state.passwordError != null) {
+          setState(() {
+            _errorMessage = state.passwordError ?? '账号和密码不匹配,请重新输入';
+          });
+        } else if (state.successOrFail != null && state.successOrFail!.isFailure) {
+          state.successOrFail!.fold(
+            (_) {},
+            (error) {
+              setState(() {
+                _errorMessage = error.msg.contains('Invalid login credentials') 
+                    ? '账号和密码不匹配,请重新输入'
+                    : error.msg;
+              });
+            },
+          );
+        } else if (state.successOrFail != null && state.successOrFail!.isSuccess) {
+          // 登录成功，关闭对话框
+          // 检查 context 是否仍然有效
+          if (context.mounted) {
+            Navigator.of(context).pop();
+          }
+        }
+      },
+      child: Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Container(
+          width: 500,
+          padding: const EdgeInsets.all(40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 标题和验证码登录按钮行
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 标题
+                  const Text(
+                    '账号密码登录',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF333333),
+                    ),
+                  ),
+                  // 验证码登录按钮
+                  TextButton(
+                    onPressed: widget.onSwitchToVerificationCode,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                      ),
+                    ),
+                    child: const Text(
+                      '验证码登录',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Color(0xFF333333),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const VSpace(8),
+              
+              // 说明文字
+              const Text(
+                '使用已经注册过的手机号登录',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF999999),
+                ),
+              ),
+              const VSpace(32),
+              
+              // 手机号输入框（只读，显示已输入的手机号）
+              Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  border: Border.all(color: const Color(0xFFE0E0E0)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.phoneOrEmail,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Color(0xFF333333),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const VSpace(16),
+              
+              // 密码输入框
+              Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(
+                    color: _errorMessage.isNotEmpty 
+                        ? Colors.red 
+                        : const Color(0xFFE0E0E0),
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: TextField(
+                  controller: _passwordController,
+                  focusNode: _passwordFocusNode,
+                  obscureText: true,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF333333),
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: '输入设置的密码',
+                    hintStyle: TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFF999999),
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  onSubmitted: (_) => _handlePasswordLogin(),
+                  onChanged: (_) {
+                    if (_errorMessage.isNotEmpty) {
+                      setState(() {
+                        _errorMessage = '';
+                      });
+                    }
+                  },
+                ),
+              ),
+              
+              // 错误提示和忘记密码链接行
+              if (_errorMessage.isNotEmpty) ...[
+                const VSpace(8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _errorMessage,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        // TODO: 实现忘记密码功能
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: const Text(
+                        '忘记密码?',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF999999),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const VSpace(8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {
+                      // TODO: 实现忘记密码功能
+                    },
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text(
+                      '忘记密码?',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF999999),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              
+              const VSpace(32),
+              
+              // 确定按钮
+              BlocBuilder<SignInBloc, SignInState>(
+                builder: (context, state) {
+                  return SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: state.isSubmitting ? null : _handlePasswordLogin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF89575),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: state.isSubmitting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Text(
+                              '确定',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+

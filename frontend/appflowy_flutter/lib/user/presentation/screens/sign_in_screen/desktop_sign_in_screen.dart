@@ -1,14 +1,17 @@
 import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/password_login_dialog.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -34,16 +37,26 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
         if (successOrFail != null) {
           if (successOrFail.isSuccess) {
             successOrFail.onSuccess((userProfile) async {
-              // 匿名登录成功，导航到主页
-              getIt<AuthRouter>().goHomeScreen(context, userProfile);
+              // 检查 context 是否仍然有效
+              if (!context.mounted) {
+                return;
+              }
+              // 使用根导航器确保导航不会因为 context 失效而失败
+              final rootContext = Navigator.of(context, rootNavigator: true).context;
+              if (rootContext.mounted) {
+                // 匿名登录成功，导航到主页
+                getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
+              }
             });
           } else {
             // 显示错误Toast
             successOrFail.onFailure((error) {
-              showToastNotification(
-                message: error.msg,
-                type: ToastificationType.error,
-              );
+              if (context.mounted) {
+                showToastNotification(
+                  message: error.msg,
+                  type: ToastificationType.error,
+                );
+              }
             });
           }
         }
@@ -81,9 +94,9 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                       const VSpace(30),
 
                       // 标题 - 中文化
-                      const Text(
-                        "欢迎使用 AppFlowy",
-                        style: TextStyle(
+                      Text(
+                        LocaleKeys.welcomeToPonyNotes.tr(),
+                        style: const TextStyle(
                           color: Color(0xFF333333),
                           fontSize: 24,
                           fontWeight: FontWeight.normal,
@@ -316,7 +329,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
     return _isValidEmail(input) || _isValidPhone(input);
   }
 
-  void _handleSubmit(BuildContext context) {
+  Future<void> _handleSubmit(BuildContext context) async {
     final input = _controller.text.trim();
     
     if (input.isEmpty) {
@@ -343,17 +356,79 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
       return;
     }
 
-    // 区分邮箱和手机号，发送相应的验证码
+    // 区分邮箱和手机号
     final bool isEmail = _isValidEmail(input);
     final bool isPhone = _isValidPhone(input);
     
     // 清理手机号格式（移除+86等国际区号）
     final String emailOrPhone = isPhone ? _cleanPhoneNumber(input) : input;
     
+    final signInBloc = context.read<SignInBloc>();
+    
+    // 先检查用户是否设置了密码
+    signInBloc.add(
+      SignInEvent.checkPasswordStatus(
+        email: isEmail ? emailOrPhone : null,
+        phone: isPhone ? emailOrPhone : null,
+      ),
+    );
+    
+    // 等待密码状态检查完成
+    await Future.delayed(const Duration(milliseconds: 800));
+    
+    // 获取当前状态
+    final currentState = signInBloc.state;
+    if (currentState.passwordIsSet == true) {
+      // 用户已设置密码，弹出密码登录对话框
+      _showPasswordLoginDialog(context, emailOrPhone, signInBloc);
+    } else {
+      // 用户未设置密码，直接发送验证码并跳转到验证码输入页面
+      _sendVerificationCodeAndNavigate(context, emailOrPhone, isEmail, signInBloc);
+    }
+  }
+
+  void _showPasswordLoginDialog(
+    BuildContext context,
+    String emailOrPhone,
+    SignInBloc signInBloc,
+  ) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => BlocProvider.value(
+        value: signInBloc,
+        child: PasswordLoginDialog(
+          phoneOrEmail: emailOrPhone,
+          onPasswordLogin: (password) {
+            // 使用密码登录
+            signInBloc.add(
+              SignInEvent.signInWithEmailAndPassword(
+                email: emailOrPhone,
+                password: password,
+              ),
+            );
+          },
+          onSwitchToVerificationCode: () {
+            // 关闭密码登录对话框，切换到验证码登录
+            Navigator.of(dialogContext).pop();
+            final bool isEmail = _isValidEmail(emailOrPhone);
+            _sendVerificationCodeAndNavigate(context, emailOrPhone, isEmail, signInBloc);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _sendVerificationCodeAndNavigate(
+    BuildContext context,
+    String emailOrPhone,
+    bool isEmail,
+    SignInBloc signInBloc,
+  ) {
     // 发送登录请求（GoTrue 会自动识别是邮箱还是手机号）
-    context.read<SignInBloc>().add(
-          SignInEvent.signInWithMagicLink(email: emailOrPhone),
-        );
+    signInBloc.add(
+      SignInEvent.signInWithMagicLink(email: emailOrPhone),
+    );
 
     // 根据输入类型显示不同的提示信息
     showToastNotification(
@@ -364,8 +439,6 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
     );
 
     // 跳转到验证码输入页面
-    // 先保存 bloc 引用，避免在 builder 中访问旧 context
-    final signInBloc = context.read<SignInBloc>();
     final navigator = Navigator.of(context);
     navigator.push(
       MaterialPageRoute(
@@ -377,7 +450,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
               navigator.pop();
             },
             onEnterPasscode: (code) {
-              // 使用验证码登录 - 直接使用保存的 bloc 引用
+              // 使用验证码登录
               signInBloc.add(
                 SignInEvent.signInWithPasscode(
                   email: emailOrPhone,

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:app_links/app_links.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:get_it/get_it.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/expire_login_deeplink_handler.dart';
@@ -12,7 +13,9 @@ import 'package:appflowy/startup/tasks/deeplink/login_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/open_app_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/payment_deeplink_handler.dart';
 import 'package:appflowy/user/application/auth/auth_error.dart';
+import 'package:appflowy/user/application/password/password_http_service.dart';
 import 'package:appflowy/user/application/user_auth_listener.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/set_password_page.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -142,13 +145,92 @@ class AppFlowyCloudDeepLink {
             Log.info('🔵 [DeepLink] No completer, handling result directly');
             await result.fold(
               (userProfile) async {
-                Log.info('🔵 [DeepLink] Login success! User: ${userProfile.email}, calling runAppFlowy()');
-                await runAppFlowy();
+                Log.info('🔵 [DeepLink] Login success! User: ${userProfile.email}');
+                
+                try {
+                  // 检查用户是否设置了密码
+                  // 从 URI 中提取 access_token
+                  final accessToken = _extractAccessTokenFromUri(uri);
+                  if (accessToken != null) {
+                    Log.info('🔵 [DeepLink] Extracted access_token from URI');
+                    
+                    // 从 userProfile.email 中提取手机号或邮箱
+                    // userProfile.email 可能是手机号（如 13436574850）或邮箱（如 test@test.com）
+                    final phoneOrEmail = userProfile.email;
+                    Log.info('🔵 [DeepLink] User phoneOrEmail: $phoneOrEmail');
+                    
+                    // 判断是手机号还是邮箱（简单判断：包含 @ 就是邮箱，否则是手机号）
+                    final isEmail = phoneOrEmail.contains('@');
+                    
+                    // 创建无需认证的 PasswordHttpService 实例（checkPasswordStatus 是公开接口）
+                    final sharedEnv = getIt<AppFlowyCloudSharedEnv>();
+                    final passwordService = PasswordHttpService(
+                      baseUrl: sharedEnv.appflowyCloudConfig.gotrue_url,
+                      authToken: '', // 公开接口不需要认证
+                    );
+                    
+                    // 使用手机号或邮箱检查密码状态
+                    Log.info('🔵 [DeepLink] Checking password status...');
+                    final passwordStatusResult = isEmail
+                        ? await passwordService.checkPasswordStatus(email: phoneOrEmail)
+                        : await passwordService.checkPasswordStatus(phone: phoneOrEmail);
+                    
+                    Log.info('🔵 [DeepLink] Password status result received');
+                    
+                    // 处理密码状态检查结果
+                    passwordStatusResult.fold(
+                      (passwordIsSet) {
+                        Log.info('🔵 [DeepLink] User password_is_set: $passwordIsSet');
+                        if (!passwordIsSet) {
+                          // 用户未设置密码，跳转到设置密码页面
+                          Log.info('🔵 [DeepLink] User has not set password, navigating to set password page');
+                          // 使用 Future.microtask 确保在下一个事件循环中执行导航
+                          Future.microtask(() {
+                            final context = AppGlobals.rootNavKey.currentState?.context;
+                            if (context != null && context.mounted) {
+                              Log.info('🔵 [DeepLink] Context available, pushing SetPasswordPage');
+                              Navigator.of(context, rootNavigator: true).push(
+                                MaterialPageRoute(
+                                  builder: (context) => SetPasswordPage(
+                                    userProfile: userProfile,
+                                    phoneOrEmail: phoneOrEmail,
+                                    accessToken: accessToken,
+                                  ),
+                                ),
+                              );
+                            } else {
+                              // Context 不可用，直接进入系统
+                              Log.info('🔵 [DeepLink] Context not available, entering system directly');
+                              runAppFlowy();
+                            }
+                          });
+                        } else {
+                          // 用户已设置密码，直接进入系统
+                          Log.info('🔵 [DeepLink] User has set password, entering system directly');
+                          runAppFlowy();
+                        }
+                      },
+                      (error) {
+                        Log.error('🔵 [DeepLink] Failed to check password status: ${error.msg}');
+                        // 检查密码状态失败，默认进入系统（避免阻塞用户）
+                        runAppFlowy();
+                      },
+                    );
+                  } else {
+                    Log.info('🔵 [DeepLink] Could not extract access_token from URI, entering system directly');
+                    // 无法提取 access_token，直接进入系统
+                    runAppFlowy();
+                  }
+                } catch (e, stackTrace) {
+                  Log.error('🔵 [DeepLink] Exception during password check: $e', stackTrace);
+                  // 发生异常，直接进入系统（避免阻塞用户）
+                  runAppFlowy();
+                }
               },
               (err) {
                 Log.error('🔵 [DeepLink] Login failed: ${err.msg}');
                 final context = AppGlobals.rootNavKey.currentState?.context;
-                if (context != null) {
+                if (context != null && context.mounted) {
                   showToastNotification(
                     message: err.msg,
                   );
@@ -164,7 +246,7 @@ class AppFlowyCloudDeepLink {
           result.onFailure(
             (error) {
               final context = AppGlobals.rootNavKey.currentState?.context;
-              if (context != null) {
+              if (context != null && context.mounted) {
                 showToastNotification(
                   message: error.msg,
                   type: ToastificationType.error,
@@ -178,7 +260,7 @@ class AppFlowyCloudDeepLink {
         Log.error('onDeepLinkError: Unexpected deep link: $error');
         if (_completer == null) {
           final context = AppGlobals.rootNavKey.currentState?.context;
-          if (context != null) {
+          if (context != null && context.mounted) {
             showToastNotification(
               message: error.msg,
               type: ToastificationType.error,
@@ -242,6 +324,18 @@ class AppFlowyCloudDeepLink {
 
     return Uri.parse('appflowy-flutter://login-callback#$fragment');
   }
+
+  /// 从 URI 中提取 access_token
+  String? _extractAccessTokenFromUri(Uri? uri) {
+    if (uri == null) return null;
+    
+    final fragment = uri.fragment;
+    if (fragment.isEmpty) return null;
+    
+    final params = Uri.splitQueryString(fragment);
+    return params['access_token'];
+  }
+
 }
 
 class InitAppFlowyCloudTask extends LaunchTask {

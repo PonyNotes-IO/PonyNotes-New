@@ -2,6 +2,7 @@
   "appName": "AppFlowy",
   "defaultUsername": "我",
   "welcomeText": "欢迎使用 @:appName",
+  "welcomeToPonyNotes": "欢迎使用小马笔记",
   "welcomeTo": "欢迎来到",
   "githubStarText": "在 GitHub 上 Star",
   "subscribeNewsletterText": "消息订阅",
