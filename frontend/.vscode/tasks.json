@@ -217,6 +217,25 @@
     // 完整编译任务（清理 + 重新编译）- 支持环境选择
     // ============================================
     {
+      "label": "AF: Clean + Rebuild All",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
       "label": "AF: Clean + Rebuild All (Development)",
       "type": "shell",
       "dependsOrder": "sequence",
@@ -276,6 +295,25 @@
     // ============================================
     // iOS 完整编译任务 - 支持环境选择
     // ============================================
+    {
+      "label": "AF: Clean + Rebuild All (iOS)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core For iOS",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
     {
       "label": "AF: Clean + Rebuild All (iOS - Development)",
       "type": "shell",
@@ -337,6 +375,25 @@
     // iOS Simulator 完整编译任务 - 支持环境选择
     // ============================================
     {
+      "label": "AF: Clean + Rebuild All (iOS Simulator)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core For iOS Simulator",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
       "label": "AF: Clean + Rebuild All (iOS Simulator - Development)",
       "type": "shell",
       "dependsOrder": "sequence",
@@ -396,6 +453,25 @@
     // ============================================
     // Android 完整编译任务 - 支持环境选择
     // ============================================
+    {
+      "label": "AF: Clean + Rebuild All (Android)",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "AF: Switch to Development Env",
+        "AF: Dart Clean",
+        "AF: Flutter Clean",
+        "AF: Build Appflowy Core For Android",
+        "AF: Flutter Pub Get",
+        "AF: Generate Language Files",
+        "AF: Generate Freezed Files",
+        "AF: Generate Svg Files"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
     {
       "label": "AF: Clean + Rebuild All (Android - Development)",
       "type": "shell",
