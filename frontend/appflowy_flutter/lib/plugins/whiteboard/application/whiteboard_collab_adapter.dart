@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart';

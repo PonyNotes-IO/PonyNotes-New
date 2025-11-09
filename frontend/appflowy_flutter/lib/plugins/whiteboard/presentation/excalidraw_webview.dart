@@ -140,7 +140,6 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   }
 
   Future<void> _initializeExcalidraw() async {
-    return;
     try {
       print('🎨 [ExcalidrawWebView] Initializing Excalidraw...');
       print('🆔 [ExcalidrawWebView] ViewID: ${widget.viewId}');
