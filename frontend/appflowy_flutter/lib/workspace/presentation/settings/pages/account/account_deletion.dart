@@ -224,7 +224,10 @@ Future<void> deleteMyAccount(
 
       // delay 1 second to make sure the toast notification is shown
       Future.delayed(const Duration(seconds: 1), () async {
-        onSuccess?.call();
+        // 在删除账户后，直接重启应用，而不是尝试导航
+        // 这样可以避免路由栈为空的问题
+        // 注意：不要调用 onSuccess，因为它会尝试 popToHome，可能导致路由错误
+        // onSuccess?.call();
 
         // restart the application
         await runAppFlowy();
