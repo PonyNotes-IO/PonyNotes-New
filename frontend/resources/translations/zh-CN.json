@@ -1829,6 +1829,8 @@
   "datePicker": {
     "dateTimeFormatTooltip": "在设置中更改日期和时间格式",
     "reminderOptions": {
+      "none": "无",
+      "atTimeOfEvent": "准时",
       "fiveMinsBefore": "5 分钟以前",
       "tenMinsBefore": "10 分钟以前",
       "fifteenMinsBefore": "15 分钟以前",
