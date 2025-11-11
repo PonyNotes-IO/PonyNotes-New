@@ -445,32 +445,83 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
       final interval = rule['interval'] ?? 1;
       final weekdays = rule['weekdays'] as List<dynamic>?;
 
-      if (unit == 1 && weekdays != null && weekdays.isNotEmpty) {
-        // 每周的特定星期几
-        // 自定义对话框保存的 weekday 索引为 0..6（周一..周日），
-        // Dart DateTime.weekday 为 1..7（周一..周日），需要 +1 映射
-        final weekdayList = weekdays.map((e) => (e as int) + 1).toList();
-        if (!weekdayList.contains(date.weekday)) {
+      final dateOnly = DateTime(date.year, date.month, date.day);
+      final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
+      final daysDiff = dateOnly.difference(startDateOnly).inDays;
+
+      switch (unit) {
+        case 0: // 每 N 天
+          // 每 interval 天重复一次
+          return daysDiff >= 0 && daysDiff % interval == 0;
+
+        case 1: // 每 N 周的特定星期几
+          if (weekdays == null || weekdays.isEmpty) {
+            return false;
+          }
+          // 自定义对话框保存的 weekday 索引为 0..6（周一..周日），
+          // Dart DateTime.weekday 为 1..7（周一..周日），需要 +1 映射
+          final weekdayList = weekdays.map((e) => (e as int) + 1).toList();
+          if (!weekdayList.contains(date.weekday)) {
+            return false;
+          }
+
+          if (interval == 1) {
+            return daysDiff >= 0;
+          }
+
+          final weeksDiff = daysDiff ~/ 7;
+          return weeksDiff >= 0 && weeksDiff % interval == 0;
+
+        case 2: // 每 N 月
+          // 计算月份差
+          final monthsDiff = (date.year - startDate.year) * 12 + (date.month - startDate.month);
+          if (monthsDiff < 0 || monthsDiff % interval != 0) {
+            return false;
+          }
+          // 在同一个月内，日期应该相同或接近（处理月末情况）
+          // 如果开始日期是月末（如31日），目标月份可能没有31日，则使用该月最后一天
+          final targetDay = _getDayInMonth(date.year, date.month, startDate.day);
+          return date.day == targetDay;
+
+        case 3: // 每 N 年
+          // 计算年份差
+          final yearsDiff = date.year - startDate.year;
+          if (yearsDiff < 0 || yearsDiff % interval != 0) {
+            return false;
+          }
+          // 在同一年内，月份和日期应该相同
+          // 处理闰年2月29日的情况：如果开始日期是2月29日，目标年份不是闰年，则使用2月28日
+          if (startDate.month == 2 && startDate.day == 29) {
+            // 闰年2月29日的情况
+            final isLeapYear = _isLeapYear(date.year);
+            if (isLeapYear) {
+              return date.month == 2 && date.day == 29;
+            } else {
+              return date.month == 2 && date.day == 28;
+            }
+          }
+          return date.month == startDate.month && date.day == startDate.day;
+
+        default:
           return false;
-        }
-
-        final dateOnly = DateTime(date.year, date.month, date.day);
-        final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
-        final daysDiff = dateOnly.difference(startDateOnly).inDays;
-
-        if (interval == 1) {
-          return daysDiff >= 0;
-        }
-
-        final weeksDiff = daysDiff ~/ 7;
-        return weeksDiff >= 0 && weeksDiff % interval == 0;
       }
-
-      return false;
     } catch (e) {
       Log.error('Failed to parse custom repeat rule: $e');
       return false;
     }
+  }
+
+  // 获取月份中的有效日期（处理月末情况）
+  int _getDayInMonth(int year, int month, int day) {
+    // 获取该月的最大天数
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    // 如果指定的日期超过该月的最大天数，返回该月的最后一天
+    return day > daysInMonth ? daysInMonth : day;
+  }
+
+  // 判断是否为闰年
+  bool _isLeapYear(int year) {
+    return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
   }
 
   List<CalendarEventData<CalendarDayEvent>> _calendarEventDataFromEventPBs(
