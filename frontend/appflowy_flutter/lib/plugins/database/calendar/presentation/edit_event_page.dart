@@ -59,6 +59,7 @@ class _EditEventPageState extends State<EditEventPage> {
   @override
   void initState() {
     super.initState();
+    print('🆕 [EditEventPage] initState: schedule.id=${widget.schedule.id}, schedule.title=${widget.schedule.title}');
     
     // 从传入的日程初始化数据
     _initializeFromSchedule();
@@ -69,6 +70,19 @@ class _EditEventPageState extends State<EditEventPage> {
     // 设置保存回调
     if (widget.onSaveRequested != null) {
       widget.onSaveRequested!(saveEvent);
+    }
+  }
+
+  @override
+  void didUpdateWidget(EditEventPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 当 schedule 发生变化时，重新初始化表单数据并触发 UI 更新
+    if (oldWidget.schedule.id != widget.schedule.id) {
+      print('🔄 [EditEventPage] schedule 发生变化: ${oldWidget.schedule.id} -> ${widget.schedule.id}');
+      setState(() {
+        _initializeFromSchedule();
+      });
+      print('✅ [EditEventPage] 已重新初始化表单数据: title=${widget.schedule.title}');
     }
   }
 
@@ -1119,12 +1133,23 @@ class _EditEventPageState extends State<EditEventPage> {
   }
 
   // 从 JSON 中提取显示摘要
-  String _extractSummaryFromJson(String jsonStr) {
+  String _extractSummaryFromJson(String? jsonStr) {
+    if (jsonStr == null || jsonStr.isEmpty) {
+      return '自定义';
+    }
     try {
       final data = jsonDecode(jsonStr);
-      return data['summary'] ?? jsonStr;
+      if (data is Map && data.containsKey('summary')) {
+        final summary = data['summary'];
+        if (summary is String && summary.isNotEmpty) {
+          return summary;
+        }
+      }
+      // 如果没有 summary 字段，尝试从其他字段构建显示文本
+      return '自定义';
     } catch (e) {
-      return jsonStr; // 如果不是 JSON，直接返回原字符串
+      // 如果不是有效的 JSON，返回默认值
+      return '自定义';
     }
   }
 }

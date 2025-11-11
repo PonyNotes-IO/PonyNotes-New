@@ -560,12 +560,19 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   // 处理点击日程
   void _onScheduleTap(ScheduleItem schedule) {
+    print('🖱️ [Calendar] _onScheduleTap 被调用: schedule.id=${schedule.id}, schedule.title=${schedule.title}');
+    print('  - 当前 _editingSchedule: ${_editingSchedule?.id}');
+    print('  - 当前 _showEditEventPage: $_showEditEventPage');
+    
     setState(() {
       _showEditEventPage = true;
       _editingSchedule = schedule;
       _showNewEventPage = false; // 确保新建页面关闭
       _selectedNote = null; // 清除选中的笔记
     });
+    
+    print('  - 更新后 _editingSchedule: ${_editingSchedule?.id}');
+    print('  - 更新后 _showEditEventPage: $_showEditEventPage');
   }
 
   // 处理点击笔记
@@ -1405,6 +1412,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         // 编辑内容区域
         Expanded(
           child: EditEventPage(
+            key: ValueKey(schedule.id), // 使用 schedule.id 作为 key，确保切换日程时重建 widget
             schedule: schedule,
             scheduleModel: _scheduleModel,
             onEventUpdated: _onEventUpdated,
@@ -1501,8 +1509,12 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Widget _buildEditEventView() {
-    if (_editingSchedule == null) return _buildDefaultView();
+    if (_editingSchedule == null) {
+      print('⚠️ [Calendar] _buildEditEventView: _editingSchedule 为 null');
+      return _buildDefaultView();
+    }
 
+    print('📝 [Calendar] _buildEditEventView: 构建编辑页面，schedule.id=${_editingSchedule!.id}, schedule.title=${_editingSchedule!.title}');
     return Container(
       color: Theme.of(context).colorScheme.surface,
       child: Column(
@@ -1565,6 +1577,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           // 编辑日程内容
           Expanded(
             child: EditEventPage(
+              key: ValueKey(_editingSchedule!.id), // 使用 schedule.id 作为 key，确保切换日程时重建 widget
               scheduleModel: _scheduleModel,
               schedule: _editingSchedule!,
               onEventUpdated: _onEventUpdated,

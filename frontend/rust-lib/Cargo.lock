@@ -971,6 +971,7 @@ dependencies = [
 [[package]]
 name = "collab"
 version = "0.2.0"
+source = "git+https://github.com/PonyNotes-IO/AppFlowy-Collab?branch=dev#6601231137cb59193013146a1d968e9de334e80c"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -995,6 +996,7 @@ dependencies = [
 [[package]]
 name = "collab-database"
 version = "0.2.0"
+source = "git+https://github.com/PonyNotes-IO/AppFlowy-Collab?branch=dev#6601231137cb59193013146a1d968e9de334e80c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1034,6 +1036,7 @@ dependencies = [
 [[package]]
 name = "collab-document"
 version = "0.2.0"
+source = "git+https://github.com/PonyNotes-IO/AppFlowy-Collab?branch=dev#6601231137cb59193013146a1d968e9de334e80c"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1054,6 +1057,7 @@ dependencies = [
 [[package]]
 name = "collab-entity"
 version = "0.2.0"
+source = "git+https://github.com/PonyNotes-IO/AppFlowy-Collab?branch=dev#6601231137cb59193013146a1d968e9de334e80c"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1073,6 +1077,7 @@ dependencies = [
 [[package]]
 name = "collab-folder"
 version = "0.2.0"
+source = "git+https://github.com/PonyNotes-IO/AppFlowy-Collab?branch=dev#6601231137cb59193013146a1d968e9de334e80c"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -1094,6 +1099,7 @@ dependencies = [
 [[package]]
 name = "collab-importer"
 version = "0.1.0"
+source = "git+https://github.com/PonyNotes-IO/AppFlowy-Collab?branch=dev#6601231137cb59193013146a1d968e9de334e80c"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1156,6 +1162,7 @@ dependencies = [
 [[package]]
 name = "collab-plugins"
 version = "0.2.0"
+source = "git+https://github.com/PonyNotes-IO/AppFlowy-Collab?branch=dev#6601231137cb59193013146a1d968e9de334e80c"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1232,6 +1239,7 @@ dependencies = [
 [[package]]
 name = "collab-user"
 version = "0.2.0"
+source = "git+https://github.com/PonyNotes-IO/AppFlowy-Collab?branch=dev#6601231137cb59193013146a1d968e9de334e80c"
 dependencies = [
  "anyhow",
  "collab",
@@ -1479,7 +1487,7 @@ dependencies = [
  "cssparser-macros",
  "dtoa-short",
  "itoa",
- "phf 0.8.0",
+ "phf 0.11.2",
  "smallvec",
 ]
 
@@ -5587,7 +5595,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.94",

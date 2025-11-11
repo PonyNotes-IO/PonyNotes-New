@@ -219,12 +219,23 @@ class _RepeatSelectionDialogState extends State<RepeatSelectionDialog> {
   }
 
   // 从 JSON 中提取显示摘要
-  String _extractSummaryFromJson(String jsonStr) {
+  String _extractSummaryFromJson(String? jsonStr) {
+    if (jsonStr == null || jsonStr.isEmpty) {
+      return '自定义';
+    }
     try {
       final data = jsonDecode(jsonStr);
-      return data['summary'] ?? jsonStr;
+      if (data is Map && data.containsKey('summary')) {
+        final summary = data['summary'];
+        if (summary is String && summary.isNotEmpty) {
+          return summary;
+        }
+      }
+      // 如果没有 summary 字段，返回默认值
+      return '自定义';
     } catch (e) {
-      return jsonStr; // 如果不是 JSON，直接返回原字符串
+      // 如果不是有效的 JSON，返回默认值
+      return '自定义';
     }
   }
 }
