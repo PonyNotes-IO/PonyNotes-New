@@ -105,27 +105,25 @@ impl TypeOptionTransform for DateTypeOption {
   }
 }
 
-impl DateTypeOption {
-  /// 从 Cell 中解码 DateCellData（公共逻辑）
-  fn decode_cell_internal(cell: &Cell) -> Option<DateCellData> {
-    // 优先尝试从 protobuf 字节中读取完整数据
-    if let Some(bytes_vec) = cell.get_as::<Vec<u8>>(CELL_DATA) {
-      let bytes = Bytes::from(bytes_vec);
-      if let Ok(pb) = DateCellDataPB::try_from(bytes.as_ref()) {
-        return Some(DateCellData::from(&pb));
-      }
+/// 从 Cell 中解码 DateCellData（公共逻辑）
+fn decode_date_cell_internal(cell: &Cell) -> Option<DateCellData> {
+  // 优先尝试从 protobuf 字节中读取完整数据
+  if let Some(bytes_vec) = cell.get_as::<Vec<u8>>(CELL_DATA) {
+    let bytes = Bytes::from(bytes_vec);
+    if let Ok(pb) = DateCellDataPB::try_from(bytes.as_ref()) {
+      return Some(DateCellData::from(&pb));
     }
-    
-    // 回退到字符串解析方式（向后兼容）
-    let s = cell.get_as::<String>(CELL_DATA)?;
-    let timestamp = cast_string_to_timestamp(&s)?;
-    Some(DateCellData::from_timestamp(timestamp))
   }
+  
+  // 回退到字符串解析方式（向后兼容）
+  let s = cell.get_as::<String>(CELL_DATA)?;
+  let timestamp = cast_string_to_timestamp(&s)?;
+  Some(DateCellData::from_timestamp(timestamp))
 }
 
 impl CellDataDecoder for DateTypeOption {
   fn decode_cell(&self, cell: &Cell) -> FlowyResult<<Self as TypeOption>::CellData> {
-    Self::decode_cell_internal(cell)
+    decode_date_cell_internal(cell)
       .ok_or_else(|| {
         flowy_error::FlowyError::internal().with_context("无法从 Cell 读取数据")
       })
@@ -165,7 +163,7 @@ impl CellDataDecoder for DateTypeOption {
     _from_field_type: FieldType,
     _field: &Field,
   ) -> Option<<Self as TypeOption>::CellData> {
-    Self::decode_cell_internal(cell)
+    decode_date_cell_internal(cell)
   }
 }
 
