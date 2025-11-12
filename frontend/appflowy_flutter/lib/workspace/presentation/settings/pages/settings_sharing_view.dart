@@ -11,10 +11,10 @@ import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy/workspace/application/view/view_publish_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
-
-import 'package:appflowy/features/shared_section/models/shared_page.dart';
-import 'package:appflowy/features/util/extensions.dart';
-import 'package:appflowy/features/share_tab/data/models/share_access_level.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 
 class SettingsSharingView extends StatefulWidget {
   const SettingsSharingView({
@@ -38,7 +38,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
   String? _loadError;
 
   // 共享内容状态
-  List<SharedPage> _sharedPages = const [];
+  List<ViewPB> _sharedNotes = const [];
   bool _isLoadingShared = true;
   String? _sharedError;
 
@@ -47,7 +47,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     super.initState();
     PublishRefresh.notifier.addListener(_onPublishPing);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadSharedPages();
+      _loadSharedNotes();
       _loadPublishedViews();
     });
   }
@@ -82,33 +82,48 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     _loadPublishedViews();
   }
 
-  Future<void> _loadSharedPages() async {
+  Future<void> _loadSharedNotes() async {
     setState(() {
       _isLoadingShared = true;
       _sharedError = null;
     });
     try {
-      final result = await FolderEventGetSharedViews().send();
-      final pages = result.fold(
+      final workspaceId = context.read<UserWorkspaceBloc>()
+          .state
+          .currentWorkspace
+          ?.workspaceId ??
+          '';
+      if (workspaceId.isEmpty) {
+        Log.error('Workspace ID is empty when loading shared notes');
+        setState(() {
+          _sharedNotes = const [];
+          _isLoadingShared = false;
+          _sharedError = '未找到工作区';
+        });
+        return;
+      }
+
+      final payload = GetWorkspaceViewPB.create()..value = workspaceId;
+      final result = await FolderEventReadPrivateViews(payload).send();
+      final views = result.fold(
         (success) {
-          final sharedPages = List<SharedPage>.from(success.sharedPages);
-          sharedPages.sort(
-            (a, b) =>
-                b.view.createTime.toInt() - a.view.createTime.toInt(),
+          final privateViews = List<ViewPB>.from(success.items);
+          privateViews.sort(
+            (a, b) => b.createTime.toInt() - a.createTime.toInt(),
           );
-          return sharedPages;
+          return privateViews;
         },
         (failure) {
-          Log.error('load shared pages failed: $failure');
+          Log.error('load shared notes failed: $failure');
           _sharedError = failure.msg;
-          return <SharedPage>[];
+          return <ViewPB>[];
         },
       );
       if (!mounted) {
         return;
       }
       setState(() {
-        _sharedPages = pages;
+        _sharedNotes = views;
         _isLoadingShared = false;
       });
     } catch (e) {
@@ -117,7 +132,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
         return;
       }
       setState(() {
-        _sharedPages = const [];
+        _sharedNotes = const [];
         _isLoadingShared = false;
         _sharedError = '加载失败';
       });
@@ -163,35 +178,35 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
 
   Widget _buildTabSection() {
     return Row(
-      children: _tabs.asMap().entries.map((entry) {
-        int index = entry.key;
-        String tab = entry.value;
+        children: _tabs.asMap().entries.map((entry) {
+          int index = entry.key;
+          String tab = entry.value;
         bool isSelected = _currentTab == index;
-
-        return GestureDetector(
-          onTap: () {
+          
+          return GestureDetector(
+            onTap: () {
             if (_currentTab != index) {
               setState(() {
                 _currentTab = index;
               });
             }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-              border: isSelected ? null : Border.all(color: Colors.grey[300]!),
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: isSelected ? null : Border.all(color: Colors.grey[300]!),
+              ),
+              child: FlowyText(
+                tab,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isSelected ? Colors.white : Colors.grey[600],
+              ),
             ),
-            child: FlowyText(
-              tab,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: isSelected ? Colors.white : Colors.grey[600],
-            ),
-          ),
-        );
-      }).toList(),
+          );
+        }).toList(),
     );
   }
 
@@ -208,7 +223,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
           : KeyedSubtree(
               key: const ValueKey('publish_tab'),
               child: _buildPublishedContent(),
-            ),
+      ),
     );
   }
 
@@ -228,15 +243,12 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: FlowyText(
-                  '我发布的网站',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[600],
-                ),
-          ),
+        FlowyText(
+          '我发布的网站',
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Colors.grey[600],
+        ),
         _buildPublishedListBody(),
       ],
     );
@@ -288,7 +300,18 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
         ),
       );
     }
-    if (_sharedPages.isEmpty) {
+    if (_sharedError != null && _sharedNotes.isEmpty) {
+      return SizedBox(
+        height: 240,
+        child: Center(
+          child: FlowyText(
+            '加载失败：$_sharedError',
+            color: Colors.red,
+          ),
+        ),
+      );
+    }
+    if (_sharedNotes.isEmpty) {
       return SizedBox(
         height: 240,
         child: Center(
@@ -313,20 +336,19 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
 
     return Column(
       children: [
-        for (int index = 0; index < _sharedPages.length; index++) ...[
-          _buildSharedListItem(_sharedPages[index]),
-          if (index != _sharedPages.length - 1)
+        for (int index = 0; index < _sharedNotes.length; index++) ...[
+          _buildSharedListItem(_sharedNotes[index]),
+          if (index != _sharedNotes.length - 1)
             Divider(height: 1, color: Colors.grey[200]),
         ],
       ],
     );
   }
 
-  Widget _buildSharedListItem(SharedPage page) {
-    final view = page.view;
+  Widget _buildSharedListItem(ViewPB view) {
     final title = view.name.isNotEmpty ? view.name : '无标题';
-    final shareTime = _formatShareTime(view.createTime.toInt());
-    final accessLabel = _mapAccessLevel(page.accessLevel);
+    final shareTime = _formatTimestamp(view.createTime.toInt());
+    const accessLabel = '已共享';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -389,6 +411,17 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
         ),
       );
     }
+    if (_loadError != null && _publishedViews.isEmpty) {
+      return SizedBox(
+        height: 320,
+        child: Center(
+          child: FlowyText(
+            '加载失败：$_loadError',
+            color: Colors.red,
+          ),
+        ),
+      );
+    }
     if (_publishedViews.isEmpty) {
       return SizedBox(
         height: 320,
@@ -411,20 +444,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     );
   }
 
-  String _mapAccessLevel(ShareAccessLevel level) {
-    switch (level) {
-      case ShareAccessLevel.readOnly:
-        return '仅查看';
-      case ShareAccessLevel.readAndComment:
-        return '可评论';
-      case ShareAccessLevel.readAndWrite:
-        return '可编辑';
-      case ShareAccessLevel.fullAccess:
-        return '完全访问';
-    }
-  }
-
-  String _formatShareTime(int secondsSinceEpoch) {
+  String _formatTimestamp(int secondsSinceEpoch) {
     final dt = DateTime.fromMillisecondsSinceEpoch(
       secondsSinceEpoch * 1000,
       isUtc: true,
