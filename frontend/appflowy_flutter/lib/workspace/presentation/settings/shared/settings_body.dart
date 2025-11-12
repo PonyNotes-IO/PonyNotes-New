@@ -33,7 +33,6 @@ class SettingsBody extends StatelessWidget {
             description: description,
             descriptionBuilder: descriptionBuilder,
           ),
-          SettingsCategorySpacer(),
           Flexible(
             child: SeparatedColumn(
               mainAxisSize: MainAxisSize.min,
