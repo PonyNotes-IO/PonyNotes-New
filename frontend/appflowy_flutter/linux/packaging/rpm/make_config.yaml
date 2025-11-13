@@ -26,7 +26,7 @@ categories:
 
 startup_notify: true
 
-supportedMimeType: x-scheme-handler/appflowy-flutter
+supportedMimeType: x-scheme-handler/ponynotes
 
 requires:
   - libnotify

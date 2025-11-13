@@ -15,7 +15,7 @@ pub fn save_appflowy_cloud_config(
   root: impl AsRef<Path>,
   new_config: &AFCloudConfiguration,
 ) -> Result<(), Box<dyn std::error::Error>> {
-  let file_path = root.as_ref().join("appflowy.yaml");
+  let file_path = root.as_ref().join("ponynotes.yaml");
   let mut config = read_yaml_file(&file_path).unwrap_or_default();
 
   if !config

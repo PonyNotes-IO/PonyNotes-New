@@ -15,7 +15,7 @@ void main() {
 
     test('invitation deep link handler', () {
       final uri = Uri.parse(
-        'appflowy-flutter://invitation-callback?email=lucas@appflowy.com&workspace_id=123',
+        'ponynotes://invitation-callback?email=lucas@appflowy.com&workspace_id=123',
       );
       deepLinkHandlerRegistry.processDeepLink(
         uri: uri,
@@ -34,18 +34,18 @@ void main() {
 
     test('login deep link handler', () {
       final uri =
-          Uri.parse('appflowy-flutter://login-callback#access_token=123');
+          Uri.parse('ponynotes://login-callback#access_token=123');
       expect(LoginDeepLinkHandler().canHandle(uri), true);
     });
 
     test('payment deep link handler', () {
-      final uri = Uri.parse('appflowy-flutter://payment-success');
+      final uri = Uri.parse('ponynotes://payment-success');
       expect(PaymentDeepLinkHandler().canHandle(uri), true);
     });
 
     test('unknown deep link handler', () {
       final uri =
-          Uri.parse('appflowy-flutter://unknown-callback?workspace_id=123');
+          Uri.parse('ponynotes://unknown-callback?workspace_id=123');
       deepLinkHandlerRegistry.processDeepLink(
         uri: uri,
         onStateChange: (handler, state) {},
@@ -57,7 +57,7 @@ void main() {
     });
 
     test('open app deep link handler', () {
-      final uri = Uri.parse('appflowy-flutter://');
+      final uri = Uri.parse('ponynotes://');
       expect(OpenAppDeepLinkHandler().canHandle(uri), true);
     });
   });

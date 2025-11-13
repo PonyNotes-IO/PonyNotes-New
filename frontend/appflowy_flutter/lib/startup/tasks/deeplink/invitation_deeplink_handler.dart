@@ -6,7 +6,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 
 // invitation callback deeplink example:
-// appflowy-flutter://invitation-callback?workspace_id=b2d11122-1fc8-474d-9ef1-ec12fea7ffe8&user_id=275966408418922496
+// ponynotes://invitation-callback?workspace_id=b2d11122-1fc8-474d-9ef1-ec12fea7ffe8&user_id=275966408418922496
 class InvitationDeepLinkHandler extends DeepLinkHandler<void> {
   static const invitationCallbackHost = 'invitation-callback';
   static const invitationCallbackWorkspaceId = 'workspace_id';

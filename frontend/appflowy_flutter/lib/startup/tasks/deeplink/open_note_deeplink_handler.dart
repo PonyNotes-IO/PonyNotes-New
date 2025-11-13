@@ -13,8 +13,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 /// 处理打开笔记的深度链接
-/// 支持的URI格式: appflowy-flutter://note?viewId=xxx
-/// 或者: appflowy-flutter://open?viewId=xxx
+/// 支持的URI格式: ponynotes://note?viewId=xxx
+/// 或者: ponynotes://open?viewId=xxx
 class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
   @override
   bool canHandle(Uri uri) {
