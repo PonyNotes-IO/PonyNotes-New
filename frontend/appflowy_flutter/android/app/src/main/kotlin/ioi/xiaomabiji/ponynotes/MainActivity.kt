@@ -1,4 +1,4 @@
-package io.appflowy.appflowy
+package ioi.xiaomabiji.ponynotes
 
 import io.flutter.embedding.android.FlutterActivity
 
