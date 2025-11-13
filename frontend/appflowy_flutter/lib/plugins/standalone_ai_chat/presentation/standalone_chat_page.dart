@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:appflowy/core/config/ai_config.dart';
 import '../application/standalone_chat_bloc.dart';
 import '../services/image_service.dart';
 import '../models/chat_image.dart';
@@ -142,6 +143,8 @@ class _ChatInputBarState extends State<_ChatInputBar> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  // 模型选择器
+                  _buildModelSelector(state),
                   // 显示选中的图片
                   if (_selectedImages.isNotEmpty) _buildSelectedImages(),
                   // 输入框和按钮
@@ -189,6 +192,87 @@ class _ChatInputBarState extends State<_ChatInputBar> {
           ),
         );
       },
+    );
+  }
+
+  /// 构建模型选择器（与欢迎页保持一致的三模型选择）
+  Widget _buildModelSelector(StandaloneChatState state) {
+    final List<AIProvider> providers = (AIConfigService.instance.getAvailableProviders().isNotEmpty)
+        ? AIConfigService.instance.getAvailableProviders()
+        : <AIProvider>[AIProvider.deepseek, AIProvider.qwen, AIProvider.doubao];
+    final AIProvider? current = state.selectedProvider;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Theme.of(context).colorScheme.outline),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_awesome,
+              size: 16,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 8),
+            PopupMenuButton<AIProvider>(
+              tooltip: '',
+              onSelected: (AIProvider provider) {
+                // 更新全局配置与BLoC
+                AIConfigService.instance.setProvider(provider);
+                context.read<StandaloneChatBloc>().add(
+                  StandaloneChatEvent.changeProvider(provider: provider),
+                );
+                // 刷新发送按钮可用状态
+                _updateSendButtonState();
+              },
+              itemBuilder: (context) {
+                return providers
+                    .map(
+                      (p) => PopupMenuItem<AIProvider>(
+                        value: p,
+                        child: Row(
+                          children: [
+                            if (current == p)
+                              Icon(Icons.check, size: 16, color: Theme.of(context).colorScheme.primary)
+                            else
+                              const SizedBox(width: 16),
+                            const SizedBox(width: 6),
+                            Text(p.displayName),
+                          ],
+                        ),
+                      ),
+                    )
+                    .toList();
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    current?.displayName ?? '选择模型',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Theme.of(context).colorScheme.onSurface,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
