@@ -85,5 +85,19 @@ post_install do |installer|
       end
       config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = MINIMUM_MACOSX_DEPLOYMENT_TARGET_SUPPORTED
     end
+
+    # Fix volume_controller plugin privacy manifest warning by treating the file as a resource.
+    next unless target.name == 'volume_controller'
+
+    privacy_build_files = target.source_build_phase.files.select do |build_file|
+      build_file.file_ref&.path&.end_with?('PrivacyInfo.xcprivacy')
+    end
+
+    privacy_build_files.each do |build_file|
+      target.source_build_phase.remove_build_file(build_file)
+      unless target.resources_build_phase.files.any? { |f| f.file_ref == build_file.file_ref }
+        target.resources_build_phase.add_file_reference(build_file.file_ref)
+      end
+    end
   end
 end
