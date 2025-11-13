@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy/plugins/whiteboard/application/local_asset_server.dart';
 
@@ -36,12 +37,42 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   final _assetServer = LocalAssetServer();
   String? _whiteboardUrl;
   late InAppWebViewSettings _settings;
+  bool _webViewCreated = false;
+  bool _pageLoaded = false;
 
   @override
   void initState() {
     super.initState();
     _initializeSettings();
     _loadExcalidrawHTML();
+  }
+
+  /// 统一的 JS 执行入口：在引擎重启/插件尚未就绪等场景下进行重试，避免 MissingPluginException
+  Future<void> _safeEvalJs(
+    String source, {
+    String tag = 'eval',
+    int maxAttempts = 10,
+    Duration initialDelay = const Duration(milliseconds: 60),
+  }) async {
+    if (!mounted) return;
+    var attempt = 0;
+    var delay = initialDelay;
+    while (mounted && attempt < maxAttempts) {
+      attempt++;
+      try {
+        if (_controller != null && _webViewCreated && _pageLoaded && !_isLoading) {
+          await _controller!.evaluateJavascript(source: source);
+          return;
+        }
+      } on MissingPluginException catch (e) {
+        print('⚠️ [ExcalidrawWebView] MissingPluginException on $tag attempt#$attempt: $e');
+      } catch (e) {
+        print('⚠️ [ExcalidrawWebView] error on $tag attempt#$attempt: $e');
+      }
+      await Future.delayed(delay);
+      delay += const Duration(milliseconds: 60);
+    }
+    print('❌ [ExcalidrawWebView] $tag failed after $maxAttempts attempts, giving up.');
   }
 
   void _initializeSettings() {
@@ -173,14 +204,14 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 设置主题
       final theme = Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
       print('🎨 [ExcalidrawWebView] Setting theme: $theme');
-      await _controller?.evaluateJavascript(source: '''
+      await _safeEvalJs('''
         console.log('[ExcalidrawWebView] Setting theme to $theme');
         if (window.setTheme) {
           window.setTheme('$theme');
         } else {
           console.error('[ExcalidrawWebView] window.setTheme not found!');
         }
-      ''');
+      ''', tag: 'setTheme');
       print('✅ [ExcalidrawWebView] Initialization complete');
     } catch (e) {
       print('❌ [ExcalidrawWebView] Initialization failed: $e');
@@ -205,11 +236,11 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 导出绘图
   Future<void> exportDrawing(String format) async {
     try {
-      await _controller?.evaluateJavascript(source: '''
+      await _safeEvalJs('''
         if (window.exportExcalidraw) {
           window.exportExcalidraw('$format');
         }
-      ''');
+      ''', tag: 'export($format)');
     } catch (e) {
       widget.onError?.call('导出失败: $e');
     }
@@ -218,12 +249,12 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 获取当前白板数据
   Future<void> getData() async {
     try {
-      await _controller?.evaluateJavascript(source: '''
+      await _safeEvalJs('''
         console.log('window.getExcalidrawData',window.getExcalidrawData);
         if (window.getExcalidrawData) {
           window.getExcalidrawData();
         }
-      ''');
+      ''', tag: 'getData');
     } catch (e) {
       widget.onError?.call('获取数据失败: $e');
     }
@@ -232,11 +263,11 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 加载白板数据
   Future<void> loadData(Map<String, dynamic> data) async {
     try {
-      await _controller?.evaluateJavascript(source: '''
+      await _safeEvalJs('''
         if (window.loadExcalidrawData) {
           window.loadExcalidrawData(${jsonEncode(data)});
         }
-      ''');
+      ''', tag: 'loadData');
     } catch (e) {
       widget.onError?.call('加载数据失败: $e');
     }
@@ -245,11 +276,11 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 清空画布
   Future<void> clearCanvas() async {
     try {
-      await _controller?.evaluateJavascript(source: '''
+      await _safeEvalJs('''
         if (window.clearCanvas) {
           window.clearCanvas();
         }
-      ''');
+      ''', tag: 'clearCanvas');
     } catch (e) {
       widget.onError?.call('清空画布失败: $e');
     }
@@ -258,11 +289,11 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 撤销操作
   Future<void> undo() async {
     try {
-      await _controller?.evaluateJavascript(source: '''
+      await _safeEvalJs('''
         if (window.undo) {
           window.undo();
         }
-      ''');
+      ''', tag: 'undo');
     } catch (e) {
       widget.onError?.call('撤销失败: $e');
     }
@@ -271,11 +302,11 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 重做操作
   Future<void> redo() async {
     try {
-      await _controller?.evaluateJavascript(source: '''
+      await _safeEvalJs('''
         if (window.redo) {
           window.redo();
         }
-      ''');
+      ''', tag: 'redo');
     } catch (e) {
       widget.onError?.call('重做失败: $e');
     }
@@ -284,11 +315,11 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 更新主题
   Future<void> updateTheme(String theme) async {
     try {
-      await _controller?.evaluateJavascript(source: '''
+      await _safeEvalJs('''
         if (window.setTheme) {
           window.setTheme('$theme');
         }
-      ''');
+      ''', tag: 'updateTheme($theme)');
     } catch (e) {
       widget.onError?.call('更新主题失败: $e');
     }
@@ -354,6 +385,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
           onWebViewCreated: (controller) {
             _controller = controller;
+            _webViewCreated = true;
             _setupJavaScriptHandlers(controller);
             widget.initialData?.forEach((key, value) async {
               final jsonValue = jsonEncode(value);
@@ -383,6 +415,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               setState(() {
                 _isLoading = true;
                 _loadingError = null;
+                _pageLoaded = false;
               });
             }
             print('🔄 [ExcalidrawWebView] Loading started: $url');
@@ -390,7 +423,10 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
           onLoadStop: (controller, url) async {
             if (mounted) {
-              setState(() => _isLoading = false);
+              setState(() {
+                _isLoading = false;
+                _pageLoaded = true;
+              });
               await _initializeExcalidraw();
             }
             print('✅ [ExcalidrawWebView] Loading finished: $url');

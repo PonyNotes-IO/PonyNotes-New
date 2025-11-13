@@ -509,6 +509,7 @@ class _ChatMessageListState extends State<_ChatMessageList> {
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: message.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
             children: [
               if (!message.isUser) ...[
                 Container(

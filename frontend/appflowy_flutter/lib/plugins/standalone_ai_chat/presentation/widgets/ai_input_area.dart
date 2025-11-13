@@ -11,6 +11,7 @@ class AIInputArea extends StatefulWidget {
   const AIInputArea({
     super.key,
     required this.onMessageSent,
+    this.onChatHistoryTap,
     this.customWidth,
     this.customMargin,
     this.customToolbarPadding,
@@ -18,6 +19,8 @@ class AIInputArea extends StatefulWidget {
   });
 
   final Function(String message, AIProvider? provider, List<ChatImage>? images) onMessageSent;
+  /// 点击聊天记录按钮的回调（若提供，则在工具栏显示图标按钮）
+  final VoidCallback? onChatHistoryTap;
   final double? customWidth; // 可选的自定义宽度
   final EdgeInsets? customMargin; // 可选的自定义边距
   final EdgeInsets? customToolbarPadding; // 可选的自定义工具栏边距
@@ -164,6 +167,13 @@ class _AIInputAreaState extends State<AIInputArea> {
                   _buildModelSelector(),
                   const Spacer(),
                   // 功能图标按钮组
+                  
+                  // 聊天记录图标按钮（仅图标）
+                  if (widget.onChatHistoryTap != null) ...[
+                    const SizedBox(width: 22),
+                    _buildHistoryButton(),
+                  ],
+                  const SizedBox(width: 22),
                   _buildImagePickerButton(),
                   const SizedBox(width: 22),
                   _buildToolButton('assets/images/icons/tool_2.png'),
@@ -185,6 +195,26 @@ class _AIInputAreaState extends State<AIInputArea> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// 构建聊天记录图标按钮（仅图标）
+  Widget _buildHistoryButton() {
+    return GestureDetector(
+      onTap: widget.onChatHistoryTap,
+      child: Container(
+        width: AIWelcomeTheme.iconSize,
+        height: AIWelcomeTheme.iconSize,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Icon(
+          Icons.history,
+          size: AIWelcomeTheme.iconSize,
+          color: AIWelcomeTheme.secondaryTextColor(context),
         ),
       ),
     );

@@ -26,12 +26,11 @@ class AIWelcomePage extends StatelessWidget {
       body: Column(
         children: [
           // 顶部头像和欢迎文字区域
-          AIWelcomeHeader(
-            onChatHistoryTap: onChatHistoryTap,
-          ),
+          const AIWelcomeHeader(),
           // 输入交互区域
           AIInputArea(
             onMessageSent: onMessageSent,
+            onChatHistoryTap: onChatHistoryTap,
           ),
           const Spacer(),
           // 底部提示文字（对应 text_18）
