@@ -175,10 +175,15 @@ class _StandaloneAiChatPageState extends State<StandaloneAiChatPage> {
   
   /// 打开聊天记录（从欢迎页面切换到聊天界面，显示历史记录）
   void _openChatHistory() {
+    debugPrint('📜 打开聊天记录按钮被点击');
     setState(() {
       _showWelcomePage = false;
     });
-    // 不需要发送消息，聊天界面会自动加载历史记录
+    // 强制重新加载会话列表，确保显示最新的会话
+    if (_chatBloc != null) {
+      debugPrint('🔄 强制重新加载会话列表');
+      _chatBloc!.add(const StandaloneChatEvent.loadChatHistory());
+    }
   }
   
   /// 发送待处理的消息

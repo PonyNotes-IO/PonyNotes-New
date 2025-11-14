@@ -570,16 +570,24 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
 
   /// 处理加载历史记录
   Future<void> _handleLoadHistory(Emitter<StandaloneChatState> emit) async {
-    if (state.isHistoryLoaded) return;
+    // 只在第一次加载时检查，避免重复加载
+    if (state.isHistoryLoaded) {
+      debugPrint('⚠️ 历史记录已加载，跳过重复加载');
+      return;
+    }
     try {
+      debugPrint('🔄 开始加载历史记录...');
       // 会话列表
       var sessions = await _persistence.loadSessions();
+      debugPrint('📋 加载到 ${sessions.length} 个会话');
       if (sessions.isEmpty) {
+        debugPrint('📝 会话列表为空，创建新会话');
         final created = await _persistence.createSession(provider: _configService.currentProvider);
         sessions = [created];
       }
       final currentSessionId = state.currentSessionId ?? sessions.last.id;
       final historyMessages = await _persistence.loadMessages(sessionId: currentSessionId);
+      debugPrint('💬 加载到 ${historyMessages.length} 条历史消息');
       if (emit.isDone) return;
       emit(state.copyWith(
         chatSessions: sessions,
@@ -587,7 +595,9 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
         messages: historyMessages,
         isHistoryLoaded: true,
       ));
+      debugPrint('✅ 历史记录加载完成');
     } catch (e) {
+      debugPrint('❌ 加载历史记录失败: $e');
       if (emit.isDone) return;
       emit(state.copyWith(error: '加载历史记录失败: $e'));
     }
@@ -629,11 +639,36 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
   }
 
 
-  /// 处理加载聊天历史 - 与 loadHistory 相同
+  /// 处理加载聊天历史 - 强制重新加载，不受 isHistoryLoaded 限制
   Future<void> _handleLoadChatHistory(
     Emitter<StandaloneChatState> emit,
   ) async {
-    await _handleLoadHistory(emit);
+    try {
+      debugPrint('🔄 强制重新加载聊天历史...');
+      // 会话列表
+      var sessions = await _persistence.loadSessions();
+      debugPrint('📋 加载到 ${sessions.length} 个会话');
+      if (sessions.isEmpty) {
+        debugPrint('📝 会话列表为空，创建新会话');
+        final created = await _persistence.createSession(provider: _configService.currentProvider);
+        sessions = [created];
+      }
+      final currentSessionId = state.currentSessionId ?? sessions.last.id;
+      final historyMessages = await _persistence.loadMessages(sessionId: currentSessionId);
+      debugPrint('💬 加载到 ${historyMessages.length} 条历史消息');
+      if (emit.isDone) return;
+      emit(state.copyWith(
+        chatSessions: sessions,
+        currentSessionId: currentSessionId,
+        messages: historyMessages,
+        isHistoryLoaded: true,
+      ));
+      debugPrint('✅ 聊天历史强制重新加载完成');
+    } catch (e) {
+      debugPrint('❌ 加载聊天历史失败: $e');
+      if (emit.isDone) return;
+      emit(state.copyWith(error: '加载聊天历史失败: $e'));
+    }
   }
 
   /// 处理加载聊天会话
@@ -642,8 +677,11 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
     Emitter<StandaloneChatState> emit,
   ) async {
     try {
+      debugPrint('🔄 切换到会话: $sessionId');
       final messages = await _persistence.loadMessages(sessionId: sessionId);
+      debugPrint('💬 加载到 ${messages.length} 条消息');
       final sessions = await _persistence.loadSessions();
+      debugPrint('📋 刷新会话列表，共 ${sessions.length} 个会话');
       if (emit.isDone) return;
       emit(state.copyWith(
         currentSessionId: sessionId,
@@ -651,7 +689,9 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
         chatSessions: sessions,
         isHistoryLoaded: true,
       ));
+      debugPrint('✅ 会话切换完成');
     } catch (e) {
+      debugPrint('❌ 加载会话失败: $e');
       if (emit.isDone) return;
       emit(state.copyWith(error: '加载会话失败: $e'));
     }
@@ -662,8 +702,11 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
     Emitter<StandaloneChatState> emit,
   ) async {
     try {
+      debugPrint('📝 创建新会话...');
       final created = await _persistence.createSession(provider: state.selectedProvider ?? _configService.currentProvider);
+      debugPrint('✅ 新会话已创建: ${created.id}');
       final sessions = await _persistence.loadSessions();
+      debugPrint('📋 刷新会话列表，共 ${sessions.length} 个会话');
       if (emit.isDone) return;
       emit(state.copyWith(
         currentSessionId: created.id,
@@ -671,7 +714,9 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
         messages: [],
         isHistoryLoaded: true,
       ));
+      debugPrint('✅ 新会话创建完成，已切换到新会话');
     } catch (e) {
+      debugPrint('❌ 创建新会话失败: $e');
       if (emit.isDone) return;
       emit(state.copyWith(error: '创建新会话失败: $e'));
     }
