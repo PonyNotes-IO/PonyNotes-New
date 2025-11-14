@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:async' show unawaited;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -90,6 +91,7 @@ class StandaloneChatState with _$StandaloneChatState {
     AIProvider? selectedProvider,
     @Default(false) bool isHistoryLoaded,
     @Default([]) List<ChatSession> chatSessions,
+    String? currentSessionId,
   }) = _StandaloneChatState;
 }
 
@@ -175,6 +177,10 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
   ) async {
     if (message.trim().isEmpty) return;
 
+    // 确保有可用会话
+    await _ensureSessionInitialized(emit);
+    final currentSessionId = state.currentSessionId!;
+
     // 确定使用的AI提供商
     final selectedProvider = provider ?? 
         state.selectedProvider ?? 
@@ -209,7 +215,21 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
     }
 
     // 异步保存用户消息到数据库（不阻塞UI）
-    _saveMessageAsync(userMessage);
+    _saveMessageAsync(userMessage, sessionId: currentSessionId);
+
+    // 若是新会话的第一条用户消息，基于内容生成标题摘要
+    if (state.messages.isEmpty) {
+      final title = _summarizeTitleFrom(message);
+      try {
+        await _persistence.renameSession(currentSessionId, title);
+        final sessions = await _persistence.loadSessions();
+        if (!emit.isDone) {
+          emit(state.copyWith(chatSessions: sessions));
+        }
+      } catch (e) {
+        debugPrint('⚠️ 重命名会话失败: $e');
+      }
+    }
 
     debugPrint('🎯 准备进入AI服务调用try块');
     debugPrint('🔍 选中的提供商: ${selectedProvider.displayName}');
@@ -228,6 +248,9 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
   ) async {
     debugPrint('🚀📷 _handleSendMessageWithImages 被调用！消息: "$message", 图片数量: ${images.length}');
     if (message.trim().isEmpty && images.isEmpty) return;
+
+    await _ensureSessionInitialized(emit);
+    final currentSessionId = state.currentSessionId!;
 
     // 确定使用的AI提供商
     final selectedProvider = provider ?? 
@@ -278,7 +301,7 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
       }
 
       // 异步保存用户消息到数据库（不阻塞UI）
-      _saveMessageAsync(userMessage);
+    _saveMessageAsync(userMessage, sessionId: currentSessionId);
 
       // 构建包含图片的消息内容
       String fullMessage = message;
@@ -446,7 +469,10 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
       debugPrint('✅ _handleFinishResponse: 状态已更新，isLoading: false');
 
       // 异步保存到数据库（不阻塞UI更新）
-      _saveMessageAsync(aiMessage);
+      final sessionId = state.currentSessionId;
+      if (sessionId != null) {
+        _saveMessageAsync(aiMessage, sessionId: sessionId);
+      }
     } else {
       debugPrint('🔄 _handleFinishResponse: 空响应，设置 isLoading: false, isStreaming: false');
       emit(state.copyWith(
@@ -498,7 +524,10 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
       debugPrint('✅ _handleStopStreaming: 状态已更新，isLoading: false');
 
       // 异步保存到数据库
-      _saveMessageAsync(aiMessage);
+      final sessionId = state.currentSessionId;
+      if (sessionId != null) {
+        _saveMessageAsync(aiMessage, sessionId: sessionId);
+      }
     } else {
       // 如果没有内容，只是停止状态
       debugPrint('🔄 _handleStopStreaming: 无内容，仅停止流式传输状态');
@@ -512,11 +541,11 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
   }
 
   /// 异步保存消息到数据库
-  void _saveMessageAsync(ChatMessage message) async {
+  void _saveMessageAsync(ChatMessage message, {required String sessionId}) async {
     try {
       final messageType = message.isUser ? '用户' : 'AI';
       debugPrint('💾 开始异步保存${messageType}消息到数据库...');
-      await _persistence.saveMessage(message);
+      await _persistence.saveMessage(message, sessionId: sessionId);
       debugPrint('✅ ${messageType}消息已成功异步保存到数据库');
     } catch (e) {
       final messageType = message.isUser ? '用户' : 'AI';
@@ -542,43 +571,35 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
   /// 处理加载历史记录
   Future<void> _handleLoadHistory(Emitter<StandaloneChatState> emit) async {
     if (state.isHistoryLoaded) return;
-
     try {
-      final historyMessages = await _persistence.loadMessages();
-      
-      if (emit.isDone) return;
-      
-      // 如果当前状态中已经有消息（比如正在进行的对话），则合并历史记录和当前消息
-      // 避免覆盖正在进行的对话
-      List<ChatMessage> finalMessages;
-      if (state.messages.isNotEmpty) {
-        // 当前有消息，合并历史记录（去重）
-        final currentMessageIds = state.messages.map((m) => m.id).toSet();
-        final newHistoryMessages = historyMessages.where((m) => !currentMessageIds.contains(m.id)).toList();
-        finalMessages = [...newHistoryMessages, ...state.messages];
-        debugPrint('📚 合并历史记录: 历史${historyMessages.length}条, 当前${state.messages.length}条, 新增${newHistoryMessages.length}条, 总计${finalMessages.length}条');
-      } else {
-        // 当前没有消息，直接使用历史记录
-        finalMessages = historyMessages;
-        debugPrint('📚 加载历史记录: ${historyMessages.length}条');
+      // 会话列表
+      var sessions = await _persistence.loadSessions();
+      if (sessions.isEmpty) {
+        final created = await _persistence.createSession(provider: _configService.currentProvider);
+        sessions = [created];
       }
-      
+      final currentSessionId = state.currentSessionId ?? sessions.last.id;
+      final historyMessages = await _persistence.loadMessages(sessionId: currentSessionId);
+      if (emit.isDone) return;
       emit(state.copyWith(
-        messages: finalMessages,
+        chatSessions: sessions,
+        currentSessionId: currentSessionId,
+        messages: historyMessages,
         isHistoryLoaded: true,
       ));
     } catch (e) {
       if (emit.isDone) return;
-      emit(state.copyWith(
-        error: '加载历史记录失败: $e',
-      ));
+      emit(state.copyWith(error: '加载历史记录失败: $e'));
     }
   }
 
   /// 处理清空聊天
   Future<void> _handleClearChat(Emitter<StandaloneChatState> emit) async {
     try {
-      await _persistence.clearMessages();
+      final sessionId = state.currentSessionId;
+      if (sessionId != null) {
+        await _persistence.clearMessages(sessionId: sessionId);
+      }
       if (emit.isDone) return;
       emit(state.copyWith(
         messages: [],
@@ -620,16 +641,40 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
     String sessionId,
     Emitter<StandaloneChatState> emit,
   ) async {
-    // 独立聊天只有一个会话，直接加载历史
-    await _handleLoadHistory(emit);
+    try {
+      final messages = await _persistence.loadMessages(sessionId: sessionId);
+      final sessions = await _persistence.loadSessions();
+      if (emit.isDone) return;
+      emit(state.copyWith(
+        currentSessionId: sessionId,
+        messages: messages,
+        chatSessions: sessions,
+        isHistoryLoaded: true,
+      ));
+    } catch (e) {
+      if (emit.isDone) return;
+      emit(state.copyWith(error: '加载会话失败: $e'));
+    }
   }
 
   /// 处理创建新聊天会话
   Future<void> _handleCreateNewChatSession(
     Emitter<StandaloneChatState> emit,
   ) async {
-    // 独立聊天只有一个会话，直接清空聊天
-    await _handleClearChat(emit);
+    try {
+      final created = await _persistence.createSession(provider: state.selectedProvider ?? _configService.currentProvider);
+      final sessions = await _persistence.loadSessions();
+      if (emit.isDone) return;
+      emit(state.copyWith(
+        currentSessionId: created.id,
+        chatSessions: sessions,
+        messages: [],
+        isHistoryLoaded: true,
+      ));
+    } catch (e) {
+      if (emit.isDone) return;
+      emit(state.copyWith(error: '创建新会话失败: $e'));
+    }
   }
 
   /// 处理重命名聊天会话
@@ -638,8 +683,14 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
     String newTitle,
     Emitter<StandaloneChatState> emit,
   ) async {
-    // 独立聊天不支持重命名，暂不实现
-    debugPrint('独立聊天不支持重命名会话');
+    try {
+      await _persistence.renameSession(sessionId, newTitle);
+      final sessions = await _persistence.loadSessions();
+      if (emit.isDone) return;
+      emit(state.copyWith(chatSessions: sessions));
+    } catch (e) {
+      debugPrint('⚠️ 重命名会话失败: $e');
+    }
   }
 
   /// 处理删除聊天会话
@@ -647,23 +698,79 @@ class StandaloneChatBloc extends Bloc<StandaloneChatEvent, StandaloneChatState> 
     List<String> sessionIds,
     Emitter<StandaloneChatState> emit,
   ) async {
-    // 独立聊天只有一个会话，相当于清空聊天
-    await _handleClearChat(emit);
+    try {
+      final currentId = state.currentSessionId;
+      await _persistence.deleteSessions(sessionIds);
+      var sessions = await _persistence.loadSessions();
+      String? nextId = currentId;
+      if (currentId == null || sessionIds.contains(currentId)) {
+        if (sessions.isEmpty) {
+          final created = await _persistence.createSession(provider: state.selectedProvider ?? _configService.currentProvider);
+          sessions = [created];
+          nextId = created.id;
+        } else {
+          nextId = sessions.last.id;
+        }
+      }
+      final messages = await _persistence.loadMessages(sessionId: nextId!);
+      if (emit.isDone) return;
+      emit(state.copyWith(
+        chatSessions: sessions,
+        currentSessionId: nextId,
+        messages: messages,
+      ));
+    } catch (e) {
+      if (emit.isDone) return;
+      emit(state.copyWith(error: '删除会话失败: $e'));
+    }
   }
 
   /// 处理清空所有聊天历史
   Future<void> _handleClearAllChatHistory(
     Emitter<StandaloneChatState> emit,
   ) async {
-    await _handleClearChat(emit);
+    try {
+      final sessions = await _persistence.loadSessions();
+      await _persistence.deleteSessions(sessions.map((e) => e.id).toList());
+      final created = await _persistence.createSession(provider: state.selectedProvider ?? _configService.currentProvider);
+      if (emit.isDone) return;
+      emit(state.copyWith(
+        chatSessions: [created],
+        currentSessionId: created.id,
+        messages: [],
+      ));
+    } catch (e) {
+      if (emit.isDone) return;
+      emit(state.copyWith(error: '清空所有聊天失败: $e'));
+    }
   }
 
   /// 处理导出聊天历史
   Future<void> _handleExportChatHistory(
     Emitter<StandaloneChatState> emit,
   ) async {
-    // TODO: 实现聊天历史导出功能
-    debugPrint('导出聊天历史功能暂未实现');
+    final sessionId = state.currentSessionId;
+    if (sessionId == null) {
+      debugPrint('⚠️ 尚无可导出的会话');
+      return;
+    }
+    try {
+      final jsonStr = await _persistence.exportChat(sessionId);
+      final dir = _getDefaultExportDir();
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final timestamp = DateTime.now();
+      final filename = 'ai_chat_${timestamp.year}${_two(timestamp.month)}${_two(timestamp.day)}_${_two(timestamp.hour)}${_two(timestamp.minute)}${_two(timestamp.second)}_$sessionId.json';
+      final file = File('${dir.path}/$filename');
+      await file.writeAsString(jsonStr);
+      debugPrint('✅ 聊天记录已导出到: ${file.path}');
+    } catch (e) {
+      debugPrint('❌ 导出聊天记录失败: $e');
+      if (!emit.isDone) {
+        emit(state.copyWith(error: '导出聊天记录失败: $e'));
+      }
+    }
   }
 
   /// 处理重试消息
@@ -693,4 +800,41 @@ extension ListExtension<T> on List<T> {
     if (length <= count) return this;
     return sublist(length - count);
   }
+}
+
+/// 私有工具方法
+extension _BlocUtils on StandaloneChatBloc {
+  String _summarizeTitleFrom(String content) {
+    final raw = content.replaceAll(RegExp(r'\\s+'), ' ').trim();
+    if (raw.isEmpty) return '新的会话';
+    return raw.length > 24 ? raw.substring(0, 24) : raw;
+  }
+
+  Future<void> _ensureSessionInitialized(Emitter<StandaloneChatState> emit) async {
+    if (state.currentSessionId != null) return;
+    var sessions = await _persistence.loadSessions();
+    if (sessions.isEmpty) {
+      final created = await _persistence.createSession(provider: state.selectedProvider ?? _configService.currentProvider);
+      sessions = [created];
+    }
+    if (!emit.isDone) {
+      emit(state.copyWith(
+        chatSessions: sessions,
+        currentSessionId: sessions.last.id,
+        isHistoryLoaded: true,
+      ));
+    }
+  }
+
+  Directory _getDefaultExportDir() {
+    if (Platform.isWindows) {
+      final home = Platform.environment['USERPROFILE'] ?? '.';
+      return Directory('$home\\PonyNotes-Exports');
+    } else {
+      final home = Platform.environment['HOME'] ?? '.';
+      return Directory('$home/PonyNotes-Exports');
+    }
+  }
+
+  String _two(int n) => n < 10 ? '0$n' : '$n';
 }

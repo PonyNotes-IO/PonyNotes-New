@@ -81,6 +81,11 @@ class _AIInputAreaState extends State<AIInputArea> {
     final text = _textController.text.trim();
     if (text.isEmpty && _selectedImages.isEmpty) return;
 
+    // 关闭可能打开的下拉框，避免遮挡或悬浮层遗留
+    if (_isDropdownOpen) {
+      _closeDropdown();
+    }
+
     // 确保已选择模型提供商
     if (_selectedProvider == null) {
       // 优先选择豆包，如果豆包不可用则选择第一个可用提供商
@@ -103,6 +108,8 @@ class _AIInputAreaState extends State<AIInputArea> {
     
     // 回调通知切换到聊天界面，传递消息、选择的模型和图片
     widget.onMessageSent(text, _selectedProvider, images.isNotEmpty ? images : null);
+    // 发送后收起键盘
+    FocusScope.of(context).unfocus();
   }
 
   @override

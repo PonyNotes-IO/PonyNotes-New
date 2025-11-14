@@ -20,20 +20,252 @@ class StandaloneChatPageView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return BlocBuilder<StandaloneChatBloc, StandaloneChatState>(
+      builder: (context, state) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      body: Column(
+          body: Row(
         children: [
-          // 消息列表区域
+              // 左侧会话列表
+              _SessionSidebar(
+                sessions: state.chatSessions,
+                currentSessionId: state.currentSessionId,
+              ),
+              // 右侧聊天区域
+              Expanded(
+                child: Column(
+                  children: [
           Expanded(
             child: _ChatMessageList(
               userProfile: userProfile,
             ),
           ),
-          // 底部输入区域
           _ChatInputBar(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 会话列表侧边栏
+class _SessionSidebar extends StatelessWidget {
+  const _SessionSidebar({
+    required this.sessions,
+    required this.currentSessionId,
+  });
+
+  final List<ChatSession> sessions;
+  final String? currentSessionId;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: 260,
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          right: BorderSide(color: colorScheme.outline, width: 1),
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              border: Border(
+                bottom: BorderSide(color: colorScheme.outline, width: 1),
+              ),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  '会话',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                const Spacer(),
+                _NewSessionButton(),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: sessions.length,
+              itemBuilder: (context, index) {
+                final s = sessions[index];
+                final selected = s.id == currentSessionId;
+                return _SessionTile(
+                  session: s,
+                  selected: selected,
+                );
+              },
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _NewSessionButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: () {
+        context.read<StandaloneChatBloc>().add(const StandaloneChatEvent.createNewChatSession());
+      },
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: cs.primary,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.add, size: 16, color: cs.onPrimary),
+            const SizedBox(width: 4),
+            Text('新建', style: TextStyle(fontSize: 12, color: cs.onPrimary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionTile extends StatelessWidget {
+  const _SessionTile({
+    required this.session,
+    required this.selected,
+  });
+  final ChatSession session;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: selected ? cs.primaryContainer : Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          context.read<StandaloneChatBloc>().add(StandaloneChatEvent.loadChatSession(sessionId: session.id));
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      session.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    if (session.lastMessage != null && session.lastMessage!.isNotEmpty)
+                      Text(
+                        session.lastMessage!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: '',
+                onSelected: (value) async {
+                  final bloc = context.read<StandaloneChatBloc>();
+                  if (value == 'rename') {
+                    final newName = await _showRenameDialog(context, session.title);
+                    if (newName != null && newName.trim().isNotEmpty) {
+                      bloc.add(StandaloneChatEvent.renameChatSession(sessionId: session.id, newTitle: newName.trim()));
+                    }
+                  } else if (value == 'export') {
+                    // 切换到该会话再导出
+                    bloc.add(StandaloneChatEvent.loadChatSession(sessionId: session.id));
+                    // 延迟触发导出，确保状态切换生效
+                    Future.delayed(const Duration(milliseconds: 50), () {
+                      bloc.add(const StandaloneChatEvent.exportChatHistory());
+                    });
+                  } else if (value == 'delete') {
+                    final confirm = await _showConfirmDelete(context);
+                    if (confirm == true) {
+                      bloc.add(StandaloneChatEvent.deleteChatSessions(sessionIds: [session.id]));
+                    }
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'rename', child: Text('重命名')),
+                  const PopupMenuItem(value: 'export', child: Text('导出')),
+                  const PopupMenuItem(value: 'delete', child: Text('删除')),
+                ],
+                child: Icon(Icons.more_vert, size: 18, color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _showRenameDialog(BuildContext context, String oldTitle) async {
+    final controller = TextEditingController(text: oldTitle);
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('重命名会话'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(hintText: '输入新标题'),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('取消')),
+            TextButton(onPressed: () => Navigator.of(context).pop(controller.text), child: const Text('确定')),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool?> _showConfirmDelete(BuildContext context) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('删除会话'),
+          content: const Text('确定删除此会话及其历史记录吗？此操作不可恢复。'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('取消')),
+            TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('删除')),
+          ],
+        );
+      },
     );
   }
 }

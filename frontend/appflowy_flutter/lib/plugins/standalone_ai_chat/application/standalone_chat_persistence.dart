@@ -18,13 +18,99 @@ class StandaloneChatPersistence {
   static const String standaloneWorkspaceId = 'standalone_workspace';
   
   // SharedPreferences 存储键
-  static const String _storageKey = 'standalone_chat_messages';
+  static const String _storageKeyLegacy = 'standalone_chat_messages';
+  static const String _sessionsKey = 'standalone_chat_sessions';
+  static String _messagesKey(String sessionId) => 'standalone_chat_messages_$sessionId';
+
+  /// 加载所有会话（带旧数据迁移）
+  Future<List<ChatSession>> loadSessions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final sessionJsonList = prefs.getStringList(_sessionsKey) ?? [];
+    if (sessionJsonList.isEmpty) {
+      // 旧版迁移：将单会话消息迁移为一个新会话
+      final legacy = prefs.getStringList(_storageKeyLegacy);
+      if (legacy != null && legacy.isNotEmpty) {
+        final sessionId = DateTime.now().millisecondsSinceEpoch.toString();
+        final messages = legacy.map((e) {
+          try {
+            return _messageFromJson(jsonDecode(e) as Map<String, dynamic>);
+          } catch (_) {
+            return null;
+          }
+        }).whereType<ChatMessage>().toList();
+        final session = ChatSession(
+          id: sessionId,
+          title: _makeTitleFromFirstUser(messages),
+          lastMessage: messages.isNotEmpty ? messages.last.content : null,
+          lastMessageTime: messages.isNotEmpty ? messages.last.timestamp : DateTime.now(),
+          messageCount: messages.length,
+          provider: messages.isNotEmpty ? messages.last.aiProvider : null,
+        );
+        await prefs.setStringList(_messagesKey(sessionId), legacy);
+        await prefs.remove(_storageKeyLegacy);
+        await prefs.setStringList(_sessionsKey, [jsonEncode(_sessionToJson(session))]);
+        return [session];
+      }
+      return [];
+    }
+    final sessions = <ChatSession>[];
+    for (final s in sessionJsonList) {
+      try {
+        sessions.add(_sessionFromJson(jsonDecode(s) as Map<String, dynamic>));
+      } catch (e) {
+        debugPrint('⚠️ 解析会话失败: $e');
+      }
+    }
+    return sessions;
+  }
+
+  /// 创建新会话
+  Future<ChatSession> createSession({String? title, AIProvider? provider}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final sessions = await loadSessions();
+    final session = ChatSession(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: (title ?? '').trim().isNotEmpty ? title!.trim() : '新的会话',
+      lastMessage: null,
+      lastMessageTime: DateTime.now(),
+      messageCount: 0,
+      provider: provider,
+    );
+    final updated = [...sessions, session];
+    await prefs.setStringList(_sessionsKey, updated.map((s) => jsonEncode(_sessionToJson(s))).toList());
+    await prefs.setStringList(_messagesKey(session.id), []);
+    return session;
+  }
+
+  /// 重命名会话
+  Future<void> renameSession(String sessionId, String newTitle) async {
+    final prefs = await SharedPreferences.getInstance();
+    final sessions = await loadSessions();
+    final idx = sessions.indexWhere((s) => s.id == sessionId);
+    if (idx < 0) return;
+    final updated = sessions[idx].copyWith(
+      title: newTitle.trim().isEmpty ? sessions[idx].title : newTitle.trim(),
+    );
+    sessions[idx] = updated;
+    await prefs.setStringList(_sessionsKey, sessions.map((s) => jsonEncode(_sessionToJson(s))).toList());
+  }
+
+  /// 删除会话（及其消息）
+  Future<void> deleteSessions(List<String> sessionIds) async {
+    final prefs = await SharedPreferences.getInstance();
+    var sessions = await loadSessions();
+    sessions = sessions.where((s) => !sessionIds.contains(s.id)).toList();
+    await prefs.setStringList(_sessionsKey, sessions.map((s) => jsonEncode(_sessionToJson(s))).toList());
+    for (final id in sessionIds) {
+      await prefs.remove(_messagesKey(id));
+    }
+  }
 
   /// 保存消息到本地存储
-  Future<void> saveMessage(ChatMessage message) async {
+  Future<void> saveMessage(ChatMessage message, {required String sessionId}) async {
     try {
       // 加载现有消息
-      final messages = await loadMessages();
+      final messages = await loadMessages(sessionId: sessionId);
       
       // 检查消息是否已存在（避免重复）
       final existingIndex = messages.indexWhere((m) => m.id == message.id);
@@ -39,7 +125,8 @@ class StandaloneChatPersistence {
       }
       
       // 保存到 SharedPreferences
-      await _saveMessagesToStorage(messages);
+      await _saveMessagesToStorage(messages, sessionId: sessionId);
+      await _updateSessionMetaForMessages(sessionId, messages);
       
       debugPrint('✅ 消息已保存: ${message.content.length > 50 ? message.content.substring(0, 50) + '...' : message.content}');
     } catch (e) {
@@ -49,12 +136,12 @@ class StandaloneChatPersistence {
   }
 
   /// 从本地存储加载消息
-  Future<List<ChatMessage>> loadMessages() async {
+  Future<List<ChatMessage>> loadMessages({required String sessionId}) async {
     try {
       debugPrint('🔄 开始加载历史消息...');
       
       final prefs = await SharedPreferences.getInstance();
-      final messagesJson = prefs.getStringList(_storageKey) ?? [];
+      final messagesJson = prefs.getStringList(_messagesKey(sessionId)) ?? [];
       
       final messages = messagesJson.map((jsonStr) {
         try {
@@ -75,10 +162,10 @@ class StandaloneChatPersistence {
   }
 
   /// 清空所有消息
-  Future<void> clearMessages() async {
+  Future<void> clearMessages({required String sessionId}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_storageKey);
+      await prefs.remove(_messagesKey(sessionId));
       debugPrint('✅ 已清空所有聊天记录');
     } catch (e) {
       debugPrint('❌ 清空聊天记录失败: $e');
@@ -87,10 +174,10 @@ class StandaloneChatPersistence {
   }
 
   /// 保存消息列表到存储
-  Future<void> _saveMessagesToStorage(List<ChatMessage> messages) async {
+  Future<void> _saveMessagesToStorage(List<ChatMessage> messages, {required String sessionId}) async {
     final prefs = await SharedPreferences.getInstance();
     final messagesJson = messages.map((m) => jsonEncode(_messageToJson(m))).toList();
-    await prefs.setStringList(_storageKey, messagesJson);
+    await prefs.setStringList(_messagesKey(sessionId), messagesJson);
   }
   
   /// 将 ChatMessage 转换为 JSON
@@ -143,7 +230,16 @@ class StandaloneChatPersistence {
   /// 获取聊天统计信息
   Future<Map<String, dynamic>> getChatStats() async {
     try {
-      final messages = await loadMessages();
+      final sessions = await loadSessions();
+      if (sessions.isEmpty) {
+        return {
+          'totalMessages': 0,
+          'userMessages': 0,
+          'aiMessages': 0,
+          'lastMessageTime': null,
+        };
+      }
+      final messages = await loadMessages(sessionId: sessions.first.id);
       final userMessages = messages.where((m) => m.isUser).length;
       final aiMessages = messages.where((m) => !m.isUser).length;
       
@@ -169,7 +265,9 @@ class StandaloneChatPersistence {
   /// 搜索消息内容
   Future<List<ChatMessage>> searchMessages(String query) async {
     try {
-      final allMessages = await loadMessages();
+      final sessions = await loadSessions();
+      if (sessions.isEmpty) return [];
+      final allMessages = await loadMessages(sessionId: sessions.first.id);
       return allMessages.where((message) {
         return message.content.toLowerCase().contains(query.toLowerCase());
       }).toList();
@@ -180,12 +278,12 @@ class StandaloneChatPersistence {
   }
 
   /// 导出聊天记录
-  Future<String> exportChat() async {
+  Future<String> exportChat(String sessionId) async {
     try {
-      final messages = await loadMessages();
+      final messages = await loadMessages(sessionId: sessionId);
       final exportData = {
         'exportTime': DateTime.now().toIso8601String(),
-        'chatId': standaloneChatId,
+        'chatId': sessionId,
         'totalMessages': messages.length,
         'messages': messages.map((m) => {
           'id': m.id,
@@ -201,5 +299,62 @@ class StandaloneChatPersistence {
       debugPrint('导出聊天记录失败: $e');
       rethrow;
     }
+  }
+
+  Map<String, dynamic> _sessionToJson(ChatSession session) {
+    return {
+      'id': session.id,
+      'title': session.title,
+      'lastMessage': session.lastMessage,
+      'lastMessageTime': session.lastMessageTime.toIso8601String(),
+      'messageCount': session.messageCount,
+      'provider': session.provider?.id,
+    };
+  }
+
+  ChatSession _sessionFromJson(Map<String, dynamic> json) {
+    AIProvider? provider;
+    final providerId = json['provider'] as String?;
+    if (providerId != null) {
+      try {
+        provider = AIProvider.values.firstWhere((p) => p.id == providerId, orElse: () => AIProvider.deepseek);
+      } catch (_) {}
+    }
+    return ChatSession(
+      id: json['id'] as String,
+      title: ((json['title'] as String?) ?? '').trim().isNotEmpty ? (json['title'] as String) : '新的会话',
+      lastMessage: json['lastMessage'] as String?,
+      lastMessageTime: DateTime.tryParse(json['lastMessageTime'] as String? ?? '') ?? DateTime.now(),
+      messageCount: (json['messageCount'] as int?) ?? 0,
+      provider: provider,
+    );
+  }
+
+  Future<void> _updateSessionMetaForMessages(String sessionId, List<ChatMessage> messages) async {
+    final prefs = await SharedPreferences.getInstance();
+    final sessions = await loadSessions();
+    final idx = sessions.indexWhere((s) => s.id == sessionId);
+    if (idx < 0) return;
+    final last = messages.isNotEmpty ? messages.last : null;
+    final updated = sessions[idx].copyWith(
+      lastMessage: last?.content,
+      lastMessageTime: last?.timestamp ?? DateTime.now(),
+      messageCount: messages.length,
+      provider: last?.aiProvider ?? sessions[idx].provider,
+    );
+    sessions[idx] = updated;
+    await prefs.setStringList(_sessionsKey, sessions.map((s) => jsonEncode(_sessionToJson(s))).toList());
+  }
+
+  String _makeTitleFromFirstUser(List<ChatMessage> messages) {
+    final candidate = messages.firstWhere(
+      (m) => m.isUser,
+      orElse: () => messages.isNotEmpty
+          ? messages.first
+          : ChatMessage(id: 'empty', content: '新的会话', isUser: true, timestamp: DateTime.now()),
+    );
+    final raw = candidate.content.replaceAll(RegExp(r'\\s+'), ' ').trim();
+    if (raw.isEmpty) return '新的会话';
+    return raw.length > 24 ? raw.substring(0, 24) : raw;
   }
 }
