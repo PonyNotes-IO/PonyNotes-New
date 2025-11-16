@@ -167,20 +167,20 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
           Log.warn('Failed to get publish info after publish, using fallback: $error');
           final result =
               await ViewBackendService.getPublishNameSpace().getOrThrow();
-          
-          emit(
-            state.copyWith(
-              isPublished: true,
-              publishResult: FlowySuccess(null),
-              unpublishResult: null,
-              namespace: result.namespace,
-              pathName: publishName,
-              url: ShareConstants.buildPublishUrl(
-                nameSpace: result.namespace,
-                publishName: publishName,
-              ),
-            ),
-          );
+
+      emit(
+        state.copyWith(
+          isPublished: true,
+          publishResult: FlowySuccess(null),
+          unpublishResult: null,
+          namespace: result.namespace,
+          pathName: publishName,
+          url: ShareConstants.buildPublishUrl(
+            nameSpace: result.namespace,
+            publishName: publishName,
+          ),
+        ),
+      );
 
           Log.info('publish success (fallback): ${result.namespace}/$publishName');
         },

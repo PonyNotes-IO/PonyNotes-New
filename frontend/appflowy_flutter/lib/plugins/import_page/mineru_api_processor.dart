@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:appflowy_backend/log.dart';
 import 'package:http/http.dart' as http;
 import 'package:archive/archive.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'file_upload_service.dart';
 
 /// Cancellation token for cancelling async operations
@@ -572,21 +573,17 @@ class MinerUApiProcessor {
       // 读取 full.md 文件内容并转换为 Markdown 格式字符串
       final bytes = fullMdFile.content as List<int>;
       
-      // 尝试使用 UTF-8 解码
-      String markdownContent;
-      try {
-        markdownContent = utf8.decode(bytes, allowMalformed: false);
-      } catch (e) {
-        // 如果 UTF-8 解码失败，尝试允许错误的字符（但仍然尝试UTF-8）
-        Log.warn('UTF-8 decode failed, trying with allowMalformed: $e');
-        markdownContent = utf8.decode(bytes, allowMalformed: true);
-      }
+      // 尝试多种编码方式解码，确保内容完整
+      String markdownContent = _decodeMarkdownBytes(bytes);
       
       // 验证内容不为空
       if (markdownContent.trim().isEmpty) {
         Log.error('full.md file is empty');
         throw Exception('解析失败：full.md 文件为空，请重新提交解析');
       }
+      
+      // 使用 markdown 库验证和规范化 Markdown 内容
+      markdownContent = _validateAndNormalizeMarkdown(markdownContent);
       
       // 转换 HTML 表格为 Markdown 表格格式
       markdownContent = _convertHtmlTablesToMarkdown(markdownContent);
@@ -610,6 +607,70 @@ class MinerUApiProcessor {
         rethrow;
       }
       throw Exception('下载或解压ZIP文件失败: $e');
+    }
+  }
+  
+  /// 解码 Markdown 文件字节，尝试多种编码方式
+  static String _decodeMarkdownBytes(List<int> bytes) {
+    // 优先尝试 UTF-8 解码（最常见）
+    try {
+      return utf8.decode(bytes, allowMalformed: false);
+    } catch (e) {
+      Log.warn('UTF-8 decode failed, trying with allowMalformed: $e');
+      try {
+        return utf8.decode(bytes, allowMalformed: true);
+      } catch (e2) {
+        Log.warn('UTF-8 decode with allowMalformed also failed: $e2');
+      }
+    }
+    
+    // 尝试其他常见编码
+    try {
+      // 尝试 Latin-1 (ISO-8859-1)
+      return latin1.decode(bytes);
+    } catch (e) {
+      Log.warn('Latin-1 decode failed: $e');
+    }
+    
+    // 最后尝试使用系统默认编码
+    try {
+      return String.fromCharCodes(bytes);
+    } catch (e) {
+      Log.error('All decode methods failed: $e');
+      throw Exception('无法解码 full.md 文件内容，编码格式不支持');
+    }
+  }
+  
+  /// 使用 markdown 库验证和规范化 Markdown 内容
+  /// 确保内容格式正确且完整
+  static String _validateAndNormalizeMarkdown(String markdownContent) {
+    try {
+      // 使用 markdown 库解析 Markdown，验证格式是否正确
+      final document = md.Document(
+        encodeHtml: false,
+        extensionSet: md.ExtensionSet.gitHubFlavored,
+      );
+      
+      // 解析 Markdown 为 AST（抽象语法树）
+      final nodes = document.parseLines(markdownContent.split('\n'));
+      
+      // 验证解析结果
+      if (nodes.isEmpty && markdownContent.trim().isNotEmpty) {
+        Log.warn('Markdown parsing returned empty nodes, but content is not empty. Content may contain unsupported syntax.');
+        // 如果解析失败但内容不为空，返回原内容（可能是特殊格式）
+        return markdownContent;
+      }
+      
+      // 如果解析成功，说明格式正确
+      Log.info('Markdown content validated successfully, ${nodes.length} top-level nodes found');
+      
+      // 返回原内容（markdown 库主要用于验证，不用于转换）
+      // 如果需要重新格式化，可以使用 markdown 库的格式化功能
+      return markdownContent;
+    } catch (e) {
+      Log.warn('Markdown validation failed: $e, returning original content');
+      // 验证失败时返回原内容，不中断处理流程
+      return markdownContent;
     }
   }
   

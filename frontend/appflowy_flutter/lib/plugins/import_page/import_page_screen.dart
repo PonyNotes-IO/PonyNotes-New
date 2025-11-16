@@ -795,63 +795,6 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
     }
   }
 
-  /// 从DOCX文件提取文本并转换为Markdown
-  Future<String> _extractTextFromDocx(Uint8List bytes, String fileName) async {
-    try {
-      // 使用archive库解析DOCX文件（DOCX是ZIP格式）
-      // final text = await _parseDocxContent(bytes);
-      //
-      // if (text.trim().isEmpty) {
-      //   return _createEmptyDocumentContent(fileName);
-      // }
-      //
-      // // 将纯文本转换为Markdown格式
-      // return _convertTextToMarkdown(text, fileName);
-      final content = await MinerUApiProcessor.processPdfBytes(
-        bytes,
-        mode: MinerUMode.ocr,
-        language: null, // 自动检测语言
-        enableOcr: true,
-        enableTable: true,
-        enableFormula: false,
-      );
-      return content;
-    } catch (e) {
-      Log.error('DOCX解析失败: $e');
-      throw Exception('无法解析DOCX文件: $e');
-    }
-  }
-
-  /// 解析DOCX文件内容（DOCX是ZIP格式，主要内容在word/document.xml）
-  Future<String> _parseDocxContent(Uint8List bytes) async {
-    try {
-      // 解压DOCX文件（DOCX实际上是一个ZIP文件）
-      final archive = ZipDecoder().decodeBytes(bytes);
-      
-      // 查找word/document.xml文件，这里包含主要的文档内容
-      ArchiveFile? documentXml;
-      for (final file in archive) {
-        if (file.name == 'word/document.xml') {
-          documentXml = file;
-          break;
-        }
-      }
-      
-      if (documentXml == null) {
-        throw Exception('无法找到document.xml文件');
-      }
-      
-      // 读取XML内容，使用正确的UTF-8解码
-      final xmlContent = utf8.decode(documentXml.content as List<int>, allowMalformed: true);
-      
-      // 从XML中提取文本内容
-      return _extractTextFromDocumentXml(xmlContent);
-    } catch (e) {
-      Log.error('DOCX文件解压失败: $e');
-      throw Exception('DOCX文件可能损坏或格式不正确: $e');
-    }
-  }
-
   /// 从document.xml中提取纯文本
   String _extractTextFromDocumentXml(String xmlContent) {
     try {

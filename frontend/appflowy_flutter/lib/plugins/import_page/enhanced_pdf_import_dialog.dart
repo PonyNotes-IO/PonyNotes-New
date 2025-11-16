@@ -394,10 +394,10 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
             child: const Text('取消处理'),
           )
         else
-          ElevatedButton(
-            onPressed: _extractedContent != null ? _importDocument : null,
-            child: const Text('导入文档'),
-          ),
+        ElevatedButton(
+          onPressed: _extractedContent != null ? _importDocument : null,
+          child: const Text('导入文档'),
+        ),
       ],
     );
   }
@@ -475,7 +475,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     } catch (e) {
       Log.warn('Failed to read PDF bytes: $e');
     }
-    
+
     setState(() {
       _isProcessing = true;
       _processingError = null;
@@ -562,10 +562,10 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       }
 
       if (mounted) {
-        setState(() {
-          _extractedContent = content;
-          _isProcessing = false;
-        });
+      setState(() {
+        _extractedContent = content;
+        _isProcessing = false;
+      });
         Log.info('Content preview updated, length: ${content.length}');
       }
 
@@ -583,10 +583,10 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       
       Log.error('Failed to process PDF: $e');
       if (mounted) {
-        setState(() {
-          _processingError = 'PDF处理失败: $e';
-          _isProcessing = false;
-        });
+      setState(() {
+        _processingError = 'PDF处理失败: $e';
+        _isProcessing = false;
+      });
       }
     } finally {
       _cancellationToken = null;

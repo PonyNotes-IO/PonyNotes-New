@@ -1001,9 +1001,9 @@ class _ChatMessageListState extends State<_ChatMessageList> {
   /// 构建Markdown内容
   Widget _buildMarkdownContent(String content) {
     return MarkdownWidget(
-      data: content,
-      shrinkWrap: true,
-      selectable: true,
+        data: content,
+        shrinkWrap: true,
+        selectable: true,
     );
   }
 }
