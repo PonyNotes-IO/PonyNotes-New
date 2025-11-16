@@ -12,49 +12,94 @@ class FileUploadService {
   
   /// Upload file to AppFlowy Cloud storage and get URL
   /// Requires user to be logged in to AppFlowy Cloud
+  /// Directly uses PUT method without file size check
   static Future<String> uploadFile(Uint8List fileBytes, String fileName) async {
     try {
-      Log.info('Uploading file to AppFlowy Cloud: $fileName');
+      Log.info('Uploading file to AppFlowy Cloud: $fileName (${getFileSizeString(fileBytes.length)})');
       
-      // Check file size first
-      if (!isFileSizeValid(fileBytes.length)) {
-        Log.warn('File size exceeds limit: ${getFileSizeString(fileBytes.length)}');
-        throw Exception('文件大小超过限制: ${getFileSizeString(fileBytes.length)}（最大200MB）');
-      }
-      
-      // Upload strategy (requires login):
-      // ≤2MB: Direct upload to AppFlowy Cloud
-      // >2MB: Chunked upload to AppFlowy Cloud
-      // >200MB: Rejected
-      // Not logged in: Rejected with login prompt
-      
-      // Check if user is logged in first - required for PDF processing
+      // Check if user is logged in first - required for file upload
       try {
         await _getAuthToken();
         Log.info('User is logged in, proceeding with file upload');
       } catch (e) {
         Log.error('User not logged in: $e');
-        throw Exception('请先登录AppFlowy Cloud后再使用PDF导入功能');
+        throw Exception('请先登录AppFlowy Cloud后再使用文件上传功能');
       }
       
-      if (fileBytes.length <= 2 * 1024 * 1024) {
-        // Small files (≤2MB): Direct upload
-        Log.info('Small file detected: ${getFileSizeString(fileBytes.length)}, using direct upload');
-        return await _uploadToAppFlowyCloudDirect(fileBytes, fileName);
-      } else {
-        // Large files (>2MB): Chunked upload
-        Log.info('Large file detected: ${getFileSizeString(fileBytes.length)}, using chunked upload');
-        return await _uploadToAppFlowyCloudChunked(fileBytes, fileName);
+      // Get current workspace
+      final workspaceResult = await UserBackendService.getCurrentWorkspace();
+      final workspace = workspaceResult.fold(
+        (workspace) => workspace,
+        (error) => throw Exception('无法获取当前工作区: $error'),
+      );
+      
+      // Get AppFlowy Cloud base URL
+      final baseUrl = await getAppFlowyCloudUrl();
+      final uri = Uri.parse(baseUrl);
+      final String baseOrigin = _buildBaseOrigin(uri);
+      
+      // Use PUT method directly: PUT /api/file_storage/{workspace_id}/blob/{file_id}
+      final workspaceId = workspace.id;
+      final fileId = Uri.encodeComponent(fileName);
+      final putUrl = '$baseOrigin/api/file_storage/$workspaceId/blob/$fileId';
+      
+      Log.info('Uploading file using PUT method: $putUrl');
+      Log.info('Workspace ID: $workspaceId, File ID: $fileId');
+      
+      // Use PUT method to upload file
+      final putReq = http.Request('PUT', Uri.parse(putUrl));
+      putReq.headers.addAll({
+        'Authorization': 'Bearer ${await _getAuthToken()}',
+        'Content-Type': 'application/octet-stream',
+        'Accept': 'application/json',
+      });
+      putReq.bodyBytes = fileBytes;
+      
+      final putResp = await _sendWithRetry(() => putReq.send(), onBeforeRetry: (attempt, code, body) {
+        Log.warn('File upload (PUT) retry#$attempt due to ${code ?? 'network'} - ${body ?? ''}');
+      });
+      
+      final putBody = await putResp.stream.bytesToString();
+      Log.info('File upload (PUT) response: ${putResp.statusCode} - $putBody');
+      
+      if (putResp.statusCode == 200 || putResp.statusCode == 201) {
+        // Try to parse URL from response
+        try {
+          if (putBody.isNotEmpty) {
+            final data = jsonDecode(putBody);
+            final fileUrl = (data is Map)
+                ? (data['url'] as String? ?? data['file_url'] as String? ?? data['link'] as String?)
+                : null;
+            if (fileUrl != null && fileUrl.isNotEmpty) {
+              Log.info('File uploaded successfully: $fileUrl');
+              return fileUrl;
+            }
+          }
+        } catch (_) {
+          // If parsing fails, construct URL from endpoint
+        }
+        
+        // Construct accessible URL (same as upload endpoint)
+        final constructed = '$baseOrigin/api/file_storage/$workspaceId/blob/$fileId';
+        Log.info('File uploaded successfully (constructed URL): $constructed');
+        return constructed;
       }
+      
+      _throwClassifiedUploadError(putResp.statusCode, putBody);
       
     } catch (e) {
       Log.error('File upload failed: $e');
+      if (e.toString().contains('文件上传失败') || e.toString().contains('AppFlowy Cloud')) {
+        rethrow;
+      }
       throw Exception('文件上传失败: $e');
     }
   }
   
   
   /// Direct upload for small files
+  /// @deprecated This method is no longer used. Use uploadFile() instead which directly uses PUT method.
+  @Deprecated('Use uploadFile() instead')
   static Future<String> _uploadToAppFlowyCloudDirect(Uint8List fileBytes, String fileName) async {
     try {
       // Get current workspace
@@ -165,6 +210,8 @@ class FileUploadService {
   }
   
   /// Chunked upload for large files (>5MB)
+  /// @deprecated This method is no longer used. Use uploadFile() instead which directly uses PUT method.
+  @Deprecated('Use uploadFile() instead')
   static Future<String> _uploadToAppFlowyCloudChunked(Uint8List fileBytes, String fileName) async {
     try {
       // Get current workspace

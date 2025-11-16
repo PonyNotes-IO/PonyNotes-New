@@ -1,19 +1,35 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'package:appflowy_backend/log.dart';
 import 'package:http/http.dart' as http;
+import 'package:archive/archive.dart';
 import 'file_upload_service.dart';
+
+/// Cancellation token for cancelling async operations
+class CancellationToken {
+  bool _cancelled = false;
+  
+  bool get isCancelled => _cancelled;
+  
+  void cancel() {
+    _cancelled = true;
+  }
+  
+  void reset() {
+    _cancelled = false;
+  }
+}
 
 /// MinerU API-based PDF processor for professional, advanced, OCR, and complex layout handling
 class MinerUApiProcessor {
   static const String apiBaseUrl = 'https://mineru.net/api/v4';
   static const String extractEndpoint = '/extract/task';
-  static const String statusEndpoint = '/extract/status';
-  static const String resultEndpoint = '/extract/result';
-  static const String apiToken = "eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiIyMTcwMDU0OCIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc1OTk3NTY5MCwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiMTc3MTAwNTQ3OTYiLCJvcGVuSWQiOm51bGwsInV1aWQiOiI2NTdmOWY5OS1iN2RiLTRiNjUtODFiMS00ZWY3NTNkMzBjNjUiLCJlbWFpbCI6IiIsImV4cCI6MTc2MTE4NTI5MH0.ZPWm5VNx2Vg_WcOEH1HCqka4f38cIsG0Y9dsirToMoOwVljlhGZoZXjKcWYEPpNlKhvSwY9wAIn-eGyktQvw-g";
+  static const String apiToken = "eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiIyMTcwMDU0OCIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc2MzIxNjI1MCwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiMTc3MTAwNTQ3OTYiLCJvcGVuSWQiOm51bGwsInV1aWQiOiI0NmQ5MjU4MS03ZTRlLTQ0MzUtYjA1Mi0zMDQ2YjY4MWU2ZjYiLCJlbWFpbCI6IiIsImV4cCI6MTc2NDQyNTg1MH0.Z48DoJXOTuwrKpJIxepE4-Y5Gl7QEiDLKxFjoFnK4sM2xThk0UAWR2GDgCd0CWCQCjv7fzpvlZj_p_DZo1jZsA";
   
   /// Process PDF using MinerU API with different modes
+  /// Returns a Future that can be cancelled via the returned CancellationToken
   static Future<String> processPdfBytes(
     Uint8List pdfBytes, {
     MinerUMode mode = MinerUMode.professional,
@@ -21,12 +37,23 @@ class MinerUApiProcessor {
     bool enableOcr = true,
     bool enableTable = false,
     bool enableFormula = false,
+    CancellationToken? cancellationToken,
   }) async {
     try {
       Log.info('Starting MinerU API processing with mode: ${mode.name}');
       
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
       // 上传PDF文件到临时服务器或使用文件URL
-      final fileUrl = await _uploadPdfFile(pdfBytes);
+      final fileUrl = await _uploadPdfFile(pdfBytes, cancellationToken: cancellationToken);
+      
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
       
       // 调用MinerU API
       final result = await _callMinerUApi(
@@ -36,12 +63,16 @@ class MinerUApiProcessor {
         enableOcr: enableOcr,
         enableTable: enableTable,
         enableFormula: enableFormula,
+        cancellationToken: cancellationToken,
       );
       
       Log.info('MinerU API processing completed successfully');
       return result;
       
     } catch (e) {
+      if (e.toString().contains('已取消')) {
+        rethrow;
+      }
       Log.error('MinerU API processing failed: $e');
       throw Exception('MinerU API处理失败: $e');
     }
@@ -55,6 +86,7 @@ class MinerUApiProcessor {
     bool enableOcr = true,
     bool enableTable = false,
     bool enableFormula = false,
+    CancellationToken? cancellationToken,
   }) async {
     final bytes = await pdfFile.readAsBytes();
     return processPdfBytes(
@@ -64,12 +96,21 @@ class MinerUApiProcessor {
       enableOcr: enableOcr,
       enableTable: enableTable,
       enableFormula: enableFormula,
+      cancellationToken: cancellationToken,
     );
   }
   
   /// Upload PDF file and get URL
-  static Future<String> _uploadPdfFile(Uint8List pdfBytes) async {
+  static Future<String> _uploadPdfFile(
+    Uint8List pdfBytes, {
+    CancellationToken? cancellationToken,
+  }) async {
     try {
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
       // 检查文件大小
       if (!FileUploadService.isFileSizeValid(pdfBytes.length)) {
         throw Exception('文件大小超过限制 (${FileUploadService.getFileSizeString(pdfBytes.length)})');
@@ -77,7 +118,18 @@ class MinerUApiProcessor {
       
       // 上传文件到临时服务
       final fileName = 'document_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
       final fileUrl = await FileUploadService.uploadFile(pdfBytes, fileName);
+      
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
       
       Log.info('PDF file uploaded successfully: $fileUrl');
       return fileUrl;
@@ -107,12 +159,14 @@ class MinerUApiProcessor {
     required bool enableOcr,
     required bool enableTable,
     required bool enableFormula,
+    CancellationToken? cancellationToken,
   }) async {
     final url = Uri.parse('$apiBaseUrl$extractEndpoint');
     
-    // 构建请求头
+    // 构建请求头（包含API Token）
     final headers = {
       'Content-Type': 'application/json',
+      'Authorization': 'Bearer ${apiToken}',
     };
     
     // 构建请求数据
@@ -122,11 +176,17 @@ class MinerUApiProcessor {
       'enable_formula': enableFormula,
       'enable_table': enableTable,
       'mode': _getModeString(mode),
+      "model_version": "vlm",
       if (language != null) 'language': language,
     };
     
     Log.info('Calling MinerU API: $url');
     Log.info('Request data: $data');
+    
+    // 检查是否已取消
+    if (cancellationToken?.isCancelled ?? false) {
+      throw Exception('任务已取消');
+    }
     
     try {
       // 发送请求
@@ -136,24 +196,45 @@ class MinerUApiProcessor {
         body: jsonEncode(data),
       );
       
-      if (response.statusCode == 200) {
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
+      Log.info('MinerU API response status: ${response.statusCode}');
+      Log.info('MinerU API response body: ${response.body}');
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
         final responseData = jsonDecode(response.body);
-        Log.info('MinerU API response: $responseData');
+        Log.info('MinerU API response data: $responseData');
         
-        // 检查任务状态
-        final taskId = responseData['data']?['task_id'];
+        // 尝试多种可能的响应格式
+        final taskId = responseData['data']?['task_id'] ?? responseData['id'];
+        
         if (taskId != null) {
-          return await _waitForTaskCompletion(taskId, apiToken);
+          Log.info('Task ID extracted: $taskId');
+          return await _waitForTaskCompletion(
+            taskId,
+            apiToken,
+            cancellationToken: cancellationToken,
+          );
         } else {
+          Log.error('API响应中未找到任务ID，完整响应: $responseData');
           throw Exception('API响应中未找到任务ID');
         }
+      } else if (response.statusCode == 404) {
+        Log.error('MinerU API 404错误: ${response.body}');
+        throw Exception('API端点不存在(404)，请检查API版本和端点路径是否正确');
       } else {
         Log.error('MinerU API error: ${response.statusCode} - ${response.body}');
-        throw Exception('API请求失败: ${response.statusCode}');
+        throw Exception('API请求失败: ${response.statusCode} - ${response.body}');
       }
       
     } catch (e) {
       Log.error('Failed to call MinerU API: $e');
+      if (e.toString().contains('404')) {
+        throw Exception('API端点不存在(404)，请检查MinerU API文档确认正确的端点路径');
+      }
       throw Exception('调用MinerU API失败: $e');
     }
   }
@@ -172,150 +253,263 @@ class MinerUApiProcessor {
     }
   }
   
-  /// Wait for task completion
-  static Future<String> _waitForTaskCompletion(String taskId, String apiToken) async {
-    const maxAttempts = 30; // 最多等待5分钟
+  /// Wait for task completion and get result
+  /// Uses GET /extract/task/{task_id} to check status and get result
+  static Future<String> _waitForTaskCompletion(
+    String taskId,
+    String apiToken, {
+    CancellationToken? cancellationToken,
+  }) async {
+    const maxAttempts = 60; // 最多等待10分钟（60次 * 10秒）
     const delaySeconds = 10;
     
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
       try {
-        // 检查任务状态
-        final status = await _checkTaskStatus(taskId);
+        // 使用 GET /extract/task/{task_id} 获取任务状态和结果
+        final url = Uri.parse('$apiBaseUrl$extractEndpoint/$taskId');
+        final headers = <String, String>{
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${apiToken}',
+        };
         
-        if (status == 'completed') {
-          // 获取结果
-          return await _getTaskResult(taskId);
-        } else if (status == 'failed') {
-          throw Exception('任务处理失败');
-        } else if (status == 'processing') {
-          // 继续等待
-          await Future.delayed(const Duration(seconds: delaySeconds));
-          continue;
-        } else {
-          throw Exception('未知的任务状态: $status');
+        Log.info('Checking task status and result: $url (attempt ${attempt + 1}/$maxAttempts)');
+        final response = await http.get(url, headers: headers);
+        
+        // 检查是否已取消
+        if (cancellationToken?.isCancelled ?? false) {
+          throw Exception('任务已取消');
         }
         
+        if (response.statusCode == 200) {
+          final responseData = jsonDecode(response.body);
+          Log.info('Task response: $responseData');
+          
+          final code = responseData['code'];
+          final data = responseData['data'];
+          
+          if (code != 0 || data == null) {
+            final errMsg = data?['err_msg'] ?? responseData['msg'] ?? '未知错误';
+            Log.error('任务返回错误: code=$code, err_msg=$errMsg');
+            throw Exception('任务处理失败: $errMsg');
+          }
+          
+          final state = data['state'] as String?;
+          if (state == null) {
+            Log.error('响应中未找到state字段: $responseData');
+            throw Exception('响应格式错误：未找到state字段');
+          }
+          
+          Log.info('Task $taskId state: $state');
+          
+          // 如果状态为 done，提取 full_zip_url 并处理
+          if (state == 'done') {
+            final fullZipUrl = data['full_zip_url'] as String?;
+            if (fullZipUrl == null || fullZipUrl.isEmpty) {
+              Log.error('任务完成但未找到full_zip_url: $data');
+              throw Exception('任务完成但未找到结果文件URL');
+            }
+            
+            Log.info('Task completed, downloading ZIP from: $fullZipUrl');
+            
+            // 下载并处理ZIP文件
+            return await _downloadAndExtractZip(
+              fullZipUrl,
+              cancellationToken: cancellationToken,
+            );
+          } else if (state == 'running' || state == 'processing' || state == 'pending' || state == 'queued') {
+            // 显示进度信息
+            final progress = data['extract_progress'];
+            if (progress != null) {
+              final extractedPages = progress['extracted_pages'] ?? 0;
+              final totalPages = progress['total_pages'] ?? 0;
+              if (totalPages > 0) {
+                Log.info('Extraction progress: $extractedPages/$totalPages pages');
+              }
+            }
+            
+            // 继续等待
+            await Future.delayed(const Duration(seconds: delaySeconds));
+            continue;
+          } else if (state == 'failed') {
+            final errMsg = data['err_msg'] ?? '任务处理失败';
+            Log.error('任务处理失败: $errMsg');
+            throw Exception('任务处理失败: $errMsg');
+          } else {
+            Log.warn('未知任务状态: $state，继续等待');
+            await Future.delayed(const Duration(seconds: delaySeconds));
+            continue;
+          }
+        } else if (response.statusCode == 404) {
+          Log.error('获取任务信息404错误: ${response.body}');
+          throw Exception('任务不存在(404)');
+        } else {
+          Log.error('获取任务信息错误: ${response.statusCode} - ${response.body}');
+          // 对于非404错误，继续重试
+          await Future.delayed(const Duration(seconds: delaySeconds));
+          continue;
+        }
       } catch (e) {
-        Log.error('Error checking task status: $e');
+        Log.error('Error checking task status (attempt $attempt): $e');
+        
+        // 如果是最后一次尝试，抛出异常
         if (attempt == maxAttempts - 1) {
           throw Exception('任务超时或失败: $e');
         }
+        
+        // 对于网络错误，等待后重试
+        if (e.toString().contains('网络') || e.toString().contains('timeout') || e.toString().contains('SocketException')) {
+          await Future.delayed(const Duration(seconds: delaySeconds));
+          continue;
+        }
+        
+        // 如果错误信息表明任务已失败或取消，直接抛出
+        if (e.toString().contains('任务处理失败') || e.toString().contains('任务已取消')) {
+          rethrow;
+        }
+        
+        // 其他错误，等待后重试
         await Future.delayed(const Duration(seconds: delaySeconds));
       }
     }
     
+    // 如果循环结束仍未获取到结果
     throw Exception('任务处理超时');
   }
   
-  /// Check task status
-  static Future<String> _checkTaskStatus(String taskId) async {
-    final url = Uri.parse('$apiBaseUrl$statusEndpoint/$taskId');
-    
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
-    
-    final response = await http.get(url, headers: headers);
-    
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['data']?['status'] ?? 'unknown';
-    } else {
-      throw Exception('状态检查失败: ${response.statusCode}');
-    }
-  }
-  
-  /// Get task result
-  static Future<String> _getTaskResult(String taskId) async {
-    final url = Uri.parse('$apiBaseUrl$resultEndpoint/$taskId');
-    
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
-    
-    final response = await http.get(url, headers: headers);
-    
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final result = data['data']?['result'];
+  /// Download ZIP file from URL and extract content
+  static Future<String> _downloadAndExtractZip(
+    String zipUrl, {
+    CancellationToken? cancellationToken,
+  }) async {
+    try {
+      Log.info('Downloading ZIP file from: $zipUrl');
       
-      if (result != null) {
-        return _formatApiResult(result);
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
+      // 下载ZIP文件
+      final zipResponse = await http.get(Uri.parse(zipUrl));
+      
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
+      if (zipResponse.statusCode != 200) {
+        throw Exception('下载ZIP文件失败: ${zipResponse.statusCode}');
+      }
+      
+      Log.info('ZIP file downloaded, size: ${zipResponse.bodyBytes.length} bytes');
+      
+      // 解压ZIP文件
+      final archive = ZipDecoder().decodeBytes(zipResponse.bodyBytes);
+      
+      // 查找markdown或文本文件
+      String? extractedContent;
+      ArchiveFile? contentFile;
+      
+      // 优先查找 full.md 文件（MinerU API 返回的完整结果文件）
+      for (final file in archive) {
+        final fileName = file.name.toLowerCase();
+        if (file.isFile && (fileName == 'full.md' || fileName.endsWith('/full.md'))) {
+          contentFile = file;
+          Log.info('Found full.md in ZIP: ${file.name}');
+          break;
+        }
+      }
+      
+      // 如果没有找到 full.md，查找其他 .md 文件
+      if (contentFile == null) {
+        for (final file in archive) {
+          if (file.isFile && file.name.toLowerCase().endsWith('.md')) {
+            contentFile = file;
+            Log.info('Found markdown file in ZIP: ${file.name}');
+            break;
+          }
+        }
+      }
+      
+      // 如果没有找到 .md 文件，查找 .txt 文件
+      if (contentFile == null) {
+        for (final file in archive) {
+          if (file.isFile && file.name.toLowerCase().endsWith('.txt')) {
+            contentFile = file;
+            Log.info('Found text file in ZIP: ${file.name}');
+            break;
+          }
+        }
+      }
+      
+      // 如果还没找到，查找第一个文本文件（不是目录，有内容）
+      if (contentFile == null) {
+        for (final file in archive) {
+          if (file.isFile && file.content is List<int> && (file.content as List<int>).isNotEmpty) {
+            // 尝试判断是否为文本文件
+            final bytes = file.content as List<int>;
+            // 简单检查：如果大部分字节都是可打印ASCII字符或UTF-8字符，认为是文本文件
+            final printableCount = bytes.where((b) => 
+              (b >= 32 && b <= 126) || 
+              (b >= 0x80 && b <= 0xFF) ||
+              b == 9 || b == 10 || b == 13
+            ).length;
+            if (printableCount.toDouble() / bytes.length > 0.7) {
+              contentFile = file;
+              Log.info('Found text-like file in ZIP: ${file.name}');
+              break;
+            }
+          }
+        }
+      }
+      
+      if (contentFile != null) {
+        Log.info('Found content file in ZIP: ${contentFile.name}');
+        final bytes = contentFile.content as List<int>;
+        extractedContent = utf8.decode(bytes, allowMalformed: true);
+        Log.info('Extracted content length: ${extractedContent.length} characters');
       } else {
-        throw Exception('未找到处理结果');
-      }
-    } else {
-      throw Exception('获取结果失败: ${response.statusCode}');
-    }
-  }
-  
-  /// Format API result
-  static String _formatApiResult(dynamic result) {
-    if (result is String) {
-      return result;
-    } else if (result is Map<String, dynamic>) {
-      // 处理结构化结果
-      final buffer = StringBuffer();
-      
-      // 添加标题
-      if (result['title'] != null) {
-        buffer.writeln('# ${result['title']}');
-        buffer.writeln();
-      }
-      
-      // 处理内容
-      if (result['content'] != null) {
-        buffer.writeln(result['content']);
-      }
-      
-      // 处理表格
-      if (result['tables'] is List) {
-        for (final table in result['tables']) {
-          buffer.writeln(_formatTable(table));
-          buffer.writeln();
+        // 如果找不到合适的文件，尝试将所有文件内容合并
+        Log.warn('No markdown or text file found in ZIP, trying to extract all text files');
+        final buffer = StringBuffer();
+        for (final file in archive) {
+          if (file.isFile && file.content is List<int>) {
+            try {
+              final bytes = file.content as List<int>;
+              if (bytes.isNotEmpty) {
+                final content = utf8.decode(bytes, allowMalformed: true);
+                if (content.trim().isNotEmpty) {
+                  buffer.writeln('--- ${file.name} ---');
+                  buffer.writeln(content);
+                  buffer.writeln();
+                }
+              }
+            } catch (e) {
+              Log.warn('Failed to decode file ${file.name}: $e');
+            }
+          }
         }
+        extractedContent = buffer.toString();
       }
       
-      // 处理图像
-      if (result['images'] is List) {
-        for (final image in result['images']) {
-          buffer.writeln('![Image](${image['url'] ?? ''})');
-        }
+      if (extractedContent.trim().isEmpty) {
+        throw Exception('ZIP文件中未找到有效的内容');
       }
       
-      return buffer.toString();
-    }
-    
-    return result.toString();
-  }
-  
-  /// Format table content
-  static String _formatTable(dynamic table) {
-    if (table is! Map || table['rows'] is! List) {
-      return '';
-    }
-    
-    final buffer = StringBuffer();
-    final rows = table['rows'] as List;
-    
-    if (rows.isEmpty) return '';
-    
-    // 表头
-    final header = rows.first;
-    if (header is List) {
-      buffer.writeln('| ${header.join(' | ')} |');
-      buffer.writeln('| ${header.map((_) => '---').join(' | ')} |');
-    }
-    
-    // 数据行
-    for (int i = 1; i < rows.length; i++) {
-      final row = rows[i];
-      if (row is List) {
-        buffer.writeln('| ${row.join(' | ')} |');
+      return extractedContent;
+      
+    } catch (e) {
+      Log.error('Failed to download and extract ZIP: $e');
+      if (e.toString().contains('已取消')) {
+        rethrow;
       }
+      throw Exception('下载或解压ZIP文件失败: $e');
     }
-    
-    return buffer.toString();
   }
   
   /// Check if API is available
@@ -324,6 +518,7 @@ class MinerUApiProcessor {
       final url = Uri.parse('$apiBaseUrl/health');
       final headers = <String, String>{
         'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${apiToken}',
       };
       
       final response = await http.get(url, headers: headers);
@@ -424,3 +619,4 @@ class MinerUApiResult {
     return '很差';
   }
 }
+

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -34,6 +35,14 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
   String? _processingError;
   bool _isProcessing = false;
   PdfImportMode _importMode = PdfImportMode.professional;
+  CancellationToken? _cancellationToken;
+
+  @override
+  void dispose() {
+    // 清理资源：取消正在进行的任务
+    _cancelProcessing();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +96,10 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         ),
         const Spacer(),
         IconButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            _cancelProcessing();
+            Navigator.of(context).pop();
+          },
           icon: const Icon(Icons.close),
         ),
       ],
@@ -268,22 +280,30 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       );
     }
 
-    if (_extractedContent == null) {
+    if (_extractedContent == null || _extractedContent!.isEmpty) {
+      String message = '选择文件并点击"开始处理"来预览提取的内容';
+      if (_isProcessing) {
+        message = '正在处理中，请稍候...';
+      }
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.grey[100],
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Center(
+        child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.preview, size: 48, color: Colors.grey),
-              SizedBox(height: 16),
+              Icon(
+                _isProcessing ? Icons.hourglass_empty : Icons.preview,
+                size: 48,
+                color: Colors.grey,
+              ),
+              const SizedBox(height: 16),
               Text(
-                '选择文件并点击"开始处理"来预览提取的内容',
-                style: TextStyle(color: Colors.grey),
+                message,
+                style: const TextStyle(color: Colors.grey),
               ),
             ],
           ),
@@ -301,7 +321,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const Spacer(),
-            if (_pdfBytes != null)
+            if (_pdfBytes != null && _extractedContent != null)
               TextButton.icon(
                 onPressed: _showHybridPreview,
                 icon: const Icon(Icons.preview),
@@ -316,11 +336,94 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
             decoration: BoxDecoration(
               border: Border.all(color: Colors.grey[300]!),
               borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
             ),
             child: SingleChildScrollView(
-              child: Text(
-                _extractedContent!,
-                style: const TextStyle(fontFamily: 'monospace'),
+              child: Markdown(
+                data: _extractedContent!,
+                shrinkWrap: true,
+                selectable: true,
+                padding: EdgeInsets.zero,
+                styleSheet: MarkdownStyleSheet(
+                  p: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                  h1: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    height: 1.2,
+                  ),
+                  h2: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    height: 1.2,
+                  ),
+                  h3: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    height: 1.2,
+                  ),
+                  h4: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    height: 1.2,
+                  ),
+                  h5: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    height: 1.2,
+                  ),
+                  h6: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    height: 1.2,
+                  ),
+                  strong: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                  em: const TextStyle(
+                    fontStyle: FontStyle.italic,
+                    color: Colors.black87,
+                  ),
+                  listBullet: const TextStyle(
+                    color: Colors.black87,
+                    fontSize: 14,
+                  ),
+                  code: TextStyle(
+                    backgroundColor: Colors.grey.shade200,
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    color: Colors.black87,
+                  ),
+                  codeblockDecoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  codeblockPadding: const EdgeInsets.all(8),
+                  tableBorder: TableBorder.all(
+                    color: Colors.grey.shade300,
+                    width: 1,
+                  ),
+                  tableHead: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                    backgroundColor: Color(0xFFF5F5F5),
+                  ),
+                  tableBody: const TextStyle(
+                    color: Colors.black87,
+                  ),
+                  tableHeadAlign: TextAlign.center,
+                  tableCellsPadding: const EdgeInsets.all(8),
+                ),
               ),
             ),
           ),
@@ -353,16 +456,42 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     return Row(
       children: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            _cancelProcessing();
+            Navigator.of(context).pop();
+          },
           child: const Text('取消'),
         ),
         const SizedBox(width: 8),
-        ElevatedButton(
-          onPressed: _extractedContent != null ? _importDocument : null,
-          child: const Text('导入文档'),
-        ),
+        if (_isProcessing)
+          ElevatedButton(
+            onPressed: () {
+              _cancelProcessing();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+            ),
+            child: const Text('取消处理'),
+          )
+        else
+          ElevatedButton(
+            onPressed: _extractedContent != null ? _importDocument : null,
+            child: const Text('导入文档'),
+          ),
       ],
     );
+  }
+  
+  /// Cancel current processing task
+  void _cancelProcessing() {
+    if (_isProcessing && _cancellationToken != null) {
+      _cancellationToken!.cancel();
+      setState(() {
+        _isProcessing = false;
+        _processingError = '处理已取消';
+      });
+      Log.info('PDF处理任务已取消');
+    }
   }
 
   Future<void> _selectFile() async {
@@ -392,9 +521,22 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
   Future<void> _processFile() async {
     if (_selectedFile == null) return;
 
+    // 创建新的取消令牌
+    _cancellationToken = CancellationToken();
+    
+    // 读取PDF文件bytes用于混合预览
+    Uint8List? pdfBytes;
+    try {
+      pdfBytes = await _selectedFile!.readAsBytes();
+    } catch (e) {
+      Log.warn('Failed to read PDF bytes: $e');
+    }
+    
     setState(() {
       _isProcessing = true;
       _processingError = null;
+      _extractedContent = null; // 重置提取内容
+      _pdfBytes = pdfBytes; // 设置PDF bytes
     });
 
     try {
@@ -411,6 +553,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
             enableOcr: false,
             enableTable: false,
             enableFormula: false,
+            cancellationToken: _cancellationToken,
           );
           break;
         case PdfImportMode.advanced:
@@ -422,6 +565,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
             enableOcr: false,
             enableTable: true,
             enableFormula: true,
+            cancellationToken: _cancellationToken,
           );
           break;
         case PdfImportMode.ocr:
@@ -433,6 +577,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
             enableOcr: true,
             enableTable: true,
             enableFormula: false,
+            cancellationToken: _cancellationToken,
           );
           break;
         case PdfImportMode.visual:
@@ -444,21 +589,63 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
             enableOcr: true,
             enableTable: true,
             enableFormula: true,
+            cancellationToken: _cancellationToken,
           );
           break;
       }
 
-      setState(() {
-        _extractedContent = content;
-        _isProcessing = false;
-      });
+      // 检查是否已取消
+      if (_cancellationToken?.isCancelled ?? false) {
+        if (mounted) {
+          setState(() {
+            _isProcessing = false;
+            _processingError = '处理已取消';
+          });
+        }
+        return;
+      }
+
+      // 验证内容是否为空
+      if (content.trim().isEmpty) {
+        Log.warn('Extracted content is empty');
+        if (mounted) {
+          setState(() {
+            _isProcessing = false;
+            _processingError = '提取的内容为空，请检查PDF文件是否包含文本内容';
+          });
+        }
+        return;
+      }
+
+      if (mounted) {
+        setState(() {
+          _extractedContent = content;
+          _isProcessing = false;
+        });
+        Log.info('Content preview updated, length: ${content.length}');
+      }
 
     } catch (e) {
+      // 如果是取消操作，不记录错误
+      if (e.toString().contains('已取消') || e.toString().contains('取消')) {
+        if (mounted) {
+          setState(() {
+            _isProcessing = false;
+            _processingError = '处理已取消';
+          });
+        }
+        return;
+      }
+      
       Log.error('Failed to process PDF: $e');
-      setState(() {
-        _processingError = 'PDF处理失败: $e';
-        _isProcessing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _processingError = 'PDF处理失败: $e';
+          _isProcessing = false;
+        });
+      }
+    } finally {
+      _cancellationToken = null;
     }
   }
 
@@ -830,6 +1017,24 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
           fontWeight: FontWeight.bold,
           height: 1.2,
         ),
+        h4: const TextStyle(
+          color: Colors.black87,
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          height: 1.2,
+        ),
+        h5: const TextStyle(
+          color: Colors.black87,
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          height: 1.2,
+        ),
+        h6: const TextStyle(
+          color: Colors.black87,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          height: 1.2,
+        ),
         strong: const TextStyle(
           fontWeight: FontWeight.bold,
           color: Colors.black87,
@@ -860,10 +1065,13 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
         tableHead: const TextStyle(
           fontWeight: FontWeight.bold,
           color: Colors.black87,
+          backgroundColor: Color(0xFFF5F5F5),
         ),
         tableBody: const TextStyle(
           color: Colors.black87,
         ),
+        tableHeadAlign: TextAlign.center,
+        tableCellsPadding: const EdgeInsets.all(8),
       ),
     );
   }

@@ -128,9 +128,6 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
   ) async {
     // set space name
     try {
-      final result =
-          await ViewBackendService.getPublishNameSpace().getOrThrow();
-
       // 直接发布原笔记，不创建副本
       await ViewBackendService.publish(
         view,
@@ -138,21 +135,57 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
         selectedViewIds: selectedViewIds,
       ).getOrThrow();
 
-      emit(
-        state.copyWith(
-          isPublished: true,
-          publishResult: FlowySuccess(null),
-          unpublishResult: null,
-          namespace: result.namespace,
-          pathName: publishName,
-          url: ShareConstants.buildPublishUrl(
-            nameSpace: result.namespace,
-            publishName: publishName,
-          ),
-        ),
+      // 发布成功后，立即从cloud服务获取最新的发布信息（包含URL）
+      // 这样可以确保使用cloud服务返回的准确信息
+      final publishInfo = await ViewBackendService.getPublishInfo(view);
+      
+      await publishInfo.fold(
+        (info) async {
+          // 使用cloud服务返回的发布信息
+          final namespace = info.namespace.isNotEmpty ? info.namespace : '';
+          final actualPublishName = info.publishName;
+          
+          emit(
+            state.copyWith(
+              isPublished: true,
+              publishResult: FlowySuccess(null),
+              unpublishResult: null,
+              namespace: namespace,
+              pathName: actualPublishName,
+              // 使用cloud服务返回的信息构建URL，确保与服务器端一致
+              url: ShareConstants.buildPublishUrl(
+                nameSpace: namespace,
+                publishName: actualPublishName,
+              ),
+            ),
+          );
+
+          Log.info('publish success: $namespace/$actualPublishName');
+        },
+        (error) async {
+          // 如果获取发布信息失败，使用之前的信息作为fallback
+          Log.warn('Failed to get publish info after publish, using fallback: $error');
+          final result =
+              await ViewBackendService.getPublishNameSpace().getOrThrow();
+          
+          emit(
+            state.copyWith(
+              isPublished: true,
+              publishResult: FlowySuccess(null),
+              unpublishResult: null,
+              namespace: result.namespace,
+              pathName: publishName,
+              url: ShareConstants.buildPublishUrl(
+                nameSpace: result.namespace,
+                publishName: publishName,
+              ),
+            ),
+          );
+
+          Log.info('publish success (fallback): ${result.namespace}/$publishName');
+        },
       );
 
-      Log.info('publish success: ${result.namespace}/$publishName');
       // 通知发布列表刷新
       PublishRefresh.ping();
       // 更新发布服务状态
