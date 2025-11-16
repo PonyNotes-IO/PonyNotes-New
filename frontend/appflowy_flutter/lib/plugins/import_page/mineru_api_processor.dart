@@ -332,7 +332,7 @@ class MinerUApiProcessor {
               }
             }
             
-            // 继续等待
+          // 继续等待
             await Future.delayed(const Duration(seconds: delaySeconds));
             continue;
           } else if (state == 'failed') {
@@ -411,104 +411,218 @@ class MinerUApiProcessor {
       // 解压ZIP文件
       final archive = ZipDecoder().decodeBytes(zipResponse.bodyBytes);
       
-      // 查找markdown或文本文件
-      String? extractedContent;
-      ArchiveFile? contentFile;
+      // 查找 full.md 文件（必须存在）
+      ArchiveFile? fullMdFile;
       
-      // 优先查找 full.md 文件（MinerU API 返回的完整结果文件）
       for (final file in archive) {
         final fileName = file.name.toLowerCase();
+        // 精确匹配 full.md（忽略路径）
         if (file.isFile && (fileName == 'full.md' || fileName.endsWith('/full.md'))) {
-          contentFile = file;
+          fullMdFile = file;
           Log.info('Found full.md in ZIP: ${file.name}');
           break;
         }
       }
       
-      // 如果没有找到 full.md，查找其他 .md 文件
-      if (contentFile == null) {
-        for (final file in archive) {
-          if (file.isFile && file.name.toLowerCase().endsWith('.md')) {
-            contentFile = file;
-            Log.info('Found markdown file in ZIP: ${file.name}');
-            break;
-          }
-        }
+      // 如果未找到 full.md，抛出明确的错误提示
+      if (fullMdFile == null) {
+        Log.error('full.md not found in ZIP file');
+        // 列出ZIP中的所有文件，便于调试
+        final fileList = archive.where((f) => f.isFile).map((f) => f.name).toList();
+        Log.error('Files in ZIP: $fileList');
+        throw Exception('解析失败，请重新提交解析');
       }
       
-      // 如果没有找到 .md 文件，查找 .txt 文件
-      if (contentFile == null) {
-        for (final file in archive) {
-          if (file.isFile && file.name.toLowerCase().endsWith('.txt')) {
-            contentFile = file;
-            Log.info('Found text file in ZIP: ${file.name}');
-            break;
-          }
-        }
+      // 读取 full.md 文件内容并转换为 Markdown 格式字符串
+      final bytes = fullMdFile.content as List<int>;
+      
+      // 尝试使用 UTF-8 解码
+      String markdownContent;
+      try {
+        markdownContent = utf8.decode(bytes, allowMalformed: false);
+      } catch (e) {
+        // 如果 UTF-8 解码失败，尝试允许错误的字符（但仍然尝试UTF-8）
+        Log.warn('UTF-8 decode failed, trying with allowMalformed: $e');
+        markdownContent = utf8.decode(bytes, allowMalformed: true);
       }
       
-      // 如果还没找到，查找第一个文本文件（不是目录，有内容）
-      if (contentFile == null) {
-        for (final file in archive) {
-          if (file.isFile && file.content is List<int> && (file.content as List<int>).isNotEmpty) {
-            // 尝试判断是否为文本文件
-            final bytes = file.content as List<int>;
-            // 简单检查：如果大部分字节都是可打印ASCII字符或UTF-8字符，认为是文本文件
-            final printableCount = bytes.where((b) => 
-              (b >= 32 && b <= 126) || 
-              (b >= 0x80 && b <= 0xFF) ||
-              b == 9 || b == 10 || b == 13
-            ).length;
-            if (printableCount.toDouble() / bytes.length > 0.7) {
-              contentFile = file;
-              Log.info('Found text-like file in ZIP: ${file.name}');
-              break;
-            }
-          }
-        }
+      // 验证内容不为空
+      if (markdownContent.trim().isEmpty) {
+        Log.error('full.md file is empty');
+        throw Exception('解析失败：full.md 文件为空，请重新提交解析');
       }
       
-      if (contentFile != null) {
-        Log.info('Found content file in ZIP: ${contentFile.name}');
-        final bytes = contentFile.content as List<int>;
-        extractedContent = utf8.decode(bytes, allowMalformed: true);
-        Log.info('Extracted content length: ${extractedContent.length} characters');
-      } else {
-        // 如果找不到合适的文件，尝试将所有文件内容合并
-        Log.warn('No markdown or text file found in ZIP, trying to extract all text files');
-        final buffer = StringBuffer();
-        for (final file in archive) {
-          if (file.isFile && file.content is List<int>) {
-            try {
-              final bytes = file.content as List<int>;
-              if (bytes.isNotEmpty) {
-                final content = utf8.decode(bytes, allowMalformed: true);
-                if (content.trim().isNotEmpty) {
-                  buffer.writeln('--- ${file.name} ---');
-                  buffer.writeln(content);
-                  buffer.writeln();
-                }
-              }
-            } catch (e) {
-              Log.warn('Failed to decode file ${file.name}: $e');
-            }
-          }
-        }
-        extractedContent = buffer.toString();
-      }
+      // 转换 HTML 表格为 Markdown 表格格式
+      markdownContent = _convertHtmlTablesToMarkdown(markdownContent);
       
-      if (extractedContent.trim().isEmpty) {
-        throw Exception('ZIP文件中未找到有效的内容');
-      }
+      Log.info('Extracted full.md content length: ${markdownContent.length} characters');
+      Log.debug('Markdown content preview: ${markdownContent.substring(0, markdownContent.length > 200 ? 200 : markdownContent.length)}...');
       
-      return extractedContent;
+      // 返回 Markdown 格式的字符串
+      return markdownContent;
       
     } catch (e) {
       Log.error('Failed to download and extract ZIP: $e');
       if (e.toString().contains('已取消')) {
         rethrow;
       }
+      // 如果错误信息已经包含"解析失败"，直接抛出
+      if (e.toString().contains('解析失败')) {
+        rethrow;
+      }
       throw Exception('下载或解压ZIP文件失败: $e');
+    }
+  }
+  
+  /// Convert HTML tables to Markdown table format
+  static String _convertHtmlTablesToMarkdown(String markdownContent) {
+    try {
+      // 匹配 HTML 表格标签（支持多行）
+      final tableRegex = RegExp(
+        r'<table[^>]*>(.*?)</table>',
+        dotAll: true,
+        caseSensitive: false,
+      );
+      
+      if (!tableRegex.hasMatch(markdownContent)) {
+        // 没有 HTML 表格，直接返回原内容
+        return markdownContent;
+      }
+      
+      Log.info('Found HTML tables in markdown, converting to Markdown format...');
+      
+      // 替换所有 HTML 表格为 Markdown 表格
+      return markdownContent.replaceAllMapped(tableRegex, (match) {
+        final tableHtml = match.group(1) ?? '';
+        return _parseHtmlTableToMarkdown(tableHtml);
+      });
+    } catch (e) {
+      Log.warn('Failed to convert HTML tables to Markdown: $e, returning original content');
+      return markdownContent;
+    }
+  }
+  
+  /// Parse HTML table content and convert to Markdown table format
+  static String _parseHtmlTableToMarkdown(String tableHtml) {
+    try {
+      final StringBuffer markdownTable = StringBuffer();
+      markdownTable.writeln(); // 添加前导空行
+      
+      // 匹配所有表格行（tr标签）
+      final trRegex = RegExp(
+        r'<tr[^>]*>(.*?)</tr>',
+        dotAll: true,
+        caseSensitive: false,
+      );
+      
+      final rows = <List<String>>[];
+      bool hasHeader = false;
+      
+      trRegex.allMatches(tableHtml).forEach((match) {
+        final trContent = match.group(1) ?? '';
+        final cells = <String>[];
+        bool isHeaderRow = false;
+        
+        // 匹配表格单元格（td或th标签）
+        final cellRegex = RegExp(
+          r'<(td|th)[^>]*>(.*?)</(td|th)>',
+          dotAll: true,
+          caseSensitive: false,
+        );
+        
+        cellRegex.allMatches(trContent).forEach((cellMatch) {
+          final cellTag = cellMatch.group(1)?.toLowerCase() ?? '';
+          final cellContent = cellMatch.group(2) ?? '';
+          
+          if (cellTag == 'th') {
+            isHeaderRow = true;
+          }
+          
+          // 提取单元格文本内容，移除内部HTML标签
+          String cellText = _extractTextFromHtml(cellContent);
+          // 转义 Markdown 表格中的管道符
+          cellText = cellText.replaceAll('|', '\\|');
+          // 清理空白字符
+          cellText = cellText.trim();
+          
+          cells.add(cellText);
+        });
+        
+        if (cells.isNotEmpty) {
+          rows.add(cells);
+          if (isHeaderRow && !hasHeader) {
+            hasHeader = true;
+          }
+        }
+      });
+      
+      if (rows.isEmpty) {
+        return ''; // 空表格，返回空字符串
+      }
+      
+      // 确定最大列数
+      int maxColumns = 0;
+      for (final row in rows) {
+        if (row.length > maxColumns) {
+          maxColumns = row.length;
+        }
+      }
+      
+      // 构建 Markdown 表格
+      bool headerSeparatorAdded = false;
+      for (int i = 0; i < rows.length; i++) {
+        final row = rows[i];
+        
+        // 构建行内容，确保所有行都有相同的列数
+        final cells = <String>[];
+        for (int j = 0; j < maxColumns; j++) {
+          if (j < row.length) {
+            cells.add(row[j]);
+          } else {
+            cells.add(''); // 填充空单元格
+          }
+        }
+        
+        // 写入表格行
+        markdownTable.writeln('| ${cells.join(' | ')} |');
+        
+        // 在第一行或第一个表头行后添加分隔符
+        if (!headerSeparatorAdded) {
+          final separator = '| ${List.generate(maxColumns, (_) => '---').join(' | ')} |';
+          markdownTable.writeln(separator);
+          headerSeparatorAdded = true;
+        }
+      }
+      
+      markdownTable.writeln(); // 添加尾随空行
+      
+      return markdownTable.toString();
+    } catch (e) {
+      Log.warn('Failed to parse HTML table: $e');
+      return ''; // 解析失败，返回空字符串
+    }
+  }
+  
+  /// Extract plain text from HTML content, removing HTML tags
+  static String _extractTextFromHtml(String html) {
+    try {
+      // 移除所有HTML标签
+      String text = html.replaceAll(RegExp(r'<[^>]+>'), '');
+      // 解码HTML实体
+      text = text
+          .replaceAll('&nbsp;', ' ')
+          .replaceAll('&lt;', '<')
+          .replaceAll('&gt;', '>')
+          .replaceAll('&amp;', '&')
+          .replaceAll('&quot;', '"')
+          .replaceAll('&#39;', "'")
+          .replaceAll('&apos;', "'");
+      // 清理多余空白字符
+      text = text.replaceAll(RegExp(r'\s+'), ' ');
+      return text.trim();
+    } catch (e) {
+      // 如果解析失败，尝试直接移除标签
+      return html.replaceAll(RegExp(r'<[^>]+>'), '').trim();
     }
   }
   

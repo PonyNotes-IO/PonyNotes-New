@@ -108,8 +108,7 @@ dependencies:
   # TODO: Consider implementing custom package
   # to gather notification handling for all platforms
   local_notifier: ^0.1.5
-  markdown:
-  markdown_widget: ^2.3.2+6
+  markdown_widget: ^2.3.2+8
   mime: ^2.0.0
   nanoid: ^1.0.0
   numerus: ^2.1.2
@@ -121,7 +120,6 @@ dependencies:
   pdf: ^3.11.1
   syncfusion_flutter_pdf: ^27.2.5
   pdfx: 2.6.0
-  flutter_markdown: ^0.6.18
   percent_indicator: 4.2.3
   permission_handler: ^11.3.1
   protobuf: ^3.1.0

@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:markdown_widget/markdown_widget.dart';
 import 'package:appflowy/core/config/ai_config.dart';
 import '../application/standalone_chat_bloc.dart';
 import '../services/image_service.dart';
@@ -1000,61 +1000,10 @@ class _ChatMessageListState extends State<_ChatMessageList> {
 
   /// 构建Markdown内容
   Widget _buildMarkdownContent(String content) {
-    return Builder(
-      builder: (context) => Markdown(
-        data: content,
-        shrinkWrap: true,
-        selectable: true,
-        padding: EdgeInsets.zero,
-        styleSheet: MarkdownStyleSheet(
-          p: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 14,
-            height: 1.4,
-          ),
-          h1: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            height: 1.2,
-          ),
-          h2: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            height: 1.2,
-          ),
-          h3: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            height: 1.2,
-          ),
-          strong: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-          em: TextStyle(
-            fontStyle: FontStyle.italic,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-          listBullet: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontSize: 14,
-          ),
-          code: TextStyle(
-            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-            fontFamily: 'monospace',
-            fontSize: 13,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-          codeblockDecoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          codeblockPadding: const EdgeInsets.all(8),
-        ),
-      ),
+    return MarkdownWidget(
+      data: content,
+      shrinkWrap: true,
+      selectable: true,
     );
   }
 }

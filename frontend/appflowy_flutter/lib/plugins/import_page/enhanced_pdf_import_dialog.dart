@@ -10,7 +10,7 @@ import 'package:appflowy/workspace/application/settings/share/import_service.dar
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:path/path.dart' as p;
 import 'package:pdfx/pdfx.dart' as pdfx;
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown_widget/markdown_widget.dart';
 import 'mineru_api_processor.dart';
 
 /// 增强的PDF导入对话框，提供多种处理模式和实时预览
@@ -339,91 +339,11 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
               color: Colors.white,
             ),
             child: SingleChildScrollView(
-              child: Markdown(
+              padding: EdgeInsets.zero,
+              child: MarkdownWidget(
                 data: _extractedContent!,
                 shrinkWrap: true,
                 selectable: true,
-                padding: EdgeInsets.zero,
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                  h1: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    height: 1.2,
-                  ),
-                  h2: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    height: 1.2,
-                  ),
-                  h3: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    height: 1.2,
-                  ),
-                  h4: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    height: 1.2,
-                  ),
-                  h5: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    height: 1.2,
-                  ),
-                  h6: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    height: 1.2,
-                  ),
-                  strong: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                  em: const TextStyle(
-                    fontStyle: FontStyle.italic,
-                    color: Colors.black87,
-                  ),
-                  listBullet: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 14,
-                  ),
-                  code: TextStyle(
-                    backgroundColor: Colors.grey.shade200,
-                    fontFamily: 'monospace',
-                    fontSize: 13,
-                    color: Colors.black87,
-                  ),
-                  codeblockDecoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  codeblockPadding: const EdgeInsets.all(8),
-                  tableBorder: TableBorder.all(
-                    color: Colors.grey.shade300,
-                    width: 1,
-                  ),
-                  tableHead: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                    backgroundColor: Color(0xFFF5F5F5),
-                  ),
-                  tableBody: const TextStyle(
-                    color: Colors.black87,
-                  ),
-                  tableHeadAlign: TextAlign.center,
-                  tableCellsPadding: const EdgeInsets.all(8),
-                ),
               ),
             ),
           ),
@@ -988,91 +908,10 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
   }
 
   Widget _buildMarkdownViewer() {
-    return Markdown(
+    return MarkdownWidget(
       data: widget.extractedText,
       shrinkWrap: true,
       selectable: true,
-      padding: EdgeInsets.zero,
-      styleSheet: MarkdownStyleSheet(
-        p: const TextStyle(
-          color: Colors.black87,
-          fontSize: 14,
-          height: 1.4,
-        ),
-        h1: const TextStyle(
-          color: Colors.black87,
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          height: 1.2,
-        ),
-        h2: const TextStyle(
-          color: Colors.black87,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          height: 1.2,
-        ),
-        h3: const TextStyle(
-          color: Colors.black87,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          height: 1.2,
-        ),
-        h4: const TextStyle(
-          color: Colors.black87,
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          height: 1.2,
-        ),
-        h5: const TextStyle(
-          color: Colors.black87,
-          fontSize: 13,
-          fontWeight: FontWeight.bold,
-          height: 1.2,
-        ),
-        h6: const TextStyle(
-          color: Colors.black87,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          height: 1.2,
-        ),
-        strong: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.black87,
-        ),
-        em: const TextStyle(
-          fontStyle: FontStyle.italic,
-          color: Colors.black87,
-        ),
-        listBullet: const TextStyle(
-          color: Colors.black87,
-          fontSize: 14,
-        ),
-        code: TextStyle(
-          backgroundColor: Colors.grey.shade200,
-          fontFamily: 'monospace',
-          fontSize: 13,
-          color: Colors.black87,
-        ),
-        codeblockDecoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        codeblockPadding: const EdgeInsets.all(8),
-        tableBorder: TableBorder.all(
-          color: Colors.grey.shade300,
-          width: 1,
-        ),
-        tableHead: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.black87,
-          backgroundColor: Color(0xFFF5F5F5),
-        ),
-        tableBody: const TextStyle(
-          color: Colors.black87,
-        ),
-        tableHeadAlign: TextAlign.center,
-        tableCellsPadding: const EdgeInsets.all(8),
-      ),
     );
   }
 }
