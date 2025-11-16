@@ -100,6 +100,142 @@ class MinerUApiProcessor {
     );
   }
   
+  /// Process Word file with MinerU API
+  static Future<String> processWordFile(
+    File wordFile, {
+    MinerUMode mode = MinerUMode.professional,
+    String? language,
+    bool enableOcr = false,
+    bool enableTable = true,
+    bool enableFormula = false,
+    CancellationToken? cancellationToken,
+  }) async {
+    final bytes = await wordFile.readAsBytes();
+    return processWordBytes(
+      bytes,
+      fileExtension: _getWordFileExtension(wordFile.path),
+      mode: mode,
+      language: language,
+      enableOcr: enableOcr,
+      enableTable: enableTable,
+      enableFormula: enableFormula,
+      cancellationToken: cancellationToken,
+    );
+  }
+  
+  /// Process Word bytes with MinerU API
+  static Future<String> processWordBytes(
+    Uint8List wordBytes, {
+    String fileExtension = 'docx', // 'docx' or 'doc'
+    MinerUMode mode = MinerUMode.professional,
+    String? language,
+    bool enableOcr = false,
+    bool enableTable = true,
+    bool enableFormula = false,
+    CancellationToken? cancellationToken,
+  }) async {
+    try {
+      Log.info('Starting MinerU API processing for Word with mode: ${mode.name}, file type: $fileExtension');
+      
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
+      // 上传Word文件到临时服务器
+      final fileUrl = await _uploadWordFile(wordBytes, fileExtension, cancellationToken: cancellationToken);
+      
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
+      // 调用MinerU API
+      final result = await _callMinerUApi(
+        fileUrl: fileUrl,
+        mode: mode,
+        language: language,
+        enableOcr: enableOcr,
+        enableTable: enableTable,
+        enableFormula: enableFormula,
+        cancellationToken: cancellationToken,
+      );
+      
+      Log.info('MinerU API processing for Word completed successfully');
+      return result;
+      
+    } catch (e) {
+      if (e.toString().contains('已取消')) {
+        rethrow;
+      }
+      Log.error('MinerU API processing for Word failed: $e');
+      throw Exception('MinerU API处理Word失败: $e');
+    }
+  }
+  
+  /// Get Word file extension from file path
+  static String _getWordFileExtension(String filePath) {
+    final fileName = filePath.toLowerCase();
+    if (fileName.endsWith('.docx')) {
+      return 'docx';
+    } else if (fileName.endsWith('.doc')) {
+      return 'doc';
+    }
+    return 'docx'; // 默认使用 docx
+  }
+  
+  /// Upload Word file and get URL
+  static Future<String> _uploadWordFile(
+    Uint8List wordBytes,
+    String fileExtension, {
+    CancellationToken? cancellationToken,
+  }) async {
+    try {
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
+      // 检查文件大小
+      if (!FileUploadService.isFileSizeValid(wordBytes.length)) {
+        throw Exception('文件大小超过限制 (${FileUploadService.getFileSizeString(wordBytes.length)})');
+      }
+      
+      // 上传文件到临时服务
+      final fileName = 'document_${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
+      
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
+      final fileUrl = await FileUploadService.uploadFile(wordBytes, fileName);
+      
+      // 检查是否已取消
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
+      Log.info('Word file uploaded successfully: $fileUrl');
+      return fileUrl;
+      
+    } catch (e) {
+      Log.error('Failed to upload Word file: $e');
+      // 透传常见上传错误并给出可操作建议
+      final message = e.toString();
+      if (message.contains('未授权') || message.contains('401')) {
+        throw Exception('Word文件上传失败: 未授权，请登录 AppFlowy Cloud 后重试');
+      }
+      if (message.contains('权限不足') || message.contains('403')) {
+        throw Exception('Word文件上传失败: 403 权限不足，请确认 token 有效并检查反向代理是否透传 Authorization');
+      }
+      if (message.contains('过大') || message.contains('413')) {
+        throw Exception('Word文件上传失败: 文件过大或反向代理限制，请减小文件或调高 client_max_body_size');
+      }
+      throw Exception('Word文件上传失败: $e');
+    }
+  }
+  
   /// Upload PDF file and get URL
   static Future<String> _uploadPdfFile(
     Uint8List pdfBytes, {
@@ -455,6 +591,9 @@ class MinerUApiProcessor {
       // 转换 HTML 表格为 Markdown 表格格式
       markdownContent = _convertHtmlTablesToMarkdown(markdownContent);
       
+      // 规范化 Markdown 格式，确保格式完整展示
+      markdownContent = _normalizeMarkdownForDisplay(markdownContent);
+      
       Log.info('Extracted full.md content length: ${markdownContent.length} characters');
       Log.debug('Markdown content preview: ${markdownContent.substring(0, markdownContent.length > 200 ? 200 : markdownContent.length)}...');
       
@@ -623,6 +762,93 @@ class MinerUApiProcessor {
     } catch (e) {
       // 如果解析失败，尝试直接移除标签
       return html.replaceAll(RegExp(r'<[^>]+>'), '').trim();
+    }
+  }
+  
+  /// Normalize Markdown format for proper display
+  /// Ensures tables, headings, lists, and other formats are correctly formatted
+  static String _normalizeMarkdownForDisplay(String markdown) {
+    try {
+      Log.info('Normalizing Markdown format for display...');
+      
+      // 1. 确保表格前后有空行（表格需要独立行）
+      markdown = markdown.replaceAllMapped(
+        RegExp(r'(\n\|[^\n]+\|\n\|[^\n]+\|\n(?:\|[^\n]+\|\n?)+)', multiLine: true),
+        (match) {
+          String table = match.group(1)!;
+          // 确保表格前后都有空行
+          if (!table.startsWith('\n\n')) {
+            table = '\n$table';
+          }
+          if (!table.endsWith('\n\n')) {
+            table = '$table\n';
+          }
+          return table;
+        },
+      );
+      
+      // 2. 确保标题前后有空行
+      markdown = markdown.replaceAllMapped(
+        RegExp(r'^(\#{1,6}\s+.+)$', multiLine: true),
+        (match) {
+          final title = match.group(1)!;
+          return '\n$title\n';
+        },
+      );
+      
+      // 3. 确保代码块前后有空行
+      markdown = markdown.replaceAllMapped(
+        RegExp(r'```[\s\S]*?```', multiLine: true),
+        (match) {
+          final codeBlock = match.group(0)!;
+          return '\n$codeBlock\n';
+        },
+      );
+      
+      // 4. 规范化列表：确保列表前后有空行（如果前面不是列表）
+      // 处理无序列表
+      markdown = markdown.replaceAllMapped(
+        RegExp(r'(\n)(\s*[-*+]\s+.+)(\n)', multiLine: true),
+        (match) {
+          final before = match.group(1)!;
+          final listItem = match.group(2)!;
+          final after = match.group(3)!;
+          // 如果前面不是列表项，确保有空行
+          return '$before$listItem$after';
+        },
+      );
+      
+      // 处理有序列表
+      markdown = markdown.replaceAllMapped(
+        RegExp(r'(\n)(\s*\d+\.\s+.+)(\n)', multiLine: true),
+        (match) {
+          final before = match.group(1)!;
+          final listItem = match.group(2)!;
+          final after = match.group(3)!;
+          return '$before$listItem$after';
+        },
+      );
+      
+      // 5. 清理多余的空行（3个或更多连续空行替换为2个）
+      markdown = markdown.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+      
+      // 6. 规范化行尾空白：移除行尾空白字符
+      markdown = markdown.split('\n').map((line) => line.trimRight()).join('\n');
+      
+      // 7. 规范化文档开头和结尾
+      markdown = markdown.trim();
+      if (markdown.isNotEmpty && !markdown.endsWith('\n')) {
+        markdown = '$markdown\n';
+      }
+      
+      // 8. 移除文档开头的多余空行（保留最多一个）
+      markdown = markdown.replaceFirst(RegExp(r'^\n{2,}'), '\n');
+      
+      Log.info('Markdown format normalized for display, final length: ${markdown.length} characters');
+      return markdown;
+    } catch (e) {
+      Log.warn('Failed to normalize Markdown format: $e, returning original content');
+      return markdown;
     }
   }
   

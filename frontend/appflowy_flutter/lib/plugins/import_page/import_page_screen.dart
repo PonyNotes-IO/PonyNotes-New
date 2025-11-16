@@ -23,6 +23,7 @@ import 'dart:typed_data';
 import 'package:html2md/html2md.dart' as html2md;
 import 'package:archive/archive.dart';
 import 'enhanced_pdf_import_dialog.dart';
+import 'enhanced_word_import_dialog.dart';
 import 'mineru_api_processor.dart';
 import 'professional_html_parser.dart';
 import 'html_import_dialog.dart';
@@ -768,110 +769,18 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       Log.info('在工作空间根目录下检查或创建"外部导入"项目');
       final externalImportView = await _getOrCreateExternalImportView(workspace.id);
 
-      // 选择Word文件
-      final result = await getIt<FilePickerService>().pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['docx', 'doc'],
-        allowMultiple: true,
-      );
-
-      if (result != null && result.files.isNotEmpty) {
-        final importValues = <ImportItemPayloadPB>[];
-        
-        for (final file in result.files) {
-          final path = file.path;
-          if (path == null) continue;
-          
-          final fileName = file.name;
-          final name = p.basenameWithoutExtension(fileName);
-          
-          // 读取Word文件内容
-          Log.info('📄 开始Word导入处理: $name');
-          
-          String markdownContent;
-          try {
-            final wordFile = File(path);
-            final bytes = await wordFile.readAsBytes();
-            
-            // 检查文件扩展名
-            final extension = p.extension(fileName).toLowerCase();
-            
-            if (extension == '.docx') {
-              // 处理.docx文件
-              markdownContent = await _extractTextFromDocx(bytes, name);
-              Log.info('✅ DOCX解析成功，内容长度: ${markdownContent.length}');
-            } else if (extension == '.doc') {
-              // .doc文件暂时不支持，提供友好提示
-              markdownContent = _createDocNotSupportedContent(name);
-              Log.info('⚠️ DOC文件暂不支持，使用默认内容');
-            } else {
-              throw Exception('不支持的文件格式: $extension');
-            }
-          } catch (e) {
-            Log.error('❌ Word文件解析失败: $e');
-            // 回退方案：创建包含错误信息的文档
-            markdownContent = _createErrorContent(name, e.toString());
-          }
-          
-          Log.info('📋 最终Markdown内容 (前500字符): ${markdownContent.substring(0, markdownContent.length > 500 ? 500 : markdownContent.length)}...');
-          
-          // 将Markdown转换为Document格式
-          final document = customMarkdownToDocument(markdownContent);
-          Log.info('📄 Document转换完成，节点数量: ${document.root.children.length}');
-          
-          final documentBytes = DocumentDataPBFromTo.fromDocument(document)?.writeToBuffer();
-          
-          if (documentBytes != null) {
-            Log.info('✅ 创建导入项目: $name (Word -> Markdown -> Document)');
-            importValues.add(
-              ImportItemPayloadPB.create()
-                ..name = name
-                ..data = documentBytes
-                ..viewLayout = ViewLayoutPB.Document
-                ..importType = ImportTypePB.Markdown,
-            );
-          } else {
-            Log.error('❌ Document序列化失败！');
-          }
-        }
-
-        if (importValues.isNotEmpty) {
-          // 导入到"外部导入"子项目下
-          final importResult = await ImportBackendService.importPages(
-            externalImportView.id,
-            importValues,
-          );
-
-          importResult.fold(
-            (views) {
-              if (mounted) {
-                final fileCount = importValues.length;
-                final fileNames = result.files.map((f) => f.name).join(', ');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('成功导入 $fileCount 个Word文件到外部导入项目：$fileNames'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-
-                // 如果有导入的视图，打开第一个
-                if (views.items.isNotEmpty) {
-                  context.read<TabsBloc>().openPlugin(views.items.first);
-                }
-              }
+      // 显示Word导入弹框
+      if (mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => EnhancedWordImportDialog(
+            parentViewId: externalImportView.id,
+            onImportSuccess: () {
+              // 导入成功后可以执行的操作
             },
-            (error) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('导入失败: $error'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-          );
-        }
+          ),
+        );
       }
     } catch (e) {
       Log.error('❌ Word导入失败: $e');
