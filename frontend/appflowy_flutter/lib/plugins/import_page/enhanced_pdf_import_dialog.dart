@@ -424,6 +424,20 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
 
       if (result != null && result.files.isNotEmpty) {
         final file = File(result.files.first.path!);
+        
+        // 检查文件大小（最大50MB）
+        final fileSize = await file.length();
+        if (fileSize > 50 * 1024 * 1024) {
+          final fileSizeStr = _formatFileSize(fileSize);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('文件大小超过限制（最大50MB），当前文件大小：$fileSizeStr'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+        
         setState(() {
           _selectedFile = file;
           _extractedContent = null;
@@ -435,6 +449,16 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('选择文件失败: $e')),
       );
+    }
+  }
+  
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) {
+      return '${bytes}B';
+    } else if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)}KB';
+    } else {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
     }
   }
 

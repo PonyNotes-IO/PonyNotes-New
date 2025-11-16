@@ -12,10 +12,15 @@ class FileUploadService {
   
   /// Upload file to AppFlowy Cloud storage and get URL
   /// Requires user to be logged in to AppFlowy Cloud
-  /// Directly uses PUT method without file size check
+  /// Maximum file size: 50MB
   static Future<String> uploadFile(Uint8List fileBytes, String fileName) async {
     try {
       Log.info('Uploading file to AppFlowy Cloud: $fileName (${getFileSizeString(fileBytes.length)})');
+      
+      // Check file size first - maximum 50MB
+      if (!isFileSizeValid(fileBytes.length)) {
+        throw Exception('文件大小超过限制（最大50MB），当前文件大小：${getFileSizeString(fileBytes.length)}');
+      }
       
       // Check if user is logged in first - required for file upload
       try {
@@ -493,9 +498,9 @@ class FileUploadService {
   }
   
   /// Check if file size is within limits
+  /// Maximum file size: 50MB
   static bool isFileSizeValid(int fileSizeInBytes) {
-    // Maximum file size limit: 200MB
-    const int maxFileSize = 200 * 1024 * 1024; // 200MB
+    const int maxFileSize = 50 * 1024 * 1024; // 50MB
     return fileSizeInBytes <= maxFileSize;
   }
   
@@ -600,7 +605,7 @@ class FileUploadService {
   
   /// Get maximum file size (in bytes)
   static int getMaxFileSize() {
-    return 100 * 1024 * 1024; // 100MB
+    return 50 * 1024 * 1024; // 50MB
   }
 }
 
