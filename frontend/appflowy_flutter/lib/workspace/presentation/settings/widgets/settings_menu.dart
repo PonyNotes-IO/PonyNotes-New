@@ -2,6 +2,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/settings_menu_element.dart';
 import 'package:appflowy_backend/log.dart';
@@ -179,6 +180,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     final theme = AppFlowyTheme.of(context);
     final currentPlan = _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
     final planName = _getPlanName(currentPlan);
+    final isFreePlan = currentPlan == WorkspacePlanPB.FreePlan;
     
     return GestureDetector(
       onTap: () => widget.changeSelectedPage(SettingsPage.accountManagement),
@@ -192,69 +194,119 @@ class _SettingsMenuState extends State<SettingsMenu> {
             width: 1,
           ),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 左侧：头像和昵称（水平排列）
+            // 第一行：头像、昵称、版本信息
             Row(
               children: [
-                // 用户头像
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: widget.userProfile.iconUrl.isNotEmpty
-                        ? Image.network(
-                            widget.userProfile.iconUrl,
-                            fit: BoxFit.cover,
-                            width: 24,
-                            height: 24,
-                            errorBuilder: (context, error, stackTrace) {
-                              return FlowySvg(
+                // 左侧：头像和昵称（水平排列）
+                Row(
+                  children: [
+                    // 用户头像
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: widget.userProfile.iconUrl.isNotEmpty
+                            ? Image.network(
+                                widget.userProfile.iconUrl,
+                                fit: BoxFit.cover,
+                                width: 24,
+                                height: 24,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return FlowySvg(
+                                    FlowySvgs.pony_notes_logo_xl,
+                                    size: const Size(16, 16),
+                                    blendMode: null,
+                                  );
+                                },
+                              )
+                            : FlowySvg(
                                 FlowySvgs.pony_notes_logo_xl,
                                 size: const Size(16, 16),
                                 blendMode: null,
-                              );
-                            },
-                          )
-                        : FlowySvg(
-                            FlowySvgs.pony_notes_logo_xl,
-                            size: const Size(16, 16),
-                            blendMode: null,
-                          ),
-                  ),
+                              ),
+                      ),
+                    ),
+                    const HSpace(6),
+                    // 昵称
+                    FlowyText(
+                      widget.userProfile.name.isNotEmpty 
+                          ? widget.userProfile.name 
+                          : '小马笔记的笔记',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: theme.textColorScheme.primary,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                const HSpace(6),
-                // 昵称
-                FlowyText(
-                  widget.userProfile.name.isNotEmpty 
-                      ? widget.userProfile.name 
-                      : '小马笔记的笔记',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: theme.textColorScheme.primary,
-                  overflow: TextOverflow.ellipsis,
+                // 右侧：版本信息
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FlowyText(
+                      planName,
+                      fontSize: 14,
+                      color: theme.textColorScheme.secondary,
+                    ),
+                  ),
                 ),
               ],
             ),
-            // 右侧：版本信息
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: FlowyText(
-                  planName,
-                  fontSize: 14,
-                  color: theme.textColorScheme.secondary,
-                ),
-              ),
-            ),
+            // 第二行：有效期（如果不是免费版）
+            if (!isFreePlan && _subscriptionInfo?.planSubscription.endDate != null) ...[
+              const VSpace(8),
+              _buildValidityPeriod(context),
+            ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildValidityPeriod(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final endDateInt64 = _subscriptionInfo?.planSubscription.endDate;
+    final interval = _subscriptionInfo?.planSubscription.interval;
+    
+    if (endDateInt64 == null || endDateInt64.toInt() == 0) {
+      return const SizedBox.shrink();
+    }
+    
+    // 将时间戳转换为 DateTime
+    final endDate = endDateInt64.toDateTime();
+    
+    // 根据 interval 计算开始日期
+    DateTime startDate;
+    if (interval == RecurringIntervalPB.Year) {
+      // 年付：开始日期 = 结束日期 - 1年
+      startDate = DateTime(endDate.year - 1, endDate.month, endDate.day);
+    } else {
+      // 默认是月付：开始日期 = 结束日期 - 1个月
+      if (endDate.month == 1) {
+        // 处理跨年情况（1月）
+        startDate = DateTime(endDate.year - 1, 12, endDate.day);
+      } else {
+        startDate = DateTime(endDate.year, endDate.month - 1, endDate.day);
+      }
+    }
+    
+    // 格式化日期为 y-MM-dd 格式
+    final dateFormat = 'y-MM-dd';
+    final startDateStr = DateFormat(dateFormat).format(startDate);
+    final endDateStr = DateFormat(dateFormat).format(endDate);
+    
+    return FlowyText(
+      '有效期: $startDateStr至$endDateStr',
+      fontSize: 12,
+      color: theme.textColorScheme.secondary,
     );
   }
 

@@ -154,7 +154,7 @@ class SettingsDialogState with _$SettingsDialogState {
   ) =>
       SettingsDialogState(
         userProfile: userProfile,
-        page: page ?? SettingsPage.account,
+        page: page ?? SettingsPage.accountManagement,
         isBillingEnabled: false,
       );
 }
