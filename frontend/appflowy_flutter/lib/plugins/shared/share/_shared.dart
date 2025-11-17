@@ -1,19 +1,18 @@
-import 'package:appflowy/features/share_tab/data/models/models.dart';
+import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/application/tab_bar_bloc.dart';
 import 'package:appflowy/plugins/shared/share/share_bloc.dart';
 import 'package:appflowy/plugins/shared/share/share_menu.dart';
-import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/plugins/shared/share/share_settings_dialog.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:provider/provider.dart';
 
 import '../../../generated/flowy_svgs.g.dart';
+import '../../../generated/locale_keys.g.dart';
 
-class ShareMenuButton extends StatefulWidget {
+class ShareMenuButton extends StatelessWidget {
   const ShareMenuButton({
     super.key,
     required this.tabs,
@@ -22,113 +21,52 @@ class ShareMenuButton extends StatefulWidget {
   final List<ShareMenuTab> tabs;
 
   @override
-  State<ShareMenuButton> createState() => _ShareMenuButtonState();
-}
-
-class _ShareMenuButtonState extends State<ShareMenuButton> {
-  final popoverController = AFPopoverController();
-  final popoverGroupId = SharePopoverGroupId();
-
-  @override
-  void initState() {
-    super.initState();
-
-    popoverController.addListener(() {
-      if (context.mounted && popoverController.isOpen) {
-        context.read<ShareBloc>().add(const ShareEvent.updatePublishStatus());
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    popoverController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    return IconButton(
+      icon: FlowySvg(FlowySvgs.icon_share_m),
+      tooltip: LocaleKeys.shareAction_buttonText.tr(),
+      padding: const EdgeInsets.all(8),
+      constraints: const BoxConstraints(
+        minWidth: 36,
+        minHeight: 36,
+      ),
+      onPressed: () => _openShareSettings(context),
+    );
+  }
+
+  Future<void> _openShareSettings(BuildContext context) async {
     final shareBloc = context.read<ShareBloc>();
     final databaseBloc = context.read<DatabaseTabBarBloc?>();
     final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
     final shareWithUserBloc = context.read<ShareTabBloc>();
-    // final animationDuration = const Duration(milliseconds: 120);
+    PageAccessLevelBloc? pageAccessLevelBloc;
+    try {
+      pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
+    } catch (_) {
+      pageAccessLevelBloc = null;
+    }
 
-    return BlocBuilder<ShareBloc, ShareState>(
-      builder: (context, state) {
-        return AFPopover(
-          controller: popoverController,
-          groupId: popoverGroupId,
-          anchor: AFAnchorAuto(
-            offset: const Offset(-176, 12),
+    shareBloc.add(const ShareEvent.updatePublishStatus());
+    shareWithUserBloc.add(ShareTabEvent.loadSharedUsers());
+
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      builder: (dialogContext) {
+        return MultiBlocProvider(
+          providers: [
+            if (databaseBloc != null)
+              BlocProvider.value(value: databaseBloc),
+            BlocProvider.value(value: shareBloc),
+            BlocProvider.value(value: userWorkspaceBloc),
+            BlocProvider.value(value: shareWithUserBloc),
+            if (pageAccessLevelBloc != null)
+              BlocProvider.value(value: pageAccessLevelBloc),
+          ],
+          child: ShareSettingsDialog(
+            tabs: tabs,
+            viewName: shareBloc.state.viewName,
           ),
-          // Enable animation
-          // effects: [
-          //   FadeEffect(duration: animationDuration),
-          //   ScaleEffect(
-          //     duration: animationDuration,
-          //     begin: Offset(0.95, 0.95),
-          //     end: Offset(1, 1),
-          //     alignment: Alignment.topRight,
-          //   ),
-          //   MoveEffect(
-          //     duration: animationDuration,
-          //     begin: Offset(20, -20),
-          //     end: Offset(0, 0),
-          //     curve: Curves.easeOutQuad,
-          //   ),
-          // ],
-          popover: (_) {
-            return ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 460,
-              ),
-              child: MultiBlocProvider(
-                providers: [
-                  if (databaseBloc != null)
-                    BlocProvider.value(
-                      value: databaseBloc,
-                    ),
-                  BlocProvider.value(value: shareBloc),
-                  BlocProvider.value(value: userWorkspaceBloc),
-                  BlocProvider.value(value: shareWithUserBloc),
-                ],
-                child: Provider.value(
-                  value: popoverGroupId,
-                  child: ShareMenu(
-                    tabs: widget.tabs,
-                    viewName: state.viewName,
-                    onClose: () {
-                      popoverController.hide();
-                    },
-                  ),
-                ),
-              ),
-            );
-          },
-          child:
-          IconButton(
-            icon: FlowySvg(FlowySvgs.icon_share_m),
-            onPressed: () {
-              popoverController.show();
-              /// Fetch the shared users when the popover is shown
-              context.read<ShareTabBloc>().add(ShareTabEvent.loadSharedUsers());
-            },
-            padding: const EdgeInsets.all(8),
-            constraints: const BoxConstraints(
-              minWidth: 36,
-              minHeight: 36,
-            ),
-          ),
-          // AFFilledTextButton.primary(
-          //   text: LocaleKeys.shareAction_buttonText.tr(),
-          //   onTap: () {
-          //     popoverController.show();
-          //
-          //     /// Fetch the shared users when the popover is shown
-          //     context.read<ShareTabBloc>().add(ShareTabEvent.loadSharedUsers());
-          //   },
-          // ),
         );
       },
     );

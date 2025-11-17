@@ -3,11 +3,8 @@ import 'package:appflowy/features/share_tab/presentation/share_tab.dart'
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/mobile/presentation/home/tab/_round_underline_tab_indicator.dart';
 import 'package:appflowy/plugins/shared/share/export_tab.dart';
 import 'package:appflowy/plugins/shared/share/share_bloc.dart';
-import 'package:appflowy/plugins/shared/share/share_tab.dart' as share_plugin;
-import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/workspace/application/settings/plan/settings_plan_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/settings_plan_comparison_dialog.dart';
@@ -55,14 +52,8 @@ class ShareMenu extends StatefulWidget {
   State<ShareMenu> createState() => _ShareMenuState();
 }
 
-class _ShareMenuState extends State<ShareMenu>
-    with SingleTickerProviderStateMixin {
+class _ShareMenuState extends State<ShareMenu> {
   late ShareMenuTab selectedTab = widget.tabs.first;
-  late final tabController = TabController(
-    length: widget.tabs.length,
-    vsync: this,
-    initialIndex: widget.tabs.indexOf(selectedTab),
-  );
 
   @override
   Widget build(BuildContext context) {
@@ -76,12 +67,8 @@ class _ShareMenuState extends State<ShareMenu>
       mainAxisSize: MainAxisSize.min,
       children: [
         VSpace(theme.spacing.xs),
-        Container(
-          alignment: Alignment.centerLeft,
-          height: 28,
-          child: _buildTabBar(context),
-        ),
-        const AFDivider(),
+        _buildTabBar(context),
+        const VSpace(12),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: theme.spacing.m),
           child: _buildTab(context),
@@ -90,42 +77,71 @@ class _ShareMenuState extends State<ShareMenu>
     );
   }
 
-  @override
-  void dispose() {
-    tabController.dispose();
-    super.dispose();
-  }
-
   Widget _buildTabBar(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    final children = [
-      for (final tab in widget.tabs)
-        Padding(
-          padding: EdgeInsets.only(bottom: theme.spacing.s),
-          child: _Segment(
-            tab: tab,
-            isSelected: selectedTab == tab,
-          ),
+    final appflowyTheme = AppFlowyTheme.of(context);
+    final surfaceColor = appflowyTheme.badgeColorScheme.color19Light1;
+    final selectedBgColor =
+        Theme.of(context).brightness == Brightness.dark ? Colors.black : Colors.white;
+    final unselectedBgColor = Colors.transparent;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: surfaceColor.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withValues(alpha: 0.35),
         ),
-    ];
-    return TabBar(
-      indicatorSize: TabBarIndicatorSize.label,
-      indicator: RoundUnderlineTabIndicator(
-        width: 68.0,
-        borderSide: BorderSide(
-          color: Theme.of(context).colorScheme.primary,
-          width: 3,
-        ),
-        insets: const EdgeInsets.only(bottom: -1),
       ),
-      isScrollable: true,
-      controller: tabController,
-      tabs: children,
-      onTap: (index) {
-        setState(() {
-          selectedTab = widget.tabs[index];
-        });
-      },
+      child: Row(
+        children: [
+          for (final tab in widget.tabs)
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    selectedTab = tab;
+                  });
+                },
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selectedTab == tab
+                        ? selectedBgColor
+                        : unselectedBgColor,
+                    borderRadius: BorderRadius.circular(10),
+                    border: selectedTab == tab
+                        ? Border.all(
+                            color: Theme.of(context)
+                                .dividerColor
+                                .withValues(alpha: 0.2),
+                          )
+                        : null,
+                    boxShadow: selectedTab == tab
+                        ? [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ]
+                        : null,
+                  ),
+                    child: _Segment(
+                      tab: tab,
+                      isSelected: selectedTab == tab,
+                      selectedTextColor:
+                          appflowyTheme.textColorScheme.primary,
+                      unselectedTextColor:
+                          appflowyTheme.textColorScheme.secondary,
+                    ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -138,34 +154,30 @@ class _ShareMenuState extends State<ShareMenu>
       case ShareMenuTab.exportAs:
         return const ExportTab();
       case ShareMenuTab.share:
-        if (FeatureFlag.sharedSection.isOn) {
-          final workspace =
-              context.read<UserWorkspaceBloc>().state.currentWorkspace;
-          final workspaceId = workspace?.workspaceId ??
-              context.read<ShareBloc>().state.workspaceId;
-          final pageId = context.read<ShareBloc>().state.viewId;
-          final isInProPlan = context
-                  .read<UserWorkspaceBloc>()
-                  .state
-                  .workspaceSubscriptionInfo
-                  ?.plan ==
-              WorkspacePlanPB.StandardPlan;
+        final workspace =
+            context.read<UserWorkspaceBloc>().state.currentWorkspace;
+        final workspaceId = workspace?.workspaceId ??
+            context.read<ShareBloc>().state.workspaceId;
+        final pageId = context.read<ShareBloc>().state.viewId;
+        final isInProPlan = context
+                .read<UserWorkspaceBloc>()
+                .state
+                .workspaceSubscriptionInfo
+                ?.plan ==
+            WorkspacePlanPB.StandardPlan;
 
-          return share_section.ShareTab(
-            workspaceId: workspaceId,
-            pageId: pageId,
-            workspaceName: workspace?.name ?? '',
-            workspaceIcon: workspace?.icon ?? '',
-            isInProPlan: isInProPlan,
-            onUpgradeToPro: () {
-              widget.onClose();
+        return share_section.ShareTab(
+          workspaceId: workspaceId,
+          pageId: pageId,
+          workspaceName: workspace?.name ?? '',
+          workspaceIcon: workspace?.icon ?? '',
+          isInProPlan: isInProPlan,
+          onUpgradeToPro: () {
+            widget.onClose();
 
-              _showUpgradeToProDialog(context);
-            },
-          );
-        }
-
-        return const share_plugin.ShareTab();
+            _showUpgradeToProDialog(context);
+          },
+        );
     }
   }
 
@@ -247,36 +259,33 @@ class _Segment extends StatefulWidget {
   const _Segment({
     required this.tab,
     required this.isSelected,
+    required this.selectedTextColor,
+    required this.unselectedTextColor,
   });
 
   final bool isSelected;
   final ShareMenuTab tab;
+  final Color selectedTextColor;
+  final Color unselectedTextColor;
 
   @override
   State<_Segment> createState() => _SegmentState();
 }
 
 class _SegmentState extends State<_Segment> {
-  bool isHovered = false;
-
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
 
-    final textColor = widget.isSelected || isHovered
-        ? theme.textColorScheme.primary
-        : theme.textColorScheme.secondary;
+    final textStyle = theme.textStyle.body.enhanced(
+      weight: widget.isSelected ? FontWeight.w600 : FontWeight.w500,
+      color: widget.isSelected ? widget.selectedTextColor : widget.unselectedTextColor,
+    );
 
-    Widget child = MouseRegion(
-      onEnter: (_) => setState(() => isHovered = true),
-      onExit: (_) => setState(() => isHovered = false),
-      child: Text(
-        widget.tab.i18n,
-        textAlign: TextAlign.center,
-        style: theme.textStyle.body.enhanced(
-          color: textColor,
-        ),
-      ),
+    Widget child = Text(
+      widget.tab.i18n,
+      textAlign: TextAlign.center,
+      style: textStyle,
     );
 
     if (widget.tab == ShareMenuTab.publish) {
@@ -284,6 +293,7 @@ class _SegmentState extends State<_Segment> {
       // show checkmark icon if published
       if (isPublished) {
         child = Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const FlowySvg(
               FlowySvgs.published_checkmark_s,

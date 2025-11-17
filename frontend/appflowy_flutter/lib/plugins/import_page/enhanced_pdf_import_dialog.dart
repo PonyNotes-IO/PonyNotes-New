@@ -491,9 +491,9 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       // 使用阿里云API处理PDF
       // 注意：阿里云API会自动处理所有模式，不需要指定mode、language等参数
       content = await AliyunDocParseProcessor.processPdfFile(
-        _selectedFile!,
-        cancellationToken: _cancellationToken,
-      );
+            _selectedFile!,
+            cancellationToken: _cancellationToken,
+          );
 
       // 检查是否已取消
       if (_cancellationToken?.isCancelled ?? false) {
