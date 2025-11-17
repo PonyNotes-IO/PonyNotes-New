@@ -81,6 +81,33 @@ class AliyunDocParseProcessor {
     );
   }
   
+  /// 处理HTML文件
+  static Future<String> processHtmlFile(
+    File htmlFile, {
+    CancellationToken? cancellationToken,
+  }) async {
+    final bytes = await htmlFile.readAsBytes();
+    final extension = _getHtmlFileExtension(htmlFile.path);
+    return processHtmlBytes(
+      bytes,
+      fileExtension: extension,
+      cancellationToken: cancellationToken,
+    );
+  }
+  
+  /// 处理HTML字节数据
+  static Future<String> processHtmlBytes(
+    Uint8List htmlBytes, {
+    String fileExtension = 'html',
+    CancellationToken? cancellationToken,
+  }) async {
+    return _processFile(
+      htmlBytes,
+      'document.$fileExtension',
+      cancellationToken: cancellationToken,
+    );
+  }
+  
   /// 获取Word文件扩展名
   static String _getWordFileExtension(String filePath) {
     final fileName = filePath.toLowerCase();
@@ -90,6 +117,17 @@ class AliyunDocParseProcessor {
       return 'doc';
     }
     return 'docx';
+  }
+  
+  /// 获取HTML文件扩展名
+  static String _getHtmlFileExtension(String filePath) {
+    final fileName = filePath.toLowerCase();
+    if (fileName.endsWith('.html')) {
+      return 'html';
+    } else if (fileName.endsWith('.htm')) {
+      return 'htm';
+    }
+    return 'html';
   }
   
   /// 获取文件大小的可读字符串
@@ -253,6 +291,8 @@ class AliyunDocParseProcessor {
       return MediaType('application', 'vnd.openxmlformats-officedocument.wordprocessingml.document');
     } else if (lowerName.endsWith('.doc')) {
       return MediaType('application', 'msword');
+    } else if (lowerName.endsWith('.html') || lowerName.endsWith('.htm')) {
+      return MediaType('text', 'html');
     }
     return MediaType('application', 'octet-stream');
   }
