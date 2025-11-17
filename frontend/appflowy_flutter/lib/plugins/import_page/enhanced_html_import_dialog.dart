@@ -11,22 +11,22 @@ import 'package:path/path.dart' as p;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'aliyun_doc_parse_processor.dart';
 
-/// 增强的Word导入对话框，提供实时预览和解析状态
-class EnhancedWordImportDialog extends StatefulWidget {
+/// 增强的HTML导入对话框，使用阿里云解析
+class EnhancedHtmlImportDialog extends StatefulWidget {
   final String parentViewId;
   final VoidCallback? onImportSuccess;
 
-  const EnhancedWordImportDialog({
+  const EnhancedHtmlImportDialog({
     super.key,
     required this.parentViewId,
     this.onImportSuccess,
   });
 
   @override
-  State<EnhancedWordImportDialog> createState() => _EnhancedWordImportDialogState();
+  State<EnhancedHtmlImportDialog> createState() => _EnhancedHtmlImportDialogState();
 }
 
-class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
+class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
   File? _selectedFile;
   String? _extractedContent;
   String? _processingError;
@@ -82,10 +82,10 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
   Widget _buildHeader() {
     return Row(
       children: [
-        const Icon(Icons.description, size: 32, color: Colors.blue),
+        const Icon(Icons.language, size: 32, color: Colors.blue),
         const SizedBox(width: 12),
         const Text(
-          '智能Word导入',
+          '智能HTML导入',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const Spacer(),
@@ -108,36 +108,87 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey[300]!),
       ),
-      child: _selectedFile == null
-          ? Row(
-              children: [
-                const Icon(Icons.insert_drive_file, color: Colors.grey),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextButton.icon(
-                    onPressed: _selectFile,
-                    icon: const Icon(Icons.folder_open),
-                    label: const Text('选择Word文件 (.docx, .doc)'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.insert_drive_file, color: Colors.blue),
+              const SizedBox(width: 8),
+              const Text(
+                '选择HTML文件',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: _isProcessing ? null : _selectFile,
+                icon: const Icon(Icons.folder_open),
+                label: const Text('选择文件'),
+              ),
+            ],
+          ),
+          if (_selectedFile != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.description, color: Colors.blue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          p.basename(_selectedFile!.path),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        FutureBuilder<int>(
+                          future: _selectedFile!.length(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData) {
+                              final size = snapshot.data!;
+                              final sizeStr = _formatFileSize(size);
+                              return Text(
+                                '文件大小: $sizeStr',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                const Icon(Icons.description, color: Colors.blue),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _selectedFile!.path.split('/').last,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  IconButton(
+                    onPressed: _isProcessing
+                        ? null
+                        : () {
+                            setState(() {
+                              _selectedFile = null;
+                              _extractedContent = null;
+                              _processingError = null;
+                            });
+                          },
+                    icon: const Icon(Icons.close, size: 20),
                   ),
-                ),
-                TextButton(
-                  onPressed: _selectFile,
-                  child: const Text('更换文件'),
-                ),
-              ],
+                ],
+              ),
             ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -145,126 +196,159 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: _selectedFile != null && !_isProcessing ? _processFile : null,
+        onPressed: _isProcessing ? null : _processFile,
         icon: _isProcessing
             ? const SizedBox(
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Icon(Icons.auto_awesome),
+            : const Icon(Icons.play_arrow),
         label: Text(_isProcessing ? '解析中...' : '开始解析'),
         style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          backgroundColor: Colors.blue,
+          foregroundColor: Colors.white,
         ),
       ),
     );
   }
 
   Widget _buildContentPreview() {
+    if (_isProcessing) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text('正在解析HTML文件...'),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: _cancelProcessing,
+              child: const Text('取消'),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (_processingError != null) {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.red[50],
-          border: Border.all(color: Colors.red[200]!),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.red[300]!),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red),
+                const SizedBox(width: 8),
+                const Text(
+                  '解析失败',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _processingError!,
+              style: const TextStyle(color: Colors.red),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_extractedContent != null && _extractedContent!.isNotEmpty) {
+      return Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[300]!),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(8),
+                  topRight: Radius.circular(8),
+                ),
+              ),
+              child: Row(
                 children: [
-                  Icon(Icons.error, color: Colors.red),
-                  SizedBox(width: 8),
-                  Text(
-                    '解析失败',
+                  const Icon(Icons.preview, size: 20),
+                  const SizedBox(width: 8),
+                  const Text(
+                    '解析预览',
                     style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.red,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${_extractedContent!.length} 字符',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(_processingError!),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_extractedContent == null || _extractedContent!.isEmpty) {
-      String message = '选择文件并点击"开始解析"来预览提取的内容';
-      if (_isProcessing) {
-        message = '正在解析中，请稍候...';
-      }
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                _isProcessing ? Icons.hourglass_empty : Icons.preview,
-                size: 48,
-                color: Colors.grey,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                message,
-                style: const TextStyle(color: Colors.grey),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.preview, size: 20),
-            const SizedBox(width: 8),
-            const Text(
-              '解析结果预览',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
-            const Spacer(),
-            if (_extractedContent != null && _extractedContent!.isNotEmpty)
-              Text(
-                '${_extractedContent!.length} 字符',
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: MarkdownWidget(
+                  data: _extractedContent!,
+                  shrinkWrap: true,
+                ),
               ),
+            ),
           ],
         ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.grey[300]!),
-              borderRadius: BorderRadius.circular(8),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.description_outlined,
+              size: 64,
+              color: Colors.grey[400],
             ),
-            child: SingleChildScrollView(
-              padding: EdgeInsets.zero,
-              child: MarkdownWidget(
-                data: _extractedContent!,
-                shrinkWrap: true,
-                selectable: true,
+            const SizedBox(height: 16),
+            Text(
+              '请选择HTML文件开始解析',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
               ),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -298,7 +382,7 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
         _isProcessing = false;
         _processingError = '处理已取消';
       });
-      Log.info('Word处理任务已取消');
+      Log.info('HTML处理任务已取消');
     }
   }
 
@@ -306,14 +390,14 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['docx', 'doc'],
+        allowedExtensions: ['html', 'htm'],
         withData: false,
       );
 
       if (result != null && result.files.isNotEmpty) {
         final file = File(result.files.first.path!);
         
-        // 检查文件大小（使用阿里云API限制：20MB）
+        // 检查文件大小（使用阿里云API限制：50MB）
         final fileSize = await file.length();
         if (!AliyunDocParseProcessor.isFileSizeValid(fileSize)) {
           final fileSizeStr = _formatFileSize(fileSize);
@@ -335,7 +419,7 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
         });
       }
     } catch (e) {
-      Log.error('Failed to select Word file: $e');
+      Log.error('Failed to select HTML file: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('选择文件失败: $e')),
       );
@@ -355,9 +439,9 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
   Future<void> _processFile() async {
     if (_selectedFile == null) return;
 
-    // 创建新的取消令牌
+    // 创建取消令牌
     _cancellationToken = CancellationToken();
-    
+
     setState(() {
       _isProcessing = true;
       _processingError = null;
@@ -367,8 +451,8 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
     try {
       String content;
       
-      // 使用阿里云API处理Word文件
-      content = await AliyunDocParseProcessor.processWordFile(
+      // 使用阿里云API处理HTML文件
+      content = await AliyunDocParseProcessor.processHtmlFile(
         _selectedFile!,
         cancellationToken: _cancellationToken,
       );
@@ -384,38 +468,25 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
         return;
       }
 
-      // 验证内容不为空
-      if (content.trim().isEmpty) {
-        if (mounted) {
-          setState(() {
-            _isProcessing = false;
-            _processingError = '提取的内容为空，请检查Word文件是否包含文本内容';
-          });
-        }
-        return;
-      }
-
-      // 更新UI
       if (mounted) {
         setState(() {
-          _extractedContent = content;
           _isProcessing = false;
+          _extractedContent = content;
+          _processingError = null;
         });
       }
+
+      Log.info('HTML解析完成，内容长度: ${content.length}');
     } catch (e) {
-      Log.error('Word处理失败: $e');
+      Log.error('HTML解析失败: $e');
       if (mounted) {
-        // 检查是否已取消
-        if (_cancellationToken?.isCancelled ?? false) {
-          setState(() {
-            _isProcessing = false;
-            _processingError = '处理已取消';
-          });
-        } else {
-          _processingError = 'Word处理失败: $e';
+        setState(() {
           _isProcessing = false;
-        }
+          _processingError = e.toString().replaceAll('Exception: ', '');
+        });
       }
+    } finally {
+      _cancellationToken = null;
     }
   }
 
@@ -449,13 +520,14 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
               }
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Word文件导入成功'),
+                  content: Text('HTML文件导入成功'),
                   backgroundColor: Colors.green,
                 ),
               );
             }
           },
           (error) {
+            Log.error('导入HTML文档失败: $error');
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -466,9 +538,11 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
             }
           },
         );
+      } else {
+        throw Exception('无法转换Markdown为文档格式');
       }
     } catch (e) {
-      Log.error('Failed to import Word document: $e');
+      Log.error('导入HTML文档失败: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

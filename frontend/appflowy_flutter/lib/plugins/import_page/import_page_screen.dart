@@ -1,4 +1,3 @@
-import 'package:appflowy/plugins/import_page/rust_html_processor.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -19,14 +18,9 @@ import 'package:appflowy/shared/markdown_to_document.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:appflowy/startup/startup.dart';
-import 'dart:typed_data';
-import 'package:html2md/html2md.dart' as html2md;
-import 'package:archive/archive.dart';
 import 'enhanced_pdf_import_dialog.dart';
 import 'enhanced_word_import_dialog.dart';
-import 'mineru_api_processor.dart';
-import 'professional_html_parser.dart';
-import 'html_import_dialog.dart';
+import 'enhanced_html_import_dialog.dart';
 
 class ImportPageScreen extends StatefulWidget {
   const ImportPageScreen({super.key});
@@ -223,7 +217,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       } else if (type == 'pdf') {
         await _handlePdfImport();
       } else if (type == 'html') {
-        await _handleHtmlImport();
+        await _handleEnhancedHtmlImport();
       } else if (type == 'word') {
         await _handleWordImport();
       } else {
@@ -527,17 +521,8 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
   }
 
 
-  Future<void> _handleHtmlImport() async {
+  Future<void> _handleEnhancedHtmlImport() async {
     try {
-      // 先显示导入选项对话框
-      final selectedMode = await showDialog<HtmlImportMode>(
-        context: context,
-        builder: (context) => const HtmlImportDialog(),
-      );
-
-      // 用户取消了对话框
-      if (selectedMode == null) return;
-
       // 获取当前工作空间
       final workspaceResult = await FolderEventReadCurrentWorkspace().send();
       final workspace = workspaceResult.fold(
@@ -549,154 +534,28 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       Log.info('在工作空间根目录下检查或创建"外部导入"项目');
       final externalImportView = await _getOrCreateExternalImportView(workspace.id);
 
-      // 选择HTML文件
-      final result = await getIt<FilePickerService>().pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['html', 'htm'],
-        allowMultiple: true,
-      );
-
-      if (result != null && result.files.isNotEmpty) {
-        final importValues = <ImportItemPayloadPB>[];
-
-        for (final file in result.files) {
-          final path = file.path;
-          if (path == null) continue;
-
-          final fileName = file.name;
-          final name = p.basenameWithoutExtension(fileName);
-
-          // 读取HTML文件内容
-          Log.info('📄 开始HTML导入处理: $name (模式: ${selectedMode.name})');
-          final htmlContent = await File(path).readAsString();
-
-          // 根据选择的模式处理HTML
-          String markdownContent;
-
-          // 首先尝试使用Rust HTML解析器（智能解析模式）
-          if (selectedMode == HtmlImportMode.smartParse) {
-            try {
-              final isAvailable = await RustHtmlProcessor.isAvailable();
-              if (isAvailable) {
-                markdownContent = await RustHtmlProcessor.processHtmlString(htmlContent, name, selectedMode);
-                Log.info('✅ Rust智能HTML解析完成，内容长度: ${markdownContent.length}');
-              } else {
-                throw Exception('Rust HTML解析器不可用');
-              }
-            } catch (rustError) {
-              Log.warn('Rust HTML解析器失败，回退到Dart解析: $rustError');
-              markdownContent = ProfessionalHtmlParser.convertHtmlToMarkdown(htmlContent, name);
-              Log.info('✅ Dart智能HTML解析完成，内容长度: ${markdownContent.length}');
-            }
-          } else {
-            // 其他模式使用原有实现
-            switch (selectedMode) {
-              case HtmlImportMode.showSource:
-                markdownContent = ProfessionalHtmlParser.createHtmlViewerContent(name, htmlContent);
-                Log.info('✅ HTML源代码显示内容创建完成，内容长度: ${markdownContent.length}');
-                break;
-
-              case HtmlImportMode.legacyParse:
-                try {
-                  // 使用html2md库进行传统解析
-                  Log.info('🔄 开始传统HTML解析 (html2md库)');
-
-                  // 预处理HTML内容，移除可能干扰解析的元素
-                  final cleanedHtml = _preprocessHtmlForLegacyParsing(htmlContent);
-
-                  // 使用html2md库转换
-                  markdownContent = html2md.convert(cleanedHtml);
-
-                  // 后处理，优化输出格式
-                  markdownContent = _postProcessLegacyMarkdown(markdownContent, name);
-
-                  Log.info('✅ 传统HTML转Markdown成功，内容长度: ${markdownContent.length}');
-                } catch (e) {
-                  Log.error('❌ 传统HTML转Markdown失败: $e');
-                  // 回退方案：直接清理HTML标签
-                  markdownContent = _cleanHtmlToText(htmlContent, name);
-                  Log.info('🔄 已回退到基础HTML清理方案');
-                }
-                break;
-              case HtmlImportMode.smartParse:
-              // 这种情况已经在上面处理了
-                markdownContent = ProfessionalHtmlParser.convertHtmlToMarkdown(htmlContent, name);
-                break;
-            }
-          }
-
-          // 优化Markdown内容（除了源代码显示模式）
-          if (selectedMode != HtmlImportMode.showSource) {
-            markdownContent = _optimizeMarkdownContent(markdownContent, name);
-          }
-
-          Log.info('📋 最终Markdown内容 (前500字符): ${markdownContent.substring(0, markdownContent.length > 500 ? 500 : markdownContent.length)}...');
-
-          // 将Markdown转换为Document格式
-          final document = customMarkdownToDocument(markdownContent);
-          Log.info('📄 Document转换完成，节点数量: ${document.root.children.length}');
-
-          final documentBytes = DocumentDataPBFromTo.fromDocument(document)?.writeToBuffer();
-
-          if (documentBytes != null) {
-            Log.info('✅ 创建导入项目: $name (HTML -> Markdown -> Document)');
-            importValues.add(
-              ImportItemPayloadPB.create()
-                ..name = name
-                ..data = documentBytes
-                ..viewLayout = ViewLayoutPB.Document
-                ..importType = ImportTypePB.Markdown,
-            );
-          } else {
-            Log.error('❌ Document序列化失败！');
-          }
-        }
-
-        if (importValues.isNotEmpty) {
-          // 导入到"外部导入"子项目下
-          final importResult = await ImportBackendService.importPages(
-            externalImportView.id,
-            importValues,
-          );
-
-          importResult.fold(
-                (views) {
+      // 显示增强的HTML导入对话框
+      if (mounted) {
+        await showDialog(
+          context: context,
+          builder: (context) => EnhancedHtmlImportDialog(
+            parentViewId: externalImportView.id,
+            onImportSuccess: () {
+              // 刷新页面或显示成功提示
               if (mounted) {
-                final fileCount = importValues.length;
-                final fileNames = result.files.map((f) => f.name).join(', ');
-                final modeDescription = _getImportModeDescription(selectedMode);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('成功使用$modeDescription导入 $fileCount 个HTML文件到外部导入项目：$fileNames'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-
-                // 如果有导入的视图，打开第一个
-                if (views.items.isNotEmpty) {
-                  context.read<TabsBloc>().openPlugin(views.items.first);
-                }
+                setState(() {
+                  // 触发页面刷新
+                });
               }
             },
-                (error) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('导入失败: $error'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-          );
-        }
+          ),
+        );
       }
     } catch (e) {
-      Log.error('❌ HTML导入失败: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('HTML导入失败: $e'),
+            content: Text('打开HTML导入对话框失败: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -704,16 +563,6 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
     }
   }
 
-  String _getImportModeDescription(HtmlImportMode mode) {
-    switch (mode) {
-      case HtmlImportMode.smartParse:
-        return '智能解析';
-      case HtmlImportMode.showSource:
-        return 'HTML源代码显示';
-      case HtmlImportMode.legacyParse:
-        return '传统解析';
-    }
-  }
   /// 清理HTML标签并转换为纯文本（回退方案）
   String _cleanHtmlToText(String htmlContent, String fileName) {
     Log.info('⚠️ 使用回退方案清理HTML内容');
