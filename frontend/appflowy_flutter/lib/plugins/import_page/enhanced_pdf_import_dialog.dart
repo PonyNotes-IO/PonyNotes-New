@@ -11,7 +11,7 @@ import 'package:appflowy/plugins/document/application/document_data_pb_extension
 import 'package:path/path.dart' as p;
 import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:markdown_widget/markdown_widget.dart';
-import 'mineru_api_processor.dart';
+import 'aliyun_doc_parse_processor.dart';
 
 /// 增强的PDF导入对话框，提供多种处理模式和实时预览
 class EnhancedPdfImportDialog extends StatefulWidget {
@@ -425,14 +425,16 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       if (result != null && result.files.isNotEmpty) {
         final file = File(result.files.first.path!);
         
-        // 检查文件大小（最大50MB）
+        // 检查文件大小（使用阿里云API限制：20MB）
         final fileSize = await file.length();
-        if (fileSize > 50 * 1024 * 1024) {
+        if (!AliyunDocParseProcessor.isFileSizeValid(fileSize)) {
           final fileSizeStr = _formatFileSize(fileSize);
+          final maxSizeStr = _formatFileSize(AliyunDocParseProcessor.maxFileSize);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('文件大小超过限制（最大50MB），当前文件大小：$fileSizeStr'),
+              content: Text('文件大小超过限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。'),
               backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
             ),
           );
           return;
@@ -486,57 +488,12 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     try {
       String content;
       
-      // 根据选择的模式处理PDF，使用MinerU API
-      switch (_importMode) {
-        case PdfImportMode.professional:
-          // 使用MinerU API进行专业处理
-          content = await MinerUApiProcessor.processPdfFile(
-            _selectedFile!,
-            mode: MinerUMode.professional,
-            language: null, // 自动检测语言
-            enableOcr: false,
-            enableTable: false,
-            enableFormula: false,
-            cancellationToken: _cancellationToken,
-          );
-          break;
-        case PdfImportMode.advanced:
-          // 使用MinerU API进行高级处理
-          content = await MinerUApiProcessor.processPdfFile(
-            _selectedFile!,
-            mode: MinerUMode.advanced,
-            language: null, // 自动检测语言
-            enableOcr: false,
-            enableTable: true,
-            enableFormula: true,
-            cancellationToken: _cancellationToken,
-          );
-          break;
-        case PdfImportMode.ocr:
-          // 使用MinerU API进行OCR处理
-          content = await MinerUApiProcessor.processPdfFile(
-            _selectedFile!,
-            mode: MinerUMode.ocr,
-            language: null, // 自动检测语言
-            enableOcr: true,
-            enableTable: true,
-            enableFormula: false,
-            cancellationToken: _cancellationToken,
-          );
-          break;
-        case PdfImportMode.visual:
-          // 使用MinerU API进行复杂布局处理
-          content = await MinerUApiProcessor.processPdfFile(
-            _selectedFile!,
-            mode: MinerUMode.complexLayout,
-            language: null, // 自动检测语言
-            enableOcr: true,
-            enableTable: true,
-            enableFormula: true,
-            cancellationToken: _cancellationToken,
-          );
-          break;
-      }
+      // 使用阿里云API处理PDF
+      // 注意：阿里云API会自动处理所有模式，不需要指定mode、language等参数
+      content = await AliyunDocParseProcessor.processPdfFile(
+        _selectedFile!,
+        cancellationToken: _cancellationToken,
+      );
 
       // 检查是否已取消
       if (_cancellationToken?.isCancelled ?? false) {

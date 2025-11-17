@@ -9,7 +9,7 @@ import 'package:appflowy/workspace/application/settings/share/import_service.dar
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:path/path.dart' as p;
 import 'package:markdown_widget/markdown_widget.dart';
-import 'mineru_api_processor.dart';
+import 'aliyun_doc_parse_processor.dart';
 
 /// 增强的Word导入对话框，提供实时预览和解析状态
 class EnhancedWordImportDialog extends StatefulWidget {
@@ -313,14 +313,16 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
       if (result != null && result.files.isNotEmpty) {
         final file = File(result.files.first.path!);
         
-        // 检查文件大小（最大50MB）
+        // 检查文件大小（使用阿里云API限制：20MB）
         final fileSize = await file.length();
-        if (fileSize > 50 * 1024 * 1024) {
+        if (!AliyunDocParseProcessor.isFileSizeValid(fileSize)) {
           final fileSizeStr = _formatFileSize(fileSize);
+          final maxSizeStr = _formatFileSize(AliyunDocParseProcessor.maxFileSize);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('文件大小超过限制（最大50MB），当前文件大小：$fileSizeStr'),
+              content: Text('文件大小超过限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。'),
               backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
             ),
           );
           return;
@@ -365,14 +367,9 @@ class _EnhancedWordImportDialogState extends State<EnhancedWordImportDialog> {
     try {
       String content;
       
-      // 使用 MinerU API 处理 Word 文件
-      content = await MinerUApiProcessor.processWordFile(
+      // 使用阿里云API处理Word文件
+      content = await AliyunDocParseProcessor.processWordFile(
         _selectedFile!,
-        mode: MinerUMode.professional,
-        language: null, // 自动检测语言
-        enableOcr: false, // Word 文件通常不需要 OCR
-        enableTable: true, // 启用表格提取
-        enableFormula: false,
         cancellationToken: _cancellationToken,
       );
 

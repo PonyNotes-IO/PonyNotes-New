@@ -6,7 +6,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
-import 'mineru_api_processor.dart';
+import 'aliyun_doc_parse_processor.dart';
 
 class PdfMetadata {
   const PdfMetadata({
@@ -144,13 +144,13 @@ class ImportService {
     throw Exception('Evernote import not yet implemented');
   }
 
-  /// Extract content and metadata from a PDF file using MinerU API with different modes
+  /// Extract content and metadata from a PDF file using Aliyun API
   static Future<({String content, PdfMetadata metadata, Uint8List? pdfBytes})> extractPdfContentWithMinerU(
     File file, {
-    MinerUMode mode = MinerUMode.professional,
-    String? language,
-    bool enableOcr = true,
-    bool enableFormula = false,
+    dynamic mode, // 保留参数以兼容现有调用，但不再使用
+    String? language, // 保留参数以兼容现有调用，但不再使用
+    bool enableOcr = true, // 保留参数以兼容现有调用，但不再使用
+    bool enableFormula = false, // 保留参数以兼容现有调用，但不再使用
   }) async {
     try {
       // Read the PDF file as bytes
@@ -167,20 +167,14 @@ class ImportService {
         metadata = const PdfMetadata();
       }
       
-      // Use MinerU API processor with specified mode
+      // Use Aliyun API processor
       String content;
       try {
-        content = await MinerUApiProcessor.processPdfFile(
-          file,
-          mode: mode,
-          language: language,
-          enableOcr: enableOcr,
-          enableFormula: enableFormula,
-        );
-        Log.info('Successfully processed PDF with MinerU API processor (mode: ${mode.name})');
-      } catch (mineruError) {
-        Log.error('MinerU API processor failed: $mineruError');
-        throw Exception('MinerU API处理失败: $mineruError');
+        content = await AliyunDocParseProcessor.processPdfFile(file);
+        Log.info('Successfully processed PDF with Aliyun API processor');
+      } catch (aliyunError) {
+        Log.error('Aliyun API processor failed: $aliyunError');
+        throw Exception('阿里云API处理失败: $aliyunError');
       }
       
       // Add metadata header if we have content
@@ -223,7 +217,7 @@ class ImportService {
       );
       
     } catch (e) {
-      throw Exception('Failed to extract PDF content with MinerU: $e');
+      throw Exception('Failed to extract PDF content with Aliyun: $e');
     }
   }
 
@@ -244,16 +238,13 @@ class ImportService {
         metadata = const PdfMetadata();
       }
       
-      // Use MinerU API processor for maximum fidelity and professional PDF processing
+      // Use Aliyun API processor for maximum fidelity and professional PDF processing
       String content;
       try {
-        content = await MinerUApiProcessor.processPdfFile(
-          file,
-          enableFormula: true,
-        );
-        Log.info('Successfully processed PDF with MinerU API processor');
-      } catch (mineruError) {
-        Log.error('MinerU API processor failed, falling back to basic extraction: $mineruError');
+        content = await AliyunDocParseProcessor.processPdfFile(file);
+        Log.info('Successfully processed PDF with Aliyun API processor');
+      } catch (aliyunError) {
+        Log.error('Aliyun API processor failed, falling back to basic extraction: $aliyunError');
         
         // Fallback to basic extraction using Syncfusion
         try {
