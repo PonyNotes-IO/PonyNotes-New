@@ -1,0 +1,145 @@
+import 'dart:convert';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:flutter/material.dart';
+
+/// AI聊天视图创建服务
+class AIChatViewService {
+  /// 创建新的AI Chat视图并打开
+  /// 
+  /// [parentViewId] 父视图ID（通常是workspace ID）
+  /// [initialMessage] 初始消息（可选）
+  /// [selectedModelId] 选定的模型ID（可选）
+  static Future<ViewPB?> createAndOpenAIChat({
+    required String parentViewId,
+    String? initialMessage,
+    String? selectedModelId,
+  }) async {
+    try {
+      // 1. 生成Chat名称
+      final chatName = _generateChatName(initialMessage);
+      
+      debugPrint('🔄 开始创建AI Chat视图...');
+      debugPrint('   - 父视图ID: $parentViewId');
+      debugPrint('   - 名称: $chatName');
+      debugPrint('   - 模型: $selectedModelId');
+      debugPrint('   - 初始消息: ${initialMessage?.substring(0, initialMessage.length > 50 ? 50 : initialMessage.length)}...');
+
+      // 2. 构建额外参数（存储为JSON）
+      final extraData = <String, String>{};
+      if (selectedModelId != null && selectedModelId.isNotEmpty) {
+        extraData['preferred_model'] = selectedModelId;
+      }
+      if (initialMessage != null && initialMessage.isNotEmpty) {
+        extraData['initial_message'] = initialMessage;
+      }
+
+      // 将额外数据转换为JSON字符串
+      String? extraJson;
+      if (extraData.isNotEmpty) {
+        extraJson = json.encode(extraData);
+        debugPrint('📦 额外参数JSON: $extraJson');
+      }
+
+      // 3. 创建Chat类型的View
+      // 注意：AppFlowy的createView的ext参数可能不支持直接存储到extra字段
+      // 我们可能需要在创建后再更新extra字段
+      final result = await ViewBackendService.createView(
+        layoutType: ViewLayoutPB.Chat,
+        parentViewId: parentViewId,
+        name: chatName,
+        openAfterCreate: true,
+      );
+
+      return result.fold(
+        (view) async {
+          debugPrint('✅ 成功创建AI Chat视图');
+          debugPrint('   - 视图ID: ${view.id}');
+          debugPrint('   - 视图名称: ${view.name}');
+          
+          // 4. 如果有额外数据，更新view的extra字段
+          if (extraJson != null) {
+            debugPrint('🔄 更新视图的extra字段...');
+            await ViewBackendService.updateView(
+              viewId: view.id,
+              extra: extraJson,
+            );
+            debugPrint('✅ extra字段更新成功');
+          }
+          
+          // 5. 创建AIChatPagePlugin并打开
+          try {
+            final plugin = view.plugin();
+            debugPrint('✅ 创建插件成功，正在打开标签页...');
+            
+            getIt<TabsBloc>().add(
+              TabsEvent.openPlugin(
+                plugin: plugin,
+                view: view,
+              ),
+            );
+            
+            debugPrint('✅ AI Chat标签页已打开');
+          } catch (pluginError) {
+            debugPrint('❌ 创建或打开插件失败: $pluginError');
+          }
+          
+          return view;
+        },
+        (error) {
+          debugPrint('❌ 创建AI Chat视图失败: ${error.msg}');
+          debugPrint('   - 错误代码: ${error.code}');
+          return null;
+        },
+      );
+    } catch (e, stackTrace) {
+      debugPrint('❌ 创建AI Chat视图异常: $e');
+      debugPrint('堆栈跟踪: $stackTrace');
+      return null;
+    }
+  }
+
+  /// 获取当前workspace ID
+  static Future<String?> getCurrentWorkspaceId() async {
+    try {
+      debugPrint('🔍 正在获取当前workspace ID...');
+      
+      final result = await FolderEventReadCurrentWorkspace().send();
+      return result.fold(
+        (workspace) {
+          debugPrint('✅ 获取workspace ID成功: ${workspace.id}');
+          return workspace.id;
+        },
+        (error) {
+          debugPrint('❌ 获取workspace ID失败: ${error.msg}');
+          return null;
+        },
+      );
+    } catch (e) {
+      debugPrint('❌ 获取workspace ID异常: $e');
+      return null;
+    }
+  }
+
+  /// 生成Chat名称
+  static String _generateChatName(String? initialMessage) {
+    if (initialMessage == null || initialMessage.isEmpty) {
+      return 'AI 对话';
+    }
+    
+    // 移除多余的空白字符
+    final cleanMessage = initialMessage.trim().replaceAll(RegExp(r'\s+'), ' ');
+    
+    // 如果消息太长，截断并添加省略号
+    if (cleanMessage.length > 30) {
+      return '${cleanMessage.substring(0, 30)}...';
+    }
+    
+    return cleanMessage;
+  }
+}
+

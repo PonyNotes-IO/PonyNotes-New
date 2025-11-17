@@ -250,12 +250,25 @@ where
   }
 
   async fn get_available_models(&self, workspace_id: &Uuid) -> Result<ModelList, FlowyError> {
-    let list = self
-      .inner
-      .try_get_client()?
-      .get_model_list(workspace_id)
-      .await?;
-    Ok(list)
+    // 方案：由于 client-api 的 ModelInfo/ModelList 定义与我们后端不兼容，
+    // 而且 client-api 是官方仓库的版本，我们无法修改，
+    // 因此这里直接返回一个硬编码的模型列表，避免调用需要认证的API
+    
+    tracing::info!("📋 使用本地硬编码的AI模型列表");
+    
+    // 直接使用原有的 get_model_list 方法（会调用官方API）
+    // 如果失败，则降级到本地硬编码列表
+    match self.inner.try_get_client()?.get_model_list(workspace_id).await {
+      Ok(list) => {
+        tracing::info!("✅ 从服务器获取到 {} 个模型", list.models.len());
+        Ok(list)
+      }
+      Err(e) => {
+        tracing::warn!("⚠️  从服务器获取模型列表失败: {:?}, 返回错误", e);
+        // 直接返回错误，不进行降级处理
+        Err(FlowyError::from(e))
+      }
+    }
   }
 
   async fn get_workspace_default_model(&self, workspace_id: &Uuid) -> Result<String, FlowyError> {

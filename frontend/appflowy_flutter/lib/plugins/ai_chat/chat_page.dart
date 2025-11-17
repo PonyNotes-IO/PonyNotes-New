@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_content_page.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -24,6 +25,34 @@ class AIChatPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 从view.extra中读取初始消息和首选模型
+    final viewExtra = view.extra;
+    String? initialMessage;
+    String? preferredModelId;
+    
+    if (viewExtra.isNotEmpty) {
+      debugPrint('🔍 AIChatPage: 解析view.extra...');
+      debugPrint('   - view.extra: $viewExtra');
+      
+      try {
+        // view.extra可能是JSON字符串，尝试解析
+        final extraData = json.decode(viewExtra) as Map<String, dynamic>;
+        initialMessage = extraData['initial_message'] as String?;
+        preferredModelId = extraData['preferred_model'] as String?;
+        
+        if (initialMessage != null) {
+          debugPrint('✅ AIChatPage: 找到初始消息: $initialMessage');
+        }
+        if (preferredModelId != null) {
+          debugPrint('✅ AIChatPage: 找到首选模型: $preferredModelId');
+        }
+      } catch (e) {
+        debugPrint('⚠️  AIChatPage: view.extra不是JSON格式，跳过解析');
+      }
+    } else {
+      debugPrint('ℹ️  AIChatPage: view.extra为空');
+    }
+    
     return MultiBlocProvider(
       providers: [
         /// [ChatBloc] is used to handle chat messages including send/receive message
@@ -31,6 +60,8 @@ class AIChatPage extends StatelessWidget {
           create: (_) => ChatBloc(
             chatId: view.id,
             userId: userProfile.id.toString(),
+            initialMessage: initialMessage,
+            preferredModelId: preferredModelId,
           ),
         ),
 

@@ -5,9 +5,9 @@ import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy/plugins/homepage/widgets/todo_plan_section.dart';
 import 'package:appflowy/plugins/standalone_ai_chat/presentation/widgets/ai_input_area.dart';
 import 'package:appflowy/plugins/standalone_ai_chat/models/chat_image.dart';
-import 'package:appflowy/core/config/ai_config.dart';
+import 'package:appflowy/core/network/ai_model_service.dart';
+import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:flutter/material.dart';
-import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -94,44 +94,52 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _initializeAIConfig();
-  }
-
-  /// 初始化AI配置
-  Future<void> _initializeAIConfig() async {
-    try {
-      await AIConfigService.instance.loadConfig();
-    } catch (e) {
-      debugPrint('主页初始化AI配置失败: $e');
-    }
   }
 
   /// 处理来自AIInputArea的消息发送
-  void _handleMessageSent(String message, AIProvider? provider, List<ChatImage>? images) {
+  /// 改为创建原生AI Chat视图
+  void _handleMessageSent(String message, AIModel? selectedModel, List<ChatImage>? images) async {
     if (message.isEmpty) return;
     
-    // 创建独立的AI聊天插件
+    debugPrint('🔄 主页: 处理消息发送');
+    debugPrint('   - 消息: $message');
+    debugPrint('   - 模型: ${selectedModel?.name} (${selectedModel?.id})');
+    debugPrint('   - 图片数: ${images?.length ?? 0}');
+    
     try {
-      final standaloneAiChatPlugin = makePlugin(
-        pluginType: PluginType.standaloneAiChat,
-        data: {
-          'initialText': message,
-          'selectedModelName': provider?.name, // 传递选择的模型名称
-          'initialImages': images, // 传递选择的图片
-        },
+      // 1. 获取当前workspace ID
+      final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
+      if (workspaceId == null) {
+        _showError('无法获取工作空间信息');
+        return;
+      }
+
+      debugPrint('✅ 主页: 获取到workspace ID: $workspaceId');
+      
+      // 2. 创建并打开原生AI Chat视图
+      final view = await AIChatViewService.createAndOpenAIChat(
+        parentViewId: workspaceId,
+        initialMessage: message,
+        selectedModelId: selectedModel?.id,
       );
 
-      // 在新标签页中打开独立AI聊天
-      getIt<TabsBloc>().add(
-        TabsEvent.openPlugin(
-          plugin: standaloneAiChatPlugin,
-        ),
-      );
-    } catch (e) {
-      // 显示错误消息
+      if (view == null) {
+        _showError('创建AI对话失败');
+      } else {
+        debugPrint('✅ 主页: AI Chat视图创建成功');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ 主页: 处理消息发送失败: $e');
+      debugPrint('堆栈跟踪: $stackTrace');
+      _showError('打开AI对话时发生错误: $e');
+    }
+  }
+
+  void _showError(String message) {
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('打开AI聊天时发生错误: $e'),
+          content: Text(message),
           duration: const Duration(seconds: 2),
         ),
       );

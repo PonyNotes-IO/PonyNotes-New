@@ -16,9 +16,6 @@ import 'package:appflowy/workspace/application/user/user_workspace_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/command_palette/command_palette.dart';
-import 'package:appflowy/core/config/kv.dart';
-import 'package:appflowy/startup/tasks/rust_sdk.dart';
-import 'dart:io';
 import 'package:appflowy/workspace/presentation/home/af_focus_manager.dart';
 import 'package:appflowy/workspace/presentation/home/errors/workspace_failed_screen.dart';
 import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
@@ -233,16 +230,12 @@ class DesktopHomeScreen extends StatelessWidget {
         previous.currentPageManager.plugin.pluginType != 
         current.currentPageManager.plugin.pluginType,
       builder: (context, tabsState) {
-        // 检查当前是否是自定义AI聊天页面
-        final currentPlugin = tabsState.currentPageManager.plugin;
-        final isStandaloneAiChat = currentPlugin.pluginType == PluginType.standaloneAiChat;
-
         return _layoutWidgets(
           layout: layout,
           homeStack: homeStack,
           sidebar: sidebar,
           editPanel: editPanel,
-          bubble: isStandaloneAiChat ? const SizedBox.shrink() : const QuestionBubble(),
+          bubble: const QuestionBubble(),
           homeMenuResizer: homeMenuResizer,
           notificationPanel: notificationPanel,
           sliderHoverTrigger: sliderHoverTrigger,

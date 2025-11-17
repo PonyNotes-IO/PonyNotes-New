@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:appflowy/core/config/ai_config.dart';
+import 'package:appflowy/core/network/ai_model_service.dart';
 import '../ai_welcome_theme.dart';
 import '../../services/image_service.dart';
 import '../../models/chat_image.dart';
@@ -10,7 +10,7 @@ import '../../models/chat_image.dart';
 class AIInputArea extends StatefulWidget {
   const AIInputArea({
     super.key,
-    required this.onMessageSent,
+    this.onMessageSent,
     this.onChatHistoryTap,
     this.customWidth,
     this.customMargin,
@@ -18,7 +18,9 @@ class AIInputArea extends StatefulWidget {
     this.customToolbarWidth,
   });
 
-  final Function(String message, AIProvider? provider, List<ChatImage>? images) onMessageSent;
+  /// 发送消息的回调（使用AIModel系统）
+  final Function(String message, AIModel? model, List<ChatImage>? images)? onMessageSent;
+  
   /// 点击聊天记录按钮的回调（若提供，则在工具栏显示图标按钮）
   final VoidCallback? onChatHistoryTap;
   final double? customWidth; // 可选的自定义宽度
@@ -36,9 +38,9 @@ class _AIInputAreaState extends State<AIInputArea> {
   final GlobalKey _selectorKey = GlobalKey(); // 用于获取模型选择器位置
   
   // 模型选择相关状态
-  AIProvider? _selectedProvider; // 初始化为null，显示"选择模型"
+  AIModel? _selectedModel; // 初始化为null，显示"选择模型"
   bool _isDropdownOpen = false;
-  List<AIProvider> _availableProviders = [];
+  List<AIModel> _availableModels = [];
   OverlayEntry? _overlayEntry;
   
   // 图片选择相关状态
@@ -48,7 +50,7 @@ class _AIInputAreaState extends State<AIInputArea> {
   @override
   void initState() {
     super.initState();
-    _loadAIConfig();
+    _loadModelsFromAPI();
   }
 
   @override
@@ -59,22 +61,41 @@ class _AIInputAreaState extends State<AIInputArea> {
     super.dispose();
   }
 
-  /// 加载AI配置
-  Future<void> _loadAIConfig() async {
-    await AIConfigService.instance.loadConfig();
-    if (mounted) {
-      setState(() {
-        _availableProviders = AIConfigService.instance.getAvailableProviders();
-        // 默认选择豆包模型
-        _selectedProvider = _availableProviders.firstWhere(
-          (provider) => provider == AIProvider.doubao,
-          orElse: () => _availableProviders.isNotEmpty ? _availableProviders.first : AIProvider.doubao,
-        );
-        if (_selectedProvider != null) {
-          AIConfigService.instance.setProvider(_selectedProvider!);
-        }
-      });
+  /// 从API加载模型列表
+  Future<void> _loadModelsFromAPI() async {
+    try {
+      debugPrint('🔄 AIInputArea: 开始加载AI模型列表...');
+      final models = await AIModelService.instance.fetchAvailableModels();
+      if (mounted) {
+        setState(() {
+          _availableModels = models;
+          // 选择默认模型
+          _selectedModel = models.firstWhere(
+            (model) => model.isDefault,
+            orElse: () => models.isNotEmpty ? models.first : _getDefaultModel(),
+          );
+          debugPrint('✅ AIInputArea: 模型列表加载完成，当前选择: ${_selectedModel?.name}');
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ AIInputArea: 加载AI模型失败: $e');
+      if (mounted) {
+        setState(() {
+          // 使用本地的默认模型作为fallback
+          _availableModels = [_getDefaultModel()];
+          _selectedModel = _availableModels.first;
+        });
+      }
     }
+  }
+
+  AIModel _getDefaultModel() {
+    return AIModel(
+      id: 'deepseek-chat',
+      name: 'DeepSeek',
+      description: '',
+      isDefault: true,
+    );
   }
 
   void _sendMessage() {
@@ -86,28 +107,31 @@ class _AIInputAreaState extends State<AIInputArea> {
       _closeDropdown();
     }
 
-    // 确保已选择模型提供商
-    if (_selectedProvider == null) {
-      // 优先选择豆包，如果豆包不可用则选择第一个可用提供商
-      if (_availableProviders.isNotEmpty) {
-        final doubaoProvider = _availableProviders.firstWhere(
-          (provider) => provider == AIProvider.doubao,
-          orElse: () => _availableProviders.first,
-        );
-        _selectProvider(doubaoProvider);
+    // 确保已选择模型
+    if (_selectedModel == null) {
+      if (_availableModels.isNotEmpty) {
+        // 选择第一个可用模型（通常是默认模型）
+        _selectModel(_availableModels.first);
       } else {
+        debugPrint('❌ 没有可用的AI模型');
         // TODO: 显示错误提示，需要配置AI模型
         return;
       }
     }
+
+    debugPrint('📤 AIInputArea: 准备发送消息');
+    debugPrint('   - 消息: $text');
+    debugPrint('   - 模型: ${_selectedModel?.name} (${_selectedModel?.id})');
+    debugPrint('   - 图片数: ${_selectedImages.length}');
 
     // 清空输入框和图片
     _textController.clear();
     final images = List<ChatImage>.from(_selectedImages);
     _selectedImages.clear();
     
-    // 回调通知切换到聊天界面，传递消息、选择的模型和图片
-    widget.onMessageSent(text, _selectedProvider, images.isNotEmpty ? images : null);
+    // 调用回调，使用AIModel系统
+    widget.onMessageSent?.call(text, _selectedModel, images.isNotEmpty ? images : null);
+    
     // 发送后收起键盘
     FocusScope.of(context).unfocus();
   }
@@ -241,7 +265,7 @@ class _AIInputAreaState extends State<AIInputArea> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                _selectedProvider?.displayName ?? '选择模型',
+                _selectedModel?.name ?? '选择模型',
                 style: AIWelcomeTheme.modelSelectorStyle(context),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -271,7 +295,7 @@ class _AIInputAreaState extends State<AIInputArea> {
 
   /// 切换下拉框状态
   void _toggleDropdown() {
-    if (_availableProviders.isEmpty) return;
+    if (_availableModels.isEmpty) return;
     
     if (_isDropdownOpen) {
       _closeDropdown();
@@ -282,7 +306,7 @@ class _AIInputAreaState extends State<AIInputArea> {
 
   /// 打开下拉框
   void _openDropdown() {
-    if (_availableProviders.isEmpty) return;
+    if (_availableModels.isEmpty) return;
     
     setState(() {
       _isDropdownOpen = true;
@@ -311,14 +335,15 @@ class _AIInputAreaState extends State<AIInputArea> {
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: _availableProviders.asMap().entries.map((entry) {
+                children: _availableModels.asMap().entries.map((entry) {
                   final index = entry.key;
-                  final provider = entry.value;
+                  final model = entry.value;
                   final isFirst = index == 0;
-                  final isLast = index == _availableProviders.length - 1;
+                  final isLast = index == _availableModels.length - 1;
+                  final isSelected = _selectedModel?.id == model.id;
                   
                   return InkWell(
-                    onTap: () => _selectProvider(provider),
+                    onTap: () => _selectModel(model),
                     borderRadius: BorderRadius.vertical(
                       top: isFirst ? const Radius.circular(8) : Radius.zero,
                       bottom: isLast ? const Radius.circular(8) : Radius.zero,
@@ -330,21 +355,39 @@ class _AIInputAreaState extends State<AIInputArea> {
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        color: _selectedProvider == provider
+                        color: isSelected
                             ? AIWelcomeTheme.selectedItemColor(context)
                             : Colors.transparent,
                       ),
-                      child: Text(
-                        provider.displayName,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: _selectedProvider == provider
-                              ? AIWelcomeTheme.selectedItemTextColor(context)
-                              : AIWelcomeTheme.primaryTextColor(context),
-                          fontWeight: _selectedProvider == provider
-                              ? FontWeight.w500
-                              : FontWeight.normal,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            model.name,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: isSelected
+                                  ? AIWelcomeTheme.selectedItemTextColor(context)
+                                  : AIWelcomeTheme.primaryTextColor(context),
+                              fontWeight: isSelected
+                                  ? FontWeight.w500
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          if (model.description.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              model.description,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isSelected
+                                    ? AIWelcomeTheme.selectedItemTextColor(context).withOpacity(0.7)
+                                    : AIWelcomeTheme.secondaryTextColor(context),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   );
@@ -368,12 +411,12 @@ class _AIInputAreaState extends State<AIInputArea> {
     _overlayEntry = null;
   }
 
-  /// 选择提供商
-  void _selectProvider(AIProvider provider) {
+  /// 选择模型
+  void _selectModel(AIModel model) {
+    debugPrint('✅ AIInputArea: 选择模型 ${model.name} (${model.id})');
     setState(() {
-      _selectedProvider = provider;
+      _selectedModel = model;
     });
-    AIConfigService.instance.setProvider(provider);
     _closeDropdown();
   }
 
@@ -616,4 +659,3 @@ class _AIInputAreaState extends State<AIInputArea> {
     );
   }
 }
-

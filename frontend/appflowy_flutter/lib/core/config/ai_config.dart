@@ -2,24 +2,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// AI模型提供商枚举
-enum AIProvider {
-  deepseek('deepseek', 'DeepSeek'),
-  qwen('qwen', '通义千问'),
-  doubao('doubao', '豆包');
-
-  const AIProvider(this.id, this.displayName);
-  final String id;
-  final String displayName;
-
-  static AIProvider fromString(String value) {
-    return AIProvider.values.firstWhere(
-      (provider) => provider.id == value,
-      orElse: () => AIProvider.deepseek,
-    );
-  }
-}
-
 /// AI配置模型
 class AIConfig {
   final String apiKey;
@@ -77,9 +59,8 @@ class AIConfigService {
 
   Map<String, String> _envVars = {};
   bool _isLoaded = false;
-  AIProvider _currentProvider = AIProvider.deepseek;
 
-  /// 加载AI配置
+  /// 加载AI配置（已弃用，保留用于兼容性）
   Future<void> loadConfig() async {
     if (_isLoaded) return;
 
@@ -119,15 +100,9 @@ class AIConfigService {
         _parseEnvContent(content);
         _isLoaded = true;
         
-        // 设置默认提供商
-        final defaultModel = _envVars['AI_DEFAULT_MODEL'] ?? 'deepseek';
-        _currentProvider = AIProvider.fromString(defaultModel);
-        
-        debugPrint('✅ AI配置解析成功');
-        debugPrint('✅ 当前提供商: ${_currentProvider.displayName}');
+        debugPrint('✅ AI配置解析成功（已弃用此配置系统，使用公开API）');
       } else {
-        debugPrint('⚠️ AI配置文件未找到');
-        debugPrint('📝 请确保.env.ai文件存在并包含在Flutter资源中');
+        debugPrint('⚠️ AI配置文件未找到（已弃用此配置系统，使用公开API）');
       }
     } catch (e) {
       debugPrint('❌ 加载AI配置失败: $e');
@@ -150,105 +125,10 @@ class AIConfigService {
     }
   }
 
-  /// 获取当前AI提供商
-  AIProvider get currentProvider => _currentProvider;
-
-  /// 设置当前AI提供商
-  void setProvider(AIProvider provider) {
-    _currentProvider = provider;
-    debugPrint('🔄 切换AI提供商为: ${provider.displayName}');
-  }
-
-  /// 获取当前提供商的配置
-  AIConfig getCurrentConfig() {
-    final provider = _currentProvider;
-    switch (provider) {
-      case AIProvider.deepseek:
-        return AIConfig(
-          apiKey: _envVars['AI_DEEPSEEK_API_KEY'] ?? '',
-          apiBase: _envVars['AI_DEEPSEEK_API_BASE'] ?? 'https://api.deepseek.com',
-          modelName: _envVars['AI_DEEPSEEK_MODEL_NAME'] ?? 'deepseek-reasoner',
-          maxTokens: int.tryParse(_envVars['AI_CHAT_MAX_TOKENS'] ?? '4096') ?? 4096,
-          temperature: double.tryParse(_envVars['AI_CHAT_TEMPERATURE'] ?? '0.7') ?? 0.7,
-          streamEnabled: _envVars['AI_CHAT_STREAM_ENABLED']?.toLowerCase() == 'true',
-        );
-      case AIProvider.qwen:
-        return AIConfig(
-          apiKey: _envVars['AI_QWEN_API_KEY'] ?? '',
-          apiBase: _envVars['AI_QWEN_API_BASE'] ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-          modelName: _envVars['AI_QWEN_MODEL_NAME'] ?? 'qwen-turbo',
-          maxTokens: int.tryParse(_envVars['AI_CHAT_MAX_TOKENS'] ?? '4096') ?? 4096,
-          temperature: double.tryParse(_envVars['AI_CHAT_TEMPERATURE'] ?? '0.7') ?? 0.7,
-          streamEnabled: _envVars['AI_CHAT_STREAM_ENABLED']?.toLowerCase() == 'true',
-        );
-      case AIProvider.doubao:
-        return AIConfig(
-          apiKey: _envVars['AI_DOUBAO_API_KEY'] ?? '',
-          apiBase: _envVars['AI_DOUBAO_API_BASE'] ?? 'https://ark.cn-beijing.volces.com/api/v3',
-          modelName: _envVars['AI_DOUBAO_MODEL_NAME'] ?? 'doubao-pro-4k',
-          maxTokens: int.tryParse(_envVars['AI_CHAT_MAX_TOKENS'] ?? '4096') ?? 4096,
-          temperature: double.tryParse(_envVars['AI_CHAT_TEMPERATURE'] ?? '0.7') ?? 0.7,
-          streamEnabled: _envVars['AI_CHAT_STREAM_ENABLED']?.toLowerCase() == 'true',
-        );
-    }
-  }
-
-  /// 获取指定提供商的配置
-  AIConfig getConfigForProvider(AIProvider provider) {
-    switch (provider) {
-      case AIProvider.deepseek:
-        return AIConfig(
-          apiKey: _envVars['AI_DEEPSEEK_API_KEY'] ?? '',
-          apiBase: _envVars['AI_DEEPSEEK_API_BASE'] ?? 'https://api.deepseek.com',
-          modelName: _envVars['AI_DEEPSEEK_MODEL_NAME'] ?? 'deepseek-reasoner',
-          maxTokens: int.tryParse(_envVars['AI_CHAT_MAX_TOKENS'] ?? '4096') ?? 4096,
-          temperature: double.tryParse(_envVars['AI_CHAT_TEMPERATURE'] ?? '0.7') ?? 0.7,
-          streamEnabled: _envVars['AI_CHAT_STREAM_ENABLED']?.toLowerCase() == 'true',
-        );
-      case AIProvider.qwen:
-        return AIConfig(
-          apiKey: _envVars['AI_QWEN_API_KEY'] ?? '',
-          apiBase: _envVars['AI_QWEN_API_BASE'] ?? 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-          modelName: _envVars['AI_QWEN_MODEL_NAME'] ?? 'qwen-turbo',
-          maxTokens: int.tryParse(_envVars['AI_CHAT_MAX_TOKENS'] ?? '4096') ?? 4096,
-          temperature: double.tryParse(_envVars['AI_CHAT_TEMPERATURE'] ?? '0.7') ?? 0.7,
-          streamEnabled: _envVars['AI_CHAT_STREAM_ENABLED']?.toLowerCase() == 'true',
-        );
-      case AIProvider.doubao:
-        return AIConfig(
-          apiKey: _envVars['AI_DOUBAO_API_KEY'] ?? '',
-          apiBase: _envVars['AI_DOUBAO_API_BASE'] ?? 'https://ark.cn-beijing.volces.com/api/v3',
-          modelName: _envVars['AI_DOUBAO_MODEL_NAME'] ?? 'doubao-pro-4k',
-          maxTokens: int.tryParse(_envVars['AI_CHAT_MAX_TOKENS'] ?? '4096') ?? 4096,
-          temperature: double.tryParse(_envVars['AI_CHAT_TEMPERATURE'] ?? '0.7') ?? 0.7,
-          streamEnabled: _envVars['AI_CHAT_STREAM_ENABLED']?.toLowerCase() == 'true',
-        );
-    }
-  }
-
-  /// 获取所有可用的提供商
-  List<AIProvider> getAvailableProviders() {
-    return AIProvider.values.where((provider) {
-      final config = getConfigForProvider(provider);
-      return config.isValid;
-    }).toList();
-  }
-
-  /// 检查是否有可用的AI配置
+  /// 检查是否有可用的AI配置（已弃用）
+  @deprecated
   bool get hasValidConfig {
-    return getAvailableProviders().isNotEmpty;
-  }
-
-  /// 获取配置状态信息
-  Map<String, dynamic> getConfigStatus() {
-    final availableProviders = getAvailableProviders();
-    return {
-      'isLoaded': _isLoaded,
-      'hasValidConfig': hasValidConfig,
-      'currentProvider': _currentProvider.displayName,
-      'availableProviders': availableProviders.map((p) => p.displayName).toList(),
-      'totalProviders': AIProvider.values.length,
-    };
+    return _isLoaded;
   }
 
   /// 重新加载配置

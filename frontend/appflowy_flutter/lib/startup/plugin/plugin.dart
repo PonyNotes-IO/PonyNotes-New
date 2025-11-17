@@ -21,7 +21,6 @@ enum PluginType {
   chat,
   importPage,
   homepage,
-  standaloneAiChat,
   fileLibrary,
   inbox,
   whiteboard,

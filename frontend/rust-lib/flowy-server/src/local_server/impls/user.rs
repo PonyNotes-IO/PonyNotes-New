@@ -370,9 +370,11 @@ fn insert_collabs(
       &params.object_id.to_string(),
       params.encoded_collab.state_vector.to_vec(),
       params.encoded_collab.doc_state.to_vec(),
-    )?
+    )
+    .map_err(|e| FlowyError::internal().with_context(format!("Failed to flush doc: {:?}", e)))?
   }
 
-  write.commit_transaction()?;
+  write.commit_transaction()
+    .map_err(|e| FlowyError::internal().with_context(format!("Failed to commit transaction: {:?}", e)))?;
   Ok(())
 }

@@ -15,10 +15,12 @@ pub async fn default_encode_collab_for_collab_type(
 ) -> FlowyResult<EncodedCollab> {
   match collab_type {
     CollabType::Document => {
-      let encode_collab = default_document_collab_data(object_id)?;
+      let encode_collab = default_document_collab_data(object_id)
+        .map_err(|e| FlowyError::internal().with_context(format!("Document error: {:?}", e)))?;
       Ok(encode_collab)
     },
-    CollabType::Database => default_database_data(object_id).await.map_err(Into::into),
+    CollabType::Database => default_database_data(object_id).await
+      .map_err(|e| FlowyError::internal().with_context(format!("Database error: {:?}", e))),
     CollabType::WorkspaceDatabase => Ok(default_workspace_database_data(object_id)),
     CollabType::Folder => {
       // let collab = Collab::new_with_origin(CollabOrigin::Empty, object_id, vec![], false);

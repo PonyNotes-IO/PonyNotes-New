@@ -32,6 +32,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatBloc({
     required this.chatId,
     required this.userId,
+    this.initialMessage,
+    this.preferredModelId,
   })  : chatController = InMemoryChatController(),
         listener = ChatMessageListener(chatId: chatId),
         super(ChatState.initial()) {
@@ -49,10 +51,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _dispatch();
     _loadMessages();
     _loadSettings();
+    
+    // 如果有初始消息，自动发送
+    if (initialMessage != null && initialMessage!.isNotEmpty) {
+      debugPrint('🔄 ChatBloc: 检测到初始消息，准备自动发送');
+      debugPrint('   - 消息: $initialMessage');
+      debugPrint('   - 首选模型: $preferredModelId');
+      
+      // 延迟发送，确保UI已经初始化
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!isClosed) {
+          debugPrint('📤 ChatBloc: 自动发送初始消息');
+          add(ChatEvent.sendMessage(
+            message: initialMessage!,
+            format: null,
+            metadata: {},
+            promptId: null,
+          ));
+        }
+      });
+    }
   }
 
   final String chatId;
   final String userId;
+  final String? initialMessage;
+  final String? preferredModelId;
   final ChatMessageListener listener;
   final ChatController chatController;
 

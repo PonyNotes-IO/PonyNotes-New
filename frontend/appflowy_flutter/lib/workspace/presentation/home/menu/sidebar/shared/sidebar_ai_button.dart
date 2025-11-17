@@ -1,10 +1,8 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
-import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 
 class SidebarAiButton extends StatelessWidget {
@@ -42,20 +40,31 @@ class SidebarAiButton extends StatelessWidget {
 
   void _openAiChatDialog(
       BuildContext context, UserWorkspaceState workspaceState) async {
+    debugPrint('🔄 侧边栏: 点击问AI按钮');
+    
     try {
-      // 创建独立的AI聊天插件，不依赖于工作空间
-      final standaloneAiChatPlugin = makePlugin(
-        pluginType: PluginType.standaloneAiChat,
-        data: null, // 独立插件不需要数据
+      // 获取当前workspace ID
+      final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
+      if (workspaceId == null) {
+        _showMessage(context, '无法获取工作空间信息');
+        return;
+      }
+
+      debugPrint('✅ 侧边栏: 获取到workspace ID: $workspaceId');
+
+      // 创建并打开原生AI Chat视图（不带初始消息）
+      final view = await AIChatViewService.createAndOpenAIChat(
+        parentViewId: workspaceId,
       );
 
-      // 在新标签页中打开独立AI聊天
-      getIt<TabsBloc>().add(
-        TabsEvent.openPlugin(
-          plugin: standaloneAiChatPlugin,
-        ),
-      );
-    } catch (e) {
+      if (view == null) {
+        _showMessage(context, '创建AI对话失败');
+      } else {
+        debugPrint('✅ 侧边栏: AI Chat视图创建成功');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ 侧边栏: 打开AI Chat失败: $e');
+      debugPrint('堆栈跟踪: $stackTrace');
       _showMessage(context, '打开AI聊天时发生错误: $e');
     }
   }

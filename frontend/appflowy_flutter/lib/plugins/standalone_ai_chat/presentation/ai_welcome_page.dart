@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:appflowy/core/config/ai_config.dart';
+import 'package:appflowy/core/network/ai_model_service.dart';
 import 'widgets/ai_welcome_header.dart';
 import 'widgets/ai_input_area.dart';
 import 'ai_welcome_theme.dart';
@@ -14,7 +14,7 @@ class AIWelcomePage extends StatelessWidget {
     this.onChatHistoryTap,
   });
 
-  final Function(String message, AIProvider? provider, List<ChatImage>? images) onMessageSent;
+  final Function(String message, AIModel? model, List<ChatImage>? images) onMessageSent;
   
   /// 点击聊天记录按钮的回调
   final VoidCallback? onChatHistoryTap;
