@@ -159,23 +159,22 @@ class _ShareMenuState extends State<ShareMenu> {
         final workspaceId = workspace?.workspaceId ??
             context.read<ShareBloc>().state.workspaceId;
         final pageId = context.read<ShareBloc>().state.viewId;
-        final isInProPlan = context
-                .read<UserWorkspaceBloc>()
-                .state
-                .workspaceSubscriptionInfo
-                ?.plan ==
-            WorkspacePlanPB.StandardPlan;
+        // final isInProPlan = context
+        //         .read<UserWorkspaceBloc>()
+        //         .state
+        //         .workspaceSubscriptionInfo
+        //         ?.plan ==
+        //     WorkspacePlanPB.StandardPlan;
 
         return share_section.ShareTab(
           workspaceId: workspaceId,
           pageId: pageId,
           workspaceName: workspace?.name ?? '',
           workspaceIcon: workspace?.icon ?? '',
-          isInProPlan: isInProPlan,
+          isInProPlan: false,//isInProPlan,
           onUpgradeToPro: () {
-            widget.onClose();
-
-            _showUpgradeToProDialog(context);
+            // widget.onClose();
+            // _showUpgradeToProDialog(context);
           },
         );
     }
