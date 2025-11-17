@@ -20,12 +20,26 @@ class LegalDocumentScreen extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: SelectableText(
-          content,
-          style: const TextStyle(fontSize: 14, height: 1.6),
-        ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SizedBox(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+            child: SingleChildScrollView(
+              child: Container(
+                width: constraints.maxWidth,
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
+                ),
+                padding: const EdgeInsets.all(16.0),
+                child: SelectableText(
+                  content,
+                  style: const TextStyle(fontSize: 14, height: 1.6),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
