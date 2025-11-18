@@ -1,3 +1,5 @@
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
@@ -138,21 +140,27 @@ class _AccountManagementViewState extends State<AccountManagementView> {
               const VSpace(32),
               
               // 退出登录按钮
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: const Color(0xFFFF6B47),
-                    width: 1,
+              GestureDetector(
+                onTap: () async {
+                  await getIt<AuthService>().signOut();
+                  await runAppFlowy();
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: const Color(0xFFFF6B47),
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(theme.spacing.s),
                   ),
-                  borderRadius: BorderRadius.circular(theme.spacing.s),
-                ),
-                child: const Center(
-                  child: FlowyText(
-                    '退出登录',
-                    fontSize: 16,
-                    color: Color(0xFFFF6B47),
+                  child: const Center(
+                    child: FlowyText(
+                      '退出登录',
+                      fontSize: 16,
+                      color: Color(0xFFFF6B47),
+                    ),
                   ),
                 ),
               ),

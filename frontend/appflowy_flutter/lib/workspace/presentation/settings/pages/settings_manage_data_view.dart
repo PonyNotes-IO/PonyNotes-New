@@ -63,7 +63,6 @@ class SettingsManageDataView extends StatelessWidget {
 
           return SettingsBody(
             title: LocaleKeys.settings_manageDataPage_title.tr(),
-            description: LocaleKeys.settings_manageDataPage_description.tr(),
             children: [
               SettingsCategory(
                 title:

@@ -48,7 +48,6 @@ class SettingsStorageView extends StatelessWidget {
 
           return SettingsBody(
             title: '存储设置',
-            description: '管理您的数据存储和缓存设置',
             children: [
               // 本地默认存储路径设置
               SettingsCategory(
