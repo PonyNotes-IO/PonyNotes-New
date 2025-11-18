@@ -91,9 +91,11 @@ class _SettingsMenuState extends State<SettingsMenu> {
       ),
       height: double.infinity,
       child: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(
-          vertical: 24,
-          horizontal: theme.spacing.l,
+        padding: EdgeInsets.only(
+          top: 12,
+          bottom: 24,
+          left: theme.spacing.l,
+          right: theme.spacing.l,
         ),
         physics: const ClampingScrollPhysics(),
         child: Column(
@@ -197,6 +199,16 @@ class _SettingsMenuState extends State<SettingsMenu> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 顶部居中显示"个人主页"
+            Center(
+              child: FlowyText(
+                '个人主页',
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: theme.textColorScheme.secondary,
+              ),
+            ),
+            const VSpace(12),
             // 第一行：头像、昵称、版本信息
             Row(
               children: [

@@ -20,10 +20,11 @@ class SettingsHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           title,
+          textAlign: TextAlign.center,
           style: theme.textStyle.heading2.enhanced(
             color: theme.textColorScheme.primary,
           ),
@@ -35,6 +36,7 @@ class SettingsHeader extends StatelessWidget {
           VSpace(theme.spacing.xs),
           Text(
             description!,
+            textAlign: TextAlign.center,
             maxLines: 4,
             style: theme.textStyle.caption.standard(
               color: theme.textColorScheme.secondary,

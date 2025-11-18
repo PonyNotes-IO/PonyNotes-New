@@ -28,10 +28,14 @@ class SettingsBody extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SettingsHeader(
-            title: title,
-            description: description,
-            descriptionBuilder: descriptionBuilder,
+          // 标题区域单独处理，确保在整个宽度中居中
+          SizedBox(
+            width: double.infinity,
+            child: SettingsHeader(
+              title: title,
+              description: description,
+              descriptionBuilder: descriptionBuilder,
+            ),
           ),
           Flexible(
             child: SeparatedColumn(
