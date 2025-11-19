@@ -21,15 +21,45 @@ class SidebarShareButton extends StatefulWidget {
   State<SidebarShareButton> createState() => _SidebarShareButtonState();
 }
 
-class _SidebarShareButtonState extends State<SidebarShareButton> {
+class _SidebarShareButtonState extends State<SidebarShareButton>
+    with WidgetsBindingObserver {
   bool _isExpanded = false;
   List<ViewPB> _userSharedNotes = [];
   bool _isLoading = false;
+  late final SharedSectionBloc _sharedSectionBloc;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final workspaceId =
+        context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ??
+            '';
+    _sharedSectionBloc = SharedSectionBloc(
+      workspaceId: workspaceId,
+      repository: RustSharePagesRepositoryImpl(),
+      enablePolling: true,
+    )..add(const SharedSectionInitEvent());
     _loadUserSharedNotes();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _sharedSectionBloc.close();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshSharedData();
+    }
+  }
+
+  void _refreshSharedData() {
+    _loadUserSharedNotes();
+    _sharedSectionBloc.add(const SharedSectionRefreshEvent());
   }
 
   Future<void> _loadUserSharedNotes() async {
@@ -78,20 +108,12 @@ class _SidebarShareButtonState extends State<SidebarShareButton> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    return BlocProvider(
-      create: (_) => SharedSectionBloc(
-        workspaceId: '', // bloc 内部不强依赖此值用于拉取列表
-        repository: RustSharePagesRepositoryImpl(),
-        enablePolling: true,
-      )..add(const SharedSectionInitEvent()),
+    return BlocProvider.value(
+      value: _sharedSectionBloc,
       child: BlocListener<SidebarSectionsBloc, SidebarSectionsState>(
         listenWhen: (prev, curr) => prev.section.privateViews.length != curr.section.privateViews.length,
         listener: (prev, curr) {
-          // Log.debug('Private views count changed, refreshing shared notes list'); // PonyNotes: 关闭非白板日志
-          // Log.debug('Previous private views: ${prev.section.privateViews.length}');
-          // Log.debug('Current private views: ${curr.section.privateViews.length}'); // PonyNotes: 关闭非白板日志
-          // Only refresh when private views count changes (share/unshare actions)
-          _loadUserSharedNotes();
+          _refreshSharedData();
         },
         child: BlocBuilder<SharedSectionBloc, SharedSectionState>(
           builder: (context, state) {
