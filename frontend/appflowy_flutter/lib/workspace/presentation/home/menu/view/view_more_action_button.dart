@@ -99,8 +99,11 @@ class ViewMoreActionPopover extends StatelessWidget {
       if (view.layout != ViewLayoutPB.Chat) {
         actionTypes.addAll([
           ViewMoreActionType.changeIcon,
-          ViewMoreActionType.duplicate,
         ]);
+        
+        // 同时显示"复制"和"复制到我的空间"选项，让用户选择
+        actionTypes.add(ViewMoreActionType.duplicate);
+        actionTypes.add(ViewMoreActionType.duplicateToMySpace);
       }
 
       actionTypes.addAll([

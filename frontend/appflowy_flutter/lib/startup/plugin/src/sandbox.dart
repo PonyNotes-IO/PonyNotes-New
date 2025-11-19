@@ -17,6 +17,11 @@ class PluginSandbox {
       <PluginType, PluginConfig>{};
   late PluginRunner pluginRunner;
 
+  /// Check if a plugin type is registered
+  bool hasPlugin(PluginType pluginType) {
+    return _pluginBuilders.containsKey(pluginType);
+  }
+
   int indexOf(PluginType pluginType) {
     final index =
         _pluginBuilders.keys.toList().indexWhere((ty) => ty == pluginType);

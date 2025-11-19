@@ -1537,7 +1537,8 @@
       "contextMenu": {
         "copy": "复制",
         "cut": "剪切",
-        "paste": "粘贴"
+        "paste": "粘贴",
+        "pasteAsPlainText": "粘贴为纯文本"
       },
       "action": "操作",
       "database": {
@@ -2102,8 +2103,59 @@
     "placeholder": "输入你要搜索的内容..."
   },
   "space": {
+    "delete": "删除",
+    "deleteConfirmation": "删除:",
+    "deleteConfirmationDescription": "这个空间中的所有页面都将被删除并移至垃圾桶，任何已发布的页面都会取消发布。",
+    "rename": "重新命名空间",
+    "changeIcon": "变更图标",
+    "manage": "管理空间",
+    "addNewSpace": "创建空间",
+    "collapseAllSubPages": "折叠所有子页面",
+    "createNewSpace": "创建新空间",
+    "createSpaceDescription": "建立多个公开与私人空间，以更好地整理您的工作。",
+    "spaceName": "空间名称",
+    "spaceNamePlaceholder": "例如营销、工程、人力资源",
+    "permission": "空间权限",
+    "publicPermission": "公开",
+    "publicPermissionDescription": "所有具有完全访问权限的工作区成员",
+    "privatePermission": "私人",
+    "privatePermissionDescription": "只有您可以访问此空间",
+    "spaceIconBackground": "背景色",
+    "spaceIcon": "图标",
+    "dangerZone": "危险区域",
+    "unableToDeleteLastSpace": "无法删除最后一个空间",
+    "unableToDeleteSpaceNotCreatedByYou": "无法删除他人建立的工作区",
+    "enableSpacesForYourWorkspace": "启用工作区的 Spaces",
+    "title": "空间",
     "defaultSpaceName": "一般",
-    "mySpace": "我的空间"
+    "mySpace": "我的空间",
+    "upgradeSpaceTitle": "启用空间",
+    "upgradeSpaceDescription": "建立多个公开和私人空间，以更好地组织您的工作区。",
+    "upgrade": "升级",
+    "upgradeYourSpace": "创建多个空间",
+    "quicklySwitch": "快速切换到下一个空间",
+    "duplicate": "复制空间",
+    "movePageToSpace": "将页面移动到空间",
+    "cannotMovePageToDatabase": "无法将页面移至数据库",
+    "switchSpace": "切换空间",
+    "spaceNameCannotBeEmpty": "空间名称不能为空",
+    "success": {
+      "deleteSpace": "空間刪除成功",
+      "renameSpace": "已成功重新命名空間",
+      "duplicateSpace": "已成功複製空間",
+      "updateSpace": "已成功更新空間"
+    },
+    "error": {
+      "deleteSpace": "刪除空間失敗",
+      "renameSpace": "重新命名空間失敗",
+      "duplicateSpace": "複製空間失敗",
+      "updateSpace": "更新空間失敗"
+    },
+    "createSpace": "創造空間",
+    "manageSpace": "管理空間",
+    "renameSpace": "重新命名空间",
+    "mSpaceIconColor": "空间图标颜色",
+    "mSpaceIcon": "空间图标"
   },
   "sidebar": {
     "appName": "小马笔记",
@@ -2149,15 +2201,61 @@
     "weekdaySix": "六",
     "weekdaySeven": "日"
   },
-  "publish": {
-    "saveThisPage": "使用此模板创建",
-    "retry": "重试",
-    "noPublished": "暂无发布",
-    "selectItemToView": "从左侧选择一个发布项查看内容",
-    "selectFavoriteToView": "选择左侧最爱项查看内容",
-    "selectPublishToView": "选择左侧发布项查看内容",
-    "noFavorites": "暂无最爱"
-  },
+    "publish": {
+      "saveThisPage": "使用此模板创建",
+      "retry": "重试",
+      "noPublished": "暂无发布",
+      "selectItemToView": "从左侧选择一个发布项查看内容",
+      "selectFavoriteToView": "选择左侧最爱项查看内容",
+      "selectPublishToView": "选择左侧发布项查看内容",
+      "noFavorites": "暂无最爱",
+      "hasNotBeenPublished": "此页面尚未发布。",
+      "spaceHasNotBeenPublished": "目前尚不支持发布工作区",
+      "reportPage": "举报页面",
+      "databaseHasNotBeenPublished": "目前尚不支持发布数据库。",
+      "createdWith": "创建于",
+      "downloadApp": "下载 AppFlowy",
+      "copy": {
+        "codeBlock": "代码区块的内容已复制到剪贴板",
+        "imageBlock": "图片链接已复制到剪贴板",
+        "mathBlock": "数学公式已复制到剪贴板",
+        "fileBlock": "文件链接已复制到剪贴板"
+      },
+      "containsPublishedPage": "此页面包含一个或多个已发布的页面。如果您继续，它们将会被取消发布。您要继续删除吗？",
+      "publishSuccessfully": "发布成功",
+      "unpublishSuccessfully": "取消发布成功",
+      "publishFailed": "发布失败",
+      "unpublishFailed": "取消发布失败",
+      "noAccessToVisit": "无法访问此页面...",
+      "createWithAppFlowy": "使用 AppFlowy 建立网站",
+      "fastWithAI": "使用 AI 快速且轻松。",
+      "tryItNow": "立即尝试",
+      "onlyGridViewCanBePublished": "仅限网格视图可发布",
+      "database": {
+        "zero": "发布所选取的 {} 视图",
+        "one": "发布所选取的 {} 个视图",
+        "many": "发布所选取的 {} 个视图",
+        "other": "发布所选取的 {} 个视图"
+      },
+      "mustSelectPrimaryDatabase": "必须选择主要视图",
+      "noDatabaseSelected": "未选取数据库，请至少选择一个数据库。",
+      "unableToDeselectPrimaryDatabase": "无法取消选择主要数据库",
+      "duplicateTitle": "您想将其新增到哪里？",
+      "selectWorkspace": "选择工作区",
+      "addTo": "添加",
+      "duplicateSuccessfully": "已新增至您的工作区",
+      "duplicateSuccessfullyDescription": "尚未安装 AppFlowy？点击“下载”后，下载将自动开始。",
+      "downloadIt": "下载",
+      "openApp": "在应用程序中打开",
+      "duplicateFailed": "复制失败",
+      "membersCount": {
+        "zero": "没有成员",
+        "one": "1 名成员",
+        "many": "{count} 名成员",
+        "other": "{count} 名成员"
+      },
+      "useThisTemplate": "使用模板"
+    },
   "web": {
     "continueWithGoogle": "使用 Google 账户登录",
     "continueWithGithub": "使用 GitHub 账户登录",

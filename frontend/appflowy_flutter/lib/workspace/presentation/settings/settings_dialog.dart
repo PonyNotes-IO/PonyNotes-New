@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -70,6 +72,8 @@ class SettingsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width * 0.7;
     final height = MediaQuery.of(context).size.height * 0.8;
+    final minHeight = math.min(600.0, height);
+    final maxHeight = math.max(height, minHeight);
     final theme = AppFlowyTheme.of(context);
     final currentWorkspaceMemberRole =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
@@ -85,8 +89,8 @@ class SettingsDialog extends StatelessWidget {
           constraints: BoxConstraints(
             minWidth: 564,
             maxWidth: 1200,
-            minHeight: 600,
-            maxHeight: height,
+            minHeight: minHeight,
+            maxHeight: maxHeight,
           ),
           expandHeight: false,
           child: ScaffoldMessenger(
