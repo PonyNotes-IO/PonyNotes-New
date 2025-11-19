@@ -57,10 +57,7 @@ class UserBackendService implements IUserBackendService {
     }
 
     if (phone != null) {
-      // TODO: 需要在protobuf中添加phone字段支持
-      // payload.phone = phone;
-      // 临时方案：将手机号存储在用户元数据中或其他字段
-      // 这里先注释掉，等protobuf更新后再启用
+      payload.phone = phone;
     }
 
     if (iconUrl != null) {

@@ -98,9 +98,7 @@ class ContactBindingService {
       );
       
       final userService = UserBackendService(userId: userProfile.id);
-      // TODO: 临时使用email字段存储手机号，等protobuf添加phone字段后再修改
-      // 这会导致email字段被覆盖，但目前没有更好的方案
-      final result = await userService.updateUserProfile(email: phoneNumber);
+      final result = await userService.updateUserProfile(phone: phoneNumber);
       
       return result.fold(
         (_) {

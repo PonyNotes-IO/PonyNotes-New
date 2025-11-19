@@ -87,6 +87,9 @@ pub struct UpdateUserProfilePayloadPB {
 
   #[pb(index = 5, one_of)]
   pub icon_url: Option<String>,
+
+  #[pb(index = 6, one_of)]
+  pub phone: Option<String>,
 }
 
 impl UpdateUserProfilePayloadPB {
@@ -116,6 +119,11 @@ impl UpdateUserProfilePayloadPB {
     self.icon_url = Some(icon_url.to_owned());
     self
   }
+
+  pub fn phone(mut self, phone: &str) -> Self {
+    self.phone = Some(phone.to_owned());
+    self
+  }
 }
 
 impl TryInto<UpdateUserProfileParams> for UpdateUserProfilePayloadPB {
@@ -139,12 +147,15 @@ impl TryInto<UpdateUserProfileParams> for UpdateUserProfilePayloadPB {
       Some(icon_url) => Some(UserIcon::parse(icon_url)?.0),
     };
 
+    let phone = self.phone;
+
     Ok(UpdateUserProfileParams {
       uid: self.id,
       name,
       email,
       password,
       icon_url,
+      phone,
       token: None,
     })
   }

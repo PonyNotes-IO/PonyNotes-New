@@ -229,6 +229,7 @@ pub struct UpdateUserProfileParams {
   pub email: Option<String>,
   pub password: Option<String>,
   pub icon_url: Option<String>,
+  pub phone: Option<String>,
   pub token: Option<String>,
 }
 
@@ -262,6 +263,11 @@ impl UpdateUserProfileParams {
 
   pub fn with_icon_url<T: ToString>(mut self, icon_url: T) -> Self {
     self.icon_url = Some(icon_url.to_string());
+    self
+  }
+
+  pub fn with_phone<T: ToString>(mut self, phone: T) -> Self {
+    self.phone = Some(phone.to_string());
     self
   }
 }

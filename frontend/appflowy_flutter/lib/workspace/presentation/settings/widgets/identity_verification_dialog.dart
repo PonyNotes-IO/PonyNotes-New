@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:appflowy/user/application/contact_binding_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/validator.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/slide_verification_widget.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +27,9 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
   final codeFocusNode = FocusNode();
   bool _isVerified = false;
   bool _isSending = false;
-  int _countdown = 0;  // 初始为0，允许首次自动发送验证码
+  bool _isSlideVerified = false;  // 滑块是否已验证
+  bool _hasRequestedCode = false;  // 是否已经请求过验证码
+  int _countdown = 0;
   Timer? _timer;
 
   @override
@@ -187,7 +190,18 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
                 ),
               ),
             
-            const VSpace(24),
+            const VSpace(16),
+            
+            // 滑块验证组件
+            SlideVerificationWidget(
+              onVerificationSuccess: () {
+                setState(() {
+                  _isSlideVerified = true;
+                });
+              },
+            ),
+            
+            const VSpace(16),
             
             // 验证码输入框
             Column(
@@ -234,7 +248,7 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
                                 ),
                               )
                             : FlowyText(
-                                _canResendCode() ? '重新获取' : '重新获取(${_countdown}s)',
+                                _getButtonText(),
                                 fontSize: 14,
                                 color: _canResendCode() ? Colors.white : Colors.grey,
                               ),
@@ -288,7 +302,19 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
   }
 
   bool _canResendCode() {
-    return _countdown == 0;
+    // 第一次发送：需要滑块已验证 + 没有倒计时
+    // 重新发送：需要没有倒计时（不需要再次验证滑块）
+    return _countdown == 0 && (_hasRequestedCode || _isSlideVerified);
+  }
+
+  String _getButtonText() {
+    if (_countdown > 0) {
+      return '重新获取(${_countdown}s)';
+    } else if (_hasRequestedCode) {
+      return '重新获取';
+    } else {
+      return '获取验证码';
+    }
   }
 
   Future<void> _sendVerificationCode() async {
@@ -321,6 +347,7 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
           setState(() {
             _countdown = 60;
             _isSending = false;
+            _hasRequestedCode = true;  // 标记已经请求过验证码
           });
           
           _startCountdown();
@@ -424,10 +451,7 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
   @override
   void initState() {
     super.initState();
-    // 自动发送验证码
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _sendVerificationCode();
-    });
+    // 不再自动发送验证码，需要用户先拖动滑块验证
   }
 }
 

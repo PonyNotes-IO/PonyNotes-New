@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:appflowy/user/application/contact_binding_service.dart';
 import 'package:appflowy/util/validator.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/slide_verification_widget.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -27,7 +28,9 @@ class _PhoneChangeDialogState extends State<PhoneChangeDialog> {
   
   bool _isChanging = false;
   bool _isSending = false;
-  int _countdown = 0;  // 初始为0，允许立即发送验证码
+  bool _isSlideVerified = false;  // 滑块是否已验证
+  bool _hasRequestedCode = false;  // 是否已经请求过验证码
+  int _countdown = 0;
   Timer? _timer;
 
   @override
@@ -141,21 +144,13 @@ class _PhoneChangeDialogState extends State<PhoneChangeDialog> {
             
             const VSpace(16),
             
-            // 滑动验证（简化版，实际项目中需要集成真实的滑动验证组件）
-            Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.grey.withOpacity(0.3)),
-              ),
-              child: Center(
-                child: FlowyText(
-                  '按住滑块，拖动到右边',
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
+            // 滑块验证组件
+            SlideVerificationWidget(
+              onVerificationSuccess: () {
+                setState(() {
+                  _isSlideVerified = true;
+                });
+              },
             ),
             
             const VSpace(16),
@@ -202,7 +197,7 @@ class _PhoneChangeDialogState extends State<PhoneChangeDialog> {
                             ),
                           )
                         : FlowyText(
-                            _canSendCode() ? '获取验证码' : '获取验证码(${_countdown}s)',
+                            _getButtonText(),
                             fontSize: 14,
                             color: _canSendCode() ? Colors.white : Colors.grey,
                           ),
@@ -257,9 +252,22 @@ class _PhoneChangeDialogState extends State<PhoneChangeDialog> {
   }
 
   bool _canSendCode() {
+    // 第一次发送：需要手机号有效 + 滑块已验证 + 没有倒计时
+    // 重新发送：需要手机号有效 + 没有倒计时（不需要再次验证滑块）
     return phoneController.text.isNotEmpty && 
            Validator.isValidPhone(phoneController.text) && 
-           _countdown == 0;
+           _countdown == 0 &&
+           (_hasRequestedCode || _isSlideVerified);
+  }
+
+  String _getButtonText() {
+    if (_countdown > 0) {
+      return '重新获取(${_countdown}s)';
+    } else if (_hasRequestedCode) {
+      return '重新获取';
+    } else {
+      return '获取验证码';
+    }
   }
 
   bool _canComplete() {
@@ -286,6 +294,7 @@ class _PhoneChangeDialogState extends State<PhoneChangeDialog> {
           setState(() {
             _countdown = 60;
             _isSending = false;
+            _hasRequestedCode = true;  // 标记已经请求过验证码
           });
           
           _startCountdown();
