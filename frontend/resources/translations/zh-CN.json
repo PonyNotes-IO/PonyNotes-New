@@ -1537,7 +1537,8 @@
       "contextMenu": {
         "copy": "复制",
         "cut": "剪切",
-        "paste": "粘贴"
+        "paste": "粘贴",
+        "pasteAsPlainText": "粘贴为纯文本"
       },
       "action": "操作",
       "database": {

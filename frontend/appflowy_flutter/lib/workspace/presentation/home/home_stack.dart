@@ -710,9 +710,18 @@ class PageManager {
             return const BlankPage();
           }
 
+          final pluginSandbox = getIt<PluginSandbox>();
+          
+          // Check if the plugin type is registered before trying to get its index
+          if (!pluginSandbox.hasPlugin(notifier.plugin.pluginType)) {
+            // If plugin is not registered yet, show blank page
+            // This can happen during initial app load before plugins are fully registered
+            return const BlankPage();
+          }
+
           return FadingIndexedStack(
-            index: getIt<PluginSandbox>().indexOf(notifier.plugin.pluginType),
-            children: getIt<PluginSandbox>().supportPluginTypes.map(
+            index: pluginSandbox.indexOf(notifier.plugin.pluginType),
+            children: pluginSandbox.supportPluginTypes.map(
               (pluginType) {
                 if (pluginType == notifier.plugin.pluginType) {
                   final builder = notifier.plugin.widgetBuilder;

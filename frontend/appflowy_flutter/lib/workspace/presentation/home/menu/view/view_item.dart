@@ -890,6 +890,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
             case ViewMoreActionType.duplicate:
               context.read<ViewBloc>().add(const ViewEvent.duplicate());
               break;
+            case ViewMoreActionType.duplicateToMySpace:
+              context.read<ViewBloc>().add(const ViewEvent.duplicateToMySpace());
+              break;
             case ViewMoreActionType.openInNewTab:
               context.read<TabsBloc>().openTab(widget.view);
               break;

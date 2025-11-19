@@ -326,9 +326,9 @@
     function generateDeepLink(viewId, path = 'note') {
       const encodedViewId = encodeURIComponent(viewId);
       if (path) {
-        return `appflowy-flutter://${path}?viewId=${encodedViewId}`;
+        return `ponynotes://${path}?viewId=${encodedViewId}`;
       } else {
-        return `appflowy-flutter://?viewId=${encodedViewId}`;
+        return `ponynotes://?viewId=${encodedViewId}`;
       }
     }
 

@@ -8,6 +8,7 @@ enum ViewMoreActionType {
   favorite,
   unFavorite,
   duplicate,
+  duplicateToMySpace, // 复制到我的空间
   copyLink, // not supported yet.
   rename,
   moveTo,
@@ -39,6 +40,8 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
         return LocaleKeys.disclosureAction_unfavorite.tr();
       case ViewMoreActionType.duplicate:
         return LocaleKeys.disclosureAction_duplicate.tr();
+      case ViewMoreActionType.duplicateToMySpace:
+        return '复制到我的空间';
       case ViewMoreActionType.copyLink:
         return LocaleKeys.disclosureAction_copyLink.tr();
       case ViewMoreActionType.rename:
@@ -72,6 +75,8 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
         return FlowySvgs.unfavorite_s;
       case ViewMoreActionType.duplicate:
         return FlowySvgs.duplicate_s;
+      case ViewMoreActionType.duplicateToMySpace:
+        return FlowySvgs.duplicate_s;
       case ViewMoreActionType.rename:
         return FlowySvgs.view_item_rename_s;
       case ViewMoreActionType.moveTo:
@@ -101,6 +106,7 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
       case ViewMoreActionType.favorite:
       case ViewMoreActionType.unFavorite:
       case ViewMoreActionType.duplicate:
+      case ViewMoreActionType.duplicateToMySpace:
       case ViewMoreActionType.copyLink:
       case ViewMoreActionType.rename:
       case ViewMoreActionType.openInNewTab:

@@ -109,6 +109,7 @@ enum FeatureFlag {
       FeatureFlag.syncDatabase,
       FeatureFlag.syncDocument,
       FeatureFlag.inlineSubPageMention,
+      FeatureFlag.sharedSection,
     ].contains(this)) {
       return true;
     }
@@ -124,11 +125,11 @@ enum FeatureFlag {
       case FeatureFlag.syncDatabase:
       case FeatureFlag.spaceDesign:
       case FeatureFlag.inlineSubPageMention:
-      // case FeatureFlag.collaborativeWorkspace: // 禁用协作工作空间功能
       case FeatureFlag.membersSettings:
+      case FeatureFlag.sharedSection:
         return true;
       case FeatureFlag.collaborativeWorkspace: // 改为默认关闭
-      case FeatureFlag.sharedSection:
+        return false;
       case FeatureFlag.unknown:
         return false;
     }

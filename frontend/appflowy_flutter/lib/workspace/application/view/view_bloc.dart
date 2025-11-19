@@ -9,8 +9,12 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/expand_views.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_listener.dart';
 import 'package:appflowy/workspace/application/recent/cached_recent_service.dart';
+import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
@@ -193,6 +197,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               syncAfterDuplicate: true,
               includeChildren: true,
               suffix: ' (${LocaleKeys.menuAppHeader_pageNameSuffix.tr()})',
+              parentViewId: e.parentViewId,
             );
             emit(
               result.fold(
@@ -201,6 +206,101 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
                 (error) => state.copyWith(
                   successOrFailure: FlowyResult.failure(error),
                 ),
+              ),
+            );
+          },
+          duplicateToMySpace: (e) async {
+            // 获取当前用户信息
+            final userResult = await UserBackendService.getCurrentUserProfile();
+            final userProfile = userResult.fold(
+              (user) => user,
+              (error) => null,
+            );
+            
+            if (userProfile == null) {
+              emit(
+                state.copyWith(
+                  successOrFailure: FlowyResult.failure(
+                    FlowyError(msg: '无法获取当前用户信息'),
+                  ),
+                ),
+              );
+              return;
+            }
+
+            // 获取当前工作区ID
+            final workspaceResult = await UserBackendService.getCurrentWorkspace();
+            final workspace = workspaceResult.fold(
+              (w) => w,
+              (error) => null,
+            );
+            
+            if (workspace == null) {
+              emit(
+                state.copyWith(
+                  successOrFailure: FlowyResult.failure(
+                    FlowyError(msg: '无法获取当前工作区'),
+                  ),
+                ),
+              );
+              return;
+            }
+
+            // 获取或创建"我的空间"
+            final workspaceService = WorkspaceService(
+              workspaceId: workspace.id,
+              userId: userProfile.id,
+            );
+            
+            // 先尝试获取私有空间
+            final privateViewsResult = await workspaceService.getPrivateViews();
+            final privateViews = privateViewsResult.fold(
+              (views) => views,
+              (error) => <ViewPB>[],
+            );
+            
+            ViewPB? mySpace = privateViews.firstWhereOrNull(
+              (v) => v.isSpace && v.spacePermission == SpacePermission.private,
+            );
+            
+            // 如果没有找到，尝试从公共视图查找
+            if (mySpace == null) {
+              final publicViewsResult = await workspaceService.getPublicViews();
+              final publicViews = publicViewsResult.fold(
+                (views) => views,
+                (error) => <ViewPB>[],
+              );
+              
+              // 查找第一个空间作为目标（如果没有私有空间，使用工作区根目录）
+              mySpace = publicViews.firstWhereOrNull((v) => v.isSpace);
+            }
+            
+            // 使用工作区ID作为父视图ID（如果没有找到空间）
+            final targetParentId = mySpace?.id ?? workspace.id;
+            
+            final result = await ViewBackendService.duplicate(
+              view: view,
+              openAfterDuplicate: true,
+              syncAfterDuplicate: true,
+              includeChildren: true,
+              suffix: ' (副本)',
+              parentViewId: targetParentId,
+            );
+            
+            emit(
+              result.fold(
+                (l) {
+                  Log.info('成功将笔记复制到我的空间: ${l.name}');
+                  return state.copyWith(
+                    successOrFailure: FlowyResult.success(null),
+                  );
+                },
+                (error) {
+                  Log.error('复制笔记到我的空间失败: ${error.msg}');
+                  return state.copyWith(
+                    successOrFailure: FlowyResult.failure(error),
+                  );
+                },
               ),
             );
           },
@@ -466,7 +566,9 @@ class ViewEvent with _$ViewEvent {
 
   const factory ViewEvent.delete() = Delete;
 
-  const factory ViewEvent.duplicate() = Duplicate;
+  const factory ViewEvent.duplicate({String? parentViewId}) = Duplicate;
+
+  const factory ViewEvent.duplicateToMySpace() = DuplicateToMySpace;
 
   const factory ViewEvent.move(
     ViewPB from,
