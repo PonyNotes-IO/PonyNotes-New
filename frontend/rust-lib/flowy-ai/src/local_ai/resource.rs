@@ -107,58 +107,9 @@ impl LocalAIResourceController {
   }
 
   pub async fn calculate_pending_resources(&self) -> FlowyResult<Option<PendingResource>> {
-    let setting = self.get_llm_setting();
-    let client = Client::builder().timeout(Duration::from_secs(5)).build()?;
-    match client.get(&setting.ollama_server_url).send().await {
-      Ok(resp) if resp.status().is_success() => {
-        info!(
-          "[LLM Resource] Ollama server is running at {}",
-          setting.ollama_server_url
-        );
-      },
-      _ => {
-        info!(
-          "[LLM Resource] Ollama server is not responding at {}",
-          setting.ollama_server_url
-        );
-        return Ok(Some(PendingResource::OllamaServerNotReady));
-      },
-    }
-
-    let required_models = vec![setting.chat_model_name, setting.embedding_model_name];
-
-    // Query the /api/tags endpoint to get a structured list of locally available models.
-    let tags_url = format!("{}/api/tags", setting.ollama_server_url);
-
-    match client.get(&tags_url).send().await {
-      Ok(resp) if resp.status().is_success() => {
-        let tags: TagsResponse = resp.json().await.inspect_err(|e| {
-          log::error!("[LLM Resource] Failed to parse /api/tags JSON response: {e:?}")
-        })?;
-        // Check if each of our required models exists in the list of available models
-        for required in &required_models {
-          if !tags
-            .models
-            .iter()
-            .any(|m| m.name == *required || m.name == format!("{}:latest", required))
-          {
-            log::trace!(
-              "[LLM Resource] required model '{}' not found in API response",
-              required
-            );
-            return Ok(Some(PendingResource::MissingModel(required.clone())));
-          }
-        }
-      },
-      _ => {
-        error!(
-          "[LLM Resource] Failed to fetch models from {} (GET /api/tags)",
-          setting.ollama_server_url
-        );
-        return Ok(Some(PendingResource::OllamaServerNotReady));
-      },
-    }
-
+    // 禁用本地 AI 资源检查
+    // 我们直接使用云端 AI 服务，不需要本地 Ollama 服务器
+    info!("[LLM Resource] Local AI disabled, using cloud AI service only");
     Ok(None)
   }
 
