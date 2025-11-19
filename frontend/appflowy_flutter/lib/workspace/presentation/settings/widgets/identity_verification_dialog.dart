@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:appflowy/user/application/contact_binding_service.dart';
+import 'package:appflowy/util/validator.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +23,8 @@ class IdentityVerificationDialog extends StatefulWidget {
 class _IdentityVerificationDialogState extends State<IdentityVerificationDialog> {
   final codeController = TextEditingController();
   final codeFocusNode = FocusNode();
-  bool _isCodeSent = false;
+  bool _isVerified = false;
+  bool _isSending = false;
   int _countdown = 60;
   Timer? _timer;
 
@@ -31,6 +34,15 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
     codeFocusNode.dispose();
     _timer?.cancel();
     super.dispose();
+  }
+
+  /// 格式化手机号显示（脱敏处理）
+  String _formatPhoneNumber(String phone) {
+    final cleanPhone = Validator.cleanPhoneNumber(phone);
+    if (cleanPhone.length >= 11) {
+      return '${cleanPhone.substring(0, 3)}******${cleanPhone.substring(cleanPhone.length - 2)}';
+    }
+    return phone;
   }
 
   @override
@@ -99,7 +111,7 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
                 ),
                 const Spacer(),
                 FlowyText(
-                  widget.phoneNumber,
+                  _formatPhoneNumber(widget.phoneNumber),
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                   color: theme.textColorScheme.primary,
@@ -136,35 +148,43 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
             
             const VSpace(16),
             
-            // 验证通过提示
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF0F9FF),
-                borderRadius: BorderRadius.circular(6),
+            // 验证通过提示（动态显示）
+            if (_isVerified)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F9FF),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      size: 16,
+                      color: Color(0xFF10B981),
+                    ),
+                    const HSpace(8),
+                    FlowyText(
+                      '验证通过',
+                      fontSize: 14,
+                      color: const Color(0xFF059669),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isVerified = false;
+                        });
+                      },
+                      child: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle,
-                    size: 16,
-                    color: Color(0xFF10B981),
-                  ),
-                  const HSpace(8),
-                  FlowyText(
-                    '验证通过',
-                    fontSize: 14,
-                    color: const Color(0xFF059669),
-                  ),
-                  const Spacer(),
-                  const Icon(
-                    Icons.close,
-                    size: 16,
-                    color: Color(0xFF9CA3AF),
-                  ),
-                ],
-              ),
-            ),
             
             const VSpace(24),
             
@@ -181,6 +201,9 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
                         decoration: const InputDecoration(
                           hintText: '6位短信验证码',
                           border: OutlineInputBorder(),
+                          counterText: '', // 隐藏字符计数
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8), // 调整内边距
+                          isDense: true, // 使输入框更紧凑
                         ),
                         keyboardType: TextInputType.number,
                         maxLength: 6,
@@ -200,18 +223,27 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
                               : Colors.grey.withOpacity(0.3),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: FlowyText(
-                          _canResendCode() ? '重新获取' : '${_countdown}s',
-                          fontSize: 14,
-                          color: _canResendCode() ? Colors.white : Colors.grey,
-                        ),
+                        child: _isSending
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : FlowyText(
+                                _canResendCode() ? '重新获取' : '重新获取(${_countdown}s)',
+                                fontSize: 14,
+                                color: _canResendCode() ? Colors.white : Colors.grey,
+                              ),
                       ),
                     ),
                   ],
                 ),
                 const VSpace(8),
                 FlowyText(
-                  '已发送短信验证码到绑定手机',
+                  '短信验证码已发送至您的手机',
                   fontSize: 12,
                   color: theme.textColorScheme.secondary,
                 ),
@@ -258,22 +290,62 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
     return _countdown == 0;
   }
 
-  void _sendVerificationCode() {
-    if (!_canResendCode()) return;
+  Future<void> _sendVerificationCode() async {
+    if (!_canResendCode() || _isSending) return;
+    
+    // 清理手机号格式
+    final cleanPhone = Validator.cleanPhoneNumber(widget.phoneNumber);
+    
+    // 验证手机号格式
+    if (!Validator.isValidPhone(cleanPhone)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('手机号格式不正确'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     
     setState(() {
-      _isCodeSent = true;
-      _countdown = 60;
+      _isSending = true;
     });
     
-    _startCountdown();
+    // 调用真实的API发送验证码
+    final result = await ContactBindingService.sendPhoneVerificationCode(cleanPhone);
     
-    // TODO: 实际发送验证码的逻辑
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('验证码已发送'),
-        duration: Duration(seconds: 2),
-      ),
+    result.fold(
+      (success) {
+        if (mounted) {
+          setState(() {
+            _countdown = 60;
+            _isSending = false;
+          });
+          
+          _startCountdown();
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('验证码已发送到 ${_formatPhoneNumber(widget.phoneNumber)}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      (error) {
+        if (mounted) {
+          setState(() {
+            _isSending = false;
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('发送失败: ${error.msg}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
     );
   }
 
@@ -290,7 +362,7 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
     });
   }
 
-  void _verifyCode() {
+  Future<void> _verifyCode() async {
     if (codeController.text.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -301,16 +373,48 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
       return;
     }
     
-    // TODO: 实际验证码验证逻辑
-    // 这里模拟验证成功
-    widget.onVerificationComplete?.call();
-    Navigator.of(context).pop();
+    // 清理手机号格式
+    final cleanPhone = Validator.cleanPhoneNumber(widget.phoneNumber);
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('验证成功'),
-        duration: Duration(seconds: 2),
-      ),
+    // 调用真实的API验证并绑定手机号
+    final result = await ContactBindingService.bindPhoneNumber(
+      cleanPhone,
+      codeController.text,
+    );
+    
+    result.fold(
+      (success) {
+        if (mounted) {
+          setState(() {
+            _isVerified = true;
+          });
+          
+          // 延迟一下让用户看到验证成功的提示
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (mounted) {
+              widget.onVerificationComplete?.call();
+              Navigator.of(context).pop();
+            }
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('手机验证成功'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('验证失败: ${error.msg}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
     );
   }
 

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:appflowy/user/application/contact_binding_service.dart';
+import 'package:appflowy/util/validator.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +24,8 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
   final emailFocusNode = FocusNode();
   final codeFocusNode = FocusNode();
   bool _isCodeSent = false;
+  bool _isBinding = false;
+  bool _isSending = false;
   int _countdown = 60;
   Timer? _timer;
 
@@ -135,7 +139,9 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                           focusedBorder: OutlineInputBorder(
                             borderSide: BorderSide(color: Color(0xFF4285F4)),
                           ),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          counterText: '', // 隐藏字符计数
+                          isDense: true, // 使输入框更紧凑
                         ),
                         keyboardType: TextInputType.number,
                         maxLength: 6,
@@ -158,11 +164,20 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                           ),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: FlowyText(
-                          _canSendCode() ? '重新获取' : '${_countdown}s',
-                          fontSize: 14,
-                          color: _canSendCode() ? Colors.black : Colors.grey,
-                        ),
+                        child: _isSending
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                ),
+                              )
+                            : FlowyText(
+                                _canSendCode() ? '重新获取' : '重新获取(${_countdown}s)',
+                                fontSize: 14,
+                                color: _canSendCode() ? Colors.black : Colors.grey,
+                              ),
                       ),
                     ),
                   ],
@@ -195,7 +210,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                 const HSpace(12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _canComplete() ? _completeBinding : null,
+                    onPressed: (_canComplete() && !_isBinding) ? _completeBinding : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _canComplete() 
                           ? const Color(0xFFFF6B47) 
@@ -208,10 +223,19 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                     ),
-                    child: const Text(
-                      '完成',
-                      style: TextStyle(fontSize: 16),
-                    ),
+                    child: _isBinding
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text(
+                            '完成',
+                            style: TextStyle(fontSize: 16),
+                          ),
                   ),
                 ),
               ],
@@ -234,22 +258,62 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
            codeController.text.length == 6;
   }
 
-  void _sendVerificationCode() {
-    if (!_canSendCode()) return;
+  Future<void> _sendVerificationCode() async {
+    if (!_canSendCode() || _isSending) return;
+    
+    // 验证邮箱格式
+    if (!Validator.isValidEmail(emailController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('请输入有效的邮箱地址'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     
     setState(() {
-      _isCodeSent = true;
-      _countdown = 60;
+      _isSending = true;
     });
     
-    _startCountdown();
+    // 调用真实的API发送验证码
+    final result = await ContactBindingService.sendEmailVerificationCode(
+      emailController.text,
+    );
     
-    // TODO: 实际发送验证码的逻辑
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('验证码已发送到 ${emailController.text}'),
-        duration: const Duration(seconds: 2),
-      ),
+    result.fold(
+      (success) {
+        if (mounted) {
+          setState(() {
+            _isCodeSent = true;
+            _countdown = 60;
+            _isSending = false;
+          });
+          
+          _startCountdown();
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('验证码已发送到 ${emailController.text}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      (error) {
+        if (mounted) {
+          setState(() {
+            _isSending = false;
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('发送失败: ${error.msg}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
     );
   }
 
@@ -266,7 +330,9 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
     });
   }
 
-  void _completeBinding() {
+  Future<void> _completeBinding() async {
+    if (!_canComplete() || _isBinding) return;
+    
     if (!_canComplete()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -277,15 +343,44 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
       return;
     }
     
-    // TODO: 实际绑定邮箱的逻辑
-    widget.onBindingComplete?.call();
-    Navigator.of(context).pop();
+    setState(() {
+      _isBinding = true;
+    });
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('邮箱 ${emailController.text} 绑定成功'),
-        duration: const Duration(seconds: 2),
-      ),
+    // 调用真实的API绑定邮箱
+    final result = await ContactBindingService.bindEmail(
+      emailController.text,
+      codeController.text,
+    );
+    
+    result.fold(
+      (success) {
+        if (mounted) {
+          widget.onBindingComplete?.call();
+          Navigator.of(context).pop();
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('邮箱 ${emailController.text} 绑定成功'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
+      (error) {
+        if (mounted) {
+          setState(() {
+            _isBinding = false;
+          });
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('绑定失败: ${error.msg}'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      },
     );
   }
 }

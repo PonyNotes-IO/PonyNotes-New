@@ -5,12 +5,12 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/image/imag
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
-import 'package:appflowy/workspace/presentation/settings/shared/settings_category.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_input_field.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 
 class SettingsUserProfileView extends StatefulWidget {
@@ -28,107 +28,116 @@ class SettingsUserProfileView extends StatefulWidget {
 class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
   late String _name;
   late String _avatarUrl;
+  late String _originalName;
+  late String _originalAvatarUrl;
   bool _isUploading = false;
+  bool _isSaving = false;
+  String? _pendingAvatarPath;
 
   @override
   void initState() {
     super.initState();
     _name = widget.userProfile.name;
     _avatarUrl = widget.userProfile.iconUrl;
+    _originalName = widget.userProfile.name;
+    _originalAvatarUrl = widget.userProfile.iconUrl;
   }
 
   @override
   Widget build(BuildContext context) {
     return SettingsBody(
-      title: "我的账户",
+      title: "个人资料",
       autoSeparate: false,
       children: [
-        SettingsCategory(
-          title: "个人资料",
-          children: [
-            const SizedBox(height: 20),
-            // 头像部分
-            Center(
-              child: Column(
-                children: [
-                  Stack(
-                    children: [
-                      GestureDetector(
-                        onTap: _isUploading ? null : _uploadAvatar,
-                        child: Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.orange.withOpacity(0.5),
-                              width: 2,
-                              style: BorderStyle.solid,
-                            ),
-                          ),
-                          child: ClipOval(
-                            child: _avatarUrl.isNotEmpty
-                                ? _buildAvatar(_avatarUrl)
-                                : _buildDefaultAvatar(),
-                          ),
-                        ),
-                      ),
-                      if (_isUploading)
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.black54,
-                            ),
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    "上传图片",
-                    style: TextStyle(
-                      color: Colors.orange,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+        const SizedBox(height: 20),
+        // 我的名称
+        _buildEditField(
+          context,
+          label: "我的名称",
+          child: SettingsInputField(
+            value: _name,
+            placeholder: "请输入您的名称",
+            onSave: (value) {
+              if (value.trim().isEmpty) return;
+              setState(() {
+                _name = value;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 24),
+        // 我的头像
+        _buildEditField(
+          context,
+          label: "我的头像",
+          child: _buildAvatarUploadSection(),
+        ),
+        const SizedBox(height: 32),
+        // 保存按钮
+        _buildSaveButton(),
+      ],
+    );
+  }
+
+  // 构建编辑字段 - 同一行显示标签和内容
+  Widget _buildEditField(BuildContext context, {required String label, required Widget child}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 120,
+          child: FlowyText(
+            label,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
+
+  // 构建头像上传区域
+  Widget _buildAvatarUploadSection() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        // 可点击的头像
+        GestureDetector(
+          onTap: _isUploading ? null : _selectAvatar,
+          child: Stack(
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: ClipOval(
+                  child: _avatarUrl.isNotEmpty
+                      ? _buildAvatar(_avatarUrl)
+                      : _buildDefaultAvatar(),
+                ),
               ),
-            ),
-            const SizedBox(height: 40),
-            // 用户名输入
-            Row(
-              children: [
-                SizedBox(
-                  width: 120,
-                  child: Text(
-                    "我的名称",
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+              // 上传状态指示器
+              if (_isUploading)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black54,
+                    ),
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        strokeWidth: 2,
+                      ),
                     ),
                   ),
                 ),
-                Expanded(
-                  child: SettingsInputField(
-                    value: _name,
-                    placeholder: "我的名称",
-                    onSave: (value) {
-                      if (value.trim().isEmpty) return;
-                      _updateUserName(value);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -160,24 +169,63 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
     return Container(
       width: double.infinity,
       height: double.infinity,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white,
-      ),
+      color: Colors.grey[100],
       child: Center(
         child: FlowySvg(
           FlowySvgs.pony_notes_logo_xl,
-          size: const Size(100, 100),
+          size: const Size(40, 40),
           blendMode: null,
         ),
       ),
     );
   }
 
-  Future<void> _uploadAvatar() async {
+  // 构建保存按钮
+  Widget _buildSaveButton() {
+    final hasChanges = _hasChanges();
+    
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        ElevatedButton(
+          onPressed: (hasChanges && !_isSaving) ? _saveChanges : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          child: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Text(
+                  "保存",
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+        ),
+      ],
+    );
+  }
+
+  // 检查是否有变化
+  bool _hasChanges() {
+    return _name != _originalName || 
+           _avatarUrl != _originalAvatarUrl || 
+           _pendingAvatarPath != null;
+  }
+
+  // 选择头像
+  Future<void> _selectAvatar() async {
     if (_isUploading) return;
 
-    // 选择图片文件
     final result = await getIt<FilePickerService>().pickFiles(
       dialogTitle: '',
       type: FileType.image,
@@ -188,8 +236,84 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
     final localImagePath = result.files.first.path;
     if (localImagePath == null) return;
 
-    setState(() => _isUploading = true);
+    setState(() {
+      _pendingAvatarPath = localImagePath;
+      // 临时显示选中的图片
+      _avatarUrl = localImagePath;
+    });
+  }
 
+  // 保存所有变化
+  Future<void> _saveChanges() async {
+    if (_isSaving) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      final userService = UserBackendService(userId: widget.userProfile.id);
+      
+      // 1. 如果有待上传的头像，先上传头像
+      String? finalAvatarUrl = _avatarUrl;
+      if (_pendingAvatarPath != null) {
+        finalAvatarUrl = await _uploadAvatarFile(_pendingAvatarPath!);
+        if (finalAvatarUrl == null) {
+          // 头像上传失败，停止保存
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('头像上传失败')),
+            );
+          }
+          return;
+        }
+      }
+
+      // 2. 更新用户资料（名称和头像URL）
+      final updateResult = await userService.updateUserProfile(
+        name: _name,
+        iconUrl: finalAvatarUrl,
+      );
+
+      updateResult.fold(
+        (success) {
+          Log.info('User profile updated successfully');
+          if (mounted) {
+            // 更新原始值
+            setState(() {
+              _originalName = _name;
+              _originalAvatarUrl = finalAvatarUrl!;
+              _avatarUrl = finalAvatarUrl;
+              _pendingAvatarPath = null;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('保存成功')),
+            );
+          }
+        },
+        (error) {
+          Log.error('Failed to update user profile: $error');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('保存失败: ${error.msg}')),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      Log.error('Save changes exception: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存异常: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  // 上传头像文件
+  Future<String?> _uploadAvatarFile(String localImagePath) async {
     try {
       // 获取当前用户配置，判断是本地模式还是云端模式
       final userProfileResult = await UserBackendService.getCurrentUserProfile();
@@ -200,13 +324,7 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
 
       if (userProfile == null) {
         Log.error('Failed to get user profile');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('获取用户信息失败')),
-          );
-        }
-        setState(() => _isUploading = false);
-        return;
+        return null;
       }
 
       final isLocalMode = userProfile.workspaceType == WorkspaceTypePB.LocalW;
@@ -226,86 +344,16 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
         uploadedUrl = url;
         if (errorMsg != null && errorMsg.isNotEmpty) {
           Log.error('Upload avatar error: $errorMsg');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('上传失败: $errorMsg')),
-            );
-          }
         }
       }
 
-      if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-        // 调用后端 API 更新用户头像
-        final userService = UserBackendService(userId: widget.userProfile.id);
-        final updateResult = await userService.updateUserProfile(
-          iconUrl: uploadedUrl,
-        );
-        
-        updateResult.fold(
-          (success) {
-            Log.info('Avatar updated successfully');
-            // 更新本地 UI
-            if (mounted) {
-              setState(() {
-                _avatarUrl = uploadedUrl!;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('头像上传成功')),
-              );
-            }
-          },
-          (error) {
-            Log.error('Failed to update avatar: $error');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('更新头像失败: ${error.msg}')),
-              );
-            }
-          },
-        );
-      }
+      return uploadedUrl;
     } catch (e) {
-      Log.error('Upload avatar exception: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('上传异常: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isUploading = false);
-      }
+      Log.error('Upload avatar file exception: $e');
+      return null;
     }
   }
 
-  Future<void> _updateUserName(String newName) async {
-    if (newName == _name) return;
-
-    final userService = UserBackendService(userId: widget.userProfile.id);
-    final result = await userService.updateUserProfile(name: newName);
-    
-    result.fold(
-      (success) {
-        Log.info('User name updated successfully');
-        if (mounted) {
-          setState(() {
-            _name = newName;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('名称更新成功')),
-          );
-        }
-      },
-      (error) {
-        Log.error('Update user name error: $error');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('更新失败: ${error.msg}')),
-          );
-        }
-      },
-    );
-  }
 }
 
 

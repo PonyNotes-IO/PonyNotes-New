@@ -39,6 +39,7 @@ class UserBackendService implements IUserBackendService {
     String? name,
     String? password,
     String? email,
+    String? phone,
     String? iconUrl,
   }) {
     final payload = UpdateUserProfilePayloadPB.create()..id = userId;
@@ -53,6 +54,13 @@ class UserBackendService implements IUserBackendService {
 
     if (email != null) {
       payload.email = email;
+    }
+
+    if (phone != null) {
+      // TODO: 需要在protobuf中添加phone字段支持
+      // payload.phone = phone;
+      // 临时方案：将手机号存储在用户元数据中或其他字段
+      // 这里先注释掉，等protobuf更新后再启用
     }
 
     if (iconUrl != null) {

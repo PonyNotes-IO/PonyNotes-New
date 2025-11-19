@@ -1,6 +1,7 @@
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
@@ -286,9 +287,25 @@ class _AccountManagementViewState extends State<AccountManagementView> {
   }
 
   void _showPhoneVerificationDialog(BuildContext context) {
-    // 从用户资料中获取手机号，如果没有则使用默认值
-    // TODO: UserProfilePB 暂不支持 phoneNumber 字段
-    final phoneNumber = '185******70';
+    // 调试：打印用户资料信息
+    Log.info('用户资料 - email: ${widget.userProfile.email}, name: ${widget.userProfile.name}');
+    
+    // 从用户资料中获取手机号
+    // 由于protobuf中没有专门的phone字段，手机号可能存储在email字段中
+    String phoneNumber = '';
+    
+    // 检查email字段是否包含手机号（不包含@符号且符合手机号格式的就是手机号）
+    if (widget.userProfile.email.isNotEmpty && 
+        !widget.userProfile.email.contains('@') &&
+        Validator.isValidPhone(widget.userProfile.email)) {
+      phoneNumber = widget.userProfile.email;
+      Log.info('从用户资料中获取到手机号: $phoneNumber');
+    } else {
+      Log.info('用户资料中没有有效的手机号，显示输入对话框');
+      // 如果没有绑定手机号，显示提示让用户输入
+      _showPhoneInputDialog(context);
+      return;
+    }
         
     showDialog(
       context: context,
@@ -303,6 +320,80 @@ class _AccountManagementViewState extends State<AccountManagementView> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _showPhoneInputDialog(BuildContext context) {
+    final phoneController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('输入手机号'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('请输入您要绑定的手机号码'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: phoneController,
+              decoration: const InputDecoration(
+                hintText: '请输入手机号',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.phone,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              final phone = phoneController.text.trim();
+              if (phone.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('请输入手机号'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                return;
+              }
+              
+              // 验证手机号格式
+              if (!Validator.isValidPhone(phone)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('请输入正确的手机号格式'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+                return;
+              }
+              
+              Navigator.of(context).pop();
+              showDialog(
+                context: context,
+                builder: (context) => IdentityVerificationDialog(
+                  phoneNumber: phone,
+                  onVerificationComplete: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('手机验证完成'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+            child: const Text('确定'),
+          ),
+        ],
       ),
     );
   }
