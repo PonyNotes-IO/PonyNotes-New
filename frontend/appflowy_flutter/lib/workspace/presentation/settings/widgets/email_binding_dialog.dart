@@ -26,7 +26,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
   bool _isCodeSent = false;
   bool _isBinding = false;
   bool _isSending = false;
-  int _countdown = 60;
+  int _countdown = 0;  // 初始为0，允许立即发送验证码
   Timer? _timer;
 
   @override

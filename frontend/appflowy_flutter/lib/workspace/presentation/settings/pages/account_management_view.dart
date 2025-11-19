@@ -6,6 +6,7 @@ import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dar
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/email_binding_dialog.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/phone_change_dialog.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
@@ -312,13 +313,8 @@ class _AccountManagementViewState extends State<AccountManagementView> {
       builder: (context) => IdentityVerificationDialog(
         phoneNumber: phoneNumber,
         onVerificationComplete: () {
-          // 验证完成后的回调
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('手机验证完成'),
-              duration: Duration(seconds: 2),
-            ),
-          );
+          // 身份验证成功后，打开更改手机号码对话框
+          _showPhoneChangeDialog(context);
         },
       ),
     );
@@ -394,6 +390,24 @@ class _AccountManagementViewState extends State<AccountManagementView> {
             child: const Text('确定'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPhoneChangeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => PhoneChangeDialog(
+        onChangeComplete: () {
+          // 更改完成后的回调
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('手机号更改成功'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+          // TODO: 刷新用户资料
+        },
       ),
     );
   }

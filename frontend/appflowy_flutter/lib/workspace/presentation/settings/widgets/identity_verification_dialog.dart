@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:appflowy/user/application/contact_binding_service.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -25,7 +26,7 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
   final codeFocusNode = FocusNode();
   bool _isVerified = false;
   bool _isSending = false;
-  int _countdown = 60;
+  int _countdown = 0;  // 初始为0，允许首次自动发送验证码
   Timer? _timer;
 
   @override
@@ -376,30 +377,32 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
     // 清理手机号格式
     final cleanPhone = Validator.cleanPhoneNumber(widget.phoneNumber);
     
-    // 调用真实的API验证并绑定手机号
-    final result = await ContactBindingService.bindPhoneNumber(
+    // 只验证验证码是否正确，不绑定手机号
+    // 使用signInWithPasscode来验证验证码
+    final result = await UserBackendService.signInWithPasscode(
       cleanPhone,
       codeController.text,
     );
     
     result.fold(
-      (success) {
+      (tokenResponse) {
         if (mounted) {
           setState(() {
             _isVerified = true;
           });
           
           // 延迟一下让用户看到验证成功的提示
-          Future.delayed(const Duration(milliseconds: 1500), () {
+          Future.delayed(const Duration(milliseconds: 800), () {
             if (mounted) {
-              widget.onVerificationComplete?.call();
               Navigator.of(context).pop();
+              // 调用回调，让父组件打开"更改手机号码"对话框
+              widget.onVerificationComplete?.call();
             }
           });
           
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('手机验证成功'),
+              content: Text('身份验证成功'),
               duration: Duration(seconds: 2),
             ),
           );
@@ -409,7 +412,7 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('验证失败: ${error.msg}'),
+              content: Text('验证码错误: ${error.msg}'),
               duration: const Duration(seconds: 2),
             ),
           );
