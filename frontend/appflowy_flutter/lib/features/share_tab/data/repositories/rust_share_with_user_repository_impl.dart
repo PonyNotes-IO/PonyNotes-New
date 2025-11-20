@@ -11,6 +11,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pbenum.dart' as user;
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
 
@@ -18,6 +19,19 @@ import 'share_with_user_repository.dart';
 
 class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
   RustShareWithUserRepositoryImpl();
+  
+  ShareRole _convertRoleToShareRole(user.AFRolePB role) {
+    switch (role) {
+      case user.AFRolePB.Guest:
+        return ShareRole.guest;
+      case user.AFRolePB.Member:
+        return ShareRole.member;
+      case user.AFRolePB.Owner:
+        return ShareRole.owner;
+      default:
+        return ShareRole.guest;
+    }
+  }
 
   @override
   Future<FlowyResult<SharedUsers, FlowyError>> getSharedUsersInPage({
@@ -103,7 +117,54 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
   Future<FlowyResult<SharedUsers, FlowyError>> getAvailableSharedUsers({
     required String pageId,
   }) async {
+    try {
+      // Get current workspace ID
+      final currentWorkspaceResult = await FolderEventReadCurrentWorkspace().send();
+      
+      final currentWorkspaceId = currentWorkspaceResult.fold(
+        (workspace) => workspace.id,
+        (error) {
+          Log.error('Failed to get current workspace: $error');
+          return null;
+        },
+      );
+      
+      if (currentWorkspaceId == null || currentWorkspaceId.isEmpty) {
+        Log.error('Failed to get workspace ID for available users');
     return FlowySuccess([]);
+      }
+      
+      // Get workspace members
+      final membersRequest = QueryWorkspacePB()..workspaceId = currentWorkspaceId;
+      final membersResult = await UserEventGetWorkspaceMembers(membersRequest).send();
+      
+      return membersResult.fold(
+        (members) {
+          // Convert WorkspaceMemberPB to SharedUser
+          final sharedUsers = members.items.map((member) {
+            // Convert user.AFRolePB to ShareRole using extension
+            final shareRole = _convertRoleToShareRole(member.role);
+            return SharedUser(
+              email: member.email,
+              name: member.name,
+              role: shareRole,
+              accessLevel: ShareAccessLevel.readAndWrite, // Default access level
+              avatarUrl: member.avatarUrl,
+            );
+          }).toList();
+          
+          Log.debug('Found ${sharedUsers.length} available workspace members');
+          return FlowySuccess(sharedUsers);
+        },
+        (error) {
+          Log.error('Failed to get workspace members: $error');
+          return FlowyFailure(error);
+        },
+      );
+    } catch (e) {
+      Log.error('Exception in getAvailableSharedUsers: $e');
+      return FlowySuccess([]);
+    }
   }
 
   @override

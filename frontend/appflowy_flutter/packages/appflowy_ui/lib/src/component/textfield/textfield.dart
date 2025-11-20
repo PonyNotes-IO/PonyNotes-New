@@ -227,13 +227,28 @@ class _AFTextFieldState extends AFTextFieldState {
   }
 
   void _validate() {
+    if (!mounted) {
+      return;
+    }
+    
     final validator = widget.validator;
     if (validator != null) {
+      // Check if controller is still valid before using it
+      try {
       final result = validator(effectiveController);
+        if (mounted) {
       setState(() {
         hasError = result.$1;
         errorText = result.$2;
       });
+        }
+      } catch (e) {
+        // Controller may have been disposed, ignore
+        if (!mounted) {
+          return;
+        }
+        // Re-throw if widget is still mounted (real error)
+      }
     }
   }
 

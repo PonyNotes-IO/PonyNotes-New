@@ -20,7 +20,9 @@ import 'package:collection/collection.dart';
 
 import 'package:appflowy/plugins/shared/share/share_bloc.dart';
 
+import '../../../util/log_utils.dart';
 import '../../../workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
+import 'build_users_list_with_owner.dart';
 import '../data/models/share_access_level.dart';
 
 class ShareTab extends StatefulWidget {
@@ -209,45 +211,8 @@ class _ShareTabState extends State<ShareTab> {
   List<SharedUser> _buildUsersListWithOwner({
     required SharedUsers users,
     required UserProfilePB? currentUser,
-  }) {
-    if (currentUser == null) {
-      return users;
-    }
-
-    // 查找是否已有拥有者
-    final owner = users.firstWhereOrNull(
-      (user) => user.role == ShareRole.owner,
-    );
-
-    // 如果已有拥有者，将其放在最前面，其他用户放在后面
-    if (owner != null) {
-      final otherUsers = users.where((user) => user.role != ShareRole.owner).toList();
-      return [owner, ...otherUsers];
-    }
-
-    // 如果没有拥有者，创建拥有者对象（使用当前用户信息）
-    final ownerUser = SharedUser(
-      email: currentUser.email,
-      name: currentUser.name.isNotEmpty ? currentUser.name : currentUser.email,
-      role: ShareRole.owner,
-      accessLevel: ShareAccessLevel.fullAccess,
-      avatarUrl: currentUser.iconUrl.isNotEmpty ? currentUser.iconUrl : null,
-    );
-
-    // 检查当前用户是否已在列表中
-    final currentUserInList = users.firstWhereOrNull(
-      (user) => user.email == currentUser.email,
-    );
-
-    if (currentUserInList != null) {
-      // 如果当前用户已在列表中，将其替换为拥有者，并放在最前面
-      final otherUsers = users.where((user) => user.email != currentUser.email).toList();
-      return [ownerUser, ...otherUsers];
-    } else {
-      // 如果当前用户不在列表中，将拥有者放在最前面
-      return [ownerUser, ...users];
-    }
-  }
+  }) =>
+      buildUsersListWithOwner(users: users, currentUser: currentUser);
 
   void _onListenShareWithUserState(
     BuildContext context,
@@ -352,213 +317,16 @@ class _ShareTabState extends State<ShareTab> {
   }
 
   void _showCollaboratorsDialog(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    final inviteController = TextEditingController();
-
-    // 清空搜索结果
-    shareTabBloc.add(ShareTabEvent.searchAvailableUsers(query: ''));
-
     showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (dialogContext) {
         return BlocProvider.value(
           value: shareTabBloc,
-          child: BlocConsumer<ShareTabBloc, ShareTabState>(
-            listener: (context, state) {
-              _onListenShareWithUserState(context, state);
-              // Clear invite controller when invitation is sent successfully
-              final shareResult = state.shareResult;
-              if (shareResult != null) {
-                shareResult.fold((success) {
-                  inviteController.clear();
-                  // 清空搜索结果
-                  shareTabBloc.add(ShareTabEvent.searchAvailableUsers(query: ''));
-                }, (error) {});
-              }
-            },
-            builder: (context, state) {
-              final currentUser = state.currentUser;
-              final users = state.users;
-
-              // 构建完整的用户列表，确保拥有者始终在最前面
-              final List<SharedUser> allUsers = _buildUsersListWithOwner(
-                users: users,
-                currentUser: currentUser,
-              );
-
-              // 从完整列表中查找当前用户（包括拥有者）
-              final currentSharedUser = allUsers.firstWhereOrNull(
-                (user) => user.email == currentUser?.email,
-              );
-
-              return Dialog(
-                insetPadding: const EdgeInsets.all(24),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header
-                        Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () => Navigator.of(context).pop(),
-                              child: const FlowySvg(FlowySvgs.arrow_left_s),
-                            ),
-                            HSpace(theme.spacing.s),
-                            FlowyText.medium(
-                              '文档协作者',
-                              color: theme.textColorScheme.primary,
-                            ),
-                          ],
-                        ),
-                        VSpace(theme.spacing.m),
-                        const Divider(height: 1),
-                        VSpace(theme.spacing.m),
-
-                        // Search input
-                        _UserSearchField(
-                          controller: inviteController,
-                          onSearch: (query) {
-                            if (query.isNotEmpty) {
-                              context.read<ShareTabBloc>().add(
-                                    ShareTabEvent.searchAvailableUsers(query: query),
-                                  );
-                            } else {
-                              context.read<ShareTabBloc>().add(
-                                    ShareTabEvent.searchAvailableUsers(query: ''),
-                                  );
-                            }
-                          },
-                          onUserSelected: (user) {
-                            _handleShareWithUser(emails: [user.email]);
-                            inviteController.clear();
-                            context.read<ShareTabBloc>().add(
-                                  ShareTabEvent.searchAvailableUsers(query: ''),
-                                );
-                          },
-                          availableUsers: state.availableUsers,
-                          existingUsers: allUsers,
-                        ),
-                        VSpace(theme.spacing.m),
-
-                        // Users list
-                        Expanded(
-                          child: allUsers.isEmpty
-                              ? Center(
-                                  child: FlowyText.regular(
-                                    '暂无协作者，邀请后即可在此查看权限明细。',
-                                    color: theme.textColorScheme.secondary,
-                                  ),
-                                )
-                              : currentSharedUser == null
-                                  ? Center(
-                                      child: FlowyText.regular(
-                                        '无法获取当前用户信息',
-                                        color: theme.textColorScheme.error,
-                                      ),
-                                    )
-                                  : ListView.separated(
-                                      shrinkWrap: true,
-                                      itemCount: allUsers.length,
-                                      separatorBuilder: (_, __) => Divider(
-                                        height: 1,
-                                        color: theme.borderColorScheme.primary
-                                            .withValues(alpha: 0.15),
-                                      ),
-                                      itemBuilder: (context, index) {
-                                        final user = allUsers[index];
-                                        return SharedUserWidget(
-                                          user: user,
-                                          currentUser: currentSharedUser,
-                                          isInPublicPage: state.sectionType ==
-                                              SharedSectionType.public,
-                                          callbacks: AccessLevelListCallbacks(
-                                            onSelectAccessLevel: (accessLevel) {
-                                              context.read<ShareTabBloc>().add(
-                                                    ShareTabEvent
-                                                        .updateUserAccessLevel(
-                                                      email: user.email,
-                                                      accessLevel: accessLevel,
-                                                    ),
-                                                  );
-                                            },
-                                            onTurnIntoMember: () {
-                                              context.read<ShareTabBloc>().add(
-                                                    ShareTabEvent.convertToMember(
-                                                      email: user.email,
-                                                    ),
-                                                  );
-                                            },
-                                            onRemoveAccess: () {
-                                              final removingSelf = user.email ==
-                                                  currentUser?.email;
-                                              if (removingSelf) {
-                                                showConfirmDialog(
-                                                  context: context,
-                                                  title: 'Remove your own access',
-                                                  titleStyle: theme.textStyle.body
-                                                      .standard(
-                                                    color: theme
-                                                        .textColorScheme.primary,
-                                                  ),
-                                                  description: '',
-                                                  style:
-                                                      ConfirmPopupStyle.cancelAndOk,
-                                                  confirmLabel: 'Remove',
-                                                  onConfirm: (_) {
-                                                    context
-                                                        .read<ShareTabBloc>()
-                                                        .add(
-                                                          ShareTabEvent
-                                                              .removeUsers(
-                                                            emails: [user.email],
-                                                          ),
-                                                        );
-                                                  },
-                                                );
-                                              } else {
-                                                context
-                                                    .read<ShareTabBloc>()
-                                                    .add(
-                                                      ShareTabEvent.removeUsers(
-                                                        emails: [user.email],
-                                                      ),
-                                                    );
-                                              }
-                                            },
-                                          ),
-                                        );
-                                      },
-                                    ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
+          child: const _CollaboratorsDialog(),
         );
       },
-    ).then((_) {
-      // Clean up controller when dialog is closed
-      // Use a post-frame callback to ensure all widget dispose methods have completed
-      // This prevents using a disposed controller
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        try {
-          inviteController.dispose();
-        } catch (e) {
-          // Controller may have already been disposed, ignore
-        }
-      });
-    });
+    );
   }
 
   Widget _buildLinkAndCopyButton(String shareLink, bool hasSharedUsers) {
@@ -670,6 +438,220 @@ class _ShareTabState extends State<ShareTab> {
   }
 }
 
+class _CollaboratorsDialog extends StatefulWidget {
+  const _CollaboratorsDialog();
+
+  @override
+  State<_CollaboratorsDialog> createState() => _CollaboratorsDialogState();
+}
+
+class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
+  late final TextEditingController _inviteController;
+  late final ShareTabBloc _bloc;
+
+  @override
+  void initState() {
+    super.initState();
+    _inviteController = TextEditingController();
+    _bloc = context.read<ShareTabBloc>();
+
+    // 打开弹窗时清空搜索结果
+    _bloc.add(ShareTabEvent.searchAvailableUsers(query: ''));
+  }
+
+  @override
+  void dispose() {
+    _inviteController.dispose();
+    super.dispose();
+  }
+
+  void _inviteUser(SharedUser user) {
+    _bloc.add(
+      ShareTabEvent.inviteUsers(
+        emails: [user.email],
+        accessLevel: ShareAccessLevel.readAndWrite,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    return BlocConsumer<ShareTabBloc, ShareTabState>(
+      listener: (context, state) {
+        // 邀请成功后清空输入框和搜索结果
+        final shareResult = state.shareResult;
+        if (shareResult != null) {
+          shareResult.fold((success) {
+            _inviteController.clear();
+            _bloc.add(ShareTabEvent.searchAvailableUsers(query: ''));
+          }, (error) {});
+        }
+      },
+      builder: (context, state) {
+        final currentUser = state.currentUser;
+        final users = state.users;
+
+        // 构建完整的用户列表，确保拥有者始终在最前面
+        final List<SharedUser> allUsers = buildUsersListWithOwner(
+          users: users,
+          currentUser: currentUser,
+        );
+
+        // 从完整列表中查找当前用户（包括拥有者）
+        final currentSharedUser = allUsers.firstWhereOrNull(
+          (user) => user.email == currentUser?.email,
+        );
+
+        return Dialog(
+          insetPadding: const EdgeInsets.all(24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500, maxHeight: 600),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          FocusScope.of(context).unfocus();
+                          Navigator.of(context).pop();
+                        },
+                        child: const FlowySvg(FlowySvgs.arrow_left_s),
+                      ),
+                      HSpace(theme.spacing.s),
+                      FlowyText.medium(
+                        '文档协作者',
+                        color: theme.textColorScheme.primary,
+                      ),
+                    ],
+                  ),
+                  VSpace(theme.spacing.m),
+                  const Divider(height: 1),
+                  VSpace(theme.spacing.m),
+
+                  // Search input
+                  _UserSearchField(
+                    controller: _inviteController,
+                    onSearch: (query) {
+                      _bloc.add(
+                        ShareTabEvent.searchAvailableUsers(query: query),
+                      );
+                    },
+                    onUserSelected: (user) {
+                      _inviteUser(user);
+                      _inviteController.clear();
+                      _bloc.add(
+                        ShareTabEvent.searchAvailableUsers(query: ''),
+                      );
+                    },
+                    availableUsers: state.availableUsers,
+                    existingUsers: allUsers,
+                  ),
+                  VSpace(theme.spacing.m),
+
+                  // Users list
+                  Expanded(
+                    child: allUsers.isEmpty
+                        ? Center(
+                            child: FlowyText.regular(
+                              '暂无协作者，邀请后即可在此查看权限明细。',
+                              color: theme.textColorScheme.secondary,
+                            ),
+                          )
+                        : currentSharedUser == null
+                            ? Center(
+                                child: FlowyText.regular(
+                                  '无法获取当前用户信息',
+                                  color: theme.textColorScheme.error,
+                                ),
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: allUsers.length,
+                                separatorBuilder: (_, __) => Divider(
+                                  height: 1,
+                                  color: theme.borderColorScheme.primary
+                                      .withValues(alpha: 0.15),
+                                ),
+                                itemBuilder: (context, index) {
+                                  final user = allUsers[index];
+                                  return SharedUserWidget(
+                                    user: user,
+                                    currentUser: currentSharedUser,
+                                    isInPublicPage: state.sectionType ==
+                                        SharedSectionType.public,
+                                    callbacks: AccessLevelListCallbacks(
+                                      onSelectAccessLevel: (accessLevel) {
+                                        _bloc.add(
+                                          ShareTabEvent.updateUserAccessLevel(
+                                            email: user.email,
+                                            accessLevel: accessLevel,
+                                          ),
+                                        );
+                                      },
+                                      onTurnIntoMember: () {
+                                        _bloc.add(
+                                          ShareTabEvent.convertToMember(
+                                            email: user.email,
+                                          ),
+                                        );
+                                      },
+                                      onRemoveAccess: () {
+                                        final removingSelf =
+                                            user.email == currentUser?.email;
+                                        if (removingSelf) {
+                                          showConfirmDialog(
+                                            context: context,
+                                            title: 'Remove your own access',
+                                            titleStyle: theme.textStyle.body
+                                                .standard(
+                                              color: theme
+                                                  .textColorScheme.primary,
+                                            ),
+                                            description: '',
+                                            style: ConfirmPopupStyle
+                                                .cancelAndOk,
+                                            confirmLabel: 'Remove',
+                                            onConfirm: (_) {
+                                              _bloc.add(
+                                                ShareTabEvent.removeUsers(
+                                                  emails: [user.email],
+                                                ),
+                                              );
+                                            },
+                                          );
+                                        } else {
+                                          _bloc.add(
+                                            ShareTabEvent.removeUsers(
+                                              emails: [user.email],
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _UserSearchField extends StatefulWidget {
   const _UserSearchField({
     required this.controller,
@@ -703,10 +685,36 @@ class _UserSearchFieldState extends State<_UserSearchField> {
 
   @override
   void dispose() {
+    // Cancel any pending timers first
     _debounceTimer?.cancel();
-    widget.controller.removeListener(_onTextChanged);
+    _debounceTimer = null;
+    
+    // Remove focus listener and unfocus before disposing
+    // This must be done before removing controller listener to prevent callbacks
+    try {
     _focusNode.removeListener(_onFocusChanged);
+      // Unfocus synchronously to prevent any async callbacks
+      if (_focusNode.hasFocus) {
+        _focusNode.unfocus();
+      }
+    } catch (e) {
+      // Focus node may have issues, ignore
+    }
+    
+    // Dispose focus node before controller to prevent focus callbacks
+    try {
     _focusNode.dispose();
+    } catch (e) {
+      // Focus node may have already been disposed, ignore
+    }
+    
+    // Remove controller listener last
+    try {
+      widget.controller.removeListener(_onTextChanged);
+    } catch (e) {
+      // Controller may have already been disposed, ignore
+    }
+    
     super.dispose();
   }
 
@@ -718,40 +726,54 @@ class _UserSearchFieldState extends State<_UserSearchField> {
     _debounceTimer?.cancel();
     
     // Check if controller is still valid before using it
+    String query;
     try {
-      final query = widget.controller.text.trim();
-      
-      if (query.isNotEmpty) {
-        // 防抖处理，延迟300ms后执行搜索
-        _debounceTimer = Timer(const Duration(milliseconds: 300), () {
-          if (mounted) {
-            try {
-              widget.onSearch(query);
-              if (mounted) {
-                setState(() {
-                  _showResults = true;
-                });
-              }
-            } catch (e) {
-              // Controller may have been disposed, ignore
-              if (!mounted) {
-                return;
-              }
-            }
-          }
-        });
-      } else {
-        widget.onSearch('');
-        if (mounted) {
-          setState(() {
-            _showResults = false;
-          });
-        }
-      }
+      query = widget.controller.text.trim();
     } catch (e) {
       // Controller may have been disposed, ignore
       if (!mounted) {
         return;
+      }
+      // If still mounted but controller is disposed, it's a real error
+      return;
+    }
+    
+    LogUtils.info('search user: $query');
+    if (query.isNotEmpty) {
+      // 防抖处理，延迟150ms后执行搜索
+      final searchQuery = query; // Capture query value for timer
+      _debounceTimer = Timer(const Duration(milliseconds: 150), () {
+        if (!mounted) {
+          return;
+        }
+        try {
+          widget.onSearch(searchQuery);
+        if (mounted) {
+          setState(() {
+            _showResults = true;
+          });
+          }
+        } catch (e) {
+          // Controller may have been disposed, ignore
+          if (!mounted) {
+            return;
+          }
+        }
+      });
+    } else {
+      if (mounted) {
+        try {
+      widget.onSearch('');
+          if (mounted) {
+      setState(() {
+        _showResults = false;
+      });
+          }
+        } catch (e) {
+          if (!mounted) {
+            return;
+          }
+        }
       }
     }
   }
@@ -761,24 +783,46 @@ class _UserSearchFieldState extends State<_UserSearchField> {
       return;
     }
     
-    if (!_focusNode.hasFocus) {
+    // Check if focus node is still valid
+    bool hasFocus;
+    try {
+      hasFocus = _focusNode.hasFocus;
+    } catch (e) {
+      // Focus node may have been disposed, ignore
+      if (!mounted) {
+        return;
+      }
+      return;
+    }
+    
+    if (!hasFocus) {
       // 延迟隐藏，以便点击结果时能触发
       Future.delayed(const Duration(milliseconds: 200), () {
-        if (mounted) {
+        if (!mounted) {
+          return;
+        }
+        // Check again if focus node is still valid
+        try {
+          if (!_focusNode.hasFocus && mounted) {
           setState(() {
             _showResults = false;
           });
+        }
+        } catch (e) {
+          // Focus node or controller may have been disposed, ignore
+          if (!mounted) {
+            return;
+          }
         }
       });
     } else {
       // Check if controller is still valid before using it
       try {
-        if (widget.controller.text.trim().isNotEmpty) {
-          if (mounted) {
-            setState(() {
-              _showResults = true;
-            });
-          }
+        final text = widget.controller.text.trim();
+        if (text.isNotEmpty && mounted) {
+      setState(() {
+        _showResults = true;
+      });
         }
       } catch (e) {
         // Controller may have been disposed, ignore
