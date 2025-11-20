@@ -549,7 +549,15 @@ class _ShareTabState extends State<ShareTab> {
       },
     ).then((_) {
       // Clean up controller when dialog is closed
-      inviteController.dispose();
+      // Use a post-frame callback to ensure all widget dispose methods have completed
+      // This prevents using a disposed controller
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          inviteController.dispose();
+        } catch (e) {
+          // Controller may have already been disposed, ignore
+        }
+      });
     });
   }
 
@@ -703,28 +711,56 @@ class _UserSearchFieldState extends State<_UserSearchField> {
   }
 
   void _onTextChanged() {
-    _debounceTimer?.cancel();
-    final query = widget.controller.text.trim();
+    if (!mounted) {
+      return;
+    }
     
-    if (query.isNotEmpty) {
-      // 防抖处理，延迟300ms后执行搜索
-      _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+    _debounceTimer?.cancel();
+    
+    // Check if controller is still valid before using it
+    try {
+      final query = widget.controller.text.trim();
+      
+      if (query.isNotEmpty) {
+        // 防抖处理，延迟300ms后执行搜索
+        _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+          if (mounted) {
+            try {
+              widget.onSearch(query);
+              if (mounted) {
+                setState(() {
+                  _showResults = true;
+                });
+              }
+            } catch (e) {
+              // Controller may have been disposed, ignore
+              if (!mounted) {
+                return;
+              }
+            }
+          }
+        });
+      } else {
+        widget.onSearch('');
         if (mounted) {
-          widget.onSearch(query);
           setState(() {
-            _showResults = true;
+            _showResults = false;
           });
         }
-      });
-    } else {
-      widget.onSearch('');
-      setState(() {
-        _showResults = false;
-      });
+      }
+    } catch (e) {
+      // Controller may have been disposed, ignore
+      if (!mounted) {
+        return;
+      }
     }
   }
 
   void _onFocusChanged() {
+    if (!mounted) {
+      return;
+    }
+    
     if (!_focusNode.hasFocus) {
       // 延迟隐藏，以便点击结果时能触发
       Future.delayed(const Duration(milliseconds: 200), () {
@@ -734,10 +770,22 @@ class _UserSearchFieldState extends State<_UserSearchField> {
           });
         }
       });
-    } else if (widget.controller.text.trim().isNotEmpty) {
-      setState(() {
-        _showResults = true;
-      });
+    } else {
+      // Check if controller is still valid before using it
+      try {
+        if (widget.controller.text.trim().isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _showResults = true;
+            });
+          }
+        }
+      } catch (e) {
+        // Controller may have been disposed, ignore
+        if (!mounted) {
+          return;
+        }
+      }
     }
   }
 
