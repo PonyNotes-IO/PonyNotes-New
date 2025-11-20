@@ -40,6 +40,7 @@ impl DatabaseDepsResolver {
 }
 
 struct DatabaseAIServiceMiddleware {
+  #[allow(dead_code)]
   ai_manager: Arc<AIManager>,
   ai_service: Arc<dyn DatabaseAIService>,
 }
@@ -51,26 +52,11 @@ impl DatabaseAIService for DatabaseAIServiceMiddleware {
     object_id: &Uuid,
     summary_row: SummaryRowContent,
   ) -> Result<String, FlowyError> {
-    if self
-      .ai_manager
-      .local_ai
-      .is_enabled_on_workspace(&workspace_id.to_string())
-    {
-      let model = self
-        .ai_manager
-        .get_active_model(&object_id.to_string())
-        .await;
-      self
-        .ai_manager
-        .local_ai
-        .summarize_database_row(&model.name, summary_row)
-        .await
-    } else {
-      self
-        .ai_service
-        .summary_database_row(workspace_id, object_id, summary_row)
-        .await
-    }
+    // Local AI is disabled, always use cloud service
+    self
+      .ai_service
+      .summary_database_row(workspace_id, object_id, summary_row)
+      .await
   }
 
   async fn translate_database_row(
@@ -79,26 +65,11 @@ impl DatabaseAIService for DatabaseAIServiceMiddleware {
     translate_row: TranslateRowContent,
     language: &str,
   ) -> Result<TranslateRowResponse, FlowyError> {
-    if self
-      .ai_manager
-      .local_ai
-      .is_enabled_on_workspace(&workspace_id.to_string())
-    {
-      let model = self
-        .ai_manager
-        .get_active_model(&workspace_id.to_string())
-        .await;
-      self
-        .ai_manager
-        .local_ai
-        .translate_database_row(&model.name, translate_row, language)
-        .await
-    } else {
-      self
-        .ai_service
-        .translate_database_row(workspace_id, translate_row, language)
-        .await
-    }
+    // Local AI is disabled, always use cloud service
+    self
+      .ai_service
+      .translate_database_row(workspace_id, translate_row, language)
+      .await
   }
 }
 

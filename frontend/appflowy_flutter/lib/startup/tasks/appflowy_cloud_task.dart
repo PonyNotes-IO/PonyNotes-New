@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:app_links/app_links.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
-import 'package:get_it/get_it.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/expire_login_deeplink_handler.dart';
@@ -201,32 +200,34 @@ class AppFlowyCloudDeepLink {
                                 ),
                               );
                             } else {
-                              // Context 不可用，直接进入系统
-                              Log.info('🔵 [DeepLink] Context not available, entering system directly');
-                              runAppFlowy();
+                              // Context 不可用，记录错误但不调用 runAppFlowy
+                              // 让正常的导航流程处理（SignInBloc 会触发）
+                              Log.error('🔵 [DeepLink] Context not available for SetPasswordPage navigation');
                             }
                           });
                         } else {
-                          // 用户已设置密码，直接进入系统
-                          Log.info('🔵 [DeepLink] User has set password, entering system directly');
-                          runAppFlowy();
+                          // 用户已设置密码，不做任何操作
+                          // 让 SignInBloc 的状态变化触发正常的导航流程
+                          // (见 SignInScreen 的 BlocConsumer listener)
+                          Log.info('🔵 [DeepLink] User has set password, letting normal navigation flow handle it');
                         }
                       },
                       (error) {
                         Log.error('🔵 [DeepLink] Failed to check password status: ${error.msg}');
-                        // 检查密码状态失败，默认进入系统（避免阻塞用户）
-                        runAppFlowy();
+                        // 检查密码状态失败，不做任何操作
+                        // 让 SignInBloc 的状态变化触发正常的导航流程
+                        Log.info('🔵 [DeepLink] Password check failed, letting normal navigation flow handle it');
                       },
                     );
                   } else {
-                    Log.info('🔵 [DeepLink] Could not extract access_token from URI, entering system directly');
-                    // 无法提取 access_token，直接进入系统
-                    runAppFlowy();
+                    Log.info('🔵 [DeepLink] Could not extract access_token from URI');
+                    // 无法提取 access_token，让正常的导航流程处理
+                    Log.info('🔵 [DeepLink] Letting normal navigation flow handle it');
                   }
                 } catch (e, stackTrace) {
                   Log.error('🔵 [DeepLink] Exception during password check: $e', stackTrace);
-                  // 发生异常，直接进入系统（避免阻塞用户）
-                  runAppFlowy();
+                  // 发生异常，让正常的导航流程处理
+                  Log.info('🔵 [DeepLink] Letting normal navigation flow handle it due to exception');
                 }
               },
               (err) {

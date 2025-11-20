@@ -26,24 +26,25 @@ impl SearchCloudService for LocalSearchServiceImpl {
     workspace_id: &Uuid,
     query: String,
   ) -> Result<Vec<SearchDocumentResponseItem>, FlowyError> {
-    let mut results = vec![];
-    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-    {
-      if let Ok(scheduler) = flowy_ai::embeddings::context::EmbedContext::shared().get_scheduler() {
-        match scheduler.search(workspace_id, &query).await {
-          Ok(items) => results = items,
-          Err(err) => tracing::error!("[Search] Local AI search failed: {:?}", err),
-        }
-      } else {
-        tracing::error!("[Search] Could not acquire local AI scheduler");
-      }
-    }
+    // TODO: Re-enable embeddings when the module is available
+    // let mut results = vec![];
+    // #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    // {
+    //   if let Ok(scheduler) = flowy_ai::embeddings::context::EmbedContext::shared().get_scheduler() {
+    //     match scheduler.search(workspace_id, &query).await {
+    //       Ok(items) => results = items,
+    //       Err(err) => tracing::error!("[Search] Local AI search failed: {:?}", err),
+    //     }
+    //   } else {
+    //     tracing::error!("[Search] Could not acquire local AI scheduler");
+    //   }
+    // }
+    //
+    // if !results.is_empty() {
+    //   return Ok(results);
+    // }
 
-    if !results.is_empty() {
-      return Ok(results);
-    }
-
-    trace!("[Search] Local AI search returned no results, falling back to local search");
+    trace!("[Search] Performing local search");
     let items = tanvity_local_search(&self.state, workspace_id, &query, None, 10, 0.4)
       .await
       .unwrap_or_default();
@@ -53,31 +54,32 @@ impl SearchCloudService for LocalSearchServiceImpl {
   async fn generate_search_summary(
     &self,
     _workspace_id: &Uuid,
-    query: String,
-    search_results: Vec<SearchResult>,
+    _query: String,
+    _search_results: Vec<SearchResult>,
   ) -> Result<SearchSummaryResult, FlowyError> {
-    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-    {
-      if search_results.is_empty() {
-        trace!("[Search] No search results to summarize");
-        return Ok(SearchSummaryResult { summaries: vec![] });
-      }
-
-      if let Ok(scheduler) = flowy_ai::embeddings::context::EmbedContext::shared().get_scheduler() {
-        let setting = self.local_ai.get_local_ai_setting();
-        match scheduler
-          .generate_summary(&query, &setting.chat_model_name, search_results)
-          .await
-        {
-          Ok(results) => return Ok(results),
-          Err(err) => tracing::error!("Local AI search failed: {:?}", err),
-        }
-      } else {
-        tracing::error!("Could not acquire local AI scheduler");
-      }
-    }
-
+    // TODO: Re-enable embeddings when the module is available
+    // #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    // {
+    //   if search_results.is_empty() {
+    //     trace!("[Search] No search results to summarize");
+    //     return Ok(SearchSummaryResult { summaries: vec![] });
+    //   }
     //
+    //   if let Ok(scheduler) = flowy_ai::embeddings::context::EmbedContext::shared().get_scheduler() {
+    //     let setting = self.local_ai.get_local_ai_setting();
+    //     match scheduler
+    //       .generate_summary(&query, &setting.chat_model_name, search_results)
+    //       .await
+    //     {
+    //       Ok(results) => return Ok(results),
+    //       Err(err) => tracing::error!("Local AI search failed: {:?}", err),
+    //     }
+    //   } else {
+    //     tracing::error!("Could not acquire local AI scheduler");
+    //   }
+    // }
+
+    trace!("[Search] Summary generation not available");
     Ok(SearchSummaryResult { summaries: vec![] })
   }
 }

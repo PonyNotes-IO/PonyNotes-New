@@ -93,7 +93,7 @@ serde_repr = "0.1"
 futures = "0.3.31"
 tokio = "1.38.0"
 tokio-stream = "0.1.17"
-ollama-rs = { version = "0.3.0" }
+# ollama-rs = { version = "0.3.0" }  # 不再使用本地 AI，已移除
 async-trait = "0.1.81"
 chrono = { version = "0.4.31", default-features = false, features = ["clock"] }
 collab = { version = "0.2" }
@@ -104,7 +104,7 @@ collab-database = { version = "0.2" }
 collab-plugins = { version = "0.2" }
 collab-user = { version = "0.2" }
 collab-importer = { version = "0.1" }
-yrs = "0.21.0"
+yrs = "0.24"
 validator = { version = "0.18", features = ["derive"] }
 tokio-util = "0.7.11"
 zip = "2.2.0"
@@ -120,9 +120,9 @@ html-to-markdown = { path = "html-to-markdown" }
 # Run the script.add_workspace_members:
 # scripts/tool/update_client_api_rev.sh  new_rev_id
 # ⚠️⚠️⚠️️
-client-api = { git = "https://github.com/AppFlowy-IO/AppFlowy-Cloud", rev = "592f644" }
-client-api-entity = { git = "https://github.com/AppFlowy-IO/AppFlowy-Cloud", rev = "592f644" }
-workspace-template = { git = "https://github.com/AppFlowy-IO/AppFlowy-Cloud", rev = "592f644" }
+client-api = { path = "../../../PonyNotes-Cloud-New/libs/client-api" }
+client-api-entity = { path = "../../../PonyNotes-Cloud-New/libs/client-api-entity" }
+workspace-template = { path = "../../../PonyNotes-Cloud-New/libs/workspace-template" }
 
 [profile.dev]
 opt-level = 0

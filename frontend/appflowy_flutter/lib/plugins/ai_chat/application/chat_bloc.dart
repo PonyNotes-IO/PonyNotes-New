@@ -54,22 +54,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     
     // 如果有初始消息，自动发送
     if (initialMessage != null && initialMessage!.isNotEmpty) {
-      debugPrint('🔄 ChatBloc: 检测到初始消息，准备自动发送');
-      debugPrint('   - 消息: $initialMessage');
-      debugPrint('   - 首选模型: $preferredModelId');
+      Log.info('🔄 ChatBloc: 检测到初始消息，准备自动发送');
+      Log.info('   - 消息: $initialMessage');
+      Log.info('   - 首选模型: $preferredModelId');
       
       // 延迟发送，确保UI已经初始化
       Future.delayed(const Duration(milliseconds: 500), () {
         if (!isClosed) {
-          debugPrint('📤 ChatBloc: 自动发送初始消息');
+          Log.info('📤 ChatBloc: 自动发送初始消息');
           add(ChatEvent.sendMessage(
             message: initialMessage!,
             format: null,
             metadata: {},
             promptId: null,
           ));
+        } else {
+          Log.warn('⚠️ ChatBloc: bloc已关闭，无法发送初始消息');
         }
       });
+    } else {
+      Log.info('ℹ️ ChatBloc: 没有初始消息或消息为空');
+      Log.info('   - initialMessage: $initialMessage');
     }
   }
 

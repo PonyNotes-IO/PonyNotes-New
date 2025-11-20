@@ -82,6 +82,7 @@ impl From<client_api::entity::billing_dto::SubscriptionPlan> for SubscriptionPla
     use client_api::entity::billing_dto::SubscriptionPlan as CloudPlan;
     match plan {
       CloudPlan::Free => SubscriptionPlan::Free,
+      CloudPlan::Basic => SubscriptionPlan::Free, // Basic plan maps to Free
       CloudPlan::Pro => SubscriptionPlan::Pro,
       CloudPlan::Team => SubscriptionPlan::Team,
       CloudPlan::AiMax => SubscriptionPlan::AiMax,
@@ -586,6 +587,7 @@ impl From<client_api::entity::billing_dto::SubscriptionPlan> for SubscriptionPla
     use client_api::entity::billing_dto::SubscriptionPlan as CloudPlan;
     match value {
       CloudPlan::Free => SubscriptionPlanPB::Free,
+      CloudPlan::Basic => SubscriptionPlanPB::Free, // Basic plan maps to Free
       CloudPlan::Pro => SubscriptionPlanPB::Standard,
       CloudPlan::Team => SubscriptionPlanPB::Team,
       CloudPlan::AiMax => SubscriptionPlanPB::AiMax,

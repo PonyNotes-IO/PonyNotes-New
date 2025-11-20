@@ -5,7 +5,7 @@ import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
-import 'package:flutter/material.dart';
+import 'package:appflowy_backend/log.dart';
 
 /// AI聊天视图创建服务
 class AIChatViewService {
@@ -23,11 +23,11 @@ class AIChatViewService {
       // 1. 生成Chat名称
       final chatName = _generateChatName(initialMessage);
       
-      debugPrint('🔄 开始创建AI Chat视图...');
-      debugPrint('   - 父视图ID: $parentViewId');
-      debugPrint('   - 名称: $chatName');
-      debugPrint('   - 模型: $selectedModelId');
-      debugPrint('   - 初始消息: ${initialMessage?.substring(0, initialMessage.length > 50 ? 50 : initialMessage.length)}...');
+      Log.info('🔄 开始创建AI Chat视图...');
+      Log.info('   - 父视图ID: $parentViewId');
+      Log.info('   - 名称: $chatName');
+      Log.info('   - 模型: $selectedModelId');
+      Log.info('   - 初始消息: ${initialMessage?.substring(0, initialMessage.length > 50 ? 50 : initialMessage.length)}...');
 
       // 2. 构建额外参数（存储为JSON）
       final extraData = <String, String>{};
@@ -42,7 +42,7 @@ class AIChatViewService {
       String? extraJson;
       if (extraData.isNotEmpty) {
         extraJson = json.encode(extraData);
-        debugPrint('📦 额外参数JSON: $extraJson');
+        Log.info('📦 额外参数JSON: $extraJson');
       }
 
       // 3. 创建Chat类型的View
@@ -57,24 +57,24 @@ class AIChatViewService {
 
       return result.fold(
         (view) async {
-          debugPrint('✅ 成功创建AI Chat视图');
-          debugPrint('   - 视图ID: ${view.id}');
-          debugPrint('   - 视图名称: ${view.name}');
+          Log.info('✅ 成功创建AI Chat视图');
+          Log.info('   - 视图ID: ${view.id}');
+          Log.info('   - 视图名称: ${view.name}');
           
           // 4. 如果有额外数据，更新view的extra字段
           if (extraJson != null) {
-            debugPrint('🔄 更新视图的extra字段...');
+            Log.info('🔄 更新视图的extra字段...');
             await ViewBackendService.updateView(
               viewId: view.id,
               extra: extraJson,
             );
-            debugPrint('✅ extra字段更新成功');
+            Log.info('✅ extra字段更新成功');
           }
           
           // 5. 创建AIChatPagePlugin并打开
           try {
             final plugin = view.plugin();
-            debugPrint('✅ 创建插件成功，正在打开标签页...');
+            Log.info('✅ 创建插件成功，正在打开标签页...');
             
             getIt<TabsBloc>().add(
               TabsEvent.openPlugin(
@@ -83,22 +83,21 @@ class AIChatViewService {
               ),
             );
             
-            debugPrint('✅ AI Chat标签页已打开');
+            Log.info('✅ AI Chat标签页已打开');
           } catch (pluginError) {
-            debugPrint('❌ 创建或打开插件失败: $pluginError');
+            Log.error('❌ 创建或打开插件失败: $pluginError');
           }
           
           return view;
         },
         (error) {
-          debugPrint('❌ 创建AI Chat视图失败: ${error.msg}');
-          debugPrint('   - 错误代码: ${error.code}');
+          Log.error('❌ 创建AI Chat视图失败: ${error.msg}');
+          Log.error('   - 错误代码: ${error.code}');
           return null;
         },
       );
     } catch (e, stackTrace) {
-      debugPrint('❌ 创建AI Chat视图异常: $e');
-      debugPrint('堆栈跟踪: $stackTrace');
+      Log.error('❌ 创建AI Chat视图异常: $e', e, stackTrace);
       return null;
     }
   }
@@ -106,21 +105,21 @@ class AIChatViewService {
   /// 获取当前workspace ID
   static Future<String?> getCurrentWorkspaceId() async {
     try {
-      debugPrint('🔍 正在获取当前workspace ID...');
+      Log.info('🔍 正在获取当前workspace ID...');
       
       final result = await FolderEventReadCurrentWorkspace().send();
       return result.fold(
         (workspace) {
-          debugPrint('✅ 获取workspace ID成功: ${workspace.id}');
+          Log.info('✅ 获取workspace ID成功: ${workspace.id}');
           return workspace.id;
         },
         (error) {
-          debugPrint('❌ 获取workspace ID失败: ${error.msg}');
+          Log.error('❌ 获取workspace ID失败: ${error.msg}');
           return null;
         },
       );
     } catch (e) {
-      debugPrint('❌ 获取workspace ID异常: $e');
+      Log.error('❌ 获取workspace ID异常: $e');
       return null;
     }
   }

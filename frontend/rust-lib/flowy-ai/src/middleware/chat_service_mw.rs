@@ -104,7 +104,7 @@ impl ChatCloudService for ChatServiceMiddleware {
     format: ResponseFormat,
     ai_model: AIModel,
   ) -> Result<StreamAnswer, FlowyError> {
-    info!("stream_answer use model: {:?}", ai_model);
+    info!("[Middleware] stream_answer use model: {:?}", ai_model);
     if ai_model.is_local {
       if self.local_ai.is_ready().await {
         let content = self.get_message_content(question_id)?;
@@ -116,10 +116,32 @@ impl ChatCloudService for ChatServiceMiddleware {
         Err(FlowyError::local_ai_not_ready())
       }
     } else {
-      self
-        .cloud_service
-        .stream_answer(workspace_id, chat_id, question_id, format, ai_model)
-        .await
+      // 使用新的 AI 会话接口
+      use crate::ai_session_client::{stream_ai_session, AISessionStreamValue};
+      use flowy_ai_pub::cloud::QuestionStreamValue;
+      use futures_util::StreamExt;
+
+      info!("[Middleware] 使用新的 AI 会话接口");
+      
+      // 从本地数据库获取问题内容
+      let content = self.get_message_content(question_id)?;
+      trace!("[Middleware] 问题内容: {}", content);
+      
+      // 获取服务器地址（这里硬编码，后续可以从配置获取）
+      let base_url = "http://8.152.101.166";
+      
+      // 调用新的 AI 会话接口
+      let stream = stream_ai_session(base_url, &content, Some(ai_model.name)).await?;
+      
+      // 将 AISessionStreamValue 转换为 QuestionStreamValue
+      let converted_stream = stream.map(|result| {
+        result.map(|value| match value {
+          AISessionStreamValue::Answer { value } => QuestionStreamValue::Answer { value },
+          AISessionStreamValue::Metadata { value } => QuestionStreamValue::Metadata { value },
+        })
+      });
+      
+      Ok(converted_stream.boxed())
     }
   }
 

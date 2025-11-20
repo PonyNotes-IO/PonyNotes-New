@@ -1,4 +1,3 @@
-use crate::deps_resolve::MultiSourceVSTanvityImpl;
 use crate::AppFlowyCoreConfig;
 use arc_swap::{ArcSwap, ArcSwapOption};
 use collab::entity::EncodedCollab;
@@ -51,7 +50,7 @@ pub fn current_server_type() -> AuthType {
 impl ServerProvider {
   pub fn new(
     config: AppFlowyCoreConfig,
-    store_preferences: Weak<KVStorePreferences>,
+    _store_preferences: Weak<KVStorePreferences>,
     user_service: impl LoggedUser + 'static,
     indexed_data_writer: Option<Weak<InstantIndexedDataWriter>>,
   ) -> Self {
@@ -59,8 +58,7 @@ impl ServerProvider {
     let logged_user = Arc::new(user_service) as Arc<dyn LoggedUser>;
     let auth_type = ArcSwap::from(Arc::new(initial_auth));
     let encryption = Arc::new(EncryptionImpl::new(None)) as Arc<dyn AppFlowyEncryption>;
-    let ai_user = Arc::new(AIUserServiceImpl(Arc::downgrade(&logged_user)));
-    let local_ai = Arc::new(LocalAIController::new(store_preferences, ai_user.clone()));
+    let local_ai = LocalAIController::new();
 
     ServerProvider {
       config,
@@ -76,12 +74,9 @@ impl ServerProvider {
   }
 
   async fn set_tanvity_state(&self, tanvity_state: Option<Weak<RwLock<DocumentTantivyState>>>) {
-    let tanvity_store = Arc::new(MultiSourceVSTanvityImpl::new(tanvity_state.clone()));
-
-    self
-      .local_ai
-      .set_retriever_sources(vec![tanvity_store])
-      .await;
+    // TODO: Re-enable when chat module is available
+    // let tanvity_store = Arc::new(MultiSourceVSTanvityImpl::new(tanvity_state.clone()));
+    // self.local_ai.set_retriever_sources(vec![tanvity_store]).await;
 
     match self.providers.try_get(self.auth_type.load().as_ref()) {
       TryResult::Present(r) => {

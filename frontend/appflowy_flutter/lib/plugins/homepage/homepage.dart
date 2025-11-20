@@ -7,6 +7,7 @@ import 'package:appflowy/plugins/standalone_ai_chat/presentation/widgets/ai_inpu
 import 'package:appflowy/plugins/standalone_ai_chat/models/chat_image.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
@@ -101,20 +102,21 @@ class _HomePageState extends State<HomePage> {
   void _handleMessageSent(String message, AIModel? selectedModel, List<ChatImage>? images) async {
     if (message.isEmpty) return;
     
-    debugPrint('🔄 主页: 处理消息发送');
-    debugPrint('   - 消息: $message');
-    debugPrint('   - 模型: ${selectedModel?.name} (${selectedModel?.id})');
-    debugPrint('   - 图片数: ${images?.length ?? 0}');
+    Log.info('🔄 主页: 处理消息发送');
+    Log.info('   - 消息: $message');
+    Log.info('   - 模型: ${selectedModel?.name} (${selectedModel?.id})');
+    Log.info('   - 图片数: ${images?.length ?? 0}');
     
     try {
       // 1. 获取当前workspace ID
       final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
       if (workspaceId == null) {
+        Log.error('❌ 主页: 无法获取工作空间信息');
         _showError('无法获取工作空间信息');
         return;
       }
 
-      debugPrint('✅ 主页: 获取到workspace ID: $workspaceId');
+      Log.info('✅ 主页: 获取到workspace ID: $workspaceId');
       
       // 2. 创建并打开原生AI Chat视图
       final view = await AIChatViewService.createAndOpenAIChat(
@@ -124,13 +126,13 @@ class _HomePageState extends State<HomePage> {
       );
 
       if (view == null) {
+        Log.error('❌ 主页: 创建AI对话失败');
         _showError('创建AI对话失败');
       } else {
-        debugPrint('✅ 主页: AI Chat视图创建成功');
+        Log.info('✅ 主页: AI Chat视图创建成功，view.id=${view.id}');
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ 主页: 处理消息发送失败: $e');
-      debugPrint('堆栈跟踪: $stackTrace');
+      Log.error('❌ 主页: 处理消息发送失败: $e', e, stackTrace);
       _showError('打开AI对话时发生错误: $e');
     }
   }

@@ -265,8 +265,9 @@ impl From<uuid::Error> for FlowyError {
   }
 }
 
-impl From<ollama_rs::error::OllamaError> for FlowyError {
-  fn from(value: ollama_rs::error::OllamaError) -> Self {
-    FlowyError::local_ai().with_context(value)
-  }
-}
+// 不再使用本地 AI，已移除 ollama 错误转换
+// impl From<ollama_rs::error::OllamaError> for FlowyError {
+//   fn from(value: ollama_rs::error::OllamaError) -> Self {
+//     FlowyError::local_ai().with_context(value)
+//   }
+// }

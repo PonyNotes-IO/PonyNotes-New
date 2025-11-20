@@ -196,7 +196,8 @@ where
     let workspace_auth_type = select_user_workspace(workspace_id, &mut conn)
       .map(|row| AuthType::from(row.workspace_type))
       .unwrap_or(AuthType::AppFlowyCloud);
-    let profile = user_profile_from_af_profile(token, profile, workspace_auth_type)?;
+    let token_str = token.access_token.clone();
+    let profile = user_profile_from_af_profile(token_str, profile, workspace_auth_type)?;
 
     // Discard the response if the user has switched to a new workspace. This avoids updating the
     // user profile with potentially outdated information when the workspace ID no longer matches.
@@ -230,6 +231,7 @@ where
       .try_get_client()?
       .create_workspace(CreateWorkspaceParam {
         workspace_name: Some(workspace_name_owned),
+        workspace_icon: None,
       })
       .await?;
     Ok(to_user_workspace(new_workspace))
@@ -400,12 +402,11 @@ where
       .into_iter()
       .flat_map(|object| {
         Uuid::from_str(&object.object_id)
-          .map(|object_id| {
-            CollabParams::new(
-              object_id,
-              u8::from(object.collab_type).into(),
-              object.encoded_collab,
-            )
+          .map(|object_id| CollabParams {
+            object_id,
+            collab_type: u8::from(object.collab_type).into(),
+            encoded_collab_v1: object.encoded_collab.into(),
+            updated_at: None,
           })
           .ok()
       })
@@ -639,7 +640,7 @@ pub async fn user_sign_in_with_url(
     latest_workspace,
     user_workspaces,
     email: user_profile.email,
-    token: Some(client.get_token()?),
+    token: Some(client.get_token_str()?),
     encryption_type,
     is_new_user,
     updated_at: user_profile.updated_at,

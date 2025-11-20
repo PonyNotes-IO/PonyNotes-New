@@ -170,7 +170,10 @@ impl StorageManager {
       error!("[File] send global notifier failed: {}", err);
     }
 
-    Some(FileStatePB { file_id, is_finish })
+    Some(FileStatePB {
+      file_id,
+      is_finish,
+    })
   }
 
   pub async fn initialize(&self, workspace_id: &str) {

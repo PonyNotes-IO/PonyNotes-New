@@ -143,7 +143,7 @@ impl AppFlowyServer for AppFlowyCloudServer {
       while let Ok(token_state) = token_state_rx.recv().await {
         if let Some(client) = weak_client.upgrade() {
           match token_state {
-            TokenState::Refresh => match client.get_token() {
+            TokenState::Refresh => match client.get_token_str() {
               Ok(token) => {
                 if let Err(err) = watch_tx.send(UserTokenState::Refresh { token }) {
                   error!("Failed to send token after token state changed: {}", err);

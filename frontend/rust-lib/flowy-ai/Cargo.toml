@@ -40,15 +40,16 @@ sha2 = "0.10.7"
 base64 = "0.21.5"
 futures-util = "0.3.30"
 flowy-storage-pub = { workspace = true }
-ollama-rs.workspace = true
+# ollama-rs.workspace = true  # 不再使用本地 AI，已移除
 schemars = "0.8.22"
 twox-hash = { version = "2.1.0", features = ["xxhash64"] }
 async-trait.workspace = true
 async-stream = "0.3.6"
 flowy-database-pub = { workspace = true }
-langchain-rust = { version = "4.6.0", features = ["ollama"] }
+# langchain-rust = { version = "4.6.0", features = ["ollama"] }  # 不再使用本地 AI，已移除
 text-splitter = { version = "0.25.1" }
 flowy-sqlite-vec.workspace = true
+pin-project = "1.1"
 
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
 notify = "6.1.1"

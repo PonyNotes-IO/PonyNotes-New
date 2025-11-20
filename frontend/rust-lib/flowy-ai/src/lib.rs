@@ -2,6 +2,7 @@ mod event_handler;
 pub mod event_map;
 
 pub mod ai_manager;
+pub mod ai_session_client;
 mod chat;
 mod completion;
 pub mod entities;
@@ -12,8 +13,6 @@ pub mod local_ai;
 
 #[cfg(feature = "ai-tool")]
 mod ai_tool;
-pub mod embeddings;
-pub use embeddings::store::SqliteVectorStore;
 
 mod middleware;
 mod model_select;
@@ -22,5 +21,4 @@ mod model_select_test;
 pub mod notification;
 pub mod offline;
 mod protobuf;
-mod search;
 mod stream_message;

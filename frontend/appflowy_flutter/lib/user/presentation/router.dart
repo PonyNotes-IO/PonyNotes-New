@@ -3,6 +3,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/presentation/screens/screens.dart';
 import 'package:appflowy/workspace/presentation/home/desktop_home_screen.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
@@ -38,22 +39,30 @@ class AuthRouter {
     BuildContext context,
     UserProfilePB userProfile,
   ) async {
+    Log.info('🔵 [AuthRouter] goHomeScreen called for user: ${userProfile.email}');
     final result = await FolderEventGetCurrentWorkspaceSetting().send();
+    Log.info('🔵 [AuthRouter] FolderEventGetCurrentWorkspaceSetting result received');
     result.fold(
       (workspaceSetting) {
+        Log.info('🔵 [AuthRouter] Workspace setting obtained, navigating to home screen');
         // Replace SignInScreen or SkipLogInScreen as root page.
         // If user click back button, it will exit app rather than go back to SignInScreen or SkipLogInScreen
         if (UniversalPlatform.isMobile) {
+          Log.info('🔵 [AuthRouter] Navigating to MobileHomeScreen');
           context.go(
             MobileHomeScreen.routeName,
           );
         } else {
+          Log.info('🔵 [AuthRouter] Navigating to DesktopHomeScreen');
           context.go(
             DesktopHomeScreen.routeName,
           );
         }
       },
-      (error) => pushWorkspaceStartScreen(context, userProfile),
+      (error) {
+        Log.error('🔵 [AuthRouter] Failed to get workspace setting: ${error.msg}');
+        pushWorkspaceStartScreen(context, userProfile);
+      },
     );
   }
 

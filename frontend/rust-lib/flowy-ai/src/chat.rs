@@ -231,6 +231,7 @@ impl Chat {
                 if err.code == ErrorCode::RequestTimeout || err.code == ErrorCode::Internal {
                   error!("[Chat] unexpected stream error: {}", err);
                   let _ = answer_sink.send(StreamMessage::Done.to_string()).await;
+                  break; // 跳出循环，避免无限重试
                 } else {
                   error!("[Chat] failed to stream answer: {}", err);
                   let _ = answer_sink

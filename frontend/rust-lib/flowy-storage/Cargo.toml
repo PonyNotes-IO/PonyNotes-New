@@ -1,7 +1,7 @@
 [package]
 name = "flowy-storage"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 lib-dispatch = { workspace = true }
@@ -10,7 +10,7 @@ serde_json.workspace = true
 serde.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
-lib-infra = { workspace = true }
+lib-infra = { workspace = true, features = ["isolate_flutter"] }
 url = "2.2.2"
 flowy-error = { workspace = true, features = ["impl_from_reqwest", "impl_from_sqlite"] }
 tokio = { workspace = true, features = ["sync", "io-util"] }

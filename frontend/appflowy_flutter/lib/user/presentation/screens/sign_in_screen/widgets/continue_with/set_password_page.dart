@@ -1,6 +1,7 @@
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/password/password_http_service.dart';
+import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -488,16 +489,15 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
 
   void _enterSystem() {
     Log.info('🟢 [SetPasswordPage] 进入系统');
-    // 调用 runAppFlowy() 重启应用并进入系统
-    // 注意：这里需要确保用户已经登录成功
+    // 使用正确的导航方式，而不是调用 runAppFlowy()
+    // runAppFlowy() 会导致应用重启并可能引发 Navigator 相关的错误
     if (mounted && context.mounted) {
-      // 使用 rootNavigator 确保导航不会失败
+      // 使用 AuthRouter 来导航到主界面（与正常登录流程一致）
       final rootContext = Navigator.of(context, rootNavigator: true).context;
       if (rootContext.mounted) {
-        // 直接调用 runAppFlowy() 会重启应用
-        // 但我们需要确保用户已经登录成功
-        // 由于登录已经成功，我们可以直接调用 runAppFlowy()
-        runAppFlowy();
+        // 使用 AuthRouter.goHomeScreen 进行导航
+        // 这与 SignInScreen 中的导航逻辑一致
+        getIt<AuthRouter>().goHomeScreen(rootContext, widget.userProfile);
       }
     }
   }

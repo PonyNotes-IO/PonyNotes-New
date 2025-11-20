@@ -1590,6 +1590,7 @@ impl FolderManager {
       let shared_with = shared_details
         .into_iter()
         .map(|user| SharedUser {
+          view_id: *page_id,
           email: user.email,
           name: user.name,
           access_level: AFAccessLevel::from(AFAccessLevelPB::from(user.access_level)),
@@ -1599,6 +1600,7 @@ impl FolderManager {
           } else {
             Some(user.avatar_url)
           },
+          pending_invitation: false,
         })
         .collect();
 

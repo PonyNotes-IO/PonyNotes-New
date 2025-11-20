@@ -35,7 +35,7 @@ collab-folder = { workspace = true, optional = true }
 client-api = { workspace = true, optional = true }
 tantivy = { workspace = true, optional = true }
 uuid.workspace = true
-ollama-rs.workspace = true
+# ollama-rs.workspace = true  # 不再使用本地 AI，已移除
 
 
 [features]

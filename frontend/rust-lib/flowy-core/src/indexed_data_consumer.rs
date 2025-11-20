@@ -5,7 +5,7 @@ use collab_folder::folder_diff::FolderViewChange;
 use collab_folder::{IconType, View, ViewIcon};
 use collab_integrate::instant_indexed_data_provider::InstantIndexedDataConsumer;
 use dashmap::DashMap;
-use flowy_ai_pub::entities::{UnindexedCollab, UnindexedCollabMetadata, UnindexedData};
+use flowy_ai_pub::entities::{UnindexedCollab, UnindexedData};
 use flowy_error::{FlowyError, FlowyResult};
 use flowy_folder::manager::FolderManager;
 use flowy_search_pub::entities::FolderViewObserver;
@@ -29,24 +29,25 @@ impl FullIndexedDataConsumer for EmbeddingFullIndexConsumer {
     "embedding_full_index_consumer".to_string()
   }
 
-  async fn consume_indexed_data(&self, _uid: i64, data: &UnindexedCollab) -> FlowyResult<()> {
-    if !matches!(data.collab_type, CollabType::Document) {
-      return Ok(());
-    }
-
-    match data.data.as_ref() {
-      None => {
-        return Ok(());
-      },
-      Some(data) => {
-        if data.is_empty() {
-          return Ok(());
-        }
-      },
-    }
-
-    let scheduler = flowy_ai::embeddings::context::EmbedContext::shared().get_scheduler()?;
-    scheduler.index_collab(data.clone()).await?;
+  async fn consume_indexed_data(&self, _uid: i64, _data: &UnindexedCollab) -> FlowyResult<()> {
+    // TODO: Re-enable when embeddings module is available
+    // if !matches!(data.collab_type, CollabType::Document) {
+    //   return Ok(());
+    // }
+    //
+    // match data.data.as_ref() {
+    //   None => {
+    //     return Ok(());
+    //   },
+    //   Some(data) => {
+    //     if data.is_empty() {
+    //       return Ok(());
+    //     }
+    //   },
+    // }
+    //
+    // let scheduler = flowy_ai::embeddings::context::EmbedContext::shared().get_scheduler()?;
+    // scheduler.index_collab(data.clone()).await?;
     Ok(())
   }
 }
@@ -71,10 +72,10 @@ impl InstantIndexedDataConsumer for EmbeddingsInstantConsumerImpl {
 
   async fn consume_collab(
     &self,
-    workspace_id: &Uuid,
+    _workspace_id: &Uuid,
     data: Option<UnindexedData>,
     object_id: &Uuid,
-    collab_type: CollabType,
+    _collab_type: CollabType,
   ) -> Result<bool, FlowyError> {
     if data.is_none() {
       return Ok(false);
@@ -99,41 +100,43 @@ impl InstantIndexedDataConsumer for EmbeddingsInstantConsumerImpl {
 
     self.consume_history.insert(*object_id, content_hash);
 
-    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-    {
-      use flowy_ai::embeddings::context::EmbedContext;
-      if let Ok(scheduler) = EmbedContext::shared().get_scheduler() {
-        let unindex_collab = UnindexedCollab {
-          workspace_id: *workspace_id,
-          object_id: *object_id,
-          collab_type,
-          data: Some(data),
-          metadata: UnindexedCollabMetadata::default(),
-        };
-
-        if let Err(err) = scheduler.index_collab(unindex_collab).await {
-          error!("[Embedding] error generating embedding: {}", err);
-        }
-      }
-    }
+    // TODO: Re-enable when embeddings module is available
+    // #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    // {
+    //   use flowy_ai::embeddings::context::EmbedContext;
+    //   if let Ok(scheduler) = EmbedContext::shared().get_scheduler() {
+    //     let unindex_collab = UnindexedCollab {
+    //       workspace_id: *workspace_id,
+    //       object_id: *object_id,
+    //       collab_type,
+    //       data: Some(data),
+    //       metadata: UnindexedCollabMetadata::default(),
+    //     };
+    //
+    //     if let Err(err) = scheduler.index_collab(unindex_collab).await {
+    //       error!("[Embedding] error generating embedding: {}", err);
+    //     }
+    //   }
+    // }
 
     Ok(true)
   }
 
   async fn did_delete_collab(
     &self,
-    workspace_id: &Uuid,
-    object_id: &Uuid,
+    _workspace_id: &Uuid,
+    _object_id: &Uuid,
   ) -> Result<(), FlowyError> {
-    #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-    {
-      use flowy_ai::embeddings::context::EmbedContext;
-      if let Ok(scheduler) = EmbedContext::shared().get_scheduler() {
-        if let Err(err) = scheduler.delete_collab(workspace_id, object_id).await {
-          error!("[Embedding] error generating embedding: {}", err);
-        }
-      }
-    }
+    // TODO: Re-enable when embeddings module is available
+    // #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+    // {
+    //   use flowy_ai::embeddings::context::EmbedContext;
+    //   if let Ok(scheduler) = EmbedContext::shared().get_scheduler() {
+    //     if let Err(err) = scheduler.delete_collab(workspace_id, object_id).await {
+    //       error!("[Embedding] error generating embedding: {}", err);
+    //     }
+    //   }
+    // }
 
     Ok(())
   }

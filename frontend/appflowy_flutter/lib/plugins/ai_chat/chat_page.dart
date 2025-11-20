@@ -3,6 +3,7 @@ import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_content_page.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,8 +32,8 @@ class AIChatPage extends StatelessWidget {
     String? preferredModelId;
     
     if (viewExtra.isNotEmpty) {
-      debugPrint('🔍 AIChatPage: 解析view.extra...');
-      debugPrint('   - view.extra: $viewExtra');
+      Log.info('🔍 AIChatPage: 解析view.extra...');
+      Log.info('   - view.extra: $viewExtra');
       
       try {
         // view.extra可能是JSON字符串，尝试解析
@@ -41,16 +42,16 @@ class AIChatPage extends StatelessWidget {
         preferredModelId = extraData['preferred_model'] as String?;
         
         if (initialMessage != null) {
-          debugPrint('✅ AIChatPage: 找到初始消息: $initialMessage');
+          Log.info('✅ AIChatPage: 找到初始消息: $initialMessage');
         }
         if (preferredModelId != null) {
-          debugPrint('✅ AIChatPage: 找到首选模型: $preferredModelId');
+          Log.info('✅ AIChatPage: 找到首选模型: $preferredModelId');
         }
       } catch (e) {
-        debugPrint('⚠️  AIChatPage: view.extra不是JSON格式，跳过解析');
+        Log.warn('⚠️  AIChatPage: view.extra不是JSON格式，跳过解析: $e');
       }
     } else {
-      debugPrint('ℹ️  AIChatPage: view.extra为空');
+      Log.info('ℹ️  AIChatPage: view.extra为空');
     }
     
     return MultiBlocProvider(

@@ -18,6 +18,7 @@ pub fn af_update_from_update_params(update: UpdateUserProfileParams) -> UpdateUs
     name: update.name,
     email: update.email,
     password: update.password,
+    phone: None,
     metadata: Some(user_metadata),
   }
 }
@@ -67,7 +68,7 @@ pub fn from_af_role(role: AFRole) -> Role {
 
 pub fn from_af_workspace_member(member: AFWorkspaceMember) -> WorkspaceMember {
   WorkspaceMember {
-    email: member.email,
+    email: member.email.unwrap_or_default(),
     role: from_af_role(member.role),
     name: member.name,
     avatar_url: member.avatar_url,
