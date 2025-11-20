@@ -52,29 +52,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _loadMessages();
     _loadSettings();
     
-    // 如果有初始消息，自动发送
+    // 注意：初始消息的自动发送逻辑移到了 _handleLatestMessages 中
+    // 这样可以确保只在首次创建（本地无消息）时才自动发送
     if (initialMessage != null && initialMessage!.isNotEmpty) {
-      Log.info('🔄 ChatBloc: 检测到初始消息，准备自动发送');
+      Log.info('ℹ️ ChatBloc: 检测到初始消息（将在加载消息后判断是否发送）');
       Log.info('   - 消息: $initialMessage');
       Log.info('   - 首选模型: $preferredModelId');
-      
-      // 延迟发送，确保UI已经初始化
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!isClosed) {
-          Log.info('📤 ChatBloc: 自动发送初始消息');
-          add(ChatEvent.sendMessage(
-            message: initialMessage!,
-            format: null,
-            metadata: {},
-            promptId: null,
-          ));
-        } else {
-          Log.warn('⚠️ ChatBloc: bloc已关闭，无法发送初始消息');
-        }
-      });
     } else {
-      Log.info('ℹ️ ChatBloc: 没有初始消息或消息为空');
-      Log.info('   - initialMessage: $initialMessage');
+      Log.info('ℹ️ ChatBloc: 没有初始消息');
     }
   }
 
@@ -210,6 +195,36 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         break;
       default:
         break;
+    }
+    
+    // 【关键修复】只在首次创建（本地无消息）时才自动发送初始消息
+    // 这样可以防止每次切换回视图时重复发送
+    if (initialMessage != null && 
+        initialMessage!.isNotEmpty && 
+        chatController.messages.isEmpty) {
+      Log.info('🔄 ChatBloc: 本地无消息记录，这是首次创建，准备自动发送初始消息');
+      Log.info('   - 消息: $initialMessage');
+      Log.info('   - 首选模型: $preferredModelId');
+      
+      // 延迟发送，确保UI已经初始化完成
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!isClosed) {
+          Log.info('📤 ChatBloc: 自动发送初始消息');
+          add(ChatEvent.sendMessage(
+            message: initialMessage!,
+            format: null,
+            metadata: {},
+            promptId: null,
+          ));
+        } else {
+          Log.warn('⚠️ ChatBloc: bloc已关闭，无法发送初始消息');
+        }
+      });
+    } else if (initialMessage != null && 
+               initialMessage!.isNotEmpty && 
+               chatController.messages.isNotEmpty) {
+      Log.info('ℹ️ ChatBloc: 本地已有 ${chatController.messages.length} 条消息，跳过自动发送');
+      Log.info('   - 这是重新打开已存在的会话，不应该重复发送消息');
     }
   }
 

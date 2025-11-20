@@ -129,17 +129,51 @@ pub async fn stream_ai_session(
     ));
   }
 
-  // 解析 SSE 流
+  // 解析 SSE 流 - 使用缓冲区处理跨chunk的JSON行
   use futures_util::stream::StreamExt as _;
-  let stream = futures_util::stream::unfold(resp, |mut resp| async move {
-    match resp.chunk().await {
-      Ok(Some(bytes)) => {
-        let result: Result<Value, FlowyError> = (|| {
+  
+  struct StreamState {
+    resp: reqwest::Response,
+    buffer: String,
+    pending_jsons: Vec<Value>,
+  }
+  
+  let initial_state = StreamState {
+    resp,
+    buffer: String::new(),
+    pending_jsons: Vec::new(),
+  };
+  
+  let stream = futures_util::stream::unfold(initial_state, |mut state| async move {
+    // 如果有待处理的JSON，先返回它们
+    if let Some(json) = state.pending_jsons.pop() {
+      return Some((Ok(json), state));
+    }
+    
+    loop {
+      match state.resp.chunk().await {
+        Ok(Some(bytes)) => {
           let text = String::from_utf8_lossy(&bytes);
           trace!("[AISession] 收到原始数据: {}", text);
           
-          // 解析每一行
-          for line in text.lines() {
+          // 将新数据追加到缓冲区
+          state.buffer.push_str(&text);
+          
+          // 尝试从缓冲区提取完整的JSON行
+          let mut results = Vec::new();
+          let mut lines: Vec<&str> = state.buffer.lines().collect();
+          let mut last_incomplete_line = String::new();
+          
+          // 检查最后一行是否完整（有换行符结尾）
+          if !state.buffer.ends_with('\n') && !lines.is_empty() {
+            // 最后一行可能不完整，保留到下次
+            if let Some(last_line) = lines.pop() {
+              last_incomplete_line = last_line.to_string();
+            }
+          }
+          
+          // 解析所有完整的行
+          for line in lines {
             let line = line.trim();
             if line.is_empty() {
               continue;
@@ -147,28 +181,61 @@ pub async fn stream_ai_session(
             
             // 解析 JSON
             match serde_json::from_str::<Value>(line) {
-              Ok(json) => return Ok(json),
+              Ok(json) => {
+                trace!("[AISession] 成功解析JSON: {:?}", json);
+                results.push(json);
+              }
               Err(e) => {
                 error!("[AISession] JSON解析失败: {} - 原始数据: {}", e, line);
-                continue;
               }
             }
           }
           
-          // 如果没有有效的JSON，返回一个空对象
-          Ok(Value::Object(serde_json::Map::new()))
-        })();
-        Some((result, resp))
-      },
-      Ok(None) => None,
-      Err(e) => {
-        error!("[AISession] 读取流失败: {}", e);
-        let err = FlowyError::new(ErrorCode::Internal, format!("读取流失败: {}", e));
-        Some((Err(err), resp))
+          // 更新缓冲区为未完成的行
+          state.buffer = last_incomplete_line;
+          
+          // 如果有成功解析的JSON，保存到pending并返回第一个
+          if !results.is_empty() {
+            // 反转顺序，因为pop是从后面取
+            results.reverse();
+            let first = results.pop().unwrap();
+            state.pending_jsons = results;
+            return Some((Ok(first), state));
+          }
+          
+          // 没有成功解析的JSON，继续读取下一个chunk
+          continue;
+        },
+        Ok(None) => {
+          // 流结束，检查缓冲区是否还有数据
+          if !state.buffer.is_empty() {
+            let line = state.buffer.trim();
+            if !line.is_empty() {
+              trace!("[AISession] 流结束，尝试解析剩余数据: {}", line);
+              match serde_json::from_str::<Value>(line) {
+                Ok(json) => {
+                  state.buffer.clear();
+                  return Some((Ok(json), state));
+                }
+                Err(e) => {
+                  error!("[AISession] 流结束时JSON解析失败: {} - 原始数据: {}", e, line);
+                }
+              }
+            }
+          }
+          trace!("[AISession] 流结束");
+          return None;
+        },
+        Err(e) => {
+          error!("[AISession] 读取流失败: {}", e);
+          let err = FlowyError::new(ErrorCode::Internal, format!("读取流失败: {}", e));
+          return Some((Err(err), state));
+        }
       }
     }
   });
 
   Ok(AISessionStream::new(stream))
 }
+
 
