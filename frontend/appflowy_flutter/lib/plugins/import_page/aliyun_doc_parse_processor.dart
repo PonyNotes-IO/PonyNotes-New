@@ -26,6 +26,9 @@ class CancellationToken {
 class AliyunDocParseProcessor {
   static const String apiBaseUrl = 'https://www.xiaomabiji.com/prod-api';
   static const String parseEndpoint = '/tool/docParse/parse';
+  static const String parseStatusEndpoint = '/tool/docParse/content';
+  static const Duration taskPollInterval = Duration(seconds: 2);
+  static const int maxTaskPollAttempts = 60;
   
   // 阿里云API文件大小限制（根据nginx 413错误，设置为20MB）
   static const int maxFileSize = 50 * 1024 * 1024; // 20MB
@@ -197,76 +200,23 @@ class AliyunDocParseProcessor {
     required String fileName,
     CancellationToken? cancellationToken,
   }) async {
-    final url = Uri.parse('$apiBaseUrl$parseEndpoint');
-    
-    Log.info('Calling Aliyun parse API: $url');
-    Log.info('File name: $fileName, Size: ${fileBytes.length} bytes');
-    
-    // 检查是否已取消
-    if (cancellationToken?.isCancelled ?? false) {
-      throw Exception('任务已取消');
-    }
-    
     try {
-      // 创建multipart请求
-      final request = http.MultipartRequest('POST', url);
-      
-      // 添加文件字段，字段名为 'doc'
-      final multipartFile = http.MultipartFile.fromBytes(
-        'doc',
-        fileBytes,
-        filename: fileName,
-        contentType: _getContentType(fileName),
+      final taskId = await _createAliyunParseTask(
+        fileBytes: fileBytes,
+        fileName: fileName,
+        cancellationToken: cancellationToken,
       );
-      request.files.add(multipartFile);
-      
-      // 发送请求
-      final streamedResponse = await request.send();
-      
-      // 检查是否已取消
-      if (cancellationToken?.isCancelled ?? false) {
-        throw Exception('任务已取消');
+      final responseData = await _pollAliyunParseResult(
+        taskId: taskId,
+        cancellationToken: cancellationToken,
+      );
+      final markdownContent = _parseResponseToMarkdown(responseData);
+      if (markdownContent.isEmpty) {
+        Log.warn('Parsed markdown content is empty');
+        throw Exception('解析结果为空，请检查文件内容');
       }
-      
-      // 读取响应
-      final response = await http.Response.fromStream(streamedResponse);
-      
-      Log.info('Aliyun API response status: ${response.statusCode}');
-      Log.info('Aliyun API response body length: ${response.body.length}');
-      
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        Log.info('Aliyun API response data keys: ${responseData.keys}');
-        
-        // 检查响应格式
-        if (responseData['code'] != null && responseData['code'] != 200) {
-          final msg = responseData['msg'] ?? '未知错误';
-          Log.error('Aliyun API returned error: code=${responseData['code']}, msg=$msg');
-          throw Exception('阿里云解析失败: $msg');
-        }
-        
-        // 解析返回的数据并转换为Markdown
-        final markdownContent = _parseResponseToMarkdown(responseData);
-        
-        if (markdownContent.isEmpty) {
-          Log.warn('Parsed markdown content is empty');
-          throw Exception('解析结果为空，请检查文件内容');
-        }
-        
-        Log.info('Successfully converted response to markdown, length: ${markdownContent.length}');
-        return markdownContent;
-        
-      } else if (response.statusCode == 413) {
-        // 413 Request Entity Too Large - 文件太大
-        final fileSizeStr = _getFileSizeString(fileBytes.length);
-        final maxSizeStr = _getFileSizeString(maxFileSize);
-        Log.error('Aliyun API 413 error: File too large. File size: $fileSizeStr, Max: $maxSizeStr');
-        throw Exception('文件大小超过服务器限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。');
-      } else {
-        Log.error('Aliyun API error: ${response.statusCode} - ${response.body}');
-        throw Exception('API请求失败: ${response.statusCode} - ${response.body}');
-      }
-      
+      Log.info('Successfully converted response to markdown, length: ${markdownContent.length}');
+      return markdownContent;
     } catch (e) {
       Log.error('Failed to call Aliyun parse API: $e');
       if (e.toString().contains('已取消')) {
@@ -280,6 +230,134 @@ class AliyunDocParseProcessor {
       }
       throw Exception('调用阿里云解析API失败: $e');
     }
+  }
+
+  /// 创建阿里云解析任务，返回任务ID
+  static Future<String> _createAliyunParseTask({
+    required Uint8List fileBytes,
+    required String fileName,
+    CancellationToken? cancellationToken,
+  }) async {
+    final url = Uri.parse('$apiBaseUrl$parseEndpoint');
+    
+    Log.info('Creating Aliyun parse task: $url');
+    Log.info('File name: $fileName, Size: ${fileBytes.length} bytes');
+    
+    if (cancellationToken?.isCancelled ?? false) {
+      throw Exception('任务已取消');
+    }
+    
+    try {
+      final request = http.MultipartRequest('POST', url);
+      final multipartFile = http.MultipartFile.fromBytes(
+        'doc',
+        fileBytes,
+        filename: fileName,
+        contentType: _getContentType(fileName),
+      );
+      request.files.add(multipartFile);
+      
+      final streamedResponse = await request.send();
+      
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
+      final response = await http.Response.fromStream(streamedResponse);
+      Log.info('Aliyun task creation status: ${response.statusCode}');
+      Log.info('Aliyun task creation body length: ${response.body.length}');
+      
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+        if (responseData['code'] != null && responseData['code'] != 200) {
+          final msg = responseData['msg'] ?? '未知错误';
+          Log.error('Aliyun task creation error: code=${responseData['code']}, msg=$msg');
+          throw Exception('阿里云解析失败: $msg');
+        }
+        final taskId = _extractTaskId(responseData['data']);
+        if (taskId == null || taskId.isEmpty) {
+          Log.error('Failed to retrieve taskId from response: ${response.body}');
+          throw Exception('未获取到解析任务ID，请稍后重试');
+        }
+        Log.info('Aliyun parse task created successfully, taskId=$taskId');
+        return taskId;
+      } else if (response.statusCode == 413) {
+        final fileSizeStr = _getFileSizeString(fileBytes.length);
+        final maxSizeStr = _getFileSizeString(maxFileSize);
+        Log.error('Aliyun API 413 error: File too large. File size: $fileSizeStr, Max: $maxSizeStr');
+        throw Exception('文件大小超过服务器限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。');
+      } else {
+        Log.error('Aliyun task creation failed: ${response.statusCode} - ${response.body}');
+        throw Exception('API请求失败: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      if (e.toString().contains('已取消') || e.toString().contains('文件大小超过')) {
+        rethrow;
+      }
+      throw Exception('创建阿里云解析任务失败: $e');
+    }
+  }
+
+  /// 轮询阿里云解析任务直到完成
+  static Future<Map<String, dynamic>> _pollAliyunParseResult({
+    required String taskId,
+    CancellationToken? cancellationToken,
+  }) async {
+    final url = Uri.parse('$apiBaseUrl$parseStatusEndpoint/$taskId');
+    Log.info('Start polling Aliyun parse task: $taskId');
+    
+    for (var attempt = 0; attempt < maxTaskPollAttempts; attempt++) {
+      if (cancellationToken?.isCancelled ?? false) {
+        throw Exception('任务已取消');
+      }
+      
+      if (attempt > 0) {
+        await Future.delayed(taskPollInterval);
+      }
+      
+      try {
+        final response = await http.get(url);
+        Log.info('Polling attempt ${attempt + 1} for task $taskId, status ${response.statusCode}');
+        
+        if (response.statusCode == 200) {
+          final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+          if (responseData['code'] != null && responseData['code'] != 200) {
+            final msg = responseData['msg'] ?? '未知错误';
+            Log.warn('Aliyun polling returned non-success code=${responseData['code']}, msg=$msg');
+            if (_shouldRetryPolling(responseData['code'])) {
+              continue;
+            }
+            throw Exception('阿里云解析失败: $msg');
+          }
+          
+          final data = responseData['data'];
+          final status = _determineTaskStatus(data);
+          switch (status) {
+            case _ParseTaskStatus.success:
+              Log.info('Aliyun parse task $taskId completed');
+              return responseData;
+            case _ParseTaskStatus.failed:
+              final errorMsg = _extractTaskErrorMessage(data) ?? '解析任务失败';
+              throw Exception('阿里云解析失败: $errorMsg');
+            case _ParseTaskStatus.pending:
+              continue;
+          }
+        } else if (_shouldRetryStatusCode(response.statusCode)) {
+          Log.warn('Aliyun polling temporary error: ${response.statusCode}');
+          continue;
+        } else {
+          Log.error('Aliyun polling failed: ${response.statusCode} - ${response.body}');
+          throw Exception('获取解析结果失败: ${response.statusCode}');
+        }
+      } catch (e) {
+        Log.warn('Aliyun polling exception: $e');
+        if (attempt == maxTaskPollAttempts - 1) {
+          rethrow;
+        }
+      }
+    }
+    
+    throw Exception('阿里云解析超时，请稍后重试');
   }
   
   /// 获取文件Content-Type
@@ -300,17 +378,9 @@ class AliyunDocParseProcessor {
   /// 解析API响应并转换为Markdown格式
   static String _parseResponseToMarkdown(Map<String, dynamic> responseData) {
     try {
-      // 提取data字段
-      final data = responseData['data'];
-      if (data == null) {
-        Log.error('Response data is null');
-        return '';
-      }
-      
-      // 提取data.data字段（嵌套的data）
-      final innerData = data['data'];
+      final innerData = _unwrapParsePayload(responseData);
       if (innerData == null) {
-        Log.error('Response data.data is null');
+        Log.error('Failed to unwrap parse payload from response');
         return '';
       }
       
@@ -699,5 +769,197 @@ class AliyunDocParseProcessor {
       return false;
     }
   }
+
+  /// 提取任务ID
+  static String? _extractTaskId(dynamic data) {
+    if (data == null) {
+      return null;
+    }
+    
+    if (data is String) {
+      return data;
+    }
+    
+    if (data is int) {
+      return data.toString();
+    }
+    
+    if (data is Map<String, dynamic>) {
+      final candidates = [
+        data['taskId'],
+        data['task_id'],
+        data['taskID'],
+        data['id'],
+        data['data'],
+      ];
+      for (final candidate in candidates) {
+        final value = _extractTaskId(candidate);
+        if (value != null && value.isNotEmpty) {
+          return value;
+        }
+      }
+    }
+    
+    return null;
+  }
+  
+  static bool _shouldRetryPolling(dynamic code) {
+    if (code is int) {
+      return code == 202 || code == 201 || code == 102;
+    }
+    return false;
+  }
+  
+  static bool _shouldRetryStatusCode(int statusCode) {
+    return statusCode == 408 || statusCode == 429 || statusCode >= 500;
+  }
+  
+  static _ParseTaskStatus _determineTaskStatus(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      final statusValue = data['status'] ??
+          data['state'] ??
+          data['taskStatus'] ??
+          data['parseStatus'];
+      final finished = data['finished'] as bool? ?? false;
+      final successFlag = data['success'] as bool? ?? false;
+      final failedFlag = data['failed'] as bool? ?? false;
+      
+      if (successFlag) {
+        return _ParseTaskStatus.success;
+      }
+      
+      if (failedFlag) {
+        return _ParseTaskStatus.failed;
+      }
+      
+      final normalizedStatus = statusValue?.toString().toLowerCase();
+      if (normalizedStatus != null) {
+        const successStates = {
+          'success',
+          'succeeded',
+          'done',
+          'finished',
+          'completed',
+          'complete',
+        };
+        const failedStates = {
+          'failed',
+          'error',
+          'timeout',
+          'expired',
+          'cancelled',
+          'canceled',
+          'stop',
+          'stopped',
+        };
+        const pendingStates = {
+          'pending',
+          'processing',
+          'running',
+          'in_progress',
+          'created',
+          'queued',
+          'queueing',
+          'waiting',
+          'init',
+        };
+        
+        if (successStates.contains(normalizedStatus)) {
+          return _ParseTaskStatus.success;
+        }
+        if (failedStates.contains(normalizedStatus)) {
+          return _ParseTaskStatus.failed;
+        }
+        if (pendingStates.contains(normalizedStatus)) {
+          return _ParseTaskStatus.pending;
+        }
+      }
+      
+      if (finished && _looksLikeParsePayload(data)) {
+        return _ParseTaskStatus.success;
+      }
+      
+      final content = data['content'];
+      if (content is Map<String, dynamic> && _looksLikeParsePayload(content)) {
+        return _ParseTaskStatus.success;
+      }
+    }
+    
+    return _ParseTaskStatus.pending;
+  }
+  
+  static String? _extractTaskErrorMessage(dynamic data) {
+    if (data is Map<String, dynamic>) {
+      return (data['errorMsg'] ??
+              data['errorMessage'] ??
+              data['msg'] ??
+              data['message'])
+          ?.toString();
+    }
+    return null;
+  }
+  
+  static Map<String, dynamic>? _unwrapParsePayload(Map<String, dynamic> responseData) {
+    final data = responseData['data'];
+    if (data == null) {
+      return null;
+    }
+    
+    if (data is Map<String, dynamic>) {
+      final nestedData = data['data'];
+      if (nestedData is Map<String, dynamic>) {
+        return nestedData;
+      }
+      
+      final content = data['content'];
+      if (content is Map<String, dynamic>) {
+        final contentData = content['data'];
+        if (contentData is Map<String, dynamic>) {
+          return contentData;
+        }
+        if (_looksLikeParsePayload(content)) {
+          return content;
+        }
+      }
+      
+      final result = data['result'];
+      if (result is Map<String, dynamic>) {
+        final resultsData = result['data'];
+        if (resultsData is Map<String, dynamic>) {
+          return resultsData;
+        }
+        if (_looksLikeParsePayload(result)) {
+          return result;
+        }
+      }
+      
+      if (_looksLikeParsePayload(data)) {
+        return data;
+      }
+    }
+    
+    if (data is List || data is String) {
+      return null;
+    }
+    
+    if (_looksLikeParsePayload(responseData)) {
+      return responseData;
+    }
+    
+    return null;
+  }
+  
+  static bool _looksLikeParsePayload(Map<String, dynamic> data) {
+    return data.containsKey('layouts') ||
+        data.containsKey('docInfo') ||
+        data.containsKey('styles') ||
+        data.containsKey('logics');
+  }
+}
+
+enum _ParseTaskStatus {
+  pending,
+  success,
+  failed,
 }
 
