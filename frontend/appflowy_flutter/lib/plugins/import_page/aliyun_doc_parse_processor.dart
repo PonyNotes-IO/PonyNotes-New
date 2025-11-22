@@ -351,7 +351,8 @@ class AliyunDocParseProcessor {
         }
       } catch (e) {
         Log.warn('Aliyun polling exception: $e');
-        if (attempt == maxTaskPollAttempts - 1) {
+        final isRetryable = _isRetryablePollingError(e);
+        if (!isRetryable || attempt == maxTaskPollAttempts - 1) {
           rethrow;
         }
       }
@@ -813,9 +814,33 @@ class AliyunDocParseProcessor {
   static bool _shouldRetryStatusCode(int statusCode) {
     return statusCode == 408 || statusCode == 429 || statusCode >= 500;
   }
+
+  static bool _isRetryablePollingError(Object error) {
+    final message = error.toString().toLowerCase();
+    const retryableKeywords = [
+      'timeout',
+      'temporarily',
+      'temporary',
+      'network',
+      'connection',
+      'cancelled',
+      'canceled',
+    ];
+    for (final keyword in retryableKeywords) {
+      if (message.contains(keyword)) {
+        return true;
+      }
+    }
+    return false;
+  }
   
   static _ParseTaskStatus _determineTaskStatus(dynamic data) {
     if (data is Map<String, dynamic>) {
+      final codeValue = data['code'];
+      if (_isFailureTaskCode(codeValue)) {
+        return _ParseTaskStatus.failed;
+      }
+
       final statusValue = data['status'] ??
           data['state'] ??
           data['taskStatus'] ??
@@ -823,12 +848,15 @@ class AliyunDocParseProcessor {
       final finished = data['finished'] as bool? ?? false;
       final successFlag = data['success'] as bool? ?? false;
       final failedFlag = data['failed'] as bool? ?? false;
+      final completedFlag = data['completed'] as bool?;
       
       if (successFlag) {
         return _ParseTaskStatus.success;
       }
-      
       if (failedFlag) {
+        return _ParseTaskStatus.failed;
+      }
+      if (completedFlag == true && !_looksLikeParsePayload(data)) {
         return _ParseTaskStatus.failed;
       }
       
@@ -844,6 +872,7 @@ class AliyunDocParseProcessor {
         };
         const failedStates = {
           'failed',
+          'fail',
           'error',
           'timeout',
           'expired',
@@ -890,11 +919,17 @@ class AliyunDocParseProcessor {
   
   static String? _extractTaskErrorMessage(dynamic data) {
     if (data is Map<String, dynamic>) {
-      return (data['errorMsg'] ??
-              data['errorMessage'] ??
-              data['msg'] ??
-              data['message'])
-          ?.toString();
+      final message = data['errorMsg'] ??
+          data['errorMessage'] ??
+          data['msg'] ??
+          data['message'];
+      if (message != null) {
+        return message.toString();
+      }
+      final codeValue = data['code'];
+      if (_isFailureTaskCode(codeValue)) {
+        return codeValue.toString();
+      }
     }
     return null;
   }
@@ -954,6 +989,21 @@ class AliyunDocParseProcessor {
         data.containsKey('docInfo') ||
         data.containsKey('styles') ||
         data.containsKey('logics');
+  }
+
+  static bool _isFailureTaskCode(dynamic codeValue) {
+    if (codeValue == null) {
+      return false;
+    }
+    if (codeValue is int) {
+      return codeValue != 200 && codeValue != 0;
+    }
+    final normalizedCode = codeValue.toString().toLowerCase();
+    if (normalizedCode.isEmpty) {
+      return false;
+    }
+    const successCodes = {'200', '0', 'success', 'ok'};
+    return !successCodes.contains(normalizedCode);
   }
 }
 
