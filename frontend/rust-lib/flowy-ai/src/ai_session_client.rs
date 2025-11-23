@@ -179,14 +179,86 @@ pub async fn stream_ai_session(
               continue;
             }
             
+            trace!("[AISession] 处理行: [{}] (长度: {})", line, line.len());
+            
+            // 处理SSE格式：检查是否是 "data: " 开头
+            // 使用 strip_prefix 更安全，避免索引越界
+            let json_str = if let Some(rest) = line.strip_prefix("data: ") {
+              rest.trim() // 去掉 "data: " 前缀并去除前后空格
+            } else {
+              line.trim()
+            };
+            
+            trace!("[AISession] 提取的JSON字符串: [{}] (长度: {})", json_str, json_str.len());
+            
+            // 处理 [DONE] 标记（流结束标记）
+            if json_str == "[DONE]" {
+              trace!("[AISession] 收到流结束标记 [DONE]");
+              continue; // 跳过，流会在后续自然结束
+            }
+            
+            // 如果去掉前缀后为空，跳过
+            if json_str.is_empty() {
+              trace!("[AISession] 跳过空行");
+              continue;
+            }
+            
             // 解析 JSON
-            match serde_json::from_str::<Value>(line) {
-              Ok(json) => {
+            match serde_json::from_str::<Value>(json_str) {
+              Ok(mut json) => {
                 trace!("[AISession] 成功解析JSON: {:?}", json);
+                
+                // 从OpenAI兼容格式转换为内部格式
+                // OpenAI格式: {"choices":[{"delta":{"content":"text"}}]}
+                // 豆包格式: {"choices":[{"delta":{"content":"","reasoning_content":"text"}}]}
+                // 内部格式: {"1": "text"} 或 {"0": metadata, "1": "text"}
+                if let Value::Object(ref mut obj) = json {
+                  if let Some(choices) = obj.get("choices").and_then(|c| c.as_array()) {
+                    if let Some(first_choice) = choices.first() {
+                      if let Some(delta) = first_choice.get("delta").and_then(|d| d.as_object()) {
+                        // 优先使用 content，如果没有或为空则使用 reasoning_content（豆包模型的思考过程）
+                        let content = delta.get("content")
+                          .and_then(|c| c.as_str())
+                          .filter(|s| !s.is_empty())
+                          .or_else(|| {
+                            delta.get("reasoning_content")
+                              .and_then(|c| c.as_str())
+                              .filter(|s| !s.is_empty())
+                          });
+                        
+                        if let Some(content_text) = content {
+                          // 转换为内部格式
+                          let mut internal_obj = serde_json::Map::new();
+                          internal_obj.insert(STREAM_ANSWER_KEY.to_string(), Value::String(content_text.to_string()));
+                          
+                          // 如果有metadata，也提取
+                          if let Some(metadata) = obj.get("metadata") {
+                            internal_obj.insert(STREAM_METADATA_KEY.to_string(), metadata.clone());
+                          }
+                          
+                          json = Value::Object(internal_obj);
+                          trace!("[AISession] 转换为内部格式: {:?}", json);
+                        } else {
+                          trace!("[AISession] delta中没有找到content或reasoning_content，跳过");
+                        }
+                      }
+                    }
+                  }
+                }
+                
                 results.push(json);
               }
               Err(e) => {
-                error!("[AISession] JSON解析失败: {} - 原始数据: {}", e, line);
+                error!("[AISession] JSON解析失败: {} - 原始行: [{}] - 提取的JSON字符串: [{}]", e, line, json_str);
+                // 尝试调试：打印前几个字符的ASCII码
+                let first_chars: String = json_str.chars().take(20).map(|c| {
+                  if c.is_control() {
+                    format!("\\x{:02x}", c as u8)
+                  } else {
+                    c.to_string()
+                  }
+                }).collect();
+                error!("[AISession] JSON字符串前20个字符: {}", first_chars);
               }
             }
           }
@@ -212,13 +284,41 @@ pub async fn stream_ai_session(
             let line = state.buffer.trim();
             if !line.is_empty() {
               trace!("[AISession] 流结束，尝试解析剩余数据: {}", line);
-              match serde_json::from_str::<Value>(line) {
-                Ok(json) => {
-                  state.buffer.clear();
-                  return Some((Ok(json), state));
-                }
-                Err(e) => {
-                  error!("[AISession] 流结束时JSON解析失败: {} - 原始数据: {}", e, line);
+              
+              // 处理SSE格式
+              let json_str = if line.starts_with("data: ") {
+                &line[6..]
+              } else {
+                line
+              };
+              
+              // 跳过 [DONE] 标记
+              if json_str.trim() != "[DONE]" {
+                match serde_json::from_str::<Value>(json_str) {
+                  Ok(mut json) => {
+                    // 转换为内部格式（与上面相同的逻辑）
+                    if let Value::Object(ref mut obj) = json {
+                      if let Some(choices) = obj.get("choices").and_then(|c| c.as_array()) {
+                        if let Some(first_choice) = choices.first() {
+                          if let Some(delta) = first_choice.get("delta").and_then(|d| d.as_object()) {
+                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                              let mut internal_obj = serde_json::Map::new();
+                              internal_obj.insert(STREAM_ANSWER_KEY.to_string(), Value::String(content.to_string()));
+                              if let Some(metadata) = obj.get("metadata") {
+                                internal_obj.insert(STREAM_METADATA_KEY.to_string(), metadata.clone());
+                              }
+                              json = Value::Object(internal_obj);
+                            }
+                          }
+                        }
+                      }
+                    }
+                    state.buffer.clear();
+                    return Some((Ok(json), state));
+                  }
+                  Err(e) => {
+                    error!("[AISession] 流结束时JSON解析失败: {} - 原始数据: {}", e, json_str);
+                  }
                 }
               }
             }

@@ -2594,12 +2594,22 @@ impl FolderManager {
             let shared_views: Vec<WorkspaceSharedViewTable> = resp
               .shared_views
               .iter()
-              .map(|shared_view| WorkspaceSharedViewTable {
-                uid,
-                workspace_id: workspace_id.to_string(),
-                view_id: shared_view.view_id.to_string(),
-                permission_id: shared_view.access_level as i32,
-                created_at: None,
+              .filter_map(|shared_view| {
+                // Get the highest access level from shared_users (if any)
+                let access_level = shared_view
+                  .shared_users
+                  .iter()
+                  .map(|u| u.access_level as i32)
+                  .max()
+                  .unwrap_or(AFAccessLevel::ReadOnly as i32);
+                
+                Some(WorkspaceSharedViewTable {
+                  uid,
+                  workspace_id: workspace_id.to_string(),
+                  view_id: shared_view.view_id.to_string(),
+                  permission_id: access_level,
+                  created_at: None,
+                })
               })
               .collect();
             let _ = replace_all_workspace_shared_views(
@@ -2617,6 +2627,15 @@ impl FolderManager {
                   let view = all_views
                     .iter()
                     .find(|view| view.id == shared_view.view_id.to_string())?;
+                  
+                  // Get the highest access level from shared_users (if any)
+                  let access_level = shared_view
+                    .shared_users
+                    .iter()
+                    .map(|u| u.access_level)
+                    .max()
+                    .unwrap_or(AFAccessLevel::ReadOnly);
+                  
                   Some(SharedViewPB {
                     view: view_pb_with_all_child_views(view.clone(), &|parent_id| {
                       all_views
@@ -2625,7 +2644,7 @@ impl FolderManager {
                         .cloned()
                         .collect()
                     }),
-                    access_level: AFAccessLevelPB::from(shared_view.access_level),
+                    access_level: AFAccessLevelPB::from(access_level),
                   })
                 })
                 .collect(),
