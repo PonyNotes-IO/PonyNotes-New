@@ -2,17 +2,25 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
 
 class ShareConstants {
-  static const String testBaseWebDomain = 'https://api.xiaomabiji.com';
-  static const String defaultBaseWebDomain = 'https://api.xiaomabiji.com';
+  static const String testBaseWebDomain = 'https://www.xiaomabiji.com';
+  static const String defaultBaseWebDomain = 'https://www.xiaomabiji.com';
 
+  /// Builds the public URL for a published page.
   static String buildPublishUrl({
     required String nameSpace,
     required String publishName,
   }) {
     final baseShareDomain =
         getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_web_domain;
-    final url = '$baseShareDomain/$nameSpace/$publishName'.addSchemaIfNeeded();
-    return url;
+    final host = baseShareDomain.addSchemaIfNeeded();
+    // final query = Uri(
+    //   queryParameters: <String, String>{
+    //     'viewId': viewId,
+    //     'workspaceId': workspaceId,
+    //   },
+    // ).query;
+    // return '$host/#/noteshare?$query';
+    return '$host/$nameSpace/$publishName';
   }
 
   static String buildNamespaceUrl({
@@ -35,11 +43,17 @@ class ShareConstants {
   }) {
     final baseShareDomain =
         getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_web_domain;
-    final url = '$baseShareDomain/app/$workspaceId/$viewId'.addSchemaIfNeeded();
-    if (blockId == null || blockId.isEmpty) {
-      return url;
-    }
-    return '$url?blockId=$blockId';
+    final host = baseShareDomain.addSchemaIfNeeded();
+
+    final query = Uri(
+      queryParameters: <String, String>{
+        'viewId': viewId,
+        'workspaceId': workspaceId,
+        if (blockId != null && blockId.isNotEmpty) 'blockId': blockId,
+      },
+    ).query;
+
+    return '$host/#/noteshare?$query';
   }
 }
 
