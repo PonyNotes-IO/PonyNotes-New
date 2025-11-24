@@ -215,6 +215,14 @@ pub async fn stream_ai_session(
                 if let Value::Object(ref mut obj) = json {
                   if let Some(choices) = obj.get("choices").and_then(|c| c.as_array()) {
                     if let Some(first_choice) = choices.first() {
+                      // 检查是否是流结束标记（finish_reason为stop）
+                      if let Some(finish_reason) = first_choice.get("finish_reason").and_then(|f| f.as_str()) {
+                        if finish_reason == "stop" {
+                          trace!("[AISession] 收到流结束标记 (finish_reason=stop)，跳过");
+                          continue; // 跳过这个chunk，不添加到results
+                        }
+                      }
+                      
                       if let Some(delta) = first_choice.get("delta").and_then(|d| d.as_object()) {
                         // 优先使用 content，如果没有或为空则使用 reasoning_content（豆包模型的思考过程）
                         let content = delta.get("content")
@@ -240,6 +248,7 @@ pub async fn stream_ai_session(
                           trace!("[AISession] 转换为内部格式: {:?}", json);
                         } else {
                           trace!("[AISession] delta中没有找到content或reasoning_content，跳过");
+                          continue; // 跳过这个chunk，不添加到results
                         }
                       }
                     }
@@ -300,21 +309,34 @@ pub async fn stream_ai_session(
                     if let Value::Object(ref mut obj) = json {
                       if let Some(choices) = obj.get("choices").and_then(|c| c.as_array()) {
                         if let Some(first_choice) = choices.first() {
+                          // 检查是否是流结束标记（finish_reason为stop）
+                          if let Some(finish_reason) = first_choice.get("finish_reason").and_then(|f| f.as_str()) {
+                            if finish_reason == "stop" {
+                              trace!("[AISession] 流结束时收到finish_reason=stop标记，正常结束");
+                              state.buffer.clear();
+                              return None; // 正常结束流
+                            }
+                          }
+                          
                           if let Some(delta) = first_choice.get("delta").and_then(|d| d.as_object()) {
-                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()) {
+                            if let Some(content) = delta.get("content").and_then(|c| c.as_str()).filter(|s| !s.is_empty()) {
                               let mut internal_obj = serde_json::Map::new();
                               internal_obj.insert(STREAM_ANSWER_KEY.to_string(), Value::String(content.to_string()));
                               if let Some(metadata) = obj.get("metadata") {
                                 internal_obj.insert(STREAM_METADATA_KEY.to_string(), metadata.clone());
                               }
                               json = Value::Object(internal_obj);
+                              state.buffer.clear();
+                              return Some((Ok(json), state));
                             }
                           }
                         }
                       }
                     }
+                    // 如果没有有效内容，直接结束流
+                    trace!("[AISession] 流结束时没有找到有效内容，正常结束");
                     state.buffer.clear();
-                    return Some((Ok(json), state));
+                    return None;
                   }
                   Err(e) => {
                     error!("[AISession] 流结束时JSON解析失败: {} - 原始数据: {}", e, json_str);
