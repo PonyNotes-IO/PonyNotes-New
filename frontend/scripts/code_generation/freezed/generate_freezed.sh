@@ -40,6 +40,23 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Determine flutter/dart command (prefer FVM if available)
+if command -v fvm >/dev/null 2>&1; then
+  FLUTTER_CMD="fvm flutter"
+  DART_CMD="fvm dart"
+else
+  if ! command -v flutter >/dev/null 2>&1; then
+    echo "❌ flutter command not found. Install Flutter or FVM first."
+    exit 1
+  fi
+  if ! command -v dart >/dev/null 2>&1; then
+    echo "❌ dart command not found. Install Dart or FVM first."
+    exit 1
+  fi
+  FLUTTER_CMD="flutter"
+  DART_CMD="dart"
+fi
+
 # Store the current working directory
 original_dir=$(pwd)
 
@@ -60,15 +77,15 @@ if [ "$exclude_packages" = false ]; then
       echo "🧊 Start generating freezed files ($d)."
       if [ "$skip_pub_packages_get" = false ]; then
         if [ "$verbose" = true ]; then
-          flutter packages pub get
+          $FLUTTER_CMD packages pub get
         else
-          flutter packages pub get >/dev/null 2>&1
+         $FLUTTER_CMD packages pub get >/dev/null 2>&1
         fi
       fi
       if [ "$verbose" = true ]; then
-        dart run build_runner build --delete-conflicting-outputs
+        $DART_CMD run build_runner build --delete-conflicting-outputs
       else
-        dart run build_runner build --delete-conflicting-outputs >/dev/null 2>&1
+        $DART_CMD run build_runner build --delete-conflicting-outputs >/dev/null 2>&1
       fi
       echo "🧊 Done generating freezed files ($d)."
     fi
@@ -100,17 +117,17 @@ echo "🧊 Start generating freezed files (AppFlowy)."
 
 if [ "$skip_pub_packages_get" = false ]; then
   if [ "$verbose" = true ]; then
-    flutter packages pub get
+    $FLUTTER_CMD packages pub get
   else
-    flutter packages pub get >/dev/null 2>&1
+    $FLUTTER_CMD packages pub get >/dev/null 2>&1
   fi
 fi
 
 # Start the build_runner in the background
 if [ "$verbose" = true ]; then
-  dart run build_runner build --delete-conflicting-outputs &
+  $DART_CMD run build_runner build --delete-conflicting-outputs &
 else
-  dart run build_runner build --delete-conflicting-outputs >/dev/null 2>&1 &
+  $DART_CMD run build_runner build --delete-conflicting-outputs >/dev/null 2>&1 &
 fi
 
 # Get the PID of the background process

@@ -36,6 +36,23 @@ done
 
 echo "📷 Start generating image/svg files"
 
+# Choose flutter/dart runners (prefer FVM if available)
+if command -v fvm >/dev/null 2>&1; then
+    FLUTTER_CMD="fvm flutter"
+    DART_CMD="fvm dart"
+else
+    if ! command -v flutter >/dev/null 2>&1; then
+        echo "❌ flutter command not found. Install Flutter or FVM first."
+        exit 1
+    fi
+    if ! command -v dart >/dev/null 2>&1; then
+        echo "❌ dart command not found. Install Dart or FVM first."
+        exit 1
+    fi
+    FLUTTER_CMD="flutter"
+    DART_CMD="dart"
+fi
+
 # Store the current working directory
 original_dir=$(pwd)
 
@@ -50,24 +67,24 @@ rsync -r ../resources/flowy_icons/ assets/flowy_icons/
 
 if [ "$skip_pub_get" = false ]; then
     if [ "$verbose" = true ]; then
-        flutter pub get
+        $FLUTTER_CMD pub get
     else
-        flutter pub get >/dev/null 2>&1
+        $FLUTTER_CMD pub get >/dev/null 2>&1
     fi
 fi
 
 if [ "$include_packages" = true ]; then
     if [ "$verbose" = true ]; then
-        flutter packages pub get
+        $FLUTTER_CMD packages pub get
     else
-        flutter packages pub get >/dev/null 2>&1
+        $FLUTTER_CMD packages pub get >/dev/null 2>&1
     fi
 fi
 
 if [ "$verbose" = true ]; then
-    dart run flowy_svg
+    $DART_CMD run flowy_svg
 else
-    dart run flowy_svg >/dev/null 2>&1
+    $DART_CMD run flowy_svg >/dev/null 2>&1
 fi
 
 # Return to the original directory

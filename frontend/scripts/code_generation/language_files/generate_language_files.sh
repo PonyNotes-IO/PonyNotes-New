@@ -37,6 +37,23 @@ done
 
 echo "🌍 Start generating language files."
 
+# Determine flutter/dart commands (prefer FVM)
+if command -v fvm >/dev/null 2>&1; then
+    FLUTTER_CMD="fvm flutter"
+    DART_CMD="fvm dart"
+else
+    if ! command -v flutter >/dev/null 2>&1; then
+        echo "❌ flutter command not found. Install Flutter or FVM first."
+        exit 1
+    fi
+    if ! command -v dart >/dev/null 2>&1; then
+        echo "❌ dart command not found. Install Dart or FVM first."
+        exit 1
+    fi
+    FLUTTER_CMD="flutter"
+    DART_CMD="dart"
+fi
+
 # Store the current working directory
 original_dir=$(pwd)
 
@@ -56,25 +73,25 @@ cp -f ../resources/translations/*.json assets/translations/
 # https://github.com/dart-lang/pub/issues/3314
 if [ "$skip_pub_get" = false ]; then
     if [ "$verbose" = true ]; then
-        flutter pub get
+        $FLUTTER_CMD pub get
     else
-        flutter pub get >/dev/null 2>&1
+       $FLUTTER_CMD pub get >/dev/null 2>&1
     fi
 fi
 if [ "$skip_pub_packages_get" = false ]; then
     if [ "$verbose" = true ]; then
-        flutter packages pub get
+        $FLUTTER_CMD packages pub get
     else
-        flutter packages pub get >/dev/null 2>&1
+        $FLUTTER_CMD packages pub get >/dev/null 2>&1
     fi
 fi
 
 if [ "$verbose" = true ]; then
-    dart run easy_localization:generate -S assets/translations/
-    dart run easy_localization:generate -f keys -o locale_keys.g.dart -S assets/translations/ -s en-US.json
+    $DART_CMD run easy_localization:generate -S assets/translations/
+    $DART_CMD run easy_localization:generate -f keys -o locale_keys.g.dart -S assets/translations/ -s en-US.json
 else
-    dart run easy_localization:generate -S assets/translations/ >/dev/null 2>&1
-    dart run easy_localization:generate -f keys -o locale_keys.g.dart -S assets/translations/ -s en-US.json >/dev/null 2>&1
+    $DART_CMD run easy_localization:generate -S assets/translations/ >/dev/null 2>&1
+    $DART_CMD run easy_localization:generate -f keys -o locale_keys.g.dart -S assets/translations/ -s en-US.json >/dev/null 2>&1
 fi
 
 echo "🌍 Done generating language files."
