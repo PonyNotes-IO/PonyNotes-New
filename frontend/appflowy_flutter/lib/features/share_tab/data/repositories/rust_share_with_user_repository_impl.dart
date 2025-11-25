@@ -1,8 +1,13 @@
+import 'dart:convert';
+
 import 'package:appflowy/core/config/kv.dart';
 import 'package:appflowy/core/config/kv_keys.dart';
+import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/util/extensions.dart';
+import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -14,6 +19,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pbenum.dart' as user;
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
+import 'package:http/http.dart' as http;
 
 import 'share_with_user_repository.dart';
 
@@ -248,5 +254,121 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
       '${KVKeys.hasClickedUpgradeToProButton}_$workspaceId',
       'true',
     );
+  }
+
+  @override
+  Future<FlowyResult<SharedUsers, FlowyError>> searchUsers({
+    required String query,
+    int pageNo = 1,
+  }) async {
+    try {
+      // Get base URL from cloud config
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      
+      if (baseUrl.isEmpty) {
+        Log.error('Base URL is empty, cannot search users');
+        return FlowySuccess([]);
+      }
+
+      // Get current user profile for auth token
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold(
+        (user) => user,
+        (error) {
+          Log.error('Failed to get user profile: $error');
+          return null;
+        },
+      );
+
+      if (userProfile == null) {
+        Log.error('User profile is null, cannot search users');
+        return FlowySuccess([]);
+      }
+
+      final authToken = userProfile.authToken;
+      if (authToken == null || authToken.isEmpty) {
+        Log.error('Auth token is empty, cannot search users');
+        return FlowySuccess([]);
+      }
+
+      // Build request URL
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/user/search',
+        queryParameters: {
+          'q': query,
+          if (pageNo > 1) 'page_no': pageNo.toString(),
+        },
+      );
+
+      Log.info('Searching users: $uri');
+
+      // Make HTTP request
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final jsonData = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        // Check response code
+        final code = jsonData['code'] as int?;
+        if (code != 0) {
+          final message = jsonData['message'] as String? ?? 'Search failed';
+          Log.error('Search users failed: $message');
+          return FlowyFailure(
+            FlowyError(msg: message),
+          );
+        }
+
+        // Parse user data
+        final data = jsonData['data'] as List<dynamic>?;
+        if (data == null) {
+          Log.warn('Search users response data is null');
+          return FlowySuccess([]);
+        }
+
+        final sharedUsers = data.map((userData) {
+          final userMap = userData as Map<String, dynamic>;
+          final email = userMap['email'] as String? ?? '';
+          final name = userMap['name'] as String? ?? email;
+          final phone = userMap['phone'] as String?;
+
+          // Use email as primary identifier, fallback to phone if email is empty
+          final userEmail = email.isNotEmpty ? email : (phone ?? '');
+
+          return SharedUser(
+            email: userEmail,
+            name: name,
+            role: ShareRole.guest, // Default role for searched users
+            accessLevel: ShareAccessLevel.readAndWrite, // Default access level
+            avatarUrl: null,
+          );
+        }).toList();
+
+        Log.info('Found ${sharedUsers.length} users for query: $query');
+        return FlowySuccess(sharedUsers);
+      } else {
+        final errorMessage = 'Search users failed: HTTP ${response.statusCode}';
+        Log.error(errorMessage);
+        return FlowyFailure(
+          FlowyError(msg: errorMessage),
+        );
+      }
+    } catch (e, stackTrace) {
+      Log.error('Exception in searchUsers: $e', e, stackTrace);
+      return FlowyFailure(
+        FlowyError(msg: 'Search users failed: $e'),
+      );
+    }
   }
 }

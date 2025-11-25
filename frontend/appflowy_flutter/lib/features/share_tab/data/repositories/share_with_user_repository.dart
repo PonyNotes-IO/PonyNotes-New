@@ -18,6 +18,12 @@ abstract class ShareWithUserRepository {
     required String pageId,
   });
 
+  /// Searches for users by email or phone number.
+  Future<FlowyResult<SharedUsers, FlowyError>> searchUsers({
+    required String query,
+    int pageNo = 1,
+  });
+
   /// Removes a user from a shared page.
   Future<FlowyResult<void, FlowyError>> removeSharedUserFromPage({
     required String pageId,

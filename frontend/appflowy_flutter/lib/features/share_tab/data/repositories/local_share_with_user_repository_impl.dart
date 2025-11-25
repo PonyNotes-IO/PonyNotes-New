@@ -195,4 +195,19 @@ class LocalShareWithUserRepositoryImpl extends ShareWithUserRepository {
   }) async {
     return;
   }
+
+  @override
+  Future<FlowyResult<SharedUsers, FlowyError>> searchUsers({
+    required String query,
+    int pageNo = 1,
+  }) async {
+    // For local implementation, filter from mock data
+    final queryLower = query.toLowerCase();
+    final filteredUsers = _sharedUsers.where((user) {
+      return user.email.toLowerCase().contains(queryLower) ||
+          user.name.toLowerCase().contains(queryLower);
+    }).toList();
+
+    return FlowySuccess(filteredUsers);
+  }
 }

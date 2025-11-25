@@ -284,19 +284,27 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       ),
     );
 
-    final result = await repository.getAvailableSharedUsers(pageId: pageId);
+    // If query is empty, return empty list
+    if (event.query.trim().isEmpty) {
+      emit(
+        state.copyWith(
+          availableUsers: [],
+        ),
+      );
+      return;
+    }
+
+    // Use the new search API
+    final result = await repository.searchUsers(
+      query: event.query.trim(),
+      pageNo: 1,
+    );
 
     result.fold(
       (users) {
-        // filter by email and name
-        final availableUsers = users.where((user) {
-          final query = event.query.toLowerCase();
-          return user.name.toLowerCase().contains(query) ||
-              user.email.toLowerCase().contains(query);
-        }).toList();
         emit(
           state.copyWith(
-            availableUsers: availableUsers,
+            availableUsers: users,
           ),
         );
       },
