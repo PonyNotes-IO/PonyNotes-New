@@ -5,24 +5,6 @@ class ShareConstants {
   static const String testBaseWebDomain = 'https://www.xiaomabiji.com';
   static const String defaultBaseWebDomain = 'https://www.xiaomabiji.com';
 
-  /// Builds the public URL for a published page.
-  static String buildPublishUrl({
-    required String nameSpace,
-    required String publishName,
-  }) {
-    final baseShareDomain =
-        getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_web_domain;
-    final host = baseShareDomain.addSchemaIfNeeded();
-    // final query = Uri(
-    //   queryParameters: <String, String>{
-    //     'viewId': viewId,
-    //     'workspaceId': workspaceId,
-    //   },
-    // ).query;
-    // return '$host/#/noteshare?$query';
-    return '$host/$nameSpace/$publishName';
-  }
-
   static String buildNamespaceUrl({
     required String nameSpace,
     bool withHttps = false,
@@ -34,6 +16,25 @@ class ShareConstants {
       url = url.replaceFirst('https://', '');
     }
     return '$url/$nameSpace';
+  }
+
+  /// Builds the public URL for a published page.
+  static String buildPublishUrl({
+    required String nameSpace,
+    required String publishName,
+    required String viewId,
+    String? workspaceId,
+  }) {
+    final baseShareDomain =
+        getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_web_domain;
+    final host = baseShareDomain.addSchemaIfNeeded();
+    final query = Uri(
+      queryParameters: <String, String?>{
+        'viewId': viewId,
+        'workspaceId': workspaceId,
+      },
+    ).query;
+    return '$host/#/noteshare?$query';
   }
 
   static String buildShareUrl({

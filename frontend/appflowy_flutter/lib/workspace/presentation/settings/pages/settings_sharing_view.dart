@@ -471,6 +471,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     final String publishUrl = ShareConstants.buildPublishUrl(
       nameSpace: item.info.namespace,
       publishName: item.info.publishName,
+      viewId: item.info.viewId,
     );
 
     return Container(

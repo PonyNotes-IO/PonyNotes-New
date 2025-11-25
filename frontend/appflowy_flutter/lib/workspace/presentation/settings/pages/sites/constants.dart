@@ -38,6 +38,7 @@ class SettingsPageSitesEvent {
     final url = ShareConstants.buildPublishUrl(
       nameSpace: nameSpace ?? publishInfoView.info.namespace,
       publishName: publishInfoView.info.publishName,
+      viewId: publishInfoView.info.viewId,
     );
     afLaunchUrlString(url);
   }
@@ -50,6 +51,7 @@ class SettingsPageSitesEvent {
     final url = ShareConstants.buildPublishUrl(
       nameSpace: nameSpace ?? publishInfoView.info.namespace,
       publishName: publishInfoView.info.publishName,
+      viewId: publishInfoView.info.viewId,
     );
     getIt<ClipboardService>().setData(ClipboardServiceData(plainText: url));
     showToastNotification(

@@ -101,6 +101,7 @@ class PublishedViewItem extends StatelessWidget {
           final url = ShareConstants.buildPublishUrl(
             nameSpace: publishInfoView.info.namespace,
             publishName: publishInfoView.info.publishName,
+            viewId: publishInfoView.info.viewId,
           );
           afLaunchUrlString(url);
         },

@@ -138,13 +138,13 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
       // 发布成功后，立即从cloud服务获取最新的发布信息（包含URL）
       // 这样可以确保使用cloud服务返回的准确信息
       final publishInfo = await ViewBackendService.getPublishInfo(view);
-      
+
       await publishInfo.fold(
         (info) async {
           // 使用cloud服务返回的发布信息
           final namespace = info.namespace.isNotEmpty ? info.namespace : '';
           final actualPublishName = info.publishName;
-          
+
           emit(
             state.copyWith(
               isPublished: true,
@@ -156,6 +156,7 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
               url: ShareConstants.buildPublishUrl(
                 nameSpace: namespace,
                 publishName: actualPublishName,
+                viewId: view.id,
               ),
             ),
           );
@@ -178,6 +179,7 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
           url: ShareConstants.buildPublishUrl(
             nameSpace: result.namespace,
             publishName: publishName,
+            viewId: view.id,
           ),
         ),
       );
@@ -281,6 +283,7 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
           ShareConstants.buildPublishUrl(
             nameSpace: s.namespace,
             publishName: s.publishName,
+            viewId: view.id,
           ),
         );
       },
@@ -342,6 +345,7 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
           (s) => ShareConstants.buildPublishUrl(
             nameSpace: state.namespace,
             publishName: pathName,
+            viewId: view.id,
           ),
           (f) => state.url,
         ),

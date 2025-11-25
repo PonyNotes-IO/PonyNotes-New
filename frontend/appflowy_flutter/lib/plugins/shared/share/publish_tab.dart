@@ -149,7 +149,8 @@ class _PublishedWidgetState extends State<_PublishedWidget> {
   @override
   void initState() {
     super.initState();
-    controller.text = widget.pathName;
+    // 显示完整的URL而不是路径名
+    controller.text = widget.url;
   }
 
   @override
@@ -170,6 +171,7 @@ class _PublishedWidgetState extends State<_PublishedWidget> {
         _PublishUrl(
           namespace: widget.namespace,
           controller: controller,
+          showFullUrl: true,
           onCopy: (_) {
             final url = context.read<ShareBloc>().state.url;
 
@@ -182,6 +184,8 @@ class _PublishedWidgetState extends State<_PublishedWidget> {
             );
           },
           onSubmitted: (pathName) {
+            // 如果显示完整URL，不允许编辑
+            // 这里保持原有逻辑，但实际不会触发，因为URL是只读的
             context.read<ShareBloc>().add(ShareEvent.updatePathName(pathName));
           },
         ),
@@ -370,12 +374,14 @@ class _PublishUrl extends StatefulWidget {
     required this.controller,
     required this.onCopy,
     required this.onSubmitted,
+    this.showFullUrl = true,
   });
 
   final String namespace;
   final TextEditingController controller;
   final void Function(String url) onCopy;
   final void Function(String url) onSubmitted;
+  final bool showFullUrl;
 
   @override
   State<_PublishUrl> createState() => _PublishUrlState();
@@ -408,8 +414,9 @@ class _PublishUrlState extends State<_PublishUrl> {
         autoFocus: false,
         controller: widget.controller,
         focusNode: focusNode,
+        readOnly: widget.showFullUrl, // 如果显示完整URL，设为只读
         enableBorderColor: ShareMenuColors.borderColor(context),
-        prefixIcon: _buildPrefixIcon(context),
+        prefixIcon: widget.showFullUrl ? null : _buildPrefixIcon(context),
         suffixIcon: _buildSuffixIcon(context),
         textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
               fontSize: 14,
@@ -457,6 +464,10 @@ class _PublishUrlState extends State<_PublishUrl> {
   }
 
   Widget _buildSaveButton(BuildContext context) {
+    // 如果显示完整URL，不显示保存按钮
+    if (widget.showFullUrl) {
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       child: FlowyButton(
