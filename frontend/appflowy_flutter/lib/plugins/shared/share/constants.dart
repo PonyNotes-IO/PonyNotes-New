@@ -20,20 +20,20 @@ class ShareConstants {
 
   /// Builds the public URL for a published page.
   static String buildPublishUrl({
-    required String nameSpace,
-    required String publishName,
+    required String workspaceId,
     required String viewId,
-    String? workspaceId,
   }) {
     final baseShareDomain =
         getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_web_domain;
     final host = baseShareDomain.addSchemaIfNeeded();
-    final query = Uri(
-      queryParameters: <String, String?>{
-        'viewId': viewId,
-        'workspaceId': workspaceId,
-      },
-    ).query;
+    final queryParams = <String, String>{
+      'viewId': viewId,
+    };
+    // 只有当 workspaceId 不为空时才添加到查询参数中
+    if (workspaceId.isNotEmpty) {
+      queryParams['workspaceId'] = workspaceId;
+    }
+    final query = Uri(queryParameters: queryParams).query;
     return '$host/#/noteshare?$query';
   }
 

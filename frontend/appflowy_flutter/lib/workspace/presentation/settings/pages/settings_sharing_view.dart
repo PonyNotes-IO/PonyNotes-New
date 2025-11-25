@@ -468,9 +468,10 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     final String publishTime = _formatPublishTime(
       item.info.publishTimestampSec.toInt(),
     );
+    // 获取当前工作区ID
+    final workspaceId = context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ?? '';
     final String publishUrl = ShareConstants.buildPublishUrl(
-      nameSpace: item.info.namespace,
-      publishName: item.info.publishName,
+      workspaceId: workspaceId,
       viewId: item.info.viewId,
     );
 

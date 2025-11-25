@@ -128,6 +128,15 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
   ) async {
     // set space name
     try {
+      // 获取当前工作区ID
+      String workspaceId = state.workspaceId;
+      if (workspaceId.isEmpty) {
+        workspaceId = await UserBackendService.getCurrentWorkspace().fold(
+          (s) => s.id,
+          (f) => '',
+        );
+      }
+
       // 直接发布原笔记，不创建副本
       await ViewBackendService.publish(
         view,
@@ -138,13 +147,13 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
       // 发布成功后，立即从cloud服务获取最新的发布信息（包含URL）
       // 这样可以确保使用cloud服务返回的准确信息
       final publishInfo = await ViewBackendService.getPublishInfo(view);
-
+      
       await publishInfo.fold(
         (info) async {
           // 使用cloud服务返回的发布信息
           final namespace = info.namespace.isNotEmpty ? info.namespace : '';
           final actualPublishName = info.publishName;
-
+          
           emit(
             state.copyWith(
               isPublished: true,
@@ -152,10 +161,11 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
               unpublishResult: null,
               namespace: namespace,
               pathName: actualPublishName,
+              workspaceId: workspaceId,
+              viewId: view.id,
               // 使用cloud服务返回的信息构建URL，确保与服务器端一致
               url: ShareConstants.buildPublishUrl(
-                nameSpace: namespace,
-                publishName: actualPublishName,
+                workspaceId: workspaceId,
                 viewId: view.id,
               ),
             ),
@@ -176,9 +186,10 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
           unpublishResult: null,
           namespace: result.namespace,
           pathName: publishName,
+          workspaceId: workspaceId,
+          viewId: view.id,
           url: ShareConstants.buildPublishUrl(
-            nameSpace: result.namespace,
-            publishName: publishName,
+            workspaceId: workspaceId,
             viewId: view.id,
           ),
         ),
@@ -281,8 +292,7 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
           s.namespace,
           s.publishName,
           ShareConstants.buildPublishUrl(
-            nameSpace: s.namespace,
-            publishName: s.publishName,
+            workspaceId: workspaceId.isNotEmpty ? workspaceId : '',
             viewId: view.id,
           ),
         );
@@ -328,6 +338,15 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
       return;
     }
 
+    // 获取 workspaceId
+    String workspaceId = state.workspaceId;
+    if (workspaceId.isEmpty) {
+      workspaceId = await UserBackendService.getCurrentWorkspace().fold(
+        (s) => s.id,
+        (f) => '',
+      );
+    }
+
     final request = SetPublishNamePB()
       ..viewId = view.id
       ..newName = pathName;
@@ -343,8 +362,7 @@ class ShareBloc extends Bloc<ShareEvent, ShareState> {
         ),
         url: result.fold(
           (s) => ShareConstants.buildPublishUrl(
-            nameSpace: state.namespace,
-            publishName: pathName,
+            workspaceId: workspaceId,
             viewId: view.id,
           ),
           (f) => state.url,

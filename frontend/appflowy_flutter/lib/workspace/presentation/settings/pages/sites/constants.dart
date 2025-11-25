@@ -3,6 +3,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -30,32 +31,42 @@ class SettingsPageSitesConstants {
 }
 
 class SettingsPageSitesEvent {
-  static void visitSite(
-    PublishInfoViewPB publishInfoView, {
-    String? nameSpace,
-  }) {
+  static Future<void> visitSite(
+    BuildContext context,
+    PublishInfoViewPB publishInfoView,
+  ) async {
+    // 获取当前工作区ID
+    final workspaceId = await _getCurrentWorkspaceId(context);
     // visit the site
     final url = ShareConstants.buildPublishUrl(
-      nameSpace: nameSpace ?? publishInfoView.info.namespace,
-      publishName: publishInfoView.info.publishName,
+      workspaceId: workspaceId,
       viewId: publishInfoView.info.viewId,
     );
     afLaunchUrlString(url);
   }
 
-  static void copySiteLink(
+  static Future<void> copySiteLink(
     BuildContext context,
-    PublishInfoViewPB publishInfoView, {
-    String? nameSpace,
-  }) {
+    PublishInfoViewPB publishInfoView,
+  ) async {
+    // 获取当前工作区ID
+    final workspaceId = await _getCurrentWorkspaceId(context);
     final url = ShareConstants.buildPublishUrl(
-      nameSpace: nameSpace ?? publishInfoView.info.namespace,
-      publishName: publishInfoView.info.publishName,
+      workspaceId: workspaceId,
       viewId: publishInfoView.info.viewId,
     );
     getIt<ClipboardService>().setData(ClipboardServiceData(plainText: url));
     showToastNotification(
       message: LocaleKeys.message_copy_success.tr(),
+    );
+  }
+
+  static Future<String> _getCurrentWorkspaceId(BuildContext context) async {
+    // 从服务获取当前工作区ID
+    final result = await UserBackendService.getCurrentWorkspace();
+    return result.fold(
+      (workspace) => workspace.id,
+      (_) => '',
     );
   }
 }

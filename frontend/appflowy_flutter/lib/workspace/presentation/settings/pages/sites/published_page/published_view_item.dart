@@ -2,6 +2,7 @@ import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/navigator_context_extension.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
@@ -20,6 +21,14 @@ class PublishedViewItem extends StatelessWidget {
   });
 
   final PublishInfoViewPB publishInfoView;
+
+  Future<String> _getCurrentWorkspaceId(BuildContext context) async {
+    final result = await UserBackendService.getCurrentWorkspace();
+    return result.fold(
+      (workspace) => workspace.id,
+      (_) => '',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,10 +106,11 @@ class PublishedViewItem extends StatelessWidget {
       padding: const EdgeInsets.only(right: 48.0),
       child: FlowyButton(
         useIntrinsicWidth: true,
-        onTap: () {
+        onTap: () async {
+          // 获取当前工作区ID
+          final workspaceId = await _getCurrentWorkspaceId(context);
           final url = ShareConstants.buildPublishUrl(
-            nameSpace: publishInfoView.info.namespace,
-            publishName: publishInfoView.info.publishName,
+            workspaceId: workspaceId,
             viewId: publishInfoView.info.viewId,
           );
           afLaunchUrlString(url);

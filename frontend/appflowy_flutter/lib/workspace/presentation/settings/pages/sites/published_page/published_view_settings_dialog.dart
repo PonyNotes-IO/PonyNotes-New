@@ -186,8 +186,8 @@ class _PublishedViewSettingsDialogState
 
   void _visitSite() {
     SettingsPageSitesEvent.visitSite(
+      context,
       widget.publishInfoView,
-      nameSpace: context.read<SettingsSitesBloc>().state.namespace,
     );
   }
 
