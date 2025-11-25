@@ -176,7 +176,21 @@ class HomeSideBar extends StatelessWidget {
                   listener: _onNotificationAction,
                 ),
                 BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+                  listenWhen: (previous, current) =>
+                      previous.currentWorkspace?.workspaceId !=
+                      current.currentWorkspace?.workspaceId,
                   listener: (context, state) {
+                    // 当工作区切换时，刷新侧边栏区域（包括"我的空间"）
+                    if (state.currentWorkspace != null) {
+                      final workspaceId = state.currentWorkspace!.workspaceId;
+                      context.read<SidebarSectionsBloc>().add(
+                            SidebarSectionsEvent.reset(
+                              userProfile,
+                              workspaceId,
+                            ),
+                          );
+                    }
+                    
                     final actionType = state.actionResult?.actionType;
 
                     if (actionType == WorkspaceActionType.create ||

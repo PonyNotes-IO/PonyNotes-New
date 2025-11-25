@@ -4,6 +4,7 @@ import 'package:appflowy/plugins/homepage/application/todo_bloc.dart';
 import 'package:appflowy/plugins/homepage/application/todo_models.dart';
 import 'package:appflowy/plugins/homepage/widgets/quick_event_creator.dart';
 import 'package:appflowy/plugins/homepage/widgets/todo_list_display.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 
 /// 主页待办计划区域的主组件
 /// 包含左侧的快速创建区域和右侧的待办列表展示
@@ -14,7 +15,16 @@ class TodoPlanSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (context) => TodoBloc()..add(const TodoEvent.initial()),
-      child: const TodoPlanSectionContent(),
+      child: BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+        listenWhen: (previous, current) =>
+            previous.currentWorkspace?.workspaceId !=
+            current.currentWorkspace?.workspaceId,
+        listener: (context, state) {
+          // 当工作区切换时，重新初始化待办计划
+          context.read<TodoBloc>().add(const TodoEvent.initial());
+        },
+        child: const TodoPlanSectionContent(),
+      ),
     );
   }
 }

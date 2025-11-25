@@ -16,6 +16,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy/workspace/application/recent/recent_views_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class HomePagePluginBuilder extends PluginBuilder {
@@ -164,15 +165,34 @@ class _HomePageState extends State<HomePage> {
 
     final userName = widget.userProfile?.name ?? "燕萍";
 
-    return Container(
-      color: Theme.of(context).colorScheme.surface,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(0, 80.0, 0, 32.0),
-        child: Column(
-          children: [
-            // 问候语区域 - 右对齐，与头像一起
-            _buildGreetingSection(greeting, userName),
-            const SizedBox(height: 50),
+    return BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+      listenWhen: (previous, current) =>
+          previous.currentWorkspace?.workspaceId !=
+          current.currentWorkspace?.workspaceId,
+      listener: (context, state) {
+        // 当工作区切换时，刷新最近访问和待办计划
+        try {
+          // 刷新最近访问
+          context.read<RecentViewsBloc>().add(
+                const RecentViewsEvent.resetRecentViews(),
+              );
+          
+          // 刷新待办计划 - 需要找到 TodoBloc
+          // 由于 TodoBloc 在 TodoPlanSection 内部创建，我们需要通过其他方式刷新
+          // 这里先刷新最近访问，待办计划的刷新会在 TodoPlanSection 中处理
+        } catch (e) {
+          Log.warn('刷新首页内容失败: $e');
+        }
+      },
+      child: Container(
+        color: Theme.of(context).colorScheme.surface,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(0, 80.0, 0, 32.0),
+          child: Column(
+            children: [
+              // 问候语区域 - 右对齐，与头像一起
+              _buildGreetingSection(greeting, userName),
+              const SizedBox(height: 50),
 
             // 问AI区域标题
             Container(
@@ -266,7 +286,8 @@ class _HomePageState extends State<HomePage> {
 
             // 待办计划
             const TodoPlanSection(),
-          ],
+            ],
+          ),
         ),
       ),
     );
