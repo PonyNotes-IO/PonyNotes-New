@@ -1,12 +1,13 @@
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
-import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../application/tabs/tabs_bloc.dart';
@@ -24,6 +25,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
   bool _isExpanded = false;
   List<PublishInfoViewPB> _items = const [];
   bool _loading = false;
+  String _workspaceId = '';
   void _onPublishPing() {
     if (!mounted) return;
     if (_isExpanded && !_loading) {
@@ -35,6 +37,9 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
   void initState() {
     super.initState();
     PublishRefresh.notifier.addListener(_onPublishPing);
+    _workspaceId =
+        context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ??
+            '';
   }
 
   @override
@@ -46,53 +51,64 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(theme.borderRadius.s),
-            onTap: () async {
-              setState(() => _isExpanded = !_isExpanded);
-              if (_isExpanded && _items.isEmpty && !_loading) {
-                await _load();
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              child: Row(
-                children: [
-                  FlowySvg(
-                    FlowySvgs.share_publish_s,
-                    size: const Size.square(16.0),
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FlowyText.medium(
-                      '发布',
-                      fontSize: 14.0,
-                      figmaLineHeight: 17.0,
-                      color: AppFlowyTheme.of(context).textColorScheme.primary,
+    return BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+      listenWhen: (previous, current) =>
+          previous.currentWorkspace?.workspaceId !=
+          current.currentWorkspace?.workspaceId,
+      listener: (context, state) {
+        _handleWorkspaceChanged(state.currentWorkspace?.workspaceId);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(theme.borderRadius.s),
+              onTap: () async {
+                setState(() => _isExpanded = !_isExpanded);
+                if (_isExpanded && _items.isEmpty && !_loading) {
+                  await _load();
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                child: Row(
+                  children: [
+                    FlowySvg(
+                      FlowySvgs.share_publish_s,
+                      size: const Size.square(16.0),
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
                     ),
-                  ),
-                  Icon(
-                    _isExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_right,
-                    size: 16,
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FlowyText.medium(
+                        '发布',
+                        fontSize: 14.0,
+                        figmaLineHeight: 17.0,
+                        color:
+                            AppFlowyTheme.of(context).textColorScheme.primary,
+                      ),
+                    ),
+                    Icon(
+                      _isExpanded
+                          ? Icons.keyboard_arrow_down
+                          : Icons.keyboard_arrow_right,
+                      size: 16,
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-        if (_isExpanded)
-          Padding(
-            padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 4.0),
-            child: _buildPublishedList(context),
-          ),
-      ],
+          if (_isExpanded)
+            Padding(
+              padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 4.0),
+              child: _buildPublishedList(context),
+            ),
+        ],
+      ),
     );
   }
 
@@ -152,5 +168,18 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         );
       }).toList(),
     );
+  }
+
+  void _handleWorkspaceChanged(String? workspaceId) {
+    final newWorkspaceId = workspaceId ?? '';
+    if (newWorkspaceId.isEmpty || newWorkspaceId == _workspaceId) {
+      return;
+    }
+    setState(() {
+      _workspaceId = newWorkspaceId;
+      _items = const [];
+      _isExpanded = false;
+      _loading = false;
+    });
   }
 }

@@ -23,7 +23,7 @@ class TodoPlanSection extends StatelessWidget {
           // 当工作区切换时，重新初始化待办计划
           context.read<TodoBloc>().add(const TodoEvent.initial());
         },
-        child: const TodoPlanSectionContent(),
+      child: const TodoPlanSectionContent(),
       ),
     );
   }

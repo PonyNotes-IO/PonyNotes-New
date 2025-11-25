@@ -11,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../generated/flowy_svgs.g.dart';
 import '../../../generated/locale_keys.g.dart';
+import '../../../workspace/presentation/widgets/dialogs.dart';
 
 class ShareMenuButton extends StatelessWidget {
   const ShareMenuButton({
@@ -35,6 +36,18 @@ class ShareMenuButton extends StatelessWidget {
   }
 
   Future<void> _openShareSettings(BuildContext context) async {
+    final enableCloudShare =
+        context.read<ShareBloc?>()?.state.enablePublish ?? false;
+
+    // 当前工作区未连接云服务或不支持发布，同步状态未知，阻止分享
+    if (!enableCloudShare) {
+      showToastNotification(
+        message: '当前笔记未同步到云端，无法生成分享链接',
+        description: '请先在设置中连接云服务并开启同步，然后再尝试分享此笔记。',
+        type: ToastificationType.warning,
+      );
+      return;
+    }
     final shareBloc = context.read<ShareBloc>();
     final databaseBloc = context.read<DatabaseTabBarBloc?>();
     final userWorkspaceBloc = context.read<UserWorkspaceBloc>();

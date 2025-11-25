@@ -185,14 +185,14 @@ class _HomePageState extends State<HomePage> {
         }
       },
       child: Container(
-        color: Theme.of(context).colorScheme.surface,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(0, 80.0, 0, 32.0),
-          child: Column(
-            children: [
-              // 问候语区域 - 右对齐，与头像一起
-              _buildGreetingSection(greeting, userName),
-              const SizedBox(height: 50),
+      color: Theme.of(context).colorScheme.surface,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(0, 80.0, 0, 32.0),
+        child: Column(
+          children: [
+            // 问候语区域 - 右对齐，与头像一起
+            _buildGreetingSection(greeting, userName),
+            const SizedBox(height: 50),
 
             // 问AI区域标题
             Container(
@@ -286,7 +286,7 @@ class _HomePageState extends State<HomePage> {
 
             // 待办计划
             const TodoPlanSection(),
-            ],
+          ],
           ),
         ),
       ),
