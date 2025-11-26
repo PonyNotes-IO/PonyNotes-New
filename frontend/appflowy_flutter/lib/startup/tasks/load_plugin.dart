@@ -16,6 +16,7 @@ import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
 import 'package:appflowy/plugins/template/template_plugin.dart';
 import 'package:appflowy/plugins/folder/folder.dart';
 import 'package:appflowy/plugins/notebook/notebook.dart';
+import 'package:appflowy/plugins/ai_welcome/ai_welcome_plugin.dart';
 class PluginLoadTask extends LaunchTask {
   const PluginLoadTask();
 
@@ -74,6 +75,10 @@ class PluginLoadTask extends LaunchTask {
     );
     registerPlugin(
       builder: NotebookPluginBuilder(),
+    );
+    registerPlugin(
+      builder: AIWelcomePluginBuilder(),
+      config: AIWelcomePluginConfig(),
     );
   }
 }

@@ -55,6 +55,9 @@ class ChatStreamManager {
       payload.promptId = promptId;
     }
 
+    // Note: Model selection is handled via AIEventUpdateSelectedModel
+    // and stored in the chat's active model, so we don't need to pass it here
+
     return payload;
   }
 

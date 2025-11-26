@@ -1,7 +1,7 @@
 use crate::local_ai::controller::LocalAIController;
 use arc_swap::ArcSwapOption;
 use flowy_ai_pub::cloud::{AIModel, ChatCloudService};
-use flowy_error::{FlowyError, FlowyResult};
+use flowy_error::{ErrorCode, FlowyError, FlowyResult};
 use flowy_sqlite::kv::KVStorePreferences;
 use lib_infra::async_trait::async_trait;
 use lib_infra::util::timestamp;
@@ -10,6 +10,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{error, info, trace};
 use uuid::Uuid;
+use serde::Deserialize;
 
 type Model = AIModel;
 pub const GLOBAL_ACTIVE_MODEL_KEY: &str = "global_active_model";
@@ -348,7 +349,7 @@ impl ModelSource for ServerAiSource {
     "server"
   }
 
-  async fn list_chat_models(&self, workspace_id: &Uuid) -> Vec<Model> {
+  async fn list_chat_models(&self, _workspace_id: &Uuid) -> Vec<Model> {
     let now = timestamp();
     let should_fetch = {
       let cached = self.cached_models.read().await;
@@ -357,20 +358,18 @@ impl ModelSource for ServerAiSource {
     if !should_fetch {
       return self.cached_models.read().await.models.clone();
     }
-    match self.cloud_service.get_available_models(workspace_id).await {
-      Ok(resp) => {
-        let models = resp
-          .models
-          .into_iter()
-          .map(AIModel::from)
-          .collect::<Vec<_>>();
+    
+    // 使用自定义的AI模型接口而不是AppFlowy Cloud的接口
+    match Self::fetch_models_from_custom_api().await {
+      Ok(models) => {
+        info!("[ModelSelect] 从自定义API获取到 {} 个模型", models.len());
         if let Err(e) = self.update_models_cache(&models, now).await {
           error!("Failed to update cache: {}", e);
         }
         models
       },
       Err(err) => {
-        error!("Failed to fetch models: {}", err);
+        error!("Failed to fetch models from custom API: {}", err);
         let cached = self.cached_models.read().await;
         if !cached.models.is_empty() {
           info!("Returning expired cache due to error");
@@ -379,6 +378,76 @@ impl ModelSource for ServerAiSource {
         Vec::new()
       },
     }
+  }
+}
+
+impl ServerAiSource {
+  /// 从自定义API获取模型列表
+  /// API: http://8.152.101.166/api/ai/chat/models
+  async fn fetch_models_from_custom_api() -> FlowyResult<Vec<AIModel>> {
+    use reqwest::Client;
+    use serde::Deserialize;
+    
+    #[derive(Deserialize)]
+    struct ModelsResponse {
+      data: ModelsData,
+    }
+    
+    #[derive(Deserialize)]
+    struct ModelsData {
+      models: Vec<ModelInfo>,
+    }
+    
+    #[derive(Deserialize)]
+    struct ModelInfo {
+      id: String,
+      name: String,
+      description: String,
+      is_default: bool,
+    }
+    
+    let url = "http://8.152.101.166/api/ai/chat/models";
+    info!("[ModelSelect] 从自定义API获取模型列表: {}", url);
+    
+    let client = Client::new();
+    let resp = client
+      .get(url)  // 使用GET方法而不是POST
+      .send()
+      .await
+      .map_err(|e| {
+        error!("[ModelSelect] 请求失败: {}", e);
+        FlowyError::new(ErrorCode::Internal, format!("HTTP请求失败: {}", e))
+      })?;
+    
+    if !resp.status().is_success() {
+      let status = resp.status();
+      let error_text = resp.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
+      error!("[ModelSelect] 服务器返回错误: {} - {}", status, error_text);
+      return Err(FlowyError::new(
+        ErrorCode::Internal,
+        format!("服务器返回错误: {}", status),
+      ));
+    }
+    
+    let response: ModelsResponse = resp.json().await.map_err(|e| {
+      error!("[ModelSelect] JSON解析失败: {}", e);
+      FlowyError::new(ErrorCode::Internal, format!("JSON解析失败: {}", e))
+    })?;
+    
+    let models: Vec<AIModel> = response.data.models
+      .into_iter()
+      .map(|m| {
+        info!("[ModelSelect] 模型: {} ({}), 默认: {}", m.name, m.id, m.is_default);
+        AIModel {
+          name: m.name,
+          is_local: false,
+          desc: m.description,
+        }
+      })
+      .collect();
+    
+    info!("[ModelSelect] 成功获取 {} 个模型", models.len());
+    Ok(models)
   }
 }
 

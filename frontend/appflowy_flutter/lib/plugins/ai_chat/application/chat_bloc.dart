@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:appflowy/ai/ai.dart';
+import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_animation_list_widget.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-ai/entities.pb.dart';
@@ -52,6 +53,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _loadMessages();
     _loadSettings();
     
+    // 如果有首选模型，设置为默认模型
+    if (preferredModelId != null && preferredModelId!.isNotEmpty) {
+      Log.info('🔄 ChatBloc: 检测到首选模型，准备设置: $preferredModelId');
+      _setPreferredModel(preferredModelId!);
+    }
+    
     // 注意：初始消息的自动发送逻辑移到了 _handleLatestMessages 中
     // 这样可以确保只在首次创建（本地无消息）时才自动发送
     if (initialMessage != null && initialMessage!.isNotEmpty) {
@@ -81,6 +88,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool hasMorePreviousMessages = true;
   bool isFetchingRelatedQuestions = false;
   bool shouldFetchRelatedQuestions = false;
+  
+  // 标志：初始消息是否已经发送过
+  bool _initialMessageSent = false;
 
   // Accessor for selected sources
   ValueNotifier<List<String>> get selectedSourcesNotifier =>
@@ -97,6 +107,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     _settingsManager.dispose();
     chatController.dispose();
+    
+    // 重置全局欢迎页标志，以免影响下一个Chat
+    skipAIChatWelcomePage = false;
+    Log.info('🔄 ChatBloc: 已重置欢迎页标志');
+    
     return super.close();
   }
 
@@ -176,12 +191,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     List<Message> messages,
     Emitter<ChatState> emit,
   ) async {
+    Log.info('🔍 ChatBloc._handleLatestMessages 被调用');
+    Log.info('   - 接收到消息数: ${messages.length}');
+    Log.info('   - 当前controller中消息数: ${chatController.messages.length}');
+    Log.info('   - initialMessage: $initialMessage');
+    Log.info('   - Stack trace: ${StackTrace.current}');
+    
     for (final message in messages) {
       await chatController.insert(message, index: 0);
     }
 
     // Check if emit is still valid after async operations
     if (emit.isDone) {
+      Log.info('⚠️ ChatBloc._handleLatestMessages: emit已完成，提前返回');
       return;
     }
 
@@ -199,12 +221,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     
     // 【关键修复】只在首次创建（本地无消息）时才自动发送初始消息
     // 这样可以防止每次切换回视图时重复发送
+    // 添加 _initialMessageSent 标志防止重复发送
     if (initialMessage != null && 
         initialMessage!.isNotEmpty && 
-        chatController.messages.isEmpty) {
+        chatController.messages.isEmpty &&
+        !_initialMessageSent) {
       Log.info('🔄 ChatBloc: 本地无消息记录，这是首次创建，准备自动发送初始消息');
       Log.info('   - 消息: $initialMessage');
       Log.info('   - 首选模型: $preferredModelId');
+      Log.info('   - _initialMessageSent标志: $_initialMessageSent');
+      Log.info('   - skipAIChatWelcomePage当前值: $skipAIChatWelcomePage');
+      
+      // 设置标志，防止重复发送
+      _initialMessageSent = true;
+      
+      // 关键：跳过AI Chat欢迎页，直接进入聊天状态
+      skipAIChatWelcomePage = true;
+      Log.info('✅ ChatBloc: 已设置跳过欢迎页标志');
       
       // 延迟发送，确保UI已经初始化完成
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -225,6 +258,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                chatController.messages.isNotEmpty) {
       Log.info('ℹ️ ChatBloc: 本地已有 ${chatController.messages.length} 条消息，跳过自动发送');
       Log.info('   - 这是重新打开已存在的会话，不应该重复发送消息');
+    } else if (_initialMessageSent) {
+      Log.info('ℹ️ ChatBloc: 初始消息已发送过，跳过重复发送');
     }
   }
 
@@ -446,6 +481,105 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
+  /// 模型ID到Name的映射表
+  /// 因为前端AIModel使用ID（如"qwen-turbo"），而后端AIModelPB只有name（如"通义千问 Turbo"）
+  static const Map<String, String> _modelIdToNameMap = {
+    'deepseek-chat': 'DeepSeek',
+    'qwen-turbo': '通义千问 Turbo',
+    'qwen-max': '通义千问 Max',
+    'doubao': '豆包',
+  };
+
+  /// 设置首选AI模型
+  void _setPreferredModel(String modelId) async {
+    try {
+      Log.info('🔄 ChatBloc: 开始设置首选模型...');
+      Log.info('   - Chat ID: $chatId');
+      Log.info('   - Model ID: $modelId');
+      
+      // 获取当前 Chat 的模型选择信息
+      final result = await AIEventGetSourceModelSelection(
+        ModelSourcePB(source: chatId),
+      ).send();
+      
+      await result.fold(
+        (modelSelection) async {
+          Log.info('✅ ChatBloc: 获取到 ${modelSelection.models.length} 个可用模型');
+          
+          // 打印所有可用模型，方便调试
+          for (final model in modelSelection.models) {
+            Log.info('   - 模型: ${model.name} (isLocal: ${model.isLocal})');
+          }
+          
+          // 根据modelId查找匹配的模型
+          // 使用映射表将前端AIModel的ID转换为后端AIModelPB的name
+          AIModelPB? matchedModel;
+          
+          // 1. 首先尝试使用映射表精确匹配
+          final expectedName = _modelIdToNameMap[modelId];
+          if (expectedName != null) {
+            matchedModel = modelSelection.models.cast<AIModelPB?>().firstWhere(
+              (model) => model?.name == expectedName,
+              orElse: () => null,
+            );
+            if (matchedModel != null) {
+              Log.info('✅ ChatBloc: 通过映射表找到匹配的模型: ${matchedModel.name}');
+            }
+          }
+          
+          // 2. 如果映射表匹配失败，尝试直接用modelId匹配name
+          if (matchedModel == null) {
+            for (final model in modelSelection.models) {
+              if (model.name == modelId ||
+                  model.name.toLowerCase() == modelId.toLowerCase()) {
+                matchedModel = model;
+                Log.info('✅ ChatBloc: 通过ID直接找到匹配的模型: ${model.name}');
+                break;
+              }
+            }
+          }
+          
+          // 3. 如果仍然没找到，使用第一个非Auto的模型
+          if (matchedModel == null && modelSelection.models.isNotEmpty) {
+            // 避免选择"Auto"模型
+            matchedModel = modelSelection.models.firstWhere(
+              (model) => model.name != 'Auto',
+              orElse: () => modelSelection.models.first,
+            );
+            Log.warn('⚠️ ChatBloc: 无法匹配模型ID "$modelId"，使用第一个可用模型: ${matchedModel.name}');
+          }
+          
+          if (matchedModel == null) {
+            Log.error('❌ ChatBloc: 没有可用的模型');
+            return;
+          }
+          
+          Log.info('✅ ChatBloc: 将使用模型: ${matchedModel.name}');
+          
+          // 更新选择的模型
+          final updatePayload = UpdateSelectedModelPB(
+            source: chatId,
+            selectedModel: matchedModel,
+          );
+          
+          await AIEventUpdateSelectedModel(updatePayload).send().fold(
+            (_) {
+              Log.info('✅ ChatBloc: 成功设置首选模型: ${matchedModel?.name ?? "未知"}');
+            },
+            (err) {
+              Log.error('❌ ChatBloc: 设置首选模型失败: ${err.msg}');
+            },
+          );
+        },
+        (err) {
+          Log.error('❌ ChatBloc: 获取模型选择信息失败: ${err.msg}');
+        },
+      );
+    } catch (e, stackTrace) {
+      Log.error('❌ ChatBloc: 设置首选模型异常: $e', e, stackTrace);
+    }
+  }
+
   void _loadMessages() async {
     final loadMessagesPayload = LoadNextChatMessagePB(
       chatId: chatId,
@@ -500,6 +634,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // Prepare streams
     await _streamManager.prepareStreams();
 
+    // 获取当前选择的模型
+    AIModelPB? selectedModel;
+    try {
+      final modelResult = await AIEventGetSourceModelSelection(
+        ModelSourcePB(source: chatId),
+      ).send();
+      modelResult.fold(
+        (modelSelection) {
+          selectedModel = modelSelection.selectedModel;
+          if (selectedModel != null) {
+            Log.info('📤 ChatBloc: 发送消息使用模型: ${selectedModel!.name}');
+          } else {
+            Log.warn('⚠️ ChatBloc: 未获取到选择的模型，将使用默认模型');
+          }
+        },
+        (err) {
+          Log.error('❌ ChatBloc: 获取选择模型失败: ${err.msg}');
+        },
+      );
+    } catch (e) {
+      Log.error('❌ ChatBloc: 获取模型异常: $e');
+    }
+
     // Create and add question message
     final questionStreamMessage = _messageHandler.createQuestionStreamMessage(
       _streamManager.questionStream!,
@@ -507,7 +664,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     add(ChatEvent.receiveMessage(questionStreamMessage));
 
-    // Send stream request
+    // Send stream request (model is already set via _setPreferredModel)
     await _streamManager.sendStreamRequest(message, format, promptId).fold(
       (question) {
         if (!isClosed) {

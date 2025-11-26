@@ -1,9 +1,11 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
+import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy_backend/log.dart';
 
 class SidebarAiButton extends StatelessWidget {
   const SidebarAiButton({
@@ -21,7 +23,7 @@ class SidebarAiButton extends StatelessWidget {
             text: '问AI',
             mainAxisAlignment: MainAxisAlignment.start,
             size: AFButtonSize.l,
-            onTap: () => _openAiChatDialog(context, state),
+            onTap: () => _openAiWelcomePage(context),
             padding: EdgeInsets.symmetric(
               horizontal: 8,
               vertical: 10,
@@ -38,34 +40,24 @@ class SidebarAiButton extends StatelessWidget {
     );
   }
 
-  void _openAiChatDialog(
-      BuildContext context, UserWorkspaceState workspaceState) async {
-    debugPrint('🔄 侧边栏: 点击问AI按钮');
+  void _openAiWelcomePage(BuildContext context) {
+    Log.info('🔄 侧边栏: 点击问AI按钮，打开AI欢迎页');
     
     try {
-      // 获取当前workspace ID
-      final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
-      if (workspaceId == null) {
-        _showMessage(context, '无法获取工作空间信息');
-        return;
-      }
-
-      debugPrint('✅ 侧边栏: 获取到workspace ID: $workspaceId');
-
-      // 创建并打开原生AI Chat视图（不带初始消息）
-      final view = await AIChatViewService.createAndOpenAIChat(
-        parentViewId: workspaceId,
+      // 创建AI欢迎页插件
+      final plugin = makePlugin(pluginType: PluginType.aiWelcome, data: null);
+      
+      // 使用TabsBloc打开插件
+      context.read<TabsBloc>().add(
+        TabsEvent.openPlugin(
+          plugin: plugin,
+        ),
       );
-
-      if (view == null) {
-        _showMessage(context, '创建AI对话失败');
-      } else {
-        debugPrint('✅ 侧边栏: AI Chat视图创建成功');
-      }
+      
+      Log.info('✅ 侧边栏: AI欢迎页已打开');
     } catch (e, stackTrace) {
-      debugPrint('❌ 侧边栏: 打开AI Chat失败: $e');
-      debugPrint('堆栈跟踪: $stackTrace');
-      _showMessage(context, '打开AI聊天时发生错误: $e');
+      Log.error('❌ 侧边栏: 打开AI欢迎页失败: $e', e, stackTrace);
+      _showMessage(context, '打开AI欢迎页时发生错误: $e');
     }
   }
 

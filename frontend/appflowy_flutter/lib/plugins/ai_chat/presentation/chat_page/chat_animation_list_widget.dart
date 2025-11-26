@@ -9,7 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart';
 
-@visibleForTesting
+/// 全局标志：是否跳过AI Chat欢迎页
+/// 当有初始消息时设置为true，直接进入聊天状态
 bool skipAIChatWelcomePage = false;
 
 class ChatAnimationListWidget extends StatefulWidget {

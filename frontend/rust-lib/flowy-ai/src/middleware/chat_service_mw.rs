@@ -15,7 +15,7 @@ use flowy_storage_pub::storage::StorageService;
 use serde_json::Value;
 use std::path::Path;
 use std::sync::{Arc, Weak};
-use tracing::{info, trace};
+use tracing::{error, info, trace, warn};
 use uuid::Uuid;
 
 pub struct ChatServiceMiddleware {
@@ -38,6 +38,38 @@ impl ChatServiceMiddleware {
       cloud_service,
       local_ai,
       storage_service,
+    }
+  }
+
+  /// 将模型显示名称映射到API所需的模型ID
+  /// 根据 http://8.152.101.166/api/ai/chat/models 返回的模型列表进行映射
+  fn map_model_name_to_id(model_name: &str) -> String {
+    match model_name {
+      "DeepSeek" => "deepseek-chat".to_string(),
+      "通义千问 Turbo" => "qwen-turbo".to_string(),
+      "通义千问 Max" => "qwen-max".to_string(),
+      "豆包" => "doubao".to_string(),
+      // 如果名称不匹配，尝试转换为小写并添加连字符
+      _ => {
+        // 尝试通过名称推断ID
+        if model_name.to_lowercase().contains("deepseek") {
+          "deepseek-chat".to_string()
+        } else if model_name.contains("通义") || model_name.to_lowercase().contains("qwen") {
+          if model_name.contains("Turbo") || model_name.contains("turbo") {
+            "qwen-turbo".to_string()
+          } else if model_name.contains("Max") || model_name.contains("max") {
+            "qwen-max".to_string()
+          } else {
+            "qwen-turbo".to_string() // 默认使用turbo
+          }
+        } else if model_name.contains("豆包") || model_name.to_lowercase().contains("doubao") {
+          "doubao".to_string()
+        } else {
+          // 如果完全不匹配，返回原始名称，让后端使用默认模型
+          warn!("[Middleware] 未知的模型名称: {}, 使用默认模型", model_name);
+          model_name.to_string()
+        }
+      }
     }
   }
 
@@ -130,8 +162,12 @@ impl ChatCloudService for ChatServiceMiddleware {
       // 获取服务器地址（这里硬编码，后续可以从配置获取）
       let base_url = "http://8.152.101.166";
       
+      // 将模型显示名称映射到API所需的模型ID
+      let model_id = Self::map_model_name_to_id(&ai_model.name);
+      info!("[Middleware] 模型名称: {}, 映射到ID: {}", ai_model.name, model_id);
+      
       // 调用新的 AI 会话接口
-      let stream = stream_ai_session(base_url, &content, Some(ai_model.name)).await?;
+      let stream = stream_ai_session(base_url, &content, Some(model_id)).await?;
       
       // 将 AISessionStreamValue 转换为 QuestionStreamValue
       let converted_stream = stream.map(|result| {

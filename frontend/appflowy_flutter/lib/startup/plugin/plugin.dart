@@ -27,6 +27,7 @@ enum PluginType {
   template,
   folder,
   notebook,
+  aiWelcome,
 }
 
 typedef PluginId = String;

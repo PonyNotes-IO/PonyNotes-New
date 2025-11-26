@@ -324,7 +324,11 @@ impl AIManager {
     params: StreamMessageParams,
   ) -> Result<ChatMessagePB, FlowyError> {
     let chat = self.get_or_create_chat_instance(&params.chat_id).await?;
-    let ai_model = self.get_active_model(&params.chat_id.to_string()).await;
+    // 优先使用params中指定的模型，否则使用默认活跃模型
+    let ai_model = match params.model.clone() {
+      Some(model) => model,
+      None => self.get_active_model(&params.chat_id.to_string()).await,
+    };
     let question = chat.stream_chat_message(&params, ai_model).await?;
     let _ = self
       .external_service
