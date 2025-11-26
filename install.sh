@@ -10,7 +10,7 @@ Usage: $this [-b] bindir [-d] [tag]
   -b sets bindir or installation directory, Defaults to /opt
   -d turns on debug logging
    [tag] is a tag from
-   https://github.com/AppFlowy-IO/AppFlowy/releases
+   https://github.com/PonyNotes-IO/PonyNotes-New/releases
    If tag is missing, then the latest will be used.
 EOF
   exit 2

@@ -207,7 +207,7 @@ pub fn make_test_board() -> DatabaseData {
             },
             FieldType::Checkbox => row_builder.insert_checkbox_cell("false"),
             FieldType::URL => {
-              row_builder.insert_url_cell("https://github.com/AppFlowy-IO/AppFlowy")
+              row_builder.insert_url_cell("https://github.com/PonyNotes-IO/PonyNotes-New")
             },
             _ => "".to_owned(),
           };
