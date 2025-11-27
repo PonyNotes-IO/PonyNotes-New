@@ -74,6 +74,13 @@ class AutoUpdateTask extends LaunchTask {
       ApplicationInfo.latestAppcastItem = item;
       ApplicationInfo.latestVersionNotifier.value =
           item.displayVersionString ?? '';
+      Log.info(
+        '[AutoUpdate] Latest version found: ${item.displayVersionString}, '
+        'Current version: ${ApplicationInfo.applicationVersion}, '
+        'Update available: ${ApplicationInfo.isUpdateAvailable}',
+      );
+    } else {
+      Log.info('[AutoUpdate] No update information available');
     }
   }
 

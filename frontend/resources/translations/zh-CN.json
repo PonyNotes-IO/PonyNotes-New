@@ -2357,6 +2357,18 @@
     "personalInfoProtection": "个人信息保护声明",
     "personalInfoProtectionContent": "这里是个人信息保护声明的内容，请根据实际需求填写。"
   },
+  "autoUpdate": {
+    "criticalUpdateTitle": "需要更新才能使用",
+    "criticalUpdateDescription": "我们已进行改进以提升您的体验！ 请从 {currentVersion} 更新至 {newVersion} 以继续使用应用程序。",
+    "criticalUpdateButton": "更新",
+    "bannerUpdateTitle": "新版本发布!",
+    "bannerUpdateDescription": "取得最新功能和修复。点击「更新」即可立即安装",
+    "bannerUpdateButton": "更新",
+    "settingsUpdateTitle": "版本 ({newVersion}) 可用!",
+    "settingsUpdateDescription": "目前版本: {currentVersion} (正式发布版)→ {newVersion}",
+    "settingsUpdateButton": "更新",
+    "settingsUpdateWhatsNew": "最新消息"
+  },
   "shareTab": {
     "accessLevel": {
       "view": "查看",

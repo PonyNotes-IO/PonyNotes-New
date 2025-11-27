@@ -31,7 +31,11 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_mi
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_menu.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_cloud_sync_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_upload_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/footer/sidebar_upgrade_application_button.dart';
 import 'package:appflowy/workspace/presentation/notifications/widgets/notification_button.dart';
+import 'package:appflowy/shared/version_checker/version_checker.dart';
+import 'package:appflowy/startup/tasks/device_info_task.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
@@ -392,8 +396,7 @@ class _SidebarState extends State<_Sidebar> {
             const VSpace(8),
 
             _renderUpgradeSpaceButton(menuHorizontalInset),
-            // 已移除自动更新提示横幅
-            // _buildUpgradeApplicationButton(menuHorizontalInset),
+            _buildUpgradeApplicationButton(menuHorizontalInset),
 
             const VSpace(14),
           ],
@@ -481,6 +484,67 @@ class _SidebarState extends State<_Sidebar> {
                 ),
             child: const SpaceMigration(),
           );
+  }
+
+  Widget _buildUpgradeApplicationButton(EdgeInsets menuHorizontalInset) {
+    return ValueListenableBuilder(
+      valueListenable: ApplicationInfo.latestVersionNotifier,
+      builder: (context, latestVersion, _) {
+        // 检查是否有新版本可用
+        final isUpdateAvailable = ApplicationInfo.isUpdateAvailable;
+
+        // 添加调试日志
+        // Log.info('[UpdateBanner] Current: ${ApplicationInfo.applicationVersion}, Latest: $latestVersion, Available: $isUpdateAvailable');
+
+        if (!isUpdateAvailable) {
+          return const SizedBox.shrink();
+        }
+
+        // 检查用户是否已经关闭过这个版本的更新提示
+        return FutureBuilder<bool>(
+          future: _shouldShowUpdateBanner(latestVersion),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData || !snapshot.data!) {
+              return const SizedBox.shrink();
+            }
+
+            // Log.info('[UpdateBanner] Showing update banner for version $latestVersion');
+
+            return Padding(
+              padding: menuHorizontalInset +
+                  const EdgeInsets.only(
+                    left: 4.0,
+                    right: 4.0,
+                    top: 8.0,
+                  ),
+              child: SidebarUpgradeApplicationButton(
+                onUpdateButtonTap: () async {
+                  await versionChecker.checkForUpdate();
+                },
+                onCloseButtonTap: () async {
+                  await _dismissUpdateBanner(latestVersion);
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<bool> _shouldShowUpdateBanner(String version) async {
+    final prefs = await SharedPreferences.getInstance();
+    final dismissedVersion = prefs.getString('dismissed_update_version');
+    return dismissedVersion != version;
+  }
+
+  Future<void> _dismissUpdateBanner(String version) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('dismissed_update_version', version);
+    // 触发重建以隐藏横幅
+    if (mounted) {
+      setState(() {});
+    }
   }
 
 
