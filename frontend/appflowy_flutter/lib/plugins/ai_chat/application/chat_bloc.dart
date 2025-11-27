@@ -240,19 +240,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       Log.info('✅ ChatBloc: 已设置跳过欢迎页标志');
       
       // 延迟发送，确保UI已经初始化完成
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!isClosed) {
-          Log.info('📤 ChatBloc: 自动发送初始消息');
-          add(ChatEvent.sendMessage(
-            message: initialMessage!,
-            format: null,
-            metadata: {},
-            promptId: null,
-          ));
-        } else {
-          Log.warn('⚠️ ChatBloc: bloc已关闭，无法发送初始消息');
-        }
-      });
+      Future.delayed(
+        const Duration(milliseconds: 500),
+        () {
+          if (!isClosed) {
+            Log.info('📤 ChatBloc: 自动发送初始消息');
+            add(
+              ChatEvent.sendMessage(
+                message: initialMessage!,
+                metadata: const {},
+              ),
+            );
+          } else {
+            Log.warn('⚠️ ChatBloc: bloc已关闭，无法发送初始消息');
+          }
+        },
+      );
     } else if (initialMessage != null && 
                initialMessage!.isNotEmpty && 
                chatController.messages.isNotEmpty) {
@@ -504,32 +507,53 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       
       await result.fold(
         (modelSelection) async {
-          Log.info('✅ ChatBloc: 获取到 ${modelSelection.models.length} 个可用模型');
-          
-          // 打印所有可用模型，方便调试
-          for (final model in modelSelection.models) {
+          var availableModels = modelSelection.models;
+          if (availableModels.isEmpty) {
+            Log.warn('⚠️ ChatBloc: 当前会话未返回可用模型，尝试读取全局配置');
+            final fallbackResult = await AIEventGetSettingModelSelection(
+              ModelSourcePB(source: kGlobalAIModelSource),
+            ).send();
+            await fallbackResult.fold(
+              (fallbackSelection) async {
+                availableModels = fallbackSelection.models;
+                Log.info(
+                  '✅ ChatBloc: 通过全局配置获取到 ${availableModels.length} 个模型',
+                );
+              },
+              (err) async {
+                Log.error('❌ ChatBloc: 获取全局模型配置失败: ${err.msg}');
+              },
+            );
+          }
+
+          if (availableModels.isEmpty) {
+            Log.error('❌ ChatBloc: 没有可用的模型');
+            return;
+          }
+
+          Log.info('✅ ChatBloc: 获取到 ${availableModels.length} 个可用模型');
+
+          for (final model in availableModels) {
             Log.info('   - 模型: ${model.name} (isLocal: ${model.isLocal})');
           }
-          
-          // 根据modelId查找匹配的模型
-          // 使用映射表将前端AIModel的ID转换为后端AIModelPB的name
+
           AIModelPB? matchedModel;
-          
-          // 1. 首先尝试使用映射表精确匹配
+
           final expectedName = _modelIdToNameMap[modelId];
           if (expectedName != null) {
-            matchedModel = modelSelection.models.cast<AIModelPB?>().firstWhere(
+            matchedModel = availableModels.cast<AIModelPB?>().firstWhere(
               (model) => model?.name == expectedName,
               orElse: () => null,
             );
             if (matchedModel != null) {
-              Log.info('✅ ChatBloc: 通过映射表找到匹配的模型: ${matchedModel.name}');
+              Log.info(
+                '✅ ChatBloc: 通过映射表找到匹配的模型: ${matchedModel.name}',
+              );
             }
           }
-          
-          // 2. 如果映射表匹配失败，尝试直接用modelId匹配name
+
           if (matchedModel == null) {
-            for (final model in modelSelection.models) {
+            for (final model in availableModels) {
               if (model.name == modelId ||
                   model.name.toLowerCase() == modelId.toLowerCase()) {
                 matchedModel = model;
@@ -538,33 +562,34 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               }
             }
           }
-          
-          // 3. 如果仍然没找到，使用第一个非Auto的模型
-          if (matchedModel == null && modelSelection.models.isNotEmpty) {
-            // 避免选择"Auto"模型
-            matchedModel = modelSelection.models.firstWhere(
+
+          if (matchedModel == null && availableModels.isNotEmpty) {
+            matchedModel = availableModels.firstWhere(
               (model) => model.name != 'Auto',
-              orElse: () => modelSelection.models.first,
+              orElse: () => availableModels.first,
             );
-            Log.warn('⚠️ ChatBloc: 无法匹配模型ID "$modelId"，使用第一个可用模型: ${matchedModel.name}');
+            Log.warn(
+              '⚠️ ChatBloc: 无法匹配模型ID "$modelId"，使用第一个可用模型: ${matchedModel.name}',
+            );
           }
-          
+
           if (matchedModel == null) {
             Log.error('❌ ChatBloc: 没有可用的模型');
             return;
           }
-          
+
           Log.info('✅ ChatBloc: 将使用模型: ${matchedModel.name}');
-          
-          // 更新选择的模型
+
           final updatePayload = UpdateSelectedModelPB(
             source: chatId,
             selectedModel: matchedModel,
           );
-          
+
           await AIEventUpdateSelectedModel(updatePayload).send().fold(
             (_) {
-              Log.info('✅ ChatBloc: 成功设置首选模型: ${matchedModel?.name ?? "未知"}');
+              Log.info(
+                '✅ ChatBloc: 成功设置首选模型: ${matchedModel?.name ?? "未知"}',
+              );
             },
             (err) {
               Log.error('❌ ChatBloc: 设置首选模型失败: ${err.msg}');

@@ -1,3 +1,4 @@
+import 'package:appflowy/ai/ai_constants.dart';
 import 'package:appflowy/plugins/ai_chat/application/ai_model_switch_listener.dart';
 import 'package:appflowy/user/application/user_listener.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -11,15 +12,13 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'settings_ai_bloc.freezed.dart';
 
-const String aiModelsGlobalActiveModel = "global_active_model";
-
 class SettingsAIBloc extends Bloc<SettingsAIEvent, SettingsAIState> {
   SettingsAIBloc(
     this.userProfile,
     this.workspaceId,
   )   : _userListener = UserListener(userProfile: userProfile),
         _aiModelSwitchListener =
-            AIModelSwitchListener(objectId: aiModelsGlobalActiveModel),
+            AIModelSwitchListener(objectId: kGlobalAIModelSource),
         super(
           SettingsAIState(
             userProfile: userProfile,
@@ -77,7 +76,7 @@ class SettingsAIBloc extends Bloc<SettingsAIEvent, SettingsAIState> {
         selectModel: (AIModelPB model) async {
           await AIEventUpdateSelectedModel(
             UpdateSelectedModelPB(
-              source: aiModelsGlobalActiveModel,
+      source: kGlobalAIModelSource,
               selectedModel: model,
             ),
           ).send();
@@ -131,7 +130,7 @@ class SettingsAIBloc extends Bloc<SettingsAIEvent, SettingsAIState> {
       );
 
   void _loadModelList() {
-    final payload = ModelSourcePB(source: aiModelsGlobalActiveModel);
+    final payload = ModelSourcePB(source: kGlobalAIModelSource);
     AIEventGetSettingModelSelection(payload).send().then((result) {
       result.fold((models) {
         if (!isClosed) {

@@ -35,7 +35,8 @@ members = [
   "flowy-template",
   "flowy-template-pub",
   "flowy-whiteboard",
-  "flowy-whiteboard-pub"
+  "flowy-whiteboard-pub",
+  "workspace-template-dev"
 ]
 
 resolver = "2"
@@ -120,9 +121,14 @@ html-to-markdown = { path = "html-to-markdown" }
 # Run the script.add_workspace_members:
 # scripts/tool/update_client_api_rev.sh  new_rev_id
 # ⚠️⚠️⚠️️
-client-api = { path = "../../../PonyNotes-Cloud-New/libs/client-api" }
-client-api-entity = { path = "../../../PonyNotes-Cloud-New/libs/client-api-entity" }
-workspace-template = { path = "../../../PonyNotes-Cloud-New/libs/workspace-template" }
+client-api = { path = "../../../PonyNotes-Cloud-New/libs/client-api", default-features = false, features = [
+  "modern_collab_api",
+  "verbose_log",
+] }
+client-api-entity = { path = "../../../PonyNotes-Cloud-New/libs/client-api-entity", default-features = false, features = [
+  "modern_collab_api",
+] }
+workspace-template = { path = "workspace-template-dev" }
 
 [profile.dev]
 opt-level = 0
@@ -148,7 +154,7 @@ incremental = true
 # We're using a specific commit here because rust-rocksdb doesn't publish the latest version that includes the memory alignment fix.
 # For more details, see https://github.com/rust-rocksdb/rust-rocksdb/pull/868
 rocksdb = { git = "https://github.com/rust-rocksdb/rust-rocksdb", rev = "1710120e4549e04ba3baa6a1ee5a5a801fa45a72" }
-# Please use the following script to update collab.
+# 请使用脚本更新 collab 依赖。
 # Working directory: frontend
 #
 # To update the commit ID, run:
@@ -157,6 +163,7 @@ rocksdb = { git = "https://github.com/rust-rocksdb/rust-rocksdb", rev = "1710120
 # To switch to the local path, run:
 # scripts/tool/update_collab_source.sh
 # ⚠️⚠️⚠️️
+# 按照路线 A：前端继续使用 dev 分支的现代 collab API（yrs 0.24），与后端 stable-for-cloud 解耦
 collab = { version = "0.2", git = "https://github.com/PonyNotes-IO/AppFlowy-Collab", branch = "dev" }
 collab-entity = { version = "0.2", git = "https://github.com/PonyNotes-IO/AppFlowy-Collab", branch = "dev" }
 collab-folder = { version = "0.2", git = "https://github.com/PonyNotes-IO/AppFlowy-Collab", branch = "dev" }
