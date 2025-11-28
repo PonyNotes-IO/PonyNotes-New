@@ -7,12 +7,14 @@ import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';
+import 'package:appflowy/user/presentation/screens/legal_document_screen.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/password_login_dialog.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
@@ -559,21 +561,51 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
             const SizedBox(width: 8),
             Flexible(
               child: RichText(
-                text: const TextSpan(
-                  style: TextStyle(
+                text: TextSpan(
+                  style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF999999),
                   ),
                   children: [
-                    TextSpan(text: "我已阅读并同意 "),
+                    const TextSpan(text: "我已阅读并同意 "),
                     TextSpan(
-                      text: "《用户协议》",
-                      style: TextStyle(color: Color(0xFFF89575)),
+                      text: "《${LocaleKeys.legal_userAgreement.tr()}》",
+                      style: const TextStyle(
+                        color: Color(0xFFF89575),
+                        decoration: TextDecoration.underline,
+                      ),
+                      mouseCursor: SystemMouseCursors.click,
+                      recognizer: TapGestureRecognizer()
+                        ..onTap = () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => LegalDocumentScreen(
+                                title: LocaleKeys.sidebar_appName.tr() + LocaleKeys.legal_userAgreement.tr(),
+                                content: LocaleKeys.legal_userAgreementContent.tr(),
+                              ),
+                            ),
+                          );
+                        },
                     ),
-                    TextSpan(text: "和"),
+                    const TextSpan(text: LocaleKeys.legal_and.tr()),
                     TextSpan(
-                      text: "《隐私政策》",
-                      style: TextStyle(color: Color(0xFFF89575)),
+                      text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
+                      style: const TextStyle(
+                        color: Color(0xFFF89575),
+                        decoration: TextDecoration.underline,
+                      ),
+                      mouseCursor: SystemMouseCursors.click,
+                      recognizer: TapGestureRecognizer()
+                        ..onTap = () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => LegalDocumentScreen(
+                                title: LocaleKeys.legal_privacyPolicy.tr(),
+                                content: LocaleKeys.legal_privacyPolicyContent.tr(),
+                              ),
+                            ),
+                          );
+                        },
                     ),
                   ],
                 ),
