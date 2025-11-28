@@ -572,7 +572,6 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
                       text: "《${LocaleKeys.legal_userAgreement.tr()}》",
                       style: const TextStyle(
                         color: Color(0xFFF89575),
-                        decoration: TextDecoration.underline,
                       ),
                       mouseCursor: SystemMouseCursors.click,
                       recognizer: TapGestureRecognizer()
@@ -592,7 +591,6 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
                       text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
                       style: const TextStyle(
                         color: Color(0xFFF89575),
-                        decoration: TextDecoration.underline,
                       ),
                       mouseCursor: SystemMouseCursors.click,
                       recognizer: TapGestureRecognizer()
