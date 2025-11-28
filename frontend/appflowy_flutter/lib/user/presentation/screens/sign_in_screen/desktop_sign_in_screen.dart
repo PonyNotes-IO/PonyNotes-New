@@ -586,7 +586,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
                           );
                         },
                     ),
-                    const TextSpan(text: LocaleKeys.legal_and.tr()),
+                    TextSpan(text: LocaleKeys.legal_and.tr()),
                     TextSpan(
                       text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
                       style: const TextStyle(
