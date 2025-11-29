@@ -8,7 +8,7 @@ use lib_infra::util::timestamp;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
 use uuid::Uuid;
 use serde::Deserialize;
 
@@ -235,7 +235,27 @@ impl ModelSelectionControl {
     self.unset_sources.write().await.remove(&source_key.key);
 
     let available = self.get_models(workspace_id).await;
-    if available.contains(&model) {
+    
+    // 【关键修复】使用名称和 is_local 来匹配模型，而不是使用 contains（因为 desc 字段可能不同）
+    // 这样可以避免因为 desc 字段不匹配而拒绝用户选择的模型
+    let model_matched = available.iter().any(|m| {
+      m.name == model.name && m.is_local == model.is_local
+    });
+    
+    // 【关键修复】当可用模型列表为空或只包含默认模型时，允许设置任何模型
+    // 这样可以处理新工作区/新 Chat 的情况，避免因为模型列表未加载而拒绝用户选择的模型
+    let is_empty_or_only_default = available.is_empty() 
+      || (available.len() == 1 && available.iter().any(|m| m.name == self.default_model.name && m.is_local == self.default_model.is_local));
+    
+    if model_matched || is_empty_or_only_default {
+      // 如果可用列表为空或只包含默认模型，记录警告但不拒绝
+      if is_empty_or_only_default && !model_matched {
+        warn!(
+          "[Model Selection] 可用模型列表为空或只包含默认模型，允许设置模型: {}",
+          model.name
+        );
+      }
+      
       // Update local storage
       if let Some(storage) = self.local_storage.load_full() {
         storage
@@ -411,7 +431,8 @@ impl ServerAiSource {
     
     let client = Client::new();
     let resp = client
-      .get(url)  // 使用GET方法而不是POST
+      .get(url)  // 按照文档要求使用GET方法
+      .header("Content-Type", "application/json")
       .send()
       .await
       .map_err(|e| {

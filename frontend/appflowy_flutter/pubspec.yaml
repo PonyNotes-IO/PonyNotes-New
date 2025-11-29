@@ -321,7 +321,6 @@ flutter:
     - assets/icons/icons.json
     - assets/fonts/
     - assets/built_in_prompts.json
-    - .env.ai
     - assets/excalidraw/
     - assets/excalidraw/assets/
     - assets/excalidraw/assets/locales/
