@@ -38,7 +38,16 @@ done
 echo "🌍 Start generating language files."
 
 # Determine flutter/dart commands (prefer FVM)
+# Check if fvm exists and can actually run (not just found in PATH)
+FVM_AVAILABLE=false
 if command -v fvm >/dev/null 2>&1; then
+    # Try to run fvm to check if it's the correct architecture
+    if fvm --version >/dev/null 2>&1; then
+        FVM_AVAILABLE=true
+    fi
+fi
+
+if [ "$FVM_AVAILABLE" = true ]; then
     FLUTTER_CMD="fvm flutter"
     DART_CMD="fvm dart"
 else
@@ -86,12 +95,13 @@ if [ "$skip_pub_packages_get" = false ]; then
     fi
 fi
 
+# Use flutter pub run instead of dart run to ensure we use Flutter's Dart SDK
 if [ "$verbose" = true ]; then
-    $DART_CMD run easy_localization:generate -S assets/translations/
-    $DART_CMD run easy_localization:generate -f keys -o locale_keys.g.dart -S assets/translations/ -s en-US.json
+    $FLUTTER_CMD pub run easy_localization:generate -S assets/translations/
+    $FLUTTER_CMD pub run easy_localization:generate -f keys -o locale_keys.g.dart -S assets/translations/ -s en-US.json
 else
-    $DART_CMD run easy_localization:generate -S assets/translations/ >/dev/null 2>&1
-    $DART_CMD run easy_localization:generate -f keys -o locale_keys.g.dart -S assets/translations/ -s en-US.json >/dev/null 2>&1
+    $FLUTTER_CMD pub run easy_localization:generate -S assets/translations/ >/dev/null 2>&1
+    $FLUTTER_CMD pub run easy_localization:generate -f keys -o locale_keys.g.dart -S assets/translations/ -s en-US.json >/dev/null 2>&1
 fi
 
 echo "🌍 Done generating language files."

@@ -37,7 +37,16 @@ done
 echo "📷 Start generating image/svg files"
 
 # Choose flutter/dart runners (prefer FVM if available)
+# Check if fvm exists and can actually run (not just found in PATH)
+FVM_AVAILABLE=false
 if command -v fvm >/dev/null 2>&1; then
+    # Try to run fvm to check if it's the correct architecture
+    if fvm --version >/dev/null 2>&1; then
+        FVM_AVAILABLE=true
+    fi
+fi
+
+if [ "$FVM_AVAILABLE" = true ]; then
     FLUTTER_CMD="fvm flutter"
     DART_CMD="fvm dart"
 else
@@ -81,10 +90,11 @@ if [ "$include_packages" = true ]; then
     fi
 fi
 
+# Use flutter pub run instead of dart run to ensure we use Flutter's Dart SDK
 if [ "$verbose" = true ]; then
-    $DART_CMD run flowy_svg
+    $FLUTTER_CMD pub run flowy_svg
 else
-    $DART_CMD run flowy_svg >/dev/null 2>&1
+    $FLUTTER_CMD pub run flowy_svg >/dev/null 2>&1
 fi
 
 # Return to the original directory

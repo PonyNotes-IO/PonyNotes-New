@@ -431,6 +431,7 @@ impl ServerAiSource {
     
     let client = Client::new();
     let resp = client
+
       .get(url)  // 按照文档要求使用GET方法
       .header("Content-Type", "application/json")
       .send()

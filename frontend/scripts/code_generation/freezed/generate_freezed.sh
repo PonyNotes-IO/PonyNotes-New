@@ -41,7 +41,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Determine flutter/dart command (prefer FVM if available)
+# Check if fvm exists and can actually run (not just found in PATH)
+FVM_AVAILABLE=false
 if command -v fvm >/dev/null 2>&1; then
+  # Try to run fvm to check if it's the correct architecture
+  if fvm --version >/dev/null 2>&1; then
+    FVM_AVAILABLE=true
+  fi
+fi
+
+if [ "$FVM_AVAILABLE" = true ]; then
   FLUTTER_CMD="fvm flutter"
   DART_CMD="fvm dart"
 else
@@ -82,10 +91,11 @@ if [ "$exclude_packages" = false ]; then
          $FLUTTER_CMD packages pub get >/dev/null 2>&1
         fi
       fi
+      # Use flutter pub run instead of dart run to ensure we use Flutter's Dart SDK
       if [ "$verbose" = true ]; then
-        $DART_CMD run build_runner build --delete-conflicting-outputs
+        $FLUTTER_CMD pub run build_runner build --delete-conflicting-outputs
       else
-        $DART_CMD run build_runner build --delete-conflicting-outputs >/dev/null 2>&1
+        $FLUTTER_CMD pub run build_runner build --delete-conflicting-outputs >/dev/null 2>&1
       fi
       echo "🧊 Done generating freezed files ($d)."
     fi
@@ -124,10 +134,11 @@ if [ "$skip_pub_packages_get" = false ]; then
 fi
 
 # Start the build_runner in the background
+# Use flutter pub run instead of dart run to ensure we use Flutter's Dart SDK
 if [ "$verbose" = true ]; then
-  $DART_CMD run build_runner build --delete-conflicting-outputs &
+  $FLUTTER_CMD pub run build_runner build --delete-conflicting-outputs &
 else
-  $DART_CMD run build_runner build --delete-conflicting-outputs >/dev/null 2>&1 &
+  $FLUTTER_CMD pub run build_runner build --delete-conflicting-outputs >/dev/null 2>&1 &
 fi
 
 # Get the PID of the background process
