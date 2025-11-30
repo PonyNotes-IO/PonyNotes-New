@@ -13,6 +13,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class AccountManagementView extends StatefulWidget {
   const AccountManagementView({
@@ -292,29 +293,37 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     Log.info('用户资料 - email: ${widget.userProfile.email}, name: ${widget.userProfile.name}');
     
     // 从用户资料中获取手机号
-    // 由于protobuf中没有专门的phone字段，手机号可能存储在email字段中
+    // 优先使用 phone 字段，如果没有则检查 email 字段
     String phoneNumber = '';
     
-    // 检查email字段是否包含手机号（不包含@符号且符合手机号格式的就是手机号）
-    if (widget.userProfile.email.isNotEmpty && 
+    if (widget.userProfile.phone != null && widget.userProfile.phone!.isNotEmpty) {
+      // 优先使用 phone 字段
+      phoneNumber = widget.userProfile.phone!;
+      Log.info('从用户资料的 phone 字段获取到手机号: $phoneNumber');
+    } else if (widget.userProfile.email.isNotEmpty && 
         !widget.userProfile.email.contains('@') &&
         Validator.isValidPhone(widget.userProfile.email)) {
+      // 兼容旧数据：检查 email 字段是否包含手机号
       phoneNumber = widget.userProfile.email;
-      Log.info('从用户资料中获取到手机号: $phoneNumber');
+      Log.info('从用户资料的 email 字段获取到手机号: $phoneNumber');
     } else {
       Log.info('用户资料中没有有效的手机号，显示输入对话框');
       // 如果没有绑定手机号，显示提示让用户输入
       _showPhoneInputDialog(context);
       return;
     }
+    
+    // 保存外层的 context，避免在对话框关闭后访问失效的 context
+    final outerContext = context;
         
     showDialog(
       context: context,
-      builder: (context) => IdentityVerificationDialog(
+      builder: (dialogContext) => IdentityVerificationDialog(
         phoneNumber: phoneNumber,
         onVerificationComplete: () {
           // 身份验证成功后，打开更改手机号码对话框
-          _showPhoneChangeDialog(context);
+          // 使用保存的外层 context
+          _showPhoneChangeDialog(outerContext);
         },
       ),
     );
@@ -395,18 +404,36 @@ class _AccountManagementViewState extends State<AccountManagementView> {
   }
 
   void _showPhoneChangeDialog(BuildContext context) {
+    // 保存 ScaffoldMessenger 和 SettingsDialogBloc 的引用，避免在对话框关闭后访问 context
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final settingsBloc = context.read<SettingsDialogBloc>();
+    
     showDialog(
       context: context,
-      builder: (context) => PhoneChangeDialog(
-        onChangeComplete: () {
+      builder: (dialogContext) => PhoneChangeDialog(
+        onChangeComplete: () async {
           // 更改完成后的回调
-          ScaffoldMessenger.of(context).showSnackBar(
+          scaffoldMessenger.showSnackBar(
             const SnackBar(
               content: Text('手机号更改成功'),
               duration: Duration(seconds: 2),
             ),
           );
-          // TODO: 刷新用户资料
+          
+          // 刷新用户资料（Rust 后端会同步从云端刷新）
+          final result = await UserBackendService.getCurrentUserProfile();
+          result.fold(
+            (newProfile) {
+              Log.info('刷新后的用户资料 - name: ${newProfile.name}, email: ${newProfile.email}, phone: ${newProfile.phone}');
+              // 通知 SettingsDialogBloc 更新用户资料
+              settingsBloc.add(
+                SettingsDialogEvent.didReceiveUserProfile(newProfile),
+              );
+            },
+            (error) {
+              Log.error('Failed to refresh user profile: ${error.msg}');
+            },
+          );
         },
       ),
     );

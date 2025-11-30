@@ -257,11 +257,13 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
                   ],
                 ),
                 const VSpace(8),
-                FlowyText(
-                  '短信验证码已发送至您的手机',
-                  fontSize: 12,
-                  color: theme.textColorScheme.secondary,
-                ),
+                // 只有在已经请求过验证码时才显示提示信息
+                if (_hasRequestedCode)
+                  FlowyText(
+                    '短信验证码已发送至您的手机',
+                    fontSize: 12,
+                    color: theme.textColorScheme.secondary,
+                  ),
               ],
             ),
             
@@ -352,12 +354,7 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
           
           _startCountdown();
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('验证码已发送到 ${_formatPhoneNumber(widget.phoneNumber)}'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          // 移除多余的 SnackBar 提示，输入框下方已有提示文本
         }
       },
       (error) {
@@ -404,6 +401,8 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
     // 清理手机号格式
     final cleanPhone = Validator.cleanPhoneNumber(widget.phoneNumber);
     
+    print('[IdentityVerificationDialog] 开始验证: phone=$cleanPhone, code=${codeController.text}');
+    
     // 只验证验证码是否正确，不绑定手机号
     // 使用signInWithPasscode来验证验证码
     final result = await UserBackendService.signInWithPasscode(
@@ -413,6 +412,7 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
     
     result.fold(
       (tokenResponse) {
+        print('[IdentityVerificationDialog] 验证成功: tokenResponse=$tokenResponse');
         if (mounted) {
           setState(() {
             _isVerified = true;
@@ -420,7 +420,8 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
           
           // 延迟一下让用户看到验证成功的提示
           Future.delayed(const Duration(milliseconds: 800), () {
-            if (mounted) {
+            // 再次检查mounted状态和验证状态，防止用户在延迟期间关闭对话框
+            if (mounted && _isVerified) {
               Navigator.of(context).pop();
               // 调用回调，让父组件打开"更改手机号码"对话框
               widget.onVerificationComplete?.call();
@@ -436,7 +437,13 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
         }
       },
       (error) {
+        print('[IdentityVerificationDialog] 验证失败: code=${error.code}, msg=${error.msg}');
         if (mounted) {
+          // 确保验证失败时 _isVerified 为 false
+          setState(() {
+            _isVerified = false;
+          });
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('验证码错误: ${error.msg}'),

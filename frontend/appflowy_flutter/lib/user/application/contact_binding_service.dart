@@ -5,29 +5,30 @@ import 'package:appflowy_result/appflowy_result.dart';
 /// 联系方式绑定服务
 class ContactBindingService {
   
-  /// 发送手机验证码
+  /// 发送手机验证码（用于验证旧手机号或新手机号）
+  /// 
+  /// 使用 GoTrue 的 /otp 端点直接发送验证码
   static Future<FlowyResult<void, FlowyError>> sendPhoneVerificationCode(
     String phoneNumber,
   ) async {
     try {
-      print('[ContactBindingService] 发送手机验证码: $phoneNumber');
+      print('[ContactBindingService] 发送验证码到手机: $phoneNumber');
       
-      // 调用云端API发送手机验证码
-      // 使用GoTrue的/otp端点发送验证码
-      final result = await UserBackendService.signInWithMagicLink(phoneNumber, '');
+      // 直接调用 GoTrue /otp 端点发送验证码
+      final result = await UserBackendService.sendPhoneOTP(phoneNumber);
       
       return result.fold(
         (_) {
-          print('[ContactBindingService] 验证码发送成功');
+          print('[ContactBindingService] 验证码已发送到: $phoneNumber');
           return FlowyResult.success(null);
         },
         (error) {
-          print('[ContactBindingService] 验证码发送失败: ${error.msg}');
+          print('[ContactBindingService] 发送验证码失败: ${error.msg}');
           return FlowyResult.failure(error);
         },
       );
     } catch (e) {
-      print('[ContactBindingService] 验证码发送异常: $e');
+      print('[ContactBindingService] 发送验证码异常: $e');
       return FlowyResult.failure(
         FlowyError.create()
           ..msg = "发送手机验证码失败: $e",
@@ -57,56 +58,36 @@ class ContactBindingService {
   }
 
   /// 验证手机号并绑定
+  /// 
+  /// 调用云端 API /api/user/verify-phone 来验证验证码并绑定手机号
   static Future<FlowyResult<void, FlowyError>> bindPhoneNumber(
     String phoneNumber,
     String verificationCode,
   ) async {
     try {
-      print('[ContactBindingService] 验证手机号: $phoneNumber, 验证码: $verificationCode');
+      print('[ContactBindingService] 验证并绑定手机号: $phoneNumber, 验证码: $verificationCode');
       
-      // 步骤1: 使用验证码登录来验证验证码是否正确
-      // 这个API会验证验证码，如果正确则返回用户token
-      final verifyResult = await UserBackendService.signInWithPasscode(
-        phoneNumber, 
-        verificationCode,
-      );
-      
-      // 检查验证是否成功
-      final verifySuccess = verifyResult.fold(
-        (tokenResponse) {
-          print('[ContactBindingService] 验证码验证成功');
-          return true;
-        },
-        (error) {
-          print('[ContactBindingService] 验证码验证失败: ${error.msg}');
-          return false;
-        },
-      );
-      
-      if (!verifySuccess) {
+      // 验证验证码格式
+      if (verificationCode.length != 6) {
         return FlowyResult.failure(
           FlowyError.create()
-            ..msg = "验证码错误，请检查后重试",
+            ..msg = "请输入6位验证码",
         );
       }
       
-      // 步骤2: 验证成功后，更新用户手机号
-      final userProfileResult = await UserBackendService.getCurrentUserProfile();
-      final userProfile = userProfileResult.fold(
-        (profile) => profile,
-        (error) => throw error,
+      // 调用新的 API 端点验证验证码并绑定手机号
+      final result = await UserBackendService.verifyAndBindPhone(
+        phoneNumber,
+        verificationCode,
       );
-      
-      final userService = UserBackendService(userId: userProfile.id);
-      final result = await userService.updateUserProfile(phone: phoneNumber);
       
       return result.fold(
         (_) {
-          print('[ContactBindingService] 手机号绑定成功');
+          print('[ContactBindingService] 手机号验证并绑定成功');
           return FlowyResult.success(null);
         },
         (error) {
-          print('[ContactBindingService] 手机号绑定失败: ${error.msg}');
+          print('[ContactBindingService] 手机号验证失败: ${error.msg}');
           return FlowyResult.failure(error);
         },
       );

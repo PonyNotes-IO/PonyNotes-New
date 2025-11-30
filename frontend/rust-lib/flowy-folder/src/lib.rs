@@ -5,6 +5,7 @@ pub mod event_handler;
 pub mod event_map;
 pub mod manager;
 pub mod notification;
+#[allow(warnings)]
 pub mod protobuf;
 mod user_default;
 pub mod view_operation;

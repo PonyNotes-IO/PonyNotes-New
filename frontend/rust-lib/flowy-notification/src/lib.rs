@@ -9,6 +9,7 @@ mod debounce;
 pub use debounce::*;
 
 pub mod entities;
+#[allow(warnings)]
 mod protobuf;
 
 lazy_static! {

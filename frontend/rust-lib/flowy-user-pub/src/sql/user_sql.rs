@@ -38,7 +38,7 @@ impl From<(UserProfile, AuthType)> for UserTable {
       email: user_profile.email,
       auth_type: auth_type as i32,
       updated_at: user_profile.updated_at,
-      phone_number: None,
+      phone_number: user_profile.phone,
     }
   }
 }
@@ -51,6 +51,7 @@ pub struct UserTableChangeset {
   pub email: Option<String>,
   pub icon_url: Option<String>,
   pub token: Option<String>,
+  pub phone_number: Option<String>,
 }
 
 impl UserTableChangeset {
@@ -61,6 +62,7 @@ impl UserTableChangeset {
       email: params.email,
       icon_url: params.icon_url,
       token: params.token,
+      phone_number: None,
     }
   }
 
@@ -71,6 +73,7 @@ impl UserTableChangeset {
       email: Some(user_profile.email),
       icon_url: Some(user_profile.icon_url),
       token: Some(user_profile.token),
+      phone_number: user_profile.phone,
     }
   }
 }
@@ -154,6 +157,7 @@ pub fn select_user_profile(
     name: row.name,
     token: row.token,
     icon_url: row.icon_url,
+    phone: row.phone_number,
     auth_type: AuthType::from(row.auth_type),
     workspace_type,
     updated_at: row.updated_at,

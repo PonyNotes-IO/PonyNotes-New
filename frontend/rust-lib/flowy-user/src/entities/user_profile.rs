@@ -43,6 +43,9 @@ pub struct UserProfilePB {
 
   #[pb(index = 7)]
   pub workspace_type: WorkspaceTypePB,
+
+  #[pb(index = 8, one_of)]
+  pub phone: Option<String>,
 }
 
 #[derive(ProtoBuf_Enum, Eq, PartialEq, Debug, Clone)]
@@ -65,6 +68,7 @@ impl From<UserProfile> for UserProfilePB {
       name: user_profile.name,
       token: user_profile.token,
       icon_url: user_profile.icon_url,
+      phone: user_profile.phone,
       user_auth_type: user_profile.auth_type.into(),
       workspace_type: user_profile.workspace_type.into(),
     }

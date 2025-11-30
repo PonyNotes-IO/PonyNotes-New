@@ -1,13 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 abstract class IUserBackendService {
   Future<FlowyResult<void, FlowyError>> cancelSubscription(
@@ -88,6 +92,146 @@ class UserBackendService implements IUserBackendService {
   ) async {
     final payload = PasscodeSignInPB(email: email, passcode: passcode);
     return UserEventPasscodeSignIn(payload).send();
+  }
+
+  /// Send OTP to phone number (for phone number verification/change)
+  /// This calls the cloud API /api/user/send-phone-otp endpoint
+  static Future<FlowyResult<void, FlowyError>> sendPhoneOTP(
+    String phone,
+  ) async {
+    try {
+      // 获取当前用户配置
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+      
+      final baseUrl = cloudConfig.serverUrl;
+      
+      if (baseUrl.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL',
+        );
+      }
+      
+      // 调用云端 API 发送手机验证码
+      final uri = Uri.parse('$baseUrl/api/user/send-phone-otp');
+      Log.info('[UserBackendService] Sending phone OTP to: $phone');
+      
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'phone': phone,
+        }),
+      );
+      
+      Log.info('[UserBackendService] Response status: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        return FlowyResult.success(null);
+      } else {
+        final errorMsg = response.body.isNotEmpty 
+            ? response.body 
+            : 'Failed to send phone OTP (HTTP ${response.statusCode})';
+        Log.error('[UserBackendService] Send phone OTP failed: $errorMsg');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e) {
+      Log.error('[UserBackendService] Exception: $e');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Failed to send phone OTP: $e',
+      );
+    }
+  }
+
+  /// Verify phone OTP and bind phone number
+  /// This calls the cloud API /api/user/verify-phone endpoint directly via HTTP
+  static Future<FlowyResult<void, FlowyError>> verifyAndBindPhone(
+    String phone,
+    String otp,
+  ) async {
+    try {
+      // 获取当前用户配置
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+      
+      // 获取当前用户 Profile（包含 token）
+      final userProfileResult = await getCurrentUserProfile();
+      final userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+      
+      final baseUrl = cloudConfig.serverUrl;
+      // userProfile.token 是一个 JSON 字符串，需要解析获取 access_token
+      final tokenJson = jsonDecode(userProfile.token);
+      final token = tokenJson['access_token'] as String;
+      
+      Log.info('[UserBackendService] Token length: ${token.length}, first 20 chars: ${token.length > 20 ? token.substring(0, 20) : token}');
+      
+      if (baseUrl.isEmpty || token.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL or auth token',
+        );
+      }
+      
+      // 调用 /api/user/verify-phone 端点
+      final uri = Uri.parse('$baseUrl/api/user/verify-phone');
+      Log.info('[UserBackendService] Calling $uri');
+      
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'phone': phone,
+          'otp': otp,
+        }),
+      );
+      
+      Log.info('[UserBackendService] Response status: ${response.statusCode}');
+      Log.info('[UserBackendService] Response body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        return FlowyResult.success(null);
+      } else {
+        final errorMsg = response.body.isNotEmpty 
+            ? response.body 
+            : 'Failed to verify phone (HTTP ${response.statusCode})';
+        Log.error('[UserBackendService] Verify phone failed: $errorMsg');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e) {
+      Log.error('[UserBackendService] Exception: $e');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Failed to verify phone: $e',
+      );
+    }
   }
 
   Future<FlowyResult<void, FlowyError>> signInWithPassword(

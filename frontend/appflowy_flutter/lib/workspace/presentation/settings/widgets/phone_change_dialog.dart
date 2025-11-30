@@ -355,18 +355,12 @@ class _PhoneChangeDialogState extends State<PhoneChangeDialog> {
     result.fold(
       (success) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('手机号更改成功'),
-              duration: Duration(seconds: 2),
-            ),
-          );
+          // 先关闭对话框
+          Navigator.of(context).pop();
           
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) {
-              widget.onChangeComplete?.call();
-              Navigator.of(context).pop();
-            }
+          // 然后调用回调（回调中会显示 SnackBar 和刷新数据）
+          Future.delayed(const Duration(milliseconds: 100), () {
+            widget.onChangeComplete?.call();
           });
         }
       },

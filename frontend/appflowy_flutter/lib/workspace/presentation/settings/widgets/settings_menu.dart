@@ -78,6 +78,24 @@ class _SettingsMenuState extends State<SettingsMenu> {
     }
   }
 
+  // 获取显示名称：优先显示昵称，其次显示手机号
+  String _getDisplayName() {
+    // 优先显示昵称
+    if (widget.userProfile.name.isNotEmpty) {
+      return widget.userProfile.name;
+    }
+    // 其次显示手机号
+    if (widget.userProfile.phone != null && widget.userProfile.phone!.isNotEmpty) {
+      return widget.userProfile.phone!;
+    }
+    // 再显示邮箱
+    if (widget.userProfile.email.isNotEmpty) {
+      return widget.userProfile.email;
+    }
+    // 最后显示默认值
+    return '小马笔记的笔记';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
@@ -247,11 +265,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
                       ),
                     ),
                     const HSpace(6),
-                    // 昵称
+                    // 昵称或手机号
                     FlowyText(
-                      widget.userProfile.name.isNotEmpty 
-                          ? widget.userProfile.name 
-                          : '小马笔记的笔记',
+                      _getDisplayName(),
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: theme.textColorScheme.primary,

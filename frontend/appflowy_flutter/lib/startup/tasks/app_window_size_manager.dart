@@ -6,14 +6,14 @@ import 'package:appflowy/core/config/kv_keys.dart';
 import 'package:appflowy/startup/startup.dart';
 
 class WindowSizeManager {
-  static const double minWindowHeight = 640.0;
-  static const double minWindowWidth = 640.0;
+  static const double minWindowHeight = 720.0;
+  static const double minWindowWidth = 1024.0;
   // Preventing failed assertion due to Texture Descriptor Validation
   static const double maxWindowHeight = 8192.0;
   static const double maxWindowWidth = 8192.0;
 
   // Default windows size
-  static const double defaultWindowHeight = 810.0;
+  static const double defaultWindowHeight = 900.0;
   static const double defaultWindowWidth = 1440.0;
 
   static const double maxScaleFactor = 2.0;
@@ -48,8 +48,15 @@ class WindowSizeManager {
     final size = json.decode(
       windowSize ?? defaultWindowSize,
     );
-    final double width = size[WindowSizeManager.width] ?? minWindowWidth;
-    final double height = size[WindowSizeManager.height] ?? minWindowHeight;
+    double width = size[WindowSizeManager.width] ?? minWindowWidth;
+    double height = size[WindowSizeManager.height] ?? minWindowHeight;
+    
+    // 如果保存的尺寸小于新的最小值，使用默认尺寸
+    if (width < minWindowWidth || height < minWindowHeight) {
+      width = defaultWindowWidth;
+      height = defaultWindowHeight;
+    }
+    
     return Size(
       width.clamp(minWindowWidth, maxWindowWidth),
       height.clamp(minWindowHeight, maxWindowHeight),

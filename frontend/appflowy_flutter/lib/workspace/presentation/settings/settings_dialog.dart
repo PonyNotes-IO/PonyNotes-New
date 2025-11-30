@@ -104,7 +104,7 @@ class SettingsDialog extends StatelessWidget {
                       Expanded(
                         flex: 2,
                         child: SettingsMenu(
-                          userProfile: user,
+                          userProfile: state.userProfile,
                           changeSelectedPage: (index) => context
                               .read<SettingsDialogBloc>()
                               .add(SettingsDialogEvent.setSelectedPage(index)),
@@ -124,7 +124,7 @@ class SettingsDialog extends StatelessWidget {
                         child: getSettingsView(
                           workspaceState.currentWorkspace!,
                           context.read<SettingsDialogBloc>().state.page,
-                          workspaceState.userProfile,
+                          state.userProfile,
                           workspaceState.currentWorkspace?.role,
                           context,
                         ),

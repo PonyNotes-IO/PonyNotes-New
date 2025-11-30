@@ -97,18 +97,16 @@ pub async fn get_user_profile_handler(
     .get_user_profile_from_disk(session.user_id, &session.workspace_id)
     .await?;
 
-  let weak_manager = Arc::downgrade(&manager);
-  let cloned_user_profile = user_profile.clone();
-  let workspace_id = session.workspace_id.clone();
-
-  // Refresh the user profile in the background
-  tokio::spawn(async move {
-    if let Some(manager) = weak_manager.upgrade() {
-      let _ = manager
-        .refresh_user_profile(&cloned_user_profile, &workspace_id)
-        .await;
-    }
-  });
+  // Refresh the user profile from cloud and wait for it to complete
+  // This ensures we get the latest user profile including phone number
+  let _ = manager
+    .refresh_user_profile(&user_profile, &session.workspace_id)
+    .await;
+  
+  // Re-fetch the user profile from disk after refresh
+  user_profile = manager
+    .get_user_profile_from_disk(session.user_id, &session.workspace_id)
+    .await?;
 
   // When the user is logged in with a local account, the email field is a placeholder and should
   // not be exposed to the client. So we set the email field to an empty string.
@@ -325,6 +323,19 @@ pub async fn sign_in_with_passcode_handler(
     .sign_in_with_passcode(&params.email, &params.passcode)
     .await?;
   data_result_ok(response.into())
+}
+
+#[tracing::instrument(level = "debug", skip(data, manager), err)]
+pub async fn verify_and_bind_phone_handler(
+  data: AFPluginData<VerifyAndBindPhonePB>,
+  manager: AFPluginState<Weak<UserManager>>,
+) -> Result<(), FlowyError> {
+  let manager = upgrade_manager(manager)?;
+  let params = data.into_inner();
+  manager
+    .verify_and_bind_phone(&params.phone, &params.otp)
+    .await?;
+  Ok(())
 }
 
 #[tracing::instrument(level = "debug", skip(data, manager), err)]

@@ -28,6 +28,13 @@ pub fn user_profile_from_af_profile(
   profile: AFUserProfile,
   auth_type: AuthType,
 ) -> Result<UserProfile, Error> {
+  tracing::info!(
+    "user_profile_from_af_profile: email={:?}, phone={:?}, name={:?}",
+    profile.email,
+    profile.phone,
+    profile.name
+  );
+  
   let icon_url = {
     profile
       .metadata
@@ -38,16 +45,27 @@ pub fn user_profile_from_af_profile(
       .unwrap_or_default()
   };
   let workspace_type = WorkspaceType::from(&auth_type);
-  Ok(UserProfile {
+  
+  let user_profile = UserProfile {
     email: profile.email.unwrap_or("".to_string()),
     name: profile.name.unwrap_or("".to_string()),
     token,
     icon_url: icon_url.unwrap_or_default(),
+    phone: profile.phone.clone(),
     auth_type: AuthType::AppFlowyCloud,
     uid: profile.uid,
     updated_at: profile.updated_at,
     workspace_type,
-  })
+  };
+  
+  tracing::info!(
+    "user_profile_from_af_profile result: email={}, phone={:?}, name={}",
+    user_profile.email,
+    user_profile.phone,
+    user_profile.name
+  );
+  
+  Ok(user_profile)
 }
 
 pub fn to_af_role(role: Role) -> AFRole {

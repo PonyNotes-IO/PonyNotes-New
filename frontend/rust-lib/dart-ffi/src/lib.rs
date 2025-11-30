@@ -34,6 +34,7 @@ mod c;
 mod env_serde;
 mod model;
 mod notification;
+#[allow(warnings)]
 mod protobuf;
 
 lazy_static! {

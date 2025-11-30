@@ -95,6 +95,15 @@ pub struct PasscodeSignInPB {
   pub passcode: String,
 }
 
+#[derive(ProtoBuf, Default)]
+pub struct VerifyAndBindPhonePB {
+  #[pb(index = 1)]
+  pub phone: String,
+
+  #[pb(index = 2)]
+  pub otp: String,
+}
+
 #[derive(ProtoBuf, Default, Debug, Clone)]
 pub struct GotrueTokenResponsePB {
   #[pb(index = 1)]

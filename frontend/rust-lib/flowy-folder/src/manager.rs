@@ -2595,7 +2595,7 @@ impl FolderManager {
               .shared_views
               .iter()
               .filter_map(|shared_view| {
-                // Get the highest access level from shared_users (if any)
+                // Get the highest access level from shared_users
                 let access_level = shared_view
                   .shared_users
                   .iter()
@@ -2628,7 +2628,7 @@ impl FolderManager {
                     .iter()
                     .find(|view| view.id == shared_view.view_id.to_string())?;
                   
-                  // Get the highest access level from shared_users (if any)
+                  // Get the highest access level from shared_users
                   let access_level = shared_view
                     .shared_users
                     .iter()

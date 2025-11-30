@@ -749,6 +749,18 @@ impl UserManager {
   }
 
   #[instrument(level = "info", skip_all)]
+  pub(crate) async fn verify_and_bind_phone(
+    &self,
+    _phone: &str,
+    _otp: &str,
+  ) -> Result<(), FlowyError> {
+    // This is a placeholder. The actual implementation should be done in Dart
+    // by calling the /api/user/verify-phone endpoint directly via HTTP.
+    // The backend API is already implemented in user_verify.rs
+    Err(FlowyError::not_support().with_context("Use Dart HTTP client to call /api/user/verify-phone"))
+  }
+
+  #[instrument(level = "info", skip_all)]
   pub(crate) async fn generate_oauth_url(
     &self,
     oauth_provider: &str,
