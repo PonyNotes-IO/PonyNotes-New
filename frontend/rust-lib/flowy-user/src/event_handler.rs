@@ -93,26 +93,49 @@ pub async fn get_user_profile_handler(
   let manager = upgrade_manager(manager)?;
   let session = manager.get_session()?;
 
+  tracing::info!("🔄 [get_user_profile_handler] Step 1: Reading from local disk");
   let mut user_profile = manager
     .get_user_profile_from_disk(session.user_id, &session.workspace_id)
     .await?;
+  tracing::info!(
+    "🔄 [get_user_profile_handler] Step 1 result: phone={:?}",
+    user_profile.phone
+  );
 
   // Refresh the user profile from cloud and wait for it to complete
   // This ensures we get the latest user profile including phone number
-  let _ = manager
-    .refresh_user_profile(&user_profile, &session.workspace_id)
+  // Use force=true to bypass debounce check
+  tracing::info!("🔄 [get_user_profile_handler] Step 2: Refreshing from cloud (forced)");
+  let refresh_result = manager
+    .refresh_user_profile_with_force(&user_profile, &session.workspace_id, true)
     .await;
+  tracing::info!(
+    "🔄 [get_user_profile_handler] Step 2 result: {:?}",
+    refresh_result
+  );
   
   // Re-fetch the user profile from disk after refresh
+  tracing::info!("🔄 [get_user_profile_handler] Step 3: Re-reading from local disk");
   user_profile = manager
     .get_user_profile_from_disk(session.user_id, &session.workspace_id)
     .await?;
+  tracing::info!(
+    "🔄 [get_user_profile_handler] Step 3 result: phone={:?}",
+    user_profile.phone
+  );
 
   // When the user is logged in with a local account, the email field is a placeholder and should
   // not be exposed to the client. So we set the email field to an empty string.
   if user_profile.auth_type == AuthType::Local {
     user_profile.email = "".to_string();
   }
+
+  tracing::info!(
+    "🔄 [get_user_profile_handler] Final result: email={}, phone={:?}, name={}",
+    user_profile.email,
+    user_profile.phone,
+    user_profile.name
+  );
 
   data_result_ok(user_profile.into())
 }

@@ -178,9 +178,8 @@ class UserBackendService implements IUserBackendService {
       );
       
       final baseUrl = cloudConfig.serverUrl;
-      // userProfile.token 是一个 JSON 字符串，需要解析获取 access_token
-      final tokenJson = jsonDecode(userProfile.token);
-      final token = tokenJson['access_token'] as String;
+      // userProfile.token 直接就是 access_token 字符串
+      final token = userProfile.token;
       
       Log.info('[UserBackendService] Token length: ${token.length}, first 20 chars: ${token.length > 20 ? token.substring(0, 20) : token}');
       

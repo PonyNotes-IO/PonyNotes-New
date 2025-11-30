@@ -67,6 +67,10 @@ impl UserTableChangeset {
   }
 
   pub fn from_user_profile(user_profile: UserProfile) -> Self {
+    tracing::info!(
+      "💾 Creating UserTableChangeset from UserProfile: phone={:?}",
+      user_profile.phone
+    );
     UserTableChangeset {
       id: user_profile.uid.to_string(),
       name: Some(user_profile.name),
@@ -151,17 +155,27 @@ pub fn select_user_profile(
   let workspace_type = WorkspaceType::from(workspace.workspace_type);
   let row = select_user_table_row(uid, conn)?;
 
+  tracing::info!(
+    "💾 Reading from local DB: phone_number={:?}",
+    row.phone_number
+  );
+
   let user = UserProfile {
     uid: row.id.parse::<i64>().unwrap_or(0),
     email: row.email,
     name: row.name,
     token: row.token,
     icon_url: row.icon_url,
-    phone: row.phone_number,
+    phone: row.phone_number.clone(),
     auth_type: AuthType::from(row.auth_type),
     workspace_type,
     updated_at: row.updated_at,
   };
+
+  tracing::info!(
+    "💾 Created UserProfile from local DB: phone={:?}",
+    user.phone
+  );
 
   Ok(user)
 }

@@ -189,7 +189,15 @@ where
       .upgrade()
       .ok_or_else(FlowyError::user_not_login)?;
 
+    tracing::info!("🌐 Fetching user profile from cloud for uid: {}", uid);
     let profile = client.get_profile().await?;
+    tracing::info!(
+      "🌐 Cloud returned profile: email={:?}, phone={:?}, name={:?}",
+      profile.email,
+      profile.phone,
+      profile.name
+    );
+    
     let token = client.get_token()?;
 
     let mut conn = logged_user.get_sqlite_db(uid)?;

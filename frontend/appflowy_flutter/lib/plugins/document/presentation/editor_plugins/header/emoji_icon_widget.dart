@@ -192,11 +192,9 @@ class _RawEmojiIconWidgetState extends State<RawEmojiIconWidget> {
   Map<String, String> _buildRequestHeader(UserProfilePB userProfilePB) {
     final header = <String, String>{};
     final token = userProfilePB.token;
-    try {
-      final decodedToken = jsonDecode(token);
-      header['Authorization'] = 'Bearer ${decodedToken['access_token']}';
-    } catch (e) {
-      Log.error('Unable to decode token: $e');
+    if (token.isNotEmpty) {
+      // token 已经是 access_token 字符串，不需要解析
+      header['Authorization'] = 'Bearer $token';
     }
     return header;
   }

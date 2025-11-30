@@ -111,7 +111,8 @@ Future<void> downloadMediaFile(
     }
 
     final uri = Uri.parse(file.url);
-    final token = jsonDecode(userProfile.token)['access_token'];
+    // token 已经是 access_token 字符串，不需要解析
+    final token = userProfile.token;
 
     if (UniversalPlatform.isMobile) {
       onDownloadBegin?.call();

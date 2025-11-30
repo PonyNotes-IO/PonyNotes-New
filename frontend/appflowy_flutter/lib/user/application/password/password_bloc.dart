@@ -53,7 +53,8 @@ class PasswordBloc extends Bloc<PasswordEvent, PasswordState> {
 
     final baseUrl = await getAppFlowyCloudUrl();
     try {
-      final authToken = jsonDecode(userProfile.token)['access_token'];
+      // token 已经是 access_token 字符串，不需要解析
+      final authToken = userProfile.token;
       passwordHttpService = PasswordHttpService(
         baseUrl: baseUrl,
         authToken: authToken,

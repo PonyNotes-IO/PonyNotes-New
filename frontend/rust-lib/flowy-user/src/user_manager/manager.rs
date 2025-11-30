@@ -581,14 +581,25 @@ impl UserManager {
     old_user_profile: &UserProfile,
     workspace_id: &str,
   ) -> FlowyResult<()> {
+    self.refresh_user_profile_with_force(old_user_profile, workspace_id, false).await
+  }
+
+  #[tracing::instrument(level = "info", skip_all, err)]
+  pub async fn refresh_user_profile_with_force(
+    &self,
+    old_user_profile: &UserProfile,
+    workspace_id: &str,
+    force: bool,
+  ) -> FlowyResult<()> {
     // If the user is a local user, no need to refresh the user profile
     if old_user_profile.workspace_type.is_local() {
       return Ok(());
     }
 
     let now = chrono::Utc::now().timestamp();
-    // Add debounce to avoid too many requests
-    if now - self.refresh_user_profile_since.load(Ordering::SeqCst) < 5 {
+    // Add debounce to avoid too many requests (unless force is true)
+    if !force && now - self.refresh_user_profile_since.load(Ordering::SeqCst) < 5 {
+      tracing::info!("⏭️ Skipping refresh due to debounce (last refresh was < 5 seconds ago)");
       return Ok(());
     }
     self.refresh_user_profile_since.store(now, Ordering::SeqCst);
@@ -602,17 +613,28 @@ impl UserManager {
 
     match result {
       Ok(new_user_profile) => {
-        // If the user profile is updated, save the new user profile
-        if new_user_profile.updated_at > old_user_profile.updated_at {
-          // Save the new user profile
-          let changeset = UserTableChangeset::from_user_profile(new_user_profile);
-          let _ = upsert_user_profile_change(
-            uid,
-            workspace_id,
-            self.authenticate_user.database.get_connection(uid)?,
-            changeset,
-          );
-        }
+        tracing::info!(
+          "📥 Received user profile from cloud: phone={:?}, email={}, name={}",
+          new_user_profile.phone,
+          new_user_profile.email,
+          new_user_profile.name
+        );
+        
+        // Always save the new user profile from cloud to ensure data consistency
+        // Previously we only saved if updated_at was newer, but this could cause
+        // issues when phone/email changes don't update the timestamp
+        let changeset = UserTableChangeset::from_user_profile(new_user_profile.clone());
+        tracing::info!(
+          "💾 Saving user profile to local DB: phone={:?}",
+          changeset.phone_number
+        );
+        
+        let _ = upsert_user_profile_change(
+          uid,
+          workspace_id,
+          self.authenticate_user.database.get_connection(uid)?,
+          changeset,
+        );
         Ok(())
       },
       Err(err) => {
@@ -830,13 +852,16 @@ pub fn upsert_user_profile_change(
   mut conn: DBConnection,
   changeset: UserTableChangeset,
 ) -> FlowyResult<()> {
-  event!(
-    tracing::Level::DEBUG,
-    "Update user profile with changeset: {:?}",
-    changeset
+  tracing::info!(
+    "💾 [upsert_user_profile_change] Updating local DB with changeset: phone={:?}",
+    changeset.phone_number
   );
   update_user_profile(&mut conn, changeset)?;
   let user = select_user_profile(uid, workspace_id, &mut conn)?;
+  tracing::info!(
+    "💾 [upsert_user_profile_change] After update, local DB has: phone={:?}",
+    user.phone
+  );
   send_notification(uid, UserNotification::DidUpdateUserProfile)
     .payload(UserProfilePB::from(user))
     .send();

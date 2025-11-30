@@ -242,7 +242,8 @@ class InteractiveImageToolbar extends StatelessWidget {
       if (savePath != null) {
         final uri = Uri.parse(currentImage.url);
 
-        final token = jsonDecode(userProfile!.token)['access_token'];
+        // token 已经是 access_token 字符串，不需要解析
+        final token = userProfile!.token;
         final response = await http.get(
           uri,
           headers: {'Authorization': 'Bearer $token'},

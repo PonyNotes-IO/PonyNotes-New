@@ -421,17 +421,34 @@ class _AccountManagementViewState extends State<AccountManagementView> {
           );
           
           // 刷新用户资料（Rust 后端会同步从云端刷新）
+          Log.info('📱 开始刷新用户资料...');
           final result = await UserBackendService.getCurrentUserProfile();
           result.fold(
             (newProfile) {
-              Log.info('刷新后的用户资料 - name: ${newProfile.name}, email: ${newProfile.email}, phone: ${newProfile.phone}');
+              Log.info('✅ 刷新后的用户资料:');
+              Log.info('   - name: ${newProfile.name}');
+              Log.info('   - email: ${newProfile.email}');
+              Log.info('   - phone: ${newProfile.phone ?? "(null)"}');
+              Log.info('   - phone.isEmpty: ${newProfile.phone?.isEmpty ?? true}');
+              
+              if (newProfile.phone == null || newProfile.phone!.isEmpty) {
+                Log.error('⚠️ 警告：刷新后的用户资料中 phone 字段为空！');
+                Log.error('   这可能是因为：');
+                Log.error('   1. 云端数据库没有更新成功');
+                Log.error('   2. 云端 API 返回的数据中没有 phone 字段');
+                Log.error('   3. 前端 Rust 代码没有正确映射 phone 字段');
+                Log.error('   4. 本地数据库没有保存 phone 字段');
+              } else {
+                Log.info('✅ phone 字段正常: ${newProfile.phone}');
+              }
+              
               // 通知 SettingsDialogBloc 更新用户资料
               settingsBloc.add(
                 SettingsDialogEvent.didReceiveUserProfile(newProfile),
               );
             },
             (error) {
-              Log.error('Failed to refresh user profile: ${error.msg}');
+              Log.error('❌ 刷新用户资料失败: ${error.msg}');
             },
           );
         },

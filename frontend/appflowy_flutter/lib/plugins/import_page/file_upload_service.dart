@@ -214,19 +214,11 @@ class FileUploadService {
         throw Exception('用户未登录，token为空');
       }
       
-      // Parse the token JSON to get access_token
-      Map<String, dynamic> tokenMap;
-      try {
-        tokenMap = jsonDecode(user.token) as Map<String, dynamic>;
-      } catch (e) {
-        Log.error('Failed to parse user token JSON: $e');
-        throw Exception('用户token格式错误，请重新登录');
-      }
+      // token 已经是 access_token 字符串，不需要解析
+      final accessToken = user.token;
       
-      final accessToken = tokenMap['access_token'] as String?;
-      
-      if (accessToken == null || accessToken.isEmpty) {
-        throw Exception('用户token中缺少access_token，请重新登录');
+      if (accessToken.isEmpty) {
+        throw Exception('用户token为空，请重新登录');
       }
       
       Log.info('Successfully retrieved access token');
