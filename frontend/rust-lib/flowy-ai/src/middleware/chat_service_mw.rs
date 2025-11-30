@@ -166,8 +166,17 @@ impl ChatCloudService for ChatServiceMiddleware {
       let model_id = Self::map_model_name_to_id(&ai_model.name);
       info!("[Middleware] 模型名称: {}, 映射到ID: {}", ai_model.name, model_id);
       
+      // 获取 token
+      let token = {
+        let uid = self.user_service.user_id()?;
+        let mut conn = self.user_service.sqlite_connection(uid)?;
+        flowy_user_pub::sql::user_sql::select_user_token(uid, &mut conn).ok()
+      };
+      
+      trace!("[Middleware] 获取到 token: {}", if token.is_some() { "有" } else { "无" });
+      
       // 调用新的 AI 会话接口
-      let stream = stream_ai_session(base_url, &content, Some(model_id)).await?;
+      let stream = stream_ai_session(base_url, &content, Some(model_id), token).await?;
       
       // 将 AISessionStreamValue 转换为 QuestionStreamValue
       let converted_stream = stream.map(|result| {

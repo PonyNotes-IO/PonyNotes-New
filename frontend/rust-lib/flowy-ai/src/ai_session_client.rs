@@ -92,6 +92,7 @@ pub async fn stream_ai_session(
   base_url: &str,
   message: &str,
   preferred_model: Option<String>,
+  token: Option<String>,
 ) -> Result<AISessionStream, FlowyError> {
   use reqwest::Client;
   use std::time::Duration;
@@ -108,10 +109,20 @@ pub async fn stream_ai_session(
     body["preferred_model"] = serde_json::Value::String(model);
   }
 
-  let resp = client
+  let mut request = client
     .post(&url)
     .timeout(Duration::from_secs(60))
-    .json(&body)
+    .json(&body);
+  
+  // 添加 Authorization header（如果提供了 token）
+  if let Some(token) = token {
+    request = request.header("Authorization", format!("Bearer {}", token));
+    trace!("[AISession] 添加 Authorization header");
+  } else {
+    error!("[AISession] 未提供 token，请求可能失败");
+  }
+
+  let resp = request
     .send()
     .await
     .map_err(|e| {
