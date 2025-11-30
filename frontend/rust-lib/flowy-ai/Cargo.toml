@@ -40,6 +40,7 @@ sha2 = "0.10.7"
 base64 = "0.21.5"
 futures-util = "0.3.30"
 flowy-storage-pub = { workspace = true }
+flowy-user-pub = { workspace = true }
 # ollama-rs.workspace = true  # 不再使用本地 AI，已移除
 schemars = "0.8.22"
 twox-hash = { version = "2.1.0", features = ["xxhash64"] }

@@ -1,9 +1,12 @@
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/plugins/ai_chat/application/ai_chat_prelude.dart';
+import 'package:appflowy/plugins/ai_chat/application/chat_bloc.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_input/mobile_chat_input.dart';
+import 'package:appflowy/plugins/ai_chat/presentation/chat_page/ai_chat_usage_indicator.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/layout_define.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
@@ -47,25 +50,36 @@ class _ChatFooterState extends State<ChatFooter> {
               ? const SizedBox.shrink()
               : Padding(
                   padding: AIChatUILayout.safeAreaInsets(context),
-                  child: BlocSelector<ChatBloc, ChatState, bool>(
-                    selector: (state) {
-                      return state.promptResponseState.isReady;
-                    },
-                    builder: (context, canSendMessage) {
-                      final chatBloc = context.read<ChatBloc>();
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      BlocSelector<ChatBloc, ChatState, bool>(
+                        selector: (state) {
+                          return state.promptResponseState.isReady;
+                        },
+                        builder: (context, canSendMessage) {
+                          final chatBloc = context.read<ChatBloc>();
 
-                      return UniversalPlatform.isDesktop
-                          ? _buildDesktopInput(
-                              context,
-                              chatBloc,
-                              canSendMessage,
-                            )
-                          : _buildMobileInput(
-                              context,
-                              chatBloc,
-                              canSendMessage,
-                            );
-                    },
+                          return UniversalPlatform.isDesktop
+                              ? _buildDesktopInput(
+                                  context,
+                                  chatBloc,
+                                  canSendMessage,
+                                )
+                              : _buildMobileInput(
+                                  context,
+                                  chatBloc,
+                                  canSendMessage,
+                                );
+                        },
+                      ),
+                      BlocSelector<ChatBloc, ChatState, WorkspaceUsagePB?>(
+                        selector: (state) => state.usageInfo,
+                        builder: (context, usage) {
+                          return AIChatUsageIndicator(usage: usage);
+                        },
+                      ),
+                    ],
                   ),
                 ),
         );

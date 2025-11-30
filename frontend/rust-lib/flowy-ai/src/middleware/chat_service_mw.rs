@@ -130,7 +130,7 @@ impl ChatCloudService for ChatServiceMiddleware {
 
   async fn stream_answer(
     &self,
-    workspace_id: &Uuid,
+    _workspace_id: &Uuid,
     chat_id: &Uuid,
     question_id: i64,
     format: ResponseFormat,
@@ -170,10 +170,50 @@ impl ChatCloudService for ChatServiceMiddleware {
       let token = {
         let uid = self.user_service.user_id()?;
         let mut conn = self.user_service.sqlite_connection(uid)?;
-        flowy_user_pub::sql::user_sql::select_user_token(uid, &mut conn).ok()
+        let token_result = flowy_user_pub::sql::select_user_token(uid, &mut conn);
+        match token_result {
+          Ok(token_str) => {
+            // 检查 token 格式：JWT token 应该以 "eyJ" 开头（Base64 编码的 JSON）
+            if token_str.starts_with("eyJ") {
+              trace!("[Middleware] 获取到 token，长度: {}, 前10个字符: {}", token_str.len(), &token_str[..token_str.len().min(10)]);
+              Some(token_str)
+            } else {
+              error!("[Middleware] Token 格式不正确，不是 JWT token。前20个字符: {}", &token_str[..token_str.len().min(20)]);
+              // 如果 token 是 JSON 格式，尝试解析并提取 access_token
+              if token_str.trim_start().starts_with('{') {
+                info!("[Middleware] 检测到 JSON 格式 token，开始解析，长度: {}", token_str.len());
+                match serde_json::from_str::<serde_json::Value>(&token_str) {
+                  Ok(json) => {
+                    info!("[Middleware] JSON 解析成功");
+                    if let Some(access_token) = json.get("access_token").and_then(|v| v.as_str()) {
+                      info!("[Middleware] 从 JSON 中提取 access_token 成功，长度: {}", access_token.len());
+                      Some(access_token.to_string())
+                    } else {
+                      error!("[Middleware] JSON 中没有找到 access_token 字段。JSON keys: {:?}", json.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+                      None
+                    }
+                  },
+                  Err(e) => {
+                    error!("[Middleware] Token 不是有效的 JSON，解析错误: {:?}", e);
+                    None
+                  }
+                }
+              } else {
+                error!("[Middleware] Token 不是 JSON 格式（不以 {{ 开头），实际开头字符: {:?}", token_str.chars().take(5).collect::<String>());
+                None
+              }
+            }
+          },
+          Err(e) => {
+            error!("[Middleware] 获取 token 失败: {:?}", e);
+            None
+          }
+        }
       };
       
-      trace!("[Middleware] 获取到 token: {}", if token.is_some() { "有" } else { "无" });
+      if token.is_none() {
+        error!("[Middleware] 无法获取有效的 token，请求将失败");
+      }
       
       // 调用新的 AI 会话接口
       let stream = stream_ai_session(base_url, &content, Some(model_id), token).await?;

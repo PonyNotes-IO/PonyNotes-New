@@ -4,7 +4,7 @@ use pin_project::pin_project;
 use serde_json::Value;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tracing::{error, trace};
+use tracing::{error, info, trace};
 
 const STREAM_ANSWER_KEY: &str = "1";
 const STREAM_METADATA_KEY: &str = "0";
@@ -116,8 +116,13 @@ pub async fn stream_ai_session(
   
   // 添加 Authorization header（如果提供了 token）
   if let Some(token) = token {
+    let token_preview = if token.len() > 20 {
+      format!("{}...", &token[..20])
+    } else {
+      token.clone()
+    };
     request = request.header("Authorization", format!("Bearer {}", token));
-    trace!("[AISession] 添加 Authorization header");
+    trace!("[AISession] 添加 Authorization header，token 预览: {}", token_preview);
   } else {
     error!("[AISession] 未提供 token，请求可能失败");
   }
@@ -134,6 +139,26 @@ pub async fn stream_ai_session(
     let status = resp.status();
     let error_text = resp.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
     error!("[AISession] 服务器返回错误: {} - {}", status, error_text);
+    
+    // 处理 402 Payment Required 错误（AI使用次数用尽）
+    if status == 402 {
+      if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
+        if let Some(code) = error_json.get("code").and_then(|v| v.as_str()) {
+          if code == "AI_LIMIT_EXCEEDED" {
+            let message = error_json.get("message")
+              .and_then(|v| v.as_str())
+              .unwrap_or("AI调用次数已用完，请升级订阅或购买补充包")
+              .to_string();
+            info!("[AISession] AI使用次数用尽: {}", message);
+            return Err(FlowyError::new(
+              ErrorCode::AIResponseLimitExceeded,
+              message,
+            ));
+          }
+        }
+      }
+    }
+    
     return Err(FlowyError::new(
       ErrorCode::Internal,
       format!("服务器返回错误: {} - {}", status, error_text),

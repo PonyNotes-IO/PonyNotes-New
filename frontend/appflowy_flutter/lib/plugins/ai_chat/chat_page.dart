@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_content_page.dart';
+import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_backend/log.dart';
@@ -11,6 +12,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'application/chat_bloc.dart';
 import 'application/chat_member_bloc.dart';
+
+// Intent for stopping AI stream
+class _StopStreamIntent extends Intent {
+  const _StopStreamIntent();
+}
 
 class AIChatPage extends StatelessWidget {
   const AIChatPage({
@@ -58,12 +64,21 @@ class AIChatPage extends StatelessWidget {
       providers: [
         /// [ChatBloc] is used to handle chat messages including send/receive message
         BlocProvider(
-          create: (_) => ChatBloc(
-            chatId: view.id,
-            userId: userProfile.id.toString(),
-            initialMessage: initialMessage,
-            preferredModelId: preferredModelId,
-          ),
+          create: (_) {
+            final bloc = ChatBloc(
+              chatId: view.id,
+              userId: userProfile.id.toString(),
+              initialMessage: initialMessage,
+              preferredModelId: preferredModelId,
+            );
+            // 异步获取 workspace ID 并刷新使用情况
+            AIChatViewService.getCurrentWorkspaceId().then((workspaceId) {
+              if (workspaceId != null) {
+                bloc.add(ChatEvent.setWorkspaceId(workspaceId));
+              }
+            });
+            return bloc;
+          },
         ),
 
         /// [AIPromptInputBloc] is used to handle the user prompt
@@ -90,27 +105,31 @@ class AIChatPage extends StatelessWidget {
                 }
               }
             },
-            child: FocusScope(
-              onKeyEvent: (focusNode, event) {
-                if (event is! KeyUpEvent) {
-                  return KeyEventResult.ignored;
-                }
-
-                if (event.logicalKey == LogicalKeyboardKey.escape ||
-                    event.logicalKey == LogicalKeyboardKey.keyC &&
-                        HardwareKeyboard.instance.isControlPressed) {
-                  final chatBloc = context.read<ChatBloc>();
-                  if (!chatBloc.state.promptResponseState.isReady) {
-                    chatBloc.add(ChatEvent.stopStream());
-                    return KeyEventResult.handled;
-                  }
-                }
-
-                return KeyEventResult.ignored;
+            child: Shortcuts(
+              shortcuts: {
+                // 定义快捷键，不影响普通输入
+                const SingleActivator(LogicalKeyboardKey.escape): _StopStreamIntent(),
+                const SingleActivator(
+                  LogicalKeyboardKey.keyC,
+                  control: true,
+                ): _StopStreamIntent(),
               },
-              child: ChatContentPage(
-                view: view,
-                userProfile: userProfile,
+              child: Actions(
+                actions: {
+                  _StopStreamIntent: CallbackAction<_StopStreamIntent>(
+                    onInvoke: (intent) {
+                      final chatBloc = context.read<ChatBloc>();
+                      if (!chatBloc.state.promptResponseState.isReady) {
+                        chatBloc.add(ChatEvent.stopStream());
+                      }
+                      return null;
+                    },
+                  ),
+                },
+                child: ChatContentPage(
+                  view: view,
+                  userProfile: userProfile,
+                ),
               ),
             ),
           );

@@ -7,7 +7,9 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-ai/entities.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/widgets.dart';
@@ -53,6 +55,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _loadMessages();
     _loadSettings();
     
+    // workspaceId 将在异步获取后设置
+    
     // 如果有首选模型，设置为默认模型
     if (preferredModelId != null && preferredModelId!.isNotEmpty) {
       Log.info('🔄 ChatBloc: 检测到首选模型，准备设置: $preferredModelId');
@@ -80,6 +84,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final String userId;
   final String? initialMessage;
   final String? preferredModelId;
+  String? _workspaceId;
   final ChatMessageListener listener;
   final ChatController chatController;
 
@@ -174,6 +179,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           questions,
           emit,
         ),
+
+        // Usage refresh
+        refreshUsage: () async => _refreshUsage(emit),
+        setWorkspaceId: (workspaceId) async {
+          // 更新 workspaceId 并刷新使用情况
+          _workspaceId = workspaceId;
+          await _refreshUsage(emit);
+        },
 
         // Message management
         deleteMessage: (message) async => chatController.remove(message),
@@ -462,8 +475,55 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
         add(const ChatEvent.didFinishAnswerStream());
         unawaited(_fetchRelatedQuestionsIfNeeded());
+        // 刷新使用情况
+        add(const ChatEvent.refreshUsage());
       },
     );
+  }
+
+  // Refresh workspace usage
+  Future<void> _refreshUsage(Emitter<ChatState> emit) async {
+    if (_workspaceId == null) {
+      Log.warn('[ChatBloc] workspaceId 为空，无法刷新使用情况');
+      return;
+    }
+
+    Log.info('[ChatBloc] 开始刷新使用情况，workspaceId: $_workspaceId, userId: $userId');
+    
+    try {
+      final service = WorkspaceService(
+        workspaceId: _workspaceId!,
+        userId: Int64.parseInt(userId),
+      );
+
+      Log.info('[ChatBloc] 调用 getWorkspaceUsage API...');
+      final result = await service.getWorkspaceUsage();
+      result.fold(
+        (usage) {
+          if (!isClosed && usage != null) {
+            Log.info(
+              '[ChatBloc] ✅ 获取使用情况成功: 已使用=${usage.aiResponsesCount}, 限制=${usage.aiResponsesCountLimit}, 剩余=${usage.aiResponsesCountLimit - usage.aiResponsesCount}, 无限制=${usage.aiResponsesUnlimited}',
+            );
+            
+            // 验证数据有效性
+            if (usage.aiResponsesCountLimit == 0 && !usage.aiResponsesUnlimited) {
+              Log.warn('[ChatBloc] ⚠️ 警告：检测到限制为0且非无限制，可能是数据未正确加载');
+            }
+            
+            emit(state.copyWith(usageInfo: usage));
+          } else {
+            Log.warn('[ChatBloc] ⚠️ 获取使用情况返回null');
+          }
+        },
+        (error) {
+          Log.error('[ChatBloc] ❌ 获取使用情况失败: $error');
+          // 不设置默认值，保持 usageInfo 为 null
+        },
+      );
+    } catch (e, stackTrace) {
+      Log.error('[ChatBloc] ❌ 刷新使用情况异常: $e');
+      Log.error('[ChatBloc] 堆栈跟踪: $stackTrace');
+    }
   }
 
   // Split method to handle related questions
@@ -952,6 +1012,10 @@ class ChatEvent with _$ChatEvent {
     List<String> questions,
   ) = _DidReceiveRelatedQueston;
 
+  // usage refresh
+  const factory ChatEvent.refreshUsage() = _RefreshUsage;
+  const factory ChatEvent.setWorkspaceId(String workspaceId) = _SetWorkspaceId;
+
   const factory ChatEvent.deleteMessage(Message message) = _DeleteMessage;
 
   const factory ChatEvent.onAIFollowUp(AIFollowUpData followUpData) =
@@ -964,12 +1028,14 @@ class ChatState with _$ChatState {
     required LoadChatMessageStatus loadingState,
     required PromptResponseState promptResponseState,
     required bool clearErrorMessages,
+    WorkspaceUsagePB? usageInfo,
   }) = _ChatState;
 
   factory ChatState.initial() => const ChatState(
         loadingState: LoadChatMessageStatus.loading,
         promptResponseState: PromptResponseState.ready,
         clearErrorMessages: false,
+        usageInfo: null,
       );
 }
 
