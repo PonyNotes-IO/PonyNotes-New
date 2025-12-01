@@ -1,3 +1,4 @@
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -12,6 +13,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flowy_infra_ui/style_widget/primary_rounded_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -74,32 +76,32 @@ class _AccountManagementViewState extends State<AccountManagementView> {
       case WorkspacePlanPB.FreePlan:
         return {
           'title': '免费版',
-          'color': const Color(0xFFFF6B47),
-          'tag': '',
+          'price': '¥0',
+          'tag': '默认',
         };
       case WorkspacePlanPB.StudentPlan:
         return {
           'title': '学生版',
-          'color': const Color(0xFF4CAF50),
+          'price': '¥12.00/月',
           'tag': '学生专享',
         };
       case WorkspacePlanPB.StandardPlan:
         return {
           'title': '标准版',
-          'color': const Color(0xFF2196F3),
+          'price': '¥20.00/月',
           'tag': '最受欢迎',
         };
       case WorkspacePlanPB.TeamPlan:
         return {
           'title': '团队版',
-          'color': const Color(0xFF9C27B0),
-          'tag': '',
+          'price': '¥45.00/月',
+          'tag': '团队协作',
         };
       default:
         return {
           'title': '免费版',
-          'color': const Color(0xFFFF6B47),
-          'tag': '',
+          'price': '¥0',
+          'tag': '默认',
         };
     }
   }
@@ -118,30 +120,31 @@ class _AccountManagementViewState extends State<AccountManagementView> {
               onTap: () => widget.changeSelectedPage(SettingsPage.rechargeRecords),
             ),
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_isLoading)
-                    const Center(
-                      child: CircularProgressIndicator(),
-                    )
-                  else
-                    _buildPlanStatusRow(context),
-                  const VSpace(32),
-                  _buildFeatureItem(context, '文档光标颜色', '购买', showArrow: true),
-                  _buildFeatureItem(context, 'AI使用次数', '今日剩余20次升级', showArrow: true),
-                  GestureDetector(
-                    onTap: () => widget.changeSelectedPage(SettingsPage.userProfile),
-                    child: _buildFeatureItem(context, '个人资料', '', showArrow: true),
-                  ),
-                  GestureDetector(
-                    onTap: () => _showPhoneVerificationDialog(context),
-                    child: _buildFeatureItem(context, '绑定手机', '修改', showButton: true, buttonText: '修改'),
-                  ),
-                  GestureDetector(
-                    onTap: () => _showEmailVerificationDialog(context),
-                    child: _buildFeatureItem(context, '邮箱', '修改', showButton: true, buttonText: '修改'),
-                  ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_isLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else ...[
+                    _buildPlanCards(context),
+                    const VSpace(24),
+                    _buildBenefitSection(context),
+              const VSpace(32),
+                  ],
+              _buildFeatureItem(context, '文档光标颜色', '购买', showArrow: true),
+              _buildFeatureItem(context, 'AI使用次数', '今日剩余20次升级', showArrow: true),
+              GestureDetector(
+                onTap: () => widget.changeSelectedPage(SettingsPage.userProfile),
+                child: _buildFeatureItem(context, '个人资料', '', showArrow: true),
+              ),
+              GestureDetector(
+                onTap: () => _showPhoneVerificationDialog(context),
+                child: _buildFeatureItem(context, '绑定手机', '修改', showButton: true, buttonText: '修改'),
+              ),
+              GestureDetector(
+                onTap: () => _showEmailVerificationDialog(context),
+                child: _buildFeatureItem(context, '邮箱', '修改', showButton: true, buttonText: '修改'),
+              ),
                 ],
               ),
             ],
@@ -150,102 +153,198 @@ class _AccountManagementViewState extends State<AccountManagementView> {
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
           child: GestureDetector(
-            onTap: () async {
-              await getIt<AuthService>().signOut();
-              await runAppFlowy();
-            },
-            child: Container(
-              width: double.infinity,
-              padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: const Color(0xFFFF6B47),
-                  width: 1,
+                onTap: () async {
+                  await getIt<AuthService>().signOut();
+                  await runAppFlowy();
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: const Color(0xFFFF6B47),
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(theme.spacing.s),
+                  ),
+                  child: const Center(
+                    child: FlowyText(
+                      '退出登录',
+                      fontSize: 16,
+                      color: Color(0xFFFF6B47),
+                    ),
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(theme.spacing.s),
               ),
-              child: const Center(
-                child: FlowyText(
-                  '退出登录',
-                  fontSize: 16,
-                  color: Color(0xFFFF6B47),
-                ),
-              ),
-            ),
           ),
-        ),
       ],
     );
   }
 
-  // 构建四个计划状态的行
-  Widget _buildPlanStatusRow(BuildContext context) {
+  Widget _buildPlanCards(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    
-    // 定义所有计划的配置
-    final allPlans = [
+    final currentPlan = _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
+    final plans = [
       WorkspacePlanPB.FreePlan,
       WorkspacePlanPB.StudentPlan,
       WorkspacePlanPB.StandardPlan,
       WorkspacePlanPB.TeamPlan,
     ];
 
-    // 获取当前用户的计划
-    final currentPlan = _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = theme.spacing.m;
+        final maxWidth =
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 960.0;
 
-    return Row(
-      children: allPlans.map((plan) {
+        // 根据可用宽度动态计算每行展示多少个卡片，避免尺寸溢出或过小
+        const double minCardWidth = 80;
+        int crossAxisCount = (maxWidth / (minCardWidth + spacing)).floor();
+        crossAxisCount = crossAxisCount.clamp(1, plans.length);
+
+        final cardWidth = (maxWidth - spacing * (crossAxisCount - 1)) /
+            crossAxisCount;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: plans.map((plan) {
         final config = _getPlanConfig(plan);
-        final isCurrentPlan = plan == currentPlan;
-        
-        return Expanded(
-          child: Container(
-            margin: EdgeInsets.only(
-              right: plan != WorkspacePlanPB.TeamPlan ? theme.spacing.s : 0,
-            ),
-            child: Column(
-              children: [
-                // 圆圈指示器
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isCurrentPlan 
-                        ? config['color'].withOpacity(0.1) 
-                        : Colors.transparent,
-                    border: Border.all(
-                      color: isCurrentPlan 
-                          ? config['color'] 
-                          : theme.borderColorScheme.primary.withOpacity(0.2),
-                      width: 2,
+            final isCurrent = plan == currentPlan;
+            return Container(
+              width: cardWidth,
+              decoration: BoxDecoration(
+                color: theme.surfaceColorScheme.layer01,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isCurrent ? const Color(0xFFFF6B47) : const Color(0xFFE9E9E9),
+                  width: isCurrent ? 1.6 : 1.0,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  // 左下角应用 Logo 水印
+                  isCurrent ? Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: Opacity(
+                        opacity: 0.12,
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8, bottom: 4),
+                          child: FlowySvg(
+                            FlowySvgs.pony_notes_logo_xl,
+                            size: const Size(56, 56),
+                            blendMode: null,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ) : SizedBox.shrink(),
+                  // 右下角选中角标
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(8),
+                        bottomRight: Radius.circular(6),
+                      ),
+                      child: Container(
+                        width: 32,
+                        height: 20,
+                        color: isCurrent
+                            ? const Color(0xFFFF6B47)
+                            : Colors.transparent,
+                        child: isCurrent
+                            ? const Icon(
+                                Icons.check,
+                                size: 14,
+                                color: Colors.white,
+                              )
+                            : null,
+                      ),
                     ),
                   ),
-                  child: Center(
-                    child: isCurrentPlan
-                        ? Icon(
-                            Icons.check,
-                            color: config['color'],
-                            size: 24,
-                          )
-                        : null,
+                  // 中间标题 + 价格
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 18,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FlowyText(
+                          config['title'] as String,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: theme.textColorScheme.primary,
+                        ),
+                        const VSpace(4),
+                        FlowyText(
+                          config['price'] as String,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: theme.textColorScheme.primary,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const VSpace(8),
-                // 计划名称
-                FlowyText(
-                  config['title'],
-                  fontSize: 14,
-                  fontWeight: isCurrentPlan ? FontWeight.w600 : FontWeight.normal,
-                  color: isCurrentPlan 
-                      ? theme.textColorScheme.primary 
-                      : theme.textColorScheme.secondary,
-                ),
-              ],
-            ),
-          ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildBenefitSection(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    const benefits = [
+      {'label': '小马AI', 'icon': FlowySvgs.icon_rights_ai_xl},
+      {'label': '小马日历', 'icon': FlowySvgs.icon_rights_calendar_xl},
+      {'label': '小马收藏夹', 'icon': FlowySvgs.icon_rights_collection_xl},
+      {'label': '云端同步', 'icon': FlowySvgs.icon_rights_cloud_xl},
+      {'label': '100T空间', 'icon': FlowySvgs.icon_rights_space_xl},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FlowyText(
+          '获赠权益',
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: theme.textColorScheme.primary,
+        ),
+        const VSpace(16),
+        Wrap(
+          spacing: theme.spacing.m,
+          runSpacing: theme.spacing.m,
+          children: benefits.map((benefit) {
+            return Container(
+              width: 140,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FlowySvg(
+                    benefit['icon'] as FlowySvgData,
+                    size: const Size(48, 48),
+                    blendMode: null, // 保留原始 SVG 颜色
+                  ),
+                  const VSpace(8),
+                  FlowyText(
+                    benefit['label'] as String,
+                    fontSize: 14,
+                    color: theme.textColorScheme.primary,
+                  ),
+                ],
+              ),
         );
       }).toList(),
+        ),
+      ],
     );
   }
   

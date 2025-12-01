@@ -33,9 +33,9 @@ class SettingsBody extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SettingsHeader(
-            title: title,
-            description: description,
-            descriptionBuilder: descriptionBuilder,
+              title: title,
+              description: description,
+              descriptionBuilder: descriptionBuilder,
             leadingBuilder: headerLeadingBuilder,
             trailingBuilder: headerTrailingBuilder,
           ),
