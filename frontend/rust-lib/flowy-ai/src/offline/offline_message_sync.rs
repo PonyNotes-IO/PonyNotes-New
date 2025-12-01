@@ -246,6 +246,10 @@ impl ChatCloudService for AutoSyncChatService {
       .await
   }
 
+  async fn delete_chat(&self, workspace_id: &Uuid, chat_id: &Uuid) -> Result<(), FlowyError> {
+    self.cloud_service.delete_chat(workspace_id, chat_id).await
+  }
+
   async fn get_available_models(&self, workspace_id: &Uuid) -> Result<ModelList, FlowyError> {
     self.cloud_service.get_available_models(workspace_id).await
   }

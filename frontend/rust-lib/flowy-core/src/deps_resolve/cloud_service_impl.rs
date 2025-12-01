@@ -857,6 +857,14 @@ impl ChatCloudService for ServerProvider {
       .await
   }
 
+  async fn delete_chat(&self, workspace_id: &Uuid, chat_id: &Uuid) -> Result<(), FlowyError> {
+    self
+      .get_server()?
+      .chat_service()
+      .delete_chat(workspace_id, chat_id)
+      .await
+  }
+
   async fn get_available_models(&self, workspace_id: &Uuid) -> Result<ModelList, FlowyError> {
     self
       .get_server()?

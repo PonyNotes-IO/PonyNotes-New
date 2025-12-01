@@ -9,7 +9,8 @@ use flowy_ai_pub::cloud::{
   ResponseFormat, StreamAnswer, StreamComplete, UpdateChatParams,
 };
 use flowy_ai_pub::persistence::{
-  ChatMessageTable, ChatTable, ChatTableChangeset, deserialize_chat_metadata, deserialize_rag_ids,
+  delete_chat as delete_chat_row, delete_chat_messages, ChatMessageTable, ChatTable,
+  ChatTableChangeset, deserialize_chat_metadata, deserialize_rag_ids,
   select_answer_where_match_reply_message_id, select_chat, select_chat_messages,
   select_message_content, serialize_chat_metadata, serialize_rag_ids, update_chat, upsert_chat,
   upsert_chat_messages,
@@ -282,6 +283,20 @@ impl ChatCloudService for LocalChatServiceImpl {
     };
 
     update_chat(db, changeset)?;
+    Ok(())
+  }
+
+  async fn delete_chat(&self, _workspace_id: &Uuid, chat_id: &Uuid) -> Result<(), FlowyError> {
+    let uid = self.logged_user.user_id()?;
+    let chat_id_str = chat_id.to_string();
+    {
+      let db = self.logged_user.get_sqlite_db(uid)?;
+      delete_chat_messages(db, &chat_id_str).map_err(FlowyError::from)?;
+    }
+    {
+      let db = self.logged_user.get_sqlite_db(uid)?;
+      delete_chat_row(db, &chat_id_str).map_err(FlowyError::from)?;
+    }
     Ok(())
   }
 
