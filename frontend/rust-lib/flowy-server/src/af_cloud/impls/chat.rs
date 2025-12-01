@@ -249,6 +249,15 @@ where
     Ok(())
   }
 
+  async fn delete_chat(&self, workspace_id: &Uuid, chat_id: &Uuid) -> Result<(), FlowyError> {
+    self
+      .inner
+      .try_get_client()?
+      .delete_chat(workspace_id, chat_id.to_string().as_str())
+      .await
+      .map_err(FlowyError::from)
+  }
+
   async fn get_available_models(&self, workspace_id: &Uuid) -> Result<ModelList, FlowyError> {
     // 方案：由于 client-api 的 ModelInfo/ModelList 定义与我们后端不兼容，
     // 而且 client-api 是官方仓库的版本，我们无法修改，

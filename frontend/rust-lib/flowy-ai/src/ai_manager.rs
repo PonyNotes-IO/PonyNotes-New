@@ -7,7 +7,8 @@ use crate::entities::{
 use crate::local_ai::controller::{LocalAIController, LocalAISetting};
 use crate::middleware::chat_service_mw::ChatServiceMiddleware;
 use flowy_ai_pub::persistence::{
-  ChatTableChangeset, select_chat_metadata, select_chat_rag_ids, select_chat_summary, update_chat,
+  ChatTableChangeset, delete_chat as delete_chat_row, delete_chat_messages, select_chat_metadata,
+  select_chat_rag_ids, select_chat_summary, update_chat,
 };
 use std::collections::HashMap;
 
@@ -267,6 +268,39 @@ impl AIManager {
     if let Some((_, chat)) = self.chats.remove(chat_id) {
       chat.close();
       self.local_ai.close_chat(chat_id);
+    }
+    let workspace_id = self.user_service.workspace_id()?;
+
+    // 删除云端记录
+    if let Err(err) = self
+      .cloud_service_wm
+      .delete_chat(&workspace_id, chat_id)
+      .await
+    {
+      if err.is_record_not_found() {
+        warn!(
+          "[Chat] 云端会话已不存在 chat_id={}, err={:?}",
+          chat_id, err
+        );
+      } else {
+        warn!(
+          "[Chat] 删除云端会话失败 chat_id={}, err={:?}",
+          chat_id, err
+        );
+        return Err(err);
+      }
+    }
+
+    // 删除本地 SQLite 中的聊天记录及消息
+    let uid = self.user_service.user_id()?;
+    let chat_id_str = chat_id.to_string();
+    {
+      let conn = self.user_service.sqlite_connection(uid)?;
+      delete_chat_messages(conn, &chat_id_str).map_err(FlowyError::from)?;
+    }
+    {
+      let conn = self.user_service.sqlite_connection(uid)?;
+      delete_chat_row(conn, &chat_id_str).map_err(FlowyError::from)?;
     }
     Ok(())
   }

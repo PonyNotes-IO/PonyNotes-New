@@ -201,6 +201,11 @@ pub fn total_message_count(mut conn: DBConnection, chat_id_val: &str) -> QueryRe
     .first::<i64>(&mut *conn)
 }
 
+pub fn delete_chat_messages(mut conn: DBConnection, chat_id_val: &str) -> QueryResult<usize> {
+  diesel::delete(dsl::chat_message_table.filter(chat_message_table::chat_id.eq(chat_id_val)))
+    .execute(&mut *conn)
+}
+
 pub fn select_message(
   mut conn: DBConnection,
   message_id_val: i64,
