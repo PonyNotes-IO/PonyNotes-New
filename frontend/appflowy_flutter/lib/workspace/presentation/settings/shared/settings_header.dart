@@ -10,11 +10,15 @@ class SettingsHeader extends StatelessWidget {
     required this.title,
     this.description,
     this.descriptionBuilder,
+    this.leadingBuilder,
+    this.trailingBuilder,
   });
 
   final String title;
   final String? description;
   final WidgetBuilder? descriptionBuilder;
+  final WidgetBuilder? leadingBuilder;
+  final WidgetBuilder? trailingBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -22,11 +26,32 @@ class SettingsHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: theme.textStyle.heading2.enhanced(
-            color: theme.textColorScheme.primary,
+        SizedBox(
+          width: double.infinity,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (leadingBuilder != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: leadingBuilder!(context),
+                ),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: theme.spacing.l),
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: theme.textStyle.heading2.enhanced(
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+              ),
+              if (trailingBuilder != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: trailingBuilder!(context),
+                ),
+            ],
           ),
         ),
         if (descriptionBuilder != null) ...[

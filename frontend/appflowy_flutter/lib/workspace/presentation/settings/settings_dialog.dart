@@ -24,6 +24,7 @@ import 'package:appflowy/workspace/presentation/settings/pages/settings_storage_
 import 'package:appflowy/workspace/presentation/settings/pages/settings_sharing_view.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/settings_about_xiaoma_view.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/settings_user_profile_view.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/recharge_records_view.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/sites/settings_sites_view.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/af_dropdown_menu_entry.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_category.dart';
@@ -158,6 +159,12 @@ class SettingsDialog extends StatelessWidget {
         return AccountManagementView(
           userProfile: user,
           workspaceId: workspace.workspaceId,
+          changeSelectedPage: (index) => context
+              .read<SettingsDialogBloc>()
+              .add(SettingsDialogEvent.setSelectedPage(index)),
+        );
+      case SettingsPage.rechargeRecords:
+        return RechargeRecordsView(
           changeSelectedPage: (index) => context
               .read<SettingsDialogBloc>()
               .add(SettingsDialogEvent.setSelectedPage(index)),

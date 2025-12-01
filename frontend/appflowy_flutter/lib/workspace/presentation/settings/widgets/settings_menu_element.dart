@@ -16,7 +16,7 @@ class SettingsMenuElement extends StatelessWidget {
   final SettingsPage page;
   final SettingsPage selectedPage;
   final String label;
-  final Function changeSelectedPage;
+  final void Function(SettingsPage page) changeSelectedPage;
   final bool showArrow; // 是否显示右侧箭头
 
   @override

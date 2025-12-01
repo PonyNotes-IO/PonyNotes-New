@@ -25,7 +25,7 @@ class SettingsMenu extends StatefulWidget {
     required this.workspaceId,
   });
 
-  final Function changeSelectedPage;
+  final void Function(SettingsPage page) changeSelectedPage;
   final SettingsPage currentPage;
   final UserProfilePB userProfile;
   final bool isBillingEnabled;
@@ -85,8 +85,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
       return widget.userProfile.name;
     }
     // 其次显示手机号
-    if (widget.userProfile.phone != null && widget.userProfile.phone!.isNotEmpty) {
-      return widget.userProfile.phone!;
+    if (widget.userProfile.hasPhone() && widget.userProfile.phone.isNotEmpty) {
+      return widget.userProfile.phone;
     }
     // 再显示邮箱
     if (widget.userProfile.email.isNotEmpty) {
@@ -371,7 +371,7 @@ class SimpleSettingsMenu extends StatelessWidget {
                     page: SettingsPage.cloud,
                     selectedPage: SettingsPage.cloud,
                     label: LocaleKeys.settings_menu_cloudSettings.tr(),
-                    changeSelectedPage: () {},
+                    changeSelectedPage: (_) {},
                   ),
                   if (kDebugMode)
                     SettingsMenuElement(
@@ -379,7 +379,7 @@ class SimpleSettingsMenu extends StatelessWidget {
                       page: SettingsPage.featureFlags,
                       selectedPage: SettingsPage.cloud,
                       label: 'Feature Flags',
-                      changeSelectedPage: () {},
+                      changeSelectedPage: (_) {},
                     ),
                 ],
               ),

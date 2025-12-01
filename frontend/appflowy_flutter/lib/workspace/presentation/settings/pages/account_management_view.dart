@@ -25,7 +25,7 @@ class AccountManagementView extends StatefulWidget {
 
   final UserProfilePB userProfile;
   final String workspaceId;
-  final Function changeSelectedPage;
+  final void Function(SettingsPage page) changeSelectedPage;
 
   @override
   State<AccountManagementView> createState() => _AccountManagementViewState();
@@ -108,67 +108,72 @@ class _AccountManagementViewState extends State<AccountManagementView> {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     
-    return SettingsBody(
-      title: "我的账户",
+    return Column(
       children: [
-        // 账户类型显示区域
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(),
-              )
-            else
-              _buildPlanStatusRow(context),
-              
-              const VSpace(32),
-              
-              // 功能列表
-              _buildFeatureItem(context, '文档光标颜色', '购买', showArrow: true),
-              _buildFeatureItem(context, 'AI使用次数', '今日剩余20次升级', showArrow: true),
-              GestureDetector(
-                onTap: () => widget.changeSelectedPage(SettingsPage.userProfile),
-                child: _buildFeatureItem(context, '个人资料', '', showArrow: true),
-              ),
-              GestureDetector(
-                onTap: () => _showPhoneVerificationDialog(context),
-                child: _buildFeatureItem(context, '绑定手机', '修改', showButton: true, buttonText: '修改'),
-              ),
-              GestureDetector(
-                onTap: () => _showEmailVerificationDialog(context),
-                child: _buildFeatureItem(context, '邮箱', '修改', showButton: true, buttonText: '修改'),
-              ),
-              
-              const VSpace(32),
-              
-              // 退出登录按钮
-              GestureDetector(
-                onTap: () async {
-                  await getIt<AuthService>().signOut();
-                  await runAppFlowy();
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: const Color(0xFFFF6B47),
-                      width: 1,
-                    ),
-                    borderRadius: BorderRadius.circular(theme.spacing.s),
+        Expanded(
+          child: SettingsBody(
+            title: "我的账户",
+            headerTrailingBuilder: (_) => OutlinedRoundedButton(
+              text: '充值记录',
+              onTap: () => widget.changeSelectedPage(SettingsPage.rechargeRecords),
+            ),
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_isLoading)
+                    const Center(
+                      child: CircularProgressIndicator(),
+                    )
+                  else
+                    _buildPlanStatusRow(context),
+                  const VSpace(32),
+                  _buildFeatureItem(context, '文档光标颜色', '购买', showArrow: true),
+                  _buildFeatureItem(context, 'AI使用次数', '今日剩余20次升级', showArrow: true),
+                  GestureDetector(
+                    onTap: () => widget.changeSelectedPage(SettingsPage.userProfile),
+                    child: _buildFeatureItem(context, '个人资料', '', showArrow: true),
                   ),
-                  child: const Center(
-                    child: FlowyText(
-                      '退出登录',
-                      fontSize: 16,
-                      color: Color(0xFFFF6B47),
-                    ),
+                  GestureDetector(
+                    onTap: () => _showPhoneVerificationDialog(context),
+                    child: _buildFeatureItem(context, '绑定手机', '修改', showButton: true, buttonText: '修改'),
                   ),
-                ),
+                  GestureDetector(
+                    onTap: () => _showEmailVerificationDialog(context),
+                    child: _buildFeatureItem(context, '邮箱', '修改', showButton: true, buttonText: '修改'),
+                  ),
+                ],
               ),
             ],
           ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: GestureDetector(
+            onTap: () async {
+              await getIt<AuthService>().signOut();
+              await runAppFlowy();
+            },
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: const Color(0xFFFF6B47),
+                  width: 1,
+                ),
+                borderRadius: BorderRadius.circular(theme.spacing.s),
+              ),
+              child: const Center(
+                child: FlowyText(
+                  '退出登录',
+                  fontSize: 16,
+                  color: Color(0xFFFF6B47),
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -296,9 +301,9 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     // 优先使用 phone 字段，如果没有则检查 email 字段
     String phoneNumber = '';
     
-    if (widget.userProfile.phone != null && widget.userProfile.phone!.isNotEmpty) {
+    if (widget.userProfile.hasPhone() && widget.userProfile.phone.isNotEmpty) {
       // 优先使用 phone 字段
-      phoneNumber = widget.userProfile.phone!;
+      phoneNumber = widget.userProfile.phone;
       Log.info('从用户资料的 phone 字段获取到手机号: $phoneNumber');
     } else if (widget.userProfile.email.isNotEmpty && 
         !widget.userProfile.email.contains('@') &&
@@ -428,10 +433,12 @@ class _AccountManagementViewState extends State<AccountManagementView> {
               Log.info('✅ 刷新后的用户资料:');
               Log.info('   - name: ${newProfile.name}');
               Log.info('   - email: ${newProfile.email}');
-              Log.info('   - phone: ${newProfile.phone ?? "(null)"}');
-              Log.info('   - phone.isEmpty: ${newProfile.phone?.isEmpty ?? true}');
+              final hasPhone = newProfile.hasPhone() && newProfile.phone.isNotEmpty;
+              final phoneValue = hasPhone ? newProfile.phone : '(null)';
+              Log.info('   - phone: $phoneValue');
+              Log.info('   - phone.isEmpty: ${!hasPhone}');
               
-              if (newProfile.phone == null || newProfile.phone!.isEmpty) {
+              if (!hasPhone) {
                 Log.error('⚠️ 警告：刷新后的用户资料中 phone 字段为空！');
                 Log.error('   这可能是因为：');
                 Log.error('   1. 云端数据库没有更新成功');

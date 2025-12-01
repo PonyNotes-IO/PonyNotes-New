@@ -15,6 +15,7 @@ enum SettingsPage {
   // NEW
   account,
   accountManagement,
+  rechargeRecords,
   workspace,
   workspaceManagement,
   storage,
