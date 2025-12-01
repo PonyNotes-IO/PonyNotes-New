@@ -24,6 +24,22 @@ class AIChatUsageIndicator extends StatelessWidget {
 
     final used = usage!.aiResponsesCount.toInt();
     final total = usage!.aiResponsesCountLimit.toInt();
+
+    // 检测未订阅状态：total == -1 表示用户未订阅
+    if (total == -1) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 4),
+        child: Text(
+          '未订阅，不可用',
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.error,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
     final remaining = total - used;
 
     // 验证数据有效性（确保不是默认值）
