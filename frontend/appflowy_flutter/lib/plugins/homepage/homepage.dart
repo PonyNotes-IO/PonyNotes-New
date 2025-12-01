@@ -17,6 +17,11 @@ import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy/workspace/application/recent/recent_views_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_result/appflowy_result.dart';
+import 'package:fixnum/fixnum.dart' as fixnum;
+import 'package:appflowy/plugins/ai_chat/presentation/chat_page/ai_chat_usage_indicator.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class HomePagePluginBuilder extends PluginBuilder {
@@ -218,15 +223,30 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            // 问AI区域 - 复用AIInputArea组件，为主页定制更宽的显示
+            // 问AI区域 - 复用AIInputArea组件，为主页定制更宽的显示，并在下方展示使用次数/未订阅状态
             LayoutBuilder(
               builder: (context, constraints) {
-                return AIInputArea(
-                  onMessageSent: _handleMessageSent,
-                  customWidth: constraints.maxWidth, // 使用几乎全部可用宽度，只留8px左右边距
-                  customMargin: const EdgeInsets.symmetric(horizontal: 0.0), // 最小边距
-                  customToolbarPadding: const EdgeInsets.fromLTRB(20, 15, 20, 13), // 左右边距各20px
-                  customToolbarWidth: constraints.maxWidth - 40, // 工具栏宽度 = 容器宽度 - 左右边距(40)
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AIInputArea(
+                      onMessageSent: _handleMessageSent,
+                      customWidth: constraints
+                          .maxWidth, // 使用几乎全部可用宽度，只留8px左右边距
+                      customMargin:
+                          const EdgeInsets.symmetric(horizontal: 0.0), // 最小边距
+                      customToolbarPadding: const EdgeInsets.fromLTRB(
+                        20,
+                        15,
+                        20,
+                        13,
+                      ), // 左右边距各20px
+                      customToolbarWidth: constraints.maxWidth -
+                          40, // 工具栏宽度 = 容器宽度 - 左右边距(40)
+                    ),
+                    const SizedBox(height: 8),
+                    const _HomeAIUsageIndicator(),
+                  ],
                 );
               },
             ),
@@ -624,6 +644,54 @@ class _HomePageState extends State<HomePage> {
         );
       }
     }
+  }
+}
+
+/// 首页问AI区域下方的使用情况/未订阅提示
+class _HomeAIUsageIndicator extends StatelessWidget {
+  const _HomeAIUsageIndicator();
+
+  Future<FlowyResult<WorkspaceUsagePB?, FlowyError>> _loadUsage(
+    BuildContext context,
+  ) async {
+    final workspaceBloc = context.read<UserWorkspaceBloc>();
+    final workspaceId = workspaceBloc.state.currentWorkspace?.workspaceId;
+    if (workspaceId == null || workspaceId.isEmpty) {
+      Log.warn('[HomeAIUsage] 当前 workspaceId 为空，跳过使用情况查询');
+      return FlowyResult.success(null);
+    }
+
+    final service = WorkspaceService(
+      workspaceId: workspaceId,
+      // getWorkspaceUsage 目前只使用 workspaceId，这里传 0 即可
+      userId: fixnum.Int64.ZERO,
+    );
+
+    Log.info('[HomeAIUsage] 调用 getWorkspaceUsage, workspaceId=$workspaceId');
+    return service.getWorkspaceUsage();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<FlowyResult<WorkspaceUsagePB?, FlowyError>>(
+      future: _loadUsage(context),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final result = snapshot.data!;
+        return result.fold(
+          (usage) {
+            return AIChatUsageIndicator(usage: usage);
+          },
+          (error) {
+            Log.error('[HomeAIUsage] 获取使用情况失败: $error');
+            return const SizedBox.shrink();
+          },
+        );
+      },
+    );
   }
 }
 

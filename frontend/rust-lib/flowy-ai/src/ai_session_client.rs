@@ -137,28 +137,47 @@ pub async fn stream_ai_session(
 
   if !resp.status().is_success() {
     let status = resp.status();
-    let error_text = resp.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
+    let error_text =
+      resp.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
     error!("[AISession] 服务器返回错误: {} - {}", status, error_text);
-    
-    // 处理 402 Payment Required 错误（AI使用次数用尽）
-    if status == 402 {
-      if let Ok(error_json) = serde_json::from_str::<serde_json::Value>(&error_text) {
-        if let Some(code) = error_json.get("code").and_then(|v| v.as_str()) {
-          if code == "AI_LIMIT_EXCEEDED" {
-            let message = error_json.get("message")
-              .and_then(|v| v.as_str())
-              .unwrap_or("AI调用次数已用完，请升级订阅或购买补充包")
-              .to_string();
-            info!("[AISession] AI使用次数用尽: {}", message);
-            return Err(FlowyError::new(
-              ErrorCode::AIResponseLimitExceeded,
-              message,
-            ));
-          }
-        }
-      }
+
+    // 解析后端返回的 JSON 错误结构（如果可能）
+    let parsed_json = serde_json::from_str::<serde_json::Value>(&error_text).ok();
+    let code_str = parsed_json
+      .as_ref()
+      .and_then(|v| v.get("code"))
+      .and_then(|v| v.as_str());
+    let message_str = parsed_json
+      .as_ref()
+      .and_then(|v| v.get("message"))
+      .and_then(|v| v.as_str());
+
+    // 处理 402 Payment Required 错误（AI 使用次数用尽）
+    if status == 402 && code_str == Some("AI_LIMIT_EXCEEDED") {
+      let message = message_str
+        .unwrap_or("AI调用次数已用完，请升级订阅或购买补充包")
+        .to_string();
+      info!("[AISession] AI使用次数用尽: {}", message);
+      return Err(FlowyError::new(
+        ErrorCode::AIResponseLimitExceeded,
+        message,
+      ));
     }
-    
+
+    // 处理 404 Not Found 错误（未找到订阅计划）
+    if status == 404 && code_str == Some("SUBSCRIPTION_NOT_FOUND") {
+      // 这里直接把后端返回的 message 透传给前端，在对话中显示给用户
+      let message = message_str
+        .unwrap_or("抱歉，您还未开启订阅计划，AI暂时不可用。")
+        .to_string();
+      info!("[AISession] 订阅计划不存在: {}", message);
+      // 使用非 Internal 的错误码，确保前端能够显示这条消息
+      return Err(FlowyError::new(
+        ErrorCode::LimitedByWorkspacePlan,
+        message,
+      ));
+    }
+
     return Err(FlowyError::new(
       ErrorCode::Internal,
       format!("服务器返回错误: {} - {}", status, error_text),
