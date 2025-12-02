@@ -378,13 +378,13 @@ impl UserManager {
       .sign_in(BoxAny::new(params))
       .await?;
     let session = Session::from(&response);
-    // 先保存认证数据，再关闭旧的数据库连接
-    // 如果先关闭数据库连接，save_auth_data 可能无法获取连接，导致 "database is locked" 或 "Cannot perform this operation while a transaction is open" 错误
+    // 先保存认证数据，然后初始化用户感知和生命周期回调
+    // 最后再关闭旧的数据库连接，为后续操作准备新的连接
+    // 如果先关闭数据库连接，后续操作（如 initial_user_awareness 和 on_sign_in）可能无法获取连接，导致 "database is locked" 或 "Cannot perform this operation while a transaction is open" 错误
     let latest_workspace = response.latest_workspace.clone();
     let workspace_id = Uuid::parse_str(&latest_workspace.id)?;
     let user_profile = UserProfile::from((&response, &auth_type));
     self.save_auth_data(&response, auth_type, &session).await?;
-    self.prepare_user(&session).await;
 
     let _ = self
       .initial_user_awareness(
@@ -406,6 +406,8 @@ impl UserManager {
         &user_profile.workspace_type,
       )
       .await?;
+    // 在所有需要数据库的操作完成之后，再关闭旧的数据库连接
+    self.prepare_user(&session).await;
     send_auth_state_notification(AuthStateChangedPB {
       state: AuthStatePB::AuthStateSignIn,
       message: "Sign in success".to_string(),
@@ -447,10 +449,12 @@ impl UserManager {
   ) -> FlowyResult<()> {
     let new_session = Session::from(&response);
     let workspace_id = Uuid::parse_str(&new_session.workspace_id)?;
+    // 先保存认证数据，然后初始化用户感知和生命周期回调
+    // 最后再关闭旧的数据库连接，为后续操作准备新的连接
+    // 如果先关闭数据库连接，后续操作（如 initial_user_awareness 和 on_sign_up）可能无法获取连接，导致 "database is locked" 或 "Cannot perform this operation while a transaction is open" 错误
     self
       .save_auth_data(&response, *auth_type, &new_session)
       .await?;
-    self.prepare_user(&new_session).await;
     let _ = self
       .initial_user_awareness(
         new_session.user_id,
@@ -486,6 +490,8 @@ impl UserManager {
         error!("Failed to get pool for user {}", new_session.user_id);
       }
     }
+    // 在所有需要数据库的操作完成之后，再关闭旧的数据库连接
+    self.prepare_user(&new_session).await;
 
     send_auth_state_notification(AuthStateChangedPB {
       state: AuthStatePB::AuthStateSignIn,
