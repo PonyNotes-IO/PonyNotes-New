@@ -3,6 +3,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -129,8 +130,11 @@ class _CommandPaletteControllerState extends State<_CommandPaletteController> {
         'CommandPalette onToggle: workspaceType ${workspaceBloc?.state.userProfile.workspaceType}',
       );
       commandBloc.add(CommandPaletteEvent.refreshCachedViews());
-      FlowyOverlay.show(
-        context: context,
+      // PonyNotes: 使用全局 rootNavKey 的 context 打开命令面板，
+      // 确保一定存在 Navigator/Overlay，避免在无 Navigator 的 context 上调用 Navigator.of。
+      final rootContext = AppGlobals.context;
+      showDialog<void>(
+        context: rootContext,
         builder: (_) => MultiBlocProvider(
           providers: [
             BlocProvider.value(value: commandBloc),
@@ -144,7 +148,8 @@ class _CommandPaletteControllerState extends State<_CommandPaletteController> {
         _toggleNotifier.value = _toggleNotifier.value.copyWith(isOpen: false);
       });
     } else if (!_toggleNotifier.value.isOpen && _isOpen) {
-      FlowyOverlay.pop(context);
+      // 关闭通过根 Navigator 打开的命令面板对话框
+      Navigator.of(context, rootNavigator: true).maybePop();
       _isOpen = false;
     }
   }
@@ -186,7 +191,9 @@ class CommandPaletteModal extends StatelessWidget {
     return BlocListener<CommandPaletteBloc, CommandPaletteState>(
       listener: (_, state) {
         if (state.askAI && context.mounted) {
-          if (Navigator.canPop(context)) FlowyOverlay.pop(context);
+          // PonyNotes: 这里使用 FlowyOverlay 管理弹窗，不再调用 Navigator.canPop(context)，
+          // 避免在不含 Navigator 的上下文中触发 FlutterError。
+          FlowyOverlay.pop(context);
           final currentWorkspace = workspaceState?.workspaces;
           final spaceBloc = context.read<SpaceBloc?>();
           if (currentWorkspace != null && spaceBloc != null) {

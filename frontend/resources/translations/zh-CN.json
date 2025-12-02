@@ -2425,5 +2425,26 @@
   },
   "shareSection": {
     "shared": "與我分享"
+  },
+  "search": {
+    "label": "搜索",
+    "sidebarSearchIcon": "搜索并快速跳转到页面",
+    "searchOrAskAI": "搜索或向 AI 提问",
+    "searchFieldHint": "在 {} 中搜索或提问…",
+    "askAIAnything": "向 AI 询问任何问题",
+    "askAIFor": "向 AI 询问",
+    "searching": "正在搜索…",
+    "noResultForSearching": "未找到匹配结果",
+    "noResultForSearchingHint": "试试不同的问题或关键字，部分页面可能在回收站中。",
+    "noResultForSearchingHintWithoutTrash": "试试不同的问题或关键字。",
+    "bestMatch": "最佳匹配",
+    "seeMore": "查看更多",
+    "showMore": "显示更多",
+    "somethingWentWrong": "出错了",
+    "pageNotExist": "该页面不存在",
+    "tryAgainOrLater": "请稍后再试",
+    "placeholder": {
+      "actions": "搜索操作…"
+    }
   }
 }

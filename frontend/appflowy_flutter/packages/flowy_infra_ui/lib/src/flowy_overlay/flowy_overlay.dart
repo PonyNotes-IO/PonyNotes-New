@@ -123,7 +123,11 @@ class FlowyOverlay extends StatefulWidget {
   }
 
   static void pop(BuildContext context) {
-    Navigator.of(context).pop();
+    // PonyNotes: 使用 Navigator.maybeOf 避免在不包含 Navigator 的 context 上抛出 FlutterError。
+    final navigator = Navigator.maybeOf(context);
+    if (navigator != null && navigator.canPop()) {
+      navigator.pop();
+    }
   }
 
   @override
