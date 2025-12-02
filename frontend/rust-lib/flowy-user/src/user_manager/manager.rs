@@ -378,12 +378,13 @@ impl UserManager {
       .sign_in(BoxAny::new(params))
       .await?;
     let session = Session::from(&response);
-    self.prepare_user(&session).await;
-
+    // 先保存认证数据，再关闭旧的数据库连接
+    // 如果先关闭数据库连接，save_auth_data 可能无法获取连接，导致 "database is locked" 或 "Cannot perform this operation while a transaction is open" 错误
     let latest_workspace = response.latest_workspace.clone();
     let workspace_id = Uuid::parse_str(&latest_workspace.id)?;
     let user_profile = UserProfile::from((&response, &auth_type));
     self.save_auth_data(&response, auth_type, &session).await?;
+    self.prepare_user(&session).await;
 
     let _ = self
       .initial_user_awareness(
