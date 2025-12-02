@@ -249,7 +249,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
         // 根据可用宽度动态计算每行展示多少个卡片，避免尺寸溢出或过小
         const double minCardWidth = 80;
         int crossAxisCount = (maxWidth / (minCardWidth + spacing)).floor();
-        crossAxisCount = crossAxisCount.clamp(1, plans.length);
+        crossAxisCount = crossAxisCount.clamp(1, plans.length + 1);
 
         final cardWidth = (maxWidth - spacing * (crossAxisCount - 1)) /
             crossAxisCount;
@@ -445,57 +445,54 @@ class _AccountManagementViewState extends State<AccountManagementView> {
             final type = option['type'] as PurchaseDurationOption;
             final isSelected = type == _selectedDuration;
             final price = option['price'] as double;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedDuration = type;
-                  });
-                },
-                child: Container(
-                  margin: EdgeInsets.only(
-                    right: option == options.last ? 0 : theme.spacing.s,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 18,
-                    horizontal: 16,
-                  ),
-                  decoration: BoxDecoration(
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedDuration = type;
+                });
+              },
+              child: Container(
+                margin: EdgeInsets.only(
+                  right: option == options.last ? 0 : theme.spacing.s,
+                ),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 18,
+                  horizontal: 30,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? const Color(0xFFFFF3EC)
+                      : theme.surfaceColorScheme.layer01,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
                     color: isSelected
-                        ? const Color(0xFFFFF3EC)
-                        : theme.surfaceColorScheme.layer01,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFFFF6B47)
-                          : const Color(0xFFE9E9E9),
-                      width: 1.4,
+                        ? const Color(0xFFFF6B47)
+                        : const Color(0xFFE9E9E9),
+                    width: 1.4,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      option['title'] as String,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isSelected
+                            ? const Color(0xFFFF6B47)
+                            : theme.textColorScheme.secondary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        option['title'] as String,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isSelected
-                              ? const Color(0xFFFF6B47)
-                              : theme.textColorScheme.secondary,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${_formatCurrency(price)}元',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: theme.textColorScheme.primary,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${_formatCurrency(price)}元',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: theme.textColorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             );

@@ -119,7 +119,18 @@ class _SettingsMenuState extends State<SettingsMenu> {
         child: Column(
           spacing: theme.spacing.xs,
           children: [
-            // User info card section at the top
+            // 账号标题 + 用户信息卡片
+            Container(
+              margin: EdgeInsets.only(top: 20,left: 20),
+              alignment: Alignment.centerLeft,
+              child: FlowyText(
+                '账号',
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: theme.textColorScheme.secondary,
+              ),
+            ),
+            const VSpace(8),
             _buildUserInfoCard(context),
             const VSpace(16),
             SettingsMenuElement(
@@ -232,6 +243,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
         ),
       ),
       child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               buildAvatar(),
               const HSpace(12),
@@ -239,34 +252,47 @@ class _SettingsMenuState extends State<SettingsMenu> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const VSpace(6),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const VSpace(16),
-                        Expanded(
-                          child: FlowyText(
-                            _getDisplayName(),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: theme.textColorScheme.primary,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF3EC),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            planName,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFFFF6B47),
-                              fontWeight: FontWeight.w600,
-                            ),
+                        Flexible(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: FlowyText(
+                                  _getDisplayName(),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.textColorScheme.primary,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const HSpace(8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF89575),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: const Color(0xFFF89879),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  planName,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -275,8 +301,13 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     if (hasValidity)
                       _buildValidityPeriod(context)
                     else
-                      SizedBox.shrink(),
-                    const VSpace(16),
+                      // FlowyText(
+                      // '有效期: 2025-01-01至2025-12-31',
+                      // fontSize: 12,
+                      // color: theme.textColorScheme.secondary,
+                      // ),
+                      SizedBox(height: 24),
+                    const VSpace(12),
                     Row(
                       children: [
                         Expanded(
@@ -327,7 +358,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 5),
         decoration: BoxDecoration(
-          color: const Color(0xFFFF6B47),
+          color: const Color(0xFFF89575),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Center(
@@ -371,8 +402,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
       }
     }
     
-    // 格式化日期为 y-MM-dd 格式
-    final dateFormat = 'y-MM-dd';
+    // 格式化日期为 yyyy.MM.dd 格式
+    final dateFormat = 'yyyy.MM.dd';
     final startDateStr = DateFormat(dateFormat).format(startDate);
     final endDateStr = DateFormat(dateFormat).format(endDate);
     
