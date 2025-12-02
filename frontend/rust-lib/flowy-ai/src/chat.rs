@@ -264,6 +264,11 @@ impl Chat {
             let _ = answer_sink
               .send(StreamMessage::AIMaxRequired(err.msg.clone()).to_string())
               .await;
+          } else if err.is_limited_by_workspace_plan() {
+            // 处理未订阅用户的错误，复用 AIMaxRequired 消息类型显示错误消息
+            let _ = answer_sink
+              .send(StreamMessage::AIMaxRequired(err.msg.clone()).to_string())
+              .await;
           } else if err.is_local_ai_not_ready() {
             let _ = answer_sink
               .send(StreamMessage::LocalAINotReady(err.msg.clone()).to_string())

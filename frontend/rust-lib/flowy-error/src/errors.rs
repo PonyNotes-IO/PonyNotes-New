@@ -107,6 +107,10 @@ impl FlowyError {
     self.code == ErrorCode::AIMaxRequired
   }
 
+  pub fn is_limited_by_workspace_plan(&self) -> bool {
+    self.code == ErrorCode::LimitedByWorkspacePlan
+  }
+
   static_flowy_error!(internal, ErrorCode::Internal);
   static_flowy_error!(record_not_found, ErrorCode::RecordNotFound);
   static_flowy_error!(workspace_initialize, ErrorCode::WorkspaceInitializeError);
