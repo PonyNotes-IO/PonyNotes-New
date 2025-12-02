@@ -671,7 +671,6 @@ class _PromptBottomActions extends StatelessWidget {
 
               const Spacer(),
 
-              // 去掉 BrowsePromptsButton（“ai.customPrompt.browsePrompts”）和来源选择按钮
               if (extraBottomActionButton != null) extraBottomActionButton!,
               if (state.supportChatWithFile) _attachmentButton(context),
               _sendButton(),

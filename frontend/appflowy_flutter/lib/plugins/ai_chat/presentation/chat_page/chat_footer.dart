@@ -95,6 +95,8 @@ class _ChatFooterState extends State<ChatFooter> {
     return DesktopPromptInput(
       isStreaming: !canSendMessage,
       textController: textController,
+      // PonyNotes: 在桌面 AI 对话中不展示输入框上方的预设格式按钮行
+      hideFormats: true,
       onStopStreaming: () {
         chatBloc.add(const ChatEvent.stopStream());
       },
