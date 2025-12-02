@@ -406,8 +406,11 @@ impl UserManager {
         &user_profile.workspace_type,
       )
       .await?;
-    // 在所有需要数据库的操作完成之后，再关闭旧的数据库连接
-    self.prepare_user(&session).await;
+    // 注意：不在登录过程中调用 prepare_user，因为：
+    // 1. 登录后可能还有其他异步操作需要使用数据库连接（如数据迁移、初始化等）
+    // 2. prepare_user 会关闭数据库连接，如果此时有其他操作正在使用连接，会导致 "database is locked" 错误
+    // 3. prepare_user 应该只在切换用户或退出时调用，而不是在登录过程中调用
+    // self.prepare_user(&session).await;  // ❌ 移除登录过程中的 prepare_user 调用
     send_auth_state_notification(AuthStateChangedPB {
       state: AuthStatePB::AuthStateSignIn,
       message: "Sign in success".to_string(),
@@ -490,8 +493,11 @@ impl UserManager {
         error!("Failed to get pool for user {}", new_session.user_id);
       }
     }
-    // 在所有需要数据库的操作完成之后，再关闭旧的数据库连接
-    self.prepare_user(&new_session).await;
+    // 注意：不在注册过程中调用 prepare_user，因为：
+    // 1. 注册后可能还有其他异步操作需要使用数据库连接（如数据迁移、初始化等）
+    // 2. prepare_user 会关闭数据库连接，如果此时有其他操作正在使用连接，会导致 "database is locked" 错误
+    // 3. prepare_user 应该只在切换用户或退出时调用，而不是在注册过程中调用
+    // self.prepare_user(&new_session).await;  // ❌ 移除注册过程中的 prepare_user 调用
 
     send_auth_state_notification(AuthStateChangedPB {
       state: AuthStatePB::AuthStateSignIn,
