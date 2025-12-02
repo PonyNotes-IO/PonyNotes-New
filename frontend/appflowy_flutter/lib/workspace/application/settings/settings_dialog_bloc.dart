@@ -33,6 +33,7 @@ enum SettingsPage {
   ai,
   cloud,
   featureFlags,
+  billingPage,
 }
 
 class SettingsDialogBloc

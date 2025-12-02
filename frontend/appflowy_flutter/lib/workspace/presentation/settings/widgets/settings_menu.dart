@@ -202,98 +202,143 @@ class _SettingsMenuState extends State<SettingsMenu> {
     final planName = _getPlanName(currentPlan);
     final isFreePlan = currentPlan == WorkspacePlanPB.FreePlan;
     
-    return GestureDetector(
-      onTap: () => widget.changeSelectedPage(SettingsPage.accountManagement),
-      child: Container(
-        padding: EdgeInsets.all(theme.spacing.m),
-        decoration: BoxDecoration(
-          color: theme.surfaceContainerColorScheme.layer01,
-          borderRadius: BorderRadius.circular(theme.spacing.m),
-          border: Border.all(
-            color: theme.borderColorScheme.primary.withOpacity(0.1),
-            width: 1,
-          ),
+    final hasValidity =
+        !isFreePlan && _subscriptionInfo?.planSubscription.endDate != null;
+
+    Widget buildAvatar() {
+      final double size = 48;
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(size / 2),
+        child: widget.userProfile.iconUrl.isNotEmpty
+            ? Image.network(
+                widget.userProfile.iconUrl,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
+              )
+            : _buildDefaultAvatar(size),
+      );
+    }
+
+    return Container(
+      padding: EdgeInsets.all(theme.spacing.l),
+      decoration: BoxDecoration(
+        color: theme.surfaceContainerColorScheme.layer01,
+        borderRadius: BorderRadius.circular(theme.spacing.m),
+        border: Border.all(
+          color: theme.borderColorScheme.primary.withOpacity(0.1),
+          width: 1,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 顶部居中显示"个人主页"
-            Center(
-              child: FlowyText(
-                '个人主页',
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: theme.textColorScheme.secondary,
-              ),
-            ),
-            const VSpace(12),
-            // 第一行：头像、昵称、版本信息
-            Row(
-              children: [
-                // 左侧：头像和昵称（水平排列）
-                Row(
+      ),
+      child: Row(
+            children: [
+              buildAvatar(),
+              const HSpace(12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 用户头像
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: widget.userProfile.iconUrl.isNotEmpty
-                            ? Image.network(
-                                widget.userProfile.iconUrl,
-                                fit: BoxFit.cover,
-                                width: 24,
-                                height: 24,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return FlowySvg(
-                                    FlowySvgs.pony_notes_logo_xl,
-                                    size: const Size(16, 16),
-                                    blendMode: null,
-                                  );
-                                },
-                              )
-                            : FlowySvg(
-                                FlowySvgs.pony_notes_logo_xl,
-                                size: const Size(16, 16),
-                                blendMode: null,
-                              ),
-                      ),
+                    Row(
+                      children: [
+                        const VSpace(16),
+                        Expanded(
+                          child: FlowyText(
+                            _getDisplayName(),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: theme.textColorScheme.primary,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF3EC),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            planName,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFFFF6B47),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const HSpace(6),
-                    // 昵称或手机号
-                    FlowyText(
-                      _getDisplayName(),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: theme.textColorScheme.primary,
-                      overflow: TextOverflow.ellipsis,
+                    const VSpace(6),
+                    if (hasValidity)
+                      _buildValidityPeriod(context)
+                    else
+                      SizedBox.shrink(),
+                    const VSpace(16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildUserInfoButton(
+                            label: '空间补充包',
+                            onTap: () =>
+                                widget.changeSelectedPage(SettingsPage.billingPage),
+                          ),
+                        ),
+                        const HSpace(12),
+                        Expanded(
+                          child: _buildUserInfoButton(
+                            label: '会员升级',
+                            onTap: () =>
+                                widget.changeSelectedPage(SettingsPage.accountManagement),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                // 右侧：版本信息
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: FlowyText(
-                      planName,
-                      fontSize: 14,
-                      color: theme.textColorScheme.secondary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            // 第二行：有效期（如果不是免费版）
-            if (!isFreePlan && _subscriptionInfo?.planSubscription.endDate != null) ...[
-              const VSpace(8),
-              _buildValidityPeriod(context),
+              ),
             ],
-          ],
+          ),
+    );
+  }
+
+  Widget _buildDefaultAvatar(double size) {
+    return Container(
+      color: Colors.white,
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      child: FlowySvg(
+        FlowySvgs.pony_notes_logo_xl,
+        size: Size(size * 0.6, size * 0.6),
+        blendMode: null,
+      ),
+    );
+  }
+
+  Widget _buildUserInfoButton({
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF6B47),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ),
     );
