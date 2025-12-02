@@ -213,7 +213,7 @@
   "newBoardText": "新建看板",
   "chat": {
     "newChat": "AI 对话",
-    "inputMessageHint": "问 @:appName AI",
+    "inputMessageHint": "输入您的想法",
     "inputLocalAIMessageHint": "问 @:appName 本地 AI",
     "unsupportedCloudPrompt": "该功能仅在使用 @:appName Cloud 时可用",
     "relatedQuestion": "相关问题",
@@ -239,6 +239,7 @@
     "regenerate": "请重试",
     "addToPageTitle": "添加消息至......",
     "addToNewPage": "创建新的页面",
+    "addToPageButton": "添加消息到页面",
     "openPagePreviewFailedToast": "打开页面失败",
     "changeFormat": {
       "actionButton": "变更样式",
@@ -250,7 +251,13 @@
     },
     "referenceSource": "找到 {} 个来源",
     "referenceSources": "找到 {} 个来源",
-    "questionTitle": "想法"
+    "questionTitle": "想法",
+    "switchModel": {
+      "label": "切换模型",
+      "localModel": "本地模型",
+      "cloudModel": "云端模型",
+      "autoModel": "自动"
+    }
   },
   "trash": {
     "text": "回收站",

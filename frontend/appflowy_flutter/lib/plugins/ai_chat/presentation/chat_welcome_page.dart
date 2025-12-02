@@ -46,7 +46,8 @@ class ChatWelcomePage extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const FlowySvg(
-          FlowySvgs.app_logo_xl,
+          // 使用小马笔记 Logo 作为 AI 欢迎页中心图标
+          FlowySvgs.pony_notes_logo_xl,
           size: Size.square(32),
           blendMode: null,
         ),

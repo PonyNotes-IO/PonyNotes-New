@@ -665,17 +665,14 @@ class _PromptBottomActions extends StatelessWidget {
           return Row(
             spacing: DesktopAIChatSizes.inputActionBarButtonSpacing,
             children: [
+              // PonyNotes: 精简底部工具栏，移除“浏览提示词”和来源选择，只保留必要功能
               if (showPredefinedFormatButton) _predefinedFormatButton(),
               _selectModelButton(context),
-              _buildBrowsePromptsButton(),
 
               const Spacer(),
 
-              if (context.read<ChatUserCubit>().supportSelectSource())
-                _selectSourcesButton(),
-
+              // 去掉 BrowsePromptsButton（“ai.customPrompt.browsePrompts”）和来源选择按钮
               if (extraBottomActionButton != null) extraBottomActionButton!,
-              // _mentionButton(context),
               if (state.supportChatWithFile) _attachmentButton(context),
               _sendButton(),
             ],
