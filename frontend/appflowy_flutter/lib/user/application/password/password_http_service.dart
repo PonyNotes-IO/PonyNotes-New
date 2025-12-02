@@ -307,6 +307,18 @@ class PasswordHttpService {
           }
         }
 
+        final errorCodeFromServer =
+            (errorBody['error_code'] ?? '') as String? ?? '';
+
+        // 首次设置密码时，服务器可能因为重复提交返回 same_password，这里直接视为成功避免卡住用户
+        if (endpoint == PasswordEndpoint.setupPassword &&
+            errorCodeFromServer == 'same_password') {
+          Log.info(
+            '🦋[PasswordHttpService] setupPassword received same_password, treat as success because password is already up-to-date.',
+          );
+          return FlowyResult.success(true);
+        }
+
         // the checkHasPassword endpoint will return 403, which is not an error
         if (endpoint != PasswordEndpoint.checkHasPassword) {
           Log.info(

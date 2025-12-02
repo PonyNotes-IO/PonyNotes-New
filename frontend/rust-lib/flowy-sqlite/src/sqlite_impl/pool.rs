@@ -122,7 +122,12 @@ impl Default for DatabaseCustomizerConfig {
     Self {
       journal_mode: SQLiteJournalMode::WAL,
       synchronous: SQLiteSynchronous::NORMAL,
-      busy_timeout: 5000,
+      // 默认 5s 的 busy_timeout 在用户首次登录时执行大量迁移/初始化操作时
+      // 非常容易触发 "database is locked"。用户清理本地数据或服务器数据后，
+      // 同步流程会在短时间内并发读写同一个 SQLite，导致写锁持续时间远超 5s。
+      // 将超时时间提升到 60s，可以让 SQLite 在高并发初始化阶段自动等待，
+      // 避免直接把锁冲突暴露给上层登录流程（从而出现“出现错误，请稍后再试”）。
+      busy_timeout: 60_000,
       secure_delete: true,
     }
   }
