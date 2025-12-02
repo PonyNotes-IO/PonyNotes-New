@@ -17,6 +17,7 @@ import 'package:appflowy/plugins/template/template_plugin.dart';
 import 'package:appflowy/plugins/folder/folder.dart';
 import 'package:appflowy/plugins/notebook/notebook.dart';
 import 'package:appflowy/plugins/ai_welcome/ai_welcome_plugin.dart';
+import 'package:appflowy/plugins/handwriting_native/handwriting_native.dart';
 class PluginLoadTask extends LaunchTask {
   const PluginLoadTask();
 
@@ -79,6 +80,9 @@ class PluginLoadTask extends LaunchTask {
     registerPlugin(
       builder: AIWelcomePluginBuilder(),
       config: AIWelcomePluginConfig(),
+    );
+    registerPlugin(
+      builder: HandwritingNativePluginBuilder(),
     );
   }
 }
