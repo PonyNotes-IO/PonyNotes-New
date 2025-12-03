@@ -3,6 +3,8 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/validator.dart';
+import 'package:appflowy/workspace/application/payment/payment_util.dart';
+import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
@@ -67,7 +69,13 @@ class _AccountManagementViewState extends State<AccountManagementView> {
         if (mounted) {
           setState(() {
             _subscriptionInfo = info;
-            _selectedPlan ??= info.plan;
+            // 如果当前是免费版或者无版本信息，默认选中学生版
+            // 如果不是免费版，就选中当前已经购买的版本
+            if (info.plan == WorkspacePlanPB.FreePlan) {
+              _selectedPlan = WorkspacePlanPB.StudentPlan;
+            } else {
+              _selectedPlan = info.plan;
+            }
             _isLoading = false;
           });
         }
@@ -76,6 +84,8 @@ class _AccountManagementViewState extends State<AccountManagementView> {
         Log.error('Failed to load subscription info: ${error.msg}');
         if (mounted) {
           setState(() {
+            // 加载失败时，如果没有选中计划，默认选中学生版
+            _selectedPlan ??= WorkspacePlanPB.StudentPlan;
             _isLoading = false;
           });
         }
@@ -129,8 +139,18 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     }
   }
 
-  WorkspacePlanPB get _effectivePlan =>
-      _selectedPlan ?? (_subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan);
+  WorkspacePlanPB get _effectivePlan {
+    // 如果已经手动选择了计划，使用选择的计划
+    if (_selectedPlan != null) {
+      return _selectedPlan!;
+    }
+    // 如果有订阅信息且不是免费版，使用当前订阅的计划
+    if (_subscriptionInfo != null && _subscriptionInfo!.plan != WorkspacePlanPB.FreePlan) {
+      return _subscriptionInfo!.plan;
+    }
+    // 默认选中学生版（免费版或无版本信息时）
+    return WorkspacePlanPB.StudentPlan;
+  }
 
   double _getDurationPrice(PurchaseDurationOption option) {
     final config = _getPlanConfig(_effectivePlan);
@@ -231,7 +251,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
 
   Widget _buildPlanCards(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final currentPlan = _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
+    // final currentPlan = _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
     final selectedPlan = _effectivePlan;
     final plans = [
       WorkspacePlanPB.FreePlan,
@@ -259,7 +279,8 @@ class _AccountManagementViewState extends State<AccountManagementView> {
           runSpacing: spacing,
           children: plans.map((plan) {
         final config = _getPlanConfig(plan);
-            final isCurrent = plan == currentPlan;
+            // 当前版本暂未显示“当前套餐”标识，后续如需可使用 isCurrent 高亮
+            // final isCurrent = plan == currentPlan;
             final isSelected = plan == selectedPlan;
             return GestureDetector(
               onTap: () {
@@ -568,17 +589,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
             opacity: _agreedProtocols ? 1 : 0.5,
             child: GestureDetector(
               onTap: _agreedProtocols
-                  ? () {
-                      final planConfig = _getPlanConfig(_effectivePlan);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            '已选择 ${planConfig['title']} - ${_selectedDuration == PurchaseDurationOption.monthly ? '30天' : '365天'}，金额 ¥${_formatCurrency(selectedPrice)}',
-                          ),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
+                  ? () => _handleUpgradePay(context, selectedPrice)
                   : null,
               child: Container(
                 padding:
@@ -601,6 +612,113 @@ class _AccountManagementViewState extends State<AccountManagementView> {
         ),
       ],
     );
+  }
+
+  /// 升级按钮点击后的支付逻辑
+  ///
+  /// 当前阶段按照需求，传递「空订单号和金额」给支付工具类：
+  /// - amount: 0
+  /// - orderId: ''
+  /// 后续会在这里对接后端下单接口，使用真实的订单号与金额。
+  Future<void> _handleUpgradePay(BuildContext context, double selectedPrice) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final planConfig = _getPlanConfig(_effectivePlan);
+
+    // 1. 根据当前平台获取可用支付方式（macOS: Apple Pay; Windows: 微信/支付宝）
+    final methods = PaymentPlatformSupport.getAvailableMethods();
+    if (methods.isEmpty) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('当前平台暂不支持支付功能'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // 暂时默认选择第一个可用支付方式，后续可增加 UI 让用户选择
+    final method = methods.first;
+
+    // 2. 先调用后端创建支付订单接口
+    final paymentType = switch (method) {
+      PaymentMethod.applePay => PaymentType.applePay,
+      PaymentMethod.wechatPay => PaymentType.wechatPay,
+      PaymentMethod.alipay => PaymentType.alipay,
+    };
+
+    // 示例：amount 使用「元」金额，后端如需「分」可在服务器换算
+    final createRequest = PaymentCreateRequest(
+      amount: selectedPrice,
+      paymentType: paymentType,
+      productName: planConfig['title'] as String? ?? '会员订阅',
+      // 这里暂时使用 workspaceId 作为 openId，后续如果有专门的 openId 可替换
+      openId: widget.workspaceId,
+      // 回调地址先占位，后端可按需要使用
+      url: '',
+      userInfo: <String, dynamic>{
+        'userId': widget.userProfile.id.toString(),
+        'name': widget.userProfile.name,
+        'email': widget.userProfile.email,
+      },
+    );
+
+    final orderResult = await PaymentApi.createPaymentOrder(createRequest);
+
+    if (orderResult.isFailure) {
+      final error = orderResult.fold((_) => null, (e) => e);
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(error?.msg ?? '创建支付订单失败'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final order = orderResult.fold(
+      (order) => order,
+      (_) => null,
+    );
+    if (order == null) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('创建支付订单失败'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // 3. 调用统一支付工具类（传递真实订单号和金额）
+    final result = await PaymentUtil.pay(
+      method: method,
+      amount: (order.amount * 100).round(), // 转为整型，示例：单位分
+      currency: 'CNY',
+      orderId: order.orderId,
+      extra: <String, dynamic>{
+        'plan': planConfig['title'],
+        'duration': _selectedDuration == PurchaseDurationOption.monthly ? 'monthly' : 'yearly',
+        'displayPrice': selectedPrice,
+        'order': order.raw,
+      },
+    );
+
+    // 4. 根据支付结果提示用户
+    if (result.success) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(result.message.isNotEmpty ? result.message : '支付成功'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(result.message.isNotEmpty ? result.message : '支付失败'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Widget _buildFeatureItem(
