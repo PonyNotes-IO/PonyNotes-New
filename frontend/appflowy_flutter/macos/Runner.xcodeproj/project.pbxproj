@@ -30,6 +30,7 @@
 		D7360C6D6177708F7B2D3C9D /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1CD81A6C7244B2318E0BA2E8 /* Pods_Runner.framework */; };
 		FB4E0E4F2CC9F3F900C57E87 /* libbz2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = FB4E0E4E2CC9F3E900C57E87 /* libbz2.tbd */; };
 		FB54062C2D22665000223D60 /* liblzma.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = FB54062B2D22664200223D60 /* liblzma.tbd */; };
+		FB181B212D3B7B8B00C15F30 /* HandwritingNativePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB181B202D3B7B8B00C15F30 /* HandwritingNativePlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,6 +80,7 @@
 		9740EEB21CF90195004384FC /* Debug.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		FB4E0E4E2CC9F3E900C57E87 /* libbz2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libbz2.tbd; path = usr/lib/libbz2.tbd; sourceTree = SDKROOT; };
 		FB54062B2D22664200223D60 /* liblzma.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = liblzma.tbd; path = usr/lib/liblzma.tbd; sourceTree = SDKROOT; };
+		FB181B202D3B7B8B00C15F30 /* HandwritingNativePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandwritingNativePlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -153,6 +155,7 @@
 			children = (
 				33CC10F02044A3C60003C045 /* AppDelegate.swift */,
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
+				FB181B202D3B7B8B00C15F30 /* HandwritingNativePlugin.swift */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
@@ -349,6 +352,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FB181B212D3B7B8B00C15F30 /* HandwritingNativePlugin.swift in Sources */,
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,

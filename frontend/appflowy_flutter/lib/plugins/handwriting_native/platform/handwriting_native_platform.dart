@@ -77,7 +77,14 @@ class HandwritingNativePlatform {
   }
 
   /// 渲染页面为PNG
-  static Future<String?> renderPage(String docId, int pageIndex, String pngPath, int width, int height) async {
+  static Future<String?> renderPage(
+    String docId,
+    int pageIndex,
+    String pngPath,
+    int width,
+    int height, {
+    String? optionsJson,
+  }) async {
     try {
       final result = await _channel.invokeMethod<String>('render_page', {
         'docId': docId,
@@ -85,6 +92,7 @@ class HandwritingNativePlatform {
         'pngPath': pngPath,
         'width': width,
         'height': height,
+        if (optionsJson != null) 'options': optionsJson,
       });
       return result;
     } catch (e) {

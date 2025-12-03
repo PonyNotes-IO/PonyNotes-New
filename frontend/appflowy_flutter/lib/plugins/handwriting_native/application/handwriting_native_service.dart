@@ -99,13 +99,27 @@ class HandwritingNativeService {
   }
 
   /// 渲染页面
-  Future<String?> renderPage(String viewId, int pageIndex, String pngPath, int width, int height) async {
+  Future<String?> renderPage(
+    String viewId,
+    int pageIndex,
+    String pngPath,
+    int width,
+    int height, {
+    String? optionsJson,
+  }) async {
     final docId = await getOrCreateDoc(viewId);
     if (docId == null) {
       return null;
     }
 
-    return await HandwritingNativePlatform.renderPage(docId, pageIndex, pngPath, width, height);
+    return await HandwritingNativePlatform.renderPage(
+      docId,
+      pageIndex,
+      pngPath,
+      width,
+      height,
+      optionsJson: optionsJson,
+    );
   }
 
   /// 获取页面数量
