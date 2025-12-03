@@ -87,7 +87,7 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     // 注册手写笔记原生插件
-    HandwritingNativePlugin.register(with: flutterViewController.registrar(forPlugin: "HandwritingNativePlugin")!)
+    HandwritingNativePlugin.register(with: flutterViewController.registrar(forPlugin: "HandwritingNativePlugin"))
 
     super.awakeFromNib()
   }

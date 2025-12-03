@@ -1,7 +1,16 @@
 import Cocoa
 import FlutterMacOS
-import Darwin.dlopen
-import Darwin.dlsym
+import Darwin
+
+// 与 C 层 PN_STROKE_POINT 对应的结构体，需放在顶层以便 @convention(c) 使用
+struct PN_STROKE_POINT {
+  var x: Float
+  var y: Float
+  var pressure: Float
+  var timestamp: Int64
+  var tool: Int32
+  var phase: Int32
+}
 
 /// 手写笔记原生插件（macOS实现）
 class HandwritingNativePlugin: NSObject, FlutterPlugin {
@@ -19,7 +28,7 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
   typealias PN_XournalDocOpenFunc = @convention(c) (UnsafeMutablePointer<OpaquePointer?>?, UnsafePointer<CChar>?) -> Int32
   typealias PN_XournalDocSaveFunc = @convention(c) (OpaquePointer?, UnsafePointer<CChar>?) -> Int32
   typealias PN_XournalDocCloseFunc = @convention(c) (OpaquePointer?) -> Int32
-  typealias PN_XournalDocHandleStrokeFunc = @convention(c) (OpaquePointer?, UnsafePointer<PN_STROKE_POINT>?, Int32) -> Int32
+  typealias PN_XournalDocHandleStrokeFunc = @convention(c) (OpaquePointer?, UnsafeRawPointer?, Int32) -> Int32
   typealias PN_XournalDocRenderPageToPngFunc = @convention(c) (OpaquePointer?, Int32, UnsafePointer<CChar>?, Int32, Int32, UnsafePointer<CChar>?) -> Int32
   typealias PN_XournalDocGetPageCountFunc = @convention(c) (OpaquePointer?, UnsafeMutablePointer<Int32>?) -> Int32
   typealias PN_XournalDocGetPageSizeFunc = @convention(c) (OpaquePointer?, Int32, UnsafeMutablePointer<Double>?, UnsafeMutablePointer<Double>?) -> Int32
@@ -35,16 +44,6 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
   private var pn_xournal_doc_render_page_to_png: PN_XournalDocRenderPageToPngFunc?
   private var pn_xournal_doc_get_page_count: PN_XournalDocGetPageCountFunc?
   private var pn_xournal_doc_get_page_size: PN_XournalDocGetPageSizeFunc?
-  
-  // PN_STROKE_POINT结构体定义（与C API对应）
-  struct PN_STROKE_POINT {
-    var x: Float
-    var y: Float
-    var pressure: Float
-    var timestamp: Int64
-    var tool: Int32
-    var phase: Int32
-  }
   
   /// 加载动态库
   private func loadDynamicLibrary() -> Bool {
@@ -451,7 +450,7 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     // 如果动态库已加载且文档句柄有效，调用实际的笔迹处理函数
     if let strokeFunc = pn_xournal_doc_handle_stroke, let handle = docHandle {
       strokePoints.withUnsafeBufferPointer { buffer in
-        let ret = strokeFunc(handle, buffer.baseAddress, Int32(strokePoints.count))
+        let ret = strokeFunc(handle, UnsafeRawPointer(buffer.baseAddress), Int32(strokePoints.count))
         if ret == 0 {
           print("✅ [HandwritingNativePlugin] Stroke handled successfully")
           result(true)
