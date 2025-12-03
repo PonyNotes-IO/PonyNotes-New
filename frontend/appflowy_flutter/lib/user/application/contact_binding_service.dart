@@ -5,16 +5,18 @@ import 'package:appflowy_result/appflowy_result.dart';
 /// 联系方式绑定服务
 class ContactBindingService {
   
-  /// 发送手机验证码（用于验证旧手机号或新手机号）
+  /// 发送手机验证码（用于换绑手机号）
   /// 
-  /// 使用 GoTrue 的 /otp 端点直接发送验证码
+  /// 使用 GoTrue 的标准手机号变更流程（需要登录）
+  /// 调用云端 API，云端会调用 GoTrue 的 update_user 来发送 OTP
   static Future<FlowyResult<void, FlowyError>> sendPhoneVerificationCode(
     String phoneNumber,
   ) async {
     try {
       print('[ContactBindingService] 发送验证码到手机: $phoneNumber');
       
-      // 直接调用 GoTrue /otp 端点发送验证码
+      // 调用云端 API 发送验证码（GoTrue 标准手机号变更流程）
+      // 这个方法需要用户登录，会调用 GoTrue 的 update_user API
       final result = await UserBackendService.sendPhoneOTP(phoneNumber);
       
       return result.fold(

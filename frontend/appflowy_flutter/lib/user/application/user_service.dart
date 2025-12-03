@@ -96,18 +96,25 @@ class UserBackendService implements IUserBackendService {
 
   /// Send OTP to phone number (for phone number verification/change)
   /// This calls the cloud API /api/user/send-phone-otp endpoint
+  /// Requires user to be logged in (needs access token)
   static Future<FlowyResult<void, FlowyError>> sendPhoneOTP(
     String phone,
   ) async {
     try {
-      // 获取当前用户配置
+      Log.info('[UserBackendService] 📱 START sendPhoneOTP for: $phone');
+      
+      // 获取当前用户配置和 token
       final cloudConfigResult = await UserEventGetCloudConfig().send();
       final cloudConfig = cloudConfigResult.fold(
         (config) => config,
-        (error) => throw error,
+        (error) {
+          Log.error('[UserBackendService] ❌ Failed to get cloud config: $error');
+          throw error;
+        },
       );
       
       final baseUrl = cloudConfig.serverUrl;
+      Log.info('[UserBackendService] 🌐 Server URL: $baseUrl');
       
       if (baseUrl.isEmpty) {
         return FlowyResult.failure(
@@ -117,37 +124,65 @@ class UserBackendService implements IUserBackendService {
         );
       }
       
+      // 获取用户的 access token
+      Log.info('[UserBackendService] 🔑 Getting user access token...');
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final token = userResult.fold(
+        (user) {
+          Log.info('[UserBackendService] ✅ Got user profile, token length: ${user.token.length}');
+          return user.token;
+        },
+        (error) {
+          Log.error('[UserBackendService] ❌ Failed to get user profile: $error');
+          return '';
+        },
+      );
+      
+      if (token.isEmpty) {
+        Log.error('[UserBackendService] ❌ Access token is empty!');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing access token. Please login first.',
+        );
+      }
+      
       // 调用云端 API 发送手机验证码
       final uri = Uri.parse('$baseUrl/api/user/send-phone-otp');
-      Log.info('[UserBackendService] Sending phone OTP to: $phone');
+      Log.info('[UserBackendService] 📤 Calling API: $uri');
+      Log.info('[UserBackendService] 📤 Request body: {"phone": "$phone"}');
       
       final response = await http.post(
         uri,
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
           'phone': phone,
         }),
       );
       
-      Log.info('[UserBackendService] Response status: ${response.statusCode}');
+      Log.info('[UserBackendService] 📥 Response status: ${response.statusCode}');
+      Log.info('[UserBackendService] 📥 Response body: ${response.body}');
       
       if (response.statusCode == 200) {
+        Log.info('[UserBackendService] ✅ Phone OTP sent successfully');
         return FlowyResult.success(null);
       } else {
         final errorMsg = response.body.isNotEmpty 
             ? response.body 
             : 'Failed to send phone OTP (HTTP ${response.statusCode})';
-        Log.error('[UserBackendService] Send phone OTP failed: $errorMsg');
+        Log.error('[UserBackendService] ❌ Send phone OTP failed: $errorMsg');
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
             ..msg = errorMsg,
         );
       }
-    } catch (e) {
-      Log.error('[UserBackendService] Exception: $e');
+    } catch (e, stackTrace) {
+      Log.error('[UserBackendService] ❌ Exception: $e');
+      Log.error('[UserBackendService] ❌ Stack trace: $stackTrace');
       return FlowyResult.failure(
         FlowyError()
           ..code = ErrorCode.Internal

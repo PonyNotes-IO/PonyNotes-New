@@ -59,8 +59,9 @@ void HandwritingNativePlugin::RegisterWithRegistrar(
 
   plugin->channel_ = std::move(channel);
   
-  // Windows平台使用AddPlugin来管理插件生命周期
-  registrar->AddPlugin(std::move(plugin));
+  // 注意：不需要调用 AddPlugin，registrar 会自动管理插件生命周期
+  // 但我们需要确保 plugin 不会被销毁，所以使用 release()
+  plugin.release();
   
   OutputDebugStringA("[HandwritingNativePlugin] Registered successfully\n");
 }

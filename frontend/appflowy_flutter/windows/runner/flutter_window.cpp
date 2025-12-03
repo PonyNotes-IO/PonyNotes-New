@@ -28,8 +28,12 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   
   // 注册手写笔记原生插件
-  HandwritingNativePlugin::RegisterWithRegistrar(
-      flutter_controller_->engine()->GetRegistrarForPlugin("HandwritingNativePlugin"));
+  auto registrar = flutter::PluginRegistrarManager::GetInstance()
+      ->GetRegistrar<flutter::PluginRegistrarWindows>(
+          flutter_controller_->engine()->GetRegistrarForPlugin("HandwritingNativePlugin"));
+  if (registrar) {
+    HandwritingNativePlugin::RegisterWithRegistrar(registrar);
+  }
   
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
