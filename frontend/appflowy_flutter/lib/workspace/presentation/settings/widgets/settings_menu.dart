@@ -276,7 +276,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                   vertical: 2,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF89575),
+                                  color: const Color(0x1CF89575),
                                   borderRadius: BorderRadius.circular(999),
                                   border: Border.all(
                                     color: const Color(0xFFF89879),
@@ -287,7 +287,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                   planName,
                                   style: const TextStyle(
                                     fontSize: 12,
-                                    color: Colors.white,
+                                    color: Color(0xFFF89879),
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),

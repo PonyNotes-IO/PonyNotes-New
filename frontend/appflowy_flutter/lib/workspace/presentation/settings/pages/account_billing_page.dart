@@ -8,6 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../application/settings/settings_dialog_bloc.dart';
+import '../../../application/payment/payment_api.dart';
+import '../../../application/payment/payment_util.dart';
+import '../../../../features/workspace/logic/workspace_bloc.dart';
 import '../shared/settings_body.dart';
 import '../widgets/email_binding_dialog.dart';
 import '../widgets/identity_verification_dialog.dart';
@@ -160,18 +163,21 @@ class _BillingPageState extends State<BillingPage> {
             ),
             const VSpace(24),
             Center(
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3EC),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: FlowyText(
-                  '¥${selectedPlan.price}元确认协议并扩充',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFFFF6B47),
+              child: GestureDetector(
+                onTap: () => _handleBillingPay(context, selectedPlan),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF3EC),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: FlowyText(
+                    '¥${selectedPlan.price}元确认协议并扩充',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFFFF6B47),
+                  ),
                 ),
               ),
             ),
@@ -443,6 +449,129 @@ class _BillingPageState extends State<BillingPage> {
         },
       ),
     );
+  }
+
+  /// 处理补充包支付
+  Future<void> _handleBillingPay(
+    BuildContext context,
+    _StoragePlan selectedPlan,
+  ) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    // 1. 获取 workspaceId
+    final workspaceBloc = context.read<UserWorkspaceBloc>();
+    final workspaceId = workspaceBloc.state.currentWorkspace?.workspaceId;
+    if (workspaceId == null || workspaceId.isEmpty) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('无法获取工作空间信息'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // 2. 根据平台选择支付方式（macOS: Apple Pay; Windows: 微信/支付宝）
+    final methods = PaymentPlatformSupport.getAvailableMethods();
+    if (methods.isEmpty) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('当前平台暂不支持支付功能'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // 暂时默认选择第一个可用支付方式，后续可增加 UI 让用户选择
+    final method = methods.first;
+
+    // 3. 先调用后端创建支付订单接口
+    final paymentType = switch (method) {
+      PaymentMethod.applePay => PaymentType.applePay,
+      PaymentMethod.wechatPay => PaymentType.wechatPay,
+      PaymentMethod.alipay => PaymentType.alipay,
+    };
+
+    // 补充包价格（单位：元）
+    final amount = selectedPlan.price.toDouble();
+
+    final createRequest = PaymentCreateRequest(
+      amount: amount,
+      paymentType: paymentType,
+      productName: selectedPlan.name,
+      // 这里暂时使用 workspaceId 作为 openId，后续如果有专门的 openId 可替换
+      openId: workspaceId,
+      // 回调地址先占位，后端可按需要使用
+      url: '',
+      userInfo: <String, dynamic>{
+        'userId': _currentUserProfile.id.toString(),
+        'name': _currentUserProfile.name,
+        'email': _currentUserProfile.email,
+        'planName': selectedPlan.name,
+        'storage': selectedPlan.storage,
+        'tokens': selectedPlan.tokens,
+      },
+    );
+
+    final orderResult = await PaymentApi.createPaymentOrder(createRequest);
+
+    if (orderResult.isFailure) {
+      final error = orderResult.fold((_) => null, (e) => e);
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(error?.msg ?? '创建支付订单失败'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final order = orderResult.fold(
+      (order) => order,
+      (_) => null,
+    );
+    if (order == null) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('创建支付订单失败'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // 4. 调用统一支付工具类（传递真实订单号和金额）
+    final result = await PaymentUtil.pay(
+      method: method,
+      amount: (order.amount * 100).round(), // 转为整型，例如单位分
+      currency: 'CNY',
+      orderId: order.orderId,
+      extra: <String, dynamic>{
+        'planName': selectedPlan.name,
+        'storage': selectedPlan.storage,
+        'tokens': selectedPlan.tokens,
+        'displayPrice': amount,
+        'order': order.raw,
+      },
+    );
+
+    // 5. 根据支付结果提示用户
+    if (result.success) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(result.message.isNotEmpty ? result.message : '支付成功'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(result.message.isNotEmpty ? result.message : '支付失败'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 }
 
