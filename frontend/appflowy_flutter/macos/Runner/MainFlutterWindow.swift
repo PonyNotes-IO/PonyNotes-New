@@ -85,7 +85,7 @@ class MainFlutterWindow: NSWindow {
     self.layoutTrafficLights()
 
     RegisterGeneratedPlugins(registry: flutterViewController)
-    
+
     // 注册手写笔记原生插件
     HandwritingNativePlugin.register(with: flutterViewController.registrar(forPlugin: "HandwritingNativePlugin")!)
 
