@@ -97,7 +97,7 @@ enum FeatureFlag {
 
   bool get isOn {
     if ([
-      FeatureFlag.planBilling,
+      // FeatureFlag.planBilling, // 禁用付费计划和账单功能
       // release this feature in version 0.6.1
       FeatureFlag.spaceDesign,
       // release this feature in version 0.5.9
@@ -119,7 +119,9 @@ enum FeatureFlag {
     }
 
     switch (this) {
-      case FeatureFlag.planBilling:
+      case FeatureFlag.planBilling: // 禁用付费计划和账单功能
+      case FeatureFlag.collaborativeWorkspace: // 改为默认关闭
+        return false;
       case FeatureFlag.search:
       case FeatureFlag.syncDocument:
       case FeatureFlag.syncDatabase:
@@ -128,8 +130,6 @@ enum FeatureFlag {
       case FeatureFlag.membersSettings:
       case FeatureFlag.sharedSection:
         return true;
-      case FeatureFlag.collaborativeWorkspace: // 改为默认关闭
-        return false;
       case FeatureFlag.unknown:
         return false;
     }
