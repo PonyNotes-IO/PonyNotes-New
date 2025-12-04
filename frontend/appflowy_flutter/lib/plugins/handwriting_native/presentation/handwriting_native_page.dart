@@ -23,6 +23,10 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
   String? _errorMessage;
   ImageProvider? _renderedImage;
 
+  /// 当前页面的实际尺寸（来自 Xournal++ 文档），用于坐标映射
+  double? _pageWidth;
+  double? _pageHeight;
+
   /// 当前选中的工具
   _HandwritingTool _selectedTool = _HandwritingTool.pen;
 
@@ -34,6 +38,9 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
 
   /// 当前正在收集的一笔笔迹
   final List<Map<String, dynamic>> _currentStrokePoints = [];
+
+   /// 当前正在书写的一笔，用于在 Flutter 侧即时预览（画布坐标）
+  final List<Offset> _previewStrokePoints = [];
 
   /// 当前页面索引（后续支持多页时使用）
   int _currentPageIndex = 0;
@@ -53,18 +60,21 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
     try {
       print('🔧 [HandwritingNativePage] Initializing document...');
       final docId = await _service.getOrCreateDoc(widget.view.id);
-      
-      if (mounted) {
-        setState(() {
-          _isInitializing = false;
-          if (docId == null) {
-            _errorMessage = '无法创建或打开文档';
-          }
-        });
+
+      if (!mounted) {
+        return;
       }
 
-      // 文档准备好之后，先渲染一次空白页面，验证 Xournal++ 渲染链路
+      setState(() {
+        _isInitializing = false;
+        if (docId == null) {
+          _errorMessage = '无法创建或打开文档';
+        }
+      });
+
+      // 文档准备好之后，先获取页面尺寸，再渲染一次空白页面，验证 Xournal++ 渲染链路
       if (docId != null) {
+        await _loadPageSize();
         await _renderAndUpdateCanvas();
       }
     } catch (e) {
@@ -75,6 +85,32 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
           _errorMessage = '初始化失败: $e';
         });
       }
+    }
+  }
+
+  /// 从动态库获取当前页面尺寸，用于 Flutter 画布坐标到文档坐标的映射
+  Future<void> _loadPageSize() async {
+    try {
+      final size = await _service.getPageSize(widget.view.id, _currentPageIndex);
+      if (!mounted) {
+        return;
+      }
+      if (size == null) {
+        print('⚠️ [HandwritingNativePage] getPageSize returned null');
+        return;
+      }
+
+      setState(() {
+        _pageWidth = size['width'];
+        _pageHeight = size['height'];
+      });
+
+      print(
+        '📐 [HandwritingNativePage] Page size loaded: '
+        'width=$_pageWidth, height=$_pageHeight',
+      );
+    } catch (e) {
+      print('❌ [HandwritingNativePage] _loadPageSize error: $e');
     }
   }
 
@@ -371,19 +407,19 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // 简单使用当前容器尺寸作为渲染参考
-            final width = constraints.maxWidth.clamp(300, 1600).toInt();
-            final height = constraints.maxHeight.clamp(200, 1200).toInt();
+            // 使用当前容器尺寸作为画布尺寸参考，并限制在合理范围
+            final canvasWidth = constraints.maxWidth.clamp(300, 1600).toDouble();
+            final canvasHeight = constraints.maxHeight.clamp(200, 1200).toDouble();
 
             return GestureDetector(
               onPanStart: (details) {
-                _startStroke(details.localPosition, width, height);
+                _startStroke(details.localPosition, canvasWidth, canvasHeight);
               },
               onPanUpdate: (details) {
-                _continueStroke(details.localPosition, width, height);
+                _continueStroke(details.localPosition, canvasWidth, canvasHeight);
               },
               onPanEnd: (details) async {
-                await _endStroke(width, height);
+                await _endStroke(canvasWidth, canvasHeight);
               },
               child: Stack(
                 children: [
@@ -433,6 +469,18 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
                         ],
                       ),
                     ),
+
+                  // 前端即时笔迹预览层：不依赖 Xournal++ 渲染结果
+                  if (_previewStrokePoints.isNotEmpty)
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _HandwritingPreviewPainter(
+                          points: _previewStrokePoints,
+                          color: _selectedColor,
+                          strokeWidth: _strokeWidth,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             );
@@ -443,24 +491,41 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
   }
 
   /// 开始一笔
-  void _startStroke(Offset localPosition, int width, int height) {
+  void _startStroke(Offset localPosition, double canvasWidth, double canvasHeight) {
     _currentStrokePoints.clear();
-    _currentStrokePoints.add(_buildPoint(localPosition, phase: 0, width: width, height: height));
+    _previewStrokePoints.clear();
+    _previewStrokePoints.add(localPosition);
+    _currentStrokePoints.add(
+      _buildPoint(
+        localPosition,
+        phase: 0,
+        canvasWidth: canvasWidth,
+        canvasHeight: canvasHeight,
+      ),
+    );
   }
 
   /// 移动中
-  void _continueStroke(Offset localPosition, int width, int height) {
-    _currentStrokePoints.add(_buildPoint(localPosition, phase: 1, width: width, height: height));
+  void _continueStroke(Offset localPosition, double canvasWidth, double canvasHeight) {
+    _previewStrokePoints.add(localPosition);
+    _currentStrokePoints.add(
+      _buildPoint(
+        localPosition,
+        phase: 1,
+        canvasWidth: canvasWidth,
+        canvasHeight: canvasHeight,
+      ),
+    );
   }
 
   /// 结束一笔：发送到原生并触发重新渲染
-  Future<void> _endStroke(int width, int height) async {
+  Future<void> _endStroke(double canvasWidth, double canvasHeight) async {
     if (_currentStrokePoints.isEmpty) return;
     _currentStrokePoints.add(_buildPoint(
       _extractLastPointOffset(),
       phase: 2,
-      width: width,
-      height: height,
+      canvasWidth: canvasWidth,
+      canvasHeight: canvasHeight,
     ));
 
     try {
@@ -468,11 +533,15 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
       if (!success) {
         print('❌ [HandwritingNativePage] handleStroke failed');
       }
-      await _renderAndUpdateCanvas(width: width, height: height);
+      await _renderAndUpdateCanvas(
+        width: canvasWidth.toInt(),
+        height: canvasHeight.toInt(),
+      );
     } catch (e) {
       print('❌ [HandwritingNativePage] endStroke error: $e');
     } finally {
       _currentStrokePoints.clear();
+      _previewStrokePoints.clear();
     }
   }
 
@@ -480,28 +549,26 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
   Map<String, dynamic> _buildPoint(
     Offset localPosition, {
     required int phase,
-    required int width,
-    required int height,
+    required double canvasWidth,
+    required double canvasHeight,
   }) {
-    // 简单做一次归一化缩放到页面坐标，后续可以根据 getPageSize 做精确映射
-    final double x = localPosition.dx.clamp(0, width.toDouble());
-    final double y = localPosition.dy.clamp(0, height.toDouble());
+    // 先将手势坐标裁剪到当前画布区域
+    final double clampedX = localPosition.dx.clamp(0, canvasWidth);
+    final double clampedY = localPosition.dy.clamp(0, canvasHeight);
 
-    int toolCode;
-    switch (_selectedTool) {
-      case _HandwritingTool.pen:
-        toolCode = 0;
-        break;
-      case _HandwritingTool.eraser:
-        toolCode = 1;
-        break;
-      case _HandwritingTool.highlighter:
-        toolCode = 2;
-        break;
-      case _HandwritingTool.selector:
-        toolCode = 3;
-        break;
-    }
+    // 如果已知页面尺寸，则按比例映射到页面坐标；否则退化为直接使用画布尺寸
+    final double pageWidth = _pageWidth ?? canvasWidth;
+    final double pageHeight = _pageHeight ?? canvasHeight;
+
+    final double x = clampedX / canvasWidth * pageWidth;
+    final double y = clampedY / canvasHeight * pageHeight;
+
+    final int toolCode = switch (_selectedTool) {
+      _HandwritingTool.pen => 0,
+      _HandwritingTool.eraser => 1,
+      _HandwritingTool.highlighter => 2,
+      _HandwritingTool.selector => 3,
+    };
 
     return {
       'x': x,
@@ -510,6 +577,11 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'tool': toolCode,
       'phase': phase,
+      // 将当前选中的颜色和粗细一并写入，作为样式扩展的预留字段
+      'style': {
+        'color': _selectedColor.value,
+        'width': _strokeWidth,
+      },
     };
   }
 
@@ -626,4 +698,46 @@ class _HandwritingToolButton extends StatelessWidget {
     );
   }
 }
+
+/// 仅用于 Flutter 侧的当前笔迹预览，不影响底层 Xournal++ 文档
+class _HandwritingPreviewPainter extends CustomPainter {
+  _HandwritingPreviewPainter({
+    required this.points,
+    required this.color,
+    required this.strokeWidth,
+  });
+
+  final List<Offset> points;
+  final Color color;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) {
+      return;
+    }
+
+    final paint = Paint()
+      ..color = color.withOpacity(0.9)
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (var i = 1; i < points.length; i++) {
+      final p = points[i];
+      path.lineTo(p.dx, p.dy);
+    }
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _HandwritingPreviewPainter oldDelegate) {
+    return oldDelegate.points != points ||
+        oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth;
+  }
+}
+
 
