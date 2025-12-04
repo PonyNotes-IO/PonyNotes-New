@@ -116,7 +116,14 @@ class _SectionFolderState extends State<SectionFolder> {
     
     if (parentViewId == null) return;
 
-    final viewName = pluginBuilder.layoutType?.defaultName ?? '';
+    // 视图默认名称
+    // 普通 Document 使用通用的默认名称；手写笔记（原生）单独使用"未命名手写笔记"
+    final String viewName;
+    if (pluginBuilder.pluginType == PluginType.handwritingNative) {
+      viewName = '未命名手写笔记';
+    } else {
+      viewName = pluginBuilder.layoutType?.defaultName ?? '';
+    }
 
     try {
       // 为 handwriting_native 类型准备 extra 参数
