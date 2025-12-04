@@ -165,6 +165,11 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     print("✅ [HandwritingNativePlugin] MethodChannel registered")
   }
   
+  /// Flutter 引擎通过 Objective-C 运行时调用的入口
+  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    handleMethodCall(call: call, result: result)
+  }
+  
   /// 处理MethodChannel调用
   private func handleMethodCall(call: FlutterMethodCall, result: @escaping FlutterResult) {
     print("📞 [HandwritingNativePlugin] Method called: \(call.method)")

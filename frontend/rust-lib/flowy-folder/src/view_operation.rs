@@ -156,7 +156,7 @@ impl From<ViewLayoutPB> for ViewLayout {
 pub(crate) fn create_view(uid: i64, params: CreateViewParams, layout: ViewLayout) -> View {
   let time = timestamp();
   
-  // Handle extra field for folder, notebook, and whiteboard types
+  // Handle extra field for folder, notebook, whiteboard, and handwriting_native types
   let extra = match params.layout {
     ViewLayoutPB::Folder => {
       let mut extra_map = if let Some(extra) = &params.extra {
@@ -187,6 +187,35 @@ pub(crate) fn create_view(uid: i64, params: CreateViewParams, layout: ViewLayout
       };
       extra_map.insert("view_type".to_string(), serde_json::Value::String("whiteboard".to_string()));
       Some(serde_json::to_string(&extra_map).unwrap_or_default())
+    },
+    ViewLayoutPB::Document => {
+      // Check if this is a handwriting_native view (from meta or extra)
+      let view_type = params.meta.get("view_type")
+        .map(|s| s.clone())
+        .or_else(|| {
+          params.extra.as_ref().and_then(|e| {
+            serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(e)
+              .ok()
+              .and_then(|m| m.get("view_type").and_then(|v| v.as_str().map(|s| s.to_string())))
+          })
+        });
+      
+      if let Some(view_type) = view_type {
+        if view_type == "handwriting_native" {
+          let mut extra_map = if let Some(extra) = &params.extra {
+            serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(extra)
+              .unwrap_or_default()
+          } else {
+            serde_json::Map::new()
+          };
+          extra_map.insert("view_type".to_string(), serde_json::Value::String("handwriting_native".to_string()));
+          Some(serde_json::to_string(&extra_map).unwrap_or_default())
+        } else {
+          params.extra
+        }
+      } else {
+        params.extra
+      }
     },
     _ => params.extra,
   };

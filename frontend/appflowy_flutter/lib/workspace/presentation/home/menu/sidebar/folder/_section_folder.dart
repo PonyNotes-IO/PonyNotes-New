@@ -119,6 +119,12 @@ class _SectionFolderState extends State<SectionFolder> {
     final viewName = pluginBuilder.layoutType?.defaultName ?? '';
 
     try {
+      // 为 handwriting_native 类型准备 extra 参数
+      Map<String, String> ext = {};
+      if (pluginBuilder.pluginType == PluginType.handwritingNative) {
+        ext['view_type'] = 'handwriting_native';
+      }
+      
       // 使用ViewBackendService创建指定类型的视图
       final result = await ViewBackendService.createView(
         layoutType: pluginBuilder.layoutType!,
@@ -128,6 +134,7 @@ class _SectionFolderState extends State<SectionFolder> {
         initialDataBytes: initialDataBytes,
         index: 0,
         section: widget.spaceType.toViewSectionPB,
+        ext: ext,
       );
 
       result.fold(
@@ -137,7 +144,7 @@ class _SectionFolderState extends State<SectionFolder> {
               .read<FolderBloc>()
               .add(const FolderEvent.expandOrUnExpand(isExpanded: true));
           
-          // 为 Folder 和 Notebook 设置 extra 字段和默认 emoji 图标
+          // 为 Folder、Notebook、手写笔记等设置 extra 字段和默认图标
           if (pluginBuilder.layoutType == ViewLayoutPB.Folder) {
             // 设置文件夹的 extra 字段
             await ViewBackendService.updateView(
@@ -161,6 +168,7 @@ class _SectionFolderState extends State<SectionFolder> {
               viewIcon: EmojiIconData.emoji('📓'),
             );
           }
+          // 注意：handwriting_native 的 extra 字段已经在创建时通过 ext 参数设置了，不需要再次更新
           
           // 不需要手动刷新，系统会自动更新侧边栏
         },
