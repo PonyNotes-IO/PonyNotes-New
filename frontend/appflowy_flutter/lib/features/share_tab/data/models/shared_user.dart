@@ -11,6 +11,7 @@ class SharedUser {
     required this.role,
     required this.accessLevel,
     this.avatarUrl,
+    this.userId,
   });
 
   final String email;
@@ -29,12 +30,16 @@ class SharedUser {
   /// if the avatar is not set, it will be the first letter of the name.
   final String? avatarUrl;
 
+  /// The user ID (member_user_id) for collaboration API.
+  final String? userId;
+
   SharedUser copyWith({
     String? email,
     String? name,
     ShareRole? role,
     ShareAccessLevel? accessLevel,
     String? avatarUrl,
+    String? userId,
   }) {
     return SharedUser(
       email: email ?? this.email,
@@ -42,6 +47,7 @@ class SharedUser {
       role: role ?? this.role,
       accessLevel: accessLevel ?? this.accessLevel,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      userId: userId ?? this.userId,
     );
   }
 }

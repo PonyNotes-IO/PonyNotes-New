@@ -144,9 +144,7 @@ class DesktopHomeScreen extends StatelessWidget {
 
                     if (currentPageManager.plugin.pluginType ==
                         PluginType.blank) {
-                      getIt<TabsBloc>().add(
-                        TabsEvent.openPlugin(plugin: view.plugin()),
-                      );
+                      getIt<TabsBloc>().openPlugin(view);
                     }
 
                     // switch to the space that contains the last opened view
@@ -382,8 +380,7 @@ class DesktopHomeScreenStackAdaptor extends HomeStackDelegate {
               lastView = views[index - 1];
             }
 
-            return getIt<TabsBloc>()
-                .add(TabsEvent.openPlugin(plugin: lastView.plugin()));
+            return getIt<TabsBloc>().openPlugin(lastView);
           }
 
           getIt<TabsBloc>()

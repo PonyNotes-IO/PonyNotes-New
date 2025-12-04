@@ -12,6 +12,7 @@ import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
@@ -297,20 +298,82 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   /// Adds a [TabsEvent.openTab] event for the provided [ViewPB]
-  void openTab(ViewPB view) =>
-      add(TabsEvent.openTab(plugin: view.plugin(), view: view));
+  void openTab(ViewPB view) {
+    try {
+      final plugin = view.plugin();
+      add(TabsEvent.openTab(plugin: plugin, view: view));
+    } catch (e, stackTrace) {
+      Log.error('Failed to open tab for view: ${view.id}, layout: ${view.layout}', e);
+      Log.error('Stack trace:', stackTrace);
+      
+      // 显示错误提示
+      String errorMessage = '加载笔记失败';
+      if (e is UnimplementedError) {
+        errorMessage = '不支持的笔记类型: ${view.layout}';
+      } else if (e.toString().contains('404')) {
+        errorMessage = '笔记不存在或已被删除';
+      } else {
+        errorMessage = '加载笔记失败: ${e.toString()}';
+      }
+      
+      showToastNotification(
+        message: errorMessage,
+        type: ToastificationType.error,
+      );
+      
+      // 如果打开失败，尝试打开一个空白页面作为降级方案
+      try {
+        add(TabsEvent.openTab(plugin: BlankPagePlugin(), view: view));
+      } catch (fallbackError) {
+        Log.error('Failed to open blank page as fallback', fallbackError);
+      }
+    }
+  }
 
   /// Adds a [TabsEvent.openPlugin] event for the provided [ViewPB]
   void openPlugin(
     ViewPB view, {
     Map<String, dynamic> arguments = const {},
   }) {
-    add(
-      TabsEvent.openPlugin(
-        plugin: view.plugin(arguments: arguments),
-        view: view,
-      ),
-    );
+    try {
+      final plugin = view.plugin(arguments: arguments);
+      add(
+        TabsEvent.openPlugin(
+          plugin: plugin,
+          view: view,
+        ),
+      );
+    } catch (e, stackTrace) {
+      Log.error('Failed to open plugin for view: ${view.id}, layout: ${view.layout}', e);
+      Log.error('Stack trace:', stackTrace);
+      
+      // 显示错误提示
+      String errorMessage = '加载笔记失败';
+      if (e is UnimplementedError) {
+        errorMessage = '不支持的笔记类型: ${view.layout}';
+      } else if (e.toString().contains('404')) {
+        errorMessage = '笔记不存在或已被删除';
+      } else {
+        errorMessage = '加载笔记失败: ${e.toString()}';
+      }
+      
+      showToastNotification(
+        message: errorMessage,
+        type: ToastificationType.error,
+      );
+      
+      // 如果打开失败，尝试打开一个空白页面作为降级方案
+      try {
+        add(
+          TabsEvent.openPlugin(
+            plugin: BlankPagePlugin(),
+            view: view,
+          ),
+        );
+      } catch (fallbackError) {
+        Log.error('Failed to open blank page as fallback', fallbackError);
+      }
+    }
   }
 }
 

@@ -21,6 +21,7 @@ class ShareTabState {
     this.removeResult,
     this.updateAccessLevelResult,
     this.turnIntoMemberResult,
+    this.addCollaboratorResult,
     this.hasClickedUpgradeToPro = false,
   });
 
@@ -38,6 +39,7 @@ class ShareTabState {
   final FlowyResult<void, FlowyError>? removeResult;
   final FlowyResult<void, FlowyError>? updateAccessLevelResult;
   final FlowyResult<void, FlowyError>? turnIntoMemberResult;
+  final FlowyResult<void, FlowyError>? addCollaboratorResult;
   final bool hasClickedUpgradeToPro;
 
   ShareTabState copyWith({
@@ -55,6 +57,7 @@ class ShareTabState {
     FlowyResult<void, FlowyError>? removeResult,
     FlowyResult<void, FlowyError>? updateAccessLevelResult,
     FlowyResult<void, FlowyError>? turnIntoMemberResult,
+    FlowyResult<void, FlowyError>? addCollaboratorResult,
     bool? hasClickedUpgradeToPro,
   }) {
     return ShareTabState(
@@ -72,6 +75,7 @@ class ShareTabState {
       removeResult: removeResult,
       updateAccessLevelResult: updateAccessLevelResult,
       turnIntoMemberResult: turnIntoMemberResult,
+      addCollaboratorResult: addCollaboratorResult,
       hasClickedUpgradeToPro:
           hasClickedUpgradeToPro ?? this.hasClickedUpgradeToPro,
     );
@@ -95,6 +99,7 @@ class ShareTabState {
         other.removeResult == removeResult &&
         other.updateAccessLevelResult == updateAccessLevelResult &&
         other.turnIntoMemberResult == turnIntoMemberResult &&
+        other.addCollaboratorResult == addCollaboratorResult &&
         other.hasClickedUpgradeToPro == hasClickedUpgradeToPro;
   }
 
@@ -115,12 +120,13 @@ class ShareTabState {
       removeResult,
       updateAccessLevelResult,
       turnIntoMemberResult,
+      addCollaboratorResult,
       hasClickedUpgradeToPro,
     );
   }
 
   @override
   String toString() {
-    return 'ShareTabState(currentUser: $currentUser, users: $users, availableUsers: $availableUsers, isLoading: $isLoading, errorMessage: $errorMessage, shareLink: $shareLink, generalAccessRole: $generalAccessRole, shareSectionType: $SharedSectionType, linkCopied: $linkCopied, initialResult: $initialResult, shareResult: $shareResult, removeResult: $removeResult, updateAccessLevelResult: $updateAccessLevelResult, turnIntoMemberResult: $turnIntoMemberResult, hasClickedUpgradeToPro: $hasClickedUpgradeToPro)';
+    return 'ShareTabState(currentUser: $currentUser, users: $users, availableUsers: $availableUsers, isLoading: $isLoading, errorMessage: $errorMessage, shareLink: $shareLink, generalAccessRole: $generalAccessRole, shareSectionType: $SharedSectionType, linkCopied: $linkCopied, initialResult: $initialResult, shareResult: $shareResult, removeResult: $removeResult, updateAccessLevelResult: $updateAccessLevelResult, turnIntoMemberResult: $turnIntoMemberResult, addCollaboratorResult: $addCollaboratorResult, hasClickedUpgradeToPro: $hasClickedUpgradeToPro)';
   }
 }

@@ -8,6 +8,7 @@ import 'package:appflowy/features/util/extensions.dart';
 import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/util/log_utils.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -93,6 +94,8 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
     required ShareAccessLevel accessLevel,
     required List<String> emails,
   }) async {
+
+
     final request = SharePageWithUserPayloadPB(
       viewId: pageId,
       emails: emails,
@@ -342,6 +345,14 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
           final email = userMap['email'] as String? ?? '';
           final name = userMap['name'] as String? ?? email;
           final phone = userMap['phone'] as String?;
+          
+          // Extract user ID (try different possible field names)
+          final userId = (userMap['id'] ?? 
+                         userMap['user_id'] ?? 
+                         userMap['userId'] ?? 
+                         userMap['member_user_id'] ??
+                         '').toString();
+          final userUserId = userId.isNotEmpty ? userId : null;
 
           // Use email as primary identifier, fallback to phone if email is empty
           final userEmail = email.isNotEmpty ? email : (phone ?? '');
@@ -350,12 +361,14 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
             email: userEmail,
             name: name,
             role: ShareRole.guest, // Default role for searched users
-            accessLevel: ShareAccessLevel.readAndWrite, // Default access level
+            accessLevel: ShareAccessLevel.readOnly, // Default access level
             avatarUrl: null,
+            userId: userUserId,
           );
         }).toList();
 
         Log.info('Found ${sharedUsers.length} users for query: $query');
+        LogUtils.info(jsonData);
         return FlowySuccess(sharedUsers);
       } else {
         final errorMessage = 'Search users failed: HTTP ${response.statusCode}';

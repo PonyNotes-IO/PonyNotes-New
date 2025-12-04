@@ -165,18 +165,18 @@ class _BillingPageState extends State<BillingPage> {
             Center(
               child: GestureDetector(
                 onTap: () => _handleBillingPay(context, selectedPlan),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3EC),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: FlowyText(
-                    '¥${selectedPlan.price}元确认协议并扩充',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFFFF6B47),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3EC),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: FlowyText(
+                  '¥${selectedPlan.price}元确认协议并扩充',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFFF6B47),
                   ),
                 ),
               ),

@@ -141,11 +141,12 @@ class HomeSideBar extends StatelessWidget {
                 BlocListener<SidebarSectionsBloc, SidebarSectionsState>(
                   listenWhen: (p, c) =>
                       p.lastCreatedRootView?.id != c.lastCreatedRootView?.id,
-                  listener: (context, state) => context.read<TabsBloc>().add(
-                        TabsEvent.openPlugin(
-                          plugin: state.lastCreatedRootView!.plugin(),
-                        ),
-                      ),
+                  listener: (context, state) {
+                    final view = state.lastCreatedRootView;
+                    if (view != null) {
+                      context.read<TabsBloc>().openPlugin(view);
+                    }
+                  },
                 ),
                 BlocListener<SpaceBloc, SpaceState>(
                   listenWhen: (prev, curr) =>
@@ -159,11 +160,7 @@ class HomeSideBar extends StatelessWidget {
                           .read<TabsBloc>()
                           .add(TabsEvent.openPlugin(plugin: BlankPagePlugin()));
                     } else {
-                      context.read<TabsBloc>().add(
-                            TabsEvent.openPlugin(
-                              plugin: state.lastCreatedPage!.plugin(),
-                            ),
-                          );
+                      context.read<TabsBloc>().openPlugin(state.lastCreatedPage!);
                     }
 
                     if (state.isDuplicatingSpace) {

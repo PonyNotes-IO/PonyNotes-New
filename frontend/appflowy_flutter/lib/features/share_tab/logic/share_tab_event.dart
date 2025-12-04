@@ -58,6 +58,15 @@ sealed class ShareTabEvent {
 
   factory ShareTabEvent.upgradeToProClicked() =>
       const ShareTabEventUpgradeToProClicked();
+
+  factory ShareTabEvent.addCollaborator({
+    required SharedUser user,
+    ShareAccessLevel accessLevel = ShareAccessLevel.readOnly,
+  }) =>
+      ShareTabEventAddCollaborator(
+        user: user,
+        accessLevel: accessLevel,
+      );
 }
 
 /// Initializes the share tab bloc.
@@ -151,4 +160,15 @@ class ShareTabEventUpdateSharedUsers extends ShareTabEvent {
 
 class ShareTabEventUpgradeToProClicked extends ShareTabEvent {
   const ShareTabEventUpgradeToProClicked();
+}
+
+/// Adds a collaborator to the page using the collaboration API.
+class ShareTabEventAddCollaborator extends ShareTabEvent {
+  const ShareTabEventAddCollaborator({
+    required this.user,
+    this.accessLevel = ShareAccessLevel.readOnly,
+  });
+
+  final SharedUser user;
+  final ShareAccessLevel accessLevel;
 }

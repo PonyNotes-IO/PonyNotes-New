@@ -323,7 +323,10 @@ class _ShareTabState extends State<ShareTab> {
       builder: (dialogContext) {
         return BlocProvider.value(
           value: shareTabBloc,
-          child: const _CollaboratorsDialog(),
+          child: _CollaboratorsDialog(
+            workspaceId: widget.workspaceId,
+            pageId: widget.pageId,
+          ),
         );
       },
     );
@@ -439,7 +442,13 @@ class _ShareTabState extends State<ShareTab> {
 }
 
 class _CollaboratorsDialog extends StatefulWidget {
-  const _CollaboratorsDialog();
+  const _CollaboratorsDialog({
+    required this.workspaceId,
+    required this.pageId,
+  });
+
+  final String workspaceId;
+  final String pageId;
 
   @override
   State<_CollaboratorsDialog> createState() => _CollaboratorsDialogState();
@@ -469,7 +478,17 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
     _bloc.add(
       ShareTabEvent.inviteUsers(
         emails: [user.email],
-        accessLevel: ShareAccessLevel.readAndWrite,
+        accessLevel: ShareAccessLevel.readOnly,
+      ),
+    );
+  }
+
+  void _addCollaborator(SharedUser user) {
+    // 调用 bloc 事件添加协作用户，默认赋予只读权限
+    _bloc.add(
+      ShareTabEvent.addCollaborator(
+        user: user,
+        accessLevel: ShareAccessLevel.readOnly,
       ),
     );
   }
@@ -487,6 +506,30 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
             _inviteController.clear();
             _bloc.add(ShareTabEvent.searchAvailableUsers(query: ''));
           }, (error) {});
+        }
+
+        // 监听添加协作用户的结果
+        final addCollaboratorResult = state.addCollaboratorResult;
+        if (addCollaboratorResult != null) {
+          addCollaboratorResult.fold(
+            (success) {
+              _inviteController.clear();
+              _bloc.add(
+                ShareTabEvent.searchAvailableUsers(query: ''),
+              );
+              showToastNotification(
+                message: '已成功添加协作用户',
+              );
+            },
+            (error) {
+              showToastNotification(
+                message: error.msg.isNotEmpty
+                    ? error.msg
+                    : '添加协作用户失败',
+                type: ToastificationType.error,
+              );
+            },
+          );
         }
       },
       builder: (context, state) {
@@ -547,7 +590,8 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                       );
                     },
                     onUserSelected: (user) {
-                      _inviteUser(user);
+                      // _inviteUser(user);
+                      _addCollaborator(user);
                       _inviteController.clear();
                       _bloc.add(
                         ShareTabEvent.searchAvailableUsers(query: ''),
@@ -843,6 +887,10 @@ class _UserSearchFieldState extends State<_UserSearchField> {
         .where((user) => !existingEmails.contains(user.email))
         .toList();
 
+    // 检查输入框是否有内容
+    final hasText = widget.controller.text.trim().isNotEmpty;
+    final shouldShowResults = _showResults && hasText;
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -852,7 +900,7 @@ class _UserSearchFieldState extends State<_UserSearchField> {
           size: AFTextFieldSize.m,
           hintText: '输入用户名邀请协作',
         ),
-        if (_showResults && filteredUsers.isNotEmpty)
+        if (shouldShowResults)
           Positioned(
             top: 50,
             left: 0,
@@ -863,7 +911,8 @@ class _UserSearchFieldState extends State<_UserSearchField> {
               color: theme.surfaceContainerColorScheme.layer01,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 200),
-                child: ListView.separated(
+                child: filteredUsers.isNotEmpty
+                    ? ListView.separated(
                   shrinkWrap: true,
                   padding: EdgeInsets.zero,
                   itemCount: filteredUsers.length,
@@ -926,11 +975,37 @@ class _UserSearchFieldState extends State<_UserSearchField> {
                       ),
                     );
                   },
+                      )
+                    : _buildEmptyState(context),
                 ),
               ),
             ),
-          ),
       ],
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Padding(
+      padding: EdgeInsets.all(theme.spacing.l),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FlowySvg(
+              FlowySvgs.search_icon_m,
+              color: theme.iconColorScheme.tertiary,
+              size: const Size.square(24),
+            ),
+            VSpace(theme.spacing.s),
+            FlowyText.regular(
+              '搜索结果为空',
+              color: theme.textColorScheme.secondary,
+              fontSize: 14,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
