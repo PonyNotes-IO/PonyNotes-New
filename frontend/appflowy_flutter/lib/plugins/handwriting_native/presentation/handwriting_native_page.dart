@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy/plugins/handwriting_native/application/handwriting_native_service.dart';
@@ -20,6 +21,7 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
   final HandwritingNativeService _service = HandwritingNativeService();
   bool _isInitializing = true;
   String? _errorMessage;
+  ImageProvider? _renderedImage;
 
   /// 当前选中的工具
   _HandwritingTool _selectedTool = _HandwritingTool.pen;
@@ -29,6 +31,12 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
 
   /// 当前画笔粗细
   double _strokeWidth = 3.0;
+
+  /// 当前正在收集的一笔笔迹
+  final List<Map<String, dynamic>> _currentStrokePoints = [];
+
+  /// 当前页面索引（后续支持多页时使用）
+  int _currentPageIndex = 0;
 
   @override
   void initState() {
@@ -53,6 +61,11 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
             _errorMessage = '无法创建或打开文档';
           }
         });
+      }
+
+      // 文档准备好之后，先渲染一次空白页面，验证 Xournal++ 渲染链路
+      if (docId != null) {
+        await _renderAndUpdateCanvas();
       }
     } catch (e) {
       print('❌ [HandwritingNativePage] Initialization error: $e');
@@ -82,7 +95,7 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
   @override
   Widget build(BuildContext context) {
     print('🖼️ [HandwritingNativePage] build() called');
-    
+
     if (_isInitializing) {
       return Scaffold(
         appBar: AppBar(
@@ -232,52 +245,7 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
                 _buildTopInfoBar(theme),
                 const Divider(height: 1),
                 Expanded(
-                  child: Container(
-                    color: theme.colorScheme.surface,
-                    padding: const EdgeInsets.all(16),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: theme.colorScheme.outlineVariant.withOpacity(0.6),
-                        ),
-                      ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.draw_rounded,
-                              size: 72,
-                              color: theme.colorScheme.primary.withOpacity(0.6),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              '手写笔记（原生）',
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(0.8),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '画布与笔迹渲染正在集成 Xournal++，当前为 UI 原型状态',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(0.55),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            Text(
-                              '视图ID: ${widget.view.id}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(0.4),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                  child: _buildCanvasArea(theme),
                 ),
               ],
             ),
@@ -386,6 +354,211 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
         ],
       ),
     );
+  }
+
+  /// 中央画布区域：承载 Xournal++ 渲染结果 + 手势事件
+  Widget _buildCanvasArea(ThemeData theme) {
+    return Container(
+      color: theme.colorScheme.surface,
+      padding: const EdgeInsets.all(16),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceVariant.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: theme.colorScheme.outlineVariant.withOpacity(0.6),
+          ),
+        ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // 简单使用当前容器尺寸作为渲染参考
+            final width = constraints.maxWidth.clamp(300, 1600).toInt();
+            final height = constraints.maxHeight.clamp(200, 1200).toInt();
+
+            return GestureDetector(
+              onPanStart: (details) {
+                _startStroke(details.localPosition, width, height);
+              },
+              onPanUpdate: (details) {
+                _continueStroke(details.localPosition, width, height);
+              },
+              onPanEnd: (details) async {
+                await _endStroke(width, height);
+              },
+              child: Stack(
+                children: [
+                  // 背景：Xournal++ 渲染出来的 PNG
+                  if (_renderedImage != null)
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image(
+                          image: _renderedImage!,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    )
+                  else
+                    // 如果还没渲染成功，显示原来的文案占位
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.draw_rounded,
+                            size: 72,
+                            color: theme.colorScheme.primary.withOpacity(0.6),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            '手写笔记（原生）',
+                            style: theme.textTheme.headlineSmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(0.8),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '画布与笔迹渲染正在集成 Xournal++，当前为 UI 原型状态',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(0.55),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            '视图ID: ${widget.view.id}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(0.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  /// 开始一笔
+  void _startStroke(Offset localPosition, int width, int height) {
+    _currentStrokePoints.clear();
+    _currentStrokePoints.add(_buildPoint(localPosition, phase: 0, width: width, height: height));
+  }
+
+  /// 移动中
+  void _continueStroke(Offset localPosition, int width, int height) {
+    _currentStrokePoints.add(_buildPoint(localPosition, phase: 1, width: width, height: height));
+  }
+
+  /// 结束一笔：发送到原生并触发重新渲染
+  Future<void> _endStroke(int width, int height) async {
+    if (_currentStrokePoints.isEmpty) return;
+    _currentStrokePoints.add(_buildPoint(
+      _extractLastPointOffset(),
+      phase: 2,
+      width: width,
+      height: height,
+    ));
+
+    try {
+      final success = await _service.handleStroke(widget.view.id, _currentStrokePoints);
+      if (!success) {
+        print('❌ [HandwritingNativePage] handleStroke failed');
+      }
+      await _renderAndUpdateCanvas(width: width, height: height);
+    } catch (e) {
+      print('❌ [HandwritingNativePage] endStroke error: $e');
+    } finally {
+      _currentStrokePoints.clear();
+    }
+  }
+
+  /// 将 Flutter 坐标转换为传给 Xournal++ 的点结构
+  Map<String, dynamic> _buildPoint(
+    Offset localPosition, {
+    required int phase,
+    required int width,
+    required int height,
+  }) {
+    // 简单做一次归一化缩放到页面坐标，后续可以根据 getPageSize 做精确映射
+    final double x = localPosition.dx.clamp(0, width.toDouble());
+    final double y = localPosition.dy.clamp(0, height.toDouble());
+
+    int toolCode;
+    switch (_selectedTool) {
+      case _HandwritingTool.pen:
+        toolCode = 0;
+        break;
+      case _HandwritingTool.eraser:
+        toolCode = 1;
+        break;
+      case _HandwritingTool.highlighter:
+        toolCode = 2;
+        break;
+      case _HandwritingTool.selector:
+        toolCode = 3;
+        break;
+    }
+
+    return {
+      'x': x,
+      'y': y,
+      'pressure': 1.0, // 先用固定值，后续接入真实压感
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'tool': toolCode,
+      'phase': phase,
+    };
+  }
+
+  /// 提取当前笔迹的最后一个点（用于 onPanEnd 补一个 up 事件）
+  Offset _extractLastPointOffset() {
+    if (_currentStrokePoints.isEmpty) {
+      return Offset.zero;
+    }
+    final last = _currentStrokePoints.last;
+    return Offset(
+      (last['x'] as num).toDouble(),
+      (last['y'] as num).toDouble(),
+    );
+  }
+
+  /// 调用原生 render_page 渲染 PNG，并更新画布背景
+  Future<void> _renderAndUpdateCanvas({int width = 1200, int height = 800}) async {
+    try {
+      final tempDir = Directory.systemTemp;
+      final pngPath =
+          '${tempDir.path}/handwriting_${widget.view.id}_page_$_currentPageIndex.png';
+
+      final renderedPath = await _service.renderPage(
+        widget.view.id,
+        _currentPageIndex,
+        pngPath,
+        width,
+        height,
+      );
+
+      if (renderedPath == null) {
+        print('⚠️ [HandwritingNativePage] renderPage returned null');
+        return;
+      }
+
+      final file = File(renderedPath);
+      if (!await file.exists()) {
+        print('⚠️ [HandwritingNativePage] Rendered file not exists: $renderedPath');
+        return;
+      }
+
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _renderedImage = MemoryImage(bytes);
+      });
+    } catch (e) {
+      print('❌ [HandwritingNativePage] _renderAndUpdateCanvas error: $e');
+    }
   }
 }
 
