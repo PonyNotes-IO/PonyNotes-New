@@ -403,16 +403,16 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
     
     print('[IdentityVerificationDialog] 开始验证: phone=$cleanPhone, code=${codeController.text}');
     
-    // 只验证验证码是否正确，不绑定手机号
-    // 使用signInWithPasscode来验证验证码
-    final result = await UserBackendService.signInWithPasscode(
+    // 验证旧手机号的验证码（用于身份验证，不绑定手机号）
+    // 使用 verifyPhoneReauthentication 来验证 phoneReauthenticationOtp 类型的验证码
+    final result = await UserBackendService.verifyPhoneReauthentication(
       cleanPhone,
       codeController.text,
     );
     
     result.fold(
-      (tokenResponse) {
-        print('[IdentityVerificationDialog] 验证成功: tokenResponse=$tokenResponse');
+      (_) {
+        print('[IdentityVerificationDialog] 验证成功');
         if (mounted) {
           setState(() {
             _isVerified = true;
