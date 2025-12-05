@@ -29,7 +29,7 @@ class HandwritingNativeService {
   }
 
   /// 为视图创建或打开文档
-  Future<String?> getOrCreateDoc(String viewId, {String? xoppPath}) async {
+  Future<String?> getOrCreateDoc(String viewId, {String? xoppPath, String? pdfPath, bool attachPdfToDocument = false}) async {
     // 如果已有docId，直接返回
     if (_docIdMap.containsKey(viewId)) {
       return _docIdMap[viewId];
@@ -38,8 +38,12 @@ class HandwritingNativeService {
     await init();
 
     String? docId;
-    if (xoppPath != null && xoppPath.isNotEmpty) {
-      // 打开现有文档
+    if (pdfPath != null && pdfPath.isNotEmpty) {
+      // 打开PDF文档
+      print('📄 [HandwritingNativeService] Opening PDF for view: $viewId');
+      docId = await HandwritingNativePlatform.openPdf(pdfPath, attachToDocument: attachPdfToDocument);
+    } else if (xoppPath != null && xoppPath.isNotEmpty) {
+      // 打开现有xopp文档
       print('📂 [HandwritingNativeService] Opening document for view: $viewId');
       docId = await HandwritingNativePlatform.openDoc(xoppPath);
     } else {

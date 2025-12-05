@@ -7,6 +7,8 @@ import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwri
 import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwriting_page_thumbnails.dart';
 import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwriting_status_bar.dart';
 import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwriting_top_toolbar.dart';
+import 'package:flowy_infra/file_picker/file_picker_impl.dart';
+import 'package:flowy_infra/file_picker/file_picker_service.dart';
 
 class HandwritingNativePage extends StatefulWidget {
   const HandwritingNativePage({
@@ -248,6 +250,7 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
                 _strokeWidth = v;
               });
             },
+            onOpenPdf: () => _openPdf(context),
             onSave: () => _showSnack(context, '保存功能开发中（将调用 xopp / PNG 导出）'),
             onExport: () => _showSnack(context, '导出功能开发中（计划支持 PNG / PDF）'),
             onUndo: () => _showSnack(context, '撤销功能开发中'),
@@ -569,6 +572,94 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
     } catch (e) {
       print('⚠️ [HandwritingNativePage] render thumbnail error: $e');
       return null;
+    }
+  }
+
+  /// 打开PDF文档
+  Future<void> _openPdf(BuildContext context) async {
+    try {
+      print('📄 [HandwritingNativePage] Opening PDF file picker...');
+      
+      // 使用文件选择器选择PDF文件
+      final filePicker = FilePicker();
+      final result = await filePicker.pickFiles(
+        dialogTitle: '选择PDF文件',
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        allowMultiple: false,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        print('⚠️ [HandwritingNativePage] No PDF file selected');
+        return;
+      }
+
+      final file = result.files.first;
+      if (file.path == null) {
+        print('❌ [HandwritingNativePage] PDF file path is null');
+        _showSnack(context, '无法获取PDF文件路径');
+        return;
+      }
+
+      final pdfPath = file.path!;
+      print('📄 [HandwritingNativePage] Selected PDF: $pdfPath');
+
+      // 检查文件是否存在
+      final pdfFile = File(pdfPath);
+      if (!await pdfFile.exists()) {
+        print('❌ [HandwritingNativePage] PDF file does not exist: $pdfPath');
+        _showSnack(context, 'PDF文件不存在');
+        return;
+      }
+
+      // 显示加载提示
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('正在打开PDF文档...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // 关闭当前文档（如果存在）
+      await _service.closeDoc(widget.view.id);
+
+      // 打开PDF文档（替换当前文档，不附加）
+      final docId = await _service.getOrCreateDoc(
+        widget.view.id,
+        pdfPath: pdfPath,
+        attachPdfToDocument: false,
+      );
+
+      if (docId == null) {
+        print('❌ [HandwritingNativePage] Failed to open PDF');
+        if (context.mounted) {
+          _showSnack(context, '打开PDF失败，请检查文件格式');
+        }
+        return;
+      }
+
+      print('✅ [HandwritingNativePage] PDF opened successfully, docId: $docId');
+
+      // 重新加载页面信息
+      await _loadPageSize();
+      await _loadPageCountAndThumbnails();
+      await _renderAndUpdateCanvas();
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PDF文档已打开'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ [HandwritingNativePage] _openPdf error: $e');
+      if (context.mounted) {
+        _showSnack(context, '打开PDF失败: $e');
+      }
     }
   }
 

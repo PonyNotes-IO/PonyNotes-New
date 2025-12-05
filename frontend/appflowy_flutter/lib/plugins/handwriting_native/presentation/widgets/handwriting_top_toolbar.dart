@@ -12,6 +12,7 @@ class HandwritingTopToolbar extends StatelessWidget {
     required this.onStrokeWidthChanged,
     this.onSave,
     this.onExport,
+    this.onOpenPdf,
     this.onUndo,
     this.onRedo,
     this.onPrevPage,
@@ -28,6 +29,7 @@ class HandwritingTopToolbar extends StatelessWidget {
 
   final VoidCallback? onSave;
   final VoidCallback? onExport;
+  final VoidCallback? onOpenPdf;
   final VoidCallback? onUndo;
   final VoidCallback? onRedo;
   final VoidCallback? onPrevPage;
@@ -53,6 +55,12 @@ class HandwritingTopToolbar extends StatelessWidget {
       child: Row(
         children: [
           // 文档操作
+          _iconButton(
+            context,
+            tooltip: '打开PDF',
+            icon: Icons.folder_open_outlined,
+            onTap: onOpenPdf,
+          ),
           _iconButton(
             context,
             tooltip: '保存',

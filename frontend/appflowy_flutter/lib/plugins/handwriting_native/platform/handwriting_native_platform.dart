@@ -37,6 +37,20 @@ class HandwritingNativePlatform {
     }
   }
 
+  /// 打开PDF文档
+  static Future<String?> openPdf(String pdfPath, {bool attachToDocument = false}) async {
+    try {
+      final result = await _channel.invokeMethod<String>('open_pdf', {
+        'path': pdfPath,
+        'attachToDocument': attachToDocument,
+      });
+      return result;
+    } catch (e) {
+      print('❌ [HandwritingNativePlatform] openPdf failed: $e');
+      return null;
+    }
+  }
+
   /// 保存文档
   static Future<bool> saveDoc(String docId, String xoppPath) async {
     try {

@@ -72,6 +72,7 @@ HandwritingNativePlugin::HandwritingNativePlugin()
     pn_xournal_shutdown_(nullptr),
     pn_xournal_doc_create_(nullptr),
     pn_xournal_doc_open_(nullptr),
+    pn_xournal_doc_open_pdf_(nullptr),
     pn_xournal_doc_save_(nullptr),
     pn_xournal_doc_close_(nullptr),
     pn_xournal_doc_handle_stroke_(nullptr),
@@ -125,6 +126,7 @@ bool HandwritingNativePlugin::LoadFunctionPointers() {
   pn_xournal_shutdown_ = (PN_XournalShutdownFunc)GetProcAddress(dll_handle_, "pn_xournal_shutdown");
   pn_xournal_doc_create_ = (PN_XournalDocCreateFunc)GetProcAddress(dll_handle_, "pn_xournal_doc_create");
   pn_xournal_doc_open_ = (PN_XournalDocOpenFunc)GetProcAddress(dll_handle_, "pn_xournal_doc_open");
+  pn_xournal_doc_open_pdf_ = (PN_XournalDocOpenPdfFunc)GetProcAddress(dll_handle_, "pn_xournal_doc_open_pdf");
   pn_xournal_doc_save_ = (PN_XournalDocSaveFunc)GetProcAddress(dll_handle_, "pn_xournal_doc_save");
   pn_xournal_doc_close_ = (PN_XournalDocCloseFunc)GetProcAddress(dll_handle_, "pn_xournal_doc_close");
   pn_xournal_doc_handle_stroke_ = (PN_XournalDocHandleStrokeFunc)GetProcAddress(dll_handle_, "pn_xournal_doc_handle_stroke");
@@ -137,6 +139,7 @@ bool HandwritingNativePlugin::LoadFunctionPointers() {
                     pn_xournal_shutdown_ != nullptr &&
                     pn_xournal_doc_create_ != nullptr &&
                     pn_xournal_doc_open_ != nullptr &&
+                    pn_xournal_doc_open_pdf_ != nullptr &&
                     pn_xournal_doc_save_ != nullptr &&
                     pn_xournal_doc_close_ != nullptr &&
                     pn_xournal_doc_handle_stroke_ != nullptr &&
@@ -179,6 +182,8 @@ void HandwritingNativePlugin::HandleMethodCall(
     HandleCreateDoc(method_call, std::move(result));
   } else if (method_name == "open_doc") {
     HandleOpenDoc(method_call, std::move(result));
+  } else if (method_name == "open_pdf") {
+    HandleOpenPdf(method_call, std::move(result));
   } else if (method_name == "save_doc") {
     HandleSaveDoc(method_call, std::move(result));
   } else if (method_name == "close_doc") {
@@ -359,6 +364,73 @@ void HandwritingNativePlugin::HandleOpenDoc(
     sprintf_s(log_msg, "[HandwritingNativePlugin] Dynamic library not available, using placeholder\n");
     OutputDebugStringA(log_msg);
     sprintf_s(log_msg, "[HandwritingNativePlugin] Document opened with ID: %s\n", docId.c_str());
+    OutputDebugStringA(log_msg);
+    result->Success(flutter::EncodableValue(docId));
+  }
+}
+
+void HandwritingNativePlugin::HandleOpenPdf(
+    const flutter::MethodCall<flutter::EncodableValue> &method_call,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  const auto* args = std::get_if<flutter::EncodableMap>(method_call.arguments());
+  if (!args) {
+    result->Error("INVALID_ARGUMENT", "Missing arguments");
+    return;
+  }
+
+  auto path_it = args->find(flutter::EncodableValue("path"));
+  if (path_it == args->end()) {
+    result->Error("INVALID_ARGUMENT", "Missing path parameter");
+    return;
+  }
+
+  const auto* pdf_path = std::get_if<std::string>(&path_it->second);
+  if (!pdf_path) {
+    result->Error("INVALID_ARGUMENT", "path must be a string");
+    return;
+  }
+
+  // attachToDocument: 0=替换当前文档, 1=附加到当前文档（默认0）
+  bool attach_to_document = false;
+  auto attach_it = args->find(flutter::EncodableValue("attachToDocument"));
+  if (attach_it != args->end()) {
+    const auto* attach_value = std::get_if<bool>(&attach_it->second);
+    if (attach_value) {
+      attach_to_document = *attach_value;
+    }
+  }
+  int attach_int = attach_to_document ? 1 : 0;
+
+  char log_msg[512];
+  sprintf_s(log_msg, "[HandwritingNativePlugin] Opening PDF from: %s, attach: %d\n", pdf_path->c_str(), attach_int);
+  OutputDebugStringA(log_msg);
+  
+  // 如果动态库已加载，调用实际的PDF打开函数
+  if (pn_xournal_doc_open_pdf_ != nullptr) {
+    PN_DOC_HANDLE doc_handle = nullptr;
+    int ret = pn_xournal_doc_open_pdf_(&doc_handle, pdf_path->c_str(), attach_int);
+    if (ret == 0 && doc_handle != nullptr) {
+      std::string docId = GenerateUUID();
+      std::lock_guard<std::mutex> lock(documents_mutex_);
+      documents_[docId] = doc_handle;
+      
+      sprintf_s(log_msg, "[HandwritingNativePlugin] PDF opened with ID: %s\n", docId.c_str());
+      OutputDebugStringA(log_msg);
+      result->Success(flutter::EncodableValue(docId));
+    } else {
+      sprintf_s(log_msg, "[HandwritingNativePlugin] Failed to open PDF, error code: %d\n", ret);
+      OutputDebugStringA(log_msg);
+      result->Error("OPEN_PDF_FAILED", "Failed to open PDF document", flutter::EncodableValue(ret));
+    }
+  } else {
+    // 占位实现
+    std::string docId = GenerateUUID();
+    std::lock_guard<std::mutex> lock(documents_mutex_);
+    documents_[docId] = nullptr; // 占位
+    
+    sprintf_s(log_msg, "[HandwritingNativePlugin] Dynamic library not available, using placeholder\n");
+    OutputDebugStringA(log_msg);
+    sprintf_s(log_msg, "[HandwritingNativePlugin] PDF opened (placeholder) with ID: %s\n", docId.c_str());
     OutputDebugStringA(log_msg);
     result->Success(flutter::EncodableValue(docId));
   }
