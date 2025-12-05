@@ -412,13 +412,17 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
             final canvasHeight = constraints.maxHeight.clamp(200, 1200).toDouble();
 
             return GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onPanStart: (details) {
+                print('🖊️ [HandwritingNativePage] onPanStart: ${details.localPosition}');
                 _startStroke(details.localPosition, canvasWidth, canvasHeight);
               },
               onPanUpdate: (details) {
+                print('🖊️ [HandwritingNativePage] onPanUpdate: ${details.localPosition}, points count: ${_previewStrokePoints.length}');
                 _continueStroke(details.localPosition, canvasWidth, canvasHeight);
               },
               onPanEnd: (details) async {
+                print('🖊️ [HandwritingNativePage] onPanEnd, total points: ${_currentStrokePoints.length}');
                 await _endStroke(canvasWidth, canvasHeight);
               },
               child: Stack(
@@ -436,51 +440,53 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
                     )
                   else
                     // 如果还没渲染成功，显示原来的文案占位
-                    Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.draw_rounded,
-                            size: 72,
-                            color: theme.colorScheme.primary.withOpacity(0.6),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            '手写笔记（原生）',
-                            style: theme.textTheme.headlineSmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(0.8),
+                    IgnorePointer(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.draw_rounded,
+                              size: 72,
+                              color: theme.colorScheme.primary.withOpacity(0.6),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '画布与笔迹渲染正在集成 Xournal++，当前为 UI 原型状态',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(0.55),
+                            const SizedBox(height: 16),
+                            Text(
+                              '手写笔记（原生）',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(0.8),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            '视图ID: ${widget.view.id}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(0.4),
+                            const SizedBox(height: 8),
+                            Text(
+                              '画布与笔迹渲染正在集成 Xournal++，当前为 UI 原型状态',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(0.55),
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 24),
+                            Text(
+                              '视图ID: ${widget.view.id}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(0.4),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
                   // 前端即时笔迹预览层：不依赖 Xournal++ 渲染结果
-                  if (_previewStrokePoints.isNotEmpty)
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: _HandwritingPreviewPainter(
-                          points: _previewStrokePoints,
-                          color: _selectedColor,
-                          strokeWidth: _strokeWidth,
-                        ),
+                  // 始终显示 CustomPaint，即使 points 为空，这样 shouldRepaint 才能正确工作
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _HandwritingPreviewPainter(
+                        points: _previewStrokePoints,
+                        color: _selectedColor,
+                        strokeWidth: _strokeWidth,
                       ),
                     ),
+                  ),
                 ],
               ),
             );
@@ -492,9 +498,12 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
 
   /// 开始一笔
   void _startStroke(Offset localPosition, double canvasWidth, double canvasHeight) {
-    _currentStrokePoints.clear();
-    _previewStrokePoints.clear();
-    _previewStrokePoints.add(localPosition);
+    print('🖊️ [HandwritingNativePage] _startStroke: $localPosition, canvas: ${canvasWidth}x${canvasHeight}');
+    setState(() {
+      _currentStrokePoints.clear();
+      _previewStrokePoints.clear();
+      _previewStrokePoints.add(localPosition);
+    });
     _currentStrokePoints.add(
       _buildPoint(
         localPosition,
@@ -503,11 +512,14 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
         canvasHeight: canvasHeight,
       ),
     );
+    print('🖊️ [HandwritingNativePage] _startStroke done, preview points: ${_previewStrokePoints.length}');
   }
 
   /// 移动中
   void _continueStroke(Offset localPosition, double canvasWidth, double canvasHeight) {
-    _previewStrokePoints.add(localPosition);
+    setState(() {
+      _previewStrokePoints.add(localPosition);
+    });
     _currentStrokePoints.add(
       _buildPoint(
         localPosition,
@@ -516,6 +528,10 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
         canvasHeight: canvasHeight,
       ),
     );
+    // 每10个点打印一次，避免日志过多
+    if (_previewStrokePoints.length % 10 == 0) {
+      print('🖊️ [HandwritingNativePage] _continueStroke: $localPosition, preview points: ${_previewStrokePoints.length}');
+    }
   }
 
   /// 结束一笔：发送到原生并触发重新渲染
@@ -540,8 +556,15 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
     } catch (e) {
       print('❌ [HandwritingNativePage] endStroke error: $e');
     } finally {
-      _currentStrokePoints.clear();
-      _previewStrokePoints.clear();
+      if (mounted) {
+        setState(() {
+          _currentStrokePoints.clear();
+          _previewStrokePoints.clear();
+        });
+      } else {
+        _currentStrokePoints.clear();
+        _previewStrokePoints.clear();
+      }
     }
   }
 
@@ -713,7 +736,7 @@ class _HandwritingPreviewPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (points.length < 2) {
+    if (points.isEmpty) {
       return;
     }
 
@@ -721,22 +744,38 @@ class _HandwritingPreviewPainter extends CustomPainter {
       ..color = color.withOpacity(0.9)
       ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke;
 
-    final path = Path()..moveTo(points.first.dx, points.first.dy);
-    for (var i = 1; i < points.length; i++) {
-      final p = points[i];
-      path.lineTo(p.dx, p.dy);
+    if (points.length == 1) {
+      // 如果只有一个点，画一个圆点
+      canvas.drawCircle(points.first, strokeWidth / 2, paint);
+    } else {
+      // 多个点，画路径
+      final path = Path()..moveTo(points.first.dx, points.first.dy);
+      for (var i = 1; i < points.length; i++) {
+        final p = points[i];
+        path.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(path, paint);
     }
-
-    canvas.drawPath(path, paint);
   }
 
   @override
   bool shouldRepaint(covariant _HandwritingPreviewPainter oldDelegate) {
-    return oldDelegate.points != points ||
-        oldDelegate.color != color ||
-        oldDelegate.strokeWidth != strokeWidth;
+    // 比较点的数量和内容，而不是引用
+    final pointsChanged = oldDelegate.points.length != points.length ||
+        (points.isNotEmpty && oldDelegate.points.isNotEmpty &&
+            (oldDelegate.points.last.dx != points.last.dx ||
+                oldDelegate.points.last.dy != points.last.dy));
+    final colorChanged = oldDelegate.color != color;
+    final strokeWidthChanged = oldDelegate.strokeWidth != strokeWidth;
+    
+    final shouldRepaint = pointsChanged || colorChanged || strokeWidthChanged;
+    if (shouldRepaint && points.length > 0) {
+      print('🖊️ [HandwritingPreviewPainter] shouldRepaint: true, points: ${points.length}, last: ${points.last}');
+    }
+    return shouldRepaint;
   }
 }
 
