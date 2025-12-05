@@ -1,7 +1,12 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy/plugins/handwriting_native/application/handwriting_native_service.dart';
+import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwriting_canvas_background_painter.dart';
+import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwriting_page_thumbnails.dart';
+import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwriting_status_bar.dart';
+import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwriting_top_toolbar.dart';
 
 class HandwritingNativePage extends StatefulWidget {
   const HandwritingNativePage({
@@ -45,6 +50,19 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
   /// 当前页面索引（后续支持多页时使用）
   int _currentPageIndex = 0;
 
+  /// 页面数量（用于缩略图和底部状态栏）
+  int _pageCount = 1;
+
+  /// 画布缩放倍率（用于渲染 PNG）
+  double _zoom = 1.0;
+
+  /// 缩略图缓存
+  final Map<int, ImageProvider> _thumbnails = {};
+
+  /// A4纸默认尺寸（点，72 DPI）
+  static const double a4Width = 595.275591;
+  static const double a4Height = 841.889764;
+
   @override
   void initState() {
     super.initState();
@@ -60,21 +78,22 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
     try {
       print('🔧 [HandwritingNativePage] Initializing document...');
       final docId = await _service.getOrCreateDoc(widget.view.id);
-
+      
       if (!mounted) {
         return;
       }
 
-      setState(() {
-        _isInitializing = false;
-        if (docId == null) {
-          _errorMessage = '无法创建或打开文档';
-        }
-      });
+        setState(() {
+          _isInitializing = false;
+          if (docId == null) {
+            _errorMessage = '无法创建或打开文档';
+          }
+        });
 
       // 文档准备好之后，先获取页面尺寸，再渲染一次空白页面，验证 Xournal++ 渲染链路
       if (docId != null) {
         await _loadPageSize();
+        await _loadPageCountAndThumbnails();
         await _renderAndUpdateCanvas();
       }
     } catch (e) {
@@ -111,6 +130,24 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
       );
     } catch (e) {
       print('❌ [HandwritingNativePage] _loadPageSize error: $e');
+    }
+  }
+
+  /// 加载页面数量并预渲染缩略图
+  Future<void> _loadPageCountAndThumbnails() async {
+    try {
+      final count = await _service.getPageCount(widget.view.id);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pageCount = (count ?? 1).clamp(1, 9999);
+      });
+
+      // 预渲染当前页缩略图
+      await _renderThumbnail(_currentPageIndex);
+    } catch (e) {
+      print('❌ [HandwritingNativePage] _loadPageCount error: $e');
     }
   }
 
@@ -186,205 +223,75 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
         surfaceTintColor: Colors.transparent,
         backgroundColor: theme.colorScheme.surface,
         foregroundColor: theme.colorScheme.onSurface,
-        toolbarHeight: 56,
         titleSpacing: 8,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer.withOpacity(0.25),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.edit_outlined,
-                    size: 18,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    widget.view.name,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          // 顶部菜单：保存 / 导出（暂为占位）
-          TextButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('保存功能开发中（将调用 xopp / PNG 导出）'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-            icon: const Icon(Icons.save_outlined, size: 18),
-            label: const Text('保存'),
-            style: TextButton.styleFrom(
-              foregroundColor: theme.colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 4),
-          TextButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('导出功能开发中（计划支持 PNG / PDF）'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            },
-            icon: const Icon(Icons.ios_share_outlined, size: 18),
-            label: const Text('导出'),
-            style: TextButton.styleFrom(
-              foregroundColor: theme.colorScheme.onSurface.withOpacity(0.8),
-            ),
-          ),
-          const SizedBox(width: 12),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  theme.colorScheme.outlineVariant.withOpacity(0.3),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-        ),
+        title: Text(widget.view.name),
       ),
-      body: Row(
+      body: Column(
         children: [
-          _buildLeftToolbar(theme),
-          const VerticalDivider(width: 1),
+          // 顶部工具栏（Xournal++ 风格）
+          HandwritingTopToolbar(
+            selectedTool: _selectedTool.toToolbarTool(),
+            selectedColor: _selectedColor,
+            strokeWidth: _strokeWidth,
+            onToolSelected: (tool) {
+              setState(() {
+                _selectedTool = tool.toInternal();
+              });
+            },
+            onColorSelected: (color) {
+              setState(() {
+                _selectedColor = color;
+              });
+            },
+            onStrokeWidthChanged: (v) {
+              setState(() {
+                _strokeWidth = v;
+              });
+            },
+            onSave: () => _showSnack(context, '保存功能开发中（将调用 xopp / PNG 导出）'),
+            onExport: () => _showSnack(context, '导出功能开发中（计划支持 PNG / PDF）'),
+            onUndo: () => _showSnack(context, '撤销功能开发中'),
+            onRedo: () => _showSnack(context, '重做功能开发中'),
+            onPrevPage: _pageCount > 1 ? () => _switchPage(_currentPageIndex - 1) : null,
+            onNextPage: _pageCount > 1 ? () => _switchPage(_currentPageIndex + 1) : null,
+          ),
+          const Divider(height: 1),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Row(
               children: [
-                _buildTopInfoBar(theme),
-                const Divider(height: 1),
+                // 左侧缩略图栏
+                HandwritingPageThumbnails(
+                  pageCount: _pageCount,
+                  currentPageIndex: _currentPageIndex,
+                  onPageSelected: (index) => _switchPage(index),
+                  onAddPage: () => _showSnack(context, '新增页面功能开发中'),
+                  onRemovePage: () => _showSnack(context, '删除页面功能开发中'),
+                  renderThumbnail: (index) => _renderThumbnail(index),
+                ),
+                const VerticalDivider(width: 1),
+                // 画布 + 状态栏
                 Expanded(
-                  child: _buildCanvasArea(theme),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 左侧垂直工具栏（笔、橡皮擦、荧光笔、选择等）
-  Widget _buildLeftToolbar(ThemeData theme) {
-    final items = [
-      (_HandwritingTool.pen, Icons.edit_outlined, '画笔'),
-      (_HandwritingTool.eraser, Icons.cleaning_services_outlined, '橡皮擦'),
-      (_HandwritingTool.highlighter, Icons.brush_outlined, '荧光笔'),
-      (_HandwritingTool.selector, Icons.crop_free, '选择'),
-    ];
-
-    return Container(
-      width: 72,
-      color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-      child: Column(
-        children: [
-          const SizedBox(height: 12),
-          for (final item in items)
-            _HandwritingToolButton(
-              icon: item.$2,
-              label: item.$3,
-              selected: _selectedTool == item.$1,
-              onTap: () {
-                setState(() {
-                  _selectedTool = item.$1;
-                });
-              },
-            ),
-          const Spacer(),
-          // 颜色与粗细简易控制条（占位）
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: _selectedColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: theme.colorScheme.onSurface.withOpacity(0.4),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${_strokeWidth.toStringAsFixed(1)} px',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: _buildCanvasArea(theme)),
+                      HandwritingStatusBar(
+                        currentPageIndex: _currentPageIndex,
+                        pageCount: _pageCount,
+                        zoom: _zoom,
+                        onPrevPage: () => _switchPage(_currentPageIndex - 1),
+                        onNextPage: () => _switchPage(_currentPageIndex + 1),
+                        onZoomChanged: (v) async {
+                          setState(() {
+                            _zoom = v;
+                          });
+                          await _renderAndUpdateCanvas();
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-      ),
-    );
-  }
-
-  /// 顶部信息条：显示当前工具 / 颜色等（为后续快捷操作预留）
-  Widget _buildTopInfoBar(ThemeData theme) {
-    String toolLabel;
-    switch (_selectedTool) {
-      case _HandwritingTool.pen:
-        toolLabel = '画笔';
-        break;
-      case _HandwritingTool.eraser:
-        toolLabel = '橡皮擦';
-        break;
-      case _HandwritingTool.highlighter:
-        toolLabel = '荧光笔';
-        break;
-      case _HandwritingTool.selector:
-        toolLabel = '选择';
-        break;
-    }
-
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      alignment: Alignment.centerLeft,
-      child: Row(
-        children: [
-          Text(
-            '当前工具：$toolLabel',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(width: 24),
-          Text(
-            '颜色：#${_selectedColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
             ),
           ),
         ],
@@ -427,7 +334,17 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
               },
               child: Stack(
                 children: [
-                  // 背景：Xournal++ 渲染出来的 PNG
+                  // 第一层：背景绘制（蓝色横格线 + 红色竖线）
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: HandwritingCanvasBackgroundPainter(
+                        pageWidth: _pageWidth ?? a4Width,
+                        pageHeight: _pageHeight ?? a4Height,
+                      ),
+                    ),
+                  ),
+
+                  // 第二层：Xournal++ 渲染出来的 PNG（如果有）
                   if (_renderedImage != null)
                     Positioned.fill(
                       child: ClipRRect(
@@ -437,46 +354,9 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
                           fit: BoxFit.contain,
                         ),
                       ),
-                    )
-                  else
-                    // 如果还没渲染成功，显示原来的文案占位
-                    IgnorePointer(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.draw_rounded,
-                              size: 72,
-                              color: theme.colorScheme.primary.withOpacity(0.6),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              '手写笔记（原生）',
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(0.8),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '画布与笔迹渲染正在集成 Xournal++，当前为 UI 原型状态',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(0.55),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            Text(
-                              '视图ID: ${widget.view.id}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(0.4),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
 
-                  // 前端即时笔迹预览层：不依赖 Xournal++ 渲染结果
+                  // 第三层：前端即时笔迹预览层（不依赖 Xournal++ 渲染结果）
                   // 始终显示 CustomPaint，即使 points 为空，这样 shouldRepaint 才能正确工作
                   Positioned.fill(
                     child: CustomPaint(
@@ -484,9 +364,9 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
                         points: _previewStrokePoints,
                         color: _selectedColor,
                         strokeWidth: _strokeWidth,
+                            ),
                       ),
                     ),
-                  ),
                 ],
               ),
             );
@@ -500,7 +380,7 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
   void _startStroke(Offset localPosition, double canvasWidth, double canvasHeight) {
     print('🖊️ [HandwritingNativePage] _startStroke: $localPosition, canvas: ${canvasWidth}x${canvasHeight}');
     setState(() {
-      _currentStrokePoints.clear();
+    _currentStrokePoints.clear();
       _previewStrokePoints.clear();
       _previewStrokePoints.add(localPosition);
     });
@@ -562,10 +442,32 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
           _previewStrokePoints.clear();
         });
       } else {
-        _currentStrokePoints.clear();
+      _currentStrokePoints.clear();
         _previewStrokePoints.clear();
       }
     }
+  }
+
+  /// 切换页面并重新渲染
+  Future<void> _switchPage(int newIndex) async {
+    if (newIndex < 0 || newIndex >= _pageCount) {
+      return;
+    }
+    setState(() {
+      _currentPageIndex = newIndex;
+      _renderedImage = null;
+    });
+    await _renderAndUpdateCanvas();
+    await _renderThumbnail(newIndex);
+  }
+
+  void _showSnack(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   /// 将 Flutter 坐标转换为传给 Xournal++ 的点结构
@@ -575,16 +477,32 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
     required double canvasWidth,
     required double canvasHeight,
   }) {
-    // 先将手势坐标裁剪到当前画布区域
-    final double clampedX = localPosition.dx.clamp(0, canvasWidth);
-    final double clampedY = localPosition.dy.clamp(0, canvasHeight);
+    // 获取页面尺寸（使用A4默认值或从动态库获取的值）
+    final double pageWidth = _pageWidth ?? a4Width;
+    final double pageHeight = _pageHeight ?? a4Height;
 
-    // 如果已知页面尺寸，则按比例映射到页面坐标；否则退化为直接使用画布尺寸
-    final double pageWidth = _pageWidth ?? canvasWidth;
-    final double pageHeight = _pageHeight ?? canvasHeight;
+    // 计算背景绘制的缩放比例和偏移量（与 HandwritingCanvasBackgroundPainter 保持一致）
+    final scaleX = canvasWidth / pageWidth;
+    final scaleY = canvasHeight / pageHeight;
+    final scale = math.min(scaleX, scaleY);
 
-    final double x = clampedX / canvasWidth * pageWidth;
-    final double y = clampedY / canvasHeight * pageHeight;
+    final drawWidth = pageWidth * scale;
+    final drawHeight = pageHeight * scale;
+    final offsetX = (canvasWidth - drawWidth) / 2;
+    final offsetY = (canvasHeight - drawHeight) / 2;
+
+    // 将手势坐标转换为页面坐标
+    // 1. 减去偏移量
+    final adjustedX = localPosition.dx - offsetX;
+    final adjustedY = localPosition.dy - offsetY;
+
+    // 2. 除以缩放比例，得到页面坐标
+    final double x = adjustedX / scale;
+    final double y = adjustedY / scale;
+
+    // 3. 裁剪到页面范围内
+    final double clampedX = x.clamp(0, pageWidth);
+    final double clampedY = y.clamp(0, pageHeight);
 
     final int toolCode = switch (_selectedTool) {
       _HandwritingTool.pen => 0,
@@ -594,8 +512,8 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
     };
 
     return {
-      'x': x,
-      'y': y,
+      'x': clampedX,
+      'y': clampedY,
       'pressure': 1.0, // 先用固定值，后续接入真实压感
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'tool': toolCode,
@@ -620,6 +538,40 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
     );
   }
 
+  /// 渲染指定页面的缩略图并缓存
+  Future<ImageProvider?> _renderThumbnail(int pageIndex) async {
+    if (_thumbnails.containsKey(pageIndex)) {
+      return _thumbnails[pageIndex];
+    }
+    try {
+      final tempDir = Directory.systemTemp;
+      final pngPath =
+          '${tempDir.path}/handwriting_${widget.view.id}_thumb_$pageIndex.png';
+
+      final renderedPath = await _service.renderPage(
+        widget.view.id,
+        pageIndex,
+        pngPath,
+        300,
+        420,
+      );
+      if (renderedPath == null) {
+        return null;
+      }
+      final file = File(renderedPath);
+      if (!await file.exists()) {
+        return null;
+      }
+      final bytes = await file.readAsBytes();
+      final image = MemoryImage(bytes);
+      _thumbnails[pageIndex] = image;
+      return image;
+    } catch (e) {
+      print('⚠️ [HandwritingNativePage] render thumbnail error: $e');
+      return null;
+    }
+  }
+
   /// 调用原生 render_page 渲染 PNG，并更新画布背景
   Future<void> _renderAndUpdateCanvas({int width = 1200, int height = 800}) async {
     try {
@@ -631,8 +583,8 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
         widget.view.id,
         _currentPageIndex,
         pngPath,
-        width,
-        height,
+        (width * _zoom).round(),
+        (height * _zoom).round(),
       );
 
       if (renderedPath == null) {
@@ -665,60 +617,33 @@ enum _HandwritingTool {
   selector,
 }
 
-class _HandwritingToolButton extends StatelessWidget {
-  const _HandwritingToolButton({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+extension _ToolMapping on _HandwritingTool {
+  HandwritingTool toToolbarTool() {
+    switch (this) {
+      case _HandwritingTool.pen:
+        return HandwritingTool.pen;
+      case _HandwritingTool.eraser:
+        return HandwritingTool.eraser;
+      case _HandwritingTool.highlighter:
+        return HandwritingTool.highlighter;
+      case _HandwritingTool.selector:
+        return HandwritingTool.selector;
+    }
+  }
+}
 
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Material(
-        color: selected
-            ? theme.colorScheme.primary.withOpacity(0.12)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 22,
-                  color: selected
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onSurface.withOpacity(0.7),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontSize: 10,
-                    color: selected
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurface.withOpacity(0.7),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+extension _ToolbarMapping on HandwritingTool {
+  _HandwritingTool toInternal() {
+    switch (this) {
+      case HandwritingTool.pen:
+        return _HandwritingTool.pen;
+      case HandwritingTool.eraser:
+        return _HandwritingTool.eraser;
+      case HandwritingTool.highlighter:
+        return _HandwritingTool.highlighter;
+      case HandwritingTool.selector:
+        return _HandwritingTool.selector;
+    }
   }
 }
 
