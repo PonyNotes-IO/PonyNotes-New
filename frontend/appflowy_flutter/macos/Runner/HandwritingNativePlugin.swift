@@ -57,31 +57,40 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       "/usr/local/lib/libponynotes_xournalpp.dylib",
     ].compactMap { $0 }
     
-    for path in possiblePaths {
+    print("📚 [HandwritingNativePlugin] Checking \(possiblePaths.count) possible paths for dynamic library...")
+    
+    for (index, path) in possiblePaths.enumerated() {
+      print("📚 [HandwritingNativePlugin] [\(index + 1)/\(possiblePaths.count)] Checking path: \(path)")
       if FileManager.default.fileExists(atPath: path) {
-        print("📚 [HandwritingNativePlugin] Attempting to load dynamic library from: \(path)")
+        print("📚 [HandwritingNativePlugin] File exists, attempting to load dynamic library from: \(path)")
         
         let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL)
         if handle != nil {
           dylibHandle = handle
-          print("✅ [HandwritingNativePlugin] Dynamic library loaded successfully")
+          print("✅ [HandwritingNativePlugin] Dynamic library loaded successfully from: \(path)")
           
           // 加载所有函数指针
           if loadFunctionPointers() {
+            print("✅ [HandwritingNativePlugin] All function pointers loaded successfully")
             return true
           } else {
+            print("❌ [HandwritingNativePlugin] Failed to load function pointers, closing library")
             dlclose(handle)
             dylibHandle = nil
           }
         } else {
           if let error = dlerror() {
-            print("❌ [HandwritingNativePlugin] Failed to load dynamic library: \(String(cString: error))")
+            print("❌ [HandwritingNativePlugin] Failed to load dynamic library from \(path): \(String(cString: error))")
+          } else {
+            print("❌ [HandwritingNativePlugin] Failed to load dynamic library from \(path): unknown error")
           }
         }
+      } else {
+        print("⚠️ [HandwritingNativePlugin] File does not exist: \(path)")
       }
     }
     
-    print("⚠️ [HandwritingNativePlugin] Dynamic library not found, using placeholder implementation")
+    print("⚠️ [HandwritingNativePlugin] Dynamic library not found in any path, using placeholder implementation")
     return false
   }
   
@@ -151,6 +160,7 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
   
   /// FlutterPlugin协议要求的方法
   public static func register(with registrar: FlutterPluginRegistrar) {
+    print("🔧 [HandwritingNativePlugin] register called")
     let instance = HandwritingNativePlugin()
     instance.channel = FlutterMethodChannel(
       name: "handwriting_native",
@@ -164,7 +174,13 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     registrar.addMethodCallDelegate(instance, channel: instance.channel!)
     
     // 尝试加载动态库
-    _ = instance.loadDynamicLibrary()
+    print("🔧 [HandwritingNativePlugin] Attempting to load dynamic library...")
+    let loaded = instance.loadDynamicLibrary()
+    if loaded {
+      print("✅ [HandwritingNativePlugin] Dynamic library loaded successfully during registration")
+    } else {
+      print("⚠️ [HandwritingNativePlugin] Dynamic library not loaded during registration, will use placeholder")
+    }
     
     print("✅ [HandwritingNativePlugin] MethodChannel registered")
   }
@@ -409,11 +425,12 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     print("💾 [HandwritingNativePlugin] Saving document \(docId) to: \(xoppPath)")
     
     documentsLock.lock()
-    guard let docHandle = documents[docId] else {
+    guard documents[docId] != nil else {
       documentsLock.unlock()
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
+    let docHandle = documents[docId] // 可能是nil（占位文档）
     documentsLock.unlock()
     
     // 如果动态库已加载且文档句柄有效，调用实际的保存函数
@@ -447,11 +464,12 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     print("🗑️ [HandwritingNativePlugin] Closing document: \(docId)")
     
     documentsLock.lock()
-    guard let docHandle = documents[docId] else {
+    guard documents[docId] != nil else {
       documentsLock.unlock()
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
+    let docHandle = documents[docId] // 可能是nil（占位文档）
     
     // 如果动态库已加载且文档句柄有效，调用实际的关闭函数
     if let closeFunc = pn_xournal_doc_close, let handle = docHandle {
@@ -480,12 +498,20 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     print("✏️ [HandwritingNativePlugin] Handling stroke for document \(docId), points count: \(points.count)")
     
     documentsLock.lock()
-    guard let docHandle = documents[docId] else {
+    guard documents[docId] != nil else {
       documentsLock.unlock()
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
+    let docHandle = documents[docId] // 可能是nil（占位文档）
     documentsLock.unlock()
+    
+    // 如果是占位文档，直接返回成功（占位实现）
+    if docHandle == nil {
+      print("⚠️ [HandwritingNativePlugin] Document is placeholder, stroke ignored")
+      result(true)
+      return
+    }
     
     // 将Flutter传入的points转换为PN_STROKE_POINT数组
     var strokePoints: [PN_STROKE_POINT] = []
@@ -551,11 +577,12 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     print("   Size: \(width)x\(height)")
     
     documentsLock.lock()
-    guard let docHandle = documents[docId] else {
+    guard documents[docId] != nil else {
       documentsLock.unlock()
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
+    let docHandle = documents[docId] // 可能是nil（占位文档）
     documentsLock.unlock()
     
     // 获取options（可选）
@@ -592,11 +619,12 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     }
     
     documentsLock.lock()
-    guard let docHandle = documents[docId] else {
+    guard documents[docId] != nil else {
       documentsLock.unlock()
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
+    let docHandle = documents[docId] // 可能是nil（占位文档）
     documentsLock.unlock()
     
     // 如果动态库已加载且文档句柄有效，调用实际的获取页面数量函数
@@ -627,11 +655,12 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     }
     
     documentsLock.lock()
-    guard let docHandle = documents[docId] else {
+    guard documents[docId] != nil else {
       documentsLock.unlock()
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
+    let docHandle = documents[docId] // 可能是nil（占位文档）
     documentsLock.unlock()
     
     // 如果动态库已加载且文档句柄有效，调用实际的获取页面尺寸函数
