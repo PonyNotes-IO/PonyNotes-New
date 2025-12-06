@@ -623,9 +623,16 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
       }
 
       // 关闭当前文档（如果存在）
-      await _service.closeDoc(widget.view.id);
+      // 注意：无论closeDoc是否成功，都要强制清除_docIdMap中的旧docId，确保getOrCreateDoc会重新打开PDF
+      print('🗑️ [HandwritingNativePage] Closing old document before opening PDF...');
+      final closeSuccess = await _service.closeDoc(widget.view.id);
+      print('🗑️ [HandwritingNativePage] closeDoc result: $closeSuccess');
+      
+      // 强制清除_docIdMap中的旧docId（如果closeDoc失败，旧docId可能还在）
+      _service.forceRemoveDoc(widget.view.id);
 
       // 打开PDF文档（替换当前文档，不附加）
+      print('📄 [HandwritingNativePage] Opening PDF document...');
       final docId = await _service.getOrCreateDoc(
         widget.view.id,
         pdfPath: pdfPath,

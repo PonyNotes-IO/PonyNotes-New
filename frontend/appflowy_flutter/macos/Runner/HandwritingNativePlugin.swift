@@ -343,8 +343,11 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
   
   /// 打开PDF文档
   private func handleOpenPdf(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    print("📞 [HandwritingNativePlugin] handleOpenPdf called")
+    
     guard let args = call.arguments as? [String: Any],
           let pdfPath = args["path"] as? String else {
+      print("❌ [HandwritingNativePlugin] handleOpenPdf: Missing path parameter")
       result(FlutterError(code: "INVALID_ARGUMENT", message: "Missing path parameter", details: nil))
       return
     }
@@ -354,32 +357,42 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     let attachInt: Int32 = attachToDocument ? 1 : 0
     
     print("📄 [HandwritingNativePlugin] Opening PDF from: \(pdfPath), attach: \(attachToDocument)")
+    print("📄 [HandwritingNativePlugin] Checking if dynamic library is loaded...")
     
     // 如果动态库已加载，调用实际的PDF打开函数
     if let openPdfFunc = pn_xournal_doc_open_pdf {
+      print("✅ [HandwritingNativePlugin] PDF open function is available, calling native function...")
       var docHandle: OpaquePointer?
       pdfPath.withCString { cString in
+        print("📄 [HandwritingNativePlugin] Calling pn_xournal_doc_open_pdf with path: \(pdfPath)")
         let ret = openPdfFunc(&docHandle, cString, attachInt)
+        print("📄 [HandwritingNativePlugin] pn_xournal_doc_open_pdf returned: \(ret), docHandle: \(docHandle != nil ? "valid" : "nil")")
+        
         if ret == 0, let handle = docHandle {
           let docId = UUID().uuidString
           documentsLock.lock()
           documents[docId] = handle
+          let docCount = documents.count
           documentsLock.unlock()
-          print("✅ [HandwritingNativePlugin] PDF opened with ID: \(docId)")
+          print("✅ [HandwritingNativePlugin] PDF opened successfully with ID: \(docId)")
+          print("✅ [HandwritingNativePlugin] Total documents in map: \(docCount)")
           result(docId)
         } else {
-          print("❌ [HandwritingNativePlugin] Failed to open PDF, error code: \(ret)")
+          print("❌ [HandwritingNativePlugin] Failed to open PDF, error code: \(ret), docHandle: \(docHandle != nil ? "valid" : "nil")")
           result(FlutterError(code: "OPEN_PDF_FAILED", message: "Failed to open PDF document", details: ret))
         }
       }
     } else {
       // 占位实现
+      print("⚠️ [HandwritingNativePlugin] PDF open function is NOT available, using placeholder")
       let docId = UUID().uuidString
       documentsLock.lock()
       documents[docId] = nil // 占位
+      let docCount = documents.count
       documentsLock.unlock()
       print("⚠️ [HandwritingNativePlugin] Dynamic library not available, using placeholder")
       print("✅ [HandwritingNativePlugin] PDF opened (placeholder) with ID: \(docId)")
+      print("✅ [HandwritingNativePlugin] Total documents in map: \(docCount)")
       result(docId)
     }
   }

@@ -30,8 +30,9 @@ class HandwritingNativeService {
 
   /// 为视图创建或打开文档
   Future<String?> getOrCreateDoc(String viewId, {String? xoppPath, String? pdfPath, bool attachPdfToDocument = false}) async {
-    // 如果已有docId，直接返回
-    if (_docIdMap.containsKey(viewId)) {
+    // 如果已有docId，直接返回（除非是打开PDF，需要强制重新打开）
+    if (_docIdMap.containsKey(viewId) && pdfPath == null) {
+      print('📄 [HandwritingNativeService] Using existing docId for view: $viewId, docId: ${_docIdMap[viewId]}');
       return _docIdMap[viewId];
     }
 
@@ -40,8 +41,9 @@ class HandwritingNativeService {
     String? docId;
     if (pdfPath != null && pdfPath.isNotEmpty) {
       // 打开PDF文档
-      print('📄 [HandwritingNativeService] Opening PDF for view: $viewId');
+      print('📄 [HandwritingNativeService] Opening PDF for view: $viewId, path: $pdfPath');
       docId = await HandwritingNativePlatform.openPdf(pdfPath, attachToDocument: attachPdfToDocument);
+      print('📄 [HandwritingNativeService] openPdf returned docId: $docId');
     } else if (xoppPath != null && xoppPath.isNotEmpty) {
       // 打开现有xopp文档
       print('📂 [HandwritingNativeService] Opening document for view: $viewId');
@@ -82,14 +84,28 @@ class HandwritingNativeService {
       return true; // 没有文档也算成功
     }
 
-    print('🗑️ [HandwritingNativeService] Closing document for view: $viewId');
+    print('🗑️ [HandwritingNativeService] Closing document for view: $viewId, docId: $docId');
     final success = await HandwritingNativePlatform.closeDoc(docId);
     
     if (success) {
       _docIdMap.remove(viewId);
+      print('✅ [HandwritingNativeService] Document closed and removed from map');
+    } else {
+      print('⚠️ [HandwritingNativeService] closeDoc failed, but docId will be removed from map anyway');
+      // 即使closeDoc失败，也移除_docIdMap中的条目，避免后续getOrCreateDoc返回无效的docId
+      _docIdMap.remove(viewId);
     }
     
     return success;
+  }
+
+  /// 强制移除文档映射（用于PDF打开时强制清除旧文档）
+  void forceRemoveDoc(String viewId) {
+    if (_docIdMap.containsKey(viewId)) {
+      final oldDocId = _docIdMap[viewId];
+      _docIdMap.remove(viewId);
+      print('🗑️ [HandwritingNativeService] Force removed docId mapping: viewId=$viewId, oldDocId=$oldDocId');
+    }
   }
 
   /// 处理笔迹
