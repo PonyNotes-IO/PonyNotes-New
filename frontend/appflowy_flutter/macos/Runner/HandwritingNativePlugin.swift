@@ -1,6 +1,11 @@
 import Cocoa
 import FlutterMacOS
 import Darwin
+import Foundation
+
+// RTLD_DEFAULT 在 C 中定义为 ((void *) -2)
+// 在 Swift 中，我们需要使用 UnsafeMutableRawPointer(bitPattern: -2) 来创建它
+private let RTLD_DEFAULT_PTR = UnsafeMutableRawPointer(bitPattern: -2)
 
 // 与 C 层 PN_STROKE_POINT 对应的结构体，需放在顶层以便 @convention(c) 使用
 struct PN_STROKE_POINT {
@@ -16,6 +21,7 @@ struct PN_STROKE_POINT {
 class HandwritingNativePlugin: NSObject, FlutterPlugin {
   private var channel: FlutterMethodChannel?
   private var documents: [String: OpaquePointer?] = [:] // docId -> PN_DOC_HANDLE映射
+  private var placeholderDocIds: Set<String> = [] // 占位文档的docId集合
   private let documentsLock = NSLock()
   
   // 动态库句柄
@@ -64,10 +70,66 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       if FileManager.default.fileExists(atPath: path) {
         print("📚 [HandwritingNativePlugin] File exists, attempting to load dynamic library from: \(path)")
         
-        let handle = dlopen(path, RTLD_NOW | RTLD_LOCAL)
+        // 尝试使用 RTLD_LAZY | RTLD_GLOBAL
+        // RTLD_LAZY: 延迟解析符号，避免依赖库问题导致立即失败
+        // RTLD_GLOBAL: 允许后续的 dlsym 调用找到符号
+        // 注意：使用绝对路径，避免rpath问题
+        let absolutePath = (path as NSString).resolvingSymlinksInPath
+        print("📚 [HandwritingNativePlugin] Resolved path: \(absolutePath)")
+        
+        // 预加载关键依赖库（可选，帮助解决依赖问题）
+        let keyDependencies = [
+          "/opt/homebrew/opt/glib/lib/libglib-2.0.0.dylib",
+          "/opt/homebrew/opt/cairo/lib/libcairo.2.dylib",
+          "/opt/homebrew/opt/poppler/lib/libpoppler-cpp.2.dylib",
+        ]
+        for depPath in keyDependencies {
+          if FileManager.default.fileExists(atPath: depPath) {
+            let depHandle = dlopen(depPath, RTLD_LAZY | RTLD_GLOBAL)
+            if depHandle != nil {
+              print("✅ [HandwritingNativePlugin] Pre-loaded dependency: \(depPath)")
+            } else {
+              if let error = dlerror() {
+                print("⚠️ [HandwritingNativePlugin] Failed to pre-load dependency \(depPath): \(String(cString: error))")
+              }
+            }
+          }
+        }
+        
+        // 使用 RTLD_NOW 立即解析所有符号，而不是延迟解析
+        // 这样可以确保依赖库正确解析，符号可以立即使用
+        let handle = dlopen(absolutePath, RTLD_NOW | RTLD_GLOBAL)
         if handle != nil {
           dylibHandle = handle
-          print("✅ [HandwritingNativePlugin] Dynamic library loaded successfully from: \(path)")
+          print("✅ [HandwritingNativePlugin] Dynamic library loaded successfully from: \(absolutePath)")
+          
+          // 验证动态库是否正确加载：尝试查找一个已知符号
+          // 先尝试从特定handle查找
+          dlerror() // 清除错误
+          var testSymbol = dlsym(handle, "_pn_xournal_init")
+          
+          // 如果从特定handle找不到，尝试从全局符号表查找（使用RTLD_DEFAULT）
+          if testSymbol == nil {
+            dlerror() // 清除错误
+            // 在Swift中，RTLD_DEFAULT需要用UnsafeMutableRawPointer(bitPattern: -2)表示
+            if let rtlDefault = RTLD_DEFAULT_PTR {
+              testSymbol = dlsym(rtlDefault, "_pn_xournal_init")
+              if testSymbol != nil {
+                print("✅ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' found via global symbol table at: \(testSymbol!)")
+              }
+            }
+          } else {
+            print("✅ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' found at: \(testSymbol!)")
+          }
+          
+          if testSymbol == nil {
+            if let error = dlerror() {
+              print("⚠️ [HandwritingNativePlugin] Warning: Symbol '_pn_xournal_init' not found: \(String(cString: error))")
+              print("⚠️ [HandwritingNativePlugin] This may indicate dependency library issues")
+            } else {
+              print("⚠️ [HandwritingNativePlugin] Warning: Symbol '_pn_xournal_init' not found (no error)")
+            }
+          }
           
           // 加载所有函数指针
           if loadFunctionPointers() {
@@ -98,51 +160,130 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
   private func loadFunctionPointers() -> Bool {
     guard let handle = dylibHandle else { return false }
     
-    // 辅助函数：从dlsym获取函数指针
+    // 辅助函数：从dlsym获取函数指针，并检查错误
+    // 先尝试从特定的handle查找，如果失败则尝试RTLD_DEFAULT
     func getFunction<T>(_ name: String) -> T? {
       dlerror() // 清除之前的错误
-      guard let symbol = dlsym(handle, name) else {
+      
+      // 首先尝试从特定的handle查找
+      var symbol = dlsym(handle, name)
+      
+      // 如果从特定handle找不到，尝试从全局符号表查找（使用RTLD_DEFAULT）
+      if symbol == nil {
+        dlerror() // 清除错误
+        // 在Swift中，RTLD_DEFAULT需要用UnsafeMutableRawPointer(bitPattern: -2)表示
+        if let rtlDefault = RTLD_DEFAULT_PTR {
+          symbol = dlsym(rtlDefault, name)
+          if symbol != nil {
+            print("✅ [HandwritingNativePlugin] Found symbol '\(name)' via global symbol table")
+          }
+        }
+      }
+      
+      guard let foundSymbol = symbol else {
+        // 检查是否有错误
+        if let error = dlerror() {
+          print("❌ [HandwritingNativePlugin] Failed to load symbol '\(name)': \(String(cString: error))")
+        } else {
+          print("❌ [HandwritingNativePlugin] Failed to load symbol '\(name)': symbol not found (no error)")
+        }
         return nil
       }
-      return unsafeBitCast(symbol, to: T.self)
+      
+      // 检查是否有错误（即使dlsym返回非nil，也可能有错误）
+      if let error = dlerror() {
+        print("❌ [HandwritingNativePlugin] Error after loading symbol '\(name)': \(String(cString: error))")
+        return nil
+      }
+      
+      return unsafeBitCast(foundSymbol, to: T.self)
     }
     
     // 加载各个函数指针（macOS下C函数符号有下划线前缀）
-    pn_xournal_init = getFunction("_pn_xournal_init")
-    pn_xournal_shutdown = getFunction("_pn_xournal_shutdown")
-    pn_xournal_doc_create = getFunction("_pn_xournal_doc_create")
-    pn_xournal_doc_open = getFunction("_pn_xournal_doc_open")
-    pn_xournal_doc_open_pdf = getFunction("_pn_xournal_doc_open_pdf")
-    pn_xournal_doc_save = getFunction("_pn_xournal_doc_save")
-    pn_xournal_doc_close = getFunction("_pn_xournal_doc_close")
-    pn_xournal_doc_handle_stroke = getFunction("_pn_xournal_doc_handle_stroke")
-    pn_xournal_doc_render_page_to_png = getFunction("_pn_xournal_doc_render_page_to_png")
-    pn_xournal_doc_get_page_count = getFunction("_pn_xournal_doc_get_page_count")
-    pn_xournal_doc_get_page_size = getFunction("_pn_xournal_doc_get_page_size")
+    var allLoaded = true
+    var missingFunctions: [String] = []
     
-    // 检查是否有错误
-    if let error = dlerror() {
-      print("❌ [HandwritingNativePlugin] Failed to load function pointers: \(String(cString: error))")
-      return false
+    if let funcPtr: PN_XournalInitFunc = getFunction("_pn_xournal_init") {
+      pn_xournal_init = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_init")
     }
     
-    // 检查所有必需的函数是否都已加载
-    let allLoaded = pn_xournal_init != nil &&
-                    pn_xournal_shutdown != nil &&
-                    pn_xournal_doc_create != nil &&
-                    pn_xournal_doc_open != nil &&
-                    pn_xournal_doc_open_pdf != nil &&
-                    pn_xournal_doc_save != nil &&
-                    pn_xournal_doc_close != nil &&
-                    pn_xournal_doc_handle_stroke != nil &&
-                    pn_xournal_doc_render_page_to_png != nil &&
-                    pn_xournal_doc_get_page_count != nil &&
-                    pn_xournal_doc_get_page_size != nil
+    if let funcPtr: PN_XournalShutdownFunc = getFunction("_pn_xournal_shutdown") {
+      pn_xournal_shutdown = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_shutdown")
+    }
+    
+    if let funcPtr: PN_XournalDocCreateFunc = getFunction("_pn_xournal_doc_create") {
+      pn_xournal_doc_create = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_doc_create")
+    }
+    
+    if let funcPtr: PN_XournalDocOpenFunc = getFunction("_pn_xournal_doc_open") {
+      pn_xournal_doc_open = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_doc_open")
+    }
+    
+    if let funcPtr: PN_XournalDocOpenPdfFunc = getFunction("_pn_xournal_doc_open_pdf") {
+      pn_xournal_doc_open_pdf = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_doc_open_pdf")
+    }
+    
+    if let funcPtr: PN_XournalDocSaveFunc = getFunction("_pn_xournal_doc_save") {
+      pn_xournal_doc_save = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_doc_save")
+    }
+    
+    if let funcPtr: PN_XournalDocCloseFunc = getFunction("_pn_xournal_doc_close") {
+      pn_xournal_doc_close = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_doc_close")
+    }
+    
+    if let funcPtr: PN_XournalDocHandleStrokeFunc = getFunction("_pn_xournal_doc_handle_stroke") {
+      pn_xournal_doc_handle_stroke = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_doc_handle_stroke")
+    }
+    
+    if let funcPtr: PN_XournalDocRenderPageToPngFunc = getFunction("_pn_xournal_doc_render_page_to_png") {
+      pn_xournal_doc_render_page_to_png = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_doc_render_page_to_png")
+    }
+    
+    if let funcPtr: PN_XournalDocGetPageCountFunc = getFunction("_pn_xournal_doc_get_page_count") {
+      pn_xournal_doc_get_page_count = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_doc_get_page_count")
+    }
+    
+    if let funcPtr: PN_XournalDocGetPageSizeFunc = getFunction("_pn_xournal_doc_get_page_size") {
+      pn_xournal_doc_get_page_size = funcPtr
+    } else {
+      allLoaded = false
+      missingFunctions.append("pn_xournal_doc_get_page_size")
+    }
     
     if allLoaded {
       print("✅ [HandwritingNativePlugin] All function pointers loaded successfully")
     } else {
-      print("⚠️ [HandwritingNativePlugin] Some function pointers failed to load")
+      print("❌ [HandwritingNativePlugin] Failed to load some function pointers. Missing: \(missingFunctions.joined(separator: ", "))")
     }
     
     return allLoaded
@@ -156,6 +297,52 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       }
       dlclose(handle)
     }
+  }
+  
+  /// 创建占位PNG文件（空白白色图像）
+  private func createPlaceholderPng(path: String, width: Int, height: Int) -> Bool {
+    let url = URL(fileURLWithPath: path)
+    
+    // 创建图像上下文
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    guard let context = CGContext(
+      data: nil,
+      width: width,
+      height: height,
+      bitsPerComponent: 8,
+      bytesPerRow: width * 4,
+      space: colorSpace,
+      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+      print("❌ [HandwritingNativePlugin] Failed to create CGContext for placeholder PNG")
+      return false
+    }
+    
+    // 填充白色背景
+    context.setFillColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    
+    // 创建图像
+    guard let image = context.makeImage() else {
+      print("❌ [HandwritingNativePlugin] Failed to create CGImage for placeholder PNG")
+      return false
+    }
+    
+    // 保存为PNG
+    guard let destination = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else {
+      print("❌ [HandwritingNativePlugin] Failed to create CGImageDestination for placeholder PNG")
+      return false
+    }
+    
+    CGImageDestinationAddImage(destination, image, nil)
+    
+    if !CGImageDestinationFinalize(destination) {
+      print("❌ [HandwritingNativePlugin] Failed to finalize placeholder PNG")
+      return false
+    }
+    
+    print("✅ [HandwritingNativePlugin] Placeholder PNG created: \(path) (\(width)x\(height))")
+    return true
   }
   
   /// FlutterPlugin协议要求的方法
@@ -310,7 +497,8 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       // 占位实现
       let docId = UUID().uuidString
       documentsLock.lock()
-      documents[docId] = nil // 占位
+      documents[docId] = nil // 占位（存储nil以便后续检查时能找到key）
+      placeholderDocIds.insert(docId) // 标记为占位文档
       documentsLock.unlock()
       print("⚠️ [HandwritingNativePlugin] Dynamic library not available, using placeholder")
       print("✅ [HandwritingNativePlugin] Document created with ID: \(docId)")
@@ -349,7 +537,8 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       // 占位实现
       let docId = UUID().uuidString
       documentsLock.lock()
-      documents[docId] = nil // 占位
+      documents[docId] = nil // 占位（存储nil以便后续检查时能找到key）
+      placeholderDocIds.insert(docId) // 标记为占位文档
       documentsLock.unlock()
       print("⚠️ [HandwritingNativePlugin] Dynamic library not available, using placeholder")
       print("✅ [HandwritingNativePlugin] Document opened with ID: \(docId)")
@@ -403,12 +592,14 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       print("⚠️ [HandwritingNativePlugin] PDF open function is NOT available, using placeholder")
       let docId = UUID().uuidString
       documentsLock.lock()
-      documents[docId] = nil // 占位
+      documents[docId] = nil // 占位（存储nil以便后续检查时能找到key）
+      placeholderDocIds.insert(docId) // 标记为占位文档
       let docCount = documents.count
+      let placeholderCount = placeholderDocIds.count
       documentsLock.unlock()
       print("⚠️ [HandwritingNativePlugin] Dynamic library not available, using placeholder")
       print("✅ [HandwritingNativePlugin] PDF opened (placeholder) with ID: \(docId)")
-      print("✅ [HandwritingNativePlugin] Total documents in map: \(docCount)")
+      print("✅ [HandwritingNativePlugin] Total documents in map: \(docCount), placeholder docs: \(placeholderCount)")
       result(docId)
     }
   }
@@ -425,13 +616,22 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     print("💾 [HandwritingNativePlugin] Saving document \(docId) to: \(xoppPath)")
     
     documentsLock.lock()
-    guard documents[docId] != nil else {
-      documentsLock.unlock()
+    let isPlaceholder = placeholderDocIds.contains(docId)
+    let docHandle = documents[docId] // 可能是nil（占位文档）
+    documentsLock.unlock()
+    
+    // 检查文档是否存在（包括占位文档）
+    if docHandle == nil && !isPlaceholder {
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
-    let docHandle = documents[docId] // 可能是nil（占位文档）
-    documentsLock.unlock()
+    
+    // 如果是占位文档，返回占位结果
+    if isPlaceholder {
+      print("⚠️ [HandwritingNativePlugin] Document is placeholder, returning placeholder save result")
+      result(true)
+      return
+    }
     
     // 如果动态库已加载且文档句柄有效，调用实际的保存函数
     if let saveFunc = pn_xournal_doc_save, let handle = docHandle {
@@ -464,12 +664,15 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     print("🗑️ [HandwritingNativePlugin] Closing document: \(docId)")
     
     documentsLock.lock()
-    guard documents[docId] != nil else {
+    let isPlaceholder = placeholderDocIds.contains(docId)
+    let docHandle = documents[docId] // 可能是nil（占位文档）
+    
+    // 检查文档是否存在（包括占位文档）
+    if docHandle == nil && !isPlaceholder {
       documentsLock.unlock()
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
-    let docHandle = documents[docId] // 可能是nil（占位文档）
     
     // 如果动态库已加载且文档句柄有效，调用实际的关闭函数
     if let closeFunc = pn_xournal_doc_close, let handle = docHandle {
@@ -479,7 +682,9 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       }
     }
     
+    // 移除文档映射和占位标记
     documents.removeValue(forKey: docId)
+    placeholderDocIds.remove(docId)
     documentsLock.unlock()
     
     print("✅ [HandwritingNativePlugin] Document closed")
@@ -498,16 +703,18 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     print("✏️ [HandwritingNativePlugin] Handling stroke for document \(docId), points count: \(points.count)")
     
     documentsLock.lock()
-    guard documents[docId] != nil else {
-      documentsLock.unlock()
-      result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
-      return
-    }
+    let isPlaceholder = placeholderDocIds.contains(docId)
     let docHandle = documents[docId] // 可能是nil（占位文档）
     documentsLock.unlock()
     
+    // 检查文档是否存在（包括占位文档）
+    if docHandle == nil && !isPlaceholder {
+      result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
+      return
+    }
+    
     // 如果是占位文档，直接返回成功（占位实现）
-    if docHandle == nil {
+    if isPlaceholder {
       print("⚠️ [HandwritingNativePlugin] Document is placeholder, stroke ignored")
       result(true)
       return
@@ -577,13 +784,33 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     print("   Size: \(width)x\(height)")
     
     documentsLock.lock()
-    guard documents[docId] != nil else {
-      documentsLock.unlock()
+    let isPlaceholder = placeholderDocIds.contains(docId)
+    let docHandle = documents[docId] // 可能是nil（占位文档）
+    let totalDocs = documents.count
+    let placeholderCount = placeholderDocIds.count
+    documentsLock.unlock()
+    
+    print("🎨 [HandwritingNativePlugin] docId: \(docId), isPlaceholder: \(isPlaceholder), docHandle: \(docHandle != nil ? "valid" : "nil"), totalDocs: \(totalDocs), placeholderCount: \(placeholderCount)")
+    
+    // 检查文档是否存在（包括占位文档）
+    if docHandle == nil && !isPlaceholder {
+      print("❌ [HandwritingNativePlugin] Document not found: \(docId)")
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
-    let docHandle = documents[docId] // 可能是nil（占位文档）
-    documentsLock.unlock()
+    
+    // 如果是占位文档，创建占位PNG文件并返回
+    if isPlaceholder {
+      print("⚠️ [HandwritingNativePlugin] Document is placeholder, creating placeholder PNG file...")
+      if createPlaceholderPng(path: pngPath, width: width, height: height) {
+        print("✅ [HandwritingNativePlugin] Placeholder PNG created successfully")
+        result(pngPath)
+      } else {
+        print("❌ [HandwritingNativePlugin] Failed to create placeholder PNG")
+        result(FlutterError(code: "PLACEHOLDER_PNG_FAILED", message: "Failed to create placeholder PNG file", details: nil))
+      }
+      return
+    }
     
     // 获取options（可选）
     let optionsJson = (args["options"] as? String) ?? "{}"
@@ -618,14 +845,30 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       return
     }
     
+    print("📄 [HandwritingNativePlugin] handleGetPageCount called for docId: \(docId)")
+    
     documentsLock.lock()
-    guard documents[docId] != nil else {
-      documentsLock.unlock()
+    let isPlaceholder = placeholderDocIds.contains(docId)
+    let docHandle = documents[docId] // 可能是nil（占位文档）
+    let totalDocs = documents.count
+    let placeholderCount = placeholderDocIds.count
+    documentsLock.unlock()
+    
+    print("📄 [HandwritingNativePlugin] docId: \(docId), isPlaceholder: \(isPlaceholder), docHandle: \(docHandle != nil ? "valid" : "nil"), totalDocs: \(totalDocs), placeholderCount: \(placeholderCount)")
+    
+    // 检查文档是否存在（包括占位文档）
+    if docHandle == nil && !isPlaceholder {
+      print("❌ [HandwritingNativePlugin] Document not found: \(docId)")
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
-    let docHandle = documents[docId] // 可能是nil（占位文档）
-    documentsLock.unlock()
+    
+    // 如果是占位文档，返回占位结果
+    if isPlaceholder {
+      print("⚠️ [HandwritingNativePlugin] Document is placeholder, returning placeholder page count: 1")
+      result(1)
+      return
+    }
     
     // 如果动态库已加载且文档句柄有效，调用实际的获取页面数量函数
     if let getPageCountFunc = pn_xournal_doc_get_page_count, let handle = docHandle {
@@ -654,14 +897,33 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       return
     }
     
+    print("📄 [HandwritingNativePlugin] handleGetPageSize called for docId: \(docId), pageIndex: \(pageIndex)")
+    
     documentsLock.lock()
-    guard documents[docId] != nil else {
-      documentsLock.unlock()
+    let isPlaceholder = placeholderDocIds.contains(docId)
+    let docHandle = documents[docId] // 可能是nil（占位文档）
+    let totalDocs = documents.count
+    let placeholderCount = placeholderDocIds.count
+    documentsLock.unlock()
+    
+    print("📄 [HandwritingNativePlugin] docId: \(docId), isPlaceholder: \(isPlaceholder), docHandle: \(docHandle != nil ? "valid" : "nil"), totalDocs: \(totalDocs), placeholderCount: \(placeholderCount)")
+    
+    // 检查文档是否存在（包括占位文档）
+    if docHandle == nil && !isPlaceholder {
+      print("❌ [HandwritingNativePlugin] Document not found: \(docId)")
       result(FlutterError(code: "DOCUMENT_NOT_FOUND", message: "Document not found: \(docId)", details: nil))
       return
     }
-    let docHandle = documents[docId] // 可能是nil（占位文档）
-    documentsLock.unlock()
+    
+    // 如果是占位文档，返回占位结果（A4尺寸）
+    if isPlaceholder {
+      print("⚠️ [HandwritingNativePlugin] Document is placeholder, returning placeholder page size (A4)")
+      result([
+        "width": 595.275591,
+        "height": 841.889764,
+      ])
+      return
+    }
     
     // 如果动态库已加载且文档句柄有效，调用实际的获取页面尺寸函数
     if let getPageSizeFunc = pn_xournal_doc_get_page_size, let handle = docHandle {
