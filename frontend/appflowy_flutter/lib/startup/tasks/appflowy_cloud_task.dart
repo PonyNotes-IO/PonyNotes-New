@@ -155,13 +155,13 @@ class AppFlowyCloudDeepLink {
                   if (accessToken != null) {
                     Log.info('🔵 [DeepLink] Extracted access_token from URI');
                     
-                    // 从 userProfile.email 中提取手机号或邮箱
-                    // userProfile.email 可能是手机号（如 13436574850）或邮箱（如 test@test.com）
-                    final phoneOrEmail = userProfile.email;
-                    Log.info('🔵 [DeepLink] User phoneOrEmail: $phoneOrEmail');
+                    // 从 userProfile 中提取手机号或邮箱
+                    // 优先使用 phone 字段，如果为空则使用 email 字段
+                    final hasPhone = userProfile.hasPhone() && userProfile.phone.isNotEmpty;
+                    final phoneOrEmail = hasPhone ? userProfile.phone : userProfile.email;
+                    final isEmail = !hasPhone;
                     
-                    // 判断是手机号还是邮箱（简单判断：包含 @ 就是邮箱，否则是手机号）
-                    final isEmail = phoneOrEmail.contains('@');
+                    Log.info('🔵 [DeepLink] User phoneOrEmail: $phoneOrEmail (isEmail: $isEmail)');
                     
                     // 创建无需认证的 PasswordHttpService 实例（checkPasswordStatus 是公开接口）
                     final sharedEnv = getIt<AppFlowyCloudSharedEnv>();

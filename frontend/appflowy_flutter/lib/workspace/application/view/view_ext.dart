@@ -169,7 +169,19 @@ extension ViewExtension on ViewPB {
             // 解析失败，继续使用默认的 DocumentPlugin
           }
         }
-        // 继续处理 Folder 和 Notebook
+        // 普通的 Document 视图，返回 DocumentPlugin
+        final selectionValue = arguments[PluginArgumentKeys.selection];
+        Selection? initialSelection;
+        if (selectionValue is Selection) initialSelection = selectionValue;
+
+        final String? initialBlockId = arguments[PluginArgumentKeys.blockId];
+
+        return DocumentPlugin(
+          view: this,
+          pluginType: pluginType,
+          initialSelection: initialSelection,
+          initialBlockId: initialBlockId,
+        );
       case ViewLayoutPB.Folder:
       case ViewLayoutPB.Notebook:
         final selectionValue = arguments[PluginArgumentKeys.selection];

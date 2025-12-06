@@ -486,6 +486,89 @@ class UserBackendService implements IUserBackendService {
     return UserEventUpdateWorkspaceSubscriptionPaymentPeriod(request).send();
   }
 
+  /// Verify phone OTP for reauthentication (without binding)
+  /// This calls GoTrue's /verify endpoint with type=reauthentication
+  static Future<FlowyResult<void, FlowyError>> verifyPhoneReauthentication(
+    String phone,
+    String otp,
+  ) async {
+    try {
+      Log.info('[UserBackendService] 🔐 START verifyPhoneReauthentication for: $phone');
+      
+      // 获取当前用户配置
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+      
+      // 获取当前用户 Profile（包含 token）
+      final userProfileResult = await getCurrentUserProfile();
+      final userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+      
+      final baseUrl = cloudConfig.serverUrl;
+      final token = userProfile.token;
+      
+      if (baseUrl.isEmpty || token.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL or auth token',
+        );
+      }
+      
+      // 调用 GoTrue 的 /verify 端点
+      // baseUrl 格式: http://8.152.101.166:8000/api (云端 API)
+      // GoTrue 通过 nginx 代理在 80 端口的 /gotrue 路径下
+      // 需要将端口从 8000 改为 80
+      final uri = Uri.parse(baseUrl);
+      final gotrueUrl = '${uri.scheme}://${uri.host}/gotrue/verify';
+      final url = Uri.parse(gotrueUrl);
+      
+      Log.info('[UserBackendService] 🔐 Calling GoTrue verify: $url');
+      
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'type': 'reauthentication',
+          'phone': phone,
+          'token': otp,
+        }),
+      );
+      
+      Log.info('[UserBackendService] 🔐 Response status: ${response.statusCode}');
+      Log.info('[UserBackendService] 🔐 Response body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        Log.info('[UserBackendService] ✅ Phone reauthentication verified successfully');
+        return FlowyResult.success(null);
+      } else {
+        final errorMsg = 'Failed to verify phone reauthentication: ${response.statusCode} - ${response.body}';
+        Log.error('[UserBackendService] ❌ $errorMsg');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e, stackTrace) {
+      Log.error('[UserBackendService] ❌ Exception: $e');
+      Log.error('[UserBackendService] ❌ Stack trace: $stackTrace');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Failed to verify phone reauthentication: $e',
+      );
+    }
+  }
+
   // NOTE: This function is irreversible and will delete the current user's account.
   static Future<FlowyResult<void, FlowyError>> deleteCurrentAccount() {
     return UserEventDeleteAccount().send();

@@ -198,13 +198,11 @@ where
       profile.name
     );
     
-    let token = client.get_token()?;
-
     let mut conn = logged_user.get_sqlite_db(uid)?;
     let workspace_auth_type = select_user_workspace(workspace_id, &mut conn)
       .map(|row| AuthType::from(row.workspace_type))
       .unwrap_or(AuthType::AppFlowyCloud);
-    let token_str = token.access_token.clone();
+    let token_str = client.get_token_str()?;
     let profile = user_profile_from_af_profile(token_str, profile, workspace_auth_type)?;
 
     // Discard the response if the user has switched to a new workspace. This avoids updating the

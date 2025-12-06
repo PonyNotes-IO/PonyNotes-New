@@ -27,6 +27,7 @@ typedef int (*PN_XournalInitFunc)(const char* config_json);
 typedef int (*PN_XournalShutdownFunc)(void);
 typedef int (*PN_XournalDocCreateFunc)(PN_DOC_HANDLE* out_doc, const char* options_json);
 typedef int (*PN_XournalDocOpenFunc)(PN_DOC_HANDLE* out_doc, const char* xopp_path);
+typedef int (*PN_XournalDocOpenPdfFunc)(PN_DOC_HANDLE* out_doc, const char* pdf_path, int attach_to_document);
 typedef int (*PN_XournalDocSaveFunc)(PN_DOC_HANDLE doc, const char* xopp_path);
 typedef int (*PN_XournalDocCloseFunc)(PN_DOC_HANDLE doc);
 typedef int (*PN_XournalDocHandleStrokeFunc)(PN_DOC_HANDLE doc, const PN_STROKE_POINT* points, int count);
@@ -59,6 +60,10 @@ class HandwritingNativePlugin {
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   
   void HandleOpenDoc(
+      const flutter::MethodCall<flutter::EncodableValue> &method_call,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  
+  void HandleOpenPdf(
       const flutter::MethodCall<flutter::EncodableValue> &method_call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   
@@ -103,6 +108,7 @@ class HandwritingNativePlugin {
   PN_XournalShutdownFunc pn_xournal_shutdown_;
   PN_XournalDocCreateFunc pn_xournal_doc_create_;
   PN_XournalDocOpenFunc pn_xournal_doc_open_;
+  PN_XournalDocOpenPdfFunc pn_xournal_doc_open_pdf_;
   PN_XournalDocSaveFunc pn_xournal_doc_save_;
   PN_XournalDocCloseFunc pn_xournal_doc_close_;
   PN_XournalDocHandleStrokeFunc pn_xournal_doc_handle_stroke_;

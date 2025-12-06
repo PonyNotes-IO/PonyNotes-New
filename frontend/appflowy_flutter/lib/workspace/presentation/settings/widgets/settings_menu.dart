@@ -79,20 +79,30 @@ class _SettingsMenuState extends State<SettingsMenu> {
   }
 
   // 获取显示名称：优先显示昵称，其次显示手机号
-  String _getDisplayName() {
-    // 优先显示昵称
+  String _getUserDisplayName() {
+    Log.info('🔍 [SettingsMenu] _getUserDisplayName called');
+    Log.info('   - userProfile.name: ${widget.userProfile.name}');
+    Log.info('   - userProfile.email: ${widget.userProfile.email}');
+    Log.info('   - userProfile.hasPhone(): ${widget.userProfile.hasPhone()}');
+    Log.info('   - userProfile.phone: ${widget.userProfile.phone}');
+    
+    // 优先显示用户名
     if (widget.userProfile.name.isNotEmpty) {
+      Log.info('   ✅ 使用 name: ${widget.userProfile.name}');
       return widget.userProfile.name;
     }
     // 其次显示手机号
     if (widget.userProfile.hasPhone() && widget.userProfile.phone.isNotEmpty) {
+      Log.info('   ✅ 使用 phone: ${widget.userProfile.phone}');
       return widget.userProfile.phone;
     }
     // 再显示邮箱
     if (widget.userProfile.email.isNotEmpty) {
+      Log.info('   ✅ 使用 email: ${widget.userProfile.email}');
       return widget.userProfile.email;
     }
     // 最后显示默认值
+    Log.info('   ✅ 使用默认值');
     return '小马笔记的笔记';
   }
 
@@ -262,7 +272,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
                             children: [
                               Flexible(
                                 child: FlowyText(
-                                  _getDisplayName(),
+                                  _getUserDisplayName(),
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
                                   color: theme.textColorScheme.primary,
