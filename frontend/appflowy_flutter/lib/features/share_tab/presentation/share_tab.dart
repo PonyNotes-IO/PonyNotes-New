@@ -717,8 +717,9 @@ class _UserSearchField extends StatefulWidget {
 
 class _UserSearchFieldState extends State<_UserSearchField> {
   final _focusNode = FocusNode();
-  bool _showResults = false;
+  final _layerLink = LayerLink();
   Timer? _debounceTimer;
+  OverlayEntry? _overlayEntry;
 
   @override
   void initState() {
@@ -728,7 +729,30 @@ class _UserSearchFieldState extends State<_UserSearchField> {
   }
 
   @override
+  void didUpdateWidget(_UserSearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 当搜索结果更新时，重新构建 overlay
+    if (!mounted) {
+      return;
+    }
+    
+    if (oldWidget.availableUsers != widget.availableUsers) {
+      try {
+        final hasText = widget.controller.text.trim().isNotEmpty;
+        if (hasText && _focusNode.hasFocus && mounted) {
+          _showOverlay();
+        }
+      } catch (e) {
+        // Controller 可能已被销毁，忽略
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    // Remove overlay entry
+    _removeOverlay();
+    
     // Cancel any pending timers first
     _debounceTimer?.cancel();
     _debounceTimer = null;
@@ -762,6 +786,183 @@ class _UserSearchFieldState extends State<_UserSearchField> {
     super.dispose();
   }
 
+  void _removeOverlay() {
+    if (_overlayEntry != null) {
+      try {
+        _overlayEntry!.remove();
+      } catch (e) {
+        // Overlay 可能已经被移除，忽略错误
+      }
+      _overlayEntry = null;
+    }
+  }
+
+  void _showOverlay() {
+    // 移除旧的 overlay，以便使用最新的数据重新创建
+    _removeOverlay();
+
+    if (!mounted) {
+      return;
+    }
+
+    // 在创建 overlay 之前捕获必要的数据
+    final theme = AppFlowyTheme.of(context);
+    final controller = widget.controller;
+    final availableUsers = widget.availableUsers;
+    final existingUsers = widget.existingUsers;
+    final onUserSelected = widget.onUserSelected;
+    
+    // 检查输入框是否有内容
+    String searchText;
+    try {
+      searchText = controller.text.trim();
+    } catch (e) {
+      // Controller 可能已被销毁
+      return;
+    }
+    
+    if (searchText.isEmpty) {
+      return;
+    }
+
+    _overlayEntry = OverlayEntry(
+      builder: (overlayContext) {
+        // 检查 widget 是否仍然有效
+        if (!mounted) {
+          return const SizedBox.shrink();
+        }
+        
+        // 再次检查输入框内容（可能已改变）
+        String currentText;
+        try {
+          currentText = controller.text.trim();
+        } catch (e) {
+          return const SizedBox.shrink();
+        }
+        
+        if (currentText.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        
+        // 过滤用户列表
+        final existingEmails = existingUsers.map((u) => u.email).toSet();
+        final filteredUsers = availableUsers
+            .where((user) => !existingEmails.contains(user.email))
+            .toList();
+        
+        // 计算弹框宽度：对话框最大宽度 500，减去左右 padding (20*2)，等于输入框宽度
+        final screenWidth = MediaQuery.of(overlayContext).size.width;
+        final dialogMaxWidth = 500.0;
+        final dialogInsetPadding = 24.0 * 2; // Dialog 的 insetPadding 左右各 24px
+        final dialogInternalPadding = 20.0 * 2; // Dialog 内部的 padding 左右各 20px
+        final inputFieldWidth = dialogMaxWidth - dialogInternalPadding; // 460px
+        
+        // 计算弹框宽度：如果屏幕宽度足够，使用输入框宽度；否则使用屏幕宽度减去所有间距
+        final popupWidth = screenWidth >= dialogMaxWidth + dialogInsetPadding
+            ? inputFieldWidth
+            : screenWidth - dialogInsetPadding - dialogInternalPadding;
+        
+        return Positioned(
+          width: popupWidth,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: const Offset(0, 8), // 紧贴输入框下方，8px 间距
+            followerAnchor: Alignment.topLeft,
+            targetAnchor: Alignment.bottomLeft,
+            child: Material(
+              elevation: 16,
+              borderRadius: BorderRadius.circular(8),
+              color: theme.surfaceContainerColorScheme.layer01,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 200),
+                child: filteredUsers.isNotEmpty
+                    ? ListView.separated(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        itemCount: filteredUsers.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: theme.borderColorScheme.primary.withValues(alpha: 0.15),
+                        ),
+                        itemBuilder: (overlayContext, index) {
+                          final user = filteredUsers[index];
+                          return InkWell(
+                            onTap: () {
+                              if (mounted) {
+                                onUserSelected(user);
+                                _focusNode.unfocus();
+                                _removeOverlay();
+                              }
+                            },
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: theme.spacing.m,
+                                vertical: theme.spacing.s,
+                              ),
+                              child: Row(
+                                children: [
+                                  // Avatar
+                                  CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: theme.surfaceContainerColorScheme.layer02,
+                                    child: user.avatarUrl != null
+                                        ? ClipOval(
+                                            child: Image.network(
+                                              user.avatarUrl!,
+                                              width: 32,
+                                              height: 32,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => _buildAvatarFallback(user),
+                                            ),
+                                          )
+                                        : _buildAvatarFallback(user),
+                                  ),
+                                  HSpace(theme.spacing.s),
+                                  // Name and email
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        FlowyText.medium(
+                                          user.name,
+                                          color: theme.textColorScheme.primary,
+                                        ),
+                                        if (user.email != user.name)
+                                          FlowyText.regular(
+                                            user.email,
+                                            fontSize: 12,
+                                            color: theme.textColorScheme.secondary,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      )
+                    : _buildEmptyState(overlayContext),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (mounted && _overlayEntry != null) {
+      try {
+        final overlay = Overlay.of(context, rootOverlay: false);
+        overlay.insert(_overlayEntry!);
+      } catch (e) {
+        // Context 可能无效，清理 overlay entry
+        _overlayEntry = null;
+      }
+    }
+  }
+
   void _onTextChanged() {
     if (!mounted) {
       return;
@@ -792,10 +993,9 @@ class _UserSearchFieldState extends State<_UserSearchField> {
         }
         try {
           widget.onSearch(searchQuery);
-        if (mounted) {
-          setState(() {
-            _showResults = true;
-          });
+          // 搜索请求发送后，显示 overlay（即使结果还没返回，也会显示等待状态）
+          if (mounted && _focusNode.hasFocus) {
+            _showOverlay();
           }
         } catch (e) {
           // Controller may have been disposed, ignore
@@ -809,9 +1009,7 @@ class _UserSearchFieldState extends State<_UserSearchField> {
         try {
       widget.onSearch('');
           if (mounted) {
-      setState(() {
-        _showResults = false;
-      });
+          _removeOverlay();
           }
         } catch (e) {
           if (!mounted) {
@@ -848,9 +1046,7 @@ class _UserSearchFieldState extends State<_UserSearchField> {
         // Check again if focus node is still valid
         try {
           if (!_focusNode.hasFocus && mounted) {
-          setState(() {
-            _showResults = false;
-          });
+          _removeOverlay();
         }
         } catch (e) {
           // Focus node or controller may have been disposed, ignore
@@ -864,9 +1060,7 @@ class _UserSearchFieldState extends State<_UserSearchField> {
       try {
         final text = widget.controller.text.trim();
         if (text.isNotEmpty && mounted) {
-      setState(() {
-        _showResults = true;
-      });
+          _showOverlay();
         }
       } catch (e) {
         // Controller may have been disposed, ignore
@@ -879,108 +1073,14 @@ class _UserSearchFieldState extends State<_UserSearchField> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    
-    // 过滤掉已经在协作者列表中的用户
-    final existingEmails = widget.existingUsers.map((u) => u.email).toSet();
-    final filteredUsers = widget.availableUsers
-        .where((user) => !existingEmails.contains(user.email))
-        .toList();
-
-    // 检查输入框是否有内容
-    final hasText = widget.controller.text.trim().isNotEmpty;
-    final shouldShowResults = _showResults && hasText;
-
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        AFTextField(
-          controller: widget.controller,
-          focusNode: _focusNode,
-          size: AFTextFieldSize.m,
-          hintText: '输入用户名邀请协作',
-        ),
-        if (shouldShowResults)
-          Positioned(
-            top: 50,
-            left: 0,
-            right: 0,
-            child: Material(
-              elevation: 8,
-              borderRadius: BorderRadius.circular(8),
-              color: theme.surfaceContainerColorScheme.layer01,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 200),
-                child: filteredUsers.isNotEmpty
-                    ? ListView.separated(
-                  shrinkWrap: true,
-                  padding: EdgeInsets.zero,
-                  itemCount: filteredUsers.length,
-                  separatorBuilder: (_, __) => Divider(
-                    height: 1,
-                    color: theme.borderColorScheme.primary.withValues(alpha: 0.15),
-                  ),
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
-                    return InkWell(
-                      onTap: () {
-                        widget.onUserSelected(user);
-                        _focusNode.unfocus();
-                      },
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: theme.spacing.m,
-                          vertical: theme.spacing.s,
-                        ),
-                        child: Row(
-                          children: [
-                            // Avatar
-                            CircleAvatar(
-                              radius: 16,
-                              backgroundColor: theme.surfaceContainerColorScheme.layer02,
-                              child: user.avatarUrl != null
-                                  ? ClipOval(
-                                      child: Image.network(
-                                        user.avatarUrl!,
-                                        width: 32,
-                                        height: 32,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => _buildAvatarFallback(user),
-                                      ),
-                                    )
-                                  : _buildAvatarFallback(user),
-                            ),
-                            HSpace(theme.spacing.s),
-                            // Name and email
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  FlowyText.medium(
-                                    user.name,
-                                    color: theme.textColorScheme.primary,
-                                  ),
-                                  if (user.email != user.name)
-                                    FlowyText.regular(
-                                      user.email,
-                                      fontSize: 12,
-                                      color: theme.textColorScheme.secondary,
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                      )
-                    : _buildEmptyState(context),
-                ),
-              ),
-            ),
-      ],
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: AFTextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        size: AFTextFieldSize.m,
+        hintText: '输入用户名邀请协作',
+      ),
     );
   }
 
