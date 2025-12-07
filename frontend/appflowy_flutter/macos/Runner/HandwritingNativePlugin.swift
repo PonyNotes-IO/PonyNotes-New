@@ -26,6 +26,8 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
   
   // 动态库句柄
   private var dylibHandle: UnsafeMutableRawPointer?
+  // 动态库路径（用于 NSLookupSymbolInImage）
+  private var dylibPath: String?
   
   // C API函数指针类型定义
   typealias PN_XournalInitFunc = @convention(c) (UnsafePointer<CChar>?) -> Int32
@@ -63,21 +65,32 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       "/usr/local/lib/libponynotes_xournalpp.dylib",
     ].compactMap { $0 }
     
-    print("📚 [HandwritingNativePlugin] Checking \(possiblePaths.count) possible paths for dynamic library...")
+    // 使用 NSLog 确保日志输出
+    let logMsg = "📚 [HandwritingNativePlugin] Checking \(possiblePaths.count) possible paths for dynamic library..."
+    NSLog(logMsg)
+    print(logMsg)
     
     for (index, path) in possiblePaths.enumerated() {
-      print("📚 [HandwritingNativePlugin] [\(index + 1)/\(possiblePaths.count)] Checking path: \(path)")
+      let checkMsg = "📚 [HandwritingNativePlugin] [\(index + 1)/\(possiblePaths.count)] Checking path: \(path)"
+      NSLog(checkMsg)
+      print(checkMsg)
+      
       if FileManager.default.fileExists(atPath: path) {
-        print("📚 [HandwritingNativePlugin] File exists, attempting to load dynamic library from: \(path)")
+        let existsMsg = "📚 [HandwritingNativePlugin] File exists, attempting to load dynamic library from: \(path)"
+        NSLog(existsMsg)
+        print(existsMsg)
         
         // 尝试使用 RTLD_LAZY | RTLD_GLOBAL
         // RTLD_LAZY: 延迟解析符号，避免依赖库问题导致立即失败
         // RTLD_GLOBAL: 允许后续的 dlsym 调用找到符号
         // 注意：使用绝对路径，避免rpath问题
         let absolutePath = (path as NSString).resolvingSymlinksInPath
-        print("📚 [HandwritingNativePlugin] Resolved path: \(absolutePath)")
+        let resolvedMsg = "📚 [HandwritingNativePlugin] Resolved path: \(absolutePath)"
+        NSLog(resolvedMsg)
+        print(resolvedMsg)
         
         // 预加载关键依赖库（可选，帮助解决依赖问题）
+        // 注意：使用 RTLD_NOW | RTLD_GLOBAL 确保依赖库立即解析并添加到全局符号表
         let keyDependencies = [
           "/opt/homebrew/opt/glib/lib/libglib-2.0.0.dylib",
           "/opt/homebrew/opt/cairo/lib/libcairo.2.dylib",
@@ -85,7 +98,7 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
         ]
         for depPath in keyDependencies {
           if FileManager.default.fileExists(atPath: depPath) {
-            let depHandle = dlopen(depPath, RTLD_LAZY | RTLD_GLOBAL)
+            let depHandle = dlopen(depPath, RTLD_NOW | RTLD_GLOBAL)
             if depHandle != nil {
               print("✅ [HandwritingNativePlugin] Pre-loaded dependency: \(depPath)")
             } else {
@@ -98,85 +111,172 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
         
         // 使用 RTLD_NOW 立即解析所有符号，而不是延迟解析
         // 这样可以确保依赖库正确解析，符号可以立即使用
+        // 尝试使用 RTLD_NOW | RTLD_GLOBAL，看看是否能解决问题
+        // 如果使用 RTLD_LOCAL，符号只在当前handle中可见，可能无法被查找
+        // 使用 RTLD_GLOBAL 时，符号会被添加到全局符号表，可以从 handle 或 RTLD_DEFAULT 查找
+        print("🔍 [HandwritingNativePlugin] Attempting to dlopen with RTLD_NOW | RTLD_GLOBAL...")
+        dlerror() // 清除之前的错误
         let handle = dlopen(absolutePath, RTLD_NOW | RTLD_GLOBAL)
+        
         if handle != nil {
           dylibHandle = handle
-          print("✅ [HandwritingNativePlugin] Dynamic library loaded successfully from: \(absolutePath)")
+          dylibPath = absolutePath  // 保存路径用于 NSLookupSymbolInImage
+          let successMsg = "✅ [HandwritingNativePlugin] Dynamic library loaded successfully from: \(absolutePath)"
+          NSLog(successMsg)
+          print(successMsg)
+          print("🔍 [HandwritingNativePlugin] dlopen returned handle: \(handle!)")
+          
+          // 检查是否有错误（即使dlopen成功，也可能有警告）
+          if let error = dlerror() {
+            print("⚠️ [HandwritingNativePlugin] Warning after dlopen: \(String(cString: error))")
+          } else {
+            print("✅ [HandwritingNativePlugin] No errors after dlopen")
+          }
           
           // 验证动态库是否正确加载：尝试查找一个已知符号
-          // 先尝试从特定handle查找
+          // 使用 RTLD_GLOBAL 时，符号会被添加到全局符号表，可以从 handle 或 RTLD_DEFAULT 查找
+          // 注意：根据测试，符号可能是不带下划线的形式
+          print("🔍 [HandwritingNativePlugin] Attempting to find symbol 'pn_xournal_init' from handle...")
           dlerror() // 清除错误
-          var testSymbol = dlsym(handle, "_pn_xournal_init")
-          
-          // 如果从特定handle找不到，尝试从全局符号表查找（使用RTLD_DEFAULT）
+          var testSymbol = dlsym(handle, "pn_xournal_init")
           if testSymbol == nil {
+            print("🔍 [HandwritingNativePlugin] Trying with underscore prefix '_pn_xournal_init'...")
+            testSymbol = dlsym(handle, "_pn_xournal_init")
+          }
+          
+          if testSymbol != nil {
+            print("✅ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' found at handle: \(testSymbol!)")
+            // 检查是否有错误
+            if let error = dlerror() {
+              print("⚠️ [HandwritingNativePlugin] Warning: Error after dlsym returned non-nil: \(String(cString: error))")
+            }
+          } else {
+            print("❌ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' NOT found from handle")
+            // 如果从特定handle找不到，尝试从全局符号表查找（使用RTLD_DEFAULT）
             dlerror() // 清除错误
+            print("🔍 [HandwritingNativePlugin] Attempting to find symbol '_pn_xournal_init' from RTLD_DEFAULT...")
             // 在Swift中，RTLD_DEFAULT需要用UnsafeMutableRawPointer(bitPattern: -2)表示
             if let rtlDefault = RTLD_DEFAULT_PTR {
               testSymbol = dlsym(rtlDefault, "_pn_xournal_init")
               if testSymbol != nil {
                 print("✅ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' found via global symbol table at: \(testSymbol!)")
+              } else {
+                if let error = dlerror() {
+                  print("❌ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' NOT found from RTLD_DEFAULT: \(String(cString: error))")
+                } else {
+                  print("❌ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' NOT found from RTLD_DEFAULT (no error)")
+                }
               }
+            } else {
+              print("❌ [HandwritingNativePlugin] RTLD_DEFAULT_PTR is nil")
             }
-          } else {
-            print("✅ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' found at: \(testSymbol!)")
           }
           
           if testSymbol == nil {
-            if let error = dlerror() {
-              print("⚠️ [HandwritingNativePlugin] Warning: Symbol '_pn_xournal_init' not found: \(String(cString: error))")
-              print("⚠️ [HandwritingNativePlugin] This may indicate dependency library issues")
-            } else {
-              print("⚠️ [HandwritingNativePlugin] Warning: Symbol '_pn_xournal_init' not found (no error)")
-            }
+            print("❌ [HandwritingNativePlugin] CRITICAL: Symbol '_pn_xournal_init' not found from any source!")
+            print("🔍 [HandwritingNativePlugin] This indicates a serious problem with symbol resolution")
+            print("🔍 [HandwritingNativePlugin] Possible causes:")
+            print("   1. Dependencies not resolved correctly")
+            print("   2. Symbol not exported correctly from the library")
+            print("   3. Library architecture mismatch")
+            print("   4. Library corruption")
           }
           
           // 加载所有函数指针
+          print("🔍 [HandwritingNativePlugin] Starting to load function pointers...")
           if loadFunctionPointers() {
             print("✅ [HandwritingNativePlugin] All function pointers loaded successfully")
             return true
           } else {
             print("❌ [HandwritingNativePlugin] Failed to load function pointers, closing library")
+            print("🔍 [HandwritingNativePlugin] Closing handle: \(handle!)")
             dlclose(handle)
             dylibHandle = nil
+            print("🔍 [HandwritingNativePlugin] Handle closed, dylibHandle set to nil")
           }
         } else {
+          // dlopen失败
+          print("❌ [HandwritingNativePlugin] dlopen returned nil")
           if let error = dlerror() {
-            print("❌ [HandwritingNativePlugin] Failed to load dynamic library from \(path): \(String(cString: error))")
+            let errorMsg = "❌ [HandwritingNativePlugin] Failed to load dynamic library from \(path): \(String(cString: error))"
+            NSLog(errorMsg)
+            print(errorMsg)
+            print("🔍 [HandwritingNativePlugin] This usually indicates:")
+            print("   1. Missing dependencies")
+            print("   2. Wrong architecture")
+            print("   3. Corrupted library file")
+            print("   4. Permission issues")
           } else {
-            print("❌ [HandwritingNativePlugin] Failed to load dynamic library from \(path): unknown error")
+            let errorMsg = "❌ [HandwritingNativePlugin] Failed to load dynamic library from \(path): unknown error"
+            NSLog(errorMsg)
+            print(errorMsg)
           }
         }
       } else {
-        print("⚠️ [HandwritingNativePlugin] File does not exist: \(path)")
+        let notExistMsg = "⚠️ [HandwritingNativePlugin] File does not exist: \(path)"
+        NSLog(notExistMsg)
+        print(notExistMsg)
       }
     }
     
-    print("⚠️ [HandwritingNativePlugin] Dynamic library not found in any path, using placeholder implementation")
+    let notFoundMsg = "⚠️ [HandwritingNativePlugin] Dynamic library not found in any path, using placeholder implementation"
+    NSLog(notFoundMsg)
+    print(notFoundMsg)
     return false
   }
   
   /// 加载函数指针
   private func loadFunctionPointers() -> Bool {
-    guard let handle = dylibHandle else { return false }
+    print("🔍 [HandwritingNativePlugin] loadFunctionPointers called")
+    guard let handle = dylibHandle else {
+      print("❌ [HandwritingNativePlugin] loadFunctionPointers: dylibHandle is nil")
+      return false
+    }
+    print("🔍 [HandwritingNativePlugin] loadFunctionPointers: dylibHandle is valid: \(handle)")
     
     // 辅助函数：从dlsym获取函数指针，并检查错误
-    // 先尝试从特定的handle查找，如果失败则尝试RTLD_DEFAULT
+    // 首先从特定的handle查找（使用RTLD_LOCAL时，符号只在当前handle中可见）
+    // 如果失败，则尝试从全局符号表查找（使用RTLD_DEFAULT）
+    // 注意：macOS 的导出表使用压缩格式，dlsym 应该能够解析，但如果失败，可能需要使用其他方法
     func getFunction<T>(_ name: String) -> T? {
+      print("🔍 [HandwritingNativePlugin] getFunction called for: '\(name)'")
+      print("🔍 [HandwritingNativePlugin] Handle value: \(handle)")
+      
       dlerror() // 清除之前的错误
       
-      // 首先尝试从特定的handle查找
+      // 首先尝试从特定的handle查找（这是主要方式）
+      print("🔍 [HandwritingNativePlugin] Attempting dlsym(handle, '\(name)')...")
       var symbol = dlsym(handle, name)
       
-      // 如果从特定handle找不到，尝试从全局符号表查找（使用RTLD_DEFAULT）
-      if symbol == nil {
+      if symbol != nil {
+        print("🔍 [HandwritingNativePlugin] dlsym returned non-nil: \(symbol!)")
+        // 检查是否有错误（即使dlsym返回非nil，也可能有错误）
+        let errorAfter = dlerror()
+        if errorAfter != nil {
+          print("❌ [HandwritingNativePlugin] Error after loading symbol '\(name)' from handle: \(String(cString: errorAfter!))")
+          symbol = nil
+        } else {
+          print("✅ [HandwritingNativePlugin] Found symbol '\(name)' at handle: \(symbol!)")
+        }
+      } else {
+        print("❌ [HandwritingNativePlugin] dlsym(handle, '\(name)') returned nil")
+        // 如果从特定handle找不到，尝试从全局符号表查找（使用RTLD_DEFAULT）
         dlerror() // 清除错误
+        print("🔍 [HandwritingNativePlugin] Attempting dlsym(RTLD_DEFAULT, '\(name)')...")
         // 在Swift中，RTLD_DEFAULT需要用UnsafeMutableRawPointer(bitPattern: -2)表示
         if let rtlDefault = RTLD_DEFAULT_PTR {
           symbol = dlsym(rtlDefault, name)
           if symbol != nil {
-            print("✅ [HandwritingNativePlugin] Found symbol '\(name)' via global symbol table")
+            print("✅ [HandwritingNativePlugin] Found symbol '\(name)' via global symbol table at: \(symbol!)")
+          } else {
+            if let error = dlerror() {
+              print("❌ [HandwritingNativePlugin] dlsym(RTLD_DEFAULT, '\(name)') returned nil with error: \(String(cString: error))")
+            } else {
+              print("❌ [HandwritingNativePlugin] dlsym(RTLD_DEFAULT, '\(name)') returned nil (no error)")
+            }
           }
+        } else {
+          print("❌ [HandwritingNativePlugin] RTLD_DEFAULT_PTR is nil, cannot try RTLD_DEFAULT")
         }
       }
       
@@ -187,93 +287,96 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
         } else {
           print("❌ [HandwritingNativePlugin] Failed to load symbol '\(name)': symbol not found (no error)")
         }
+        // 注意：导出表数据中确实包含符号（压缩格式），但 dlsym 无法找到
+        // 这可能是因为 -Wl,-exported_symbol 选项没有正确工作
+        // 或者符号导出格式有问题
+        print("🔍 [HandwritingNativePlugin] Export table contains symbols in compressed format")
+        print("   But dlsym cannot find them - this suggests an export configuration issue")
         return nil
       }
       
-      // 检查是否有错误（即使dlsym返回非nil，也可能有错误）
-      if let error = dlerror() {
-        print("❌ [HandwritingNativePlugin] Error after loading symbol '\(name)': \(String(cString: error))")
-        return nil
-      }
-      
+      print("✅ [HandwritingNativePlugin] Successfully loaded symbol '\(name)', casting to function pointer...")
       return unsafeBitCast(foundSymbol, to: T.self)
     }
     
-    // 加载各个函数指针（macOS下C函数符号有下划线前缀）
+    // 加载各个函数指针
+    // 注意：虽然 -Wl,-exported_symbol 使用了带下划线的符号名称，
+    // 但实际的符号可能是不带下划线的，需要尝试两种形式
     var allLoaded = true
     var missingFunctions: [String] = []
     
-    if let funcPtr: PN_XournalInitFunc = getFunction("_pn_xournal_init") {
+    // 首先尝试不带下划线的符号名称（根据 ctypes 测试，这是实际导出的形式）
+    if let funcPtr: PN_XournalInitFunc = getFunction("pn_xournal_init") ?? getFunction("_pn_xournal_init") {
       pn_xournal_init = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_init")
     }
     
-    if let funcPtr: PN_XournalShutdownFunc = getFunction("_pn_xournal_shutdown") {
+    if let funcPtr: PN_XournalShutdownFunc = getFunctionWithFallback("pn_xournal_shutdown", "_pn_xournal_shutdown") {
       pn_xournal_shutdown = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_shutdown")
     }
     
-    if let funcPtr: PN_XournalDocCreateFunc = getFunction("_pn_xournal_doc_create") {
+    if let funcPtr: PN_XournalDocCreateFunc = getFunctionWithFallback("pn_xournal_doc_create", "_pn_xournal_doc_create") {
       pn_xournal_doc_create = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_create")
     }
     
-    if let funcPtr: PN_XournalDocOpenFunc = getFunction("_pn_xournal_doc_open") {
+    if let funcPtr: PN_XournalDocOpenFunc = getFunctionWithFallback("pn_xournal_doc_open", "_pn_xournal_doc_open") {
       pn_xournal_doc_open = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_open")
     }
     
-    if let funcPtr: PN_XournalDocOpenPdfFunc = getFunction("_pn_xournal_doc_open_pdf") {
+    if let funcPtr: PN_XournalDocOpenPdfFunc = getFunctionWithFallback("pn_xournal_doc_open_pdf", "_pn_xournal_doc_open_pdf") {
       pn_xournal_doc_open_pdf = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_open_pdf")
     }
     
-    if let funcPtr: PN_XournalDocSaveFunc = getFunction("_pn_xournal_doc_save") {
+    if let funcPtr: PN_XournalDocSaveFunc = getFunctionWithFallback("pn_xournal_doc_save", "_pn_xournal_doc_save") {
       pn_xournal_doc_save = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_save")
     }
     
-    if let funcPtr: PN_XournalDocCloseFunc = getFunction("_pn_xournal_doc_close") {
+    if let funcPtr: PN_XournalDocCloseFunc = getFunctionWithFallback("pn_xournal_doc_close", "_pn_xournal_doc_close") {
       pn_xournal_doc_close = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_close")
     }
     
-    if let funcPtr: PN_XournalDocHandleStrokeFunc = getFunction("_pn_xournal_doc_handle_stroke") {
+    if let funcPtr: PN_XournalDocHandleStrokeFunc = getFunctionWithFallback("pn_xournal_doc_handle_stroke", "_pn_xournal_doc_handle_stroke") {
       pn_xournal_doc_handle_stroke = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_handle_stroke")
     }
     
-    if let funcPtr: PN_XournalDocRenderPageToPngFunc = getFunction("_pn_xournal_doc_render_page_to_png") {
+    if let funcPtr: PN_XournalDocRenderPageToPngFunc = getFunctionWithFallback("pn_xournal_doc_render_page_to_png", "_pn_xournal_doc_render_page_to_png") {
       pn_xournal_doc_render_page_to_png = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_render_page_to_png")
     }
     
-    if let funcPtr: PN_XournalDocGetPageCountFunc = getFunction("_pn_xournal_doc_get_page_count") {
+    if let funcPtr: PN_XournalDocGetPageCountFunc = getFunctionWithFallback("pn_xournal_doc_get_page_count", "_pn_xournal_doc_get_page_count") {
       pn_xournal_doc_get_page_count = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_get_page_count")
     }
     
-    if let funcPtr: PN_XournalDocGetPageSizeFunc = getFunction("_pn_xournal_doc_get_page_size") {
+    if let funcPtr: PN_XournalDocGetPageSizeFunc = getFunctionWithFallback("pn_xournal_doc_get_page_size", "_pn_xournal_doc_get_page_size") {
       pn_xournal_doc_get_page_size = funcPtr
     } else {
       allLoaded = false
@@ -347,7 +450,10 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
   
   /// FlutterPlugin协议要求的方法
   public static func register(with registrar: FlutterPluginRegistrar) {
+    // 使用 NSLog 确保日志输出（Flutter 的 print 可能被过滤）
+    NSLog("🔧 [HandwritingNativePlugin] register called")
     print("🔧 [HandwritingNativePlugin] register called")
+    
     let instance = HandwritingNativePlugin()
     instance.channel = FlutterMethodChannel(
       name: "handwriting_native",
@@ -361,14 +467,18 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     registrar.addMethodCallDelegate(instance, channel: instance.channel!)
     
     // 尝试加载动态库
+    NSLog("🔧 [HandwritingNativePlugin] Attempting to load dynamic library...")
     print("🔧 [HandwritingNativePlugin] Attempting to load dynamic library...")
     let loaded = instance.loadDynamicLibrary()
     if loaded {
+      NSLog("✅ [HandwritingNativePlugin] Dynamic library loaded successfully during registration")
       print("✅ [HandwritingNativePlugin] Dynamic library loaded successfully during registration")
     } else {
+      NSLog("⚠️ [HandwritingNativePlugin] Dynamic library not loaded during registration, will use placeholder")
       print("⚠️ [HandwritingNativePlugin] Dynamic library not loaded during registration, will use placeholder")
     }
     
+    NSLog("✅ [HandwritingNativePlugin] MethodChannel registered")
     print("✅ [HandwritingNativePlugin] MethodChannel registered")
   }
   
@@ -563,6 +673,26 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     
     print("📄 [HandwritingNativePlugin] Opening PDF from: \(pdfPath), attach: \(attachToDocument)")
     print("📄 [HandwritingNativePlugin] Checking if dynamic library is loaded...")
+    
+    // 检查动态库加载状态
+    let dylibStatus = dylibHandle != nil ? "loaded" : "not loaded"
+    let funcStatus = pn_xournal_doc_open_pdf != nil ? "available" : "not available"
+    NSLog("📄 [HandwritingNativePlugin] Dynamic library status: \(dylibStatus), PDF open function: \(funcStatus)")
+    print("📄 [HandwritingNativePlugin] Dynamic library status: \(dylibStatus), PDF open function: \(funcStatus)")
+    
+    // 如果动态库未加载，尝试重新加载
+    if dylibHandle == nil {
+      NSLog("📄 [HandwritingNativePlugin] Dynamic library not loaded, attempting to reload...")
+      print("📄 [HandwritingNativePlugin] Dynamic library not loaded, attempting to reload...")
+      let reloaded = loadDynamicLibrary()
+      if reloaded {
+        NSLog("✅ [HandwritingNativePlugin] Dynamic library reloaded successfully")
+        print("✅ [HandwritingNativePlugin] Dynamic library reloaded successfully")
+      } else {
+        NSLog("❌ [HandwritingNativePlugin] Failed to reload dynamic library")
+        print("❌ [HandwritingNativePlugin] Failed to reload dynamic library")
+      }
+    }
     
     // 如果动态库已加载，调用实际的PDF打开函数
     if let openPdfFunc = pn_xournal_doc_open_pdf {
