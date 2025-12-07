@@ -305,8 +305,13 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     var allLoaded = true
     var missingFunctions: [String] = []
     
+    // 辅助函数：尝试两种符号名称（带下划线和不带下划线）
+    func getFunctionWithFallback<T>(_ name: String, _ altName: String) -> T? {
+      return getFunction(name) ?? getFunction(altName)
+    }
+    
     // 首先尝试不带下划线的符号名称（根据 ctypes 测试，这是实际导出的形式）
-    if let funcPtr: PN_XournalInitFunc = getFunction("pn_xournal_init") ?? getFunction("_pn_xournal_init") {
+    if let funcPtr: PN_XournalInitFunc = getFunctionWithFallback("pn_xournal_init", "_pn_xournal_init") {
       pn_xournal_init = funcPtr
     } else {
       allLoaded = false
@@ -395,8 +400,8 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
   deinit {
     // 清理动态库
     if let handle = dylibHandle {
-      if pn_xournal_shutdown != nil {
-        pn_xournal_shutdown?()
+      if let shutdownFunc = pn_xournal_shutdown {
+        let _ = shutdownFunc()
       }
       dlclose(handle)
     }
