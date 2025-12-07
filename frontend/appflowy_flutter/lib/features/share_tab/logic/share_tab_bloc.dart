@@ -50,6 +50,38 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
   // Used to listen for shared view updates.
   FolderNotificationListener? _folderNotificationListener;
 
+  /// 从 token 字段中提取 access_token
+  /// 如果 token 是 JSON 格式，则解析并提取 access_token
+  /// 否则直接返回 token
+  String? _extractAccessToken(String token) {
+    if (token.isEmpty) {
+      return null;
+    }
+
+    final trimmedToken = token.trim();
+    
+    // 检查是否是 JSON 格式（以 { 开头）
+    if (trimmedToken.startsWith('{')) {
+      try {
+        final tokenMap = jsonDecode(trimmedToken) as Map<String, dynamic>;
+        final accessToken = tokenMap['access_token'] as String?;
+        if (accessToken != null && accessToken.isNotEmpty) {
+          Log.info('Extracted access_token from JSON token');
+          return accessToken;
+        } else {
+          Log.error('access_token not found in JSON token');
+          return null;
+        }
+      } catch (e) {
+        Log.error('Failed to parse token as JSON: $e');
+        return null;
+      }
+    }
+    
+    // 如果不是 JSON，直接返回 token
+    return trimmedToken;
+  }
+
   @override
   Future<void> close() async {
       await _folderNotificationListener?.stop();
@@ -492,9 +524,16 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         return null;
       }
 
-      final token = userProfile.token;
-      if (token.isEmpty) {
+      final rawToken = userProfile.token;
+      if (rawToken.isEmpty) {
         Log.error('Auth token is empty');
+        return null;
+      }
+
+      // 提取 access_token（可能是 JSON 格式）
+      final accessToken = _extractAccessToken(rawToken);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.error('Failed to extract access_token from token');
         return null;
       }
 
@@ -508,7 +547,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         uri,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $accessToken',
         },
       ).timeout(
         const Duration(seconds: 10),
@@ -570,15 +609,22 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         return false;
       }
 
-      final token = userProfile.token;
-      if (token.isEmpty) {
+      final rawToken = userProfile.token;
+      if (rawToken.isEmpty) {
         Log.error('Auth token is empty');
+        return false;
+      }
+
+      // 提取 access_token（可能是 JSON 格式）
+      final accessToken = _extractAccessToken(rawToken);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.error('Failed to extract access_token from token');
         return false;
       }
 
       // 构建 API URL: /api/{workspace_id}/collab/{object_id}/members/{member_user_id}
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/$workspaceId/collab/$objectId/members/$memberUserId',
+        path: '/api/workspace/$workspaceId/collab/$objectId/members/$memberUserId',
       );
 
       Log.info('Adding collaborator: $uri');
@@ -588,7 +634,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         uri,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $accessToken',
         },
       ).timeout(
         const Duration(seconds: 10),

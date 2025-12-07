@@ -347,11 +347,7 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
           final phone = userMap['phone'] as String?;
           
           // Extract user ID (try different possible field names)
-          final userId = (userMap['id'] ?? 
-                         userMap['user_id'] ?? 
-                         userMap['userId'] ?? 
-                         userMap['member_user_id'] ??
-                         '').toString();
+          final userId = (userMap['uuid'] ?? '').toString();
           final userUserId = userId.isNotEmpty ? userId : null;
 
           // Use email as primary identifier, fallback to phone if email is empty

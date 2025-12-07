@@ -9,6 +9,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -96,7 +97,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
 
   Future<void> _loadUserSharedNotes() async {
     setState(() => _isLoading = true);
-
+    
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
       final baseUrl =
@@ -117,14 +118,21 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         throw Exception('未找到用户凭证，请重新登录');
       }
 
+      // 提取 access_token（可能是 JSON 格式）
+      final accessToken = _extractAccessToken(token);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.error('Failed to extract access_token from token');
+        return;
+      }
+
       final sentNotes = await _fetchCollaborations(
         baseUrl: baseUrl,
-        token: token,
+        token: accessToken,
         path: '/api/collab/me/sent',
       );
       final receivedNotes = await _fetchCollaborations(
         baseUrl: baseUrl,
-        token: token,
+        token: accessToken,
         path: '/api/collab/me/received',
       );
 
@@ -141,11 +149,14 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       if (!mounted) {
         return;
       }
-
+      
       setState(() {
         _userSharedNotes = combined;
         _isLoading = false;
       });
+
+      // 异步加载每个笔记的详细信息（包括标题）
+      await _loadViewDetails(combined);
     } catch (e) {
       Log.error('Exception in _loadUserSharedNotes: $e');
       setState(() {
@@ -153,6 +164,38 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         _isLoading = false;
       });
     }
+  }
+
+  /// 从 token 字段中提取 access_token
+  /// 如果 token 是 JSON 格式，则解析并提取 access_token
+  /// 否则直接返回 token
+  String? _extractAccessToken(String token) {
+    if (token.isEmpty) {
+      return null;
+    }
+
+    final trimmedToken = token.trim();
+
+    // 检查是否是 JSON 格式（以 { 开头）
+    if (trimmedToken.startsWith('{')) {
+      try {
+        final tokenMap = jsonDecode(trimmedToken) as Map<String, dynamic>;
+        final accessToken = tokenMap['access_token'] as String?;
+        if (accessToken != null && accessToken.isNotEmpty) {
+          Log.info('Extracted access_token from JSON token');
+          return accessToken;
+        } else {
+          Log.error('access_token not found in JSON token');
+          return null;
+        }
+      } catch (e) {
+        Log.error('Failed to parse token as JSON: $e');
+        return null;
+      }
+    }
+
+    // 如果不是 JSON，直接返回 token
+    return trimmedToken;
   }
 
   Future<List<ViewPB>> _fetchCollaborations({
@@ -232,46 +275,75 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       if (entry is! Map<String, dynamic>) {
         continue;
       }
-      final viewInfo = (entry['view'] as Map<String, dynamic>?) ?? entry;
-      var viewId = (viewInfo['objectId'] ??
-              viewInfo['object_id'] ??
-              viewInfo['viewId'] ??
-              viewInfo['view_id'] ??
-              viewInfo['id'] ??
-              '')
+
+      // 根据新的 API 响应结构，使用 oid 作为 viewId
+      final oid = (entry['oid'] ?? entry['object_id'] ?? entry['objectId'] ?? '')
           .toString();
-      if (viewId.isEmpty && entry['objectId'] != null) {
-        viewId = entry['objectId'].toString();
-      }
-      if (viewId.isEmpty) {
+      if (oid.isEmpty) {
         continue;
       }
 
-      final title = (viewInfo['title'] ??
-              viewInfo['name'] ??
-              viewInfo['object_name'] ??
-              viewInfo['objectName'] ??
-              '未命名笔记')
-          .toString();
-
-      final timestampRaw = entry['created_at'] ??
-          entry['createdAt'] ??
-          entry['create_time'] ??
-          entry['createTime'] ??
-          viewInfo['created_at'] ??
-          viewInfo['createdAt'] ??
-          viewInfo['create_time'] ??
-          viewInfo['createTime'];
+      // 解析创建时间
+      final timestampRaw = entry['created_at'] ?? entry['createdAt'];
       final createdSeconds = _parseTimestampSeconds(timestampRaw);
 
+      // 创建基本的 ViewPB，标题稍后通过异步加载获取
       final view = ViewPB()
-        ..id = viewId
-        ..name = title
+        ..id = oid
+        ..name = '加载中...' // 临时标题，稍后更新
         ..createTime = fixnum.Int64(createdSeconds);
       views.add(view);
     }
 
     return views;
+  }
+
+  /// 异步加载笔记的详细信息（包括标题）
+  Future<void> _loadViewDetails(List<ViewPB> views) async {
+    if (views.isEmpty || !mounted) {
+      return;
+    }
+
+    final updatedViews = <ViewPB>[];
+    bool hasUpdate = false;
+
+    for (final view in views) {
+      if (view.id.isEmpty) {
+        updatedViews.add(view);
+        continue;
+      }
+
+      try {
+        // 尝试通过 ViewBackendService 获取笔记详细信息
+        final viewResult = await ViewBackendService.getView(view.id);
+        viewResult.fold(
+          (detailedView) {
+            // 如果成功获取到详细信息，使用真实的标题
+            if (detailedView.name.isNotEmpty) {
+              updatedViews.add(detailedView);
+              hasUpdate = true;
+            } else {
+              // 如果标题为空，保持原视图
+              updatedViews.add(view);
+            }
+          },
+          (error) {
+            // 如果获取失败，保持原视图（使用临时标题）
+            updatedViews.add(view);
+          },
+        );
+      } catch (e) {
+        Log.error('Failed to load view details for ${view.id}: $e');
+        updatedViews.add(view);
+      }
+    }
+
+    // 如果有更新，更新 UI
+    if (hasUpdate && mounted) {
+      setState(() {
+        _userSharedNotes = updatedViews;
+      });
+    }
   }
 
   int _parseTimestampSeconds(dynamic raw) {

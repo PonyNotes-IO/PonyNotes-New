@@ -364,12 +364,12 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       
       // 如果打开失败，尝试打开一个空白页面作为降级方案
       try {
-        add(
-          TabsEvent.openPlugin(
+    add(
+      TabsEvent.openPlugin(
             plugin: BlankPagePlugin(),
-            view: view,
-          ),
-        );
+        view: view,
+      ),
+    );
       } catch (fallbackError) {
         Log.error('Failed to open blank page as fallback', fallbackError);
       }

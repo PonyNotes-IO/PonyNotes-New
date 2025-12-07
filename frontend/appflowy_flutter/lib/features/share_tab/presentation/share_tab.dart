@@ -488,7 +488,6 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
     _bloc.add(
       ShareTabEvent.addCollaborator(
         user: user,
-        accessLevel: ShareAccessLevel.readOnly,
       ),
     );
   }
