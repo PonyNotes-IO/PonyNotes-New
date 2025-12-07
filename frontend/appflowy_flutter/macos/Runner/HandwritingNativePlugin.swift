@@ -109,56 +109,95 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
         
         // 使用 RTLD_NOW 立即解析所有符号，而不是延迟解析
         // 这样可以确保依赖库正确解析，符号可以立即使用
-        // 注意：使用 RTLD_LOCAL 而不是 RTLD_GLOBAL，因为我们需要从特定的handle查找符号
-        let handle = dlopen(absolutePath, RTLD_NOW | RTLD_LOCAL)
+        // 尝试使用 RTLD_NOW | RTLD_GLOBAL，看看是否能解决问题
+        // 如果使用 RTLD_LOCAL，符号只在当前handle中可见，可能无法被查找
+        // 使用 RTLD_GLOBAL 时，符号会被添加到全局符号表，可以从 handle 或 RTLD_DEFAULT 查找
+        print("🔍 [HandwritingNativePlugin] Attempting to dlopen with RTLD_NOW | RTLD_GLOBAL...")
+        dlerror() // 清除之前的错误
+        let handle = dlopen(absolutePath, RTLD_NOW | RTLD_GLOBAL)
+        
         if handle != nil {
           dylibHandle = handle
           let successMsg = "✅ [HandwritingNativePlugin] Dynamic library loaded successfully from: \(absolutePath)"
           NSLog(successMsg)
           print(successMsg)
+          print("🔍 [HandwritingNativePlugin] dlopen returned handle: \(handle!)")
+          
+          // 检查是否有错误（即使dlopen成功，也可能有警告）
+          if let error = dlerror() {
+            print("⚠️ [HandwritingNativePlugin] Warning after dlopen: \(String(cString: error))")
+          } else {
+            print("✅ [HandwritingNativePlugin] No errors after dlopen")
+          }
           
           // 验证动态库是否正确加载：尝试查找一个已知符号
-          // 直接从特定的handle查找（使用RTLD_LOCAL时，符号只在当前handle中可见）
+          // 使用 RTLD_GLOBAL 时，符号会被添加到全局符号表，可以从 handle 或 RTLD_DEFAULT 查找
+          print("🔍 [HandwritingNativePlugin] Attempting to find symbol '_pn_xournal_init' from handle...")
           dlerror() // 清除错误
           var testSymbol = dlsym(handle, "_pn_xournal_init")
           
           if testSymbol != nil {
             print("✅ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' found at handle: \(testSymbol!)")
+            // 检查是否有错误
+            if let error = dlerror() {
+              print("⚠️ [HandwritingNativePlugin] Warning: Error after dlsym returned non-nil: \(String(cString: error))")
+            }
           } else {
+            print("❌ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' NOT found from handle")
             // 如果从特定handle找不到，尝试从全局符号表查找（使用RTLD_DEFAULT）
             dlerror() // 清除错误
+            print("🔍 [HandwritingNativePlugin] Attempting to find symbol '_pn_xournal_init' from RTLD_DEFAULT...")
             // 在Swift中，RTLD_DEFAULT需要用UnsafeMutableRawPointer(bitPattern: -2)表示
             if let rtlDefault = RTLD_DEFAULT_PTR {
               testSymbol = dlsym(rtlDefault, "_pn_xournal_init")
               if testSymbol != nil {
                 print("✅ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' found via global symbol table at: \(testSymbol!)")
+              } else {
+                if let error = dlerror() {
+                  print("❌ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' NOT found from RTLD_DEFAULT: \(String(cString: error))")
+                } else {
+                  print("❌ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' NOT found from RTLD_DEFAULT (no error)")
+                }
               }
+            } else {
+              print("❌ [HandwritingNativePlugin] RTLD_DEFAULT_PTR is nil")
             }
           }
           
           if testSymbol == nil {
-            if let error = dlerror() {
-              print("⚠️ [HandwritingNativePlugin] Warning: Symbol '_pn_xournal_init' not found: \(String(cString: error))")
-              print("⚠️ [HandwritingNativePlugin] This may indicate dependency library issues")
-            } else {
-              print("⚠️ [HandwritingNativePlugin] Warning: Symbol '_pn_xournal_init' not found (no error)")
-            }
+            print("❌ [HandwritingNativePlugin] CRITICAL: Symbol '_pn_xournal_init' not found from any source!")
+            print("🔍 [HandwritingNativePlugin] This indicates a serious problem with symbol resolution")
+            print("🔍 [HandwritingNativePlugin] Possible causes:")
+            print("   1. Dependencies not resolved correctly")
+            print("   2. Symbol not exported correctly from the library")
+            print("   3. Library architecture mismatch")
+            print("   4. Library corruption")
           }
           
           // 加载所有函数指针
+          print("🔍 [HandwritingNativePlugin] Starting to load function pointers...")
           if loadFunctionPointers() {
             print("✅ [HandwritingNativePlugin] All function pointers loaded successfully")
             return true
           } else {
             print("❌ [HandwritingNativePlugin] Failed to load function pointers, closing library")
+            print("🔍 [HandwritingNativePlugin] Closing handle: \(handle!)")
             dlclose(handle)
             dylibHandle = nil
+            print("🔍 [HandwritingNativePlugin] Handle closed, dylibHandle set to nil")
           }
         } else {
+          // dlopen失败
+          print("❌ [HandwritingNativePlugin] dlopen returned nil")
           if let error = dlerror() {
             let errorMsg = "❌ [HandwritingNativePlugin] Failed to load dynamic library from \(path): \(String(cString: error))"
             NSLog(errorMsg)
             print(errorMsg)
+            print("🔍 [HandwritingNativePlugin] This usually indicates:")
+            print("   1. Missing dependencies")
+            print("   2. Wrong architecture")
+            print("   3. Corrupted library file")
+            print("   4. Permission issues")
           } else {
             let errorMsg = "❌ [HandwritingNativePlugin] Failed to load dynamic library from \(path): unknown error"
             NSLog(errorMsg)
@@ -180,18 +219,28 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
   
   /// 加载函数指针
   private func loadFunctionPointers() -> Bool {
-    guard let handle = dylibHandle else { return false }
+    print("🔍 [HandwritingNativePlugin] loadFunctionPointers called")
+    guard let handle = dylibHandle else {
+      print("❌ [HandwritingNativePlugin] loadFunctionPointers: dylibHandle is nil")
+      return false
+    }
+    print("🔍 [HandwritingNativePlugin] loadFunctionPointers: dylibHandle is valid: \(handle)")
     
     // 辅助函数：从dlsym获取函数指针，并检查错误
     // 首先从特定的handle查找（使用RTLD_LOCAL时，符号只在当前handle中可见）
     // 如果失败，则尝试从全局符号表查找（使用RTLD_DEFAULT）
     func getFunction<T>(_ name: String) -> T? {
+      print("🔍 [HandwritingNativePlugin] getFunction called for: '\(name)'")
+      print("🔍 [HandwritingNativePlugin] Handle value: \(handle)")
+      
       dlerror() // 清除之前的错误
       
       // 首先尝试从特定的handle查找（这是主要方式）
+      print("🔍 [HandwritingNativePlugin] Attempting dlsym(handle, '\(name)')...")
       var symbol = dlsym(handle, name)
       
       if symbol != nil {
+        print("🔍 [HandwritingNativePlugin] dlsym returned non-nil: \(symbol!)")
         // 检查是否有错误（即使dlsym返回非nil，也可能有错误）
         let errorAfter = dlerror()
         if errorAfter != nil {
@@ -201,14 +250,24 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
           print("✅ [HandwritingNativePlugin] Found symbol '\(name)' at handle: \(symbol!)")
         }
       } else {
+        print("❌ [HandwritingNativePlugin] dlsym(handle, '\(name)') returned nil")
         // 如果从特定handle找不到，尝试从全局符号表查找（使用RTLD_DEFAULT）
         dlerror() // 清除错误
+        print("🔍 [HandwritingNativePlugin] Attempting dlsym(RTLD_DEFAULT, '\(name)')...")
         // 在Swift中，RTLD_DEFAULT需要用UnsafeMutableRawPointer(bitPattern: -2)表示
         if let rtlDefault = RTLD_DEFAULT_PTR {
           symbol = dlsym(rtlDefault, name)
           if symbol != nil {
             print("✅ [HandwritingNativePlugin] Found symbol '\(name)' via global symbol table at: \(symbol!)")
+          } else {
+            if let error = dlerror() {
+              print("❌ [HandwritingNativePlugin] dlsym(RTLD_DEFAULT, '\(name)') returned nil with error: \(String(cString: error))")
+            } else {
+              print("❌ [HandwritingNativePlugin] dlsym(RTLD_DEFAULT, '\(name)') returned nil (no error)")
+            }
           }
+        } else {
+          print("❌ [HandwritingNativePlugin] RTLD_DEFAULT_PTR is nil, cannot try RTLD_DEFAULT")
         }
       }
       
@@ -222,6 +281,7 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
         return nil
       }
       
+      print("✅ [HandwritingNativePlugin] Successfully loaded symbol '\(name)', casting to function pointer...")
       return unsafeBitCast(foundSymbol, to: T.self)
     }
     
