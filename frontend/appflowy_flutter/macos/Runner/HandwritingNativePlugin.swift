@@ -26,6 +26,8 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
   
   // 动态库句柄
   private var dylibHandle: UnsafeMutableRawPointer?
+  // 动态库路径（用于 NSLookupSymbolInImage）
+  private var dylibPath: String?
   
   // C API函数指针类型定义
   typealias PN_XournalInitFunc = @convention(c) (UnsafePointer<CChar>?) -> Int32
@@ -118,6 +120,7 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
         
         if handle != nil {
           dylibHandle = handle
+          dylibPath = absolutePath  // 保存路径用于 NSLookupSymbolInImage
           let successMsg = "✅ [HandwritingNativePlugin] Dynamic library loaded successfully from: \(absolutePath)"
           NSLog(successMsg)
           print(successMsg)
@@ -132,9 +135,14 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
           
           // 验证动态库是否正确加载：尝试查找一个已知符号
           // 使用 RTLD_GLOBAL 时，符号会被添加到全局符号表，可以从 handle 或 RTLD_DEFAULT 查找
-          print("🔍 [HandwritingNativePlugin] Attempting to find symbol '_pn_xournal_init' from handle...")
+          // 注意：根据测试，符号可能是不带下划线的形式
+          print("🔍 [HandwritingNativePlugin] Attempting to find symbol 'pn_xournal_init' from handle...")
           dlerror() // 清除错误
-          var testSymbol = dlsym(handle, "_pn_xournal_init")
+          var testSymbol = dlsym(handle, "pn_xournal_init")
+          if testSymbol == nil {
+            print("🔍 [HandwritingNativePlugin] Trying with underscore prefix '_pn_xournal_init'...")
+            testSymbol = dlsym(handle, "_pn_xournal_init")
+          }
           
           if testSymbol != nil {
             print("✅ [HandwritingNativePlugin] Test symbol '_pn_xournal_init' found at handle: \(testSymbol!)")
@@ -229,6 +237,7 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
     // 辅助函数：从dlsym获取函数指针，并检查错误
     // 首先从特定的handle查找（使用RTLD_LOCAL时，符号只在当前handle中可见）
     // 如果失败，则尝试从全局符号表查找（使用RTLD_DEFAULT）
+    // 注意：macOS 的导出表使用压缩格式，dlsym 应该能够解析，但如果失败，可能需要使用其他方法
     func getFunction<T>(_ name: String) -> T? {
       print("🔍 [HandwritingNativePlugin] getFunction called for: '\(name)'")
       print("🔍 [HandwritingNativePlugin] Handle value: \(handle)")
@@ -278,6 +287,11 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
         } else {
           print("❌ [HandwritingNativePlugin] Failed to load symbol '\(name)': symbol not found (no error)")
         }
+        // 注意：导出表数据中确实包含符号（压缩格式），但 dlsym 无法找到
+        // 这可能是因为 -Wl,-exported_symbol 选项没有正确工作
+        // 或者符号导出格式有问题
+        print("🔍 [HandwritingNativePlugin] Export table contains symbols in compressed format")
+        print("   But dlsym cannot find them - this suggests an export configuration issue")
         return nil
       }
       
@@ -285,81 +299,84 @@ class HandwritingNativePlugin: NSObject, FlutterPlugin {
       return unsafeBitCast(foundSymbol, to: T.self)
     }
     
-    // 加载各个函数指针（macOS下C函数符号有下划线前缀）
+    // 加载各个函数指针
+    // 注意：虽然 -Wl,-exported_symbol 使用了带下划线的符号名称，
+    // 但实际的符号可能是不带下划线的，需要尝试两种形式
     var allLoaded = true
     var missingFunctions: [String] = []
     
-    if let funcPtr: PN_XournalInitFunc = getFunction("_pn_xournal_init") {
+    // 首先尝试不带下划线的符号名称（根据 ctypes 测试，这是实际导出的形式）
+    if let funcPtr: PN_XournalInitFunc = getFunction("pn_xournal_init") ?? getFunction("_pn_xournal_init") {
       pn_xournal_init = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_init")
     }
     
-    if let funcPtr: PN_XournalShutdownFunc = getFunction("_pn_xournal_shutdown") {
+    if let funcPtr: PN_XournalShutdownFunc = getFunctionWithFallback("pn_xournal_shutdown", "_pn_xournal_shutdown") {
       pn_xournal_shutdown = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_shutdown")
     }
     
-    if let funcPtr: PN_XournalDocCreateFunc = getFunction("_pn_xournal_doc_create") {
+    if let funcPtr: PN_XournalDocCreateFunc = getFunctionWithFallback("pn_xournal_doc_create", "_pn_xournal_doc_create") {
       pn_xournal_doc_create = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_create")
     }
     
-    if let funcPtr: PN_XournalDocOpenFunc = getFunction("_pn_xournal_doc_open") {
+    if let funcPtr: PN_XournalDocOpenFunc = getFunctionWithFallback("pn_xournal_doc_open", "_pn_xournal_doc_open") {
       pn_xournal_doc_open = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_open")
     }
     
-    if let funcPtr: PN_XournalDocOpenPdfFunc = getFunction("_pn_xournal_doc_open_pdf") {
+    if let funcPtr: PN_XournalDocOpenPdfFunc = getFunctionWithFallback("pn_xournal_doc_open_pdf", "_pn_xournal_doc_open_pdf") {
       pn_xournal_doc_open_pdf = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_open_pdf")
     }
     
-    if let funcPtr: PN_XournalDocSaveFunc = getFunction("_pn_xournal_doc_save") {
+    if let funcPtr: PN_XournalDocSaveFunc = getFunctionWithFallback("pn_xournal_doc_save", "_pn_xournal_doc_save") {
       pn_xournal_doc_save = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_save")
     }
     
-    if let funcPtr: PN_XournalDocCloseFunc = getFunction("_pn_xournal_doc_close") {
+    if let funcPtr: PN_XournalDocCloseFunc = getFunctionWithFallback("pn_xournal_doc_close", "_pn_xournal_doc_close") {
       pn_xournal_doc_close = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_close")
     }
     
-    if let funcPtr: PN_XournalDocHandleStrokeFunc = getFunction("_pn_xournal_doc_handle_stroke") {
+    if let funcPtr: PN_XournalDocHandleStrokeFunc = getFunctionWithFallback("pn_xournal_doc_handle_stroke", "_pn_xournal_doc_handle_stroke") {
       pn_xournal_doc_handle_stroke = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_handle_stroke")
     }
     
-    if let funcPtr: PN_XournalDocRenderPageToPngFunc = getFunction("_pn_xournal_doc_render_page_to_png") {
+    if let funcPtr: PN_XournalDocRenderPageToPngFunc = getFunctionWithFallback("pn_xournal_doc_render_page_to_png", "_pn_xournal_doc_render_page_to_png") {
       pn_xournal_doc_render_page_to_png = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_render_page_to_png")
     }
     
-    if let funcPtr: PN_XournalDocGetPageCountFunc = getFunction("_pn_xournal_doc_get_page_count") {
+    if let funcPtr: PN_XournalDocGetPageCountFunc = getFunctionWithFallback("pn_xournal_doc_get_page_count", "_pn_xournal_doc_get_page_count") {
       pn_xournal_doc_get_page_count = funcPtr
     } else {
       allLoaded = false
       missingFunctions.append("pn_xournal_doc_get_page_count")
     }
     
-    if let funcPtr: PN_XournalDocGetPageSizeFunc = getFunction("_pn_xournal_doc_get_page_size") {
+    if let funcPtr: PN_XournalDocGetPageSizeFunc = getFunctionWithFallback("pn_xournal_doc_get_page_size", "_pn_xournal_doc_get_page_size") {
       pn_xournal_doc_get_page_size = funcPtr
     } else {
       allLoaded = false
