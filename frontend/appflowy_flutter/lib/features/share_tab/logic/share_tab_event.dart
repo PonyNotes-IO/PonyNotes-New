@@ -67,6 +67,15 @@ sealed class ShareTabEvent {
         user: user,
         accessLevel: accessLevel,
       );
+
+  factory ShareTabEvent.updateMemberPermission({
+    required SharedUser user,
+    required ShareAccessLevel accessLevel,
+  }) =>
+      ShareTabEventUpdateMemberPermission(
+        user: user,
+        accessLevel: accessLevel,
+      );
 }
 
 /// Initializes the share tab bloc.
@@ -167,6 +176,17 @@ class ShareTabEventAddCollaborator extends ShareTabEvent {
   const ShareTabEventAddCollaborator({
     required this.user,
     this.accessLevel = ShareAccessLevel.readOnly,
+  });
+
+  final SharedUser user;
+  final ShareAccessLevel accessLevel;
+}
+
+/// Updates the permission for a member using the collaboration API.
+class ShareTabEventUpdateMemberPermission extends ShareTabEvent {
+  const ShareTabEventUpdateMemberPermission({
+    required this.user,
+    required this.accessLevel,
   });
 
   final SharedUser user;

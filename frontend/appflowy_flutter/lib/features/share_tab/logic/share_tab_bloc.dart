@@ -41,6 +41,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     on<ShareTabEventUpdateSharedUsers>(_onUpdateSharedUsers);
     on<ShareTabEventUpgradeToProClicked>(_onUpgradeToProClicked);
     on<ShareTabEventAddCollaborator>(_onAddCollaborator);
+    on<ShareTabEventUpdateMemberPermission>(_onUpdateMemberPermission);
   }
 
   final ShareWithUserRepository repository;
@@ -439,6 +440,78 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     );
   }
 
+  /// 将 ShareAccessLevel 转换为 permission_id
+  /// 根据后端定义：1=readOnly, 2=readAndComment, 3=readAndWrite, 4=fullAccess
+  int _accessLevelToPermissionId(ShareAccessLevel accessLevel) {
+    switch (accessLevel) {
+      case ShareAccessLevel.readOnly:
+        return 1;
+      case ShareAccessLevel.readAndComment:
+        return 2;
+      case ShareAccessLevel.readAndWrite:
+        return 3;
+      case ShareAccessLevel.fullAccess:
+        return 4;
+    }
+  }
+
+  Future<void> _onUpdateMemberPermission(
+    ShareTabEventUpdateMemberPermission event,
+    Emitter<ShareTabState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        errorMessage: '',
+        updateAccessLevelResult: null,
+      ),
+    );
+
+    // 确保用户有 userId
+    String? memberUserId = event.user.userId;
+    if (memberUserId == null || memberUserId.isEmpty) {
+      emit(
+        state.copyWith(
+          errorMessage: '无法获取用户ID，请确保用户已注册',
+          updateAccessLevelResult: FlowyFailure(
+            FlowyError()
+              ..msg = '无法获取用户ID，请确保用户已注册',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 调用权限更新接口
+    final (success, errorMessage) = await _updateMemberPermission(
+      workspaceId: workspaceId,
+      objectId: pageId,
+      memberUserId: memberUserId,
+      permissionId: _accessLevelToPermissionId(event.accessLevel),
+    );
+
+    if (success) {
+      // 刷新共享用户列表
+      final users = await _getSharedUsers();
+      emit(
+        state.copyWith(
+          users: users,
+          updateAccessLevelResult: FlowySuccess(null),
+          errorMessage: '',
+        ),
+      );
+    } else {
+      emit(
+        state.copyWith(
+          errorMessage: errorMessage.isNotEmpty ? errorMessage : '更新权限失败',
+          updateAccessLevelResult: FlowyFailure(
+            FlowyError()
+              ..msg = errorMessage.isNotEmpty ? errorMessage : '更新权限失败',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _onAddCollaborator(
     ShareTabEventAddCollaborator event,
     Emitter<ShareTabState> emit,
@@ -454,20 +527,16 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     String? memberUserId = event.user.userId;
 
     if (memberUserId == null || memberUserId.isEmpty) {
-      // 尝试通过 email 查找用户 ID
-      memberUserId = await _getUserIdByEmail(event.user.email);
-      if (memberUserId == null || memberUserId.isEmpty) {
-        emit(
-          state.copyWith(
-            errorMessage: '无法获取用户ID，请确保用户已注册',
-            addCollaboratorResult: FlowyFailure(
-              FlowyError()
-                ..msg = '无法获取用户ID，请确保用户已注册',
-            ),
+      emit(
+        state.copyWith(
+          errorMessage: '无法获取用户ID，请确保用户已注册',
+          addCollaboratorResult: FlowyFailure(
+            FlowyError()
+              ..msg = '无法获取用户ID，请确保用户已注册',
           ),
-        );
-        return;
-      }
+        ),
+      );
+      return;
     }
 
     // 调用协作接口添加成员
@@ -497,87 +566,6 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         ),
       );
     }
-  }
-
-  /// 通过邮箱查找用户 ID
-  Future<String?> _getUserIdByEmail(String email) async {
-    try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-
-      if (baseUrl.isEmpty) {
-        Log.error('Base URL is empty');
-        return null;
-      }
-
-      final userResult = await UserBackendService.getCurrentUserProfile();
-      final userProfile = userResult.fold(
-        (user) => user,
-        (error) {
-          Log.error('Failed to get user profile: $error');
-          return null;
-        },
-      );
-
-      if (userProfile == null) {
-        Log.error('User profile is null');
-        return null;
-      }
-
-      final rawToken = userProfile.token;
-      if (rawToken.isEmpty) {
-        Log.error('Auth token is empty');
-        return null;
-      }
-
-      // 提取 access_token（可能是 JSON 格式）
-      final accessToken = _extractAccessToken(rawToken);
-      if (accessToken == null || accessToken.isEmpty) {
-        Log.error('Failed to extract access_token from token');
-        return null;
-      }
-
-      // 搜索用户接口可能返回用户 ID
-      final uri = Uri.parse(baseUrl).replace(
-        path: '/api/user/search',
-        queryParameters: {'q': email},
-      );
-
-      final response = await http.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken',
-        },
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('Request timeout');
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final jsonData = jsonDecode(response.body) as Map<String, dynamic>;
-        final code = jsonData['code'] as int?;
-        if (code == 0) {
-          final data = jsonData['data'] as List<dynamic>?;
-          if (data != null && data.isNotEmpty) {
-            final userMap = data.first as Map<String, dynamic>;
-            // 尝试多种可能的字段名
-            final userId = (userMap['id'] ??
-                    userMap['user_id'] ??
-                    userMap['userId'] ??
-                    userMap['member_user_id'] ??
-                    '')
-                .toString();
-            return userId.isNotEmpty ? userId : null;
-          }
-        }
-      }
-    } catch (e, stackTrace) {
-      Log.error('Failed to get user ID by email: $e', e, stackTrace);
-    }
-    return null;
   }
 
   /// 调用协作接口添加成员
@@ -655,6 +643,122 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     } catch (e, stackTrace) {
       Log.error('Exception in _addCollaborator: $e', e, stackTrace);
       return false;
+    }
+  }
+
+  /// 调用权限变更接口更新成员权限
+  /// 返回 (success, errorMessage)
+  Future<(bool, String)> _updateMemberPermission({
+    required String workspaceId,
+    required String objectId,
+    required String memberUserId,
+    required int permissionId,
+  }) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+
+      if (baseUrl.isEmpty) {
+        Log.error('Base URL is empty');
+        return (false, '服务器配置错误');
+      }
+
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold(
+        (user) => user,
+        (error) {
+          Log.error('Failed to get user profile: $error');
+          return null;
+        },
+      );
+
+      if (userProfile == null) {
+        Log.error('User profile is null');
+        return (false, '用户未登录');
+      }
+
+      final rawToken = userProfile.token;
+      if (rawToken.isEmpty) {
+        Log.error('Auth token is empty');
+        return (false, '认证失败');
+      }
+
+      // 提取 access_token（可能是 JSON 格式）
+      final accessToken = _extractAccessToken(rawToken);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.error('Failed to extract access_token from token');
+        return (false, 'Token 提取失败');
+      }
+
+      // 构建 API URL: PATCH /api/workspace/{workspace_id}/collab/{object_id}/members/{member_user_id}
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/workspace/$workspaceId/collab/$objectId/members/$memberUserId',
+      );
+
+      Log.info('Updating member permission: $uri');
+      Log.info('Permission ID: $permissionId');
+
+      // 发送 PATCH 请求
+      final response = await http.patch(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: jsonEncode({
+          'permission_id': permissionId,
+        }),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      Log.info('Update member permission response: ${response.statusCode}');
+      Log.info('Response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return (true, '');
+      } else {
+        String errorMessage = '更新权限失败: HTTP ${response.statusCode}';
+        
+        // 尝试解析响应体
+        if (response.body.isNotEmpty) {
+          Log.error('Response body: ${response.body}');
+          
+          try {
+            // 尝试解析为 JSON
+            final errorBody = jsonDecode(response.body) as Map<String, dynamic>?;
+            if (errorBody != null) {
+              final msg = errorBody['message'] ?? errorBody['msg'] ?? errorBody['error'];
+              if (msg != null && msg.toString().isNotEmpty) {
+                errorMessage = '更新权限失败: $msg';
+              }
+            }
+          } catch (e) {
+            // 如果不是 JSON，尝试直接使用响应体作为错误信息
+            final bodyText = response.body.trim();
+            if (bodyText.isNotEmpty) {
+              if (bodyText.contains('fail to decode token') || 
+                  bodyText.contains('Base64 error') ||
+                  bodyText.contains('token') ||
+                  bodyText.contains('error')) {
+                errorMessage = '更新权限失败: $bodyText';
+              } else {
+                errorMessage = '更新权限失败: HTTP ${response.statusCode} - $bodyText';
+              }
+            }
+          }
+        }
+        
+        Log.error(errorMessage);
+        return (false, errorMessage);
+      }
+    } catch (e, stackTrace) {
+      Log.error('Exception in _updateMemberPermission: $e', e, stackTrace);
+      final errorMessage = '更新权限失败: ${e.toString()}';
+      return (false, errorMessage);
     }
   }
 
