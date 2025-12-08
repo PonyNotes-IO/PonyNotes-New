@@ -566,6 +566,13 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
         return null;
       }
       final bytes = await file.readAsBytes();
+      if (!_isValidPng(bytes)) {
+        print(
+          '❌ [HandwritingNativePage] Thumbnail PNG invalid, path=$renderedPath, '
+          'size=${bytes.length} bytes, page=$pageIndex',
+        );
+        return null;
+      }
       final image = MemoryImage(bytes);
       _thumbnails[pageIndex] = image;
       return image;
@@ -697,6 +704,20 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
       }
 
       final bytes = await file.readAsBytes();
+      if (!_isValidPng(bytes)) {
+        print(
+          '❌ [HandwritingNativePage] Rendered PNG invalid, path=$renderedPath, '
+          'size=${bytes.length} bytes, width=${(width * _zoom).round()}, '
+          'height=${(height * _zoom).round()}, zoom=$_zoom',
+        );
+        if (mounted) {
+          setState(() {
+            _errorMessage = '手写页面渲染失败：PNG数据无效';
+            _renderedImage = null;
+          });
+        }
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _renderedImage = MemoryImage(bytes);
@@ -704,6 +725,20 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
     } catch (e) {
       print('❌ [HandwritingNativePage] _renderAndUpdateCanvas error: $e');
     }
+  }
+
+  /// 校验PNG魔数，避免无效图片导致解码崩溃
+  bool _isValidPng(List<int> bytes) {
+    if (bytes.length < 8) {
+      return false;
+    }
+    const pngMagic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    for (var i = 0; i < pngMagic.length; i++) {
+      if (bytes[i] != pngMagic[i]) {
+        return false;
+      }
+    }
+    return true;
   }
 }
 
