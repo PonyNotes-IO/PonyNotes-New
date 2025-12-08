@@ -17,6 +17,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pbenum.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:flutter/material.dart';
@@ -155,6 +156,21 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       return await viewResult.fold(
         (view) async {
           Log.info('📝 [OpenNoteDeepLinkHandler] 成功获取视图: ${view.name}');
+
+          // 优先调用 Rust 的 open_document_handler，确保文档存在且可打开
+          try {
+            final docResult = await DocumentService().openDocument(
+              documentId: view.id,
+            );
+            docResult.fold(
+              (_) => Log.info('📝 [OpenNoteDeepLinkHandler] open_document 成功: ${view.id}'),
+              (error) => Log.warn(
+                '📝 [OpenNoteDeepLinkHandler] open_document 失败: ${error.msg}',
+              ),
+            );
+          } catch (e, stackTrace) {
+            Log.error('📝 [OpenNoteDeepLinkHandler] 调用 open_document 时异常: $e', stackTrace);
+          }
           
           // 等待应用初始化完成后再打开视图
           // 使用WidgetsBinding确保在UI线程中执行
