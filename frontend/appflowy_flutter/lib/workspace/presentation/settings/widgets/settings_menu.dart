@@ -253,12 +253,24 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
   Widget _buildUserInfoCard(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final currentPlan = _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
-    final planName = _getPlanName(currentPlan);
-    final isFreePlan = currentPlan == WorkspacePlanPB.FreePlan;
-    
-    final hasValidity =
-        !isFreePlan && _subscriptionInfo?.planSubscription.endDate != null;
+    // 优先使用新接口的订阅信息，其次回退 workspace 订阅信息
+    final sub = widget.currentSubscription;
+    final summary = sub?.subscription;
+    final planDetails = sub?.planDetails;
+
+    final currentPlan =
+        _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
+    final planName = summary?.planNameCn?.isNotEmpty == true
+        ? summary!.planNameCn!
+        : (summary?.planCode?.isNotEmpty == true
+            ? summary!.planCode!
+            : (planDetails?.planNameCn?.isNotEmpty == true
+                ? planDetails!.planNameCn!
+                : _getPlanName(currentPlan)));
+
+    final hasValidity = summary?.endDate != null ||
+        (_subscriptionInfo?.planSubscription.endDate != null &&
+            currentPlan != WorkspacePlanPB.FreePlan);
 
     Widget buildAvatar() {
       final double size = 48;
@@ -343,13 +355,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
                     ),
                     const VSpace(6),
                     if (hasValidity)
-                      _buildValidityPeriod(context)
+                      _buildValidityPeriod(context,
+                          start: summary?.startDate, end: summary?.endDate)
                     else
-                      // FlowyText(
-                      // '有效期: 2025-01-01至2025-12-31',
-                      // fontSize: 12,
-                      // color: theme.textColorScheme.secondary,
-                      // ),
                       SizedBox(height: 24),
                     const VSpace(12),
                     Row(
@@ -419,42 +427,49 @@ class _SettingsMenuState extends State<SettingsMenu> {
     );
   }
 
-  Widget _buildValidityPeriod(BuildContext context) {
+  Widget _buildValidityPeriod(
+    BuildContext context, {
+    DateTime? start,
+    DateTime? end,
+  }) {
     final theme = AppFlowyTheme.of(context);
     final endDateInt64 = _subscriptionInfo?.planSubscription.endDate;
     final interval = _subscriptionInfo?.planSubscription.interval;
-    
-    if (endDateInt64 == null || endDateInt64.toInt() == 0) {
-      return const SizedBox.shrink();
+    DateTime? endDate = end;
+    DateTime? startDate = start;
+
+    if (endDate == null && endDateInt64 != null && endDateInt64.toInt() != 0) {
+      endDate = endDateInt64.toDateTime();
     }
-    
-    // 将时间戳转换为 DateTime
-    final endDate = endDateInt64.toDateTime();
-    
-    // 根据 interval 计算开始日期
-    DateTime startDate;
-    if (interval == RecurringIntervalPB.Year) {
-      // 年付：开始日期 = 结束日期 - 1年
-      startDate = DateTime(endDate.year - 1, endDate.month, endDate.day);
-    } else {
-      // 默认是月付：开始日期 = 结束日期 - 1个月
-      if (endDate.month == 1) {
-        // 处理跨年情况（1月）
-        startDate = DateTime(endDate.year - 1, 12, endDate.day);
+
+    if (startDate == null && endDate != null) {
+      if (interval == RecurringIntervalPB.Year) {
+        startDate = DateTime(endDate.year - 1, endDate.month, endDate.day);
       } else {
-        startDate = DateTime(endDate.year, endDate.month - 1, endDate.day);
+        if (endDate.month == 1) {
+          startDate = DateTime(endDate.year - 1, 12, endDate.day);
+        } else {
+          startDate = DateTime(endDate.year, endDate.month - 1, endDate.day);
+        }
       }
+    }
+
+    if (endDate == null) {
+      return const SizedBox.shrink();
     }
     
     // 格式化日期为 yyyy.MM.dd 格式
     final dateFormat = 'yyyy.MM.dd';
-    final startDateStr = DateFormat(dateFormat).format(startDate);
+    final startDateStr =
+        startDate != null ? DateFormat(dateFormat).format(startDate) : '--';
     final endDateStr = DateFormat(dateFormat).format(endDate);
     
     return FlowyText(
       '有效期: $startDateStr至$endDateStr',
       fontSize: 12,
       color: theme.textColorScheme.secondary,
+      maxLines: 2,
+      overflow: TextOverflow.visible,
     );
   }
 
