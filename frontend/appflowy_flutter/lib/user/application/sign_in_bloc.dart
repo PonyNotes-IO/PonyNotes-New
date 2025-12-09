@@ -5,6 +5,7 @@ import 'package:appflowy/startup/tasks/appflowy_cloud_task.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/password/password_http_service.dart';
+import 'package:appflowy/user/application/wechat/wechat_login_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -111,6 +112,17 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             email: email,
             phone: phone,
           ),
+          signInWithWeChat: () async => _onSignInWithWeChat(emit),
+          clearPhoneBindingRequirement: () {
+            emit(
+              state.copyWith(
+                requiresPhoneBinding: false,
+              ),
+            );
+          },
+          wechatCodeReceived: (code) async {
+            await _completeWeChatLogin(emit, code);
+          },
         );
       },
     );
@@ -593,6 +605,106 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     );
   }
 
+  Future<void> _onSignInWithWeChat(
+    Emitter<SignInState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        isSubmitting: true,
+        emailError: null,
+        passwordError: null,
+        successOrFail: null,
+      ),
+    );
+
+    // 确保 passwordService 已初始化
+    if (passwordService == null) {
+      final sharedEnv = getIt<AppFlowyCloudSharedEnv>();
+      passwordService = PasswordHttpService(
+        baseUrl: sharedEnv.appflowyCloudConfig.gotrue_url,
+        authToken: '',
+      );
+    }
+
+    // 1. 获取微信授权码
+    Log.info('🟢[SignInBloc] Starting WeChat login...');
+    final codeResult = await WeChatLoginService.instance.getAuthorizationCode();
+    
+    await codeResult.fold(
+      (code) async {
+        Log.info('🟢[SignInBloc] Got WeChat authorization code, length: ${code.length}');
+        await _completeWeChatLogin(emit, code);
+      },
+      (error) {
+        Log.error('🟢[SignInBloc] Failed to get WeChat authorization code: $error');
+        emit(
+          _stateFromCode(
+            FlowyError.create()
+              ..code = ErrorCode.Internal
+              ..msg = error,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _completeWeChatLogin(
+    Emitter<SignInState> emit,
+    String code,
+  ) async {
+    final loginResult = await passwordService!.signInWithThirdParty(
+      platform: 'weixin',
+      code: code,
+    );
+
+    emit(
+      loginResult.fold(
+        (tokenMap) {
+          // 将 JSON map 转换为 GotrueTokenResponsePB
+          try {
+            final gotrueTokenResponse = GotrueTokenResponsePB.create()
+              ..accessToken = tokenMap['access_token'] as String? ?? ''
+              ..tokenType = tokenMap['token_type'] as String? ?? 'bearer'
+              ..expiresIn = Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
+              ..expiresAt = Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
+              ..refreshToken = tokenMap['refresh_token'] as String? ?? ''
+              ..providerAccessToken = tokenMap['provider_access_token'] as String? ?? ''
+              ..providerRefreshToken = tokenMap['provider_refresh_token'] as String? ?? '';
+
+            Log.info('🟢[SignInBloc] WeChat login successful');
+            getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
+              gotrueTokenResponse,
+            );
+
+            // 判定是否需要绑定手机号
+            String phone = '';
+            final userMap = tokenMap['user'];
+            if (userMap is Map<String, dynamic>) {
+              phone = (userMap['phone'] as String?) ?? '';
+            }
+            final requiresPhoneBinding = phone.isEmpty;
+
+            return state.copyWith(
+              isSubmitting: false,
+              requiresPhoneBinding: requiresPhoneBinding,
+            );
+          } catch (e) {
+            Log.error('🟢[SignInBloc] Failed to parse token response: $e');
+            return _stateFromCode(
+              FlowyError.create()
+                ..code = ErrorCode.Internal
+                ..msg = 'Failed to parse token response: $e',
+            );
+          }
+        },
+        (error) {
+          Log.error('🟢[SignInBloc] WeChat login failed: ${error.msg}');
+          return _stateFromCode(error);
+        },
+      ),
+    );
+  }
+
   SignInState _stateFromCode(FlowyError error) {
     Log.error('SignInState _stateFromCode: ${error.msg}');
 
@@ -688,6 +800,16 @@ class SignInEvent with _$SignInEvent {
     String? email,
     String? phone,
   }) = CheckPasswordStatus;
+
+  const factory SignInEvent.signInWithWeChat() = SignInWithWeChat;
+
+  /// 清除“需要绑定手机号”状态，防止重复弹窗
+  const factory SignInEvent.clearPhoneBindingRequirement() =
+      ClearPhoneBindingRequirement;
+
+  /// 收到微信回调的 code（通过 deep link）
+  const factory SignInEvent.wechatCodeReceived(String code) =
+      WeChatCodeReceived;
 }
 
 // we support sign in directly without sign up, but we want to allow the users to sign up if they want to
@@ -712,6 +834,7 @@ class SignInState with _$SignInState {
     required FlowyResult<bool, FlowyError>? resetPasswordSuccessOrFail,
     @Default(LoginType.signIn) LoginType loginType,
     bool? passwordIsSet,
+    @Default(false) bool requiresPhoneBinding,
   }) = _SignInState;
 
   factory SignInState.initial() => const SignInState(
@@ -723,5 +846,6 @@ class SignInState with _$SignInState {
         validateResetPasswordTokenSuccessOrFail: null,
         resetPasswordSuccessOrFail: null,
         passwordIsSet: null,
+        requiresPhoneBinding: false,
       );
 }

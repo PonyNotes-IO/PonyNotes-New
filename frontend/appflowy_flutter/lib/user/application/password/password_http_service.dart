@@ -464,4 +464,98 @@ class PasswordHttpService {
       );
     }
   }
+
+  /// Signs in with third party provider (e.g., WeChat, DouYin)
+  /// Uses GoTrue API with grant_type=third_party
+  ///
+  /// [platform] - The platform name (e.g., "weixin", "douyin")
+  /// [code] - The authorization code from the third party SDK
+  ///
+  /// Returns GotrueTokenResponse with access_token and refresh_token
+  Future<FlowyResult<Map<String, dynamic>, FlowyError>> signInWithThirdParty({
+    required String platform,
+    required String code,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/token?grant_type=third_party');
+      Log.info(
+        '🦋[PasswordHttpService] Making third party login request to: $uri',
+      );
+      Log.info(
+        '🦋[PasswordHttpService] platform: $platform',
+      );
+
+      final body = <String, dynamic>{
+        'platform': platform,
+        'code': code,
+      };
+
+      final response = await client.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      Log.info(
+        '🦋[PasswordHttpService] Third party login response status: ${response.statusCode}, body length: ${response.body.length}',
+      );
+
+      if (response.statusCode == 200) {
+        try {
+          final decodedBody = jsonDecode(response.body) as Map<String, dynamic>;
+          Log.info(
+            '🦋[PasswordHttpService] Third party login successful',
+          );
+          return FlowyResult.success(decodedBody);
+        } catch (e) {
+          Log.error(
+            '🦋[PasswordHttpService] Failed to decode third party login response: $e, body: ${response.body}',
+          );
+          return FlowyResult.failure(
+            FlowyError(msg: 'Failed to decode response: $e'),
+          );
+        }
+      } else {
+        Log.error(
+          '🦋[PasswordHttpService] Third party login failed with status ${response.statusCode}, body: ${response.body}',
+        );
+
+        Map<String, dynamic> errorBody = {};
+        if (response.body.isNotEmpty) {
+          try {
+            errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+          } catch (e) {
+            Log.error(
+              '🦋[PasswordHttpService] Failed to parse error response as JSON: $e',
+            );
+            errorBody = {};
+          }
+        }
+
+        ErrorCode errorCode = ErrorCode.Internal;
+
+        if (response.statusCode == 400) {
+          // Invalid credentials or code
+          errorCode = ErrorCode.UserUnauthorized;
+        } else if (response.statusCode == 422) {
+          errorCode = ErrorCode.InvalidParams;
+        }
+
+        return FlowyResult.failure(
+          FlowyError(
+            code: errorCode,
+            msg: errorBody['msg'] ?? errorBody['error_description'] ?? 'Third party login failed',
+          ),
+        );
+      }
+    } catch (e) {
+      Log.error('🦋[PasswordHttpService] Third party login request failed: error: $e');
+
+      return FlowyResult.failure(
+        FlowyError(msg: 'Network error: ${e.toString()}'),
+      );
+    }
+  }
 }
