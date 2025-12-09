@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
@@ -22,6 +25,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../generated/locale_keys.g.dart';
 import '../../../../user/presentation/screens/legal_document_screen.dart';
+import 'package:http/http.dart' as http;
 
 enum PurchaseDurationOption {
   monthly,
@@ -46,20 +50,25 @@ class AccountManagementView extends StatefulWidget {
 
 class _AccountManagementViewState extends State<AccountManagementView> {
   WorkspaceSubscriptionInfoPB? _subscriptionInfo;
-  bool _isLoading = true;
+  bool _isLoadingSubscription = true;
+  bool _isLoadingPlans = true;
   WorkspacePlanPB? _selectedPlan;
   PurchaseDurationOption _selectedDuration = PurchaseDurationOption.monthly;
   bool _agreedProtocols = false;
+  Map<WorkspacePlanPB, _RemotePlan> _planConfigs = {};
 
   @override
   void initState() {
     super.initState();
     _loadSubscriptionInfo();
+    _loadSubscriptionPlans();
   }
+
+  bool get _isLoading => _isLoadingSubscription || _isLoadingPlans;
 
   Future<void> _loadSubscriptionInfo() async {
     setState(() {
-      _isLoading = true;
+      _isLoadingSubscription = true;
     });
 
     final result = await UserBackendService.getWorkspaceSubscriptionInfo(widget.workspaceId);
@@ -76,7 +85,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
             } else {
               _selectedPlan = info.plan;
             }
-            _isLoading = false;
+            _isLoadingSubscription = false;
           });
         }
       },
@@ -86,70 +95,142 @@ class _AccountManagementViewState extends State<AccountManagementView> {
           setState(() {
             // 加载失败时，如果没有选中计划，默认选中学生版
             _selectedPlan ??= WorkspacePlanPB.StudentPlan;
-            _isLoading = false;
+            _isLoadingSubscription = false;
           });
         }
       },
     );
   }
 
-  // 根据订阅计划返回对应的配置
-  Map<String, dynamic> _getPlanConfig(WorkspacePlanPB plan) {
-    switch (plan) {
-      case WorkspacePlanPB.FreePlan:
-        return {
-          'title': '免费版',
-          'price': '¥0',
-          'tag': '默认',
-          'monthlyPrice': 0.0,
-          'yearlyPrice': 0.0,
-        };
-      case WorkspacePlanPB.StudentPlan:
-        return {
-          'title': '学生版',
-          'price': '¥12.00/月',
-          'tag': '学生专享',
-          'monthlyPrice': 12.0,
-          'yearlyPrice': 120.0,
-        };
-      case WorkspacePlanPB.StandardPlan:
-        return {
-          'title': '标准版',
-          'price': '¥20.00/月',
-          'tag': '最受欢迎',
-          'monthlyPrice': 20.0,
-          'yearlyPrice': 200.0,
-        };
-      case WorkspacePlanPB.TeamPlan:
-        return {
-          'title': '团队版',
-          'price': '¥45.00/月',
-          'tag': '团队协作',
-          'monthlyPrice': 45.0,
-          'yearlyPrice': 450.0,
-        };
-      default:
-        return {
-          'title': '免费版',
-          'price': '¥0',
-          'tag': '默认',
-          'monthlyPrice': 0.0,
-          'yearlyPrice': 0.0,
-        };
+  Future<void> _loadSubscriptionPlans() async {
+    setState(() {
+      _isLoadingPlans = true;
+    });
+
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (baseUrl.isEmpty) {
+        Log.warn('订阅计划接口 baseUrl 为空，跳过远程加载');
+        setState(() {
+          _isLoadingPlans = false;
+        });
+        return;
+      }
+
+      final rawToken = widget.userProfile.token;
+      final accessToken = _extractAccessToken(rawToken);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.warn('订阅计划接口无法获取 access_token，使用本地默认配置');
+        setState(() {
+          _isLoadingPlans = false;
+        });
+        return;
+      }
+
+      final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/plans');
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        Log.warn('订阅计划接口返回非 200: ${response.statusCode}, body: ${response.body}');
+        setState(() {
+          _isLoadingPlans = false;
+        });
+        return;
+      }
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final code = decoded['code'] as int? ?? -1;
+      if (code != 0) {
+        final message = decoded['message'] as String? ?? 'unknown error';
+        Log.warn('订阅计划接口返回错误 code=$code, message=$message');
+        setState(() {
+          _isLoadingPlans = false;
+        });
+        return;
+      }
+
+      final data = decoded['data'];
+      if (data is! List) {
+        Log.warn('订阅计划接口 data 非数组，使用本地默认配置');
+        setState(() {
+          _isLoadingPlans = false;
+        });
+        return;
+      }
+
+      final Map<WorkspacePlanPB, _RemotePlan> configs = {};
+      for (final item in data) {
+        if (item is! Map<String, dynamic>) continue;
+        final codeStr = item['plan_code'] as String? ?? '';
+        final mappedPlan = _mapPlanCodeToPb(codeStr);
+        if (mappedPlan == null) continue;
+        configs[mappedPlan] = _RemotePlan.fromJson(item);
+      }
+
+      if (mounted) {
+        setState(() {
+          _planConfigs = configs;
+          _isLoadingPlans = false;
+        });
+      }
+    } catch (e, stackTrace) {
+      Log.error('订阅计划接口请求异常: $e', e, stackTrace);
+      if (mounted) {
+        setState(() {
+          _isLoadingPlans = false;
+        });
+      }
     }
   }
 
-  WorkspacePlanPB get _effectivePlan {
-    // 如果已经手动选择了计划，使用选择的计划
-    if (_selectedPlan != null) {
-      return _selectedPlan!;
+  // 根据订阅计划返回对应的配置
+  Map<String, dynamic> _getPlanConfig(WorkspacePlanPB? plan) {
+    if (plan == null) return {};
+    final remote = _planConfigs[plan];
+    if (remote != null) {
+      final monthly = remote.monthlyPriceYuan ?? 0.0;
+      final yearly = remote.yearlyPriceYuan ?? monthly * 12;
+      return {
+        'title': remote.planNameCn.isNotEmpty ? remote.planNameCn : remote.planName,
+        'price': '¥${_formatCurrency(monthly)}/月',
+        'tag': remote.planNameCn,
+        'monthlyPrice': monthly,
+        'yearlyPrice': yearly,
+      };
     }
-    // 如果有订阅信息且不是免费版，使用当前订阅的计划
-    if (_subscriptionInfo != null && _subscriptionInfo!.plan != WorkspacePlanPB.FreePlan) {
+    switch (plan) {
+      case WorkspacePlanPB.FreePlan:
+        return {};
+      case WorkspacePlanPB.StudentPlan:
+        return {};
+      case WorkspacePlanPB.StandardPlan:
+        return {};
+      case WorkspacePlanPB.TeamPlan:
+        return {};
+      default:
+        return {};
+    }
+  }
+
+  WorkspacePlanPB? get _effectivePlan {
+    final availablePlans = _planConfigs.keys.toList();
+    if (availablePlans.isEmpty) return null;
+
+    if (_selectedPlan != null && _planConfigs.containsKey(_selectedPlan)) {
+      return _selectedPlan;
+    }
+    if (_subscriptionInfo != null &&
+        _planConfigs.containsKey(_subscriptionInfo!.plan)) {
       return _subscriptionInfo!.plan;
     }
-    // 默认选中学生版（免费版或无版本信息时）
-    return WorkspacePlanPB.StudentPlan;
+    return availablePlans.first;
   }
 
   double _getDurationPrice(PurchaseDurationOption option) {
@@ -175,6 +256,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final hasPlans = _planConfigs.isNotEmpty;
 
     return Column(
       children: [
@@ -191,14 +273,18 @@ class _AccountManagementViewState extends State<AccountManagementView> {
           children: [
             if (_isLoading)
                     const Center(child: CircularProgressIndicator())
-                  else ...[
-                    _buildPlanCards(context),
-                    const VSpace(24),
-                    _buildBenefitSection(context),
-                    const VSpace(24),
-                    _buildPurchaseDurationSection(context),
-                    const VSpace(32),
-                  ],
+                  else if (!hasPlans) ...[
+                    const SizedBox(height: 20),
+                    const Center(child: Text('暂无可用的会员计划')),
+                    const SizedBox(height: 24),
+                  ] else ...[
+                      _buildPlanCards(context),
+                      const VSpace(24),
+                      _buildBenefitSection(context),
+                      const VSpace(24),
+                      _buildPurchaseDurationSection(context),
+                      const VSpace(32),
+                    ],
               _buildFeatureItem(context, '文档光标颜色', '购买', showArrow: true),
               _buildFeatureItem(context, 'AI使用次数', '今日剩余20次升级', showArrow: true),
               GestureDetector(
@@ -253,12 +339,14 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     final theme = AppFlowyTheme.of(context);
     // final currentPlan = _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
     final selectedPlan = _effectivePlan;
-    final plans = [
-      WorkspacePlanPB.FreePlan,
-      WorkspacePlanPB.StudentPlan,
-      WorkspacePlanPB.StandardPlan,
-      WorkspacePlanPB.TeamPlan,
-    ];
+    final plans = _planConfigs.entries
+        .where((e) => e.value.isActive)
+        .map((e) => e.key)
+        .toList();
+
+    if (selectedPlan == null || plans.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -273,7 +361,6 @@ class _AccountManagementViewState extends State<AccountManagementView> {
 
         final cardWidth = (maxWidth - spacing * (crossAxisCount - 1)) /
             crossAxisCount;
-        plans.remove(WorkspacePlanPB.FreePlan);
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
@@ -431,6 +518,9 @@ class _AccountManagementViewState extends State<AccountManagementView> {
   }
 
   Widget _buildPurchaseDurationSection(BuildContext context) {
+    if (_effectivePlan == null) {
+      return const SizedBox.shrink();
+    }
     final theme = AppFlowyTheme.of(context);
     final monthlyPrice = _getDurationPrice(PurchaseDurationOption.monthly);
     final yearlyPrice = _getDurationPrice(PurchaseDurationOption.yearly);
@@ -949,6 +1039,76 @@ class _AccountManagementViewState extends State<AccountManagementView> {
           );
         },
       ),
+    );
+  }
+
+  String? _extractAccessToken(String? rawToken) {
+    if (rawToken == null || rawToken.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(rawToken);
+      if (decoded is Map<String, dynamic>) {
+        final accessToken = decoded['access_token'] as String?;
+        if (accessToken != null && accessToken.isNotEmpty) {
+          return accessToken;
+        }
+      }
+    } catch (_) {
+      // 不是 JSON，直接返回
+      return rawToken;
+    }
+    return null;
+  }
+
+  WorkspacePlanPB? _mapPlanCodeToPb(String code) {
+    switch (code) {
+      case 'free_local':
+        return WorkspacePlanPB.FreePlan;
+      case 'student':
+        return WorkspacePlanPB.StudentPlan;
+      case 'standard':
+        return WorkspacePlanPB.StandardPlan;
+      case 'team':
+        return WorkspacePlanPB.TeamPlan;
+      default:
+        return null;
+    }
+  }
+}
+
+class _RemotePlan {
+  const _RemotePlan({
+    required this.planCode,
+    required this.planName,
+    required this.planNameCn,
+    required this.monthlyPriceYuan,
+    required this.yearlyPriceYuan,
+    required this.isActive,
+  });
+
+  final String planCode;
+  final String planName;
+  final String planNameCn;
+  final double? monthlyPriceYuan;
+  final double? yearlyPriceYuan;
+  final bool isActive;
+
+  factory _RemotePlan.fromJson(Map<String, dynamic> json) {
+    double? _parseDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toDouble();
+      final str = value.toString();
+      return double.tryParse(str);
+    }
+
+    return _RemotePlan(
+      planCode: json['plan_code'] as String? ?? '',
+      planName: json['plan_name'] as String? ?? '',
+      planNameCn: json['plan_name_cn'] as String? ?? '',
+      monthlyPriceYuan: _parseDouble(json['monthly_price_yuan']),
+      yearlyPriceYuan: _parseDouble(json['yearly_price_yuan']),
+      isActive: json['is_active'] as bool? ?? true,
     );
   }
 }
