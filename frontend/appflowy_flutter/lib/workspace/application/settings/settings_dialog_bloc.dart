@@ -39,6 +39,7 @@ enum SettingsPage {
   cloud,
   featureFlags,
   billingPage,
+  addonPurchaseRecords,
 }
 
 class SettingsDialogBloc
@@ -54,6 +55,7 @@ class SettingsDialogBloc
 
   final AFRolePB? currentWorkspaceMemberRole;
   final UserListener _userListener;
+  bool _listenerStarted = false;
 
   @override
   Future<void> close() async {
@@ -66,7 +68,10 @@ class SettingsDialogBloc
       (event, emit) async {
         await event.when(
           initial: () async {
-            _userListener.start(onProfileUpdated: _profileUpdated);
+            if (!_listenerStarted) {
+              _userListener.start(onProfileUpdated: _profileUpdated);
+              _listenerStarted = true;
+            }
 
             final isBillingEnabled = await _isBillingEnabled(
               state.userProfile,

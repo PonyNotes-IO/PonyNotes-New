@@ -292,7 +292,12 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                       const VSpace(32),
                     ],
               _buildFeatureItem(context, '文档光标颜色', '购买', showArrow: true),
-              _buildFeatureItem(context, 'AI使用次数', '今日剩余20次升级', showArrow: true),
+              _buildFeatureItem(
+                context,
+                'AI使用次数',
+                _buildAiUsageSubtitle(),
+                showArrow: true,
+              ),
               GestureDetector(
                 onTap: () => widget.changeSelectedPage(SettingsPage.userProfile),
                 child: _buildFeatureItem(context, '个人资料', '', showArrow: true),
@@ -562,6 +567,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     final theme = AppFlowyTheme.of(context);
     final storageLabel = (sub.usage?.storageTotalGb ?? plan?.cloudStorageGb)
         ?.toString();
+    final aiChatRemaining = sub.usage?.aiChatRemaining;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -634,6 +640,14 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                       theme: theme,
                     ),
                   ],
+                  if (aiChatRemaining != null) ...[
+                    const SizedBox(width: 8),
+                    _buildInfoChip(
+                      label: 'AI剩余次数',
+                      value: '$aiChatRemaining次',
+                      theme: theme,
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -672,6 +686,15 @@ class _AccountManagementViewState extends State<AccountManagementView> {
         ],
       ),
     );
+  }
+
+  String _buildAiUsageSubtitle() {
+    final usage = widget.currentSubscription?.usage;
+    final remaining = usage?.aiChatRemaining;
+    if (remaining == null) {
+      return '';
+    }
+    return '本月剩余$remaining次';
   }
 
   Widget _buildPurchaseDurationSection(BuildContext context) {
@@ -870,6 +893,34 @@ class _AccountManagementViewState extends State<AccountManagementView> {
   Future<void> _handleUpgradePay(BuildContext context, double selectedPrice) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     final planConfig = _getPlanConfig(_effectivePlan);
+    final remotePlan = _effectivePlan != null ? _planConfigs[_effectivePlan!] : null;
+    final planId = remotePlan?.id;
+    if (planId == null) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('无法获取计划ID，暂无法订阅'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // 0. 先创建/更新订阅
+    final subscribed = await _createOrUpdateSubscription(
+      planId: planId,
+      billingType: _selectedDuration == PurchaseDurationOption.monthly
+          ? 'monthly'
+          : 'yearly',
+      scaffoldMessenger: scaffoldMessenger,
+    );
+    if (!subscribed) {
+      return;
+    }
+
+    // 订阅成功后刷新设置页的订阅信息（存储用量等）
+    if (context.mounted) {
+      context.read<SettingsDialogBloc>().add(const SettingsDialogEvent.initial());
+    }
 
     // 1. 根据当前平台获取可用支付方式（macOS: Apple Pay; Windows: 微信/支付宝）
     final methods = PaymentPlatformSupport.getAvailableMethods();
@@ -1197,6 +1248,90 @@ class _AccountManagementViewState extends State<AccountManagementView> {
         },
       ),
     );
+  }
+
+  Future<bool> _createOrUpdateSubscription({
+    required int planId,
+    required String billingType,
+    required ScaffoldMessengerState scaffoldMessenger,
+  }) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (baseUrl.isEmpty) {
+        Log.warn('订阅接口 baseUrl 为空');
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('无法创建订阅：服务地址为空'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return false;
+      }
+
+      final accessToken = _extractAccessToken(widget.userProfile.token);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.warn('订阅接口缺少 access_token');
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('无法创建订阅：未登录或 token 失效'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return false;
+      }
+
+      final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/subscribe');
+      final body = jsonEncode({
+        'plan_id': planId,
+        'billing_type': billingType,
+      });
+
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        body: body,
+      );
+
+      if (response.statusCode != 200) {
+        Log.warn('创建订阅失败: ${response.statusCode}, body: ${response.body}');
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('创建订阅失败：HTTP ${response.statusCode}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return false;
+      }
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final code = decoded['code'] as int? ?? -1;
+      if (code != 0) {
+        final msg = decoded['message'] as String? ?? '创建订阅失败';
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return false;
+      }
+
+      Log.info('订阅创建/更新成功: ${decoded['data']}');
+      return true;
+    } catch (e, stackTrace) {
+      Log.error('创建订阅异常: $e', e, stackTrace);
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('创建订阅异常'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return false;
+    }
   }
 
   String? _extractAccessToken(String? rawToken) {

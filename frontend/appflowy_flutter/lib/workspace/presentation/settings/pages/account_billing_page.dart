@@ -13,9 +13,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../application/settings/settings_dialog_bloc.dart';
-import '../../../application/payment/payment_api.dart';
-import '../../../application/payment/payment_util.dart';
-import '../../../../features/workspace/logic/workspace_bloc.dart';
 import '../shared/settings_body.dart';
 import '../widgets/email_binding_dialog.dart';
 import '../widgets/identity_verification_dialog.dart';
@@ -63,6 +60,14 @@ class _BillingPageState extends State<BillingPage> {
 
     return SettingsBody(
       title: '空间补充包',
+      headerTrailingBuilder: (_) => OutlinedRoundedButton(
+        text: '购买记录',
+        onTap: () => context.read<SettingsDialogBloc>().add(
+              const SettingsDialogEvent.setSelectedPage(
+                SettingsPage.addonPurchaseRecords,
+              ),
+            ),
+      ),
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,7 +215,7 @@ class _BillingPageState extends State<BillingPage> {
         _buildFeatureItem(
           context,
           'AI使用次数',
-          '今日剩余20次升级',
+          _buildAiUsageSubtitle(context),
           showArrow: true,
         ),
         _buildFeatureItem(
@@ -242,6 +247,16 @@ class _BillingPageState extends State<BillingPage> {
         ),
       ],
     );
+  }
+
+  String _buildAiUsageSubtitle(BuildContext context) {
+    final state = context.read<SettingsDialogBloc>().state;
+    final usage = state.currentSubscription?.usage;
+    final remaining = usage?.aiChatRemaining;
+    if (remaining == null) {
+      return '';
+    }
+    return '本月剩余$remaining次';
   }
 
   Widget _buildFeatureItem(
@@ -572,117 +587,99 @@ class _BillingPageState extends State<BillingPage> {
     _AddonPlan selectedPlan,
   ) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-    // 1. 获取 workspaceId
-    final workspaceBloc = context.read<UserWorkspaceBloc>();
-    final workspaceId = workspaceBloc.state.currentWorkspace?.workspaceId;
-    if (workspaceId == null || workspaceId.isEmpty) {
+    final addonId = selectedPlan.id;
+    if (addonId == null) {
       scaffoldMessenger.showSnackBar(
         const SnackBar(
-          content: Text('无法获取工作空间信息'),
+          content: Text('无法获取补充包信息'),
           duration: Duration(seconds: 2),
         ),
       );
       return;
     }
 
-    // 2. 根据平台选择支付方式（macOS: Apple Pay; Windows: 微信/支付宝）
-    final methods = PaymentPlatformSupport.getAvailableMethods();
-    if (methods.isEmpty) {
+    final accessToken = _extractAccessToken(_currentUserProfile.token);
+    if (accessToken == null || accessToken.isEmpty) {
       scaffoldMessenger.showSnackBar(
         const SnackBar(
-          content: Text('当前平台暂不支持支付功能'),
+          content: Text('缺少访问凭证，无法购买补充包'),
           duration: Duration(seconds: 2),
         ),
       );
       return;
     }
 
-    // 暂时默认选择第一个可用支付方式，后续可增加 UI 让用户选择
-    final method = methods.first;
+    final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+    final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+    if (baseUrl.isEmpty) {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(
+          content: Text('服务地址未配置，无法购买补充包'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
 
-    // 3. 先调用后端创建支付订单接口
-    final paymentType = switch (method) {
-      PaymentMethod.applePay => PaymentType.applePay,
-      PaymentMethod.wechatPay => PaymentType.wechatPay,
-      PaymentMethod.alipay => PaymentType.alipay,
-    };
-
-    // 补充包价格（单位：元）
-    final amount = selectedPlan.priceYuan ?? 0;
-
-    final createRequest = PaymentCreateRequest(
-      amount: amount,
-      paymentType: paymentType,
-      productName: selectedPlan.name,
-      // 这里暂时使用 workspaceId 作为 openId，后续如果有专门的 openId 可替换
-      openId: workspaceId,
-      // 回调地址先占位，后端可按需要使用
-      url: '',
-      userInfo: <String, dynamic>{
-        'userId': _currentUserProfile.id.toString(),
-        'name': _currentUserProfile.name,
-        'email': _currentUserProfile.email,
-        'planName': selectedPlan.name,
-        'storage': selectedPlan.storageLabel,
-        'tokens': selectedPlan.tokensLabel,
-      },
+    final uri = Uri.parse(baseUrl).replace(
+      path: '/api/subscription/addons/purchase',
     );
 
-    final orderResult = await PaymentApi.createPaymentOrder(createRequest);
+    try {
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'addon_id': addonId,
+          'quantity': 1,
+        }),
+      );
 
-    if (orderResult.isFailure) {
-      final error = orderResult.fold((_) => null, (e) => e);
+      if (response.statusCode != 200) {
+        Log.warn(
+          '购买补充包接口返回非 200: ${response.statusCode}, body: ${response.body}',
+        );
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('购买失败：${response.statusCode}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final code = decoded['code'] as int? ?? -1;
+      final message = decoded['message']?.toString() ?? '';
+      if (code != 0) {
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text(message.isNotEmpty ? message : '购买失败'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+
+      // 购买成功后刷新设置页订阅信息（含存储用量）
+      if (context.mounted) {
+        context.read<SettingsDialogBloc>().add(const SettingsDialogEvent.initial());
+      }
+
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text(error?.msg ?? '创建支付订单失败'),
+          content: Text(message.isNotEmpty ? message : '补充包购买成功'),
           duration: const Duration(seconds: 2),
         ),
       );
-      return;
-    }
-
-    final order = orderResult.fold(
-      (order) => order,
-      (_) => null,
-    );
-    if (order == null) {
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text('创建支付订单失败'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    // 4. 调用统一支付工具类（传递真实订单号和金额）
-    final result = await PaymentUtil.pay(
-      method: method,
-      amount: (order.amount * 100).round(), // 转为整型，例如单位分
-      currency: 'CNY',
-      orderId: order.orderId,
-      extra: <String, dynamic>{
-        'planName': selectedPlan.name,
-        'storage': selectedPlan.storageLabel,
-        'tokens': selectedPlan.tokensLabel,
-        'displayPrice': amount,
-        'order': order.raw,
-      },
-    );
-
-    // 5. 根据支付结果提示用户
-    if (result.success) {
+    } catch (e, stackTrace) {
+      Log.error('购买补充包接口异常: $e', e, stackTrace);
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text(result.message.isNotEmpty ? result.message : '支付成功'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    } else {
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text(result.message.isNotEmpty ? result.message : '支付失败'),
+          content: Text('购买失败：$e'),
           duration: const Duration(seconds: 2),
         ),
       );

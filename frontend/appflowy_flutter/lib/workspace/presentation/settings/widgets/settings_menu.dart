@@ -23,6 +23,7 @@ class SettingsMenu extends StatefulWidget {
     required this.isBillingEnabled,
     required this.currentUserRole,
     required this.workspaceId,
+    this.currentSubscription,
   });
 
   final void Function(SettingsPage page) changeSelectedPage;
@@ -31,6 +32,7 @@ class SettingsMenu extends StatefulWidget {
   final bool isBillingEnabled;
   final AFRolePB? currentUserRole;
   final String workspaceId;
+  final CurrentSubscription? currentSubscription;
 
   @override
   State<SettingsMenu> createState() => _SettingsMenuState();
@@ -109,6 +111,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final storageUsage = _buildStorageUsageText();
 
     return Container(
       decoration: BoxDecoration(
@@ -143,6 +146,15 @@ class _SettingsMenuState extends State<SettingsMenu> {
             const VSpace(8),
             _buildUserInfoCard(context),
             const VSpace(16),
+            SettingsMenuElement(
+              page: SettingsPage.accountManagement,
+              selectedPage: widget.currentPage,
+              label: "我的账户",
+              trailingText: storageUsage,
+              changeSelectedPage: widget.changeSelectedPage,
+              showArrow: false,
+              isEnabled: false,
+            ),
             SettingsMenuElement(
               page: SettingsPage.workspace,
               selectedPage: widget.currentPage,
@@ -215,6 +227,28 @@ class _SettingsMenuState extends State<SettingsMenu> {
         ),
       ),
     );
+  }
+
+  String _buildStorageUsageText() {
+    final usage = widget.currentSubscription?.usage;
+    final usedGb = usage?.storageUsedGb;
+    final totalGb = usage?.storageTotalGb;
+    if (usedGb == null || totalGb == null) {
+      return '';
+    }
+
+    double remainingGb = totalGb - usedGb;
+    if (remainingGb < 0) remainingGb = 0;
+
+    String fmt(double gb) {
+      if (gb < 1) {
+        final mb = gb * 1024;
+        return '${mb.toStringAsFixed(0)}M';
+      }
+      return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
+    }
+
+    return '剩余流量${fmt(remainingGb)}/${fmt(totalGb)}';
   }
 
   Widget _buildUserInfoCard(BuildContext context) {

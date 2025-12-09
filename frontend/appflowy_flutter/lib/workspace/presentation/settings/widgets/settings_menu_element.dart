@@ -11,6 +11,8 @@ class SettingsMenuElement extends StatelessWidget {
     required this.changeSelectedPage,
     required this.selectedPage,
     this.showArrow = true, // 默认显示箭头
+    this.trailingText,
+    this.isEnabled = true,
   });
 
   final SettingsPage page;
@@ -18,17 +20,22 @@ class SettingsMenuElement extends StatelessWidget {
   final String label;
   final void Function(SettingsPage page) changeSelectedPage;
   final bool showArrow; // 是否显示右侧箭头
+  final String? trailingText;
+  final bool isEnabled;
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     return AFBaseButton(
-      onTap: () => changeSelectedPage(page),
+      onTap: () {
+        if (!isEnabled) return;
+        changeSelectedPage(page);
+      },
       padding: EdgeInsets.all(theme.spacing.m),
       borderRadius: theme.borderRadius.m,
       borderColor: (_, __, ___, ____) => Colors.transparent,
       backgroundColor: (_, isHovering, __) {
-        if (isHovering) {
+        if (isHovering && isEnabled) {
           return theme.fillColorScheme.contentHover;
         } else if (page == selectedPage) {
           return theme.fillColorScheme.themeSelect;
@@ -46,12 +53,27 @@ class SettingsMenuElement extends StatelessWidget {
                 ),
               ),
             ),
+            if (trailingText != null && trailingText!.isNotEmpty) ...[
+              const HSpace(8),
+              Text(
+                trailingText!,
+                style: theme.textStyle.body
+                    .standard(
+                      color: isEnabled
+                          ? theme.textColorScheme.secondary
+                          : theme.textColorScheme.secondary.withOpacity(0.5),
+                    )
+                    .copyWith(fontSize: 12),
+              ),
+            ],
             if (showArrow) ...[
               const HSpace(8),
               Icon(
                 Icons.chevron_right,
                 size: 16,
-                color: theme.textColorScheme.secondary,
+                color: isEnabled
+                    ? theme.textColorScheme.secondary
+                    : theme.textColorScheme.secondary.withOpacity(0.5),
               ),
             ],
           ],

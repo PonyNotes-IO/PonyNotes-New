@@ -46,6 +46,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'pages/setting_ai_view/local_settings_ai_view.dart';
 import 'widgets/setting_cloud.dart';
 import 'pages/account_billing_page.dart';
+import 'pages/addon_purchase_records_view.dart';
 import 'package:appflowy/env/env.dart';
 
 @visibleForTesting
@@ -115,6 +116,8 @@ class SettingsDialog extends StatelessWidget {
                           currentUserRole: currentWorkspaceMemberRole,
                           isBillingEnabled: state.isBillingEnabled,
                           workspaceId: workspaceState.currentWorkspace?.workspaceId ?? '',
+                          currentSubscription:
+                              context.read<SettingsDialogBloc>().state.currentSubscription,
                         ),
                       ),
                       AFDivider(
@@ -172,6 +175,12 @@ class SettingsDialog extends StatelessWidget {
         );
       case SettingsPage.rechargeRecords:
         return RechargeRecordsView(
+          changeSelectedPage: (index) => context
+              .read<SettingsDialogBloc>()
+              .add(SettingsDialogEvent.setSelectedPage(index)),
+        );
+      case SettingsPage.addonPurchaseRecords:
+        return AddonPurchaseRecordsView(
           changeSelectedPage: (index) => context
               .read<SettingsDialogBloc>()
               .add(SettingsDialogEvent.setSelectedPage(index)),
