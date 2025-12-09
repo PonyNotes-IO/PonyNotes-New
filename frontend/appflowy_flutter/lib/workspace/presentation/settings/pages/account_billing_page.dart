@@ -1,3 +1,7 @@
+import 'dart:convert';
+
+import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -6,6 +10,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../application/settings/settings_dialog_bloc.dart';
 import '../../../application/payment/payment_api.dart';
@@ -31,40 +36,30 @@ class BillingPage extends StatefulWidget {
 class _BillingPageState extends State<BillingPage> {
   int _selectedPlanIndex = 0;
   late UserProfilePB _currentUserProfile = widget.userProfile;
-
-  final List<_StoragePlan> _plans = const [
-    _StoragePlan(
-      name: 'A扩充方案',
-      storage: '存储空间 5G',
-      tokens: 'AI token 100次/天',
-      price: 5,
-    ),
-    _StoragePlan(
-      name: 'B扩充方案',
-      storage: '存储空间 20G',
-      tokens: 'AI token 500次/天',
-      price: 15,
-    ),
-    _StoragePlan(
-      name: 'C扩充方案',
-      storage: '存储空间 50G',
-      tokens: 'AI token 1000次/天',
-      price: 35,
-    ),
-  ];
+  bool _isLoading = true;
+  List<_AddonPlan> _addons = const [];
 
   @override
   void didUpdateWidget(covariant BillingPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.userProfile != widget.userProfile) {
       _currentUserProfile = widget.userProfile;
+      _loadAddons();
     }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAddons();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final selectedPlan = _plans[_selectedPlanIndex];
+    final hasPlans = _addons.isNotEmpty;
+    final selectedPlan =
+        hasPlans ? _addons[_selectedPlanIndex.clamp(0, _addons.length - 1)] : null;
 
     return SettingsBody(
       title: '空间补充包',
@@ -79,6 +74,13 @@ class _BillingPageState extends State<BillingPage> {
               color: theme.textColorScheme.primary,
             ),
             const VSpace(16),
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (!hasPlans) ...[
+              const SizedBox(height: 12),
+              const Center(child: Text('暂无可用的补充包')),
+              const SizedBox(height: 12),
+            ] else
             LayoutBuilder(
               builder: (context, constraints) {
                 final spacing = theme.spacing.l;
@@ -87,7 +89,7 @@ class _BillingPageState extends State<BillingPage> {
                 const double minCardWidth = 220;
                 int crossAxisCount =
                     (maxWidth / (minCardWidth + spacing)).floor();
-                crossAxisCount = crossAxisCount.clamp(1, _plans.length);
+                crossAxisCount = crossAxisCount.clamp(1, _addons.length);
 
                 final cardWidth = (maxWidth -
                         spacing * (crossAxisCount - 1)) /
@@ -96,8 +98,8 @@ class _BillingPageState extends State<BillingPage> {
                 return Wrap(
                   spacing: spacing,
                   runSpacing: spacing,
-                  children: List.generate(_plans.length, (index) {
-                    final plan = _plans[index];
+                  children: List.generate(_addons.length, (index) {
+                    final plan = _addons[index];
                     final isSelected = index == _selectedPlanIndex;
                     return GestureDetector(
                       onTap: () {
@@ -148,7 +150,7 @@ class _BillingPageState extends State<BillingPage> {
                             ),
                             const VSpace(12),
                             FlowyText(
-                              '${plan.price}元/月',
+                              '${plan.priceYuanStr}',
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               color: const Color(0xFFFF6B47),
@@ -162,25 +164,26 @@ class _BillingPageState extends State<BillingPage> {
               },
             ),
             const VSpace(24),
-            Center(
-              child: GestureDetector(
-                onTap: () => _handleBillingPay(context, selectedPlan),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3EC),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: FlowyText(
-                  '¥${selectedPlan.price}元确认协议并扩充',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFFFF6B47),
+            if (hasPlans && selectedPlan != null)
+              Center(
+                child: GestureDetector(
+                  onTap: () => _handleBillingPay(context, selectedPlan),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3EC),
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: FlowyText(
+                      '¥${selectedPlan.priceYuanStr} 确认协议并扩充',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFFF6B47),
+                    ),
                   ),
                 ),
               ),
-            ),
             const VSpace(32),
             _buildFeatureSection(context),
           ],
@@ -451,10 +454,119 @@ class _BillingPageState extends State<BillingPage> {
     );
   }
 
+  Future<void> _loadAddons() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (baseUrl.isEmpty) {
+        Log.warn('补充包接口 baseUrl 为空');
+        setState(() {
+          _addons = const [];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final accessToken = _extractAccessToken(_currentUserProfile.token);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.warn('补充包接口缺少 access_token');
+        setState(() {
+          _addons = const [];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/addons');
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        Log.warn(
+          '补充包接口返回非 200: ${response.statusCode}, body: ${response.body}',
+        );
+        setState(() {
+          _addons = const [];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final code = decoded['code'] as int? ?? -1;
+      if (code != 0) {
+        Log.warn('补充包接口 code!=0: code=$code, message=${decoded['message']}');
+        setState(() {
+          _addons = const [];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final data = decoded['data'];
+      if (data is! List) {
+        Log.warn('补充包接口 data 不是数组');
+        setState(() {
+          _addons = const [];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final List<_AddonPlan> addons = [];
+      for (final item in data) {
+        if (item is! Map<String, dynamic>) continue;
+        final plan = _AddonPlan.fromJson(item);
+        if (plan.isActive == true) {
+          addons.add(plan);
+        }
+      }
+
+      setState(() {
+        _addons = addons;
+        _isLoading = false;
+        _selectedPlanIndex = 0;
+      });
+    } catch (e, stackTrace) {
+      Log.error('补充包接口请求异常: $e', e, stackTrace);
+      setState(() {
+        _addons = const [];
+        _isLoading = false;
+      });
+    }
+  }
+
+  String? _extractAccessToken(String? rawToken) {
+    if (rawToken == null || rawToken.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(rawToken);
+      if (decoded is Map<String, dynamic>) {
+        final accessToken = decoded['access_token'] as String?;
+        if (accessToken != null && accessToken.isNotEmpty) {
+          return accessToken;
+        }
+      }
+    } catch (_) {
+      return rawToken;
+    }
+    return null;
+  }
+
   /// 处理补充包支付
   Future<void> _handleBillingPay(
     BuildContext context,
-    _StoragePlan selectedPlan,
+    _AddonPlan selectedPlan,
   ) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
@@ -494,7 +606,7 @@ class _BillingPageState extends State<BillingPage> {
     };
 
     // 补充包价格（单位：元）
-    final amount = selectedPlan.price.toDouble();
+    final amount = selectedPlan.priceYuan ?? 0;
 
     final createRequest = PaymentCreateRequest(
       amount: amount,
@@ -575,18 +687,56 @@ class _BillingPageState extends State<BillingPage> {
   }
 }
 
-class _StoragePlan {
+class _AddonPlan {
   final String name;
   final String storage;
   final String tokens;
-  final int price;
+  final double? priceYuan;
+  final bool? isActive;
 
-  const _StoragePlan({
+  const _AddonPlan({
     required this.name,
     required this.storage,
     required this.tokens,
-    required this.price,
+    required this.priceYuan,
+    required this.isActive,
   });
+
+  String get priceYuanStr =>
+      priceYuan == null ? '0' : priceYuan!.toStringAsFixed(2);
+
+  factory _AddonPlan.fromJson(Map<String, dynamic> json) {
+    String _buildStorage(Map<String, dynamic> j) {
+      final storageGb = j['storage_gb'];
+      if (storageGb == null) return '存储空间 --';
+      return '存储空间 ${storageGb}G';
+    }
+
+    String _buildTokens(Map<String, dynamic> j) {
+      final chat = j['ai_chat_count'];
+      final image = j['ai_image_count'];
+      if (chat == null && image == null) return 'AI token --';
+      final chatStr = chat == null ? '' : '对话${chat}次';
+      final imageStr = image == null ? '' : ' 图片${image}张';
+      return 'AI token $chatStr$imageStr'.trim();
+    }
+
+    double? _parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    return _AddonPlan(
+      name: (json['addon_name_cn'] as String?) ??
+          (json['addon_name'] as String?) ??
+          '补充包',
+      storage: _buildStorage(json),
+      tokens: _buildTokens(json),
+      priceYuan: _parseDouble(json['price_yuan']),
+      isActive: json['is_active'] as bool? ?? true,
+    );
+  }
 }
 
 
