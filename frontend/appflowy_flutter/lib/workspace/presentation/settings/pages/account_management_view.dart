@@ -1236,19 +1236,49 @@ class _AccountManagementViewState extends State<AccountManagementView> {
 
 class _RemotePlan {
   const _RemotePlan({
+    required this.id,
     required this.planCode,
     required this.planName,
     required this.planNameCn,
     required this.monthlyPriceYuan,
     required this.yearlyPriceYuan,
+    required this.cloudStorageGb,
+    required this.hasInbox,
+    required this.hasMultiDeviceSync,
+    required this.hasApiSupport,
+    required this.versionHistoryDays,
+    required this.aiChatCountPerMonth,
+    required this.aiImageGenerationPerMonth,
+    required this.hasShareLink,
+    required this.hasPublish,
+    required this.workspaceMemberLimit,
+    required this.collaborativeWorkspaceLimit,
+    required this.pagePermissionGuestEditors,
+    required this.hasSpaceMemberManagement,
+    required this.hasSpaceMemberGrouping,
     required this.isActive,
   });
 
+  final int? id;
   final String planCode;
   final String planName;
   final String planNameCn;
   final double? monthlyPriceYuan;
   final double? yearlyPriceYuan;
+  final int? cloudStorageGb;
+  final bool hasInbox;
+  final bool hasMultiDeviceSync;
+  final bool hasApiSupport;
+  final int? versionHistoryDays;
+  final int? aiChatCountPerMonth;
+  final int? aiImageGenerationPerMonth;
+  final bool hasShareLink;
+  final bool hasPublish;
+  final int? workspaceMemberLimit;
+  final int? collaborativeWorkspaceLimit;
+  final int? pagePermissionGuestEditors;
+  final bool hasSpaceMemberManagement;
+  final bool hasSpaceMemberGrouping;
   final bool isActive;
 
   factory _RemotePlan.fromJson(Map<String, dynamic> json) {
@@ -1258,14 +1288,45 @@ class _RemotePlan {
       final str = value.toString();
       return double.tryParse(str);
     }
+    int? _parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toInt();
+      return int.tryParse(v.toString());
+    }
 
     return _RemotePlan(
+      id: _parseInt(json['id']),
       planCode: json['plan_code'] as String? ?? '',
       planName: json['plan_name'] as String? ?? '',
       planNameCn: json['plan_name_cn'] as String? ?? '',
       monthlyPriceYuan: _parseDouble(json['monthly_price_yuan']),
       yearlyPriceYuan: _parseDouble(json['yearly_price_yuan']),
+      cloudStorageGb: _parseInt(json['cloud_storage_gb']),
+      hasInbox: json['has_inbox'] as bool? ?? false,
+      hasMultiDeviceSync: json['has_multi_device_sync'] as bool? ?? false,
+      hasApiSupport: json['has_api_support'] as bool? ?? false,
+      versionHistoryDays: _parseInt(json['version_history_days']),
+      aiChatCountPerMonth: _parseInt(json['ai_chat_count_per_month']),
+      aiImageGenerationPerMonth: _parseInt(json['ai_image_generation_per_month']),
+      hasShareLink: json['has_share_link'] as bool? ?? false,
+      hasPublish: json['has_publish'] as bool? ?? false,
+      workspaceMemberLimit: _parseInt(json['workspace_member_limit']),
+      collaborativeWorkspaceLimit: _parseInt(json['collaborative_workspace_limit']),
+      pagePermissionGuestEditors: _parseInt(json['page_permission_guest_editors']),
+      hasSpaceMemberManagement:
+          json['has_space_member_management'] as bool? ?? false,
+      hasSpaceMemberGrouping:
+          json['has_space_member_grouping'] as bool? ?? false,
       isActive: json['is_active'] as bool? ?? true,
     );
   }
+
+  // 、、**字段说明：**
+  // - `cloud_storage_gb`: -1表示无，0表示无限制，正数表示具体GB数
+  // - `version_history_days`: -1表示无版本历史
+  // - `ai_chat_count_per_month`: -1表示无限制
+  // - `ai_image_generation_per_month`: -1表示无限制
+  // - `workspace_member_limit`: -1表示无限制
+  // - `collaborative_workspace_limit`: -1表示无限制，0表示仅限1个
+  // - `page_permission_guest_editors`: -1表示无，0表示仅查看，正数表示可编辑的访客数量
 }

@@ -136,18 +136,21 @@ class _BillingPageState extends State<BillingPage> {
                               color: theme.textColorScheme.primary,
                             ),
                             const VSpace(12),
-                            FlowyText(
-                              plan.storage,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: theme.textColorScheme.primary,
-                            ),
-                            const VSpace(4),
-                            FlowyText(
-                              plan.tokens,
-                              fontSize: 14,
-                              color: theme.textColorScheme.secondary,
-                            ),
+                            if (plan.isStorage) ...[
+                              FlowyText(
+                                plan.storageLabel,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: theme.textColorScheme.primary,
+                              ),
+                            ] else ...[
+                              FlowyText(
+                                plan.tokensLabel,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: theme.textColorScheme.primary,
+                              ),
+                            ],
                             const VSpace(12),
                             FlowyText(
                               '${plan.priceYuanStr}',
@@ -621,8 +624,8 @@ class _BillingPageState extends State<BillingPage> {
         'name': _currentUserProfile.name,
         'email': _currentUserProfile.email,
         'planName': selectedPlan.name,
-        'storage': selectedPlan.storage,
-        'tokens': selectedPlan.tokens,
+        'storage': selectedPlan.storageLabel,
+        'tokens': selectedPlan.tokensLabel,
       },
     );
 
@@ -661,8 +664,8 @@ class _BillingPageState extends State<BillingPage> {
       orderId: order.orderId,
       extra: <String, dynamic>{
         'planName': selectedPlan.name,
-        'storage': selectedPlan.storage,
-        'tokens': selectedPlan.tokens,
+        'storage': selectedPlan.storageLabel,
+        'tokens': selectedPlan.tokensLabel,
         'displayPrice': amount,
         'order': order.raw,
       },
@@ -688,52 +691,68 @@ class _BillingPageState extends State<BillingPage> {
 }
 
 class _AddonPlan {
+  final int? id;
+  final String addonCode;
+  final String addonType;
   final String name;
-  final String storage;
-  final String tokens;
   final double? priceYuan;
+  final int? storageGb;
+  final int? aiChatCount;
+  final int? aiImageCount;
   final bool? isActive;
 
   const _AddonPlan({
+    required this.id,
+    required this.addonCode,
+    required this.addonType,
     required this.name,
-    required this.storage,
-    required this.tokens,
     required this.priceYuan,
+    required this.storageGb,
+    required this.aiChatCount,
+    required this.aiImageCount,
     required this.isActive,
   });
 
   String get priceYuanStr =>
       priceYuan == null ? '0' : priceYuan!.toStringAsFixed(2);
+  bool get isStorage => addonType == 'storage';
+  bool get isAiToken => addonType == 'ai_token';
+
+  String get storageLabel =>
+      storageGb == null ? '存储空间 --' : '存储空间 ${storageGb}G';
+
+  String get tokensLabel {
+    if (aiChatCount == null && aiImageCount == null) return 'AI Token --';
+    final chatStr = aiChatCount == null ? '' : '对话${aiChatCount}次';
+    final imageStr = aiImageCount == null ? '' : ' 图片${aiImageCount}张';
+    final merged = [chatStr, imageStr].where((e) => e.isNotEmpty).join(' ');
+    return merged.isEmpty ? 'AI Token --' : 'AI Token $merged';
+  }
 
   factory _AddonPlan.fromJson(Map<String, dynamic> json) {
-    String _buildStorage(Map<String, dynamic> j) {
-      final storageGb = j['storage_gb'];
-      if (storageGb == null) return '存储空间 --';
-      return '存储空间 ${storageGb}G';
-    }
-
-    String _buildTokens(Map<String, dynamic> j) {
-      final chat = j['ai_chat_count'];
-      final image = j['ai_image_count'];
-      if (chat == null && image == null) return 'AI token --';
-      final chatStr = chat == null ? '' : '对话${chat}次';
-      final imageStr = image == null ? '' : ' 图片${image}张';
-      return 'AI token $chatStr$imageStr'.trim();
-    }
-
     double? _parseDouble(dynamic v) {
       if (v == null) return null;
       if (v is num) return v.toDouble();
       return double.tryParse(v.toString());
     }
 
+    int? _parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toInt();
+      return int.tryParse(v.toString());
+    }
+
     return _AddonPlan(
+      id: _parseInt(json['id']),
+      addonCode: (json['addon_code'] as String?) ?? '',
+      addonType: (json['addon_type'] as String?) ?? '',
       name: (json['addon_name_cn'] as String?) ??
           (json['addon_name'] as String?) ??
           '补充包',
-      storage: _buildStorage(json),
-      tokens: _buildTokens(json),
       priceYuan: _parseDouble(json['price_yuan']),
+      storageGb: _parseInt(json['storage_gb']),
+      aiChatCount: _parseInt(json['ai_chat_count']),
+      aiImageCount: _parseInt(json['ai_image_count']),
       isActive: json['is_active'] as bool? ?? true,
     );
   }
