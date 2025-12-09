@@ -163,6 +163,12 @@ class SettingsDialog extends StatelessWidget {
           changeSelectedPage: (index) => context
               .read<SettingsDialogBloc>()
               .add(SettingsDialogEvent.setSelectedPage(index)),
+          currentSubscription:
+              context.read<SettingsDialogBloc>().state.currentSubscription,
+          isLoadingCurrentSubscription: context
+              .read<SettingsDialogBloc>()
+              .state
+              .isLoadingCurrentSubscription,
         );
       case SettingsPage.rechargeRecords:
         return RechargeRecordsView(

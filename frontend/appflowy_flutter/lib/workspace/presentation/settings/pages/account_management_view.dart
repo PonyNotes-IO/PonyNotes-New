@@ -18,6 +18,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:intl/intl.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -38,11 +39,15 @@ class AccountManagementView extends StatefulWidget {
     required this.userProfile,
     required this.workspaceId,
     required this.changeSelectedPage,
+    this.currentSubscription,
+    this.isLoadingCurrentSubscription = false,
   });
 
   final UserProfilePB userProfile;
   final String workspaceId;
   final void Function(SettingsPage page) changeSelectedPage;
+  final CurrentSubscription? currentSubscription;
+  final bool isLoadingCurrentSubscription;
 
   @override
   State<AccountManagementView> createState() => _AccountManagementViewState();
@@ -278,6 +283,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                     const Center(child: Text('暂无可用的会员计划')),
                     const SizedBox(height: 24),
                   ] else ...[
+                  _buildCurrentSubscriptionCard(context),
                       _buildPlanCards(context),
                       const VSpace(24),
                       _buildBenefitSection(context),
@@ -514,6 +520,157 @@ class _AccountManagementViewState extends State<AccountManagementView> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildCurrentSubscriptionCard(BuildContext context) {
+    if (widget.isLoadingCurrentSubscription) {
+      return Column(
+        children: const [
+          SizedBox(height: 12),
+          Center(child: CircularProgressIndicator()),
+          SizedBox(height: 12),
+        ],
+      );
+    }
+
+    final sub = widget.currentSubscription;
+    if (sub == null || sub.subscription?.planCode == null) {
+      return const SizedBox.shrink();
+    }
+
+    final summary = sub.subscription!;
+    final plan = sub.planDetails;
+
+    String _formatDate(DateTime? dt) {
+      if (dt == null) return '--';
+      return DateFormat('yyyy-MM-dd').format(dt);
+    }
+
+    String _buildStatus(String? status) {
+      if (status == null || status.isEmpty) return '未知';
+      switch (status) {
+        case 'active':
+          return '已订阅';
+        case 'canceled':
+          return '已取消';
+        default:
+          return status;
+      }
+    }
+
+    final theme = AppFlowyTheme.of(context);
+    final storageLabel = (sub.usage?.storageTotalGb ?? plan?.cloudStorageGb)
+        ?.toString();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FlowyText(
+          '当前订阅',
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: theme.textColorScheme.primary,
+        ),
+        const VSpace(12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.surfaceColorScheme.layer01,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: const Color(0xFFE9E9E9),
+              width: 1.0,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  FlowyText(
+                    summary.planNameCn ?? summary.planCode ?? '未知套餐',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: theme.textColorScheme.primary,
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3EC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFF6B47)),
+                    ),
+                    child: FlowyText(
+                      _buildStatus(summary.status),
+                      fontSize: 12,
+                      color: const Color(0xFFFF6B47),
+                    ),
+                  ),
+                ],
+              ),
+              const VSpace(8),
+              Row(
+                children: [
+                  _buildInfoChip(
+                    label: '计费周期',
+                    value: summary.billingType ?? '--',
+                    theme: theme,
+                  ),
+                  const SizedBox(width: 8),
+                  _buildInfoChip(
+                    label: '到期时间',
+                    value: _formatDate(summary.endDate),
+                    theme: theme,
+                  ),
+                  if (storageLabel != null) ...[
+                    const SizedBox(width: 8),
+                    _buildInfoChip(
+                      label: '存储',
+                      value: '$storageLabel GB',
+                      theme: theme,
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+        const VSpace(16),
+      ],
+    );
+  }
+
+  Widget _buildInfoChip({
+    required String label,
+    required String value,
+    required AppFlowyThemeData theme,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+      decoration: BoxDecoration(
+        color: theme.surfaceColorScheme.layer02,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          FlowyText(
+            label,
+            fontSize: 12,
+            color: theme.textColorScheme.secondary,
+          ),
+          const SizedBox(width: 6),
+          FlowyText(
+            value,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: theme.textColorScheme.primary,
+          ),
+        ],
+      ),
     );
   }
 
