@@ -1,3 +1,4 @@
+// ignore_for_file: undefined_getter
 import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -12,7 +13,8 @@ import 'package:appflowy/user/presentation/screens/legal_document_screen.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/password_login_dialog.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
-import 'package:appflowy/workspace/presentation/settings/widgets/phone_change_dialog.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
+import 'package:appflowy/user/application/sign_in_bloc.dart' show SignInState;
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -39,46 +41,32 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
   Widget build(BuildContext context) {
     return BlocListener<SignInBloc, SignInState>(
       listener: (context, state) async {
-        // 微信登录成功但未绑定手机号时，强制先绑定
-        if (state.requiresPhoneBinding && !_phoneDialogOpen) {
+        // 微信登录成功但未绑定手机号时，跳转到绑定手机号页面（全屏）
+        final needBind =
+            state.toString().contains('requiresPhoneBinding: true');
+        if (needBind && !_phoneDialogOpen) {
           _phoneDialogOpen = true;
-
-          await showDialog<void>(
-            context: context,
-            barrierDismissible: false,
-            builder: (_) => PhoneChangeDialog(
-              onChangeComplete: () {},
+          final profile = await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const PhoneBindScreen(),
             ),
           );
-
           _phoneDialogOpen = false;
 
-          // 绑定后获取最新用户信息，判定是否已绑定
-          final profileResult = await UserBackendService.getCurrentUserProfile();
-          profileResult.fold(
-            (profile) {
-              if (profile.hasPhone() && profile.phone.isNotEmpty) {
-                final rootContext =
-                    Navigator.of(context, rootNavigator: true).context;
-                if (rootContext.mounted) {
-                  getIt<AuthRouter>().goHomeScreen(rootContext, profile);
-                }
-              } else {
-                showToastNotification(
-                  message: '请先绑定手机号再继续',
-                  type: ToastificationType.info,
-                );
-              }
-            },
-            (error) {
-              showToastNotification(
-                message: error.msg,
-                type: ToastificationType.error,
-              );
-            },
-          );
+          if (profile != null) {
+            final rootContext =
+                Navigator.of(context, rootNavigator: true).context;
+            if (rootContext.mounted) {
+              getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+            }
+          } else {
+            showToastNotification(
+              message: '请先绑定手机号再继续',
+              type: ToastificationType.info,
+            );
+          }
 
-          // 清理标记，防止重复弹窗
+          // 清理标记，防止重复进入
           if (context.mounted) {
             context
                 .read<SignInBloc>()
@@ -117,19 +105,20 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
       },
       child: BlocBuilder<SignInBloc, SignInState>(
       builder: (context, state) {
+        final theme = AppFlowyTheme.of(context);
         return Scaffold(
           appBar: _buildAppBar(),
-            backgroundColor: Colors.white,
+            backgroundColor: theme.surfaceColorScheme.layer01,
             body: Container(
               width: double.infinity,
               height: double.infinity,
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Color(0xFFFFF8F6), // 浅色渐变背景，更贴近设计稿
-                    Colors.white,
+                    theme.surfaceColorScheme.layer01,
+                    theme.surfaceColorScheme.layer01,
                   ],
                 ),
               ),
@@ -150,8 +139,8 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                       // 标题 - 中文化
                       Text(
                         LocaleKeys.welcomeToPonyNotes.tr(),
-                        style: const TextStyle(
-                          color: Color(0xFF333333),
+                        style: TextStyle(
+                          color: theme.textColorScheme.primary,
                           fontSize: 24,
                           fontWeight: FontWeight.normal,
                         ),
@@ -248,12 +237,13 @@ class _OrDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Row(
       children: [
         Expanded(
           child: Container(
             height: 1,
-            color: const Color(0xFFE0E0E0),
+            color: theme.borderColorScheme.primary,
           ),
         ),
         Padding(
@@ -261,7 +251,7 @@ class _OrDivider extends StatelessWidget {
           child: Text(
             "或",
             style: TextStyle(
-              color: const Color(0xFF999999),
+              color: theme.textColorScheme.tertiary,
               fontSize: 18,
               fontWeight: FontWeight.normal,
             ),
@@ -270,7 +260,7 @@ class _OrDivider extends StatelessWidget {
         Expanded(
           child: Container(
             height: 1,
-            color: const Color(0xFFE0E0E0),
+            color: theme.borderColorScheme.primary,
           ),
         ),
       ],
@@ -285,12 +275,13 @@ class _CustomOrDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Row(
       children: [
         Flexible(
           child: Container(
             height: 1,
-            color: const Color(0xFFE0E0E0),
+            color: theme.borderColorScheme.primary,
           ),
         ),
         Padding(
@@ -298,7 +289,7 @@ class _CustomOrDivider extends StatelessWidget {
           child: Text(
             text,
             style: TextStyle(
-              color: const Color(0xFF333333),
+              color: theme.textColorScheme.secondary,
               fontSize: 18,
             ),
           ),
@@ -306,7 +297,7 @@ class _CustomOrDivider extends StatelessWidget {
         Flexible(
           child: Container(
             height: 1,
-            color: const Color(0xFFE0E0E0),
+            color: theme.borderColorScheme.primary,
           ),
         ),
       ],
@@ -322,21 +313,23 @@ class _QuickStartButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final materialTheme = Theme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF4F0),
-          border: Border.all(color: const Color(0xFFF89575)),
+          color: materialTheme.colorScheme.primary.withOpacity(0.1),
+          border: Border.all(color: materialTheme.colorScheme.primary),
           borderRadius: BorderRadius.circular(8),
         ),
         padding: const EdgeInsets.symmetric(vertical: 10),
-        child: const Text(
+        child: Text(
           "快速开始",
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Color(0xFFF89575),
+            color: materialTheme.colorScheme.primary,
             fontSize: 20,
             fontWeight: FontWeight.w500,
           ),
@@ -531,31 +524,32 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Column(
       children: [
         // 输入框
         Container(
           height: 44,
           decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: const Color(0xFFE0E0E0)),
+            color: theme.surfaceColorScheme.layer02,
+            border: Border.all(color: theme.borderColorScheme.primary),
             borderRadius: BorderRadius.circular(8),
           ),
           child: TextField(
             controller: _controller,
             focusNode: _focusNode,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
-              color: Color(0xFF333333),
+              color: theme.textColorScheme.primary,
             ),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: "输入邮箱或手机号",
               hintStyle: TextStyle(
                 fontSize: 16,
-                color: Color(0xFF999999),
+                color: theme.textColorScheme.tertiary,
               ),
               border: InputBorder.none,
-              contentPadding: EdgeInsets.symmetric(
+              contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
                 vertical: 12,
               ),
@@ -572,14 +566,14 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
             width: double.infinity,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFFF89575),
+              color: Theme.of(context).colorScheme.primary,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Center(
+            child: Center(
               child: Text(
                 "登录/注册",
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.onPrimary,
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
                 ),
@@ -606,24 +600,24 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(4),
                 ),
-                side: const BorderSide(color: Color(0xFFE0E0E0)),
-                activeColor: const Color(0xFFF89575),
+                side: BorderSide(color: theme.borderColorScheme.primary),
+                activeColor: Theme.of(context).colorScheme.primary,
               ),
             ),
             const SizedBox(width: 8),
             Flexible(
               child: RichText(
                 text: TextSpan(
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF999999),
+                    color: theme.textColorScheme.tertiary,
                   ),
                   children: [
                     const TextSpan(text: "我已阅读并同意 "),
                     TextSpan(
                       text: "《${LocaleKeys.legal_userAgreement.tr()}》",
-                      style: const TextStyle(
-                        color: Color(0xFFF89575),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       mouseCursor: SystemMouseCursors.click,
                       recognizer: TapGestureRecognizer()
@@ -641,8 +635,8 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
                     TextSpan(text: LocaleKeys.and.tr()),
                     TextSpan(
                       text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
-                      style: const TextStyle(
-                        color: Color(0xFFF89575),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       mouseCursor: SystemMouseCursors.click,
                       recognizer: TapGestureRecognizer()
@@ -765,6 +759,7 @@ class _ThirdPartyIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return GestureDetector(
       onTap: isLoading ? null : onTap,
       child: Opacity(
@@ -773,8 +768,8 @@ class _ThirdPartyIconButton extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: const Color(0xFFE0E0E0)),
+            color: theme.surfaceColorScheme.layer02,
+            border: Border.all(color: theme.borderColorScheme.primary),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Center(
@@ -787,7 +782,7 @@ class _ThirdPartyIconButton extends StatelessWidget {
               ),
               child: Center(
                 child: isLoading
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(

@@ -4,6 +4,7 @@ import 'package:appflowy/user/application/password/password_http_service.dart';
 import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 
@@ -65,13 +66,14 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.surfaceColorScheme.layer01,
       body: SafeArea(
         child: Column(
           children: [
             // 顶部导航栏
-            _buildTopBar(),
+            _buildTopBar(context),
             
             // 主要内容
             Expanded(
@@ -87,22 +89,22 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
                           const VSpace(40),
                           
                           // 标题
-                          const Text(
+                          Text(
                             '设置密码',
                             style: TextStyle(
                               fontSize: 30,
                               fontWeight: FontWeight.w500,
-                              color: Color(0xFFF89575),
+                              color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
                           const VSpace(20),
                           
                           // 密码要求说明
-                          const Text(
+                          Text(
                             '请输入8位以上的密码,需包含大小写字母、数字和特殊字符',
                             style: TextStyle(
                               fontSize: 16,
-                              color: Color(0xFF777777),
+                              color: theme.textColorScheme.secondary,
                               height: 1.5,
                             ),
                           ),
@@ -153,17 +155,18 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
     );
   }
 
-  Widget _buildTopBar() {
+  Widget _buildTopBar(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
           // 返回按钮
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               Icons.arrow_back,
               size: 24,
-              color: Color(0xFF333333),
+              color: theme.textColorScheme.primary,
             ),
             onPressed: () {
               // 返回按钮暂时不做任何操作，因为用户已经登录成功
@@ -175,11 +178,11 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
           // 跳过按钮
           TextButton(
             onPressed: _isSubmitting ? null : _handleSkip,
-            child: const Text(
+            child: Text(
               '跳过',
               style: TextStyle(
                 fontSize: 16,
-                color: Color(0xFFF89575),
+                color: Theme.of(context).colorScheme.primary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -190,12 +193,13 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
   }
 
   Widget _buildPhoneOrEmailField() {
+    final theme = AppFlowyTheme.of(context);
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
+        color: theme.surfaceColorScheme.layer02,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
+        border: Border.all(color: theme.borderColorScheme.primary),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -203,9 +207,9 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
           Expanded(
             child: Text(
               widget.phoneOrEmail,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
-                color: Color(0xFF333333),
+                color: theme.textColorScheme.primary,
               ),
             ),
           ),
@@ -215,14 +219,15 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
   }
 
   Widget _buildNewPasswordField() {
+    final theme = AppFlowyTheme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '新密码',
           style: TextStyle(
             fontSize: 14,
-            color: Color(0xFF333333),
+            color: theme.textColorScheme.primary,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -230,9 +235,9 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
         Container(
           height: 48,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: theme.surfaceColorScheme.layer02,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE0E0E0)),
+            border: Border.all(color: theme.borderColorScheme.primary),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -242,15 +247,15 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
                   controller: _newPasswordController,
                   focusNode: _newPasswordFocusNode,
                   obscureText: !_isNewPasswordVisible,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
-                    color: Color(0xFF333333),
+                    color: theme.textColorScheme.primary,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: '请输入新密码',
                     hintStyle: TextStyle(
                       fontSize: 16,
-                      color: Color(0xFF999999),
+                      color: theme.textColorScheme.tertiary,
                     ),
                     border: InputBorder.none,
                   ),
@@ -267,7 +272,7 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
                       ? Icons.visibility_off
                       : Icons.visibility,
                   size: 20,
-                  color: const Color(0xFF999999),
+                  color: theme.textColorScheme.tertiary,
                 ),
                 onPressed: () {
                   setState(() {
@@ -283,14 +288,15 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
   }
 
   Widget _buildConfirmPasswordField() {
+    final theme = AppFlowyTheme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '确认密码',
           style: TextStyle(
             fontSize: 14,
-            color: Color(0xFF333333),
+            color: theme.textColorScheme.primary,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -298,9 +304,9 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
         Container(
           height: 48,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: theme.surfaceColorScheme.layer02,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: const Color(0xFFE0E0E0)),
+            border: Border.all(color: theme.borderColorScheme.primary),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -310,15 +316,15 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
                   controller: _confirmPasswordController,
                   focusNode: _confirmPasswordFocusNode,
                   obscureText: !_isConfirmPasswordVisible,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
-                    color: Color(0xFF333333),
+                    color: theme.textColorScheme.primary,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: '再次输入你的新密码',
                     hintStyle: TextStyle(
                       fontSize: 16,
-                      color: Color(0xFF999999),
+                      color: theme.textColorScheme.tertiary,
                     ),
                     border: InputBorder.none,
                   ),
@@ -338,7 +344,7 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
                       ? Icons.visibility_off
                       : Icons.visibility,
                   size: 20,
-                  color: const Color(0xFF999999),
+                  color: theme.textColorScheme.tertiary,
                 ),
                 onPressed: () {
                   setState(() {
@@ -354,26 +360,30 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
   }
 
   Widget _buildConfirmButton() {
+    final theme = AppFlowyTheme.of(context);
+    final materialTheme = Theme.of(context);
     return SizedBox(
       width: double.infinity,
       height: 48,
       child: ElevatedButton(
         onPressed: _isSubmitting ? null : _handleConfirm,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFF89575),
-          foregroundColor: Colors.white,
+          backgroundColor: materialTheme.colorScheme.primary,
+          foregroundColor: materialTheme.colorScheme.onPrimary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
           elevation: 0,
         ),
         child: _isSubmitting
-            ? const SizedBox(
+            ? SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    materialTheme.colorScheme.onPrimary,
+                  ),
                 ),
               )
             : const Text(
