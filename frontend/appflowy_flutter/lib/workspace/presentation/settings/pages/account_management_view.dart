@@ -283,7 +283,6 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                     const Center(child: Text('暂无可用的会员计划')),
                     const SizedBox(height: 24),
                   ] else ...[
-                  _buildCurrentSubscriptionCard(context),
                       _buildPlanCards(context),
                       const VSpace(24),
                       _buildBenefitSection(context),
@@ -476,13 +475,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
 
   Widget _buildBenefitSection(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    const benefits = [
-      {'label': '小马AI', 'icon': FlowySvgs.icon_rights_ai_xl},
-      {'label': '小马日历', 'icon': FlowySvgs.icon_rights_calendar_xl},
-      {'label': '小马收藏夹', 'icon': FlowySvgs.icon_rights_collection_xl},
-      {'label': '云端同步', 'icon': FlowySvgs.icon_rights_cloud_xl},
-      {'label': '100T空间', 'icon': FlowySvgs.icon_rights_space_xl},
-    ];
+    final benefits = _buildBenefitsForSelectedPlan();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -528,134 +521,36 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     );
   }
 
-  Widget _buildCurrentSubscriptionCard(BuildContext context) {
-    if (widget.isLoadingCurrentSubscription) {
-      return Column(
-        children: const [
-          SizedBox(height: 12),
-          Center(child: CircularProgressIndicator()),
-          SizedBox(height: 12),
-        ],
-      );
-    }
+  List<Map<String, dynamic>> _buildBenefitsForSelectedPlan() {
+    final plan = _effectivePlan;
+    final config = plan != null ? _planConfigs[plan] : null;
 
-    final sub = widget.currentSubscription;
-    if (sub == null || sub.subscription?.planCode == null) {
-      return const SizedBox.shrink();
-    }
-
-    final summary = sub.subscription!;
-    final plan = sub.planDetails;
-
-    String _formatDate(DateTime? dt) {
-      if (dt == null) return '--';
-      return DateFormat('yyyy-MM-dd').format(dt);
-    }
-
-    String _buildStatus(String? status) {
-      if (status == null || status.isEmpty) return '未知';
-      switch (status) {
-        case 'active':
-          return '已订阅';
-        case 'canceled':
-          return '已取消';
-        default:
-          return status;
+    // 根据 cloudStorageGb 动态生成空间大小标签
+    String _getStorageLabel() {
+      final storageGb = config?.cloudStorageGb;
+      if (storageGb == null || storageGb == -1) {
+        return '无空间';
+      } else if (storageGb == 0) {
+        return '无限制空间';
+      } else if (storageGb >= 1000) {
+        // 大于等于1000GB，显示为TB
+        final tb = (storageGb / 1000).toStringAsFixed(1);
+        return '${tb}T空间';
+      } else {
+        return '${storageGb}GB空间';
       }
     }
 
-    final theme = AppFlowyTheme.of(context);
-    final storageLabel = (sub.usage?.storageTotalGb ?? plan?.cloudStorageGb)
-        ?.toString();
-    final aiChatRemaining = sub.usage?.aiChatRemaining;
+    // 基础权益
+    final base = <Map<String, dynamic>>[
+      {'label': '小马AI', 'icon': FlowySvgs.icon_rights_ai_xl},
+      {'label': '小马日历', 'icon': FlowySvgs.icon_rights_calendar_xl},
+      {'label': '小马收藏夹', 'icon': FlowySvgs.icon_rights_collection_xl},
+      {'label': '云端同步', 'icon': FlowySvgs.icon_rights_cloud_xl},
+      {'label': _getStorageLabel(), 'icon': FlowySvgs.icon_rights_space_xl},
+    ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FlowyText(
-          '当前订阅',
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: theme.textColorScheme.primary,
-        ),
-        const VSpace(12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.surfaceColorScheme.layer01,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: const Color(0xFFE9E9E9),
-              width: 1.0,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  FlowyText(
-                    summary.planNameCn ?? summary.planCode ?? '未知套餐',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: theme.textColorScheme.primary,
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF3EC),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFFF6B47)),
-                    ),
-                    child: FlowyText(
-                      _buildStatus(summary.status),
-                      fontSize: 12,
-                      color: const Color(0xFFFF6B47),
-                    ),
-                  ),
-                ],
-              ),
-              const VSpace(8),
-              Row(
-                children: [
-                  _buildInfoChip(
-                    label: '计费周期',
-                    value: summary.billingType ?? '--',
-                    theme: theme,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildInfoChip(
-                    label: '到期时间',
-                    value: _formatDate(summary.endDate),
-                    theme: theme,
-                  ),
-                  if (storageLabel != null) ...[
-                    const SizedBox(width: 8),
-                    _buildInfoChip(
-                      label: '存储',
-                      value: '$storageLabel GB',
-                      theme: theme,
-                    ),
-                  ],
-                  if (aiChatRemaining != null) ...[
-                    const SizedBox(width: 8),
-                    _buildInfoChip(
-                      label: 'AI剩余次数',
-                      value: '$aiChatRemaining次',
-                      theme: theme,
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ),
-        ),
-        const VSpace(16),
-      ],
-    );
+    return base;
   }
 
   Widget _buildInfoChip({
