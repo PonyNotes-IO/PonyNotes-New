@@ -28,6 +28,7 @@ class ShareConstants {
     final host = baseShareDomain.addSchemaIfNeeded();
     final queryParams = <String, String>{
       'viewId': viewId,
+      'type': 'publish', // 添加类型参数，标识这是发布链接
     };
     // 只有当 workspaceId 不为空时才添加到查询参数中
     if (workspaceId.isNotEmpty) {
@@ -50,6 +51,7 @@ class ShareConstants {
       queryParameters: <String, String>{
         'viewId': viewId,
         'workspaceId': workspaceId,
+        'type': 'share', // 添加类型参数，标识这是分享链接
         if (blockId != null && blockId.isNotEmpty) 'blockId': blockId,
       },
     ).query;

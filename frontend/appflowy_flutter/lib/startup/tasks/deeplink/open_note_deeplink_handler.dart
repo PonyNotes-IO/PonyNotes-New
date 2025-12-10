@@ -53,6 +53,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       // 从URI中获取参数
       final viewId = uri.queryParameters['viewId'];
       final targetWorkspaceId = uri.queryParameters['workspaceId'];
+      final linkType = uri.queryParameters['type']; // 获取链接类型：share 或 publish
       
       if (viewId == null || viewId.isEmpty) {
         Log.error('📝 [OpenNoteDeepLinkHandler] viewId参数为空');
@@ -64,7 +65,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         );
       }
 
-      Log.info('📝 [OpenNoteDeepLinkHandler] 准备打开笔记, viewId: $viewId, workspaceId: ${targetWorkspaceId ?? "(current)"}');
+      Log.info('📝 [OpenNoteDeepLinkHandler] 准备打开笔记, viewId: $viewId, workspaceId: ${targetWorkspaceId ?? "(current)"}, type: ${linkType ?? "unknown"}');
 
       // 获取当前工作区ID（如果未提供）
       String? workspaceId = targetWorkspaceId;
@@ -146,6 +147,15 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
           viewId: viewId,
           content: publishedContentResult,
           onStateChange: onStateChange,
+        );
+      }
+
+      // 如果是分享链接（type=share），需要将当前用户添加到协作中
+      if (linkType == 'share' && workspaceId.isNotEmpty) {
+        Log.info('📝 [OpenNoteDeepLinkHandler] 检测到分享链接，尝试添加用户到协作');
+        await _addUserToCollaboration(
+          workspaceId: workspaceId,
+          viewId: viewId,
         );
       }
 
@@ -445,6 +455,93 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         FlowyError()
           ..msg = '从发布内容创建笔记时出错: $e'
           ..code = ErrorCode.Internal,
+      );
+    }
+  }
+
+  /// 将当前用户添加到协作中（用于分享链接）
+  Future<void> _addUserToCollaboration({
+    required String workspaceId,
+    required String viewId,
+  }) async {
+    try {
+      Log.info('📝 [OpenNoteDeepLinkHandler] 开始添加用户到协作, workspaceId: $workspaceId, viewId: $viewId');
+
+      // 获取当前用户信息
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold(
+        (user) => user,
+        (error) {
+          Log.warn('📝 [OpenNoteDeepLinkHandler] 获取用户信息失败: $error');
+          return null;
+        },
+      );
+
+      if (userProfile == null) {
+        Log.warn('📝 [OpenNoteDeepLinkHandler] 用户信息为空，跳过添加协作');
+        return;
+      }
+
+      // 获取用户ID
+      final userId = userProfile.id.toString();
+      if (userId.isEmpty) {
+        Log.warn('📝 [OpenNoteDeepLinkHandler] 用户ID为空，跳过添加协作');
+        return;
+      }
+
+      // 获取 auth token
+      final authToken = userProfile.authToken;
+      if (authToken == null || authToken.isEmpty) {
+        Log.warn('📝 [OpenNoteDeepLinkHandler] Auth token 为空，跳过添加协作');
+        return;
+      }
+
+      // 获取 base URL
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      
+      if (baseUrl.isEmpty) {
+        Log.warn('📝 [OpenNoteDeepLinkHandler] Base URL 为空，跳过添加协作');
+        return;
+      }
+
+      // 构建 API URL: /api/workspace/{workspace_id}/collab/{object_id}/members/{member_user_id}
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/workspace/$workspaceId/collab/$viewId/members/$userId',
+      );
+
+      Log.info('📝 [OpenNoteDeepLinkHandler] 请求添加协作: $uri');
+
+      // 发送 POST 请求
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('请求超时');
+        },
+      );
+
+      Log.info('📝 [OpenNoteDeepLinkHandler] 添加协作响应状态: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        Log.info('📝 [OpenNoteDeepLinkHandler] 成功添加用户到协作');
+      } else if (response.statusCode == 409) {
+        // 409 表示用户已经在协作中，这是正常情况，不需要报错
+        Log.info('📝 [OpenNoteDeepLinkHandler] 用户已在协作中');
+      } else {
+        Log.warn('📝 [OpenNoteDeepLinkHandler] 添加协作失败: HTTP ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      // 添加协作失败不应该阻止打开笔记，只记录错误
+      Log.error(
+        '📝 [OpenNoteDeepLinkHandler] 添加用户到协作时出错: $e',
+        e,
+        stackTrace,
       );
     }
   }
