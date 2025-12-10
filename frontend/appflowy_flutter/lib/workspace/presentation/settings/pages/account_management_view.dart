@@ -405,13 +405,10 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                         alignment: Alignment.bottomLeft,
                         child: Opacity(
                           opacity: 0.12,
-                          child: Padding(
-                            padding: const EdgeInsets.only(left: 8, bottom: 4),
-                            child: FlowySvg(
+                          child: FlowySvg(
                               FlowySvgs.pony_notes_logo_xl,
                               size: const Size(56, 56),
                               blendMode: isSelected ? null : BlendMode.srcATop,
-                            ),
                           ),
                         ),
                       ),
