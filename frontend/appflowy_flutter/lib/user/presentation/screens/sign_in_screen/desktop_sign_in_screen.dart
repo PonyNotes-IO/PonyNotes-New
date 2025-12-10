@@ -6,11 +6,13 @@ import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/user/presentation/screens/legal_document_screen.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/password_login_dialog.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/phone_change_dialog.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -31,10 +33,60 @@ class DesktopSignInScreen extends StatefulWidget {
 
 class _DesktopSignInScreenState extends State<DesktopSignInScreen>
     with WindowListener {
+  bool _phoneDialogOpen = false;
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<SignInBloc, SignInState>(
       listener: (context, state) async {
+        // 微信登录成功但未绑定手机号时，强制先绑定
+        if (state.requiresPhoneBinding && !_phoneDialogOpen) {
+          _phoneDialogOpen = true;
+
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => PhoneChangeDialog(
+              onChangeComplete: () {},
+            ),
+          );
+
+          _phoneDialogOpen = false;
+
+          // 绑定后获取最新用户信息，判定是否已绑定
+          final profileResult = await UserBackendService.getCurrentUserProfile();
+          profileResult.fold(
+            (profile) {
+              if (profile.hasPhone() && profile.phone.isNotEmpty) {
+                final rootContext =
+                    Navigator.of(context, rootNavigator: true).context;
+                if (rootContext.mounted) {
+                  getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                }
+              } else {
+                showToastNotification(
+                  message: '请先绑定手机号再继续',
+                  type: ToastificationType.info,
+                );
+              }
+            },
+            (error) {
+              showToastNotification(
+                message: error.msg,
+                type: ToastificationType.error,
+              );
+            },
+          );
+
+          // 清理标记，防止重复弹窗
+          if (context.mounted) {
+            context
+                .read<SignInBloc>()
+                .add(const SignInEvent.clearPhoneBindingRequirement());
+          }
+          return;
+        }
+
         final successOrFail = state.successOrFail;
         if (successOrFail != null) {
           if (successOrFail.isSuccess) {
@@ -622,47 +674,59 @@ class _CustomThirdPartyButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // 微信登录
-        _ThirdPartyIconButton(
-          label: "微信",
-          backgroundColor: const Color(0xFF09BB07),
-          onTap: () {
-            showToastNotification(
-              message: "微信登录功能开发中",
-              type: ToastificationType.info,
-            );
-          },
-        ),
-        const SizedBox(width: 32),
+    return BlocBuilder<SignInBloc, SignInState>(
+      builder: (context, state) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // 微信登录
+            _ThirdPartyIconButton(
+              label: "微信",
+              backgroundColor: const Color(0xFF09BB07),
+              onTap: state.isSubmitting
+                  ? null
+                  : () {
+                      context.read<SignInBloc>().add(
+                            const SignInEvent.signInWithWeChat(),
+                          );
+                    },
+              isLoading: state.isSubmitting,
+            ),
+            const SizedBox(width: 32),
 
-        // 抖音登录
-        _ThirdPartyIconButton(
-          label: "抖音",
-          backgroundColor: Colors.black,
-          onTap: () {
-            showToastNotification(
-              message: "抖音登录功能开发中",
-              type: ToastificationType.info,
-            );
-          },
-        ),
-        const SizedBox(width: 32),
+            // 抖音登录
+            _ThirdPartyIconButton(
+              label: "抖音",
+              backgroundColor: Colors.black,
+              onTap: state.isSubmitting
+                  ? null
+                  : () {
+                      showToastNotification(
+                        message: "抖音登录功能开发中",
+                        type: ToastificationType.info,
+                      );
+                    },
+              isLoading: false,
+            ),
+            const SizedBox(width: 32),
 
-        // QQ 登录
-        _ThirdPartyIconButton(
-          label: "QQ",
-          backgroundColor: const Color(0xFF12B7F5),
-          onTap: () {
-            showToastNotification(
-              message: "QQ登录功能开发中",
-              type: ToastificationType.info,
-            );
-          },
-        ),
-      ],
+            // QQ 登录
+            _ThirdPartyIconButton(
+              label: "QQ",
+              backgroundColor: const Color(0xFF12B7F5),
+              onTap: state.isSubmitting
+                  ? null
+                  : () {
+                      showToastNotification(
+                        message: "QQ登录功能开发中",
+                        type: ToastificationType.info,
+                      );
+                    },
+              isLoading: false,
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -690,41 +754,55 @@ class _ThirdPartyIconButton extends StatelessWidget {
   const _ThirdPartyIconButton({
     required this.label,
     required this.backgroundColor,
-    required this.onTap,
+    this.onTap,
+    this.isLoading = false,
   });
 
   final String label;
   final Color backgroundColor;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 48,
-        height: 48,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: const Color(0xFFE0E0E0)),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Center(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
+      onTap: isLoading ? null : onTap,
+      child: Opacity(
+        opacity: (onTap == null || isLoading) ? 0.6 : 1.0,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: const Color(0xFFE0E0E0)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Center(
+                child: isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
               ),
             ),
           ),
