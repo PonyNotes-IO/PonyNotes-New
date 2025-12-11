@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flowy_infra_ui/style_widget/button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -92,7 +93,7 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                         _error = null;
                       });
                     },
-                    onLoadError: (_, __, code, message) {
+                    onLoadError: (controller, url, code, message) {
                       Log.error('WeChat WebView load error: $code $message');
                       setState(() {
                         _isLoading = false;

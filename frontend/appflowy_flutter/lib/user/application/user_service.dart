@@ -127,7 +127,7 @@ class UserBackendService implements IUserBackendService {
       // 获取用户的 access token
       Log.info('[UserBackendService] 🔑 Getting user access token...');
       final userResult = await UserBackendService.getCurrentUserProfile();
-      final token = userResult.fold(
+      final rawToken = userResult.fold(
         (user) {
           Log.info('[UserBackendService] ✅ Got user profile, token length: ${user.token.length}');
           return user.token;
@@ -137,7 +137,7 @@ class UserBackendService implements IUserBackendService {
           return '';
         },
       );
-      
+      final token = _normalizeToken(rawToken);
       if (token.isEmpty) {
         Log.error('[UserBackendService] ❌ Access token is empty!');
         return FlowyResult.failure(
@@ -191,6 +191,22 @@ class UserBackendService implements IUserBackendService {
     }
   }
 
+  /// 将 token 归一化：如果是 JSON 字符串，提取 access_token；否则直接返回
+  static String _normalizeToken(String token) {
+    if (token.isEmpty) return token;
+    if (token.trim().startsWith('{')) {
+      try {
+        final map = jsonDecode(token);
+        if (map is Map && map['access_token'] is String) {
+          return map['access_token'] as String;
+        }
+      } catch (_) {
+        // ignore parse errors, fallback to raw token
+      }
+    }
+    return token;
+  }
+
   /// Verify phone OTP and bind phone number
   /// This calls the cloud API /api/user/verify-phone endpoint directly via HTTP
   static Future<FlowyResult<void, FlowyError>> verifyAndBindPhone(
@@ -213,8 +229,8 @@ class UserBackendService implements IUserBackendService {
       );
       
       final baseUrl = cloudConfig.serverUrl;
-      // userProfile.token 直接就是 access_token 字符串
-      final token = userProfile.token;
+      // userProfile.token 可能是 access_token，也可能是包含 access_token 的 JSON，需要归一化
+      final token = _normalizeToken(userProfile.token);
       
       Log.info('[UserBackendService] Token length: ${token.length}, first 20 chars: ${token.length > 20 ? token.substring(0, 20) : token}');
       
