@@ -41,135 +41,164 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
 
     return Scaffold(
       backgroundColor: theme.surfaceColorScheme.layer01,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 12),
-                Text(
-                  '绑定手机号',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: theme.textColorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '根据国家相关法律规定及网络安全管理要求，请验证有效手机号码',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: theme.textColorScheme.secondary,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                TextField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  style: TextStyle(
-                    color: theme.textColorScheme.primary,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: '输入手机号',
-                    hintStyle: TextStyle(
-                      color: theme.textColorScheme.tertiary,
-                    ),
-                    filled: true,
-                    fillColor: theme.surfaceColorScheme.layer02,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: theme.borderColorScheme.primary,
-                      ),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: theme.borderColorScheme.primary,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: Theme.of(context).colorScheme.primary,
-                        width: 2,
-                      ),
-                    ),
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 48, 32, 48),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _codeController,
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        style: TextStyle(
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        // 回到登录页，阻止进入主页
+                        Navigator.of(context).pop(null);
+                        Navigator.of(context, rootNavigator: true)
+                            .popUntil((route) => route.isFirst);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.arrow_back,
                           color: theme.textColorScheme.primary,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: '请输入6位验证码',
-                          hintStyle: TextStyle(
-                            color: theme.textColorScheme.tertiary,
-                          ),
-                          counterText: '',
-                          filled: true,
-                          fillColor: theme.surfaceColorScheme.layer02,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: theme.borderColorScheme.primary,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: theme.borderColorScheme.primary,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 2,
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
+                          size: 22,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(height: 12),
+                    Text(
+                      '绑定手机号',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                        color: theme.textColorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '根据国家相关法律规定及网络安全管理要求，请验证有效手机号码',
+                      maxLines: 2,
+                      softWrap: true,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: theme.textColorScheme.secondary,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    TextField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      style: TextStyle(
+                        color: theme.textColorScheme.primary,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '输入手机号',
+                        hintStyle: TextStyle(
+                          color: theme.textColorScheme.tertiary,
+                        ),
+                        hoverColor: Colors.transparent,
+                        focusColor: Colors.transparent,
+                        filled: true,
+                        fillColor: theme.surfaceColorScheme.layer02,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: theme.borderColorScheme.primary,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: theme.borderColorScheme.primary,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: theme.borderColorScheme.primary,
+                            width: 1.2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _codeController,
+                            keyboardType: TextInputType.number,
+                            maxLength: 6,
+                            style: TextStyle(
+                              color: theme.textColorScheme.primary,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: '请输入6位验证码',
+                              hintStyle: TextStyle(
+                                color: theme.textColorScheme.tertiary,
+                              ),
+                              counterText: '',
+                              hoverColor: Colors.transparent,
+                              focusColor: Colors.transparent,
+                              filled: true,
+                              fillColor: theme.surfaceColorScheme.layer02,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: theme.borderColorScheme.primary,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: theme.borderColorScheme.primary,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: BorderSide(
+                                  color: theme.borderColorScheme.primary,
+                                  width: 1.2,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: width > 500 ? 140 : 120,
+                          child: FlowyButton(
+                            text: Text(_getButtonText()),
+                            onTap: _sendCode,
+                            disable: !_canResendCode() || _isSending,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 48),
                     SizedBox(
-                      width: width > 500 ? 140 : 120,
+                      width: double.infinity,
                       child: FlowyButton(
-                        text: Text(_getButtonText()),
-                        onTap: _sendCode,
-                        disable: !_canResendCode() || _isSending,
+                        text: const Text('下一步'),
+                        onTap: _bindPhone,
+                        disable: _isBinding,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: FlowyButton(
-                    text: const Text('下一步'),
-                    onTap: _bindPhone,
-                    disable: _isBinding,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),

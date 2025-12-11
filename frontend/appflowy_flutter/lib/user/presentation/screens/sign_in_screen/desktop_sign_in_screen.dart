@@ -7,11 +7,11 @@ import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
-import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/user/presentation/screens/legal_document_screen.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/password_login_dialog.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/wechat_webview_dialog.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart' show SignInState;
@@ -36,16 +36,20 @@ class DesktopSignInScreen extends StatefulWidget {
 class _DesktopSignInScreenState extends State<DesktopSignInScreen>
     with WindowListener {
   bool _phoneDialogOpen = false;
+  bool _phoneBindingCancelled = false; // 阻止未绑定时误入主页
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<SignInBloc, SignInState>(
+    return BlocListener<SignInBloc, dynamic>(
       listener: (context, state) async {
         // 微信登录成功但未绑定手机号时，跳转到绑定手机号页面（全屏）
+        final dynamic dynState = state;
         final needBind =
-            state.toString().contains('requiresPhoneBinding: true');
+            (dynState.requiresPhoneBinding == true) ||
+                state.toString().contains('requiresPhoneBinding: true');
         if (needBind && !_phoneDialogOpen) {
           _phoneDialogOpen = true;
+          _phoneBindingCancelled = false;
           final profile = await Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => const PhoneBindScreen(),
@@ -60,6 +64,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
               getIt<AuthRouter>().goHomeScreen(rootContext, profile);
             }
           } else {
+            _phoneBindingCancelled = true;
             showToastNotification(
               message: '请先绑定手机号再继续',
               type: ToastificationType.info,
@@ -70,7 +75,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
           if (context.mounted) {
             context
                 .read<SignInBloc>()
-                .add(const SignInEvent.clearPhoneBindingRequirement());
+                .add(SignInEvent.clearPhoneBindingRequirement());
           }
           return;
         }
@@ -81,6 +86,39 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
             successOrFail.onSuccess((userProfile) async {
               // 检查 context 是否仍然有效
               if (!context.mounted) {
+                return;
+              }
+            // 如果之前取消过绑定，阻止直接进入主页
+            if (_phoneBindingCancelled) {
+              showToastNotification(
+                message: '请先绑定手机号再继续',
+                type: ToastificationType.info,
+              );
+              return;
+            }
+              // 如果未绑定手机号（包含临时号），先跳转到绑定页，防止直接进入主界面
+              if (_needBindPhone(userProfile.phone) && !_phoneDialogOpen) {
+                _phoneDialogOpen = true;
+              _phoneBindingCancelled = false;
+                final profile = await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const PhoneBindScreen(),
+                  ),
+                );
+                _phoneDialogOpen = false;
+                if (profile != null) {
+                  final rootContext =
+                      Navigator.of(context, rootNavigator: true).context;
+                  if (rootContext.mounted) {
+                    getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                  }
+                } else {
+                _phoneBindingCancelled = true;
+                  showToastNotification(
+                    message: '请先绑定手机号再继续',
+                    type: ToastificationType.info,
+                  );
+                }
                 return;
               }
               // 使用根导航器确保导航不会因为 context 失效而失败
@@ -200,6 +238,15 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
     // must call setState once when the window is focused
     setState(() {});
   }
+}
+
+// 兼容：有些环境下 freezed 生成文件可能缺失，使用 toString 兜底判断
+extension _SignInStateCompat on SignInState {
+  bool get requiresPhoneBindingCompat =>
+      toString().contains('requiresPhoneBinding: true');
+
+  // 提供同名 getter，避免未生成 freezed 时的未定义告警
+  bool get requiresPhoneBinding => requiresPhoneBindingCompat;
 }
 
 class DesktopSignInSettingsButton extends StatelessWidget {
@@ -679,10 +726,21 @@ class _CustomThirdPartyButtons extends StatelessWidget {
               backgroundColor: const Color(0xFF09BB07),
               onTap: state.isSubmitting
                   ? null
-                  : () {
-                      context.read<SignInBloc>().add(
-                            const SignInEvent.signInWithWeChat(),
-                          );
+                  : () async {
+                      if (UniversalPlatform.isWindows ||
+                          UniversalPlatform.isMacOS ||
+                          UniversalPlatform.isLinux) {
+                        final code = await showWeChatWebViewDialog(context);
+                        if (code != null && context.mounted) {
+                          context
+                              .read<SignInBloc>()
+                              .add(SignInEvent.wechatCodeReceived(code));
+                        }
+                      } else {
+                        context.read<SignInBloc>().add(
+                              const SignInEvent.signInWithWeChat(),
+                            );
+                      }
                     },
               isLoading: state.isSubmitting,
             ),
@@ -805,4 +863,15 @@ class _ThirdPartyIconButton extends StatelessWidget {
       ),
     );
   }
+}
+
+// 兼容：有些环境下 freezed 生成文件可能缺失，使用 toString 兜底判断
+bool _requiresPhoneBinding(SignInState state) =>
+    state.toString().contains('requiresPhoneBinding: true');
+
+bool _needBindPhone(String? phone) {
+  if (phone == null) return true;
+  if (phone.isEmpty) return true;
+  // 临时手机号占位（后端自动生成），也视为未绑定
+  return phone.startsWith('+86temp');
 }
