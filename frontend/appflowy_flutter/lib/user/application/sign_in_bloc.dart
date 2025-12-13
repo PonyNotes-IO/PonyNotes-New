@@ -6,6 +6,7 @@ import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/password/password_http_service.dart';
 import 'package:appflowy/user/application/wechat/wechat_login_service.dart';
+import 'package:appflowy/user/application/douyin/douyin_login_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -113,6 +114,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             phone: phone,
           ),
           signInWithWeChat: () async => _onSignInWithWeChat(emit),
+          signInWithDouYin: () async => _onSignInWithDouYin(emit),
           clearPhoneBindingRequirement: () {
             emit(
               state.copyWith(
@@ -122,6 +124,9 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
           },
           wechatCodeReceived: (code) async {
             await _completeWeChatLogin(emit, code);
+          },
+          douyinCodeReceived: (code) async {
+            await _completeDouYinLogin(emit, code);
           },
         );
       },
@@ -705,6 +710,106 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     );
   }
 
+  Future<void> _onSignInWithDouYin(
+    Emitter<SignInState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        isSubmitting: true,
+        emailError: null,
+        passwordError: null,
+        successOrFail: null,
+      ),
+    );
+
+    // 确保 passwordService 已初始化
+    if (passwordService == null) {
+      final sharedEnv = getIt<AppFlowyCloudSharedEnv>();
+      passwordService = PasswordHttpService(
+        baseUrl: sharedEnv.appflowyCloudConfig.gotrue_url,
+        authToken: '',
+      );
+    }
+
+    // 1. 获取抖音授权码
+    Log.info('🟢[SignInBloc] Starting DouYin login...');
+    final codeResult = await DouYinLoginService.instance.getAuthorizationCode();
+    
+    await codeResult.fold(
+      (code) async {
+        Log.info('🟢[SignInBloc] Got DouYin authorization code, length: ${code.length}');
+        await _completeDouYinLogin(emit, code);
+      },
+      (error) {
+        Log.error('🟢[SignInBloc] Failed to get DouYin authorization code: $error');
+        emit(
+          _stateFromCode(
+            FlowyError.create()
+              ..code = ErrorCode.Internal
+              ..msg = error,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _completeDouYinLogin(
+    Emitter<SignInState> emit,
+    String code,
+  ) async {
+    final loginResult = await passwordService!.signInWithThirdParty(
+      platform: 'douyin',
+      code: code,
+    );
+
+    emit(
+      loginResult.fold(
+        (tokenMap) {
+          // 将 JSON map 转换为 GotrueTokenResponsePB
+          try {
+            final gotrueTokenResponse = GotrueTokenResponsePB.create()
+              ..accessToken = tokenMap['access_token'] as String? ?? ''
+              ..tokenType = tokenMap['token_type'] as String? ?? 'bearer'
+              ..expiresIn = Int64((tokenMap['expires_in'] as num?)?.toInt() ?? 3600)
+              ..expiresAt = Int64((tokenMap['expires_at'] as num?)?.toInt() ?? 0)
+              ..refreshToken = tokenMap['refresh_token'] as String? ?? ''
+              ..providerAccessToken = tokenMap['provider_access_token'] as String? ?? ''
+              ..providerRefreshToken = tokenMap['provider_refresh_token'] as String? ?? '';
+
+            Log.info('🟢[SignInBloc] DouYin login successful');
+            getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
+              gotrueTokenResponse,
+            );
+
+            // 判定是否需要绑定手机号
+            String phone = '';
+            final userMap = tokenMap['user'];
+            if (userMap is Map<String, dynamic>) {
+              phone = (userMap['phone'] as String?) ?? '';
+            }
+            final requiresPhoneBinding = phone.isEmpty;
+
+            return state.copyWith(
+              isSubmitting: false,
+              requiresPhoneBinding: requiresPhoneBinding,
+            );
+          } catch (e) {
+            Log.error('🟢[SignInBloc] Failed to parse token response: $e');
+            return _stateFromCode(
+              FlowyError.create()
+                ..code = ErrorCode.Internal
+                ..msg = 'Failed to parse token response: $e',
+            );
+          }
+        },
+        (error) {
+          Log.error('🟢[SignInBloc] DouYin login failed: ${error.msg}');
+          return _stateFromCode(error);
+        },
+      ),
+    );
+  }
+
   SignInState _stateFromCode(FlowyError error) {
     Log.error('SignInState _stateFromCode: ${error.msg}');
 
@@ -810,6 +915,12 @@ class SignInEvent with _$SignInEvent {
   /// 收到微信回调的 code（通过 deep link）
   const factory SignInEvent.wechatCodeReceived(String code) =
       WeChatCodeReceived;
+
+  const factory SignInEvent.signInWithDouYin() = SignInWithDouYin;
+
+  /// 收到抖音回调的 code（通过 deep link）
+  const factory SignInEvent.douyinCodeReceived(String code) =
+      DouYinCodeReceived;
 }
 
 // we support sign in directly without sign up, but we want to allow the users to sign up if they want to

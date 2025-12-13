@@ -12,6 +12,7 @@ import 'package:appflowy/user/presentation/screens/legal_document_screen.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/password_login_dialog.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/wechat_webview_dialog.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/douyin_webview_dialog.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart' show SignInState;
@@ -58,18 +59,18 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
           _phoneDialogOpen = false;
 
           if (profile != null) {
-            final rootContext =
-                Navigator.of(context, rootNavigator: true).context;
-            if (rootContext.mounted) {
-              getIt<AuthRouter>().goHomeScreen(rootContext, profile);
-            }
-          } else {
+                final rootContext =
+                    Navigator.of(context, rootNavigator: true).context;
+                if (rootContext.mounted) {
+                  getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                }
+              } else {
             _phoneBindingCancelled = true;
-            showToastNotification(
-              message: '请先绑定手机号再继续',
-              type: ToastificationType.info,
-            );
-          }
+                showToastNotification(
+                  message: '请先绑定手机号再继续',
+                  type: ToastificationType.info,
+                );
+              }
 
           // 清理标记，防止重复进入
           if (context.mounted) {
@@ -737,9 +738,9 @@ class _CustomThirdPartyButtons extends StatelessWidget {
                               .add(SignInEvent.wechatCodeReceived(code));
                         }
                       } else {
-                        context.read<SignInBloc>().add(
-                              const SignInEvent.signInWithWeChat(),
-                            );
+                      context.read<SignInBloc>().add(
+                            const SignInEvent.signInWithWeChat(),
+                          );
                       }
                     },
               isLoading: state.isSubmitting,
@@ -752,13 +753,23 @@ class _CustomThirdPartyButtons extends StatelessWidget {
               backgroundColor: Colors.black,
               onTap: state.isSubmitting
                   ? null
-                  : () {
-                      showToastNotification(
-                        message: "抖音登录功能开发中",
-                        type: ToastificationType.info,
+                  : () async {
+                      if (UniversalPlatform.isWindows ||
+                          UniversalPlatform.isMacOS ||
+                          UniversalPlatform.isLinux) {
+                        final code = await showDouYinWebViewDialog(context);
+                        if (code != null && context.mounted) {
+                          context
+                              .read<SignInBloc>()
+                              .add(SignInEvent.douyinCodeReceived(code));
+                        }
+                      } else {
+                        context.read<SignInBloc>().add(
+                              const SignInEvent.signInWithDouYin(),
                       );
+                      }
                     },
-              isLoading: false,
+              isLoading: state.isSubmitting,
             ),
             const SizedBox(width: 32),
 

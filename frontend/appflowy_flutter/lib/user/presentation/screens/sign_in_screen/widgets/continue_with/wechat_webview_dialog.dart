@@ -101,24 +101,30 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                       });
                     },
                     shouldOverrideUrlLoading: (controller, action) async {
-                      final uri = action.request.url;
-                      if (uri == null) {
+                      try {
+                        final uri = action.request.url;
+                        if (uri == null) {
+                          return NavigationActionPolicy.ALLOW;
+                        }
+
+                        final uriString = uri.toString();
+                        final isCallback = uriString.contains('wechat/callback') ||
+                            (uri.scheme != null && uri.scheme!.startsWith('ponynotes'));
+                        if (isCallback) {
+                          final code = uri.queryParameters['code'];
+                          final state = uri.queryParameters['state'];
+                          if (code != null && state == widget.state) {
+                            if (mounted) {
+                              Navigator.of(context).pop(code);
+                            }
+                            return NavigationActionPolicy.CANCEL;
+                          }
+                        }
+                        return NavigationActionPolicy.ALLOW;
+                      } catch (e) {
+                        Log.error('WeChat WebView shouldOverrideUrlLoading error: $e');
                         return NavigationActionPolicy.ALLOW;
                       }
-
-                      final isCallback = uri.toString().contains('wechat/callback') ||
-                          uri.scheme.startsWith('ponynotes');
-                      if (isCallback) {
-                        final code = uri.queryParameters['code'];
-                        final state = uri.queryParameters['state'];
-                        if (code != null && state == widget.state) {
-                          if (mounted) {
-                            Navigator.of(context).pop(code);
-                          }
-                          return NavigationActionPolicy.CANCEL;
-                        }
-                      }
-                      return NavigationActionPolicy.ALLOW;
                     },
                   ),
                   if (_isLoading) const _LoadingMask(),
