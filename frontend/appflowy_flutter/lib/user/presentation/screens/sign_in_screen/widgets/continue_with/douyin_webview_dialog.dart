@@ -82,8 +82,8 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                 builder: (context) {
                   try {
                     return Stack(
-                      children: [
-                        InAppWebView(
+                children: [
+                  InAppWebView(
                     initialUrlRequest: URLRequest(url: WebUri(widget.authUrl)),
                     initialSettings: InAppWebViewSettings(
                       transparentBackground: true,
@@ -108,15 +108,15 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                     onWebViewCreated: (c) => _controller = c,
                     onLoadStop: (_, __) {
                       if (mounted) {
-                        setState(() => _isLoading = false);
+                      setState(() => _isLoading = false);
                       }
                     },
                     onLoadStart: (_, __) {
                       if (mounted) {
-                        setState(() {
-                          _isLoading = true;
-                          _error = null;
-                        });
+                      setState(() {
+                        _isLoading = true;
+                        _error = null;
+                      });
                       }
                     },
                     onLoadError: (controller, url, code, message) {
@@ -158,8 +158,8 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                     onLoadHttpError: (controller, url, statusCode, description) {
                       Log.error('DouYin WebView HTTP error: $statusCode $description');
                       if (mounted) {
-                        setState(() {
-                          _isLoading = false;
+                      setState(() {
+                        _isLoading = false;
                           _error = 'HTTP错误 ($statusCode): $description';
                         });
                       }
@@ -187,18 +187,18 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                     },
                     shouldOverrideUrlLoading: (controller, action) async {
                       try {
-                        final uri = action.request.url;
-                        if (uri == null) {
-                          return NavigationActionPolicy.ALLOW;
-                        }
+                      final uri = action.request.url;
+                      if (uri == null) {
+                        return NavigationActionPolicy.ALLOW;
+                      }
 
                         final uriString = uri.toString();
                         final scheme = uri.scheme;
                         final isCallback = uriString.contains('douyin/callback') ||
                             (scheme != null && scheme.startsWith('ponynotes'));
-                        if (isCallback) {
-                          final code = uri.queryParameters['code'];
-                          final state = uri.queryParameters['state'];
+                      if (isCallback) {
+                        final code = uri.queryParameters['code'];
+                        final state = uri.queryParameters['state'];
                           Log.info('DouYin callback detected: code=${code != null ? 'present' : 'missing'}, state=$state, expectedState=${widget.state}');
                           // 检查 code 是否存在，state 可选（因为可能被抖音添加了额外参数）
                           if (code != null && code.isNotEmpty) {
@@ -212,17 +212,17 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                             } else {
                               // State 不匹配，但仍然返回 code（可能是抖音添加了额外参数）
                               Log.warn('DouYin callback: state mismatch, but returning code anyway');
-                              if (mounted) {
-                                Navigator.of(context).pop(code);
-                              }
-                              return NavigationActionPolicy.CANCEL;
-                            }
+                          if (mounted) {
+                            Navigator.of(context).pop(code);
                           }
+                          return NavigationActionPolicy.CANCEL;
+                        }
+                      }
                         }
                         return NavigationActionPolicy.ALLOW;
                       } catch (e) {
                         Log.error('DouYin WebView shouldOverrideUrlLoading error: $e');
-                        return NavigationActionPolicy.ALLOW;
+                      return NavigationActionPolicy.ALLOW;
                       }
                     },
                   ),
@@ -252,7 +252,7 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                         ],
                       ),
                     ),
-                      ],
+                ],
                     );
                   } catch (e) {
                     Log.error('DouYin WebView initialization error: $e');

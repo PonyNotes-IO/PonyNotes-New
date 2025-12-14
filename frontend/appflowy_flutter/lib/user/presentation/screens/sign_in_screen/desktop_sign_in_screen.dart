@@ -103,8 +103,13 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
               );
               return;
             }
-              // 如果未绑定手机号（包含临时号），先跳转到绑定页，防止直接进入主界面
-              if (_needBindPhone(userProfile.phone) && !_phoneDialogOpen) {
+              // 只有在第三方登录（微信/抖音）且未绑定手机号时，才跳转到绑定页
+              // 手机号登录/注册的用户不应该触发绑定页面
+              final dynamic dynState = state;
+              final needBind =
+                  (dynState.requiresPhoneBinding == true) ||
+                      state.toString().contains('requiresPhoneBinding: true');
+              if (needBind && _needBindPhone(userProfile.phone) && !_phoneDialogOpen) {
                 _phoneDialogOpen = true;
               _phoneBindingCancelled = false;
                 final profile = await Navigator.of(context).push(
@@ -564,15 +569,8 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
             backToLogin: () {
               navigator.pop();
             },
-            onEnterPasscode: (code) {
-              // 使用验证码登录
-              signInBloc.add(
-                SignInEvent.signInWithPasscode(
-                  email: emailOrPhone,
-                  passcode: code,
-                ),
-              );
-            },
+            // onEnterPasscode 现在在 ContinueWithMagicLinkOrPasscodePage 内部直接使用 context.read<SignInBloc>()
+            // 不再需要通过回调传递，避免使用已关闭的 bloc
           ),
         ),
       ),
