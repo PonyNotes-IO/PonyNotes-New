@@ -59,10 +59,16 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
           _phoneDialogOpen = false;
 
           if (profile != null) {
-                final rootContext =
-                    Navigator.of(context, rootNavigator: true).context;
-                if (rootContext.mounted) {
-                  getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                // 检查 context 是否仍然有效
+                if (!context.mounted) {
+                  return;
+                }
+                final rootNavigator = Navigator.of(context, rootNavigator: true);
+                if (rootNavigator != null) {
+                  final rootContext = rootNavigator.context;
+                  if (rootContext.mounted) {
+                    getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                  }
                 }
               } else {
             _phoneBindingCancelled = true;
@@ -108,10 +114,16 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 );
                 _phoneDialogOpen = false;
                 if (profile != null) {
-                  final rootContext =
-                      Navigator.of(context, rootNavigator: true).context;
-                  if (rootContext.mounted) {
-                    getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                  // 检查 context 是否仍然有效
+                  if (!context.mounted) {
+                    return;
+                  }
+                  final rootNavigator = Navigator.of(context, rootNavigator: true);
+                  if (rootNavigator != null) {
+                    final rootContext = rootNavigator.context;
+                    if (rootContext.mounted) {
+                      getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                    }
                   }
                 } else {
                 _phoneBindingCancelled = true;
@@ -123,7 +135,15 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 return;
               }
               // 使用根导航器确保导航不会因为 context 失效而失败
-              final rootContext = Navigator.of(context, rootNavigator: true).context;
+              // 检查 context 是否仍然有效
+              if (!context.mounted) {
+                return;
+              }
+              final rootNavigator = Navigator.of(context, rootNavigator: true);
+              final rootContext = rootNavigator?.context;
+              if (rootContext == null || !rootContext.mounted) {
+                return;
+              }
               if (rootContext.mounted) {
                 // 匿名登录成功，导航到主页
                 getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);

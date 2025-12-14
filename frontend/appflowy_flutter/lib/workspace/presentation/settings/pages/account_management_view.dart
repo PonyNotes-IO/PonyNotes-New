@@ -956,22 +956,26 @@ class _AccountManagementViewState extends State<AccountManagementView> {
   }
 
   void _showPhoneVerificationDialog(BuildContext context) {
+    // 从 SettingsDialogBloc 获取最新的用户资料，而不是使用 widget.userProfile
+    final settingsBloc = context.read<SettingsDialogBloc>();
+    final latestUserProfile = settingsBloc.state.userProfile;
+    
     // 调试：打印用户资料信息
-    Log.info('用户资料 - email: ${widget.userProfile.email}, name: ${widget.userProfile.name}');
+    Log.info('用户资料 - email: ${latestUserProfile.email}, name: ${latestUserProfile.name}');
     
     // 从用户资料中获取手机号
     // 优先使用 phone 字段，如果没有则检查 email 字段
     String phoneNumber = '';
     
-    if (widget.userProfile.hasPhone() && widget.userProfile.phone.isNotEmpty) {
+    if (latestUserProfile.hasPhone() && latestUserProfile.phone.isNotEmpty) {
       // 优先使用 phone 字段
-      phoneNumber = widget.userProfile.phone;
+      phoneNumber = latestUserProfile.phone;
       Log.info('从用户资料的 phone 字段获取到手机号: $phoneNumber');
-    } else if (widget.userProfile.email.isNotEmpty && 
-        !widget.userProfile.email.contains('@') &&
-        Validator.isValidPhone(widget.userProfile.email)) {
+    } else if (latestUserProfile.email.isNotEmpty && 
+        !latestUserProfile.email.contains('@') &&
+        Validator.isValidPhone(latestUserProfile.email)) {
       // 兼容旧数据：检查 email 字段是否包含手机号
-      phoneNumber = widget.userProfile.email;
+      phoneNumber = latestUserProfile.email;
       Log.info('从用户资料的 email 字段获取到手机号: $phoneNumber');
     } else {
       Log.info('用户资料中没有有效的手机号，显示输入对话框');
