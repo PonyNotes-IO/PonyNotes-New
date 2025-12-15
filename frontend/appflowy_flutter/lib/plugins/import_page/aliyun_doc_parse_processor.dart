@@ -364,6 +364,19 @@ class AliyunDocParseProcessor {
         // 尝试从其他字段提取内容
         return _extractContentFromOtherFields(mapData);
       }
+
+      // 先按官方示例，直接拼接每个 layout 的 markdownContent
+      final markdownBlocks = layouts
+          .whereType<Map<String, dynamic>>()
+          .map((layout) => layout['markdownContent'])
+          .whereType<String>()
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+
+      if (markdownBlocks.isNotEmpty) {
+        return markdownBlocks.join('\n').trim();
+      }
       
       // 提取docInfo（文档信息）
       final docInfo = mapData['docInfo'] as Map<String, dynamic>?;
