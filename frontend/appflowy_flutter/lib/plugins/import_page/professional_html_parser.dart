@@ -1,6 +1,7 @@
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart' as dom;
 import 'package:appflowy_backend/log.dart';
+import 'package:html2md/html2md.dart' as html2md;
 
 /// 专业的HTML解析器，用于将HTML转换为结构化的Markdown
 class ProfessionalHtmlParser {
@@ -8,35 +9,61 @@ class ProfessionalHtmlParser {
   static String convertHtmlToMarkdown(String htmlContent, String fileName) {
     try {
       Log.info('🔍 开始专业HTML解析: $fileName');
-      
-      // 解析HTML文档
+      // 1) 先做简单清洗，去掉 script/style 等噪音，再交给 html2md
+      final sanitizedHtml = _sanitizeHtmlForMarkdown(htmlContent);
+      final md = _postProcessMarkdown(html2md.convert(sanitizedHtml).trim());
+      if (md.isNotEmpty) {
+        Log.info('✅ html2md 转换完成，长度: ${md.length}');
+        return md;
+      }
+
+      // 2) 如果转换为空，继续使用原有结构化解析，尽量保留层级
       final document = html_parser.parse(htmlContent);
-      
-      // 提取文档标题
       final String title = _extractTitle(document, fileName);
-      
-      // 转换文档内容
+
       final buffer = StringBuffer();
       buffer.writeln('# $title\n');
-      
-      // 处理body内容，如果没有body则处理整个文档
+
       final bodyElement = document.body ?? document.documentElement;
       if (bodyElement != null) {
         _processElement(bodyElement, buffer, 0);
       } else {
-        // 如果没有结构化内容，回退到纯文本
         buffer.writeln(_extractPlainText(document));
       }
-      
+
       final result = buffer.toString().trim();
-      Log.info('✅ HTML解析完成，生成Markdown长度: ${result.length}');
-      
+      Log.info('✅ HTML解析完成（回退解析），长度: ${result.length}');
+
       return result.isEmpty ? _createFallbackContent(fileName, htmlContent) : result;
-      
+
     } catch (e) {
       Log.error('❌ HTML解析失败: $e');
       return _createFallbackContent(fileName, htmlContent);
     }
+  }
+
+  /// 去掉噪音标签，仅取 body 内的内容
+  static String _sanitizeHtmlForMarkdown(String htmlContent) {
+    try {
+      final document = html_parser.parse(htmlContent);
+      // 移除脚本/样式/隐藏内容
+      document.querySelectorAll('script, style, noscript').forEach((e) => e.remove());
+      // 仅取 body 内部，如果不存在则返回整体文本
+      final body = document.body;
+      if (body != null) {
+        return body.innerHtml;
+      }
+      return document.outerHtml;
+    } catch (_) {
+      // 解析异常则返回原文
+      return htmlContent;
+    }
+  }
+
+  /// 轻量 Markdown 后处理，压缩多余空行
+  static String _postProcessMarkdown(String markdown) {
+    // 将 3 个以上连续空行压缩为 2 行，去掉首尾空白
+    return markdown.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
   }
   
   /// 提取文档标题

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/shared/markdown_to_document.dart';
@@ -9,7 +10,8 @@ import 'package:appflowy/workspace/application/settings/share/import_service.dar
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:path/path.dart' as p;
 import 'package:markdown_widget/markdown_widget.dart';
-import 'aliyun_doc_parse_processor.dart';
+import 'aliyun_doc_parse_processor.dart' show CancellationToken;
+import 'professional_html_parser.dart';
 
 /// 增强的HTML导入对话框，使用阿里云解析
 class EnhancedHtmlImportDialog extends StatefulWidget {
@@ -27,6 +29,8 @@ class EnhancedHtmlImportDialog extends StatefulWidget {
 }
 
 class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
+  static const int _maxFileSize = 50 * 1024 * 1024; // 50MB，本地解析限制
+
   File? _selectedFile;
   String? _extractedContent;
   String? _processingError;
@@ -397,11 +401,11 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
       if (result != null && result.files.isNotEmpty) {
         final file = File(result.files.first.path!);
         
-        // 检查文件大小（使用阿里云API限制：50MB）
+        // 检查文件大小（本地解析限制：50MB）
         final fileSize = await file.length();
-        if (!AliyunDocParseProcessor.isFileSizeValid(fileSize)) {
+        if (!_isFileSizeValid(fileSize)) {
           final fileSizeStr = _formatFileSize(fileSize);
-          final maxSizeStr = _formatFileSize(AliyunDocParseProcessor.maxFileSize);
+          final maxSizeStr = _formatFileSize(_maxFileSize);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('文件大小超过限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。'),
@@ -436,6 +440,10 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
     }
   }
 
+  bool _isFileSizeValid(int fileSizeInBytes) {
+    return fileSizeInBytes <= _maxFileSize;
+  }
+
   Future<void> _processFile() async {
     if (_selectedFile == null) return;
 
@@ -451,11 +459,8 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
     try {
       String content;
       
-      // 使用阿里云API处理HTML文件
-      content = await AliyunDocParseProcessor.processHtmlFile(
-        _selectedFile!,
-        cancellationToken: _cancellationToken,
-      );
+      // 本地解析HTML -> Markdown（不经过阿里云）
+      content = await _processLocalHtml(_selectedFile!, _cancellationToken);
 
       // 检查是否已取消
       if (_cancellationToken?.isCancelled ?? false) {
@@ -487,6 +492,38 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
       }
     } finally {
       _cancellationToken = null;
+    }
+  }
+
+  Future<String> _processLocalHtml(File htmlFile, CancellationToken? token) async {
+    if (token?.isCancelled ?? false) {
+      throw Exception('处理已取消');
+    }
+
+    // 读取并解码 HTML 文件
+    final bytes = await htmlFile.readAsBytes();
+    final htmlString = _decodeHtmlBytes(bytes);
+
+    if (token?.isCancelled ?? false) {
+      throw Exception('处理已取消');
+    }
+
+    final fileName = p.basename(htmlFile.path);
+    // 使用本地解析器转换为 Markdown
+    final markdown = ProfessionalHtmlParser.convertHtmlToMarkdown(htmlString, fileName);
+    return markdown;
+  }
+
+  String _decodeHtmlBytes(List<int> bytes) {
+    try {
+      return utf8.decode(bytes);
+    } catch (_) {
+      try {
+        return latin1.decode(bytes);
+      } catch (e) {
+        Log.warn('HTML 字节解码失败，返回空字符串: $e');
+        return '';
+      }
     }
   }
 
