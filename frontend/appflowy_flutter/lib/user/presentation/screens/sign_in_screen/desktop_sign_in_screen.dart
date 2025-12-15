@@ -12,6 +12,7 @@ import 'package:appflowy/user/presentation/screens/legal_document_screen.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/password_login_dialog.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/wechat_webview_dialog.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/douyin_webview_dialog.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart' show SignInState;
@@ -58,18 +59,24 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
           _phoneDialogOpen = false;
 
           if (profile != null) {
-            final rootContext =
-                Navigator.of(context, rootNavigator: true).context;
-            if (rootContext.mounted) {
-              getIt<AuthRouter>().goHomeScreen(rootContext, profile);
-            }
-          } else {
+                // 检查 context 是否仍然有效
+                if (!context.mounted) {
+                  return;
+                }
+                final rootNavigator = Navigator.of(context, rootNavigator: true);
+                if (rootNavigator != null) {
+                  final rootContext = rootNavigator.context;
+                  if (rootContext.mounted) {
+                    getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                  }
+                }
+              } else {
             _phoneBindingCancelled = true;
-            showToastNotification(
-              message: '请先绑定手机号再继续',
-              type: ToastificationType.info,
-            );
-          }
+                showToastNotification(
+                  message: '请先绑定手机号再继续',
+                  type: ToastificationType.info,
+                );
+              }
 
           // 清理标记，防止重复进入
           if (context.mounted) {
@@ -96,8 +103,13 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
               );
               return;
             }
-              // 如果未绑定手机号（包含临时号），先跳转到绑定页，防止直接进入主界面
-              if (_needBindPhone(userProfile.phone) && !_phoneDialogOpen) {
+              // 只有在第三方登录（微信/抖音）且未绑定手机号时，才跳转到绑定页
+              // 手机号登录/注册的用户不应该触发绑定页面
+              final dynamic dynState = state;
+              final needBind =
+                  (dynState.requiresPhoneBinding == true) ||
+                      state.toString().contains('requiresPhoneBinding: true');
+              if (needBind && _needBindPhone(userProfile.phone) && !_phoneDialogOpen) {
                 _phoneDialogOpen = true;
               _phoneBindingCancelled = false;
                 final profile = await Navigator.of(context).push(
@@ -107,10 +119,16 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 );
                 _phoneDialogOpen = false;
                 if (profile != null) {
-                  final rootContext =
-                      Navigator.of(context, rootNavigator: true).context;
-                  if (rootContext.mounted) {
-                    getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                  // 检查 context 是否仍然有效
+                  if (!context.mounted) {
+                    return;
+                  }
+                  final rootNavigator = Navigator.of(context, rootNavigator: true);
+                  if (rootNavigator != null) {
+                    final rootContext = rootNavigator.context;
+                    if (rootContext.mounted) {
+                      getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                    }
                   }
                 } else {
                 _phoneBindingCancelled = true;
@@ -122,7 +140,15 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 return;
               }
               // 使用根导航器确保导航不会因为 context 失效而失败
-              final rootContext = Navigator.of(context, rootNavigator: true).context;
+              // 检查 context 是否仍然有效
+              if (!context.mounted) {
+                return;
+              }
+              final rootNavigator = Navigator.of(context, rootNavigator: true);
+              final rootContext = rootNavigator?.context;
+              if (rootContext == null || !rootContext.mounted) {
+                return;
+              }
               if (rootContext.mounted) {
                 // 匿名登录成功，导航到主页
                 getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
@@ -543,15 +569,8 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
             backToLogin: () {
               navigator.pop();
             },
-            onEnterPasscode: (code) {
-              // 使用验证码登录
-              signInBloc.add(
-                SignInEvent.signInWithPasscode(
-                  email: emailOrPhone,
-                  passcode: code,
-                ),
-              );
-            },
+            // onEnterPasscode 现在在 ContinueWithMagicLinkOrPasscodePage 内部直接使用 context.read<SignInBloc>()
+            // 不再需要通过回调传递，避免使用已关闭的 bloc
           ),
         ),
       ),
@@ -737,9 +756,9 @@ class _CustomThirdPartyButtons extends StatelessWidget {
                               .add(SignInEvent.wechatCodeReceived(code));
                         }
                       } else {
-                        context.read<SignInBloc>().add(
-                              const SignInEvent.signInWithWeChat(),
-                            );
+                      context.read<SignInBloc>().add(
+                            const SignInEvent.signInWithWeChat(),
+                          );
                       }
                     },
               isLoading: state.isSubmitting,
@@ -752,13 +771,23 @@ class _CustomThirdPartyButtons extends StatelessWidget {
               backgroundColor: Colors.black,
               onTap: state.isSubmitting
                   ? null
-                  : () {
-                      showToastNotification(
-                        message: "抖音登录功能开发中",
-                        type: ToastificationType.info,
+                  : () async {
+                      if (UniversalPlatform.isWindows ||
+                          UniversalPlatform.isMacOS ||
+                          UniversalPlatform.isLinux) {
+                        final code = await showDouYinWebViewDialog(context);
+                        if (code != null && context.mounted) {
+                          context
+                              .read<SignInBloc>()
+                              .add(SignInEvent.douyinCodeReceived(code));
+                        }
+                      } else {
+                        context.read<SignInBloc>().add(
+                              const SignInEvent.signInWithDouYin(),
                       );
+                      }
                     },
-              isLoading: false,
+              isLoading: state.isSubmitting,
             ),
             const SizedBox(width: 32),
 

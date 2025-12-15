@@ -101,13 +101,15 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                       });
                     },
                     shouldOverrideUrlLoading: (controller, action) async {
+                      try {
                       final uri = action.request.url;
                       if (uri == null) {
                         return NavigationActionPolicy.ALLOW;
                       }
 
-                      final isCallback = uri.toString().contains('wechat/callback') ||
-                          uri.scheme.startsWith('ponynotes');
+                        final uriString = uri.toString();
+                        final isCallback = uriString.contains('wechat/callback') ||
+                            (uri.scheme != null && uri.scheme!.startsWith('ponynotes'));
                       if (isCallback) {
                         final code = uri.queryParameters['code'];
                         final state = uri.queryParameters['state'];
@@ -119,6 +121,10 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                         }
                       }
                       return NavigationActionPolicy.ALLOW;
+                      } catch (e) {
+                        Log.error('WeChat WebView shouldOverrideUrlLoading error: $e');
+                        return NavigationActionPolicy.ALLOW;
+                      }
                     },
                   ),
                   if (_isLoading) const _LoadingMask(),

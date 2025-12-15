@@ -12,6 +12,7 @@ import 'package:appflowy/startup/tasks/deeplink/login_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/open_app_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/open_note_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/wechat_deeplink_handler.dart';
+import 'package:appflowy/startup/tasks/deeplink/douyin_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/payment_deeplink_handler.dart';
 import 'package:appflowy/user/application/auth/auth_error.dart';
 import 'package:appflowy/user/application/password/password_http_service.dart';
@@ -36,7 +37,8 @@ class AppFlowyCloudDeepLink {
       ..register(ExpireLoginDeepLinkHandler())
       ..register(OpenAppDeepLinkHandler())
       ..register(OpenNoteDeepLinkHandler())
-      ..register(WeChatDeepLinkHandler());
+      ..register(WeChatDeepLinkHandler())
+      ..register(DouYinDeepLinkHandler());
 
     _deepLinkSubscription = _AppLinkWrapper.instance.listen(
       (Uri? uri) async {
@@ -262,6 +264,9 @@ class AppFlowyCloudDeepLink {
         } else if (handler is WeChatDeepLinkHandler) {
           // The handler already processed the code; just log
           Log.info('🔵 [DeepLink] WeChatDeepLinkHandler processed');
+        } else if (handler is DouYinDeepLinkHandler) {
+          // The handler already processed the code; just log
+          Log.info('🔵 [DeepLink] DouYinDeepLinkHandler processed');
         }
       },
       onError: (error) {

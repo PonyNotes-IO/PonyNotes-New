@@ -4,18 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 
 class ContinueWithMagicLinkOrPasscodePage extends StatefulWidget {
   const ContinueWithMagicLinkOrPasscodePage({
     super.key,
     required this.backToLogin,
     required this.email,
-    required this.onEnterPasscode,
+    this.onEnterPasscode,
   });
 
   final String email;
   final VoidCallback backToLogin;
-  final ValueChanged<String> onEnterPasscode;
+  final ValueChanged<String>? onEnterPasscode;
 
   @override
   State<ContinueWithMagicLinkOrPasscodePage> createState() =>
@@ -105,10 +106,20 @@ class _ContinueWithMagicLinkOrPasscodePageState
   }
 
   void _validateAndSubmit() {
+    // 防止重复提交
+    if (_isLoading) {
+      return;
+    }
+    
     final code = _codeControllers.map((c) => c.text).join();
     
     if (code.length != 6) {
       setState(() => _errorMessage = '验证码错误，请重新输入');
+      return;
+    }
+
+    // 检查 context 是否仍然有效
+    if (!mounted) {
       return;
     }
 
@@ -117,15 +128,60 @@ class _ContinueWithMagicLinkOrPasscodePageState
       _errorMessage = '';
     });
     
-    widget.onEnterPasscode(code);
+    // 优先使用 context.read<SignInBloc>() 来获取 bloc，避免使用已关闭的 bloc
+    try {
+      final signInBloc = context.read<SignInBloc>();
+      
+      // 检查 bloc 是否已关闭
+      // 如果 bloc 已关闭，说明登录可能已经成功，Deep Link Handler 正在处理
+      // 此时不应该显示错误，而是等待 Deep Link Handler 完成
+      if (signInBloc.isClosed) {
+        // 不清除 loading 状态，让用户知道正在处理
+        // Deep Link Handler 会自动处理导航
+        return;
+      }
+      
+      signInBloc.add(
+        SignInEvent.signInWithPasscode(
+          email: widget.email,
+          passcode: code,
+        ),
+      );
+    } catch (e) {
+      // 如果 bloc 已关闭或发生其他错误，尝试使用回调（向后兼容）
+      if (widget.onEnterPasscode != null) {
+        try {
+          widget.onEnterPasscode!(code);
+        } catch (e2) {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              _errorMessage = '登录失败，请重试';
+            });
+          }
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = '登录失败，请重试';
+          });
+        }
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.surfaceColorScheme.layer01,
       body: BlocListener<SignInBloc, SignInState>(
       listener: (context, state) {
+        // 监听 Deep Link 状态变化（通过 requiresPhoneBinding 或其他状态）
+        // 验证码登录成功后，SignInBloc 会将 token 传递给 Deep Link Handler
+        // Deep Link Handler 会处理登录并触发导航
+        
         // 监听 isSubmitting 的变化
         if (_isLoading && !state.isSubmitting) {
           // 从loading变为非loading状态
@@ -146,11 +202,26 @@ class _ContinueWithMagicLinkOrPasscodePageState
               },
             );
           } else if (successOrFail != null && successOrFail.isSuccess) {
-            // 登录成功，Deep Link Handler 会自动调用 runAppFlowy() 重启应用
+            // 登录成功，Deep Link Handler 会自动处理导航
             // 这里不需要做任何导航操作，只需清除错误信息
             if (mounted) {
               setState(() => _errorMessage = '');
             }
+          }
+        }
+        
+        // 监听 Deep Link 状态变化
+        // 当 Deep Link Handler 处理完成时，SignInBloc 会收到 deepLinkStateChange 事件
+        // 如果登录成功，successOrFail 会被设置
+        final successOrFail = state.successOrFail;
+        if (successOrFail != null && successOrFail.isSuccess && _isLoading) {
+          // 登录成功，清除 loading 状态
+          // Deep Link Handler 会自动处理导航，这里不需要额外操作
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              _errorMessage = '';
+            });
           }
         }
         },
@@ -169,12 +240,12 @@ class _ContinueWithMagicLinkOrPasscodePageState
                       const VSpace(40),
                       
                       // 标题
-                      const Text(
+                      Text(
                         '请输入验证码',
                         style: TextStyle(
                           fontSize: 30,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF333333),
+                          color: theme.textColorScheme.primary,
                         ),
                       ),
                       const VSpace(20),
@@ -183,17 +254,17 @@ class _ContinueWithMagicLinkOrPasscodePageState
                       RichText(
                         textAlign: TextAlign.center,
                         text: TextSpan(
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 20,
-                            color: Color(0xFF777777),
+                            color: theme.textColorScheme.secondary,
                             height: 1.4,
                           ),
                           children: [
                             const TextSpan(text: '6位验证码已发送至 '),
                             TextSpan(
                               text: widget.email,
-                              style: const TextStyle(
-                                color: Color(0xFF333333),
+                              style: TextStyle(
+                                color: theme.textColorScheme.primary,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -215,7 +286,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
                           alignment: Alignment.center,
                           child: Text(
                             _errorMessage,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.red,
                               fontSize: 20,
                             ),
@@ -245,14 +316,15 @@ class _ContinueWithMagicLinkOrPasscodePageState
   }
 
   Widget _buildBackButton() {
+    final theme = AppFlowyTheme.of(context);
     return Container(
       alignment: Alignment.centerLeft,
       margin: const EdgeInsets.only(left: 32, top: 20),
       child: IconButton(
-        icon: const Icon(
+        icon: Icon(
           Icons.arrow_back,
           size: 24,
-          color: Color(0xFF333333),
+          color: theme.textColorScheme.primary,
         ),
         onPressed: widget.backToLogin,
       ),
@@ -260,6 +332,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
   }
 
   Widget _buildVerificationCodeInputs() {
+    final theme = AppFlowyTheme.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(6, (index) {
@@ -269,8 +342,12 @@ class _ContinueWithMagicLinkOrPasscodePageState
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: const Color(0xFFEBEBEB),
+              color: theme.surfaceColorScheme.layer02,
               borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: theme.borderColorScheme.primary,
+                width: 1,
+              ),
             ),
             child: KeyboardListener(
               focusNode: FocusNode(),
@@ -295,10 +372,10 @@ class _ContinueWithMagicLinkOrPasscodePageState
                 minLines: null,
                 // ignore: avoid_redundant_argument_values
                 maxLines: null,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF333333),
+                  color: theme.textColorScheme.primary,
                 ),
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -310,7 +387,10 @@ class _ContinueWithMagicLinkOrPasscodePageState
                   contentPadding: EdgeInsets.zero,
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
-                    borderSide: const BorderSide(color: Color(0xFFF89575), width: 1.5),
+                    borderSide: BorderSide(
+                      color: const Color(0xFFF89575),
+                      width: 1.5,
+                    ),
                   ),
                 ),
                 onChanged: (value) {
@@ -355,13 +435,15 @@ class _ContinueWithMagicLinkOrPasscodePageState
   }
 
   Widget _buildResendSection() {
+    final theme = AppFlowyTheme.of(context);
+    final primaryColor = const Color(0xFFF89575);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text(
+        Text(
           '收不到验证码？',
           style: TextStyle(
-            color: Color(0xFF5E5E5E),
+            color: theme.textColorScheme.secondary,
             fontSize: 20,
           ),
         ),
@@ -372,21 +454,21 @@ class _ContinueWithMagicLinkOrPasscodePageState
             child: RichText(
               textAlign: TextAlign.center,
               text: TextSpan(
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   height: 1.4,
                 ),
                 children: [
                   TextSpan(
                     text: '$_countdown',
-                    style: const TextStyle(
-                      color: Color(0xFFF89575),
+                    style: TextStyle(
+                      color: primaryColor,
                     ),
                   ),
-                  const TextSpan(
+                  TextSpan(
                     text: '秒后重新获取验证码',
                     style: TextStyle(
-                      color: Color(0xFF333333),
+                      color: theme.textColorScheme.primary,
                     ),
                   ),
                 ],
@@ -399,7 +481,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFF89575),
+                color: primaryColor,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
@@ -417,13 +499,14 @@ class _ContinueWithMagicLinkOrPasscodePageState
   }
 
   Widget _buildNextButton() {
+    final primaryColor = const Color(0xFFF89575);
     return SizedBox(
       width: 418,
       height: 52,
       child: ElevatedButton(
         onPressed: _isLoading ? null : _validateAndSubmit,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFF89575),
+          backgroundColor: primaryColor,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
