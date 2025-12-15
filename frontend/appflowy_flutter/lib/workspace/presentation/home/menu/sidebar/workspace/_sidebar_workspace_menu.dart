@@ -106,12 +106,12 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
           child: _CreateWorkspaceButton(),
         ),
 
-        if (UniversalPlatform.isDesktop) ...[
-          const Padding(
-            padding: EdgeInsets.only(left: 6.0, top: 6.0, right: 6.0),
-            child: _ImportNotionButton(),
-          ),
-        ],
+        // if (UniversalPlatform.isDesktop) ...[
+        //   const Padding(
+        //     padding: EdgeInsets.only(left: 6.0, top: 6.0, right: 6.0),
+        //     child: _ImportNotionButton(),
+        //   ),
+        // ],
 
         const VSpace(6.0),
       ],
