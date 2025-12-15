@@ -60,7 +60,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
             const SizedBox(height: 30),
             
             // Third-party import section  
-            _buildThirdPartyImportSection(),
+            // _buildThirdPartyImportSection(),
           ],
         ),
       ),

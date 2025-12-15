@@ -69,7 +69,7 @@ class SettingsDialogBloc
         await event.when(
           initial: () async {
             if (!_listenerStarted) {
-              _userListener.start(onProfileUpdated: _profileUpdated);
+            _userListener.start(onProfileUpdated: _profileUpdated);
               _listenerStarted = true;
             }
 

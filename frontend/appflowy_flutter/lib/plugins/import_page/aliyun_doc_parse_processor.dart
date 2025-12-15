@@ -379,28 +379,38 @@ class AliyunDocParseProcessor {
   /// 解析API响应并转换为Markdown格式
   static String _parseResponseToMarkdown(Map<String, dynamic> responseData) {
     try {
-      final innerData = _unwrapParsePayload(responseData);
+      final dynamic innerData = _unwrapParsePayload(responseData);
       if (innerData == null) {
         Log.error('Failed to unwrap parse payload from response');
         return '';
       }
+      // 兼容返回 data 为 List 的情况（直接拼接为纯文本）
+      if (innerData is List) {
+        final listContent = innerData.map((e) => e.toString()).join('\n');
+        return listContent.trim();
+      }
+      if (innerData is! Map<String, dynamic>) {
+        Log.error('Unexpected parse payload type: ${innerData.runtimeType}');
+        return '';
+      }
+      final Map<String, dynamic> mapData = innerData;
       
       // 提取layouts（布局信息，包含文本内容）
-      final layouts = innerData['layouts'] as List<dynamic>?;
+      final layouts = mapData['layouts'] as List<dynamic>?;
       if (layouts == null || layouts.isEmpty) {
         Log.warn('No layouts found in response');
         // 尝试从其他字段提取内容
-        return _extractContentFromOtherFields(innerData);
+        return _extractContentFromOtherFields(mapData);
       }
       
       // 提取docInfo（文档信息）
-      final docInfo = innerData['docInfo'] as Map<String, dynamic>?;
+      final docInfo = mapData['docInfo'] as Map<String, dynamic>?;
       
       // 提取styles（样式信息）
-      final styles = innerData['styles'] as List<dynamic>?;
+      final styles = mapData['styles'] as List<dynamic>?;
       
       // 提取logics（逻辑结构）
-      final logics = innerData['logics'] as Map<String, dynamic>?;
+      final logics = mapData['logics'] as Map<String, dynamic>?;
       
       // 构建Markdown内容
       final StringBuffer markdown = StringBuffer();
@@ -502,6 +512,30 @@ class AliyunDocParseProcessor {
     }
   }
   
+  /// 提取布局的 y 坐标（兼容 pos 为 Map 或 List 的情况）
+  static int _extractLayoutY(Map<String, dynamic> layout) {
+    final pos = layout['pos'];
+    if (pos is Map<String, dynamic>) {
+      final y = pos['y'];
+      if (y is num) return y.toInt();
+    } else if (pos is List) {
+      int? minY;
+      for (final item in pos) {
+        if (item is Map<String, dynamic>) {
+          final yVal = item['y'];
+          if (yVal is num) {
+            final yInt = yVal.toInt();
+            minY = minY == null ? yInt : (yInt < minY ? yInt : minY);
+          }
+        }
+      }
+      if (minY != null) {
+        return minY;
+      }
+    }
+    return 0;
+  }
+
   /// 处理layouts并转换为Markdown
   static void _processLayoutsToMarkdown(
     StringBuffer markdown,
@@ -525,10 +559,11 @@ class AliyunDocParseProcessor {
       }
     }
     
-    // 按页面和位置排序layouts
-    final sortedLayouts = List<Map<String, dynamic>>.from(
-      layouts.whereType<Map<String, dynamic>>(),
-    )..sort((a, b) {
+    // 过滤出 Map 类型的布局，忽略列表等异常项，避免类型转换错误
+    final sortedLayouts = layouts
+        .whereType<Map<String, dynamic>>()
+        .toList()
+      ..sort((a, b) {
       // 先按页码排序
       final pageA = _getFirstPageNum(a);
       final pageB = _getFirstPageNum(b);
@@ -537,10 +572,8 @@ class AliyunDocParseProcessor {
       }
       
       // 再按位置排序（y坐标，从上到下）
-      final posA = a['pos'] as Map<String, dynamic>?;
-      final posB = b['pos'] as Map<String, dynamic>?;
-      final yA = posA?['y'] as int? ?? 0;
-      final yB = posB?['y'] as int? ?? 0;
+      final yA = _extractLayoutY(a);
+      final yB = _extractLayoutY(b);
       return yA.compareTo(yB);
     });
     
@@ -849,6 +882,14 @@ class AliyunDocParseProcessor {
       final successFlag = data['success'] as bool? ?? false;
       final failedFlag = data['failed'] as bool? ?? false;
       final completedFlag = data['completed'] as bool?;
+      final nestedData = data['data'];
+      if (completedFlag == true) {
+        // 阿里云解析接口的最新返回结构：data 中有 completed=true，实际解析结果在 data.data 内
+        if (nestedData is Map<String, dynamic> &&
+            _looksLikeParsePayload(nestedData)) {
+          return _ParseTaskStatus.success;
+        }
+      }
       
       if (successFlag) {
         return _ParseTaskStatus.success;
@@ -934,7 +975,8 @@ class AliyunDocParseProcessor {
     return null;
   }
   
-  static Map<String, dynamic>? _unwrapParsePayload(Map<String, dynamic> responseData) {
+  /// 解包解析结果，可能返回 Map 或 List 或 null
+  static dynamic _unwrapParsePayload(Map<String, dynamic> responseData) {
     final data = responseData['data'];
     if (data == null) {
       return null;
@@ -973,8 +1015,11 @@ class AliyunDocParseProcessor {
       }
     }
     
-    if (data is List || data is String) {
-      return null;
+    if (data is List) {
+      return data;
+    }
+    if (data is String) {
+      return [data];
     }
     
     if (_looksLikeParsePayload(responseData)) {

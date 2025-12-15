@@ -66,8 +66,8 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
           children: [
             _buildHeader(),
             const SizedBox(height: 16),
-            _buildModeSelector(),
-            const SizedBox(height: 16),
+            // _buildModeSelector(),
+            // const SizedBox(height: 16),
             _buildFileSelector(),
             const SizedBox(height: 16),
             if (_selectedFile != null) ...[
