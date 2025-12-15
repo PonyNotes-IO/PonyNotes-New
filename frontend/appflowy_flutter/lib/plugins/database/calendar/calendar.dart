@@ -763,36 +763,36 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             ),
           ),
           // 订阅系统日历
-          Container(
-              height: 42,
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  Icon(Icons.calendar_month_outlined, size: 18),
-                  SizedBox(width: 10),
-                  Text('订阅系统日历', style: TextStyle(fontSize: 14)),
-                  Spacer(),
-                Toggle(
-                  value: _isSubscribeSystemCalendar,
-                  onChanged: (value) {
-                    // 更新弹层内视图
-                    setPopupState(() {
-                      _isSubscribeSystemCalendar = value;
-                    });
-                    // 同步更新父级（外层可能依赖该状态）
-                    if (mounted) {
-                      setState(() {});
-                    }
-                    // 执行业务逻辑（订阅/取消订阅 + 刷新）
-                    _toggleSystemCalendarSubscription(value);
-                  },
-                  style: const ToggleStyle.mobile(),
-                  activeBackgroundColor: Color(0xFFF89575),
-                  padding: EdgeInsets.zero,
-                ),
-              ],
-            ),
-          ),
+          // Container(
+          //     height: 42,
+          //     padding: EdgeInsets.symmetric(horizontal: 12),
+          //     child: Row(
+          //       children: [
+          //         Icon(Icons.calendar_month_outlined, size: 18),
+          //         SizedBox(width: 10),
+          //         Text('订阅系统日历', style: TextStyle(fontSize: 14)),
+          //         Spacer(),
+          //       Toggle(
+          //         value: _isSubscribeSystemCalendar,
+          //         onChanged: (value) {
+          //           // 更新弹层内视图
+          //           setPopupState(() {
+          //             _isSubscribeSystemCalendar = value;
+          //           });
+          //           // 同步更新父级（外层可能依赖该状态）
+          //           if (mounted) {
+          //             setState(() {});
+          //           }
+          //           // 执行业务逻辑（订阅/取消订阅 + 刷新）
+          //           _toggleSystemCalendarSubscription(value);
+          //         },
+          //         style: const ToggleStyle.mobile(),
+          //         activeBackgroundColor: Color(0xFFF89575),
+          //         padding: EdgeInsets.zero,
+          //       ),
+          //     ],
+          //   ),
+          // ),
           // 日记模式
           InkWell(
             onTap: () {
