@@ -414,9 +414,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
           borderRadius: BorderRadius.circular(6),
         ),
         child: Center(
-          child: Text(
-            label,
-            style: const TextStyle(
+          child: FittedBox(
+            child: FlowyText(
+              label,
               color: Colors.white,
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -464,12 +464,12 @@ class _SettingsMenuState extends State<SettingsMenu> {
         startDate != null ? DateFormat(dateFormat).format(startDate) : '--';
     final endDateStr = DateFormat(dateFormat).format(endDate);
     
-    return FlowyText(
-      '有效期: $startDateStr至$endDateStr',
-      fontSize: 12,
-      color: theme.textColorScheme.secondary,
-      maxLines: 2,
-      overflow: TextOverflow.visible,
+    return FittedBox(
+      child: FlowyText(
+        '有效期: $startDateStr至$endDateStr',
+        fontSize: 12,
+        color: theme.textColorScheme.secondary,
+      ),
     );
   }
 

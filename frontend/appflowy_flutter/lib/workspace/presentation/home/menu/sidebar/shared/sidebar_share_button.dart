@@ -33,7 +33,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   bool _isExpanded = false;
   List<ViewPB> _userSharedNotes = [];
   bool _isLoading = false;
-  late final SharedSectionBloc _sharedSectionBloc;
+  late SharedSectionBloc _sharedSectionBloc;
   String _workspaceId = '';
 
   @override

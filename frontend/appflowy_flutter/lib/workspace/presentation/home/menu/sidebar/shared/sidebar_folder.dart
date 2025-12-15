@@ -84,8 +84,8 @@ class SidebarFolder extends StatelessWidget {
             const VSpace(4.0),
             const SidebarFileLibraryButton(),
             // 模板
-            const VSpace(4.0),
-            const SidebarTemplateNewButton(),
+            // const VSpace(4.0),
+            // const SidebarTemplateNewButton(),
             // 回收站
             const VSpace(4.0),
             const SidebarTrashItem(),
