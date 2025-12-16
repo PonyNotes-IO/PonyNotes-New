@@ -98,6 +98,7 @@
     "resetPasswordLinkExpired": "The password reset link has expired. Please request a new link.",
     "resetPasswordLinkInvalid": "The password reset link is invalid. Please request a new link.",
     "enterNewPasswordFor": "Enter new password for ",
+    "enterNewPasswordSuffix": "Enter new password",
     "newPassword": "New password",
     "enterNewPassword": "Enter new password",
     "confirmPassword": "Confirm password",

@@ -122,6 +122,12 @@ class _SetNewPasswordWidgetState extends State<SetNewPasswordWidget> {
                 color: theme.textColorScheme.primary,
               ),
             ),
+            TextSpan(
+              text: LocaleKeys.signIn_enterNewPasswordSuffix.tr(),
+              style: theme.textStyle.body.standard(
+                color: theme.textColorScheme.primary,
+              ),
+            ),
           ],
         ),
         textAlign: TextAlign.center,
