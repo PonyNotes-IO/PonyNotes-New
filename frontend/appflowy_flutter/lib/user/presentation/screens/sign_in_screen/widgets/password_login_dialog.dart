@@ -1,4 +1,8 @@
+import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/forgot_password_flow_page.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -50,8 +54,41 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
     widget.onPasswordLogin(password);
   }
 
+  void _handleForgotPassword(BuildContext context) {
+    Log.info('🟢 [PasswordLoginDialog] 处理忘记密码，phoneOrEmail: ${widget.phoneOrEmail}');
+    
+    final signInBloc = context.read<SignInBloc>();
+    
+    // 判断是邮箱还是手机号
+    final isEmail = widget.phoneOrEmail.contains('@');
+    
+    // 发送验证码
+    // forgotPassword API 支持邮箱和手机号（GoTrue 会自动检测）
+    signInBloc.add(
+      SignInEvent.forgotPassword(email: widget.phoneOrEmail),
+    );
+    
+    // 关闭密码登录对话框
+    Navigator.of(context).pop();
+    
+    // 跳转到忘记密码流程页面
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        builder: (context) => BlocProvider.value(
+          value: signInBloc,
+          child: ForgotPasswordFlowPage(
+            phoneOrEmail: widget.phoneOrEmail,
+            backToLogin: widget.onSwitchToVerificationCode,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return BlocListener<SignInBloc, SignInState>(
       listener: (context, state) {
         // 监听登录错误
@@ -84,6 +121,10 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
         ),
         child: Container(
           width: 500,
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.all(40),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -95,12 +136,12 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 标题
-                  const Text(
+                  Text(
                     '账号密码登录',
-                    style: TextStyle(
+                    style: textTheme.headlineSmall?.copyWith(
                       fontSize: 28,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFF333333),
+                      color: colorScheme.onSurface,
                     ),
                   ),
                   // 验证码登录按钮
@@ -110,14 +151,15 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                        side: BorderSide(color: colorScheme.outlineVariant),
                       ),
+                      foregroundColor: colorScheme.onSurface,
                     ),
-                    child: const Text(
+                    child: Text(
                       '验证码登录',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Color(0xFF333333),
+                        color: colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -126,11 +168,11 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
               const VSpace(8),
               
               // 说明文字
-              const Text(
-                '使用已经注册过的手机号登录',
+              Text(
+                '使用已经注册过的账号登录',
                 style: TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF999999),
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
               const VSpace(32),
@@ -139,8 +181,8 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
               Container(
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
-                  border: Border.all(color: const Color(0xFFE0E0E0)),
+                  color: colorScheme.surfaceVariant,
+                  border: Border.all(color: colorScheme.outlineVariant),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -149,9 +191,9 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                     Expanded(
                       child: Text(
                         widget.phoneOrEmail,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
-                          color: Color(0xFF333333),
+                          color: colorScheme.onSurface,
                         ),
                       ),
                     ),
@@ -164,11 +206,11 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
               Container(
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colorScheme.surfaceVariant,
                   border: Border.all(
                     color: _errorMessage.isNotEmpty 
-                        ? Colors.red 
-                        : const Color(0xFFE0E0E0),
+                        ? colorScheme.error 
+                        : colorScheme.outlineVariant,
                   ),
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -176,18 +218,18 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                   controller: _passwordController,
                   focusNode: _passwordFocusNode,
                   obscureText: true,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
-                    color: Color(0xFF333333),
+                    color: colorScheme.onSurface,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: '输入设置的密码',
                     hintStyle: TextStyle(
                       fontSize: 16,
-                      color: Color(0xFF999999),
+                      color: colorScheme.onSurfaceVariant,
                     ),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
@@ -212,28 +254,30 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                     Expanded(
                       child: Text(
                         _errorMessage,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: Colors.red,
+                          color: colorScheme.error,
                         ),
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        // TODO: 实现忘记密码功能
+                    BlocBuilder<SignInBloc, SignInState>(
+                      builder: (context, state) {
+                        return TextButton(
+                          onPressed: state.isSubmitting ? null : () => _handleForgotPassword(context),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            '忘记密码?',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        );
                       },
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: const Text(
-                        '忘记密码?',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF999999),
-                        ),
-                      ),
                     ),
                   ],
                 ),
@@ -241,22 +285,24 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                 const VSpace(8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      // TODO: 实现忘记密码功能
+                  child: BlocBuilder<SignInBloc, SignInState>(
+                    builder: (context, state) {
+                      return TextButton(
+                        onPressed: state.isSubmitting ? null : () => _handleForgotPassword(context),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          '忘记密码?',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      );
                     },
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text(
-                      '忘记密码?',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF999999),
-                      ),
-                    ),
                   ),
                 ),
               ],

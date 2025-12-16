@@ -196,17 +196,27 @@ class PasswordHttpService {
   }
 
   // Verify the reset password token
+  // Supports both email and phone number (GoTrue will auto-detect phone in email field)
   Future<FlowyResult<String, FlowyError>> verifyResetPasswordToken({
     required String email,
     required String token,
+    String? phone,
   }) async {
+    final body = <String, dynamic>{
+      'type': 'recovery',
+      'token': token,
+    };
+    
+    // 如果提供了 phone，使用 phone；否则使用 email（GoTrue 会自动检测手机号）
+    if (phone != null && phone.isNotEmpty) {
+      body['phone'] = phone;
+    } else {
+      body['email'] = email;
+    }
+    
     final result = await _makeRequest(
       endpoint: PasswordEndpoint.verifyResetPasswordToken,
-      body: {
-        'type': 'recovery',
-        'email': email,
-        'token': token,
-      },
+      body: body,
       errorMessage: 'Failed to verify reset password token',
     );
 

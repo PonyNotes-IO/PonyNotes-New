@@ -3,7 +3,6 @@ import 'dart:math';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
-import 'package:flowy_infra_ui/style_widget/button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -107,19 +106,24 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                         return NavigationActionPolicy.ALLOW;
                       }
 
-                        final uriString = uri.toString();
-                        final isCallback = uriString.contains('wechat/callback') ||
-                            (uri.scheme != null && uri.scheme!.startsWith('ponynotes'));
-                      if (isCallback) {
-                        final code = uri.queryParameters['code'];
-                        final state = uri.queryParameters['state'];
-                        if (code != null && state == widget.state) {
-                          if (mounted) {
-                            Navigator.of(context).pop(code);
-                          }
-                          return NavigationActionPolicy.CANCEL;
-                        }
+                      final uriString = uri.toString();
+                      final isCallback = uriString.contains('wechat/callback') ||
+                          uriString.startsWith('ponynotes://');
+                      if (!isCallback) {
+                        return NavigationActionPolicy.ALLOW;
                       }
+
+                      final code = uri.queryParameters['code'];
+                      final state = uri.queryParameters['state'];
+                      final hasValidCode = code != null && code.isNotEmpty;
+
+                      if (hasValidCode && state == widget.state) {
+                        if (mounted) {
+                          Navigator.of(context).pop(code);
+                        }
+                        return NavigationActionPolicy.CANCEL;
+                      }
+
                       return NavigationActionPolicy.ALLOW;
                       } catch (e) {
                         Log.error('WeChat WebView shouldOverrideUrlLoading error: $e');
@@ -134,13 +138,15 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            _error!,
+                            _error ?? '',
                             style: TextStyle(color: theme.textColorScheme.primary),
                           ),
                           const SizedBox(height: 12),
-                          FlowyButton(
-                            text: const Text('重试'),
-                            onTap: () {
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              foregroundColor: theme.textColorScheme.primary,
+                            ),
+                            onPressed: () {
                               setState(() {
                                 _isLoading = true;
                                 _error = null;
@@ -149,7 +155,8 @@ class _WeChatWebViewDialogState extends State<_WeChatWebViewDialog> {
                                 urlRequest: URLRequest(url: WebUri(widget.authUrl)),
                               );
                             },
-                          ),
+                            child: const Text('重试'),
+                          )
                         ],
                       ),
                     ),
