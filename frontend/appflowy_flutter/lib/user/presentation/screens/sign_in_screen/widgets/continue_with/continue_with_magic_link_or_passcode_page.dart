@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/user/presentation/router.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -134,10 +137,15 @@ class _ContinueWithMagicLinkOrPasscodePageState
       
       // 检查 bloc 是否已关闭
       // 如果 bloc 已关闭，说明登录可能已经成功，Deep Link Handler 正在处理
-      // 此时不应该显示错误，而是等待 Deep Link Handler 完成
       if (signInBloc.isClosed) {
-        // 不清除 loading 状态，让用户知道正在处理
-        // Deep Link Handler 会自动处理导航
+        // Bloc 已关闭，清除 loading 状态
+        // Deep Link Handler 会自动处理导航，这里不需要保持 loading
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = '';
+          });
+        }
         return;
       }
       
@@ -178,9 +186,57 @@ class _ContinueWithMagicLinkOrPasscodePageState
       backgroundColor: theme.surfaceColorScheme.layer01,
       body: BlocListener<SignInBloc, SignInState>(
       listener: (context, state) {
-        // 监听 Deep Link 状态变化（通过 requiresPhoneBinding 或其他状态）
-        // 验证码登录成功后，SignInBloc 会将 token 传递给 Deep Link Handler
-        // Deep Link Handler 会处理登录并触发导航
+        // 监听登录状态变化
+        final successOrFail = state.successOrFail;
+        
+        // 优先检查登录成功状态（无论 isSubmitting 如何）
+        if (successOrFail != null && successOrFail.isSuccess) {
+          // 登录成功，清除 loading 状态
+          if (mounted && _isLoading) {
+            setState(() {
+              _isLoading = false;
+              _errorMessage = '';
+            });
+          }
+          
+          // Deep Link Handler 会自动处理导航，但为了确保导航成功，
+          // 我们也可以在这里尝试导航（如果 Deep Link Handler 没有处理）
+          successOrFail.fold(
+            (userProfile) {
+              // 登录成功，尝试导航到主界面
+              // 使用 Future.microtask 确保在下一个事件循环中执行，避免在 listener 中直接导航
+              Future.microtask(() {
+                if (mounted && context.mounted) {
+                  try {
+                    Log.info('🟢 [ContinueWithMagicLinkOrPasscodePage] 尝试导航到主界面');
+                    
+                    // 先关闭当前页面（验证码页面）
+                    final navigator = Navigator.of(context, rootNavigator: true);
+                    if (navigator.canPop()) {
+                      Log.info('🟢 [ContinueWithMagicLinkOrPasscodePage] 关闭验证码页面');
+                      navigator.pop();
+                    }
+                    
+                    // 然后导航到主界面
+                    final rootContext = navigator.context;
+                    if (rootContext.mounted) {
+                      Log.info('🟢 [ContinueWithMagicLinkOrPasscodePage] 调用 goHomeScreen');
+                      getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
+                    } else {
+                      Log.error('🟢 [ContinueWithMagicLinkOrPasscodePage] rootContext 未 mounted');
+                    }
+                  } catch (e, stackTrace) {
+                    Log.error('🟢 [ContinueWithMagicLinkOrPasscodePage] 导航失败: $e', stackTrace);
+                  }
+                } else {
+                  Log.error('🟢 [ContinueWithMagicLinkOrPasscodePage] context 未 mounted');
+                }
+              });
+            },
+            (_) {},
+          );
+          return;
+        }
         
         // 监听 isSubmitting 的变化
         if (_isLoading && !state.isSubmitting) {
@@ -190,7 +246,6 @@ class _ContinueWithMagicLinkOrPasscodePageState
           }
           
           // 检查是否有错误
-          final successOrFail = state.successOrFail;
           if (successOrFail != null && successOrFail.isFailure) {
             // 有错误，显示错误信息
             successOrFail.fold(
@@ -201,27 +256,6 @@ class _ContinueWithMagicLinkOrPasscodePageState
                 }
               },
             );
-          } else if (successOrFail != null && successOrFail.isSuccess) {
-            // 登录成功，Deep Link Handler 会自动处理导航
-            // 这里不需要做任何导航操作，只需清除错误信息
-            if (mounted) {
-              setState(() => _errorMessage = '');
-            }
-          }
-        }
-        
-        // 监听 Deep Link 状态变化
-        // 当 Deep Link Handler 处理完成时，SignInBloc 会收到 deepLinkStateChange 事件
-        // 如果登录成功，successOrFail 会被设置
-        final successOrFail = state.successOrFail;
-        if (successOrFail != null && successOrFail.isSuccess && _isLoading) {
-          // 登录成功，清除 loading 状态
-          // Deep Link Handler 会自动处理导航，这里不需要额外操作
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-              _errorMessage = '';
-            });
           }
         }
         },
@@ -409,10 +443,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
                   if (value.isNotEmpty && index < 5) {
                     _codeFocusNodes[index + 1].requestFocus();
                   }
-                  final isAllFilled = _codeControllers.every((c) => c.text.isNotEmpty);
-                  if (isAllFilled) {
-                    _validateAndSubmit();
-                  }
+                  // 移除自动提交逻辑，改为由"下一步"按钮触发
                 },
                 onTap: () {
                   // 点击时清空当前输入框并聚焦
@@ -422,9 +453,8 @@ class _ContinueWithMagicLinkOrPasscodePageState
                 onSubmitted: (_) {
                   if (index < 5) {
                     _codeFocusNodes[index + 1].requestFocus();
-                  } else {
-                    _validateAndSubmit();
                   }
+                  // 移除自动提交逻辑，改为由"下一步"按钮触发
                 },
               ),
             ),

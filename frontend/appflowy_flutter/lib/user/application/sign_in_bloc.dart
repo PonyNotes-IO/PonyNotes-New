@@ -387,28 +387,60 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     Log.info('🟣 [SignInBloc] signInWithPasscode result: ${result.isSuccess ? "success" : "failure"}');
 
-    emit(
-      result.fold(
-        (gotrueTokenResponse) {
-          Log.info('🟣 [SignInBloc] 验证码登录成功，传递token给DeepLink');
-          Log.info('🟣 [SignInBloc] access_token: ${gotrueTokenResponse.hasAccessToken() ? "present" : "missing"}');
-          Log.info('🟣 [SignInBloc] refresh_token: ${gotrueTokenResponse.hasRefreshToken() ? "present" : "missing"}');
-          
-          getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
+    final newState = await result.fold(
+      (gotrueTokenResponse) async {
+        Log.info('🟣 [SignInBloc] 验证码登录成功，传递token给DeepLink');
+        Log.info('🟣 [SignInBloc] access_token: ${gotrueTokenResponse.hasAccessToken() ? "present" : "missing"}');
+        Log.info('🟣 [SignInBloc] refresh_token: ${gotrueTokenResponse.hasRefreshToken() ? "present" : "missing"}');
+
+        try {
+          // 将 token 交给 Deep Link 处理（写入本地并触发登录流程）
+          await getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
             gotrueTokenResponse,
           );
-          
-          Log.info('🟣 [SignInBloc] emit state with isSubmitting=false');
+          Log.info('🟣 [SignInBloc] passGotrueTokenResponse 完成');
+        } catch (e, s) {
+          Log.error('🟣 [SignInBloc] passGotrueTokenResponse error: $e\n$s');
+        }
+
+        // 等待一小段时间，让 Deep Link Handler 有机会处理并更新状态
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // 如果 Deep Link 已经把登录完成的结果同步到 state（successOrFail 已经是成功），则不再重复请求
+        if (!isClosed &&
+            state.successOrFail != null &&
+            state.successOrFail!.isSuccess) {
+          Log.info('🟣 [SignInBloc] DeepLink 已返回成功结果，跳过兜底拉取用户信息');
           return state.copyWith(
             isSubmitting: false,
           );
-        },
-        (error) {
-          Log.error('🟣 [SignInBloc] 验证码登录失败: ${error.msg}');
-          return _stateFromCode(error);
-        },
-      ),
+        }
+
+        // 兜底：直接获取用户信息并返回成功状态，确保不会卡在验证码页
+        Log.info('🟣 [SignInBloc] DeepLink 未返回结果，使用兜底逻辑获取用户信息');
+        final profileResult = await authService.getUser();
+        return profileResult.fold(
+          (userProfile) {
+            Log.info('🟣 [SignInBloc] 兜底获取用户信息成功: ${userProfile.email}');
+            return state.copyWith(
+              isSubmitting: false,
+              successOrFail: FlowyResult.success(userProfile),
+            );
+          },
+          (error) {
+            Log.error('🟣 [SignInBloc] 兜底获取用户信息失败: ${error.msg}');
+            return _stateFromCode(error);
+          },
+        );
+      },
+      (error) async {
+        Log.error('🟣 [SignInBloc] 验证码登录失败: ${error.msg}');
+        return _stateFromCode(error);
+      },
     );
+
+    Log.info('🟣 [SignInBloc] emit newState, successOrFail: ${newState.successOrFail?.isSuccess ?? "null"}');
+    emit(newState);
   }
 
   Future<void> _onSignInAsGuest(

@@ -66,8 +66,8 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 final rootNavigator = Navigator.of(context, rootNavigator: true);
                 if (rootNavigator != null) {
                   final rootContext = rootNavigator.context;
-                  if (rootContext.mounted) {
-                    getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                if (rootContext.mounted) {
+                  getIt<AuthRouter>().goHomeScreen(rootContext, profile);
                   }
                 }
               } else {
