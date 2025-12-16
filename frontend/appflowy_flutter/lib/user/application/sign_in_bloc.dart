@@ -97,11 +97,12 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             emit(state.copyWith(loginType: type));
           },
           forgotPassword: (email) => _onForgotPassword(emit, email: email),
-          validateResetPasswordToken: (email, token) async =>
+          validateResetPasswordToken: (email, token, phone) async =>
               _onValidateResetPasswordToken(
             emit,
             email: email,
             token: token,
+            phone: phone,
           ),
           resetPassword: (email, newPassword) async => _onResetPassword(
             emit,
@@ -511,6 +512,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     Emitter<SignInState> emit, {
     required String email,
     required String token,
+    String? phone,
   }) async {
     if (state.isSubmitting) {
       Log.error('Validate reset password token is already in progress');
@@ -530,6 +532,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     final result = await passwordService?.verifyResetPasswordToken(
       email: email,
       token: token,
+      phone: phone,
     );
 
     result?.fold(
@@ -926,6 +929,7 @@ class SignInEvent with _$SignInEvent {
   const factory SignInEvent.validateResetPasswordToken({
     required String email,
     required String token,
+    String? phone,
   }) = ValidateResetPasswordToken;
 
   const factory SignInEvent.resetPassword({

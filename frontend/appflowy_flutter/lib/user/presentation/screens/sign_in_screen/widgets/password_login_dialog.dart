@@ -1,4 +1,8 @@
+import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/forgot_password_flow_page.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -48,6 +52,37 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
     });
 
     widget.onPasswordLogin(password);
+  }
+
+  void _handleForgotPassword(BuildContext context) {
+    Log.info('🟢 [PasswordLoginDialog] 处理忘记密码，phoneOrEmail: ${widget.phoneOrEmail}');
+    
+    final signInBloc = context.read<SignInBloc>();
+    
+    // 判断是邮箱还是手机号
+    final isEmail = widget.phoneOrEmail.contains('@');
+    
+    // 发送验证码
+    // forgotPassword API 支持邮箱和手机号（GoTrue 会自动检测）
+    signInBloc.add(
+      SignInEvent.forgotPassword(email: widget.phoneOrEmail),
+    );
+    
+    // 关闭密码登录对话框
+    Navigator.of(context).pop();
+    
+    // 跳转到忘记密码流程页面
+    Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(
+        builder: (context) => BlocProvider.value(
+          value: signInBloc,
+          child: ForgotPasswordFlowPage(
+            phoneOrEmail: widget.phoneOrEmail,
+            backToLogin: widget.onSwitchToVerificationCode,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -225,22 +260,24 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                         ),
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        // TODO: 实现忘记密码功能
+                    BlocBuilder<SignInBloc, SignInState>(
+                      builder: (context, state) {
+                        return TextButton(
+                          onPressed: state.isSubmitting ? null : () => _handleForgotPassword(context),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            '忘记密码?',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        );
                       },
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text(
-                        '忘记密码?',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
                     ),
                   ],
                 ),
@@ -248,22 +285,24 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                 const VSpace(8),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      // TODO: 实现忘记密码功能
+                  child: BlocBuilder<SignInBloc, SignInState>(
+                    builder: (context, state) {
+                      return TextButton(
+                        onPressed: state.isSubmitting ? null : () => _handleForgotPassword(context),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          '忘记密码?',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      );
                     },
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      '忘记密码?',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
                   ),
                 ),
               ],

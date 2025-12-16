@@ -87,20 +87,31 @@ class _ContinueWithMagicLinkOrPasscodePageState
       // 聚焦到第一个输入框
       _codeFocusNodes[0].requestFocus();
       
-      // 调用SignInBloc重新发送邮箱验证码
+      // 调用SignInBloc重新发送验证码
       if (!mounted) return;
-      context
-          .read<SignInBloc>()
-          .add(SignInEvent.signInWithMagicLink(email: widget.email));
+      final signInBloc = context.read<SignInBloc>();
+      
+      // 如果提供了 onEnterPasscode 回调，说明是忘记密码流程，使用 forgotPassword API
+      if (widget.onEnterPasscode != null) {
+        signInBloc.add(SignInEvent.forgotPassword(email: widget.email));
+      } else {
+        // 否则，使用正常的登录验证码流程
+        signInBloc.add(SignInEvent.signInWithMagicLink(email: widget.email));
+      }
       
       // 重新开始倒计时
       _startCountdown();
       
       if (!mounted) return;
+      
+      // 判断是邮箱还是手机号
+      final isEmail = widget.email.contains('@');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('验证码已重新发送到您的邮箱'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(isEmail 
+              ? '验证码已重新发送到您的邮箱' 
+              : '验证码已重新发送到您的手机'),
+          duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
@@ -131,6 +142,24 @@ class _ContinueWithMagicLinkOrPasscodePageState
       _errorMessage = '';
     });
     
+    // 如果提供了 onEnterPasscode 回调，优先使用回调（用于忘记密码等场景）
+    if (widget.onEnterPasscode != null) {
+      try {
+        widget.onEnterPasscode!(code);
+        // 回调会处理验证码验证，这里不需要清除 loading
+        // 验证结果会通过 BlocListener 处理
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = '验证失败，请重试';
+          });
+        }
+      }
+      return;
+    }
+    
+    // 否则，使用正常的登录流程
     // 优先使用 context.read<SignInBloc>() 来获取 bloc，避免使用已关闭的 bloc
     try {
       final signInBloc = context.read<SignInBloc>();
@@ -156,25 +185,11 @@ class _ContinueWithMagicLinkOrPasscodePageState
         ),
       );
     } catch (e) {
-      // 如果 bloc 已关闭或发生其他错误，尝试使用回调（向后兼容）
-      if (widget.onEnterPasscode != null) {
-        try {
-          widget.onEnterPasscode!(code);
-        } catch (e2) {
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-              _errorMessage = '登录失败，请重试';
-            });
-          }
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _errorMessage = '登录失败，请重试';
-          });
-        }
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = '登录失败，请重试';
+        });
       }
     }
   }
@@ -238,7 +253,32 @@ class _ContinueWithMagicLinkOrPasscodePageState
           return;
         }
         
-        // 监听 isSubmitting 的变化
+        // 监听验证码验证结果（用于忘记密码流程）
+        final validateResult = state.validateResetPasswordTokenSuccessOrFail;
+        if (validateResult != null && _isLoading) {
+          validateResult.fold(
+            (_) {
+              // 验证成功，清除 loading（页面会通过回调处理导航）
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                  _errorMessage = '';
+                });
+              }
+            },
+            (error) {
+              // 验证失败，显示错误信息
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                  _errorMessage = error.msg;
+                });
+              }
+            },
+          );
+        }
+        
+        // 监听 isSubmitting 的变化（用于登录流程）
         if (_isLoading && !state.isSubmitting) {
           // 从loading变为非loading状态
           if (mounted) {
