@@ -25,6 +25,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:flutter/material.dart';
 import 'package:url_protocol/url_protocol.dart';
+import 'package:window_manager/window_manager.dart';
 
 const appflowyDeepLinkSchema = 'ponynotes';
 
@@ -285,6 +286,19 @@ class AppFlowyCloudDeepLink {
         }
       },
     );
+
+    // 处理完 DeepLink 后，在桌面端确保窗口显示并获得焦点（例如应用被最小化时）。
+    if (!Platform.isAndroid && !Platform.isIOS && !Platform.isFuchsia) {
+      try {
+        if (await windowManager.isMinimized()) {
+          await windowManager.restore();
+        }
+        await windowManager.show();
+        await windowManager.focus();
+      } catch (e, stackTrace) {
+        Log.error('🔵 [DeepLink] 恢复并聚焦窗口失败: $e', stackTrace);
+      }
+    }
   }
 
   Uri? _buildDeepLinkUri(GotrueTokenResponsePB gotrueTokenResponse) {
