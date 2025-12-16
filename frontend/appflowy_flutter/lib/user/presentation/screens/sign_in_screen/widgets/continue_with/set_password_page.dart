@@ -502,12 +502,24 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
     // 使用正确的导航方式，而不是调用 runAppFlowy()
     // runAppFlowy() 会导致应用重启并可能引发 Navigator 相关的错误
     if (mounted && context.mounted) {
-      // 使用 AuthRouter 来导航到主界面（与正常登录流程一致）
-      final rootContext = Navigator.of(context, rootNavigator: true).context;
-      if (rootContext.mounted) {
-        // 使用 AuthRouter.goHomeScreen 进行导航
-        // 这与 SignInScreen 中的导航逻辑一致
-        getIt<AuthRouter>().goHomeScreen(rootContext, widget.userProfile);
+      try {
+        // 先关闭设置密码页面
+        final navigator = Navigator.of(context, rootNavigator: true);
+        if (navigator.canPop()) {
+          Log.info('🟢 [SetPasswordPage] 关闭设置密码页面');
+          navigator.pop();
+        }
+        
+        // 然后导航到主界面
+        final rootContext = navigator.context;
+        if (rootContext.mounted) {
+          Log.info('🟢 [SetPasswordPage] 调用 goHomeScreen');
+          // 使用 AuthRouter.goHomeScreen 进行导航
+          // 这与 SignInScreen 中的导航逻辑一致
+          getIt<AuthRouter>().goHomeScreen(rootContext, widget.userProfile);
+        }
+      } catch (e, stackTrace) {
+        Log.error('🟢 [SetPasswordPage] 导航失败: $e', stackTrace);
       }
     }
   }
