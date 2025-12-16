@@ -52,6 +52,8 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return BlocListener<SignInBloc, SignInState>(
       listener: (context, state) {
         // 监听登录错误
@@ -84,6 +86,10 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
         ),
         child: Container(
           width: 500,
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.all(40),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -95,12 +101,12 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 标题
-                  const Text(
+                  Text(
                     '账号密码登录',
-                    style: TextStyle(
+                    style: textTheme.headlineSmall?.copyWith(
                       fontSize: 28,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFF333333),
+                      color: colorScheme.onSurface,
                     ),
                   ),
                   // 验证码登录按钮
@@ -110,14 +116,15 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: Color(0xFFE0E0E0)),
+                        side: BorderSide(color: colorScheme.outlineVariant),
                       ),
+                      foregroundColor: colorScheme.onSurface,
                     ),
-                    child: const Text(
+                    child: Text(
                       '验证码登录',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Color(0xFF333333),
+                        color: colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -126,11 +133,11 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
               const VSpace(8),
               
               // 说明文字
-              const Text(
+              Text(
                 '使用已经注册过的手机号登录',
                 style: TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF999999),
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
               const VSpace(32),
@@ -139,8 +146,8 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
               Container(
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
-                  border: Border.all(color: const Color(0xFFE0E0E0)),
+                  color: colorScheme.surfaceVariant,
+                  border: Border.all(color: colorScheme.outlineVariant),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -149,9 +156,9 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                     Expanded(
                       child: Text(
                         widget.phoneOrEmail,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
-                          color: Color(0xFF333333),
+                          color: colorScheme.onSurface,
                         ),
                       ),
                     ),
@@ -164,11 +171,11 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
               Container(
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: colorScheme.surfaceVariant,
                   border: Border.all(
                     color: _errorMessage.isNotEmpty 
-                        ? Colors.red 
-                        : const Color(0xFFE0E0E0),
+                        ? colorScheme.error 
+                        : colorScheme.outlineVariant,
                   ),
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -176,18 +183,18 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                   controller: _passwordController,
                   focusNode: _passwordFocusNode,
                   obscureText: true,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
-                    color: Color(0xFF333333),
+                    color: colorScheme.onSurface,
                   ),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: '输入设置的密码',
                     hintStyle: TextStyle(
                       fontSize: 16,
-                      color: Color(0xFF999999),
+                      color: colorScheme.onSurfaceVariant,
                     ),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
@@ -212,9 +219,9 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                     Expanded(
                       child: Text(
                         _errorMessage,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: Colors.red,
+                          color: colorScheme.error,
                         ),
                       ),
                     ),
@@ -227,11 +234,11 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: const Text(
+                      child: Text(
                         '忘记密码?',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF999999),
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -250,11 +257,11 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: const Text(
+                    child: Text(
                       '忘记密码?',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF999999),
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
