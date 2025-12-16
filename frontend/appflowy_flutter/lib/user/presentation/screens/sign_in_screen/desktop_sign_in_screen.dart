@@ -493,17 +493,32 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
       ),
     );
     
-    // 等待密码状态检查完成
-    await Future.delayed(const Duration(milliseconds: 800));
-    
-    // 获取当前状态
-    final currentState = signInBloc.state;
-    if (currentState.passwordIsSet == true) {
+    // 等待密码状态检查完成（以 passwordIsSet 的首次变化为准，超时则按未设置处理）
+    final passwordIsSet = await _waitForPasswordStatus(signInBloc);
+    if (passwordIsSet == true) {
       // 用户已设置密码，弹出密码登录对话框
       _showPasswordLoginDialog(context, emailOrPhone, signInBloc);
     } else {
       // 用户未设置密码，直接发送验证码并跳转到验证码输入页面
       _sendVerificationCodeAndNavigate(context, emailOrPhone, isEmail, signInBloc);
+    }
+  }
+
+  /// 等待 passwordIsSet 有结果，最多 2 秒；超时或异常返回 null
+  Future<bool?> _waitForPasswordStatus(SignInBloc signInBloc) async {
+    try {
+      // 如果当前已有值，直接返回
+      if (signInBloc.state.passwordIsSet != null) {
+        return signInBloc.state.passwordIsSet;
+      }
+
+      final state = await signInBloc.stream
+          .where((s) => s.passwordIsSet != null)
+          .first
+          .timeout(const Duration(seconds: 2));
+      return state.passwordIsSet;
+    } catch (_) {
+      return null;
     }
   }
 

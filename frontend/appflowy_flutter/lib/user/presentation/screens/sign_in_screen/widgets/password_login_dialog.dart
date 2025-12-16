@@ -134,7 +134,7 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
               
               // 说明文字
               Text(
-                '使用已经注册过的手机号登录',
+                '使用已经注册过的账号登录',
                 style: TextStyle(
                   fontSize: 14,
                   color: colorScheme.onSurfaceVariant,

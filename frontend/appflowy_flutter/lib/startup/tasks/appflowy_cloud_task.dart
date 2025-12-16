@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:app_links/app_links.dart';
@@ -161,9 +162,44 @@ class AppFlowyCloudDeepLink {
                     
                     // 从 userProfile 中提取手机号或邮箱
                     // 优先使用 phone 字段，如果为空则使用 email 字段
-                    final hasPhone = userProfile.hasPhone() && userProfile.phone.isNotEmpty;
-                    final phoneOrEmail = hasPhone ? userProfile.phone : userProfile.email;
-                    final isEmail = !hasPhone;
+                    var hasPhone = userProfile.hasPhone() && userProfile.phone.isNotEmpty;
+                    var phoneOrEmail = hasPhone ? userProfile.phone : userProfile.email;
+                    var isEmail = !hasPhone;
+                    
+                    // 如果 phone 和 email 都为空，尝试从 token 中提取手机号
+                    if (phoneOrEmail.isEmpty && accessToken != null) {
+                      try {
+                        // 尝试从 JWT token 中提取手机号（token 格式：header.payload.signature）
+                        final parts = accessToken.split('.');
+                        if (parts.length >= 2) {
+                          // 解码 payload（base64url）
+                          final payload = parts[1];
+                          // 补齐 padding
+                          final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+                          final padding = (4 - normalized.length % 4) % 4;
+                          final padded = normalized + ('=' * padding);
+                          
+                          try {
+                            final decoded = base64Decode(padded);
+                            final jsonString = utf8.decode(decoded);
+                            final json = jsonDecode(jsonString) as Map<String, dynamic>;
+                            
+                            // 从 token 中提取手机号
+                            final tokenPhone = json['phone'] as String?;
+                            if (tokenPhone != null && tokenPhone.isNotEmpty) {
+                              Log.info('🔵 [DeepLink] 从 token 中提取到手机号: $tokenPhone');
+                              phoneOrEmail = tokenPhone;
+                              hasPhone = true;
+                              isEmail = false;
+                            }
+                          } catch (e) {
+                            Log.info('🔵 [DeepLink] 无法从 token 中提取手机号: $e');
+                          }
+                        }
+                      } catch (e) {
+                        Log.info('🔵 [DeepLink] 解析 token 失败: $e');
+                      }
+                    }
                     
                     Log.info('🔵 [DeepLink] User phoneOrEmail: $phoneOrEmail (isEmail: $isEmail)');
                     
