@@ -63,42 +63,46 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(theme.borderRadius.s),
-              onTap: () async {
-                setState(() => _isExpanded = !_isExpanded);
-                if (_isExpanded && _items.isEmpty && !_loading) {
-                  await _load();
-                }
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                child: Row(
-                  children: [
-                    FlowySvg(
+            child: SizedBox(
+              height: 44,
+              child: Stack(
+                children: [
+                  AFGhostIconTextButton.primary(
+                    text: '发布',
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    size: AFButtonSize.l,
+                    onTap: () async {
+                      setState(() => _isExpanded = !_isExpanded);
+                      if (_isExpanded && _items.isEmpty && !_loading) {
+                        await _load();
+                      }
+                    },
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 10,
+                    ),
+                    borderRadius: theme.borderRadius.s,
+                    iconBuilder: (context, isHover, disabled) => FlowySvg(
                       FlowySvgs.share_publish_s,
                       size: const Size.square(16.0),
                       color: Theme.of(context).textTheme.bodyMedium?.color,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FlowyText.medium(
-                        '发布',
-                        fontSize: 14.0,
-                        figmaLineHeight: 17.0,
-                        color:
-                            AppFlowyTheme.of(context).textColorScheme.primary,
+                  ),
+                  Positioned(
+                    right: 12,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: Icon(
+                        _isExpanded
+                            ? Icons.keyboard_arrow_down
+                            : Icons.keyboard_arrow_right,
+                        size: 16,
+                        color: Theme.of(context).textTheme.bodyMedium?.color,
                       ),
                     ),
-                    Icon(
-                      _isExpanded
-                          ? Icons.keyboard_arrow_down
-                          : Icons.keyboard_arrow_right,
-                      size: 16,
-                      color: Theme.of(context).textTheme.bodyMedium?.color,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

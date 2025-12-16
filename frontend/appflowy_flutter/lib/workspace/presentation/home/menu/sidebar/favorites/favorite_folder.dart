@@ -51,11 +51,11 @@ class _FavoriteFolderState extends State<FavoriteFolder> {
             onExit: (_) => isHovered.value = false,
             child: Column(
               children: [
-                FavoriteHeader(
-                  onPressed: () => context
+                FavoriteHeader(onPressed: () {
+                  context
                       .read<FolderBloc>()
-                      .add(const FolderEvent.expandOrUnExpand()),
-                ),
+                      .add(const FolderEvent.expandOrUnExpand());
+                }),
                 buildReorderListView(context, state),
                 if (state.isExpanded) ...[
                   // more button

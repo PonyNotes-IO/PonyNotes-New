@@ -16,26 +16,26 @@ class ProfessionalHtmlParser {
         Log.info('✅ html2md 转换完成，长度: ${md.length}');
         return md;
       }
-
+      
       // 2) 如果转换为空，继续使用原有结构化解析，尽量保留层级
       final document = html_parser.parse(htmlContent);
       final String title = _extractTitle(document, fileName);
-
+      
       final buffer = StringBuffer();
       buffer.writeln('# $title\n');
-
+      
       final bodyElement = document.body ?? document.documentElement;
       if (bodyElement != null) {
         _processElement(bodyElement, buffer, 0);
       } else {
         buffer.writeln(_extractPlainText(document));
       }
-
+      
       final result = buffer.toString().trim();
       Log.info('✅ HTML解析完成（回退解析），长度: ${result.length}');
-
+      
       return result.isEmpty ? _createFallbackContent(fileName, htmlContent) : result;
-
+      
     } catch (e) {
       Log.error('❌ HTML解析失败: $e');
       return _createFallbackContent(fileName, htmlContent);

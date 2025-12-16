@@ -103,7 +103,7 @@ enum FeatureFlag {
       // release this feature in version 0.5.9
       FeatureFlag.search,
       // release this feature in version 0.5.6
-      // FeatureFlag.collaborativeWorkspace, // 禁用协作工作空间功能
+      FeatureFlag.collaborativeWorkspace, // 禁用协作工作空间功能
       FeatureFlag.membersSettings,
       // release this feature in version 0.5.4
       FeatureFlag.syncDatabase,
@@ -120,8 +120,8 @@ enum FeatureFlag {
 
     switch (this) {
       case FeatureFlag.planBilling: // 禁用付费计划和账单功能
-      case FeatureFlag.collaborativeWorkspace: // 改为默认关闭
         return false;
+      case FeatureFlag.collaborativeWorkspace: // 改为默认关闭
       case FeatureFlag.search:
       case FeatureFlag.syncDocument:
       case FeatureFlag.syncDatabase:

@@ -124,7 +124,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         Log.error('Failed to extract access_token from token');
         return;
       }
-
+      
       final sentNotes = await _fetchCollaborations(
         baseUrl: baseUrl,
         token: accessToken,
@@ -150,10 +150,10 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         return;
       }
       
-      setState(() {
+          setState(() {
         _userSharedNotes = combined;
-        _isLoading = false;
-      });
+            _isLoading = false;
+          });
 
       // 异步加载每个笔记的详细信息（包括标题）
       await _loadViewDetails(combined);
@@ -396,48 +396,51 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(theme.borderRadius.s),
-                      onTap: () {
-                        setState(() => _isExpanded = !_isExpanded);
-                        if (_isExpanded) {
-                          _loadUserSharedNotes(); // Refresh when expanding
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          children: [
-                            FlowySvg(
+                    child: SizedBox(
+                      height: 44,
+                      child: Stack(
+                        children: [
+                          AFGhostIconTextButton.primary(
+                            text: '共享',
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            size: AFButtonSize.l,
+                            onTap: () {
+                              setState(() => _isExpanded = !_isExpanded);
+                              if (_isExpanded) {
+                                _loadUserSharedNotes(); // 展开时刷新
+                              }
+                            },
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 10,
+                            ),
+                            borderRadius: theme.borderRadius.s,
+                            iconBuilder: (context, isHover, disabled) =>
+                                FlowySvg(
                               FlowySvgs.shared_section_icon_m,
                               size: const Size.square(16.0),
                               color:
                                   Theme.of(context).textTheme.bodyMedium?.color,
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: FlowyText.medium(
-                                '共享',
-                                fontSize: 14.0,
-                                figmaLineHeight: 17.0,
-                                color: AppFlowyTheme.of(context)
-                                    .textColorScheme
-                                    .primary,
+                          ),
+                          Positioned(
+                            right: 12,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: Icon(
+                                _isExpanded
+                                    ? Icons.keyboard_arrow_down
+                                    : Icons.keyboard_arrow_right,
+                                size: 16,
+                                color: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.color,
                               ),
                             ),
-                            Icon(
-                              _isExpanded
-                                  ? Icons.keyboard_arrow_down
-                                  : Icons.keyboard_arrow_right,
-                              size: 16,
-                              color:
-                                  Theme.of(context).textTheme.bodyMedium?.color,
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

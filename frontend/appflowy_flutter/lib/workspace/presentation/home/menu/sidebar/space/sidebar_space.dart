@@ -97,8 +97,8 @@ class SidebarSpace extends StatelessWidget {
             const VSpace(4.0),
             const SidebarFileLibraryButton(),
             // 模版
-            const VSpace(4.0),
-            const SidebarTemplateNewButton(),
+            // const VSpace(4.0),
+            // const SidebarTemplateNewButton(),
             // 回收站
             const VSpace(4.0),
             const SidebarTrashItem(),

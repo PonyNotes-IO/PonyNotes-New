@@ -12,11 +12,13 @@ import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../env/cloud_env.dart';
+import '../../../generated/locale_keys.g.dart';
 import '../../../user/application/user_service.dart';
 import '../../startup.dart';
 import '../app_widget.dart';
@@ -121,7 +123,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       // 标题会在文档打开后由文档页面自动更新
       final minimalView = ViewPB()
         ..id = viewId
-        ..name = '笔记' // 默认名称，文档打开后会自动更新
+        ..name = LocaleKeys.menuAppHeader_defaultNewNotebookName.tr() // 默认名称，文档打开后会自动更新
         ..layout = ViewLayoutPB.Document;
       
       Log.info('📝 [OpenNoteDeepLinkHandler] 创建最小化视图对象: ${minimalView.id}');

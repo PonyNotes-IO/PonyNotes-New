@@ -142,19 +142,19 @@ class _BillingPageState extends State<BillingPage> {
                             ),
                             const VSpace(12),
                             if (plan.isStorage) ...[
-                              FlowyText(
+                            FlowyText(
                                 plan.storageLabel,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                color: theme.textColorScheme.primary,
-                              ),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: theme.textColorScheme.primary,
+                            ),
                             ] else ...[
-                              FlowyText(
+                            FlowyText(
                                 plan.tokensLabel,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w500,
                                 color: theme.textColorScheme.primary,
-                              ),
+                            ),
                             ],
                             const VSpace(12),
                             FlowyText(
@@ -173,25 +173,25 @@ class _BillingPageState extends State<BillingPage> {
             ),
             const VSpace(24),
             if (hasPlans && selectedPlan != null)
-              Center(
+            Center(
                 child: GestureDetector(
                   onTap: () => _handleBillingPay(context, selectedPlan),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF3EC),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: FlowyText(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3EC),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: FlowyText(
                       '¥${selectedPlan.priceYuanStr} 确认协议并扩充',
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFFF6B47),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFFFF6B47),
                     ),
-                  ),
                 ),
               ),
+            ),
             const VSpace(32),
             _buildFeatureSection(context),
           ],

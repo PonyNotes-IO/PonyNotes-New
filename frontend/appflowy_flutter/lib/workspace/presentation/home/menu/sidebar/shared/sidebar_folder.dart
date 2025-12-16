@@ -36,62 +36,44 @@ class SidebarFolder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Log.debug('SidebarFolder.build() called');
-    const sectionPadding = 16.0;
+    const sectionPadding = 4.0;
     return ValueListenableBuilder(
       valueListenable: getIt<MenuSharedState>().notifier,
       builder: (context, value, child) {
         Log.debug('SidebarFolder building menu items');
         return Column(
           children: [
-            const VSpace(4.0),
+            const VSpace(sectionPadding),
             // home button
             const SidebarHomeButton(),
             // AI button
-            const VSpace(4.0),
+            const VSpace(sectionPadding),
             const SidebarAiButton(),
             // calendar button
-            const VSpace(4.0),
+            const VSpace(sectionPadding),
             const SidebarCalendarButton(),
             // inbox button
-            const VSpace(4.0),
+            const VSpace(sectionPadding),
             const SidebarInboxButton(),
             // favorite
-            const VSpace(4.0),
+            const VSpace(sectionPadding),
             const SidebarFavoriteButton(),
             // 我的空间 (原个人的功能)
-            const VSpace(4.0),
-            BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
-              builder: (context, state) {
-                // 在非协作工作空间模式下显示个人空间（重命名为我的空间）
-                final isCollaborativeWorkspace =
-                    context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
-                
-                if (!isCollaborativeWorkspace) {
-                  return PersonalSectionFolder(
-                    views: state.section.publicViews,
-                  );
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-            // 共享
-            const VSpace(4.0),
-            const SidebarShareButton(),
-            // 发布
-            const VSpace(4.0),
-            const SidebarPublishButton(),
-            // 文件库
-            const VSpace(4.0),
-            const SidebarFileLibraryButton(),
-            // 模板
-            // const VSpace(4.0),
-            // const SidebarTemplateNewButton(),
-            // 回收站
-            const VSpace(4.0),
-            const SidebarTrashItem(),
-            // 设置
-            const VSpace(4.0),
-            const SidebarSettingsButton(),
+            const VSpace(sectionPadding),
+            // BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
+            //   builder: (context, state) {
+            //     // 在非协作工作空间模式下显示个人空间（重命名为我的空间）
+            //     final isCollaborativeWorkspace =
+            //         context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
+            //
+            //     if (!isCollaborativeWorkspace) {
+            //       return PersonalSectionFolder(
+            //         views: state.section.publicViews,
+            //       );
+            //     }
+            //     return const SizedBox.shrink();
+            //   },
+            // ),
             // public or private (只在协作工作空间显示)
             BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
               builder: (context, state) {
@@ -103,20 +85,40 @@ class SidebarFolder extends StatelessWidget {
                 return Column(
                   children: isCollaborativeWorkspace
                       ? [
-                          // public
-                          const VSpace(sectionPadding),
-                          PublicSectionFolder(views: state.section.publicViews),
-
-                          // private
-                          const VSpace(sectionPadding),
-                          PrivateSectionFolder(
-                            views: state.section.privateViews,
-                          ),
-                        ]
-                      : [], // 非协作工作空间不显示底部的个人空间（已移至上方）
+                    // private
+                    PrivateSectionFolder(
+                      views: state.section.privateViews,
+                    ),
+                    // public
+                    // const VSpace(sectionPadding),
+                    PublicSectionFolder(views: state.section.publicViews),
+                  ]
+                      : [
+                  PersonalSectionFolder(
+                          views: state.section.publicViews,
+                        ),
+                  ], // 非协作工作空间不显示底部的个人空间（已移至上方）
                 );
               },
             ),
+            // 共享
+            const VSpace(sectionPadding),
+            const SidebarShareButton(),
+            // 发布
+            const VSpace(sectionPadding),
+            const SidebarPublishButton(),
+            // 文件库
+            const VSpace(sectionPadding),
+            const SidebarFileLibraryButton(),
+            // 模板
+            // const VSpace(4.0),
+            // const SidebarTemplateNewButton(),
+            // 回收站
+            const VSpace(sectionPadding),
+            const SidebarTrashItem(),
+            // 设置
+            const VSpace(sectionPadding),
+            const SidebarSettingsButton(),
             const VSpace(200),
           ],
         );
@@ -128,7 +130,7 @@ class SidebarFolder extends StatelessWidget {
 class PrivateSectionFolder extends SectionFolder {
   PrivateSectionFolder({super.key, required super.views})
       : super(
-          title: LocaleKeys.sideBar_private.tr(),
+          title: LocaleKeys.space_mySpace.tr(),
           spaceType: FolderSpaceType.private,
           expandButtonTooltip: LocaleKeys.sideBar_clickToHidePrivate.tr(),
           addButtonTooltip: LocaleKeys.sideBar_addAPageToPrivate.tr(),

@@ -69,19 +69,20 @@ class _FolderHeaderState extends State<FolderHeader> {
           text: Row(
             children: [
               // 添加文件夹图标（只为"我的空间"显示）
-              if (widget.title == LocaleKeys.space_mySpace.tr()) ...[
-                FlowySvg(
+              Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: FlowySvg(
                   FlowySvgs.folder_m,
                   size: const Size.square(16.0),
                 ),
-                const HSpace(8.0),
-              ],
+              ),
               FlowyText(
                 widget.title,
                 lineHeight: 1.15,
               ),
               const HSpace(4.0),
               FlowySvg(
+                // 展开时使用向下箭头，收起时使用向右箭头
                 widget.isExpanded
                     ? FlowySvgs.workspace_drop_down_menu_show_s
                     : FlowySvgs.workspace_drop_down_menu_hide_s,

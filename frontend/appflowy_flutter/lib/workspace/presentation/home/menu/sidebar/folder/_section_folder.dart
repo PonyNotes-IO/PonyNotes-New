@@ -1,5 +1,4 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
@@ -10,9 +9,8 @@ import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/folder/_folder_header.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
-import 'package:easy_localization/easy_localization.dart';
-import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -61,7 +59,6 @@ class _SectionFolderState extends State<SectionFolder> {
             children: [
               _buildHeader(context),
               // Pages
-              const VSpace(4.0),
               ..._buildViews(context, state, isHovered),
               // Add a placeholder if there are no views
               _buildDraggablePlaceholder(context),
@@ -98,8 +95,8 @@ class _SectionFolderState extends State<SectionFolder> {
             .add(const FolderEvent.expandOrUnExpand(isExpanded: true));
       },
       // 只为"我的空间"提供选择菜单功能
-      parentViewId: widget.title == LocaleKeys.space_mySpace.tr() ? parentViewId : null,
-      onViewSelected: widget.title == LocaleKeys.space_mySpace.tr() ? _onViewSelected : null,
+      parentViewId: parentViewId,
+      onViewSelected: _onViewSelected,
     );
   }
 
@@ -144,7 +141,7 @@ class _SectionFolderState extends State<SectionFolder> {
         ext: ext,
       );
 
-      result.fold(
+      await result.fold(
         (view) async {
           // 创建成功，展开文件夹以显示新创建的视图
           context
@@ -199,9 +196,11 @@ class _SectionFolderState extends State<SectionFolder> {
       return [];
     }
 
-    // 为"我的空间"的子项目设置适当的缩进级别
-    final bool isMySpaceSection = widget.title == LocaleKeys.space_mySpace.tr();
-    final int itemLevel = isMySpaceSection ? 1 : 0; // 我的空间下的项目缩进一级
+    // 为协作/个人空间的子项目设置统一缩进：私有空间和工作区都缩进一级
+    final bool isIndentedSection =
+        widget.spaceType == FolderSpaceType.private ||
+            widget.spaceType == FolderSpaceType.public;
+    final int itemLevel = isIndentedSection ? 1 : 0;
 
     return widget.views.map(
       (view) => ViewItem(
@@ -246,4 +245,5 @@ class _SectionFolderState extends State<SectionFolder> {
       isPlaceholder: true,
     );
   }
+
 }

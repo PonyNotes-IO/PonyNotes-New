@@ -40,54 +40,45 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
 
   Widget _buildFavoriteHeader(BuildContext context, FavoriteState state) {
     final theme = AppFlowyTheme.of(context);
-    
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(theme.borderRadius.s),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(theme.borderRadius.s),
-            onTap: () {
-              setState(() {
-                _isExpanded = !_isExpanded;
-              });
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-              child: Row(
-                children: [
-                  // 收藏夹图标
-                  FlowySvg(
-                    FlowySvgs.favorite_s,
-                    size: const Size.square(16.0),
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
-                  const SizedBox(width: 8),
-                  // 收藏夹文本
-                  Expanded(
-                    child: FlowyText.medium(
-                      '最爱',
-                      fontSize: 14.0,
-                      figmaLineHeight: 17.0,
-                      color: AppFlowyTheme.of(context).textColorScheme.primary,
-                    ),
-                  ),
-                  // 展开/收起箭头
-                  Icon(
-                    _isExpanded 
-                        ? Icons.keyboard_arrow_down 
-                        : Icons.keyboard_arrow_right,
-                    size: 16,
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
-                ],
+      child: SizedBox(
+        height: 44,
+        child: Stack(
+          children: [
+            AFGhostIconTextButton.primary(
+              text: '最爱',
+              mainAxisAlignment: MainAxisAlignment.start,
+              size: AFButtonSize.l,
+              onTap: () {
+                setState(() => _isExpanded = !_isExpanded);
+              },
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 10,
+              ),
+              borderRadius: theme.borderRadius.s,
+              iconBuilder: (context, isHover, disabled) => FlowySvg(
+                FlowySvgs.favorite_s,
+                size: const Size.square(16.0),
+                color: Theme.of(context).textTheme.bodyMedium?.color,
               ),
             ),
-          ),
+            Positioned(
+              right: 12,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: Icon(
+                  _isExpanded
+                      ? Icons.keyboard_arrow_down
+                      : Icons.keyboard_arrow_right,
+                  size: 16,
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

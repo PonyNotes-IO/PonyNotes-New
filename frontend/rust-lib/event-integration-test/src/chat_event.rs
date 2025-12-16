@@ -59,6 +59,7 @@ impl EventIntegrationTest {
       question_stream_port: 0,
       format: None,
       prompt_id: None,
+      model: None,
     };
 
     EventBuilder::new(self.clone())

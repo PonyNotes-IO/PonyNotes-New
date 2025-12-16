@@ -112,7 +112,7 @@ class AliyunDocParseProcessor {
   static bool isFileSizeValid(int fileSizeInBytes) {
     return fileSizeInBytes <= maxFileSize;
   }
-
+  
   /// 处理文件的通用方法
   static Future<String> _processFile(
     Uint8List fileBytes,
@@ -510,7 +510,7 @@ class AliyunDocParseProcessor {
     }
     return 0;
   }
-
+  
   /// 处理layouts并转换为Markdown
   static void _processLayoutsToMarkdown(
     StringBuffer markdown,
