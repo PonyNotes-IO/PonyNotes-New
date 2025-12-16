@@ -55,9 +55,21 @@ class _SetNewPasswordWidgetState extends State<SetNewPasswordWidget> {
               showToastNotification(
                 message: LocaleKeys.signIn_resetPasswordSuccess.tr(),
               );
-              // pop until the login screen is found
-              Navigator.popUntil(context, (route) {
-                return route.settings.name == '/continue-with-password';
+              // 保存回调引用，避免在 widget 销毁后访问
+              final backToLoginCallback = widget.backToLogin;
+              // 关闭忘记密码流程页面
+              if (mounted && Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+              // 使用 Future.microtask 延迟执行回调，确保在导航完成后执行
+              // 使用 try-catch 确保即使回调内部出错也不会影响应用
+              Future.microtask(() {
+                try {
+                  backToLoginCallback();
+                } catch (e) {
+                  // 忽略回调错误，因为对话框可能已经关闭
+                  // 重置密码成功后，用户应该已经返回到登录页面了
+                }
               });
             },
             (error) {
