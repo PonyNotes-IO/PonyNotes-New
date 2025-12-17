@@ -43,6 +43,11 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
   Widget build(BuildContext context) {
     return BlocListener<SignInBloc, dynamic>(
       listener: (context, state) async {
+        // 如果用户取消了绑定，阻止所有后续操作（包括进入主界面）
+        if (_phoneBindingCancelled) {
+          return;
+        }
+        
         // 微信登录成功但未绑定手机号时，跳转到绑定手机号页面（全屏）
         final dynamic dynState = state;
         final needBind =
@@ -51,9 +56,14 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
         if (needBind && !_phoneDialogOpen) {
           _phoneDialogOpen = true;
           _phoneBindingCancelled = false;
+          // 在 push 之前获取 SignInBloc 引用，避免在 builder 中访问失效的 context
+          final signInBloc = context.read<SignInBloc>();
           final profile = await Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => const PhoneBindScreen(),
+              builder: (_) => BlocProvider.value(
+                value: signInBloc,
+                child: const PhoneBindScreen(),
+              ),
             ),
           );
           _phoneDialogOpen = false;
@@ -76,6 +86,9 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                   message: '请先绑定手机号再继续',
                   type: ToastificationType.info,
                 );
+                // 用户取消了绑定，清理登录成功状态，防止后续触发进入主界面
+                // 通过触发一个空事件来重置状态（如果需要的话）
+                // 或者依赖 _phoneBindingCancelled 标志来阻止进入主界面
               }
 
           // 清理标记，防止重复进入
@@ -112,9 +125,14 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
               if (needBind && _needBindPhone(userProfile.phone) && !_phoneDialogOpen) {
                 _phoneDialogOpen = true;
               _phoneBindingCancelled = false;
+                // 在 push 之前获取 SignInBloc 引用，避免在 builder 中访问失效的 context
+                final signInBloc = context.read<SignInBloc>();
                 final profile = await Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => const PhoneBindScreen(),
+                    builder: (_) => BlocProvider.value(
+                      value: signInBloc,
+                      child: const PhoneBindScreen(),
+                    ),
                   ),
                 );
                 _phoneDialogOpen = false;
@@ -139,6 +157,61 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 }
                 return;
               }
+              
+              // 如果用户取消了绑定，直接返回，不执行后续逻辑
+              if (_phoneBindingCancelled) {
+                return;
+              }
+              
+              // 检查是否需要绑定手机号（第三方登录但未绑定手机号）
+              if (_needBindPhone(userProfile.phone)) {
+                // 需要绑定手机号，跳转到绑定页面
+                if (!_phoneDialogOpen) {
+                  _phoneDialogOpen = true;
+                  _phoneBindingCancelled = false;
+                  // 在 push 之前获取 SignInBloc 引用，避免在 builder 中访问失效的 context
+                  final signInBloc = context.read<SignInBloc>();
+                  final profile = await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => BlocProvider.value(
+                        value: signInBloc,
+                        child: const PhoneBindScreen(),
+                      ),
+                    ),
+                  );
+                  _phoneDialogOpen = false;
+                  if (profile != null) {
+                    // 绑定成功，进入主界面
+                    if (!context.mounted) {
+                      return;
+                    }
+                    final rootNavigator = Navigator.of(context, rootNavigator: true);
+                    if (rootNavigator != null) {
+                      final rootContext = rootNavigator.context;
+                      if (rootContext.mounted) {
+                        getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                      }
+                    }
+                  } else {
+                    // 用户取消了绑定，不进入主界面
+                    _phoneBindingCancelled = true;
+                    showToastNotification(
+                      message: '请先绑定手机号再继续',
+                      type: ToastificationType.info,
+                    );
+                  }
+                } else {
+                  // 如果绑定对话框已经打开，说明用户正在绑定过程中，不应该进入主界面
+                  return;
+                }
+                return;
+              }
+              
+              // 再次检查是否取消了绑定，防止在返回登录后仍然进入主界面
+              if (_phoneBindingCancelled) {
+                return;
+              }
+              
               // 使用根导航器确保导航不会因为 context 失效而失败
               // 检查 context 是否仍然有效
               if (!context.mounted) {
@@ -150,7 +223,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 return;
               }
               if (rootContext.mounted) {
-                // 匿名登录成功，导航到主页
+                // 登录成功且已绑定手机号，导航到主页
                 getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
               }
             });
@@ -914,8 +987,10 @@ bool _requiresPhoneBinding(SignInState state) =>
     state.toString().contains('requiresPhoneBinding: true');
 
 bool _needBindPhone(String? phone) {
-  if (phone == null) return true;
-  if (phone.isEmpty) return true;
-  // 临时手机号占位（后端自动生成），也视为未绑定
+  if (phone == null) return false;
+  if (phone.isEmpty) return false;
+  // 只有临时手机号（第三方登录）才需要绑定
+  // 邮箱注册的用户手机号为空，不需要绑定
+  // 手机号注册的用户有正常手机号，不需要绑定
   return phone.startsWith('+86temp');
 }

@@ -19,6 +19,7 @@ import 'package:appflowy/user/application/auth/auth_error.dart';
 import 'package:appflowy/user/application/password/password_http_service.dart';
 import 'package:appflowy/user/application/user_auth_listener.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/set_password_page.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -223,6 +224,11 @@ class AppFlowyCloudDeepLink {
                     passwordStatusResult.fold(
                       (passwordIsSet) {
                         Log.info('🔵 [DeepLink] User password_is_set: $passwordIsSet');
+                        
+                        // 检查是否需要绑定手机号
+                        final needBindPhone = _needBindPhone(userProfile.phone);
+                        Log.info('🔵 [DeepLink] User phone: ${userProfile.phone}, needBindPhone: $needBindPhone');
+                        
                         if (!passwordIsSet) {
                           // 用户未设置密码，跳转到设置密码页面
                           Log.info('🔵 [DeepLink] User has not set password, navigating to set password page');
@@ -246,11 +252,27 @@ class AppFlowyCloudDeepLink {
                               Log.error('🔵 [DeepLink] Context not available for SetPasswordPage navigation');
                             }
                           });
+                        } else if (needBindPhone) {
+                          // 用户已设置密码但未绑定手机号，跳转到绑定手机号页面
+                          Log.info('🔵 [DeepLink] User has set password but needs phone binding, navigating to PhoneBindScreen');
+                          Future.microtask(() {
+                            final context = AppGlobals.rootNavKey.currentState?.context;
+                            if (context != null && context.mounted) {
+                              Log.info('🔵 [DeepLink] Context available, pushing PhoneBindScreen');
+                              Navigator.of(context, rootNavigator: true).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const PhoneBindScreen(),
+                                ),
+                              );
+                            } else {
+                              Log.error('🔵 [DeepLink] Context not available for PhoneBindScreen navigation');
+                            }
+                          });
                         } else {
-                          // 用户已设置密码，不做任何操作
+                          // 用户已设置密码且已绑定手机号，不做任何操作
                           // 让 SignInBloc 的状态变化触发正常的导航流程
                           // (见 SignInScreen 的 BlocConsumer listener)
-                          Log.info('🔵 [DeepLink] User has set password, letting normal navigation flow handle it');
+                          Log.info('🔵 [DeepLink] User has set password and bound phone, letting normal navigation flow handle it');
                         }
                       },
                       (error) {
@@ -434,6 +456,17 @@ class InitAppFlowyCloudTask extends LaunchTask {
     await _authStateListener?.stop();
     _authStateListener = null;
   }
+}
+
+// 检查是否需要绑定手机号
+// 只有第三方登录（微信、抖音）的用户才有临时手机号（+86temp...），需要绑定
+// 邮箱注册的用户手机号为空，不需要绑定
+// 手机号注册的用户有正常手机号，不需要绑定
+bool _needBindPhone(String? phone) {
+  if (phone == null) return false;
+  if (phone.isEmpty) return false;
+  // 只有临时手机号（第三方登录）才需要绑定
+  return phone.startsWith('+86temp');
 }
 
 // wrapper for AppLinks to support multiple listeners

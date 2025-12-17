@@ -1,11 +1,20 @@
 import 'dart:async';
 
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/user/application/contact_binding_service.dart';
+import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/back_to_login_in_button.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_button.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/title_logo.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/verifying_button.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
-import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 
 /// 首次绑定手机号的完整页面（非弹窗）
@@ -19,6 +28,8 @@ class PhoneBindScreen extends StatefulWidget {
 class _PhoneBindScreenState extends State<PhoneBindScreen> {
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
+  final _phoneKey = GlobalKey<AFTextFieldState>();
+  final _codeKey = GlobalKey<AFTextFieldState>();
 
   bool _isSending = false;
   bool _isBinding = false;
@@ -37,173 +48,94 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final width = MediaQuery.of(context).size.width;
+    final spacing = theme.spacing.xxl;
 
     return Scaffold(
-      backgroundColor: theme.surfaceColorScheme.layer01,
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(32, 48, 32, 48),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        // 回到登录页，阻止进入主页
-                        Navigator.of(context).pop(null);
-                        Navigator.of(context, rootNavigator: true)
-                            .popUntil((route) => route.isFirst);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.arrow_back,
-                          color: theme.textColorScheme.primary,
-                          size: 22,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '绑定手机号',
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w700,
-                        color: theme.textColorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '根据国家相关法律规定及网络安全管理要求，请验证有效手机号码',
-                      maxLines: 2,
-                      softWrap: true,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: theme.textColorScheme.secondary,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    TextField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      style: TextStyle(
-                        color: theme.textColorScheme.primary,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: '输入手机号',
-                        hintStyle: TextStyle(
-                          color: theme.textColorScheme.tertiary,
-                        ),
-                        hoverColor: Colors.transparent,
-                        focusColor: Colors.transparent,
-                        filled: true,
-                        fillColor: theme.surfaceColorScheme.layer02,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: theme.borderColorScheme.primary,
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: theme.borderColorScheme.primary,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: theme.borderColorScheme.primary,
-                            width: 1.2,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 16,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _codeController,
-                            keyboardType: TextInputType.number,
-                            maxLength: 6,
-                            style: TextStyle(
-                              color: theme.textColorScheme.primary,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: '请输入6位验证码',
-                              hintStyle: TextStyle(
-                                color: theme.textColorScheme.tertiary,
-                              ),
-                              counterText: '',
-                              hoverColor: Colors.transparent,
-                              focusColor: Colors.transparent,
-                              filled: true,
-                              fillColor: theme.surfaceColorScheme.layer02,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: theme.borderColorScheme.primary,
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: theme.borderColorScheme.primary,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: theme.borderColorScheme.primary,
-                                  width: 1.2,
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 18,
-                                vertical: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        SizedBox(
-                          width: width > 500 ? 140 : 120,
-                          child: FlowyButton(
-                            text: Text(_getButtonText()),
-                            onTap: _sendCode,
-                            disable: !_canResendCode() || _isSending,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 48),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FlowyButton(
-                        text: const Text('下一步'),
-                        onTap: _bindPhone,
-                        disable: _isBinding,
-                      ),
-                    ),
-                  ],
+      body: Center(
+        child: SizedBox(
+          width: 340,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildLogoAndTitle(),
+              _buildPhoneField(),
+              VSpace(spacing),
+              _buildCodeField(),
+              VSpace(spacing),
+              _buildNextButton(),
+              VSpace(spacing),
+              BackToLoginButton(
+                onTap: () {
+                  // 回到登录页，返回 null 表示取消绑定
+                  Navigator.of(context).pop(null);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogoAndTitle() {
+    return const TitleLogo(
+      title: '绑定手机号',
+      description: '根据国家相关法律规定及网络安全管理要求，请验证有效手机号码',
+    );
+  }
+
+  Widget _buildPhoneField() {
+    return AFTextField(
+      key: _phoneKey,
+      controller: _phoneController,
+      hintText: '输入手机号',
+      keyboardType: TextInputType.phone,
+    );
+  }
+
+  Widget _buildCodeField() {
+    final theme = AppFlowyTheme.of(context);
+    final canResend = _canResendCode() && !_isSending;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AFTextField(
+          key: _codeKey,
+          controller: _codeController,
+          hintText: '请输入6位验证码',
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+        ),
+        VSpace(theme.spacing.s),
+        Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            onTap: canResend ? _sendCode : null,
+            child: MouseRegion(
+              cursor: canResend ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              child: Text(
+                _getButtonText(),
+                style: theme.textStyle.body.standard(
+                  color: canResend
+                      ? theme.textColorScheme.action
+                      : theme.textColorScheme.tertiary,
                 ),
               ),
             ),
           ),
         ),
-      ),
+      ],
     );
+  }
+
+  Widget _buildNextButton() {
+    return _isBinding
+        ? const VerifyingButton()
+        : ContinueWithButton(
+            text: LocaleKeys.web_continue.tr(),
+            onTap: _bindPhone,
+          );
   }
 
   bool _canResendCode() => _countdown == 0 && !_isSending;
@@ -278,10 +210,20 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
     });
     result.fold(
       (_) async {
-        // 绑定成功后刷新用户信息并返回
+        // 绑定成功后刷新用户信息
         final profileResult = await UserBackendService.getCurrentUserProfile();
         profileResult.fold(
           (profile) {
+            // 通过 SignInBloc 设置登录成功状态（如果可用）
+            try {
+              final signInBloc = BlocProvider.of<SignInBloc>(context);
+              signInBloc.add(SignInEvent.phoneBindingComplete(profile));
+            } catch (e) {
+              // SignInBloc 不可用（例如在 appflowy_cloud_task 中），
+              // 让 desktop_sign_in_screen 处理导航
+              Log.info('🔵 [PhoneBindScreen] SignInBloc not available, letting parent handle navigation');
+            }
+            // 返回 profile，让 desktop_sign_in_screen 处理导航
             Navigator.of(context).pop(profile);
           },
           (error) {

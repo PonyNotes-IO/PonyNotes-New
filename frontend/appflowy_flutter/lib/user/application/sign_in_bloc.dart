@@ -129,6 +129,20 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
           douyinCodeReceived: (code) async {
             await _completeDouYinLogin(emit, code);
           },
+          phoneBindingComplete: (userProfile) {
+            // 手机号绑定成功后，设置登录成功状态
+            emit(
+              state.copyWith(
+                isSubmitting: false,
+                requiresPhoneBinding: false,
+                successOrFail: FlowyResult.success(userProfile),
+              ),
+            );
+          },
+          reset: () {
+            // 重置登录状态（退出登录时使用）
+            emit(SignInState.initial());
+          },
         );
       },
     );
@@ -175,11 +189,26 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
         Log.info('  - result.result: ${result.result}');
         final newState = result.result?.fold(
           (s) {
-            Log.info('[SignInBloc] DeepLink成功，设置successOrFail: ${s.email}');
-            return state.copyWith(
-              isSubmitting: false,
-              successOrFail: FlowyResult.success(s),
-            );
+            Log.info('[SignInBloc] DeepLink成功，检查是否需要绑定手机号: ${s.email}');
+            // 检查是否需要绑定手机号（第三方登录且手机号是临时手机号）
+            final needBindPhone = s.phone.isNotEmpty && s.phone.startsWith('+86temp');
+            if (needBindPhone) {
+              Log.info('[SignInBloc] 需要绑定手机号，暂不设置successOrFail');
+              // 第三方登录需要绑定手机号，暂不设置 successOrFail
+              // 等绑定成功后再设置
+              return state.copyWith(
+                isSubmitting: false,
+                requiresPhoneBinding: true,
+                successOrFail: null, // 不设置成功状态，等绑定完成后再设置
+              );
+            } else {
+              Log.info('[SignInBloc] 不需要绑定手机号，设置successOrFail: ${s.email}');
+              // 不需要绑定手机号，直接设置成功状态
+              return state.copyWith(
+                isSubmitting: false,
+                successOrFail: FlowyResult.success(s),
+              );
+            }
           },
           (f) {
             Log.info('[SignInBloc] DeepLink失败: ${f.msg}');
@@ -957,6 +986,13 @@ class SignInEvent with _$SignInEvent {
   /// 收到抖音回调的 code（通过 deep link）
   const factory SignInEvent.douyinCodeReceived(String code) =
       DouYinCodeReceived;
+
+  /// 手机号绑定成功后，设置登录成功状态
+  const factory SignInEvent.phoneBindingComplete(UserProfilePB userProfile) =
+      PhoneBindingComplete;
+
+  /// 重置登录状态（退出登录时使用）
+  const factory SignInEvent.reset() = Reset;
 }
 
 // we support sign in directly without sign up, but we want to allow the users to sign up if they want to

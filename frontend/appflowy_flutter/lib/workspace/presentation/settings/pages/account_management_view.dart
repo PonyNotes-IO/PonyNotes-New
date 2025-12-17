@@ -4,7 +4,9 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:get_it/get_it.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
@@ -318,6 +320,15 @@ class _AccountManagementViewState extends State<AccountManagementView> {
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
           child: GestureDetector(
                 onTap: () async {
+                  // 重置 SignInBloc 状态（如果可用）
+                  try {
+                    final signInBloc = getIt<SignInBloc>();
+                    if (!signInBloc.isClosed) {
+                      signInBloc.add(const SignInEvent.reset());
+                    }
+                  } catch (e) {
+                    // SignInBloc 不可用，忽略
+                  }
                   await getIt<AuthService>().signOut();
                   await runAppFlowy();
                 },

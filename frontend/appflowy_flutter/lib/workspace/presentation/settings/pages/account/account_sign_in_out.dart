@@ -5,6 +5,8 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/password/password_bloc.dart';
 import 'package:appflowy/user/application/prelude.dart';
+import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:get_it/get_it.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_email_and_password.dart';
 import 'package:appflowy/util/navigator_context_extension.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/account/password/change_password.dart';
@@ -83,6 +85,15 @@ class AccountSignInOutButton extends StatelessWidget {
       description: LocaleKeys.settings_menu_logoutPrompt.tr(),
       confirmLabel: LocaleKeys.button_yes.tr(),
       onConfirm: (_) async {
+        // 重置 SignInBloc 状态（如果可用）
+        try {
+          final signInBloc = getIt<SignInBloc>();
+          if (!signInBloc.isClosed) {
+            signInBloc.add(const SignInEvent.reset());
+          }
+        } catch (e) {
+          // SignInBloc 不可用，忽略
+        }
         await getIt<AuthService>().signOut();
         onAction();
       },
