@@ -3,6 +3,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -51,45 +52,76 @@ class _FolderHeaderState extends State<FolderHeader> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: HomeSizes.workspaceSectionHeight,
+    final theme = AppFlowyTheme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: MouseRegion(
         onEnter: (_) => isHovered.value = true,
         onExit: (_) => isHovered.value = false,
-        child: FlowyButton(
-          onTap: widget.onPressed,
-          margin: const EdgeInsets.only(left: 16.0, right: 12.0),
-          rightIcon: ValueListenableBuilder(
-            valueListenable: isHovered,
-            builder: (context, onHover, child) =>
-                Opacity(opacity: onHover ? 1 : 0, child: child),
-            child: _buildAddButton(),
+        child: Stack(children: [
+          AFGhostIconTextButton.primary(
+            text: widget.title,
+            mainAxisAlignment: MainAxisAlignment.start,
+            size: AFButtonSize.l,
+            onTap: widget.onPressed,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 10,
+            ),
+            borderRadius: theme.borderRadius.s,
+            iconBuilder: (context, isHover, disabled) => FlowySvg(
+              FlowySvgs.folder_m,
+              size: const Size.square(16.0),
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+            ),
+            showExpandArrow: true,
+            isExpanded: widget.isExpanded,
           ),
-          iconPadding: 10.0,
-          text: Row(
-            children: [
-              // 添加文件夹图标（只为"我的空间"显示）
-              Padding(
-                padding: const EdgeInsets.only(right: 8.0),
-                child: FlowySvg(
-                  FlowySvgs.folder_m,
-                  size: const Size.square(16.0),
-                ),
+          Positioned(
+            right: 8,
+            top: 0.0,
+            bottom: 0.0,
+            child: Align(
+              alignment: Alignment.center,
+              child: ValueListenableBuilder(
+                valueListenable: isHovered,
+                builder: (context, onHover, child) =>
+                    Opacity(opacity: onHover ? 1 : 0, child: child),
+                child: _buildAddButton(),
               ),
-              FlowyText(
-                widget.title,
-                lineHeight: 1.15,
-              ),
-              const HSpace(4.0),
-              FlowySvg(
-                // 展开时使用向下箭头，收起时使用向右箭头
-                widget.isExpanded
-                    ? FlowySvgs.workspace_drop_down_menu_show_s
-                    : FlowySvgs.workspace_drop_down_menu_hide_s,
-              ),
-            ],
-          ),
-        ),
+            ),
+          )
+        ]),
+
+        // FlowyButton(
+        //   onTap: widget.onPressed,
+        //   rightIcon: ,
+        //
+        //   text: Row(
+        //     children: [
+        //       // 添加文件夹图标（只为"我的空间"显示）
+        //       Padding(
+        //         padding: const EdgeInsets.only(right: 8.0),
+        //         child: FlowySvg(
+        //           FlowySvgs.folder_m,
+        //           size: const Size.square(16.0),
+        //         ),
+        //       ),
+        //       FlowyText(
+        //         widget.title,
+        //         lineHeight: 1.15,
+        //       ),
+        //       const HSpace(4.0),
+        //       FlowySvg(
+        //         // 展开时使用向下箭头，收起时使用向右箭头
+        //         widget.isExpanded
+        //             ? FlowySvgs.workspace_drop_down_menu_show_s
+        //             : FlowySvgs.workspace_drop_down_menu_hide_s,
+        //         size: const Size.square(16.0),
+        //       ),
+        //     ],
+        //   ),
+        // ),
       ),
     );
   }
@@ -110,7 +142,7 @@ class _FolderHeaderState extends State<FolderHeader> {
         ),
       );
     }
-    
+
     // 否则使用原来的简单按钮
     return FlowyIconButton(
       width: 24,

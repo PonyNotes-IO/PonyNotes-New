@@ -75,14 +75,30 @@ class SidebarSpace extends StatelessWidget {
             // favorite button
             const VSpace(4.0),
             const SidebarFavoriteButton(),
-            
-            // 我的空间 (原个人的功能，已移至上方合适位置)
-            const VSpace(4.0),
+
             BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
               builder: (context, state) {
-                // 始终显示我的空间（不管是否协作工作空间）
-                return PersonalSectionFolder(
-                  views: state.section.publicViews,
+                // only show public and private section if the workspace is collaborative and not local
+                final isCollaborativeWorkspace =
+                    context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
+
+                // only show public and private section if the workspace is collaborative
+                return Column(
+                  children: isCollaborativeWorkspace
+                      ? [
+                    // private
+                    PrivateSectionFolder(
+                      views: state.section.privateViews,
+                    ),
+                    // public
+                    const VSpace(4.0),
+                    PublicSectionFolder(views: state.section.publicViews),
+                  ]
+                      : [
+                    PersonalSectionFolder(
+                      views: state.section.publicViews,
+                    ),
+                  ], // 非协作工作空间不显示底部的个人空间（已移至上方）
                 );
               },
             ),

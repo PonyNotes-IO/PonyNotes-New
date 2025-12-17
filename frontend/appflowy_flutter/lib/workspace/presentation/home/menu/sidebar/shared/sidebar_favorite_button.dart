@@ -42,45 +42,27 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
     final theme = AppFlowyTheme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: SizedBox(
-        height: 44,
-        child: Stack(
-          children: [
-            AFGhostIconTextButton.primary(
-              text: '最爱',
-              mainAxisAlignment: MainAxisAlignment.start,
-              size: AFButtonSize.l,
-              onTap: () {
-                setState(() => _isExpanded = !_isExpanded);
-              },
-              padding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 10,
-              ),
-              borderRadius: theme.borderRadius.s,
-              iconBuilder: (context, isHover, disabled) => FlowySvg(
-                FlowySvgs.favorite_s,
-                size: const Size.square(16.0),
-                color: Theme.of(context).textTheme.bodyMedium?.color,
-              ),
+      child: AFGhostIconTextButton.primary(
+            text: '最爱',
+            mainAxisAlignment: MainAxisAlignment.start,
+            size: AFButtonSize.l,
+            onTap: () {
+              setState(() => _isExpanded = !_isExpanded);
+            },
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 10,
             ),
-            Positioned(
-              right: 12,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: Icon(
-                  _isExpanded
-                      ? Icons.keyboard_arrow_down
-                      : Icons.keyboard_arrow_right,
-                  size: 16,
-                  color: Theme.of(context).textTheme.bodyMedium?.color,
-                ),
-              ),
+            borderRadius: theme.borderRadius.s,
+            iconBuilder: (context, isHover, disabled) => FlowySvg(
+              FlowySvgs.favorite_s,
+              size: const Size.square(16.0),
+              color: Theme.of(context).textTheme.bodyMedium?.color,
             ),
-          ],
-        ),
-      ),
+            showExpandArrow: true,
+            isExpanded: _isExpanded,
+            expandArrowPosition: AFExpandArrowPosition.rowEnd,
+          ),
     );
   }
 
