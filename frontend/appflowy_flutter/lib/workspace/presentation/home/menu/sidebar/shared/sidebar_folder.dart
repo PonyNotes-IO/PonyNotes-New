@@ -58,8 +58,6 @@ class SidebarFolder extends StatelessWidget {
             // favorite
             const VSpace(sectionPadding),
             const SidebarFavoriteButton(),
-            // 我的空间 (原个人的功能)
-            const VSpace(sectionPadding),
             // BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
             //   builder: (context, state) {
             //     // 在非协作工作空间模式下显示个人空间（重命名为我的空间）
@@ -90,7 +88,6 @@ class SidebarFolder extends StatelessWidget {
                       views: state.section.privateViews,
                     ),
                     // public
-                    // const VSpace(sectionPadding),
                     PublicSectionFolder(views: state.section.publicViews),
                   ]
                       : [
@@ -102,7 +99,6 @@ class SidebarFolder extends StatelessWidget {
               },
             ),
             // 共享
-            const VSpace(sectionPadding),
             const SidebarShareButton(),
             // 发布
             const VSpace(sectionPadding),

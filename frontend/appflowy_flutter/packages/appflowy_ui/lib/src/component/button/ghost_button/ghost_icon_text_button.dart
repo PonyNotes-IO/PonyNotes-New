@@ -8,6 +8,14 @@ typedef AFGhostIconBuilder = Widget Function(
   bool disabled,
 );
 
+/// 展开箭头位置
+enum AFExpandArrowPosition {
+  /// 紧跟在文字后面
+  afterText,
+  /// 在整个 Row 的最右边
+  rowEnd,
+}
+
 class AFGhostIconTextButton extends StatelessWidget {
   const AFGhostIconTextButton({
     super.key,
@@ -21,6 +29,10 @@ class AFGhostIconTextButton extends StatelessWidget {
     this.borderRadius,
     this.disabled = false,
     this.mainAxisAlignment = MainAxisAlignment.center,
+    this.showExpandArrow = false,
+    this.isExpanded = false,
+    this.expandArrowPosition = AFExpandArrowPosition.afterText,
+    this.expandArrowBuilder,
   });
 
   /// Primary ghost text button.
@@ -34,6 +46,10 @@ class AFGhostIconTextButton extends StatelessWidget {
     double? borderRadius,
     bool disabled = false,
     MainAxisAlignment mainAxisAlignment = MainAxisAlignment.center,
+    bool showExpandArrow = false,
+    bool isExpanded = false,
+    AFExpandArrowPosition expandArrowPosition = AFExpandArrowPosition.afterText,
+    AFGhostIconBuilder? expandArrowBuilder,
   }) {
     return AFGhostIconTextButton(
       key: key,
@@ -45,6 +61,10 @@ class AFGhostIconTextButton extends StatelessWidget {
       borderRadius: borderRadius,
       disabled: disabled,
       mainAxisAlignment: mainAxisAlignment,
+      showExpandArrow: showExpandArrow,
+      isExpanded: isExpanded,
+      expandArrowPosition: expandArrowPosition,
+      expandArrowBuilder: expandArrowBuilder,
       backgroundColor: (context, isHovering, disabled) {
         final theme = AppFlowyTheme.of(context);
         if (disabled) {
@@ -109,6 +129,18 @@ class AFGhostIconTextButton extends StatelessWidget {
 
   final MainAxisAlignment mainAxisAlignment;
 
+  /// 是否显示展开/收起箭头
+  final bool showExpandArrow;
+
+  /// 当前是否展开状态
+  final bool isExpanded;
+
+  /// 展开箭头的位置
+  final AFExpandArrowPosition expandArrowPosition;
+
+  /// 自定义展开箭头构建器，如果为 null 则使用默认箭头
+  final AFGhostIconBuilder? expandArrowBuilder;
+
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
@@ -125,24 +157,75 @@ class AFGhostIconTextButton extends StatelessWidget {
       builder: (context, isHovering, disabled) {
         final textColor = this.textColor?.call(context, isHovering, disabled) ??
             theme.textColorScheme.primary;
+
+        // 构建展开箭头
+        Widget? expandArrow;
+        if (showExpandArrow) {
+          expandArrow = expandArrowBuilder?.call(context, isHovering, disabled) ??
+              _buildDefaultExpandArrow(context, isHovering, disabled, textColor);
+        }
+
         return Row(
           mainAxisAlignment: mainAxisAlignment,
           children: [
+            // 左侧图标
             iconBuilder(
               context,
               isHovering,
               disabled,
             ),
             SizedBox(width: theme.spacing.m),
-            Text(
-              text,
-              style: size.buildTextStyle(context).copyWith(
-                    color: textColor,
-                  ),
-            ),
+            // 文字
+            if (expandArrowPosition == AFExpandArrowPosition.rowEnd)
+              Expanded(
+                child: Text(
+                  text,
+                  style: size.buildTextStyle(context).copyWith(
+                        color: textColor,
+                      ),
+                ),
+              )
+            else
+              Text(
+                text,
+                style: size.buildTextStyle(context).copyWith(
+                      color: textColor,
+                    ),
+              ),
+            // 箭头在文字后
+            if (showExpandArrow &&
+                expandArrowPosition == AFExpandArrowPosition.afterText) ...[
+              SizedBox(width: theme.spacing.s),
+              expandArrow!,
+            ],
+            // 箭头在行尾
+            if (showExpandArrow &&
+                expandArrowPosition == AFExpandArrowPosition.rowEnd) ...[
+              expandArrow!,
+            ],
           ],
         );
       },
+    );
+  }
+
+  /// 构建默认的展开/收起箭头
+  Widget _buildDefaultExpandArrow(
+    BuildContext context,
+    bool isHovering,
+    bool disabled,
+    Color color,
+  ) {
+    return AnimatedRotation(
+      turns: isExpanded ? 0.25 : 0, // 0.25 = 90度，展开时向下
+      duration: const Duration(milliseconds: 150),
+      child: Icon(
+        Icons.chevron_right,
+        size: 16,
+        color: disabled
+            ? AppFlowyTheme.of(context).textColorScheme.tertiary
+            : color,
+      ),
     );
   }
 }
