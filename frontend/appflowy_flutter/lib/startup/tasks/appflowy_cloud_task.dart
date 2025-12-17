@@ -261,7 +261,12 @@ class AppFlowyCloudDeepLink {
                               Log.info('🔵 [DeepLink] Context available, pushing PhoneBindScreen');
                               Navigator.of(context, rootNavigator: true).push(
                                 MaterialPageRoute(
-                                  builder: (context) => const PhoneBindScreen(),
+                                  // 从应用内部（而非登录页）进入绑定流程：
+                                  // - 绑定成功：PhoneBindScreen 会返回 profile，DesktopSignInScreen 会导航到主界面
+                                  // - 返回登录：PhoneBindScreen 会执行 signOut + runAppFlowy，回到登录入口
+                                  builder: (context) => const PhoneBindScreen(
+                                    logoutOnBack: true,
+                                  ),
                                 ),
                               );
                             } else {

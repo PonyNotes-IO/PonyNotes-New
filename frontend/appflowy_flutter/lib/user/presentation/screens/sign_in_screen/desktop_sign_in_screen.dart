@@ -81,14 +81,22 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                   }
                 }
               } else {
+            // 用户取消了绑定，设置标志并清理状态
             _phoneBindingCancelled = true;
                 showToastNotification(
                   message: '请先绑定手机号再继续',
                   type: ToastificationType.info,
                 );
-                // 用户取消了绑定，清理登录成功状态，防止后续触发进入主界面
-                // 通过触发一个空事件来重置状态（如果需要的话）
-                // 或者依赖 _phoneBindingCancelled 标志来阻止进入主界面
+                // 清理登录成功状态，防止后续触发进入主界面
+                if (context.mounted) {
+                  context
+                      .read<SignInBloc>()
+                      .add(SignInEvent.clearPhoneBindingRequirement());
+                  // 重置登录状态，确保不会进入主界面
+                  context
+                      .read<SignInBloc>()
+                      .add(const SignInEvent.reset());
+                }
               }
 
           // 清理标记，防止重复进入
@@ -110,10 +118,13 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
               }
             // 如果之前取消过绑定，阻止直接进入主页
             if (_phoneBindingCancelled) {
-              showToastNotification(
-                message: '请先绑定手机号再继续',
-                type: ToastificationType.info,
-              );
+              // 用户取消了绑定，不应该进入主界面
+              // 重置状态，确保不会进入主界面
+              if (context.mounted) {
+                context
+                    .read<SignInBloc>()
+                    .add(const SignInEvent.reset());
+              }
               return;
             }
               // 只有在第三方登录（微信/抖音）且未绑定手机号时，才跳转到绑定页
@@ -149,11 +160,22 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                     }
                   }
                 } else {
+                // 用户取消了绑定，设置标志并清理状态
                 _phoneBindingCancelled = true;
                   showToastNotification(
                     message: '请先绑定手机号再继续',
                     type: ToastificationType.info,
                   );
+                  // 清理登录成功状态，防止后续触发进入主界面
+                  if (context.mounted) {
+                    context
+                        .read<SignInBloc>()
+                        .add(SignInEvent.clearPhoneBindingRequirement());
+                    // 重置登录状态，确保不会进入主界面
+                    context
+                        .read<SignInBloc>()
+                        .add(const SignInEvent.reset());
+                  }
                 }
                 return;
               }
@@ -193,12 +215,22 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                       }
                     }
                   } else {
-                    // 用户取消了绑定，不进入主界面
+                    // 用户取消了绑定，设置标志并清理状态
                     _phoneBindingCancelled = true;
                     showToastNotification(
                       message: '请先绑定手机号再继续',
                       type: ToastificationType.info,
                     );
+                    // 清理登录成功状态，防止后续触发进入主界面
+                    if (context.mounted) {
+                      context
+                          .read<SignInBloc>()
+                          .add(SignInEvent.clearPhoneBindingRequirement());
+                      // 重置登录状态，确保不会进入主界面
+                      context
+                          .read<SignInBloc>()
+                          .add(const SignInEvent.reset());
+                    }
                   }
                 } else {
                   // 如果绑定对话框已经打开，说明用户正在绑定过程中，不应该进入主界面

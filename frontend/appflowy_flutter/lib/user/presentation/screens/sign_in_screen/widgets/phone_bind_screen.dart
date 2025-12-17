@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/user/application/contact_binding_service.dart';
+import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/back_to_login_in_button.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_button.dart';
@@ -19,7 +21,18 @@ import 'package:flutter/material.dart';
 
 /// 首次绑定手机号的完整页面（非弹窗）
 class PhoneBindScreen extends StatefulWidget {
-  const PhoneBindScreen({super.key});
+  const PhoneBindScreen({
+    super.key,
+    this.logoutOnBack = false,
+  });
+
+  /// 是否在点击“返回登录”时执行退出登录并回到登录页。
+  ///
+  /// - 从登录页进入的绑定流程：为 `false`，仅 `pop` 当前页面回到登录页。
+  /// - 从应用内部（DeepLink）强制绑定手机号：为 `true`，点击返回时会：
+  ///   1. 调用 `AuthService.signOut()` 退出登录
+  ///   2. 调用 `runAppFlowy()` 回到登录入口
+  final bool logoutOnBack;
 
   @override
   State<PhoneBindScreen> createState() => _PhoneBindScreenState();
@@ -65,9 +78,27 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
               _buildNextButton(),
               VSpace(spacing),
               BackToLoginButton(
-                onTap: () {
-                  // 回到登录页，返回 null 表示取消绑定
-                  Navigator.of(context).pop(null);
+                onTap: () async {
+                  // 从登录页进入的绑定流程：简单 pop 回登录页
+                  if (!widget.logoutOnBack) {
+                    Navigator.of(context).pop(null);
+                    return;
+                  }
+
+                  // 从应用内部（DeepLink）进入的绑定流程：
+                  // 1. 退出登录
+                  // 2. 重启 AppFlowy，回到登录入口
+                  try {
+                    await getIt<AuthService>().signOut();
+                  } catch (e, stack) {
+                    Log.error(
+                      '🔵 [PhoneBindScreen] signOut failed on backToLogin: $e',
+                      stack,
+                    );
+                  }
+
+                  // 使用 runAppFlowy 重启应用，确保不会停留在主界面
+                  await runAppFlowy();
                 },
               ),
             ],

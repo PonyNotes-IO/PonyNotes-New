@@ -1,14 +1,9 @@
-import 'dart:async';
-import 'package:appflowy/env/cloud_env.dart';
-import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/set_new_password.dart';
 import 'package:appflowy_backend/log.dart';
-import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 
 enum ForgotPasswordFlowState {
   enterVerificationCode,
@@ -34,7 +29,6 @@ class ForgotPasswordFlowPage extends StatefulWidget {
 
 class _ForgotPasswordFlowPageState extends State<ForgotPasswordFlowPage> {
   ForgotPasswordFlowState _state = ForgotPasswordFlowState.enterVerificationCode;
-  String? _verificationCode;
 
   @override
   Widget build(BuildContext context) {
@@ -78,11 +72,15 @@ class _ForgotPasswordFlowPageState extends State<ForgotPasswordFlowPage> {
         },
         child: ContinueWithMagicLinkOrPasscodePage(
           email: widget.phoneOrEmail,
-          backToLogin: widget.backToLogin,
+          // 忘记密码场景下，返回按钮只需要关闭当前流程页面，回到登录页/上层路由
+          // 不再调用外层传入的 backToLogin（其中可能持有已销毁的对话框 context）
+          backToLogin: () {
+            final navigator = Navigator.of(context, rootNavigator: true);
+            if (navigator.canPop()) {
+              navigator.pop();
+            }
+          },
           onEnterPasscode: (code) {
-            // 验证重置密码的验证码
-            _verificationCode = code;
-            
             // 判断是邮箱还是手机号
             final isEmail = widget.phoneOrEmail.contains('@');
             
