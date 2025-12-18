@@ -167,6 +167,25 @@ class UserBackendService implements IUserBackendService {
       Log.info('[UserBackendService] 📥 Response body: ${response.body}');
       
       if (response.statusCode == 200) {
+        // Check if response body contains error information
+        try {
+          final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+          if (responseData.containsKey('code') && responseData['code'] != 0) {
+            // Response contains error code
+            final errorMsg = responseData['message'] as String? ?? 
+                responseData['msg'] as String? ?? 
+                'Failed to send phone OTP';
+            Log.error('[UserBackendService] ❌ Send phone OTP failed: $errorMsg');
+            return FlowyResult.failure(
+              FlowyError()
+                ..code = ErrorCode.Internal
+                ..msg = errorMsg,
+            );
+          }
+        } catch (e) {
+          // If parsing fails, assume success (backward compatibility)
+          Log.info('[UserBackendService] ⚠️ Could not parse response body, assuming success');
+        }
         Log.info('[UserBackendService] ✅ Phone OTP sent successfully');
         return FlowyResult.success(null);
       } else {
