@@ -113,7 +113,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
         if (_phoneBindingCancelled && state.successOrFail == null) {
           return;
         }
-        
+
         final successOrFail = state.successOrFail;
         if (successOrFail != null) {
           if (successOrFail.isSuccess) {

@@ -25,9 +25,11 @@ import 'package:appflowy/plugins/base/emoji/emoji_picker_screen.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/code_block/code_language_screen.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_picker_screen.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mobile_toolbar_item/mobile_block_settings_screen.dart';
+import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/user/presentation/presentation.dart';
 import 'package:appflowy/workspace/presentation/home/desktop_home_screen.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/feature_flags/mobile_feature_flag_screen.dart';
@@ -746,9 +748,33 @@ GoRoute _rootRoute(Widget child) {
     redirect: (context, state) async {
       // Every time before navigating to splash screen, we check if user is already logged in desktop. It is used to skip showing splash screen when user just changes appearance settings like theme mode.
       final userResponse = await getIt<AuthService>().getUser();
-      final routeName = userResponse.fold(
-        (user) => DesktopHomeScreen.routeName,
-        (error) => null,
+      final routeName = await userResponse.fold(
+        (user) async {
+          // 检查用户是否需要绑定手机号（第三方登录但未绑定手机号）
+          // 如果需要绑定手机号，不重定向，让 SplashScreen 处理
+          if (isAppFlowyCloudEnabled && !UniversalPlatform.isMobile) {
+            try {
+              final profileResult = await UserBackendService.getCurrentUserProfile();
+              final profile = profileResult.fold(
+                (profile) => profile,
+                (error) => null,
+              );
+              if (profile != null) {
+                final phone = profile.phone;
+                // 如果手机号是临时手机号（+86temp...），需要绑定，不重定向
+                if (phone != null && phone.isNotEmpty && phone.startsWith('+86temp')) {
+                  Log.info('🔵 [Router] User needs phone binding, not redirecting to home screen');
+                  return null; // 不重定向，让 SplashScreen 处理
+                }
+              }
+            } catch (e, stack) {
+              Log.error('🔵 [Router] Error checking phone binding: $e', stack);
+              // 如果检查失败，继续正常流程
+            }
+          }
+          return DesktopHomeScreen.routeName;
+        },
+        (error) async => null,
       );
       if (routeName != null && !UniversalPlatform.isMobile) return routeName;
 
