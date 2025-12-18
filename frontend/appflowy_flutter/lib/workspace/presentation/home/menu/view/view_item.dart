@@ -15,6 +15,8 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
@@ -825,7 +827,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     List<int>? initialDataBytes,
     bool openAfterCreated,
     bool createNewView,
-  ) {
+  ) async {
     final viewBloc = context.read<ViewBloc>();
     final viewName = pluginBuilder.layoutType?.defaultName ?? '';
     
@@ -834,49 +836,60 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     // 如果是 HandwritingSaberPluginBuilder，需要在创建后设置 extra 字段
     final isHandwritingSaber = pluginBuilder is HandwritingSaberPluginBuilder;
     
-    // 如果是 Saber 手写视图，先设置监听器，等待视图创建完成后更新 extra
+    // 如果是 Saber 手写视图，需要先创建视图，然后立即更新 extra 字段
+    // 否则，直接通过 ViewBloc 创建视图
     if (isHandwritingSaber) {
-      // 使用 firstWhere 只监听一次，并设置超时
-      viewBloc.stream
-          .where((state) => state.lastCreatedView != null)
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: (sink) {
-              Log.warn('⚠️ [VIEW_ITEM] Timeout waiting for view creation');
-              sink.close();
-            },
-          )
-          .take(1)
-          .listen((state) {
-            final createdView = state.lastCreatedView!;
-            Log.info('🔵 [VIEW_ITEM] View created, setting extra for handwriting_saber: ${createdView.id}');
-            
-            // 设置 extra 字段为 handwriting_saber
-            final extra = jsonEncode({'view_type': 'handwriting_saber'});
-            ViewBackendService.updateView(
-              viewId: createdView.id,
-              extra: extra,
-            ).then((result) {
-              result.fold(
-                (updatedView) {
-                  Log.info('✅ [VIEW_ITEM] Successfully set extra for handwriting_saber view: ${createdView.id}');
-                },
-                (error) {
-                  Log.error('❌ [VIEW_ITEM] Failed to set extra for handwriting_saber view: ${error.msg}');
-                },
-              );
-            });
-          });
-    }
-    
-    viewBloc.add(
-      ViewEvent.createView(
-        viewName,
-        pluginBuilder.layoutType!,
-        openAfterCreated: openAfterCreated,
+      // 直接调用 ViewBackendService.createView 并等待结果
+      final parentViewId = widget.view.id;
+      final result = await ViewBackendService.createView(
+        parentViewId: parentViewId,
+        name: viewName,
+        layoutType: pluginBuilder.layoutType!,
+        openAfterCreate: openAfterCreated,
         section: widget.spaceType.toViewSectionPB,
-      ),
-    );
+      );
+      
+      // 处理创建结果
+      result.fold(
+        (createdView) async {
+          Log.info('🔵 [VIEW_ITEM] View created successfully: ${createdView.id}');
+          
+          // 立即更新 extra 字段
+          Log.info('🔵 [VIEW_ITEM] Setting extra for handwriting_saber view: ${createdView.id}');
+          final extra = jsonEncode({'view_type': 'handwriting_saber'});
+          final updateResult = await ViewBackendService.updateView(
+            viewId: createdView.id,
+            extra: extra,
+          );
+          updateResult.fold(
+            (updatedView) {
+              Log.info('✅ [VIEW_ITEM] Successfully set extra for handwriting_saber view: ${createdView.id}');
+              // 通知 ViewBloc 视图已创建（通过 viewDidUpdate 事件，避免重复创建）
+              viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.success(updatedView)));
+            },
+            (error) {
+              Log.error('❌ [VIEW_ITEM] Failed to set extra for handwriting_saber view: ${error.msg}');
+              // 即使更新失败，也通知 ViewBloc 视图已创建（使用原始视图）
+              viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.success(createdView)));
+            },
+          );
+        },
+        (error) {
+          Log.error('❌ [VIEW_ITEM] Failed to create view: ${error.msg}');
+          viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.failure(error)));
+        },
+      );
+    } else {
+      // 非 Saber 视图，直接通过 ViewBloc 创建
+      viewBloc.add(
+        ViewEvent.createView(
+          viewName,
+          pluginBuilder.layoutType!,
+          openAfterCreated: openAfterCreated,
+          section: widget.spaceType.toViewSectionPB,
+        ),
+      );
+    }
 
     viewBloc.add(const ViewEvent.setIsExpanded(true));
   }
