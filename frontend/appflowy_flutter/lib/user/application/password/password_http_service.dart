@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 enum PasswordEndpoint {
   changePassword,
   forgotPassword,
+  otp,
   setupPassword,
   checkHasPassword,
   verifyResetPasswordToken,
@@ -20,6 +21,8 @@ enum PasswordEndpoint {
         return '/user/change-password';
       case PasswordEndpoint.forgotPassword:
         return '/recover';
+      case PasswordEndpoint.otp:
+        return '/otp';
       case PasswordEndpoint.setupPassword:
         return '/user';
       case PasswordEndpoint.checkHasPassword:
@@ -35,6 +38,7 @@ enum PasswordEndpoint {
     switch (this) {
       case PasswordEndpoint.changePassword:
       case PasswordEndpoint.forgotPassword:
+      case PasswordEndpoint.otp:
       case PasswordEndpoint.verifyResetPasswordToken:
         return 'POST';
       case PasswordEndpoint.setupPassword:
@@ -94,22 +98,49 @@ class PasswordHttpService {
     );
   }
 
-  /// Sends a password reset email to the user
+  /// Sends a password reset email or SMS to the user
   ///
-  /// [email] - The email address of the user
+  /// [email] - The email address or phone number of the user
+  /// [phone] - Optional phone number (if provided, will be used instead of email)
   Future<FlowyResult<bool, FlowyError>> forgotPassword({
     required String email,
+    String? phone,
   }) async {
-    final result = await _makeRequest(
-      endpoint: PasswordEndpoint.forgotPassword,
-      body: {'email': email},
-      errorMessage: 'Failed to send password reset email',
-    );
+    // 如果提供了 phone，使用 /otp 接口（支持手机号）
+    // 否则使用 /recover 接口（只支持邮箱）
+    if (phone != null && phone.isNotEmpty) {
+      final body = <String, dynamic>{
+        'phone': phone,
+        'create_user': false, // 密码重置时，用户应该已存在
+      };
+      
+      final result = await _makeRequest(
+        endpoint: PasswordEndpoint.otp,
+        body: body,
+        errorMessage: 'Failed to send password reset SMS',
+      );
 
-    return result.fold(
-      (data) => FlowyResult.success(true),
-      (error) => FlowyResult.failure(error),
-    );
+      return result.fold(
+        (data) => FlowyResult.success(true),
+        (error) => FlowyResult.failure(error),
+      );
+    } else {
+      // 使用 /recover 接口（只支持邮箱）
+      final body = <String, dynamic>{
+        'email': email,
+      };
+      
+      final result = await _makeRequest(
+        endpoint: PasswordEndpoint.forgotPassword,
+        body: body,
+        errorMessage: 'Failed to send password reset email',
+      );
+
+      return result.fold(
+        (data) => FlowyResult.success(true),
+        (error) => FlowyResult.failure(error),
+      );
+    }
   }
 
   /// Sets up a password for a user that doesn't have one

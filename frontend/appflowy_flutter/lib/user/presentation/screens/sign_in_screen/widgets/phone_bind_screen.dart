@@ -79,15 +79,10 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
               VSpace(spacing),
               BackToLoginButton(
                 onTap: () async {
-                  // 从登录页进入的绑定流程：简单 pop 回登录页
-                  if (!widget.logoutOnBack) {
-                    Navigator.of(context).pop(null);
-                    return;
-                  }
-
-                  // 从应用内部（DeepLink）进入的绑定流程：
+                  // 无论是从登录页还是从应用内部进入的绑定流程，都使用相同的处理方式：
                   // 1. 退出登录
                   // 2. 重启 AppFlowy，回到登录入口
+                  // 这样可以确保完全清除登录状态，不会进入主界面
                   try {
                     await getIt<AuthService>().signOut();
                   } catch (e, stack) {

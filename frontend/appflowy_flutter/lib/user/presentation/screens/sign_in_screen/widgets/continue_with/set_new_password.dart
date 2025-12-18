@@ -55,22 +55,15 @@ class _SetNewPasswordWidgetState extends State<SetNewPasswordWidget> {
               showToastNotification(
                 message: LocaleKeys.signIn_resetPasswordSuccess.tr(),
               );
-              // 保存回调引用，避免在 widget 销毁后访问
-              final backToLoginCallback = widget.backToLogin;
-              // 关闭忘记密码流程页面
-              if (mounted && Navigator.of(context).canPop()) {
-                Navigator.of(context).pop();
-              }
-              // 使用 Future.microtask 延迟执行回调，确保在导航完成后执行
-              // 使用 try-catch 确保即使回调内部出错也不会影响应用
-              Future.microtask(() {
-                try {
-                  backToLoginCallback();
-                } catch (e) {
-                  // 忽略回调错误，因为对话框可能已经关闭
-                  // 重置密码成功后，用户应该已经返回到登录页面了
+              // 重置密码成功，关闭忘记密码流程页面，返回登录页
+              // 只 pop 当前页面，不调用传入的回调（可能持有已销毁的 context）
+              // 使用同步方式 pop，避免在异步回调中访问可能已销毁的 context
+              if (mounted) {
+                final navigator = Navigator.of(context, rootNavigator: true);
+                if (navigator.canPop()) {
+                  navigator.pop();
                 }
-              });
+              }
             },
             (error) {
               if (error.code == ErrorCode.NewPasswordTooWeak) {
@@ -104,7 +97,14 @@ class _SetNewPasswordWidgetState extends State<SetNewPasswordWidget> {
                   _buildResetButton(),
                   VSpace(spacing),
                   BackToLoginButton(
-                    onTap: widget.backToLogin,
+                    onTap: () {
+                      // 只 pop 当前页面，不调用传入的回调（可能持有已销毁的 context）
+                      // 使用同步方式 pop，避免在异步回调中访问可能已销毁的 context
+                      final navigator = Navigator.of(context, rootNavigator: true);
+                      if (navigator.canPop()) {
+                        navigator.pop();
+                      }
+                    },
                   ),
                 ],
               ),

@@ -515,7 +515,15 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       ),
     );
 
-    final result = await passwordService?.forgotPassword(email: email);
+    // 判断是手机号还是邮箱
+    final bool isPhone = _isValidPhone(email);
+    final bool isEmail = _isValidEmail(email);
+    
+    // 根据类型传递正确的参数
+    final result = await passwordService?.forgotPassword(
+      email: email,
+      phone: isPhone ? email : null,
+    );
 
     result?.fold(
       (success) {

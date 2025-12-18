@@ -81,7 +81,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                   }
                 }
               } else {
-            // 用户取消了绑定，设置标志并清理状态
+            // 用户取消了绑定，立即设置标志（在 reset 之前），防止 BlocListener 被触发时进入主界面
             _phoneBindingCancelled = true;
                 showToastNotification(
                   message: '请先绑定手机号再继续',
@@ -108,6 +108,12 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
           return;
         }
 
+        // 如果用户取消了绑定，且状态被重置（successOrFail 为 null），直接返回
+        // 这可以防止在 reset 后仍然触发进入主界面的逻辑
+        if (_phoneBindingCancelled && state.successOrFail == null) {
+          return;
+        }
+        
         final successOrFail = state.successOrFail;
         if (successOrFail != null) {
           if (successOrFail.isSuccess) {
@@ -116,17 +122,24 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
               if (!context.mounted) {
                 return;
               }
-            // 如果之前取消过绑定，阻止直接进入主页
-            if (_phoneBindingCancelled) {
-              // 用户取消了绑定，不应该进入主界面
-              // 重置状态，确保不会进入主界面
-              if (context.mounted) {
-                context
-                    .read<SignInBloc>()
-                    .add(const SignInEvent.reset());
+              
+              // 如果之前取消过绑定，阻止直接进入主页
+              // 这个检查必须在最前面，防止任何进入主界面的逻辑
+              if (_phoneBindingCancelled) {
+                // 用户取消了绑定，不应该进入主界面
+                // 重置状态，确保不会进入主界面
+                if (context.mounted) {
+                  try {
+                    final signInBloc = context.read<SignInBloc>();
+                    if (!signInBloc.isClosed) {
+                      signInBloc.add(const SignInEvent.reset());
+                    }
+                  } catch (e) {
+                    // SignInBloc 不可用或已关闭，忽略
+                  }
+                }
+                return;
               }
-              return;
-            }
               // 只有在第三方登录（微信/抖音）且未绑定手机号时，才跳转到绑定页
               // 手机号登录/注册的用户不应该触发绑定页面
               final dynamic dynState = state;
