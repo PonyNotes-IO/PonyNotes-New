@@ -32,10 +32,8 @@ class HandwritingSaberPluginBuilder extends PluginBuilder {
   @override
   FlowySvgData get icon => FlowySvgs.icon_board_s;
 
-  /// 注意：当前阶段仅为 PoC，暂时复用已有的 PluginType.blank，后续再引入独立的
-  /// PluginType.handwritingSaber，并在插件加载任务中完成注册。
   @override
-  PluginType get pluginType => PluginType.blank;
+  PluginType get pluginType => PluginType.handwritingSaber;
 
   @override
   ViewLayoutPB? get layoutType => ViewLayoutPB.Document;
@@ -105,7 +103,7 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
   }
 
   @override
-  List<NavigationItem> get navigationItems => [this];
+  List<NavigationItem> get navigationItems => <NavigationItem>[this];
 
   @override
   String? get viewName => notifier.view.nameOrDefault;

@@ -21,7 +21,9 @@ import 'package:appflowy/workspace/presentation/home/menu/view/draggable_view_it
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_button.dart';
+import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'dart:convert';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/rename_view_popover.dart';
 import 'package:appflowy_backend/log.dart';
@@ -823,11 +825,14 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     List<int>? initialDataBytes,
     bool openAfterCreated,
     bool createNewView,
-  ) {
+  ) async {
     final viewBloc = context.read<ViewBloc>();
     final viewName = pluginBuilder.layoutType?.defaultName ?? '';
     
     Log.info('🔵 [VIEW_ITEM] Creating view with layout: ${pluginBuilder.layoutType}, viewName: "$viewName"');
+    
+    // 如果是 HandwritingSaberPluginBuilder，需要在创建后设置 extra 字段
+    final isHandwritingSaber = pluginBuilder is HandwritingSaberPluginBuilder;
     
     viewBloc.add(
       ViewEvent.createView(
@@ -839,6 +844,32 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     );
 
     viewBloc.add(const ViewEvent.setIsExpanded(true));
+    
+    // 如果是 Saber 手写视图，创建后需要设置 extra 字段
+    if (isHandwritingSaber) {
+      // 等待视图创建完成（通过监听 state 变化）
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // 获取最新状态，检查是否有新创建的视图
+      final currentState = viewBloc.state;
+      if (currentState.lastCreatedView != null) {
+        final createdView = currentState.lastCreatedView!;
+        // 设置 extra 字段为 handwriting_saber
+        final extra = jsonEncode({'view_type': 'handwriting_saber'});
+        final result = await ViewBackendService.updateView(
+          viewId: createdView.id,
+          extra: extra,
+        );
+        result.fold(
+          (updatedView) {
+            Log.info('✅ [VIEW_ITEM] Successfully set extra for handwriting_saber view: ${createdView.id}');
+          },
+          (error) {
+            Log.error('❌ [VIEW_ITEM] Failed to set extra for handwriting_saber view: ${error.msg}');
+          },
+        );
+      }
+    }
   }
 
   // ··· more action button

@@ -12,6 +12,7 @@ import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/plugins/document/document.dart';
 import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
 import 'package:appflowy/plugins/handwriting_native/handwriting_native.dart';
+import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
@@ -152,13 +153,18 @@ extension ViewExtension on ViewPB {
           initialRowId: rowId,
         );
       case ViewLayoutPB.Document:
-        // 检查是否是 handwriting_native 类型（通过 extra 字段）
+        // 检查是否是 handwriting_saber / handwriting_native 类型（通过 extra 字段）
         if (extra.isNotEmpty) {
           try {
             final ext = jsonDecode(extra);
             if (ext is Map<String, dynamic>) {
               final viewType = ext['view_type'] as String?;
-              if (viewType == 'handwriting_native') {
+              if (viewType == 'handwriting_saber') {
+                return HandwritingSaberPlugin(
+                  view: this,
+                  pluginType: PluginType.handwritingSaber,
+                );
+              } else if (viewType == 'handwriting_native') {
                 return HandwritingNativePlugin(
                   view: this,
                   pluginType: PluginType.handwritingNative,

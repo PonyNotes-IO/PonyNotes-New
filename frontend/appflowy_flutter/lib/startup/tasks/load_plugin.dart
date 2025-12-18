@@ -13,6 +13,7 @@ import 'package:appflowy/plugins/homepage/homepage.dart';
 import 'package:appflowy/plugins/file_library/file_library_plugin.dart';
 import 'package:appflowy/plugins/inbox/inbox_plugin.dart';
 import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
+import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/plugins/template/template_plugin.dart';
 import 'package:appflowy/plugins/folder/folder.dart';
 import 'package:appflowy/plugins/notebook/notebook.dart';
@@ -83,6 +84,9 @@ class PluginLoadTask extends LaunchTask {
     );
     registerPlugin(
       builder: HandwritingNativePluginBuilder(),
+    );
+    registerPlugin(
+      builder: HandwritingSaberPluginBuilder(),
     );
   }
 }
