@@ -828,6 +828,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     bool openAfterCreated,
     bool createNewView,
   ) async {
+    Log.info('🔵 [VIEW_ITEM] _onSelected called with pluginBuilder: ${pluginBuilder.runtimeType}, menuName: ${pluginBuilder.menuName}');
+    
     final viewBloc = context.read<ViewBloc>();
     final viewName = pluginBuilder.layoutType?.defaultName ?? '';
     
@@ -835,6 +837,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     
     // 如果是 HandwritingSaberPluginBuilder，需要在创建后设置 extra 字段
     final isHandwritingSaber = pluginBuilder is HandwritingSaberPluginBuilder;
+    Log.info('🔵 [VIEW_ITEM] isHandwritingSaber: $isHandwritingSaber, pluginBuilder type: ${pluginBuilder.runtimeType}');
     
     // 如果是 Saber 手写视图，需要先创建视图，然后立即更新 extra 字段
     // 否则，直接通过 ViewBloc 创建视图
@@ -850,7 +853,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       );
       
       // 处理创建结果
-      result.fold(
+      await result.fold(
         (createdView) async {
           Log.info('🔵 [VIEW_ITEM] View created successfully: ${createdView.id}');
           
@@ -861,20 +864,31 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
             viewId: createdView.id,
             extra: extra,
           );
+          
+          ViewPB finalView = createdView;
           updateResult.fold(
             (updatedView) {
               Log.info('✅ [VIEW_ITEM] Successfully set extra for handwriting_saber view: ${createdView.id}');
-              // 通知 ViewBloc 视图已创建（通过 viewDidUpdate 事件，避免重复创建）
-              viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.success(updatedView)));
+              finalView = updatedView;
             },
             (error) {
               Log.error('❌ [VIEW_ITEM] Failed to set extra for handwriting_saber view: ${error.msg}');
-              // 即使更新失败，也通知 ViewBloc 视图已创建（使用原始视图）
-              viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.success(createdView)));
+              // 即使更新失败，也使用原始视图
             },
           );
+          
+          // 通知 ViewBloc 视图已创建
+          // 由于 viewDidUpdate 不会设置 lastCreatedView，我们需要通过其他方式来触发视图打开
+          // 但是，ViewBackendService.createView 中的 setAsCurrent 应该已经处理了视图的打开
+          // 所以我们只需要更新 ViewBloc 的状态即可
+          viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.success(finalView)));
+          
+          // 手动触发视图打开（通过 TabsBloc）
+          if (openAfterCreated) {
+            context.read<TabsBloc>().openPlugin(finalView);
+          }
         },
-        (error) {
+        (error) async {
           Log.error('❌ [VIEW_ITEM] Failed to create view: ${error.msg}');
           viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.failure(error)));
         },
