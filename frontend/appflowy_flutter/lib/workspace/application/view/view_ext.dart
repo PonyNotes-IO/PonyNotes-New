@@ -165,11 +165,10 @@ extension ViewExtension on ViewPB {
             }
           } catch (e) {
             // 解析失败，忽略 extra，继续尝试从 meta 中读取
+            // 注意：旧版本中可能会从 meta 字段读取 view_type，但目前 ViewPB
+            // 不再暴露 meta 映射字段，因此这里暂不做额外处理。
           }
         }
-
-        // 如果 extra 中没有 view_type，则尝试从 meta 中读取
-        viewType ??= meta['view_type'];
 
         if (viewType == 'handwriting_saber') {
           return HandwritingSaberPlugin(
