@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/header/emoji_icon_widget.dart';
@@ -842,9 +840,12 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     // 如果是 Saber 手写视图，需要先创建视图，然后立即更新 extra 字段
     // 否则，直接通过 ViewBloc 创建视图
     if (isHandwritingSaber) {
-      // Saber 手写视图：直接调用 ViewBackendService.createView，并通过 ext 传递 view_type
+      // Saber 手写视图：直接调用 ViewBackendService.createView 创建文档，
+      // 然后通过 updateView 把 view_type 写入 extra，供 ViewExtension.plugin() 识别
       final parentViewId = widget.view.id;
-      Log.info('🔵 [VIEW_ITEM] Creating handwriting_saber view via ViewBackendService.createView, parentViewId: $parentViewId');
+      Log.info(
+        '🔵 [VIEW_ITEM] Creating handwriting_saber view via ViewBackendService.createView, parentViewId: $parentViewId',
+      );
 
       final result = await ViewBackendService.createView(
         parentViewId: parentViewId,
@@ -852,24 +853,52 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         layoutType: pluginBuilder.layoutType!,
         openAfterCreate: openAfterCreated,
         section: widget.spaceType.toViewSectionPB,
-        ext: const {'view_type': 'handwriting_saber'},
       );
 
       await result.fold(
         (createdView) async {
-          Log.info('🔵 [VIEW_ITEM] Handwriting_saber view created successfully: ${createdView.id}, layout: ${createdView.layout}, extra: ${createdView.extra}, meta: ${createdView.meta}');
+          Log.info(
+            '🔵 [VIEW_ITEM] Handwriting_saber view created successfully: ${createdView.id}, layout: ${createdView.layout}, extra: ${createdView.extra}',
+          );
 
-          // 这里不再调用 updateView，而是依赖 meta['view_type'] 在 ViewExtension.plugin() 中选择正确的插件
-          // 仅通过 viewDidUpdate 通知 ViewBloc 刷新当前视图状态
-          viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.success(createdView)));
+          const extraJson = '{"view_type": "handwriting_saber"}';
+          final updateResult = await ViewBackendService.updateView(
+            viewId: createdView.id,
+            extra: extraJson,
+          );
 
-          if (openAfterCreated) {
-            Log.info('🔵 [VIEW_ITEM] Opening handwriting_saber view via TabsBloc.openPlugin: ${createdView.id}');
-            context.read<TabsBloc>().openPlugin(createdView);
-          }
+          updateResult.fold(
+            (updatedView) {
+              Log.info(
+                '✅ [VIEW_ITEM] Successfully set extra for handwriting_saber view: ${createdView.id}, extra=$extraJson',
+              );
+              viewBloc.add(
+                ViewEvent.viewDidUpdate(FlowyResult.success(updatedView)),
+              );
+              if (openAfterCreated) {
+                Log.info(
+                  '🔵 [VIEW_ITEM] Opening handwriting_saber view via TabsBloc.openPlugin: ${updatedView.id}',
+                );
+                context.read<TabsBloc>().openPlugin(updatedView);
+              }
+            },
+            (error) {
+              Log.error(
+                '❌ [VIEW_ITEM] Failed to set extra for handwriting_saber view: ${createdView.id}, error=${error.msg}',
+              );
+              viewBloc.add(
+                ViewEvent.viewDidUpdate(FlowyResult.success(createdView)),
+              );
+              if (openAfterCreated) {
+                context.read<TabsBloc>().openPlugin(createdView);
+              }
+            },
+          );
         },
         (error) async {
-          Log.error('❌ [VIEW_ITEM] Failed to create handwriting_saber view: ${error.msg}');
+          Log.error(
+            '❌ [VIEW_ITEM] Failed to create handwriting_saber view: ${error.msg}',
+          );
           viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.failure(error)));
         },
       );

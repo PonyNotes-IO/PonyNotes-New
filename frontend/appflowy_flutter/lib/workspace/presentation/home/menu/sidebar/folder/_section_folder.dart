@@ -144,6 +144,28 @@ class _SectionFolderState extends State<SectionFolder> {
       await result.fold(
         (view) async {
           // 创建成功，展开文件夹以显示新创建的视图
+          Log.info(
+            '[SECTION_FOLDER] view created: id=${view.id}, layout=${view.layout}, extra=${view.extra}',
+          );
+
+          // 如果是 Saber 手写笔记，创建后需要在 extra 中写入 view_type，供 ViewExtension.plugin() 识别
+          if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+            const extraJson = '{"view_type": "handwriting_saber"}';
+            final updateResult = await ViewBackendService.updateView(
+              viewId: view.id,
+              extra: extraJson,
+            );
+            updateResult.fold(
+              (_) => Log.info(
+                '[SECTION_FOLDER] set extra for handwriting_saber view success: ${view.id}, extra=$extraJson',
+              ),
+              (error) => Log.error(
+                '[SECTION_FOLDER] set extra for handwriting_saber view failed: ${view.id}, error=${error.msg} (${error.code})',
+              ),
+            );
+          }
+
+          // 创建成功，展开文件夹以显示新创建的视图
           context
               .read<FolderBloc>()
               .add(const FolderEvent.expandOrUnExpand(isExpanded: true));
