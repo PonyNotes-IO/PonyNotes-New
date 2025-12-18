@@ -153,27 +153,34 @@ extension ViewExtension on ViewPB {
           initialRowId: rowId,
         );
       case ViewLayoutPB.Document:
-        // 检查是否是 handwriting_saber / handwriting_native 类型（通过 extra 字段）
+        // 检查是否是 handwriting_saber / handwriting_native 类型
+        // 优先从 extra 字段解析，如果没有，再从 meta 中读取 view_type
+        String? viewType;
+
         if (extra.isNotEmpty) {
           try {
             final ext = jsonDecode(extra);
             if (ext is Map<String, dynamic>) {
-              final viewType = ext['view_type'] as String?;
-              if (viewType == 'handwriting_saber') {
-                return HandwritingSaberPlugin(
-                  view: this,
-                  pluginType: PluginType.handwritingSaber,
-                );
-              } else if (viewType == 'handwriting_native') {
-                return HandwritingNativePlugin(
-                  view: this,
-                  pluginType: PluginType.handwritingNative,
-                );
-              }
+              viewType = ext['view_type'] as String?;
             }
           } catch (e) {
-            // 解析失败，继续使用默认的 DocumentPlugin
+            // 解析失败，忽略 extra，继续尝试从 meta 中读取
           }
+        }
+
+        // 如果 extra 中没有 view_type，则尝试从 meta 中读取
+        viewType ??= meta['view_type'];
+
+        if (viewType == 'handwriting_saber') {
+          return HandwritingSaberPlugin(
+            view: this,
+            pluginType: PluginType.handwritingSaber,
+          );
+        } else if (viewType == 'handwriting_native') {
+          return HandwritingNativePlugin(
+            view: this,
+            pluginType: PluginType.handwritingNative,
+          );
         }
         // 普通的 Document 视图，返回 DocumentPlugin
         final selectionValue = arguments[PluginArgumentKeys.selection];
