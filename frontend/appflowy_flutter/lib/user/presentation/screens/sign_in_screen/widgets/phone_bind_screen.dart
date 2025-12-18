@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/user/application/contact_binding_service.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
@@ -14,7 +13,6 @@ import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/contin
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
@@ -123,32 +121,53 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
     final theme = AppFlowyTheme.of(context);
     final canResend = _canResendCode() && !_isSending;
     
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        AFTextField(
-          key: _codeKey,
-          controller: _codeController,
-          hintText: '请输入6位验证码',
-          keyboardType: TextInputType.number,
-          maxLength: 6,
+        Expanded(
+          child: AFTextField(
+            key: _codeKey,
+            controller: _codeController,
+            hintText: '请输入6位验证码',
+            keyboardType: TextInputType.number,
+            onChanged: (value) {
+              // 手动限制长度为 6，不显示字数提示
+              if (value.length > 6) {
+                _codeController.value = TextEditingValue(
+                  text: value.substring(0, 6),
+                  selection: TextSelection.collapsed(offset: 6),
+                );
+              }
+            },
+          ),
         ),
-        VSpace(theme.spacing.s),
-        Align(
-          alignment: Alignment.centerRight,
-          child: GestureDetector(
-            onTap: canResend ? _sendCode : null,
-            child: MouseRegion(
-              cursor: canResend ? SystemMouseCursors.click : SystemMouseCursors.basic,
-              child: Text(
-                _getButtonText(),
-                style: theme.textStyle.body.standard(
-                  color: canResend
-                      ? theme.textColorScheme.action
-                      : theme.textColorScheme.tertiary,
-                ),
-              ),
+        HSpace(theme.spacing.s),
+        SizedBox(
+          width: 120,
+          child: AFFilledTextButton(
+            text: _getButtonText(),
+            onTap: canResend ? _sendCode : () {},
+            size: AFButtonSize.m,
+            disabled: !canResend,
+            padding: EdgeInsets.symmetric(
+              horizontal: theme.spacing.xl,
+              vertical: 10.0, // 与输入框的 vertical padding 一致
             ),
+            backgroundColor: (context, isHovering, disabled) {
+              if (disabled) {
+                return theme.fillColorScheme.contentHover;
+              }
+              if (isHovering) {
+                return theme.fillColorScheme.contentHover;
+              }
+              return theme.fillColorScheme.content;
+            },
+            textColor: (context, isHovering, disabled) {
+              if (disabled) {
+                return theme.textColorScheme.tertiary;
+              }
+              return theme.textColorScheme.primary;
+            },
           ),
         ),
       ],
@@ -159,7 +178,7 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
     return _isBinding
         ? const VerifyingButton()
         : ContinueWithButton(
-            text: LocaleKeys.web_continue.tr(),
+            text: '下一步',
             onTap: _bindPhone,
           );
   }
