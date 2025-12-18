@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -14,6 +15,8 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
@@ -21,6 +24,7 @@ import 'package:appflowy/workspace/presentation/home/menu/view/draggable_view_it
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_button.dart';
+import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/rename_view_popover.dart';
@@ -823,20 +827,63 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     List<int>? initialDataBytes,
     bool openAfterCreated,
     bool createNewView,
-  ) {
+  ) async {
+    Log.info('🔵 [VIEW_ITEM] _onSelected called with pluginBuilder: ${pluginBuilder.runtimeType}, menuName: ${pluginBuilder.menuName}');
+    
     final viewBloc = context.read<ViewBloc>();
     final viewName = pluginBuilder.layoutType?.defaultName ?? '';
     
     Log.info('🔵 [VIEW_ITEM] Creating view with layout: ${pluginBuilder.layoutType}, viewName: "$viewName"');
     
-    viewBloc.add(
-      ViewEvent.createView(
-        viewName,
-        pluginBuilder.layoutType!,
-        openAfterCreated: openAfterCreated,
+    // 如果是 HandwritingSaberPluginBuilder，需要在创建后设置 extra 字段
+    final isHandwritingSaber = pluginBuilder is HandwritingSaberPluginBuilder;
+    Log.info('🔵 [VIEW_ITEM] isHandwritingSaber: $isHandwritingSaber, pluginBuilder type: ${pluginBuilder.runtimeType}');
+    
+    // 如果是 Saber 手写视图，需要先创建视图，然后立即更新 extra 字段
+    // 否则，直接通过 ViewBloc 创建视图
+    if (isHandwritingSaber) {
+      // Saber 手写视图：直接调用 ViewBackendService.createView，并通过 ext 传递 view_type
+      final parentViewId = widget.view.id;
+      Log.info('🔵 [VIEW_ITEM] Creating handwriting_saber view via ViewBackendService.createView, parentViewId: $parentViewId');
+
+      final result = await ViewBackendService.createView(
+        parentViewId: parentViewId,
+        name: viewName,
+        layoutType: pluginBuilder.layoutType!,
+        openAfterCreate: openAfterCreated,
         section: widget.spaceType.toViewSectionPB,
-      ),
-    );
+        ext: const {'view_type': 'handwriting_saber'},
+      );
+
+      await result.fold(
+        (createdView) async {
+          Log.info('🔵 [VIEW_ITEM] Handwriting_saber view created successfully: ${createdView.id}, layout: ${createdView.layout}, extra: ${createdView.extra}, meta: ${createdView.meta}');
+
+          // 这里不再调用 updateView，而是依赖 meta['view_type'] 在 ViewExtension.plugin() 中选择正确的插件
+          // 仅通过 viewDidUpdate 通知 ViewBloc 刷新当前视图状态
+          viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.success(createdView)));
+
+          if (openAfterCreated) {
+            Log.info('🔵 [VIEW_ITEM] Opening handwriting_saber view via TabsBloc.openPlugin: ${createdView.id}');
+            context.read<TabsBloc>().openPlugin(createdView);
+          }
+        },
+        (error) async {
+          Log.error('❌ [VIEW_ITEM] Failed to create handwriting_saber view: ${error.msg}');
+          viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.failure(error)));
+        },
+      );
+    } else {
+      // 非 Saber 视图，直接通过 ViewBloc 创建
+      viewBloc.add(
+        ViewEvent.createView(
+          viewName,
+          pluginBuilder.layoutType!,
+          openAfterCreated: openAfterCreated,
+          section: widget.spaceType.toViewSectionPB,
+        ),
+      );
+    }
 
     viewBloc.add(const ViewEvent.setIsExpanded(true));
   }

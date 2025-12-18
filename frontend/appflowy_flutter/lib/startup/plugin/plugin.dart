@@ -29,6 +29,7 @@ enum PluginType {
   notebook,
   aiWelcome,
   handwritingNative,
+  handwritingSaber,
 }
 
 typedef PluginId = String;
