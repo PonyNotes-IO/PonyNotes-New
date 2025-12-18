@@ -61,7 +61,7 @@ class _SectionFolderState extends State<SectionFolder> {
               // Pages
               ..._buildViews(context, state, isHovered),
               // Add a placeholder if there are no views
-              _buildDraggablePlaceholder(context),
+              // _buildDraggablePlaceholder(context),
             ],
           ),
         ),
