@@ -2590,7 +2590,11 @@ name = "flowy-handwriting-saber-pub"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "collab",
+ "flowy-error",
+ "lib-infra",
  "protobuf",
+ "uuid",
 ]
 
 [[package]]

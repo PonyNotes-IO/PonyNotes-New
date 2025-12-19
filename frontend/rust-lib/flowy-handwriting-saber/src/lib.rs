@@ -6,8 +6,3 @@ pub mod manager;
 pub use entities::*;
 pub use manager::*;
 
-// 导出 protobuf 生成的模块
-#[allow(clippy::all)]
-#[rustfmt::skip]
-pub mod protobuf;
-
