@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
@@ -56,6 +57,15 @@ class HandwritingSaberDataService {
   Future<String> _getHandwritingSaberFilePath(String viewId) async {
     final directory = await _getHandwritingSaberDirectory();
     return p.join(directory, '$viewId.sbn2');
+  }
+
+  /// 仅用于调试和 PoC 阶段：返回指定视图对应的数据文件绝对路径
+  ///
+  /// 注意：
+  /// - 该方法只在 Flutter 侧用于状态展示，不参与正式业务逻辑判断；
+  /// - 后续如果存储实现切换为 Rust / Collab，本方法依然会返回当前本地缓存路径，便于问题排查。
+  Future<String> getHandwritingSaberFilePathForDebug(String viewId) async {
+    return _getHandwritingSaberFilePath(viewId);
   }
 
   /// 创建手写笔记

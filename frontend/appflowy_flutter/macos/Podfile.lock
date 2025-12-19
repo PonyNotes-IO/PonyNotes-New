@@ -39,6 +39,9 @@ PODS:
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
+  - pdfrx (0.0.3):
+    - Flutter
+    - FlutterMacOS
   - pdfx (1.0.0):
     - FlutterMacOS
   - ReachabilitySwift (5.2.4)
@@ -85,6 +88,7 @@ DEPENDENCIES:
   - media_kit_video (from `Flutter/ephemeral/.symlinks/plugins/media_kit_video/macos`)
   - package_info_plus (from `Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
+  - pdfrx (from `Flutter/ephemeral/.symlinks/plugins/pdfrx/darwin`)
   - pdfx (from `Flutter/ephemeral/.symlinks/plugins/pdfx/macos`)
   - screen_retriever_macos (from `Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos`)
   - share_plus (from `Flutter/ephemeral/.symlinks/plugins/share_plus/macos`)
@@ -139,6 +143,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos
   path_provider_foundation:
     :path: Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin
+  pdfrx:
+    :path: Flutter/ephemeral/.symlinks/plugins/pdfrx/darwin
   pdfx:
     :path: Flutter/ephemeral/.symlinks/plugins/pdfx/macos
   screen_retriever_macos:
@@ -182,6 +188,7 @@ SPEC CHECKSUMS:
   OrderedSet: e539b66b644ff081c73a262d24ad552a69be3a94
   package_info_plus: f0052d280d17aa382b932f399edf32507174e870
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
+  pdfrx: f02453e8acfc97f5cd0e29aa33f658ea6c12e71d
   pdfx: 1e79f57f7a6ce2f4a4c30f21fa54d3dc82441b51
   ReachabilitySwift: 32793e867593cfc1177f5d16491e3a197d2fccda
   screen_retriever_macos: 452e51764a9e1cdb74b3c541238795849f21557f
