@@ -29,11 +29,13 @@ class SpacePermissionSwitch extends StatefulWidget {
     required this.onPermissionChanged,
     this.spacePermission,
     this.showArrow = false,
+    this.disabled = false,
   });
 
   final SpacePermission? spacePermission;
   final void Function(SpacePermission permission) onPermissionChanged;
   final bool showArrow;
+  final bool disabled;
 
   @override
   State<SpacePermissionSwitch> createState() => _SpacePermissionSwitchState();
@@ -57,26 +59,25 @@ class _SpacePermissionSwitchState extends State<SpacePermissionSwitch> {
           figmaLineHeight: 18.0,
         ),
         const VSpace(6.0),
-        AppFlowyPopover(
-          controller: popoverController,
-          direction: PopoverDirection.bottomWithCenterAligned,
-          constraints: const BoxConstraints(maxWidth: 500),
-          offset: const Offset(0, 4),
-          margin: EdgeInsets.zero,
-          popupBuilder: (_) => _buildPermissionButtons(),
-          child: DecoratedBox(
-            decoration: ShapeDecoration(
-              shape: RoundedRectangleBorder(
-                side: BorderSide(color: context.enableBorderColor),
-                borderRadius: BorderRadius.circular(10),
+        widget.disabled
+            ? SpacePermissionButton(
+                showArrow: widget.showArrow,
+                permission: spacePermission,
+                showBorder: true,
+              )
+            : AppFlowyPopover(
+                controller: popoverController,
+                direction: PopoverDirection.bottomWithCenterAligned,
+                constraints: const BoxConstraints(maxWidth: 500),
+                offset: const Offset(0, 4),
+                margin: EdgeInsets.zero,
+                popupBuilder: (_) => _buildPermissionButtons(),
+                child: SpacePermissionButton(
+                  showArrow: widget.showArrow,
+                  permission: spacePermission,
+                  showBorder: true,
+                ),
               ),
-            ),
-            child: SpacePermissionButton(
-              showArrow: true,
-              permission: spacePermission,
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -117,11 +118,13 @@ class SpacePermissionButton extends StatelessWidget {
     required this.permission,
     this.onTap,
     this.showArrow = false,
+    this.showBorder = false,
   });
 
   final SpacePermission permission;
   final VoidCallback? onTap;
   final bool showArrow;
+  final bool showBorder;
 
   @override
   Widget build(BuildContext context) {
@@ -138,18 +141,18 @@ class SpacePermissionButton extends StatelessWidget {
         ),
     };
 
-    return FlowyButton(
-      margin: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
-      radius: showArrow ? BorderRadius.circular(10) : BorderRadius.zero,
+    final button = FlowyButton(
+      margin: EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
+      radius: showBorder 
+          ? BorderRadius.circular(8)
+          : (showArrow ? BorderRadius.circular(10) : BorderRadius.zero),
       iconPadding: 16.0,
       leftIcon: FlowySvg(icon),
       leftIconSize: const Size.square(20),
       rightIcon: showArrow
           ? const FlowySvg(FlowySvgs.space_permission_dropdown_s)
           : null,
-      borderColor: Theme.of(context).isLightMode
-          ? const Color(0x1E171717)
-          : const Color(0xFF3A3F49),
+      borderColor: null, // 移除内部边框，避免与外层边框重复
       text: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -164,6 +167,22 @@ class SpacePermissionButton extends StatelessWidget {
       ),
       onTap: onTap,
     );
+
+    // 如果需要显示边框，在外层添加装饰
+    if (showBorder) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Theme.of(context).dividerColor.withOpacity(0.5),
+            width: 1.0,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: button,
+      );
+    }
+
+    return button;
   }
 }
 

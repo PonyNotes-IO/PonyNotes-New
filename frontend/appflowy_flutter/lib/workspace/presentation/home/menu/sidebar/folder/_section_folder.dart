@@ -8,8 +8,9 @@ import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/folder/_folder_header.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/create_space_popup.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
-import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
@@ -75,6 +76,11 @@ class _SectionFolderState extends State<SectionFolder> {
     final parentViewId =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
     
+    // 根据 spaceType 判断是否显示创建空间按钮
+    // private 和 public 都支持创建空间
+    final showCreateSpaceButton = widget.spaceType == FolderSpaceType.private ||
+        widget.spaceType == FolderSpaceType.public;
+    
     return FolderHeader(
       title: widget.title,
       isExpanded: context.watch<FolderBloc>().state.isExpanded,
@@ -98,6 +104,32 @@ class _SectionFolderState extends State<SectionFolder> {
       // 只为"我的空间"提供选择菜单功能
       parentViewId: parentViewId,
       onViewSelected: _onViewSelected,
+      showCreateSpaceButton: showCreateSpaceButton,
+      onCreateSpace: showCreateSpaceButton ? () => _showCreateSpaceDialog(context) : null,
+    );
+  }
+
+  void _showCreateSpaceDialog(BuildContext context) {
+    // 根据 spaceType 确定初始的 SpacePermission
+    final initialPermission = widget.spaceType == FolderSpaceType.private
+        ? SpacePermission.private
+        : SpacePermission.publicToAll;
+    
+    final spaceBloc = context.read<SpaceBloc>();
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: BlocProvider.value(
+          value: spaceBloc,
+          child: CreateSpacePopup(
+            initialPermission: initialPermission,
+            disablePermissionChange: true,
+          ),
+        ),
+      ),
     );
   }
 
@@ -252,23 +284,4 @@ class _SectionFolderState extends State<SectionFolder> {
       ),
     );
   }
-
-  Widget _buildDraggablePlaceholder(BuildContext context) {
-    if (widget.views.isNotEmpty) {
-      return const SizedBox.shrink();
-    }
-    final parentViewId =
-        context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
-    return ViewItem(
-      spaceType: widget.spaceType,
-      view: ViewPB(parentViewId: parentViewId ?? ''),
-      level: 0,
-      leftPadding: HomeSpaceViewSizes.leftPadding,
-      isFeedback: false,
-      onSelected: (_, __) {},
-      isHoverEnabled: widget.isHoverEnabled,
-      isPlaceholder: true,
-    );
-  }
-
 }

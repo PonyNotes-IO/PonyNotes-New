@@ -1,10 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
-import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
@@ -20,6 +17,8 @@ class FolderHeader extends StatefulWidget {
     required this.isExpanded,
     this.parentViewId,
     this.onViewSelected,
+    this.onCreateSpace,
+    this.showCreateSpaceButton = false,
   });
 
   final String title;
@@ -36,6 +35,8 @@ class FolderHeader extends StatefulWidget {
     bool openAfterCreated,
     bool createNewView,
   )? onViewSelected;
+  final VoidCallback? onCreateSpace;
+  final bool showCreateSpaceButton;
 
   @override
   State<FolderHeader> createState() => _FolderHeaderState();
@@ -127,6 +128,17 @@ class _FolderHeaderState extends State<FolderHeader> {
   }
 
   Widget _buildAddButton() {
+    // 如果显示创建空间按钮
+    if (widget.showCreateSpaceButton && widget.onCreateSpace != null) {
+      return FlowyIconButton(
+        width: 24,
+        iconPadding: const EdgeInsets.all(4.0),
+        tooltipText: widget.addButtonTooltip,
+        icon: const FlowySvg(FlowySvgs.space_add_s),
+        onPressed: widget.onCreateSpace,
+      );
+    }
+
     // 如果提供了parentViewId和onViewSelected回调，则使用ViewAddButton显示选择菜单
     if (widget.parentViewId != null && widget.onViewSelected != null) {
       return SizedBox(

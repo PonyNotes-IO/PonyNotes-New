@@ -10,17 +10,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class CreateSpacePopup extends StatefulWidget {
-  const CreateSpacePopup({super.key});
+  const CreateSpacePopup({
+    super.key,
+    this.initialPermission,
+    this.disablePermissionChange = false,
+  });
+
+  final SpacePermission? initialPermission;
+  final bool disablePermissionChange;
 
   @override
   State<CreateSpacePopup> createState() => _CreateSpacePopupState();
 }
 
 class _CreateSpacePopupState extends State<CreateSpacePopup> {
-  String spaceName = LocaleKeys.space_defaultSpaceName.tr();
-  String? spaceIcon = kDefaultSpaceIconId;
-  String? spaceIconColor = builtInSpaceColors.first;
-  SpacePermission spacePermission = SpacePermission.publicToAll;
+  late String spaceName = LocaleKeys.space_defaultSpaceName.tr();
+  late String? spaceIcon = kDefaultSpaceIconId;
+  late String? spaceIconColor = builtInSpaceColors.first;
+  late SpacePermission spacePermission;
+
+  @override
+  void initState() {
+    super.initState();
+    spacePermission = widget.initialPermission ?? SpacePermission.publicToAll;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +77,12 @@ class _CreateSpacePopupState extends State<CreateSpacePopup> {
           ),
           const VSpace(20.0),
           SpacePermissionSwitch(
-            onPermissionChanged: (value) => spacePermission = value,
+            spacePermission: spacePermission,
+            onPermissionChanged: widget.disablePermissionChange
+                ? (_) {}
+                : (value) => setState(() => spacePermission = value),
+            showArrow: !widget.disablePermissionChange,
+            disabled: widget.disablePermissionChange,
           ),
           const VSpace(20.0),
           SpaceCancelOrConfirmButton(
