@@ -44,8 +44,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     required Uri uri,
     required DeepLinkStateHandler onStateChange,
   }) async {
-    Log.info('📝 [OpenNoteDeepLinkHandler] 处理打开笔记深度链接: ${uri.toString()}');
-    
     onStateChange(this, DeepLinkState.loading);
 
     try {
@@ -55,7 +53,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       final linkType = uri.queryParameters['type']; // 获取链接类型：share 或 publish
       
       if (viewId == null || viewId.isEmpty) {
-        Log.error('📝 [OpenNoteDeepLinkHandler] viewId参数为空');
+        Log.error('[OpenNoteDeepLinkHandler] viewId参数为空');
         onStateChange(this, DeepLinkState.error);
         return FlowyResult.failure(
           FlowyError()
@@ -64,8 +62,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         );
       }
 
-      Log.info('📝 [OpenNoteDeepLinkHandler] 准备打开笔记, viewId: $viewId, workspaceId: ${targetWorkspaceId ?? "(current)"}, type: ${linkType ?? "unknown"}');
-
       // workspaceId 仅作为后端识别上下文的参数，前端不再主动切换工作区，
       // 由 Rust 侧的 open_document / view 服务自行处理跨工作区打开逻辑。
       final workspaceId = targetWorkspaceId;
@@ -73,7 +69,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       // 如果是分享链接（type=share），尝试将当前用户添加到协作中，
       // 具体权限与视图可见性仍由后端控制。
       if (linkType == 'share' && workspaceId != null && workspaceId.isNotEmpty) {
-        Log.info('📝 [OpenNoteDeepLinkHandler] 检测到分享链接，尝试添加用户到协作');
         await _addUserToCollaboration(
           workspaceId: workspaceId,
           viewId: viewId,
@@ -82,8 +77,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
 
       // 直接通过 DocumentService 打开文档，不依赖 ViewBackendService.getView
       // 因为某些情况下 getView 可能获取不到，但 openDocument 可以成功
-      Log.info('📝 [OpenNoteDeepLinkHandler] 直接通过 DocumentService 打开文档: $viewId');
-      
       bool documentOpened = false;
       try {
         final docResult = await DocumentService().openDocument(
@@ -91,7 +84,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         );
         await docResult.fold(
           (_) async {
-            Log.info('📝 [OpenNoteDeepLinkHandler] open_document 成功: $viewId');
             documentOpened = true;
             // 等待一小段时间，确保文档数据已经加载完成
             await Future.delayed(const Duration(milliseconds: 300));
@@ -104,7 +96,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
           },
         );
       } catch (e, stackTrace) {
-        Log.error('📝 [OpenNoteDeepLinkHandler] 调用 open_document 时异常: $e', stackTrace);
+        Log.error('[OpenNoteDeepLinkHandler] 调用 open_document 时异常: $e', stackTrace);
         documentOpened = false;
       }
 
@@ -126,7 +118,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         ..name = LocaleKeys.menuAppHeader_defaultNewNotebookName.tr() // 默认名称，文档打开后会自动更新
         ..layout = ViewLayoutPB.Document;
       
-      Log.info('📝 [OpenNoteDeepLinkHandler] 创建最小化视图对象: ${minimalView.id}');
           
           // 等待应用初始化完成后再打开视图
           // 使用WidgetsBinding确保在UI线程中执行
@@ -135,12 +126,12 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
               // 获取TabsBloc实例
               final navContext = AppGlobals.rootNavKey.currentState?.context;
               if (navContext == null) {
-                Log.error('📝 [OpenNoteDeepLinkHandler] 无法获取BuildContext，应用可能未完全初始化');
+                Log.error('[OpenNoteDeepLinkHandler] 无法获取BuildContext，应用可能未完全初始化');
                 // 如果应用未初始化，延迟一段时间后重试
                 await Future.delayed(const Duration(seconds: 1));
                 final retryContext = AppGlobals.rootNavKey.currentState?.context;
                 if (retryContext == null) {
-                  Log.error('📝 [OpenNoteDeepLinkHandler] 重试后仍无法获取BuildContext');
+                  Log.error('[OpenNoteDeepLinkHandler] 重试后仍无法获取BuildContext');
                   return;
                 }
             _openView(retryContext, minimalView);
@@ -148,14 +139,14 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
             _openView(navContext, minimalView);
               }
             } catch (e, stackTrace) {
-              Log.error('📝 [OpenNoteDeepLinkHandler] 打开视图时出错: $e', stackTrace);
+              Log.error('[OpenNoteDeepLinkHandler] 打开视图时出错: $e', stackTrace);
             }
           });
           
           onStateChange(this, DeepLinkState.finish);
           return FlowyResult.success(null);
     } catch (e, stackTrace) {
-      Log.error('📝 [OpenNoteDeepLinkHandler] 处理深度链接时出错: $e', stackTrace);
+      Log.error('[OpenNoteDeepLinkHandler] 处理深度链接时出错: $e', stackTrace);
       onStateChange(this, DeepLinkState.error);
       return FlowyResult.failure(
         FlowyError()
@@ -168,7 +159,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
   /// 打开视图
   void _openView(BuildContext context, ViewPB view) {
     try {
-      Log.info('📝 [OpenNoteDeepLinkHandler] 开始打开视图: ${view.name} (${view.id})');
 
       // 通过 ActionNavigationBloc 触发打开逻辑，避免直接依赖 TabsBloc
       final actionBloc =
@@ -186,12 +176,10 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
             showErrorToast: true,
           ),
         );
-        Log.info('📝 [OpenNoteDeepLinkHandler] 已通过 ActionNavigationBloc 发送打开请求');
       } else {
         // 兜底：如果 ActionNavigationBloc 不存在，再尝试直接使用 TabsBloc
         final tabsBloc = context.read<TabsBloc>();
         tabsBloc.openPlugin(view);
-        Log.info('📝 [OpenNoteDeepLinkHandler] 通过 TabsBloc 打开视图');
       }
     } catch (e, stackTrace) {
       Log.error('📝 [OpenNoteDeepLinkHandler] 打开视图时出错: $e', stackTrace);
@@ -204,7 +192,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     required String viewId,
   }) async {
     try {
-      Log.info('📝 [OpenNoteDeepLinkHandler] 开始添加用户到协作, workspaceId: $workspaceId, viewId: $viewId');
 
       // 获取当前用户信息
       final userResult = await UserBackendService.getCurrentUserProfile();
@@ -249,7 +236,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         path: '/api/workspace/$workspaceId/collab/$viewId/members/$userId',
       );
 
-      Log.info('📝 [OpenNoteDeepLinkHandler] 请求添加协作: $uri');
 
       // 发送 POST 请求
       final response = await http.post(
@@ -265,21 +251,17 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         },
       );
 
-      Log.info('📝 [OpenNoteDeepLinkHandler] 添加协作响应状态: ${response.statusCode}');
-
       if (response.statusCode == 200 || response.statusCode == 201) {
-        Log.info('📝 [OpenNoteDeepLinkHandler] 成功添加用户到协作');
+        // Success
       } else if (response.statusCode == 409) {
         // 409 表示用户已经在协作中，这是正常情况，不需要报错
-        Log.info('📝 [OpenNoteDeepLinkHandler] 用户已在协作中');
       } else {
-        Log.warn('📝 [OpenNoteDeepLinkHandler] 添加协作失败: HTTP ${response.statusCode}');
+        Log.warn('[OpenNoteDeepLinkHandler] 添加协作失败: HTTP ${response.statusCode}');
       }
     } catch (e, stackTrace) {
       // 添加协作失败不应该阻止打开笔记，只记录错误
       Log.error(
-        '📝 [OpenNoteDeepLinkHandler] 添加用户到协作时出错: $e',
-        e,
+        '[OpenNoteDeepLinkHandler] 添加用户到协作时出错: $e',
         stackTrace,
       );
     }

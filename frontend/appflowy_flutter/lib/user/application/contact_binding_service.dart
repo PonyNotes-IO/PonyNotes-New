@@ -13,24 +13,15 @@ class ContactBindingService {
     String phoneNumber,
   ) async {
     try {
-      print('[ContactBindingService] 发送验证码到手机: $phoneNumber');
-      
       // 调用云端 API 发送验证码（GoTrue 标准手机号变更流程）
       // 这个方法需要用户登录，会调用 GoTrue 的 update_user API
       final result = await UserBackendService.sendPhoneOTP(phoneNumber);
       
       return result.fold(
-        (_) {
-          print('[ContactBindingService] 验证码已发送到: $phoneNumber');
-          return FlowyResult.success(null);
-        },
-        (error) {
-          print('[ContactBindingService] 发送验证码失败: ${error.msg}');
-          return FlowyResult.failure(error);
-        },
+        (_) => FlowyResult.success(null),
+        (error) => FlowyResult.failure(error),
       );
     } catch (e) {
-      print('[ContactBindingService] 发送验证码异常: $e');
       return FlowyResult.failure(
         FlowyError.create()
           ..msg = "发送手机验证码失败: $e",
@@ -67,8 +58,6 @@ class ContactBindingService {
     String verificationCode,
   ) async {
     try {
-      print('[ContactBindingService] 验证并绑定手机号: $phoneNumber, 验证码: $verificationCode');
-      
       // 验证验证码格式
       if (verificationCode.length != 6) {
         return FlowyResult.failure(
@@ -84,17 +73,10 @@ class ContactBindingService {
       );
       
       return result.fold(
-        (_) {
-          print('[ContactBindingService] 手机号验证并绑定成功');
-          return FlowyResult.success(null);
-        },
-        (error) {
-          print('[ContactBindingService] 手机号验证失败: ${error.msg}');
-          return FlowyResult.failure(error);
-        },
+        (_) => FlowyResult.success(null),
+        (error) => FlowyResult.failure(error),
       );
     } catch (e) {
-      print('[ContactBindingService] 绑定手机号异常: $e');
       return FlowyResult.failure(
         FlowyError.create()
           ..msg = "绑定手机号失败: $e",
@@ -108,8 +90,6 @@ class ContactBindingService {
     String verificationCode,
   ) async {
     try {
-      print('[ContactBindingService] 验证邮箱: $email, 验证码: $verificationCode');
-      
       // 步骤1: 使用验证码登录来验证验证码是否正确
       final verifyResult = await UserBackendService.signInWithPasscode(
         email, 
@@ -118,14 +98,8 @@ class ContactBindingService {
       
       // 检查验证是否成功
       final verifySuccess = verifyResult.fold(
-        (tokenResponse) {
-          print('[ContactBindingService] 验证码验证成功');
-          return true;
-        },
-        (error) {
-          print('[ContactBindingService] 验证码验证失败: ${error.msg}');
-          return false;
-        },
+        (_) => true,
+        (_) => false,
       );
       
       if (!verifySuccess) {
@@ -146,17 +120,10 @@ class ContactBindingService {
       final result = await userService.updateUserProfile(email: email);
       
       return result.fold(
-        (_) {
-          print('[ContactBindingService] 邮箱绑定成功');
-          return FlowyResult.success(null);
-        },
-        (error) {
-          print('[ContactBindingService] 邮箱绑定失败: ${error.msg}');
-          return FlowyResult.failure(error);
-        },
+        (_) => FlowyResult.success(null),
+        (error) => FlowyResult.failure(error),
       );
     } catch (e) {
-      print('[ContactBindingService] 绑定邮箱异常: $e');
       return FlowyResult.failure(
         FlowyError.create()
           ..msg = "绑定邮箱失败: $e",

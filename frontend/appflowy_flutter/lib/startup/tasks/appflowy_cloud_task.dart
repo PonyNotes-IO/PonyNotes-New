@@ -45,7 +45,6 @@ class AppFlowyCloudDeepLink {
 
     _deepLinkSubscription = _AppLinkWrapper.instance.listen(
       (Uri? uri) async {
-        Log.info('onDeepLink: ${uri.toString()}');
         await _handleUri(uri);
       },
       onError: (Object err, StackTrace stackTrace) {
@@ -105,17 +104,13 @@ class AppFlowyCloudDeepLink {
   Future<void> passGotrueTokenResponse(
     GotrueTokenResponsePB gotrueTokenResponse,
   ) async {
-    Log.info('🔵 [DeepLink] passGotrueTokenResponse called');
     final uri = _buildDeepLinkUri(gotrueTokenResponse);
-    Log.info('🔵 [DeepLink] built URI: ${uri?.toString() ?? "null"}');
     await _handleUri(uri);
-    Log.info('🔵 [DeepLink] _handleUri completed');
   }
 
   Future<void> _handleUri(
     Uri? uri,
   ) async {
-    Log.info('🔵 [DeepLink] _handleUri called with uri: ${uri?.toString() ?? "null"}');
     _stateNotifier?.value = DeepLinkResult(state: DeepLinkState.none);
 
     if (uri == null) {
@@ -125,24 +120,18 @@ class AppFlowyCloudDeepLink {
       return;
     }
 
-    Log.info('🔵 [DeepLink] calling processDeepLink');
     await _deepLinkHandlerRegistry.processDeepLink(
       uri: uri,
       onStateChange: (handler, state) {
-        Log.info('🔵 [DeepLink] onStateChange: handler=${handler.runtimeType}, state=$state');
         // only handle the login deep link
         if (handler is LoginDeepLinkHandler) {
           _stateNotifier?.value = DeepLinkResult(state: state);
         }
       },
       onResult: (handler, result) async {
-        Log.info('🔵 [DeepLink] onResult: handler=${handler.runtimeType}, result type=${result.runtimeType}');
         if (handler is LoginDeepLinkHandler &&
             result is FlowyResult<UserProfilePB, FlowyError>) {
-          Log.info('🔵 [DeepLink] LoginDeepLinkHandler result received, _completer=${_completer == null ? "null" : "present"}');
-          
           // 先更新 _stateNotifier，让 SignInBloc 能收到结果
-          Log.info('🔵 [DeepLink] Updating _stateNotifier with result');
           _stateNotifier?.value = DeepLinkResult(
             state: DeepLinkState.finish,
             result: result,
@@ -150,18 +139,14 @@ class AppFlowyCloudDeepLink {
           
           // If there is no completer, runAppFlowy() will be called.
           if (_completer == null) {
-            Log.info('🔵 [DeepLink] No completer, handling result directly');
             await result.fold(
               (userProfile) async {
-                Log.info('🔵 [DeepLink] Login success! User: ${userProfile.email}');
                 
                 try {
                   // 检查用户是否设置了密码
                   // 从 URI 中提取 access_token
                   final accessToken = _extractAccessTokenFromUri(uri);
                   if (accessToken != null) {
-                    Log.info('🔵 [DeepLink] Extracted access_token from URI');
-                    
                     // 从 userProfile 中提取手机号或邮箱
                     // 优先使用 phone 字段，如果为空则使用 email 字段
                     var hasPhone = userProfile.hasPhone() && userProfile.phone.isNotEmpty;
@@ -189,21 +174,18 @@ class AppFlowyCloudDeepLink {
                             // 从 token 中提取手机号
                             final tokenPhone = json['phone'] as String?;
                             if (tokenPhone != null && tokenPhone.isNotEmpty) {
-                              Log.info('🔵 [DeepLink] 从 token 中提取到手机号: $tokenPhone');
                               phoneOrEmail = tokenPhone;
                               hasPhone = true;
                               isEmail = false;
                             }
                           } catch (e) {
-                            Log.info('🔵 [DeepLink] 无法从 token 中提取手机号: $e');
+                            // 无法从 token 中提取手机号，忽略
                           }
                         }
                       } catch (e) {
-                        Log.info('🔵 [DeepLink] 解析 token 失败: $e');
+                        // 解析 token 失败，忽略
                       }
                     }
-                    
-                    Log.info('🔵 [DeepLink] User phoneOrEmail: $phoneOrEmail (isEmail: $isEmail)');
                     
                     // 创建无需认证的 PasswordHttpService 实例（checkPasswordStatus 是公开接口）
                     final sharedEnv = getIt<AppFlowyCloudSharedEnv>();
@@ -213,30 +195,22 @@ class AppFlowyCloudDeepLink {
                     );
                     
                     // 使用手机号或邮箱检查密码状态
-                    Log.info('🔵 [DeepLink] Checking password status...');
                     final passwordStatusResult = isEmail
                         ? await passwordService.checkPasswordStatus(email: phoneOrEmail)
                         : await passwordService.checkPasswordStatus(phone: phoneOrEmail);
                     
-                    Log.info('🔵 [DeepLink] Password status result received');
-                    
                     // 处理密码状态检查结果
                     passwordStatusResult.fold(
                       (passwordIsSet) {
-                        Log.info('🔵 [DeepLink] User password_is_set: $passwordIsSet');
-                        
                         // 检查是否需要绑定手机号
                         final needBindPhone = _needBindPhone(userProfile.phone);
-                        Log.info('🔵 [DeepLink] User phone: ${userProfile.phone}, needBindPhone: $needBindPhone');
                         
                         if (!passwordIsSet) {
                           // 用户未设置密码，跳转到设置密码页面
-                          Log.info('🔵 [DeepLink] User has not set password, navigating to set password page');
                           // 使用 Future.microtask 确保在下一个事件循环中执行导航
                           Future.microtask(() {
                             final context = AppGlobals.rootNavKey.currentState?.context;
                             if (context != null && context.mounted) {
-                              Log.info('🔵 [DeepLink] Context available, pushing SetPasswordPage');
                               Navigator.of(context, rootNavigator: true).push(
                                 MaterialPageRoute(
                                   builder: (context) => SetPasswordPage(
@@ -254,11 +228,9 @@ class AppFlowyCloudDeepLink {
                           });
                         } else if (needBindPhone) {
                           // 用户已设置密码但未绑定手机号，跳转到绑定手机号页面
-                          Log.info('🔵 [DeepLink] User has set password but needs phone binding, navigating to PhoneBindScreen');
                           Future.microtask(() {
                             final context = AppGlobals.rootNavKey.currentState?.context;
                             if (context != null && context.mounted) {
-                              Log.info('🔵 [DeepLink] Context available, pushing PhoneBindScreen');
                               Navigator.of(context, rootNavigator: true).push(
                                 MaterialPageRoute(
                                   // 从应用内部（而非登录页）进入绑定流程：
@@ -277,25 +249,18 @@ class AppFlowyCloudDeepLink {
                           // 用户已设置密码且已绑定手机号，不做任何操作
                           // 让 SignInBloc 的状态变化触发正常的导航流程
                           // (见 SignInScreen 的 BlocConsumer listener)
-                          Log.info('🔵 [DeepLink] User has set password and bound phone, letting normal navigation flow handle it');
                         }
                       },
                       (error) {
-                        Log.error('🔵 [DeepLink] Failed to check password status: ${error.msg}');
+                        Log.error('[DeepLink] Failed to check password status: ${error.msg}');
                         // 检查密码状态失败，不做任何操作
                         // 让 SignInBloc 的状态变化触发正常的导航流程
-                        Log.info('🔵 [DeepLink] Password check failed, letting normal navigation flow handle it');
                       },
                     );
-                  } else {
-                    Log.info('🔵 [DeepLink] Could not extract access_token from URI');
-                    // 无法提取 access_token，让正常的导航流程处理
-                    Log.info('🔵 [DeepLink] Letting normal navigation flow handle it');
                   }
                 } catch (e, stackTrace) {
-                  Log.error('🔵 [DeepLink] Exception during password check: $e', stackTrace);
+                  Log.error('[DeepLink] Exception during password check: $e', stackTrace);
                   // 发生异常，让正常的导航流程处理
-                  Log.info('🔵 [DeepLink] Letting normal navigation flow handle it due to exception');
                 }
               },
               (err) {

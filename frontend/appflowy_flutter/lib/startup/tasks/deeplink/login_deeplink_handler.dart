@@ -24,10 +24,8 @@ class LoginDeepLinkHandler extends DeepLinkHandler<UserProfilePB> {
   Future<FlowyResult<UserProfilePB, FlowyError>> handle({
     required Uri uri,
     required DeepLinkStateHandler onStateChange,
-  }) async {
-    Log.info('🟢 [LoginDeepLinkHandler] handle called with URI: ${uri.toString()}');
+  }  ) async {
     final deviceId = await getDeviceId();
-    Log.info('🟢 [LoginDeepLinkHandler] deviceId: $deviceId');
     
     final payload = OauthSignInPB(
       authType: AuthTypePB.Server,
@@ -37,23 +35,19 @@ class LoginDeepLinkHandler extends DeepLinkHandler<UserProfilePB> {
       },
     );
 
-    Log.info('🟢 [LoginDeepLinkHandler] calling onStateChange(loading)');
     onStateChange(this, DeepLinkState.loading);
 
-    Log.info('🟢 [LoginDeepLinkHandler] sending UserEventOauthSignIn to Rust');
     final result = await UserEventOauthSignIn(payload).send();
 
-    Log.info('🟢 [LoginDeepLinkHandler] UserEventOauthSignIn result: ${result.isSuccess ? "success" : "failure"}');
     result.fold(
       (userProfile) {
-        Log.info('🟢 [LoginDeepLinkHandler] Login SUCCESS! User email: ${userProfile.email}');
+        // Login success
       },
       (error) {
         Log.error('🟢 [LoginDeepLinkHandler] Login FAILED! Error: ${error.msg}');
       },
     );
 
-    Log.info('🟢 [LoginDeepLinkHandler] calling onStateChange(finish)');
     onStateChange(this, DeepLinkState.finish);
 
     return result;

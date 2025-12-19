@@ -763,7 +763,6 @@ GoRoute _rootRoute(Widget child) {
                 final phone = profile.phone;
                 // 如果手机号是临时手机号（+86temp...），需要绑定，不重定向
                 if (phone != null && phone.isNotEmpty && phone.startsWith('+86temp')) {
-                  Log.info('🔵 [Router] User needs phone binding, not redirecting to home screen');
                   return null; // 不重定向，让 SplashScreen 处理
                 }
               }

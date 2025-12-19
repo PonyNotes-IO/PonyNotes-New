@@ -101,21 +101,17 @@ class UserBackendService implements IUserBackendService {
     String phone,
   ) async {
     try {
-      Log.info('[UserBackendService] 📱 START sendPhoneOTP for: $phone');
-      
       // 获取当前用户配置和 token
       final cloudConfigResult = await UserEventGetCloudConfig().send();
       final cloudConfig = cloudConfigResult.fold(
         (config) => config,
         (error) {
-          Log.error('[UserBackendService] ❌ Failed to get cloud config: $error');
+          Log.error('[UserBackendService] Failed to get cloud config: $error');
           throw error;
         },
       );
       
       final baseUrl = cloudConfig.serverUrl;
-      Log.info('[UserBackendService] 🌐 Server URL: $baseUrl');
-      
       if (baseUrl.isEmpty) {
         return FlowyResult.failure(
           FlowyError()
@@ -125,21 +121,17 @@ class UserBackendService implements IUserBackendService {
       }
       
       // 获取用户的 access token
-      Log.info('[UserBackendService] 🔑 Getting user access token...');
       final userResult = await UserBackendService.getCurrentUserProfile();
       final rawToken = userResult.fold(
-        (user) {
-          Log.info('[UserBackendService] ✅ Got user profile, token length: ${user.token.length}');
-          return user.token;
-        },
+        (user) => user.token,
         (error) {
-          Log.error('[UserBackendService] ❌ Failed to get user profile: $error');
+          Log.error('[UserBackendService] Failed to get user profile: $error');
           return '';
         },
       );
       final token = _normalizeToken(rawToken);
       if (token.isEmpty) {
-        Log.error('[UserBackendService] ❌ Access token is empty!');
+        Log.error('[UserBackendService] Access token is empty!');
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
@@ -149,9 +141,6 @@ class UserBackendService implements IUserBackendService {
       
       // 调用云端 API 发送手机验证码
       final uri = Uri.parse('$baseUrl/api/user/send-phone-otp');
-      Log.info('[UserBackendService] 📤 Calling API: $uri');
-      Log.info('[UserBackendService] 📤 Request body: {"phone": "$phone"}');
-      
       final response = await http.post(
         uri,
         headers: {
@@ -163,9 +152,6 @@ class UserBackendService implements IUserBackendService {
         }),
       );
       
-      Log.info('[UserBackendService] 📥 Response status: ${response.statusCode}');
-      Log.info('[UserBackendService] 📥 Response body: ${response.body}');
-      
       if (response.statusCode == 200) {
         // Check if response body contains error information
         try {
@@ -175,7 +161,7 @@ class UserBackendService implements IUserBackendService {
             final errorMsg = responseData['message'] as String? ?? 
                 responseData['msg'] as String? ?? 
                 'Failed to send phone OTP';
-            Log.error('[UserBackendService] ❌ Send phone OTP failed: $errorMsg');
+            Log.error('[UserBackendService] Send phone OTP failed: $errorMsg');
             return FlowyResult.failure(
               FlowyError()
                 ..code = ErrorCode.Internal
@@ -184,15 +170,13 @@ class UserBackendService implements IUserBackendService {
           }
         } catch (e) {
           // If parsing fails, assume success (backward compatibility)
-          Log.info('[UserBackendService] ⚠️ Could not parse response body, assuming success');
         }
-        Log.info('[UserBackendService] ✅ Phone OTP sent successfully');
         return FlowyResult.success(null);
       } else {
         final errorMsg = response.body.isNotEmpty 
             ? response.body 
             : 'Failed to send phone OTP (HTTP ${response.statusCode})';
-        Log.error('[UserBackendService] ❌ Send phone OTP failed: $errorMsg');
+        Log.error('[UserBackendService] Send phone OTP failed: $errorMsg');
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
@@ -263,8 +247,6 @@ class UserBackendService implements IUserBackendService {
       
       // 调用 /api/user/verify-phone 端点
       final uri = Uri.parse('$baseUrl/api/user/verify-phone');
-      Log.info('[UserBackendService] Calling $uri');
-      
       final response = await http.post(
         uri,
         headers: {
@@ -276,9 +258,6 @@ class UserBackendService implements IUserBackendService {
           'otp': otp,
         }),
       );
-      
-      Log.info('[UserBackendService] Response status: ${response.statusCode}');
-      Log.info('[UserBackendService] Response body: ${response.body}');
       
       if (response.statusCode == 200) {
         return FlowyResult.success(null);
@@ -563,8 +542,6 @@ class UserBackendService implements IUserBackendService {
       final gotrueUrl = '${uri.scheme}://${uri.host}/gotrue/verify';
       final url = Uri.parse(gotrueUrl);
       
-      Log.info('[UserBackendService] 🔐 Calling GoTrue verify: $url');
-      
       final response = await http.post(
         url,
         headers: {
@@ -578,24 +555,19 @@ class UserBackendService implements IUserBackendService {
         }),
       );
       
-      Log.info('[UserBackendService] 🔐 Response status: ${response.statusCode}');
-      Log.info('[UserBackendService] 🔐 Response body: ${response.body}');
-      
       if (response.statusCode == 200) {
-        Log.info('[UserBackendService] ✅ Phone reauthentication verified successfully');
         return FlowyResult.success(null);
       } else {
         final errorMsg = 'Failed to verify phone reauthentication: ${response.statusCode} - ${response.body}';
-        Log.error('[UserBackendService] ❌ $errorMsg');
+        Log.error('[UserBackendService] $errorMsg');
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
             ..msg = errorMsg,
         );
       }
-    } catch (e, stackTrace) {
-      Log.error('[UserBackendService] ❌ Exception: $e');
-      Log.error('[UserBackendService] ❌ Stack trace: $stackTrace');
+    } catch (e) {
+      Log.error('[UserBackendService] Exception: $e');
       return FlowyResult.failure(
         FlowyError()
           ..code = ErrorCode.Internal

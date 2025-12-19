@@ -55,7 +55,6 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
   }
 
   void _handleForgotPassword(BuildContext context) {
-    Log.info('🟢 [PasswordLoginDialog] 处理忘记密码，phoneOrEmail: ${widget.phoneOrEmail}');
     
     final signInBloc = context.read<SignInBloc>();
     

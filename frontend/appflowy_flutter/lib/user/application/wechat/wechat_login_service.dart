@@ -28,7 +28,6 @@ class WeChatLoginService {
   /// - Desktop: Use web-based OAuth flow or QR code scanning
   Future<FlowyResult<String, String>> getAuthorizationCode() async {
     try {
-      Log.info('🟢[WeChatLoginService] Starting WeChat login...');
       
       if (UniversalPlatform.isAndroid || UniversalPlatform.isIOS) {
         // Mobile platform - should use WeChat SDK
@@ -94,7 +93,6 @@ class WeChatLoginService {
     final url = 'https://open.weixin.qq.com/connect/qrconnect?$query#wechat_redirect';
 
     try {
-      Log.info('🟢[WeChatLoginService] Opening WeChat OAuth URL: $url');
       await launchUrlString(url, mode: LaunchMode.externalApplication);
 
       // Wait for deep link callback (app scheme)

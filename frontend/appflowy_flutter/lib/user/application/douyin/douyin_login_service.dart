@@ -28,7 +28,6 @@ class DouYinLoginService {
   /// - Desktop: Use web-based OAuth flow or QR code scanning
   Future<FlowyResult<String, String>> getAuthorizationCode() async {
     try {
-      Log.info('🟢[DouYinLoginService] Starting DouYin login...');
       
       if (UniversalPlatform.isAndroid || UniversalPlatform.isIOS) {
         // Mobile platform - should use DouYin SDK
@@ -98,7 +97,6 @@ class DouYinLoginService {
     final url = 'https://open.douyin.com/platform/oauth/connect?$query';
 
     try {
-      Log.info('🟢[DouYinLoginService] Opening DouYin OAuth URL: $url');
       await launchUrlString(url, mode: LaunchMode.externalApplication);
 
       // Wait for deep link callback (app scheme)

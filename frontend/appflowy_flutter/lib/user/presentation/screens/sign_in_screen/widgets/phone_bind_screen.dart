@@ -257,27 +257,38 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
       (_) async {
         // 绑定成功后刷新用户信息
         final profileResult = await UserBackendService.getCurrentUserProfile();
+        // 再次检查 mounted，因为异步操作可能已经导致 widget 被销毁
+        if (!mounted) return;
         profileResult.fold(
           (profile) {
-            // 通过 SignInBloc 设置登录成功状态（如果可用）
+            // 通过 SignInBloc 设置登录成功状态（如果可用且未关闭）
             try {
-              final signInBloc = BlocProvider.of<SignInBloc>(context);
-              signInBloc.add(SignInEvent.phoneBindingComplete(profile));
+              if (!mounted) return;
+              final signInBloc = context.read<SignInBloc>();
+              // 检查 bloc 是否已关闭，避免 "Cannot add new events after calling close" 错误
+              if (!signInBloc.isClosed) {
+                signInBloc.add(SignInEvent.phoneBindingComplete(profile));
+              }
             } catch (e) {
-              // SignInBloc 不可用（例如在 appflowy_cloud_task 中），
+              // SignInBloc 不可用或已关闭（例如在 appflowy_cloud_task 中），
               // 让 desktop_sign_in_screen 处理导航
-              Log.info('🔵 [PhoneBindScreen] SignInBloc not available, letting parent handle navigation');
             }
             // 返回 profile，让 desktop_sign_in_screen 处理导航
-            Navigator.of(context).pop(profile);
+            if (mounted) {
+              Navigator.of(context).pop(profile);
+            }
           },
           (error) {
-            _toast(error.msg);
+            if (mounted) {
+              _toast(error.msg);
+            }
           },
         );
       },
       (error) {
-        _toast(error.msg);
+        if (mounted) {
+          _toast(error.msg);
+        }
       },
     );
   }

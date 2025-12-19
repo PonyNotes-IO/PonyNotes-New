@@ -31,10 +31,8 @@ class SignInScreen extends StatelessWidget {
   void _showSignInError(BuildContext context, SignInState state) {
     final successOrFail = state.successOrFail;
     if (successOrFail != null) {
-      Log.info('🔵 [SignInScreen] successOrFail state received');
       successOrFail.fold(
         (userProfile) {
-          Log.info('🔵 [SignInScreen] Login success! User: ${userProfile.email}');
           // 检查 context 是否仍然有效
           if (!context.mounted) {
             Log.error('🔵 [SignInScreen] context is not mounted');
@@ -43,7 +41,6 @@ class SignInScreen extends StatelessWidget {
           // 使用根导航器确保导航不会因为 context 失效而失败
           final rootContext = Navigator.of(context, rootNavigator: true).context;
           if (rootContext.mounted) {
-            Log.info('🔵 [SignInScreen] Calling AuthRouter.goHomeScreen');
             getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
           } else {
             Log.error('🔵 [SignInScreen] rootContext is not mounted');

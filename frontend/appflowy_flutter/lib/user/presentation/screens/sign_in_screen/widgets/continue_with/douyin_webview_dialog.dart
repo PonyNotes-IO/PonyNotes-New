@@ -137,7 +137,7 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                       }
                     },
                     onConsoleMessage: (controller, message) {
-                      Log.info('DouYin WebView console: ${message.message}');
+                      // WebView console messages
                     },
                     onReceivedError: (controller, request, error) {
                       Log.error('DouYin WebView received error: ${error.description}, type: ${error.type}, url: ${request.url}');
@@ -149,7 +149,6 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                       // 最小化处理，只记录日志，不做任何可能引发崩溃的操作
                       try {
                         // 不访问 url 的任何属性，避免可能的崩溃
-                        Log.info('DouYin WebView visited history updated, isReload: $isReload');
                       } catch (e) {
                         // 静默处理错误，避免崩溃
                         Log.error('DouYin WebView onUpdateVisitedHistory error: $e');
@@ -169,7 +168,6 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                       // 使用 Future.microtask 确保异步操作安全
                       return Future.microtask(() {
                         try {
-                          Log.info('DouYin WebView permission request: ${request.resources}');
                           // 自动批准所有权限请求（摄像头、麦克风等），避免崩溃
                           return PermissionResponse(
                             resources: request.resources,
@@ -199,12 +197,10 @@ class _DouYinWebViewDialogState extends State<_DouYinWebViewDialog> {
                       if (isCallback) {
                         final code = uri.queryParameters['code'];
                         final state = uri.queryParameters['state'];
-                          Log.info('DouYin callback detected: code=${code != null ? 'present' : 'missing'}, state=$state, expectedState=${widget.state}');
                           // 检查 code 是否存在，state 可选（因为可能被抖音添加了额外参数）
                           if (code != null && code.isNotEmpty) {
                             // 如果 state 匹配，使用它；否则仍然返回 code（因为 code 是最重要的）
                             if (state == widget.state || state == null) {
-                              Log.info('DouYin callback: returning code to caller');
                               if (mounted) {
                                 Navigator.of(context).pop(code);
                               }
