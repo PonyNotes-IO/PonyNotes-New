@@ -829,12 +829,13 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     Log.info('🔵 [VIEW_ITEM] _onSelected called with pluginBuilder: ${pluginBuilder.runtimeType}, menuName: ${pluginBuilder.menuName}');
     
     final viewBloc = context.read<ViewBloc>();
-    final viewName = pluginBuilder.layoutType?.defaultName ?? '';
-    
-    Log.info('🔵 [VIEW_ITEM] Creating view with layout: ${pluginBuilder.layoutType}, viewName: "$viewName"');
-    
-    // 如果是 HandwritingSaberPluginBuilder，需要在创建后设置 extra 字段
+    // 如果是 HandwritingSaberPluginBuilder，使用"未命名手记"作为默认名称
     final isHandwritingSaber = pluginBuilder is HandwritingSaberPluginBuilder;
+    final viewName = isHandwritingSaber 
+        ? '未命名手记' 
+        : (pluginBuilder.layoutType?.defaultName ?? '');
+    
+    Log.info('🔵 [VIEW_ITEM] Creating view with layout: ${pluginBuilder.layoutType}, viewName: "$viewName", isHandwritingSaber: $isHandwritingSaber');
     Log.info('🔵 [VIEW_ITEM] isHandwritingSaber: $isHandwritingSaber, pluginBuilder type: ${pluginBuilder.runtimeType}');
     
     // 如果是 Saber 手写视图，需要先创建视图，然后立即更新 extra 字段

@@ -75,6 +75,7 @@ pub struct AppFlowyCore {
   pub collab_builder: Arc<AppFlowyCollabBuilder>,
   pub full_indexed_data_writer: Arc<RwLock<Option<FullIndexedDataWriter>>>,
   pub whiteboard_manager: Arc<flowy_whiteboard::WhiteboardManager>,
+  pub handwriting_saber_manager: Arc<flowy_handwriting_saber::HandwritingSaberManager>,
 }
 
 impl Drop for AppFlowyCore {
@@ -178,6 +179,7 @@ impl AppFlowyCore {
       storage_manager,
       instant_indexed_data_writer,
       whiteboard_manager,
+      handwriting_saber_manager,
     ) = async {
       let storage_manager = FileStorageResolver::resolve(
         Arc::downgrade(&authenticate_user),
@@ -255,6 +257,12 @@ impl AppFlowyCore {
         server_provider.clone(),
       );
 
+      let handwriting_saber_manager = HandwritingSaberDepsResolver::resolve(
+        Arc::downgrade(&authenticate_user),
+        Arc::downgrade(&collab_builder),
+        server_provider.clone(),
+      );
+
       // Register the folder operation handlers
       register_handlers(
         &folder_manager,
@@ -276,6 +284,7 @@ impl AppFlowyCore {
         storage_manager,
         instant_indexed_data_writer,
         whiteboard_manager,
+        handwriting_saber_manager,
       )
     }
     .await;
@@ -322,6 +331,7 @@ impl AppFlowyCore {
         Arc::downgrade(&ai_manager),
         Arc::downgrade(&storage_manager),
         Arc::downgrade(&whiteboard_manager),
+        Arc::downgrade(&handwriting_saber_manager),
       ),
     ));
 
@@ -341,6 +351,7 @@ impl AppFlowyCore {
       collab_builder,
       full_indexed_data_writer,
       whiteboard_manager,
+      handwriting_saber_manager,
     }
   }
 

@@ -19,6 +19,8 @@ flowy-document = { workspace = true }
 flowy-document-pub = { workspace = true }
 flowy-whiteboard = { workspace = true }
 flowy-whiteboard-pub = { workspace = true }
+flowy-handwriting-saber = { workspace = true }
+flowy-handwriting-saber-pub = { workspace = true }
 flowy-error = { workspace = true }
 flowy-server = { workspace = true }
 flowy-server-pub = { workspace = true }

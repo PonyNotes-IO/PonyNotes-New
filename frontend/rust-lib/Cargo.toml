@@ -36,6 +36,8 @@ members = [
   "flowy-template-pub",
   "flowy-whiteboard",
   "flowy-whiteboard-pub",
+  "flowy-handwriting-saber",
+  "flowy-handwriting-saber-pub",
   "workspace-template-dev"
 ]
 
@@ -75,6 +77,8 @@ flowy-template = { path = "flowy-template" }
 flowy-template-pub = { path = "flowy-template-pub" }
 flowy-whiteboard = { path = "flowy-whiteboard" }
 flowy-whiteboard-pub = { path = "flowy-whiteboard-pub" }
+flowy-handwriting-saber = { path = "flowy-handwriting-saber" }
+flowy-handwriting-saber-pub = { path = "flowy-handwriting-saber-pub" }
 anyhow = "1.0"
 arc-swap = "1.7"
 tracing = "0.1.40"

@@ -31,6 +31,7 @@ use flowy_folder_pub::cloud::{
 use flowy_folder_pub::entities::PublishPayload;
 use flowy_search_pub::cloud::SearchCloudService;
 use flowy_whiteboard_pub::cloud::{WhiteboardCloudService, WhiteboardSnapshot};
+use flowy_handwriting_saber_pub::cloud::HandwritingSaberCloudService;
 use flowy_server_pub::af_cloud_config::AFCloudConfiguration;
 use flowy_server_pub::guest_dto::{
   ListSharedViewResponse, RevokeSharedViewAccessRequest, ShareViewWithGuestRequest,
@@ -976,5 +977,47 @@ impl WhiteboardCloudService for ServerProvider {
       .whiteboard_service()
       .create_whiteboard_collab(workspace_id, whiteboard_id, encoded_collab)
       .await
+  }
+}
+
+#[async_trait]
+impl HandwritingSaberCloudService for ServerProvider {
+  async fn get_handwriting_saber_doc_state(
+    &self,
+    _handwriting_saber_id: &Uuid,
+    _workspace_id: &Uuid,
+  ) -> Result<Vec<u8>, FlowyError> {
+    // TODO: 实现 Cloud 服务接口
+    Err(FlowyError::internal().with_context("HandwritingSaberCloudService not implemented yet"))
+  }
+
+  async fn get_handwriting_saber_data(
+    &self,
+    _handwriting_saber_id: &Uuid,
+    _workspace_id: &Uuid,
+  ) -> Result<Option<Vec<u8>>, FlowyError> {
+    // TODO: 实现 Cloud 服务接口
+    Ok(None)
+  }
+
+  async fn create_handwriting_saber_collab(
+    &self,
+    _workspace_id: &Uuid,
+    _handwriting_saber_id: &Uuid,
+    _encoded_collab: EncodedCollab,
+  ) -> Result<(), FlowyError> {
+    // TODO: 实现 Cloud 服务接口
+    Err(FlowyError::internal().with_context("HandwritingSaberCloudService not implemented yet"))
+  }
+
+  async fn save_handwriting_saber_data(
+    &self,
+    _handwriting_saber_id: &Uuid,
+    _workspace_id: &Uuid,
+    _sbn2_bytes: Vec<u8>,
+    _version: i64,
+  ) -> Result<i64, FlowyError> {
+    // TODO: 实现 Cloud 服务接口
+    Err(FlowyError::internal().with_context("HandwritingSaberCloudService not implemented yet"))
   }
 }

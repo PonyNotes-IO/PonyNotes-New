@@ -2288,6 +2288,8 @@ dependencies = [
  "flowy-error",
  "flowy-folder",
  "flowy-folder-pub",
+ "flowy-handwriting-saber",
+ "flowy-handwriting-saber-pub",
  "flowy-search",
  "flowy-search-pub",
  "flowy-server",
@@ -2548,6 +2550,47 @@ dependencies = [
  "serde_json",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "flowy-handwriting-saber"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "collab",
+ "collab-entity",
+ "collab-integrate",
+ "collab-plugins",
+ "dashmap 6.1.0",
+ "flowy-codegen",
+ "flowy-derive",
+ "flowy-error",
+ "flowy-folder",
+ "flowy-handwriting-saber-pub",
+ "flowy-notification",
+ "futures",
+ "getrandom 0.2.16",
+ "lib-dispatch",
+ "lib-infra",
+ "protobuf",
+ "serde",
+ "serde_json",
+ "strum_macros 0.25.3",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "validator 0.18.1",
+]
+
+[[package]]
+name = "flowy-handwriting-saber-pub"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "protobuf",
 ]
 
 [[package]]

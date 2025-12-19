@@ -4,6 +4,7 @@ use std::sync::Weak;
 use flowy_database2::DatabaseManager;
 use flowy_document::manager::DocumentManager as DocumentManager2;
 use flowy_folder::manager::FolderManager;
+use flowy_handwriting_saber::HandwritingSaberManager;
 use flowy_search::services::manager::SearchManager;
 use flowy_storage::manager::StorageManager;
 use flowy_user::user_manager::UserManager;
@@ -19,6 +20,7 @@ pub fn make_plugins(
   ai_manager: Weak<AIManager>,
   file_storage_manager: Weak<StorageManager>,
   whiteboard_manager: Weak<WhiteboardManager>,
+  handwriting_saber_manager: Weak<HandwritingSaberManager>,
 ) -> Vec<AFPlugin> {
   let user_plugin = flowy_user::event_map::init(user_session);
   let folder_plugin = flowy_folder::event_map::init(folder_manager);
@@ -29,6 +31,7 @@ pub fn make_plugins(
   let ai_plugin = flowy_ai::event_map::init(ai_manager);
   let file_storage_plugin = flowy_storage::event_map::init(file_storage_manager);
   let whiteboard_plugin = flowy_whiteboard::event_map::init(whiteboard_manager);
+  let handwriting_saber_plugin = flowy_handwriting_saber::event_map::init(handwriting_saber_manager);
   vec![
     user_plugin,
     folder_plugin,
@@ -39,5 +42,6 @@ pub fn make_plugins(
     ai_plugin,
     file_storage_plugin,
     whiteboard_plugin,
+    handwriting_saber_plugin,
   ]
 }
