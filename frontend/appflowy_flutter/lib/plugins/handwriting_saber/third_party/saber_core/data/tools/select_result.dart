@@ -1,0 +1,77 @@
+import 'package:flutter/material.dart';
+
+import '../editor/page.dart';
+import '../../components/canvas/image/pdf_editor_image.dart';
+
+/// ✅ 选择结果（存储选中的对象）
+class SelectResult {
+  SelectResult({
+    required this.pageIndex,
+    required this.strokes,
+    required this.images,
+    required this.selectionPath,
+  });
+
+  int pageIndex; // 页面索引
+  List<Stroke> strokes; // 选中的笔迹列表（可修改）
+  List<PdfEditorImage> images; // 选中的图片列表（可修改）
+  Path selectionPath; // 选择区域的路径
+
+  bool get isEmpty => strokes.isEmpty && images.isEmpty;
+
+  /// ✅ 移动选中的对象
+  void move(Offset offset) {
+    // 移动所有选中的笔迹
+    for (final stroke in strokes) {
+      for (int i = 0; i < stroke.points.length; i++) {
+        stroke.points[i] = stroke.points[i] + offset;
+      }
+    }
+
+    // 移动所有选中的图片
+    for (final image in images) {
+      if (image.dstRect != null) {
+        image.dstRect = image.dstRect!.shift(offset);
+      }
+    }
+
+    // 移动选择路径
+    selectionPath = selectionPath.shift(offset);
+  }
+
+  /// ✅ 获取选择区域的边界框
+  Rect? getBoundingBox() {
+    if (isEmpty) return null;
+
+    double minX = double.infinity;
+    double minY = double.infinity;
+    double maxX = double.negativeInfinity;
+    double maxY = double.negativeInfinity;
+
+    // 从笔迹中获取边界
+    for (final stroke in strokes) {
+      for (final point in stroke.points) {
+        minX = minX < point.dx ? minX : point.dx;
+        minY = minY < point.dy ? minY : point.dy;
+        maxX = maxX > point.dx ? maxX : point.dx;
+        maxY = maxY > point.dy ? maxY : point.dy;
+      }
+    }
+
+    // 从图片中获取边界
+    for (final image in images) {
+      if (image.dstRect != null) {
+        final rect = image.dstRect!;
+        minX = minX < rect.left ? minX : rect.left;
+        minY = minY < rect.top ? minY : rect.top;
+        maxX = maxX > rect.right ? maxX : rect.right;
+        maxY = maxY > rect.bottom ? maxY : rect.bottom;
+      }
+    }
+
+    if (minX == double.infinity) return null;
+
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
+  }
+}
+

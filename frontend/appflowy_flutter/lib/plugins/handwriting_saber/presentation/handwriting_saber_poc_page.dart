@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../application/handwriting_saber_data_service.dart';
@@ -13,8 +15,15 @@ import '../third_party/saber_core/components/canvas/saber_core_canvas.dart';
 import '../third_party/saber_core/data/editor/editor_core_info.dart';
 import '../third_party/saber_core/data/editor/page.dart';
 import '../third_party/saber_core/data/editor/shape_strokes.dart';
+import '../third_party/saber_core/data/editor/stroke_extensions.dart'; // ✅ 导入扩展方法
+import '../third_party/saber_core/data/editor/text_box.dart' as saber_text; // ✅ 导入文本框（使用别名避免与Flutter的TextBox冲突）
+import '../third_party/saber_core/data/tools/select_result.dart';
 import '../third_party/saber_core/data/tools/tool.dart';
 import 'handwriting_saber_toolbar.dart';
+import 'text_formatting_toolbar.dart';
+
+// ✅ 使用TextFormatting（在text_box.dart中定义）
+typedef TextFormatting = saber_text.TextFormatting;
 
 /// PoC 页面：暂时只展示占位 UI，并在本地创建一个占位的 .sbn2 文件。
 ///
@@ -56,8 +65,19 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   CanvasBackgroundPattern _currentBackgroundPattern =
       CanvasBackgroundPattern.lined;
   
+  /// ✅ 当前填充颜色（用于形状工具）
+  Color? _currentFillColor;
+  
+  /// ✅ 当前文本格式化（用于文本框工具）
+  TextFormatting _currentTextFormatting = const TextFormatting();
+  
   /// ✅ 激光笔淡出定时器（用于管理多个激光笔笔迹的淡出）
   final Map<Stroke, Timer> _laserFadeOutTimers = {};
+
+  /// ✅ 选择工具状态
+  SelectResult? _selectResult;
+  bool _isSelecting = false; // 是否正在选择（拖拽选择区域）
+  Offset? _selectStartPosition; // 选择开始位置
 
   @override
   void initState() {
@@ -155,6 +175,22 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _currentPageIndex = 0;
     }
     
+    // ✅ 如果是选择工具，开始选择
+    if (_currentTool.toolId == ToolId.select) {
+      _startSelection(position, pageIndex: _currentPageIndex);
+      return;
+    }
+    
+    // ✅ 如果是文本框工具或标题工具，创建文本框
+    if (_currentTool.toolId == ToolId.textBox ||
+        _currentTool.toolId == ToolId.heading1 ||
+        _currentTool.toolId == ToolId.heading2 ||
+        _currentTool.toolId == ToolId.heading3 ||
+        _currentTool.toolId == ToolId.paragraph) {
+      _createTextBox(position, pageIndex: _currentPageIndex);
+      return;
+    }
+    
     // 如果是橡皮擦，不创建新笔迹，而是检测并删除相交的笔迹
     if (_currentTool.toolId == ToolId.eraser) {
       _eraseStrokesAtPosition(position, pageIndex: _currentPageIndex);
@@ -174,6 +210,220 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     setState(() {
       _currentStroke = stroke;
     });
+  }
+  
+  /// ✅ 开始选择
+  void _startSelection(Offset position, {int? pageIndex}) {
+    final pageIdx = pageIndex ?? 0;
+    
+    // 检查是否点击在已选中的对象上
+    if (_selectResult != null && 
+        _selectResult!.pageIndex == pageIdx &&
+        _isPointInSelection(position, _selectResult!)) {
+      // 点击在已选中的对象上，准备移动
+      _selectStartPosition = position;
+      return;
+    }
+    
+    // ✅ 先尝试点击选择单个对象（快速点击，不拖拽）
+    final clickedStroke = _findStrokeAtPosition(position, pageIdx);
+    if (clickedStroke != null) {
+      // 点击选中了单个笔迹
+      setState(() {
+        _selectResult = SelectResult(
+          pageIndex: pageIdx,
+          strokes: [clickedStroke],
+          images: [],
+          selectionPath: Path(), // 点击选择不需要路径
+        );
+        _isSelecting = false;
+        _selectStartPosition = position;
+      });
+      return;
+    }
+    
+    // 开始新的拖拽选择区域
+    setState(() {
+      _isSelecting = true;
+      _selectStartPosition = position;
+      _selectResult = SelectResult(
+        pageIndex: pageIdx,
+        strokes: [],
+        images: [],
+        selectionPath: Path()..moveTo(position.dx, position.dy),
+      );
+    });
+  }
+  
+  /// ✅ 在指定位置查找笔迹（用于点击选择）
+  Stroke? _findStrokeAtPosition(Offset position, int pageIndex) {
+    if (_coreInfo.pages.isEmpty || pageIndex < 0 || pageIndex >= _coreInfo.pages.length) {
+      return null;
+    }
+    
+    final page = _coreInfo.pages[pageIndex];
+    
+    // ✅ 从后往前查找（最上层的笔迹优先）
+    for (int i = page.strokes.length - 1; i >= 0; i--) {
+      final stroke = page.strokes[i];
+      if (_isPointInStroke(position, stroke)) {
+        return stroke;
+      }
+    }
+    
+    return null;
+  }
+  
+  /// ✅ 检查点是否在笔迹内（用于点击选择）
+  bool _isPointInStroke(Offset point, Stroke stroke) {
+    if (stroke.points.isEmpty) {
+      return false;
+    }
+    
+    // ✅ 使用笔迹的平滑路径进行检测（需要导入StrokeExtensions）
+    // 注意：getSmoothPath是扩展方法，需要确保已导入stroke_extensions.dart
+    final smoothPath = stroke.getSmoothPath(isComplete: true);
+    if (smoothPath.getBounds().isEmpty) {
+      // 如果路径为空，检查是否与点足够接近
+      for (final strokePoint in stroke.points) {
+        final distance = (point - strokePoint).distance;
+        if (distance < stroke.strokeWidth * 2) {
+          return true;
+        }
+      }
+      return false;
+    }
+    
+    // ✅ 使用路径的边界框进行快速检测
+    final bounds = smoothPath.getBounds();
+    final expandedBounds = bounds.inflate(stroke.strokeWidth);
+    if (!expandedBounds.contains(point)) {
+      return false;
+    }
+    
+    // ✅ 对于形状笔迹，使用更精确的检测
+    if (stroke is LineStroke) {
+      return _isPointNearLine(point, stroke.startPoint, stroke.endPoint, stroke.strokeWidth);
+    } else if (stroke is RectangleStroke) {
+      return stroke.rect.inflate(stroke.strokeWidth).contains(point);
+    } else if (stroke is CircleStroke) {
+      final center = stroke.center;
+      final distance = (point - center).distance;
+      return distance <= stroke.radius + stroke.strokeWidth;
+    } else if (stroke is TriangleStroke) {
+      // 检查点是否在三角形内
+      return _isPointInTriangle(point, stroke.point1, stroke.point2, stroke.point3);
+    } else if (stroke is DiamondStroke) {
+      // 检查点是否在菱形内
+      return _isPointInPolygon(point, stroke.points);
+    } else {
+      // ✅ 对于普通笔迹，检查点是否在路径附近
+      // 使用路径的边界框和点距离检测
+      final tolerance = stroke.strokeWidth * 2;
+      for (final strokePoint in stroke.points) {
+        final distance = (point - strokePoint).distance;
+        if (distance < tolerance) {
+          return true;
+        }
+      }
+      // 如果点不在任何顶点附近，检查是否在路径内（使用路径的contains方法）
+      return smoothPath.contains(point);
+    }
+  }
+  
+  /// ✅ 检查点是否在直线附近
+  bool _isPointNearLine(Offset point, Offset lineStart, Offset lineEnd, double strokeWidth) {
+    final A = point.dx - lineStart.dx;
+    final B = point.dy - lineStart.dy;
+    final C = lineEnd.dx - lineStart.dx;
+    final D = lineEnd.dy - lineStart.dy;
+    
+    final dot = A * C + B * D;
+    final lenSq = C * C + D * D;
+    if (lenSq == 0) {
+      // 线段退化为点
+      return (point - lineStart).distance < strokeWidth * 2;
+    }
+    
+    final param = dot / lenSq;
+    Offset closestPoint;
+    if (param < 0) {
+      closestPoint = lineStart;
+    } else if (param > 1) {
+      closestPoint = lineEnd;
+    } else {
+      closestPoint = Offset(
+        lineStart.dx + param * C,
+        lineStart.dy + param * D,
+      );
+    }
+    
+    final distance = (point - closestPoint).distance;
+    return distance < strokeWidth * 2;
+  }
+  
+  /// ✅ 检查点是否在三角形内
+  bool _isPointInTriangle(Offset point, Offset p1, Offset p2, Offset p3) {
+    // 使用重心坐标法
+    final d1 = _sign(point, p1, p2);
+    final d2 = _sign(point, p2, p3);
+    final d3 = _sign(point, p3, p1);
+    
+    final hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+    final hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+    
+    return !(hasNeg && hasPos);
+  }
+  
+  double _sign(Offset p1, Offset p2, Offset p3) {
+    return (p1.dx - p3.dx) * (p2.dy - p3.dy) - (p2.dx - p3.dx) * (p1.dy - p3.dy);
+  }
+  
+  /// ✅ 检查点是否在多边形内
+  bool _isPointInPolygon(Offset point, List<Offset> polygon) {
+    if (polygon.length < 3) {
+      return false;
+    }
+    
+    bool inside = false;
+    int j = polygon.length - 1;
+    for (int i = 0; i < polygon.length; i++) {
+      final xi = polygon[i].dx;
+      final yi = polygon[i].dy;
+      final xj = polygon[j].dx;
+      final yj = polygon[j].dy;
+      
+      final intersect = ((yi > point.dy) != (yj > point.dy)) &&
+          (point.dx < (xj - xi) * (point.dy - yi) / (yj - yi) + xi);
+      if (intersect) {
+        inside = !inside;
+      }
+      j = i;
+    }
+    
+    return inside;
+  }
+  
+  /// ✅ 检查点是否在选择区域内
+  bool _isPointInSelection(Offset point, SelectResult selectResult) {
+    // 检查是否在某个选中的笔迹附近
+    for (final stroke in selectResult.strokes) {
+      for (final strokePoint in stroke.points) {
+        final distance = (point - strokePoint).distance;
+        if (distance < stroke.strokeWidth * 2) {
+          return true;
+        }
+      }
+    }
+    
+    // 检查是否在某个选中的图片内
+    for (final image in selectResult.images) {
+      if (image.dstRect != null && image.dstRect!.contains(point)) {
+        return true;
+      }
+    }
+    
+    return false;
   }
   
   /// 在指定位置擦除相交的笔迹
@@ -259,6 +509,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
 
   void _updateStroke(Offset position) {
+    // ✅ 如果是选择工具，更新选择
+    if (_currentTool.toolId == ToolId.select) {
+      _updateSelection(position);
+      return;
+    }
+    
     // 如果是橡皮擦，继续检测并删除相交的笔迹
     if (_currentTool.toolId == ToolId.eraser) {
       _eraseStrokesAtPosition(position, pageIndex: _currentPageIndex);
@@ -273,17 +529,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // ✅ 对于形状工具，更新结束点并重新计算形状点
     final toolId = _currentTool.toolId;
     if (toolId == ToolId.triangle) {
-      // ✅ 三角形工具：支持三个点的输入
-      if (stroke.points.isEmpty) {
-        stroke.points.add(position); // 第一个点
-      } else if (stroke.points.length == 1) {
-        stroke.points.add(position); // 第二个点
-      } else if (stroke.points.length == 2) {
-        stroke.points.add(position); // 第三个点
-      } else {
-        // 已经有三个点，更新第三个点
-        stroke.points[2] = position;
-      }
+      // ✅ 三角形工具：一笔绘制，像自由多边形一样添加点
+      stroke.points.add(position);
     } else if (toolId == ToolId.line ||
         toolId == ToolId.rectangle || 
         toolId == ToolId.circle || 
@@ -311,8 +558,346 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // 触发重绘
     });
   }
+  
+  /// ✅ 更新选择
+  void _updateSelection(Offset position) {
+    if (_selectResult == null || _selectStartPosition == null) {
+      return;
+    }
+    
+    // ✅ 如果已经完成选择（点击选择或拖拽选择完成），则移动选中的对象
+    if (!_isSelecting && _selectResult!.pageIndex == (_currentPageIndex ?? 0) && !_selectResult!.isEmpty) {
+      final offset = position - _selectStartPosition!;
+      if (offset.distance > 1.0) { // 只有移动距离大于1像素才移动
+        _selectResult!.move(offset);
+        _selectStartPosition = position;
+        setState(() {
+          // 触发重绘
+        });
+        _saveToStorage();
+      }
+      return;
+    }
+    
+    // ✅ 更新选择路径（拖拽选择区域）
+    if (_isSelecting) {
+      setState(() {
+        _selectResult!.selectionPath.lineTo(position.dx, position.dy);
+      });
+    }
+  }
+
+  /// ✅ 结束选择
+  void _endSelection() {
+    if (_selectResult == null) {
+      return;
+    }
+    
+    if (_isSelecting) {
+      // ✅ 完成选择区域，检测区域内的对象
+      if (_selectResult!.selectionPath.getBounds().width > 5 || 
+          _selectResult!.selectionPath.getBounds().height > 5) {
+        // 只有选择区域足够大时才检测（避免误触）
+        _selectResult!.selectionPath.close();
+        _detectObjectsInSelection(_selectResult!);
+      } else {
+        // ✅ 选择区域太小，取消选择
+        setState(() {
+          _selectResult = null;
+          _isSelecting = false;
+          _selectStartPosition = null;
+        });
+        return;
+      }
+      setState(() {
+        _isSelecting = false;
+      });
+    } else {
+      // ✅ 移动完成，保持选择状态
+      _selectStartPosition = null;
+    }
+  }
+  
+  /// ✅ 取消选择（点击空白区域时调用）
+  void _clearSelection() {
+    setState(() {
+      _selectResult = null;
+      _isSelecting = false;
+      _selectStartPosition = null;
+    });
+  }
+  
+  /// ✅ 创建文本框
+  void _createTextBox(Offset position, {int? pageIndex}) async {
+    final pageIdx = pageIndex ?? 0;
+    if (pageIdx < 0 || pageIdx >= _coreInfo.pages.length) {
+      return;
+    }
+    
+    final page = _coreInfo.pages[pageIdx];
+    
+    // ✅ 根据工具类型确定文本框类型
+    saber_text.TextBoxType textBoxType = saber_text.TextBoxType.normal;
+    if (_currentTool.toolId == ToolId.heading1) {
+      textBoxType = saber_text.TextBoxType.heading1;
+    } else if (_currentTool.toolId == ToolId.heading2) {
+      textBoxType = saber_text.TextBoxType.heading2;
+    } else if (_currentTool.toolId == ToolId.heading3) {
+      textBoxType = saber_text.TextBoxType.heading3;
+    } else if (_currentTool.toolId == ToolId.paragraph) {
+      textBoxType = saber_text.TextBoxType.paragraph;
+    }
+    
+    // ✅ 创建新文本框（默认大小）
+    final textBox = saber_text.TextBox(
+      id: 'textbox_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(1000)}',
+      position: position,
+      size: const Size(200, 100), // 默认大小
+      text: '',
+      textStyle: TextStyle(
+        fontSize: 16,
+        color: _currentTool.color,
+      ),
+      textBoxType: textBoxType, // ✅ 设置文本框类型
+    );
+    
+    // ✅ 应用标题样式
+    if (textBoxType != saber_text.TextBoxType.normal) {
+      textBox.textStyle = textBox.getHeadingStyle(_currentTool.color);
+    }
+    
+    // ✅ 添加到页面
+    setState(() {
+      page.textBoxes.add(textBox);
+    });
+    
+    // ✅ 打开编辑对话框
+    final editResult = await _showTextBoxEditDialog(textBox.text, textBox.textStyle);
+    if (editResult != null) {
+      setState(() {
+        textBox.text = editResult['text'] as String;
+        final formatting = editResult['formatting'] as TextFormatting;
+        textBox.textStyle = formatting.applyTo(
+          textBox.textStyle ?? TextStyle(
+            fontSize: 16,
+            color: _currentTool.color,
+          ),
+        );
+      });
+      _saveToStorage();
+    } else {
+      // 如果用户取消编辑，删除文本框
+      setState(() {
+        page.textBoxes.remove(textBox);
+      });
+    }
+  }
+  
+  /// ✅ 显示文本框编辑对话框
+  Future<Map<String, dynamic>?> _showTextBoxEditDialog(
+    String initialText,
+    TextStyle? initialStyle,
+  ) async {
+    final textController = TextEditingController(text: initialText);
+    String? result;
+    TextFormatting? finalFormatting;
+    TextFormatting currentFormatting = _currentTextFormatting;
+    
+    // ✅ 从初始样式恢复格式化状态
+    if (initialStyle != null) {
+      currentFormatting = TextFormatting(
+        bold: initialStyle.fontWeight == FontWeight.bold,
+        italic: initialStyle.fontStyle == FontStyle.italic,
+        underline: initialStyle.decoration == TextDecoration.underline ||
+            (initialStyle.decoration != null && 
+             initialStyle.decoration!.contains(TextDecoration.underline)),
+        strikethrough: initialStyle.decoration == TextDecoration.lineThrough ||
+            (initialStyle.decoration != null && 
+             initialStyle.decoration!.contains(TextDecoration.lineThrough)),
+      );
+    }
+    
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('编辑文本'),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ✅ 格式化工具栏
+                TextFormattingToolbar(
+                  formatting: currentFormatting,
+                  onFormattingChanged: (formatting) {
+                    setDialogState(() {
+                      currentFormatting = formatting;
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+                // ✅ 文本输入框
+                TextField(
+                  autofocus: true,
+                  controller: textController,
+                  maxLines: null,
+                  minLines: 5,
+                  style: currentFormatting.applyTo(
+                    initialStyle ?? const TextStyle(fontSize: 16),
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: '输入文本...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                result = null;
+                Navigator.of(context).pop();
+              },
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                result = textController.text;
+                finalFormatting = currentFormatting;
+                Navigator.of(context).pop();
+              },
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      ),
+    );
+    
+    if (result == null) {
+      return null;
+    }
+    
+    return {
+      'text': result!,
+      'formatting': finalFormatting ?? currentFormatting,
+    };
+  }
+  
+  /// ✅ 查找点击位置的文本框
+  saber_text.TextBox? _findTextBoxAtPosition(Offset position, int pageIndex) {
+    if (_coreInfo.pages.isEmpty || pageIndex < 0 || pageIndex >= _coreInfo.pages.length) {
+      return null;
+    }
+    
+    final page = _coreInfo.pages[pageIndex];
+    
+    // ✅ 从后往前查找（最上层的文本框优先）
+    for (int i = page.textBoxes.length - 1; i >= 0; i--) {
+      final textBox = page.textBoxes[i];
+      if (textBox.rect.contains(position)) {
+        return textBox;
+      }
+    }
+    
+    return null;
+  }
+  
+  /// ✅ 编辑文本框（点击已存在的文本框时调用）
+  Future<void> _editTextBox(saber_text.TextBox textBox) async {
+    final editResult = await _showTextBoxEditDialog(textBox.text, textBox.textStyle);
+    if (editResult != null) {
+      final newText = editResult['text'] as String;
+      final formatting = editResult['formatting'] as TextFormatting;
+      
+      if (newText != textBox.text || formatting != _currentTextFormatting) {
+        setState(() {
+          textBox.text = newText;
+          textBox.textStyle = formatting.applyTo(
+            textBox.textStyle ?? TextStyle(
+              fontSize: 16,
+              color: _currentTool.color,
+            ),
+          );
+        });
+        _saveToStorage();
+      }
+    }
+  }
+  
+  /// ✅ 检测选择区域内的对象
+  void _detectObjectsInSelection(SelectResult selectResult) {
+    if (_coreInfo.pages.isEmpty) {
+      return;
+    }
+    
+    final pageIndex = selectResult.pageIndex;
+    if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) {
+      return;
+    }
+    
+    final page = _coreInfo.pages[pageIndex];
+    final selectionPath = selectResult.selectionPath;
+    
+    // ✅ 检测笔迹（简化版：检查笔迹的点是否在选择区域内）
+    final selectedStrokes = <Stroke>[];
+    for (final stroke in page.strokes) {
+      int pointsInside = 0;
+      for (final point in stroke.points) {
+        if (selectionPath.contains(point)) {
+          pointsInside++;
+        }
+      }
+      // 如果70%以上的点在选择区域内，则认为被选中
+      if (stroke.points.isNotEmpty && 
+          pointsInside / stroke.points.length >= 0.7) {
+        selectedStrokes.add(stroke);
+      }
+    }
+    
+    // ✅ 检测图片
+    final selectedImages = <PdfEditorImage>[];
+    if (page.backgroundImage != null) {
+      final image = page.backgroundImage!;
+      if (image.dstRect != null) {
+        final rect = image.dstRect!;
+        // 检查矩形的四个角是否在选择区域内
+        int cornersInside = 0;
+        final corners = [
+          Offset(rect.left, rect.top),
+          Offset(rect.right, rect.top),
+          Offset(rect.right, rect.bottom),
+          Offset(rect.left, rect.bottom),
+        ];
+        for (final corner in corners) {
+          if (selectionPath.contains(corner)) {
+            cornersInside++;
+          }
+        }
+        // 如果至少3个角在选择区域内，则认为被选中
+        if (cornersInside >= 3) {
+          selectedImages.add(image);
+        }
+      }
+    }
+    
+    setState(() {
+      selectResult.strokes.clear();
+      selectResult.strokes.addAll(selectedStrokes);
+      selectResult.images.clear();
+      selectResult.images.addAll(selectedImages);
+    });
+  }
 
   Future<void> _endStroke() async {
+    // ✅ 如果是选择工具，结束选择
+    if (_currentTool.toolId == ToolId.select) {
+      _endSelection();
+      return;
+    }
+    
     final Stroke? stroke = _currentStroke;
     if (stroke == null || stroke.points.isEmpty) {
       _currentPageIndex = null;
@@ -353,6 +938,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           color: stroke.color,
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
+          fillColor: _currentFillColor, // ✅ 传递填充颜色
         );
       }
     } else if (toolId == ToolId.circle) {
@@ -364,27 +950,21 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           color: stroke.color,
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
+          fillColor: _currentFillColor, // ✅ 传递填充颜色
         );
       }
     } else if (toolId == ToolId.triangle) {
-      // ✅ 三角形：需要三个点
-      if (stroke.points.length >= 3) {
+      // ✅ 三角形：一笔绘制，自动优化为三角形
+      if (stroke.points.length >= 2) {
+        // ✅ 检测Shift键状态
+        final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
         finalStroke = TriangleStroke(
-          point1: stroke.points[0],
-          point2: stroke.points[1],
-          point3: stroke.points[2],
+          points: List<Offset>.from(stroke.points),
           color: stroke.color,
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
-        );
-      } else if (stroke.points.length == 2) {
-        // ✅ 兼容旧版本：如果只有两个点，使用fromRect构造函数
-        finalStroke = TriangleStroke.fromRect(
-          startPoint: stroke.points[0],
-          endPoint: stroke.points[1],
-          color: stroke.color,
-          strokeWidth: stroke.strokeWidth,
-          toolId: toolId,
+          isShiftPressed: isShiftPressed, // ✅ 传递Shift键状态
+          fillColor: _currentFillColor, // ✅ 传递填充颜色
         );
       }
     } else if (toolId == ToolId.diamond) {
@@ -396,6 +976,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           color: stroke.color,
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
+          fillColor: _currentFillColor, // ✅ 传递填充颜色
         );
       }
     } else if (toolId == ToolId.freePolygon) {
@@ -476,6 +1057,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     });
   }
 
+  /// ✅ 填充颜色改变回调
+  void _onFillColorChanged(Color? fillColor) {
+    setState(() {
+      _currentFillColor = fillColor;
+    });
+  }
+
   void _onStrokeWidthChanged(double width) {
     setState(() {
       if (_currentTool is Pen) {
@@ -524,10 +1112,41 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       onPanStart: (DragStartDetails details) {
         // ✅ 只处理当前页面的触摸事件
         if (!isPointInPage(details.localPosition)) {
+          // ✅ 点击在页面外，取消选择
+          if (_currentTool.toolId == ToolId.select) {
+            _clearSelection();
+          }
           return;
         }
         final pagePos = toPageCoordinates(details.localPosition);
         if (pagePos.dx.isFinite && pagePos.dy.isFinite) {
+          // ✅ 如果是选择工具，检查是否点击在空白区域或文本框
+          if (_currentTool.toolId == ToolId.select) {
+            final clickedStroke = _findStrokeAtPosition(pagePos, pageIndex);
+            final clickedTextBox = _findTextBoxAtPosition(pagePos, pageIndex);
+            if (clickedStroke == null && clickedTextBox == null &&
+                (_selectResult == null || !_isPointInSelection(pagePos, _selectResult!))) {
+              // ✅ 点击在空白区域，取消选择
+              _clearSelection();
+            } else if (clickedTextBox != null) {
+              // ✅ 点击在文本框上，编辑文本框
+              _editTextBox(clickedTextBox);
+              return;
+            }
+          }
+          // ✅ 如果是文本框工具或标题工具，检查是否点击在已存在的文本框上
+          if (_currentTool.toolId == ToolId.textBox ||
+              _currentTool.toolId == ToolId.heading1 ||
+              _currentTool.toolId == ToolId.heading2 ||
+              _currentTool.toolId == ToolId.heading3 ||
+              _currentTool.toolId == ToolId.paragraph) {
+            final clickedTextBox = _findTextBoxAtPosition(pagePos, pageIndex);
+            if (clickedTextBox != null) {
+              // ✅ 点击在已存在的文本框上，编辑它
+              _editTextBox(clickedTextBox);
+              return;
+            }
+          }
           // ✅ 确保笔迹添加到正确的页面
           if (pageIndex < _coreInfo.pages.length) {
             _startStroke(pagePos, pageIndex: pageIndex);
@@ -561,6 +1180,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
               lineThickness: _coreInfo.lineThickness,
             )..laserStrokes.addAll(_coreInfo.laserStrokes),
             currentStroke: _currentStroke,
+            selectResult: _selectResult != null && 
+                _selectResult!.pageIndex == pageIndex ? _selectResult : null,
+            isSelecting: _isSelecting && 
+                _selectResult != null && 
+                _selectResult!.pageIndex == pageIndex,
           ),
         ),
       ),
@@ -795,6 +1419,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             onColorChanged: _onColorChanged,
             currentStrokeWidth: _currentTool.strokeWidth,
             onStrokeWidthChanged: _onStrokeWidthChanged,
+            currentFillColor: _currentFillColor, // ✅ 填充颜色
+            onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
             onImportPdf: _importPdf,  // ✅ PDF 导入回调
           ),
           const Divider(height: 1),
