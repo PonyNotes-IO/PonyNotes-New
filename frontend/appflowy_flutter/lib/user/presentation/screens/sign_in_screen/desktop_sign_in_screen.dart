@@ -38,6 +38,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
     with WindowListener {
   bool _phoneDialogOpen = false;
   bool _phoneBindingCancelled = false; // 阻止未绑定时误入主页
+  bool _isNavigatingToHome = false; // 防止重复导航
 
   @override
   Widget build(BuildContext context) {
@@ -69,18 +70,34 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
           _phoneDialogOpen = false;
 
           if (profile != null) {
-                // 检查 context 是否仍然有效
-                if (!context.mounted) {
-                  return;
-                }
-                final rootNavigator = Navigator.of(context, rootNavigator: true);
-                if (rootNavigator != null) {
-                  final rootContext = rootNavigator.context;
-                if (rootContext.mounted) {
-                  getIt<AuthRouter>().goHomeScreen(rootContext, profile);
-                  }
-                }
-              } else {
+            // 绑定成功，设置登录成功状态并导航到主页
+            // 检查 context 是否仍然有效
+            if (!context.mounted || _isNavigatingToHome) {
+              return;
+            }
+            
+            // 设置导航标志，防止重复调用
+            _isNavigatingToHome = true;
+            
+            // 先设置登录成功状态，确保后续逻辑能正确执行
+            try {
+              final signInBloc = context.read<SignInBloc>();
+              if (!signInBloc.isClosed) {
+                signInBloc.add(SignInEvent.phoneBindingComplete(profile));
+              }
+            } catch (e) {
+              // SignInBloc 不可用，直接导航
+            }
+            
+            // 导航到主页
+            final rootNavigator = Navigator.of(context, rootNavigator: true);
+            if (rootNavigator != null) {
+              final rootContext = rootNavigator.context;
+              if (rootContext.mounted) {
+                getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+              }
+            }
+          } else {
             // 用户取消了绑定，立即设置标志（在 reset 之前），防止 BlocListener 被触发时进入主界面
             _phoneBindingCancelled = true;
                 showToastNotification(

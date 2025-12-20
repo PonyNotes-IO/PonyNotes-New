@@ -279,19 +279,8 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
               return;
             }
             
-            // 通过 SignInBloc 设置登录成功状态（如果可用且未关闭）
-            try {
-              if (!mounted) return;
-              final signInBloc = context.read<SignInBloc>();
-              // 检查 bloc 是否已关闭，避免 "Cannot add new events after calling close" 错误
-              if (!signInBloc.isClosed) {
-                signInBloc.add(SignInEvent.phoneBindingComplete(profile));
-              }
-            } catch (e) {
-              // SignInBloc 不可用或已关闭（例如在 appflowy_cloud_task 中），
-              // 让 desktop_sign_in_screen 处理导航
-            }
-            // 返回 profile，让 desktop_sign_in_screen 处理导航
+            // 直接返回 profile，让 desktop_sign_in_screen 处理导航
+            // 不在这里触发 phoneBindingComplete 事件，避免重复导航
             if (mounted) {
               Navigator.of(context).pop(profile);
             }
