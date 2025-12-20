@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:file_picker/file_picker.dart';
@@ -144,10 +143,21 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
   }
 
-  void _startStroke(Offset position) {
+  /// ✅ 当前正在绘制的页面索引
+  int? _currentPageIndex;
+  
+  void _startStroke(Offset position, {int? pageIndex}) {
+    // ✅ 设置当前页面索引
+    _currentPageIndex = pageIndex ?? 0;
+    
+    // 确保页面索引有效
+    if (_currentPageIndex! >= _coreInfo.pages.length) {
+      _currentPageIndex = 0;
+    }
+    
     // 如果是橡皮擦，不创建新笔迹，而是检测并删除相交的笔迹
     if (_currentTool.toolId == ToolId.eraser) {
-      _eraseStrokesAtPosition(position);
+      _eraseStrokesAtPosition(position, pageIndex: _currentPageIndex);
       return;
     }
     
@@ -167,12 +177,17 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
   
   /// 在指定位置擦除相交的笔迹
-  void _eraseStrokesAtPosition(Offset position) {
+  void _eraseStrokesAtPosition(Offset position, {int? pageIndex}) {
     if (_coreInfo.pages.isEmpty) {
       return;
     }
     
-    final page = _coreInfo.pages.first;
+    final int targetPageIndex = pageIndex ?? 0;
+    if (targetPageIndex >= _coreInfo.pages.length) {
+      return;
+    }
+    
+    final page = _coreInfo.pages[targetPageIndex];
     final eraserSize = _currentTool.strokeWidth;
     final sqrEraserSize = eraserSize * eraserSize;
     
@@ -246,7 +261,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   void _updateStroke(Offset position) {
     // 如果是橡皮擦，继续检测并删除相交的笔迹
     if (_currentTool.toolId == ToolId.eraser) {
-      _eraseStrokesAtPosition(position);
+      _eraseStrokesAtPosition(position, pageIndex: _currentPageIndex);
       return;
     }
     
@@ -257,11 +272,23 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     
     // ✅ 对于形状工具，更新结束点并重新计算形状点
     final toolId = _currentTool.toolId;
-    if (toolId == ToolId.rectangle || 
+    if (toolId == ToolId.triangle) {
+      // ✅ 三角形工具：支持三个点的输入
+      if (stroke.points.isEmpty) {
+        stroke.points.add(position); // 第一个点
+      } else if (stroke.points.length == 1) {
+        stroke.points.add(position); // 第二个点
+      } else if (stroke.points.length == 2) {
+        stroke.points.add(position); // 第三个点
+      } else {
+        // 已经有三个点，更新第三个点
+        stroke.points[2] = position;
+      }
+    } else if (toolId == ToolId.line ||
+        toolId == ToolId.rectangle || 
         toolId == ToolId.circle || 
-        toolId == ToolId.triangle || 
         toolId == ToolId.diamond) {
-      // 形状工具：起始点是第一个点，结束点是当前位置
+      // 其他形状工具：起始点是第一个点，结束点是当前位置
       if (stroke.points.isEmpty) {
         stroke.points.add(position);
       } else {
@@ -288,17 +315,36 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   Future<void> _endStroke() async {
     final Stroke? stroke = _currentStroke;
     if (stroke == null || stroke.points.isEmpty) {
+      _currentPageIndex = null;
       return;
     }
     if (_coreInfo.pages.isEmpty) {
       _coreInfo = EditorCoreInfo.empty();
     }
     
+    // ✅ 确保页面索引有效
+    final int targetPageIndex = _currentPageIndex ?? 0;
+    if (targetPageIndex >= _coreInfo.pages.length) {
+      _currentPageIndex = null;
+      return;
+    }
+    
     // ✅ 根据工具类型创建对应的形状笔迹
     final toolId = stroke.toolId;
     Stroke? finalStroke;
     
-    if (toolId == ToolId.rectangle) {
+    if (toolId == ToolId.line) {
+      // ✅ 直线
+      if (stroke.points.length >= 2) {
+        finalStroke = LineStroke(
+          startPoint: stroke.points.first,
+          endPoint: stroke.points[1],
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: toolId,
+        );
+      }
+    } else if (toolId == ToolId.rectangle) {
       // ✅ 矩形
       if (stroke.points.length >= 2) {
         finalStroke = RectangleStroke(
@@ -321,10 +367,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         );
       }
     } else if (toolId == ToolId.triangle) {
-      // ✅ 三角形
-      if (stroke.points.length >= 2) {
+      // ✅ 三角形：需要三个点
+      if (stroke.points.length >= 3) {
         finalStroke = TriangleStroke(
-          startPoint: stroke.points.first,
+          point1: stroke.points[0],
+          point2: stroke.points[1],
+          point3: stroke.points[2],
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: toolId,
+        );
+      } else if (stroke.points.length == 2) {
+        // ✅ 兼容旧版本：如果只有两个点，使用fromRect构造函数
+        finalStroke = TriangleStroke.fromRect(
+          startPoint: stroke.points[0],
           endPoint: stroke.points[1],
           color: stroke.color,
           strokeWidth: stroke.strokeWidth,
@@ -380,13 +436,14 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       );
     }
     
-    // ✅ 保存完成的笔迹
+    // ✅ 保存完成的笔迹到正确的页面
     if (finalStroke != null) {
-      _coreInfo.pages.first.strokes.add(finalStroke);
+      _coreInfo.pages[targetPageIndex].strokes.add(finalStroke);
     }
     
     setState(() {
       _currentStroke = null;
+      _currentPageIndex = null;
     });
     await _saveToStorage();
   }
@@ -429,6 +486,87 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     });
   }
   
+  /// ✅ 构建单页画布（支持触摸绘制）
+  Widget _buildSinglePageCanvas({
+    required EditorPage page,
+    required int pageIndex,
+    required double pageDisplayWidth,
+    required double pageDisplayHeight,
+    required double screenWidth,
+  }) {
+    // ✅ 计算页面坐标变换参数
+    final double scale = pageDisplayWidth / page.size.width;
+    final double offsetX = (screenWidth - pageDisplayWidth) / 2;
+    final double offsetY = 0;  // 页面顶部对齐
+    
+    // ✅ 将 localPosition 转换为页面坐标
+    Offset toPageCoordinates(Offset localPosition) {
+      // 防止除零错误
+      if (scale <= 0) {
+        return localPosition;
+      }
+      return Offset(
+        (localPosition.dx - offsetX) / scale,
+        (localPosition.dy - offsetY) / scale,
+      );
+    }
+    
+    // ✅ 检查触摸点是否在当前页面范围内
+    bool isPointInPage(Offset localPosition) {
+      return localPosition.dx >= offsetX &&
+          localPosition.dx <= offsetX + pageDisplayWidth &&
+          localPosition.dy >= offsetY &&
+          localPosition.dy <= offsetY + pageDisplayHeight;
+    }
+    
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanStart: (DragStartDetails details) {
+        // ✅ 只处理当前页面的触摸事件
+        if (!isPointInPage(details.localPosition)) {
+          return;
+        }
+        final pagePos = toPageCoordinates(details.localPosition);
+        if (pagePos.dx.isFinite && pagePos.dy.isFinite) {
+          // ✅ 确保笔迹添加到正确的页面
+          if (pageIndex < _coreInfo.pages.length) {
+            _startStroke(pagePos, pageIndex: pageIndex);
+          }
+        }
+      },
+      onPanUpdate: (DragUpdateDetails details) {
+        // ✅ 只处理当前页面的触摸事件
+        if (!isPointInPage(details.localPosition)) {
+          return;
+        }
+        final pagePos = toPageCoordinates(details.localPosition);
+        if (pagePos.dx.isFinite && pagePos.dy.isFinite) {
+          _updateStroke(pagePos);
+        }
+      },
+      onPanEnd: (DragEndDetails details) => _endStroke(),
+      child: Container(
+        width: screenWidth,
+        height: pageDisplayHeight,
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          width: pageDisplayWidth,
+          height: pageDisplayHeight,
+          child: SaberCoreCanvas(
+            coreInfo: EditorCoreInfo(
+              pages: [page],  // ✅ 只传递当前页面
+              backgroundColor: _coreInfo.backgroundColor,
+              backgroundPattern: _coreInfo.backgroundPattern,
+              lineHeight: _coreInfo.lineHeight,
+              lineThickness: _coreInfo.lineThickness,
+            )..laserStrokes.addAll(_coreInfo.laserStrokes),
+            currentStroke: _currentStroke,
+          ),
+        ),
+      ),
+    );
+  }
+  
   /// ✅ 导入 PDF 文件（参考 Saber 的 importPdfFromFilePath）
   Future<void> _importPdf() async {
     try {
@@ -453,64 +591,86 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
   }
   
-  /// ✅ 从文件路径导入 PDF（参考 Saber 的实现）
+  /// ✅ 从文件路径导入 PDF（参考 Saber 的实现，支持多页）
   Future<void> _importPdfFromFilePath(String pdfFilePath) async {
     try {
       // 加载 PDF 文档
       final pdfDocument = await PdfDocument.openFile(pdfFilePath);
       
-      // 获取第一页（当前 PoC 只支持单页）
+      // 检查PDF是否有页面
       if (pdfDocument.pages.isEmpty) {
         throw Exception('PDF 文件没有页面');
       }
       
-      final pdfPage = pdfDocument.pages[1];  // pdfrx 页面编号从 1 开始
+      // ✅ 保存当前第一页的笔迹（如果有）
+      final List<Stroke> existingStrokes = _coreInfo.pages.isNotEmpty
+          ? List<Stroke>.from(_coreInfo.pages.first.strokes)
+          : <Stroke>[];
       
-      // 计算页面尺寸（参考 Saber 的实现）
-      const defaultWidth = 800.0;  // 默认页面宽度
-      final pageSize = Size(
-        defaultWidth,
-        defaultWidth * pdfPage.height / pdfPage.width,
-      );
+      // ✅ 清空现有页面（除了最后一页空页面，如果有的话）
+      // 参考 Saber 的实现：移除最后一页空页面，导入PDF后重新添加
+      // 检查最后一页是否为空（没有笔迹、没有背景图片）
+      final bool hadEmptyPage = _coreInfo.pages.isNotEmpty && 
+          _coreInfo.pages.last.strokes.isEmpty &&
+          _coreInfo.pages.last.backgroundImage == null;
+      if (hadEmptyPage && _coreInfo.pages.length > 1) {
+        _coreInfo.pages.removeLast();
+      }
+      _coreInfo.pages.clear();
       
-      // 创建 PDF 背景图片
-      final pdfImage = PdfEditorImage(
-        pdfFilePath: pdfFilePath,
-        pdfPageIndex: 0,  // 第一页索引为 0
-        naturalSize: pdfPage.size,
-        dstRect: Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
-      );
+      // ✅ 为每个 PDF 页面创建一个新的 EditorPage
+      for (final pdfPage in pdfDocument.pages) {
+        // pdfrx 页面编号从 1 开始
+        assert(pdfPage.pageNumber >= 1, 'pdfrx page numbers start at 1');
+        
+        // ✅ 计算页面尺寸（参考 Saber 的实现）
+        // resize to defaultWidth to keep pen sizes consistent
+        final pageSize = Size(
+          EditorPage.defaultWidth,
+          EditorPage.defaultWidth * pdfPage.height / pdfPage.width,
+        );
+        
+        // ✅ 创建 PDF 背景图片
+        // dstRect 设置为填充整个页面（从 (0,0) 开始，大小为 pageSize）
+        final pdfImage = PdfEditorImage(
+          pdfFilePath: pdfFilePath,
+          pdfPageIndex: pdfPage.pageNumber - 1,  // PDF 页面索引（从 0 开始）
+          naturalSize: pdfPage.size,
+          dstRect: Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
+        );
+        
+        // ✅ 创建新页面，如果是第一页则保留原有笔迹
+        final page = EditorPage(
+          size: pageSize,
+          strokes: _coreInfo.pages.isEmpty ? existingStrokes : <Stroke>[],
+          backgroundImage: pdfImage,
+        );
+        _coreInfo.pages.add(page);
+      }
       
-      // 更新当前页面，设置 PDF 背景
-      setState(() {
-        if (_coreInfo.pages.isEmpty) {
-          _coreInfo.pages.add(EditorPage(
-            size: pageSize,
-            backgroundImage: pdfImage,
-          ));
-        } else {
-          // 更新第一页
-          final page = _coreInfo.pages.first;
-          _coreInfo.pages[0] = EditorPage(
-            size: pageSize,
-            strokes: page.strokes,
-            backgroundImage: pdfImage,
-          );
-        }
-      });
+      // ✅ 添加一个空页面（参考 Saber 的实现）
+      _coreInfo.pages.add(EditorPage(
+        size: EditorPage.defaultSize,
+      ));
+      
+      // 更新状态
+      setState(() {});
       
       // 保存更改
       await _saveToStorage();
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PDF 导入成功')),
+          SnackBar(
+            content: Text('PDF 导入成功（${pdfDocument.pages.length} 页）'),
+          ),
         );
       }
       
       // 释放 PDF 文档资源（PdfEditorImage 会管理自己的文档）
       pdfDocument.dispose();
     } catch (e) {
+      debugPrint('❌ [HandwritingSaberPocPage] 导入 PDF 失败：$e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('导入 PDF 失败：$e')),
@@ -607,28 +767,25 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.view.name),
+        // ✅ 在AppBar底部显示状态信息（更合适的位置）
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(24),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _status,
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ),
+        ),
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Handwriting Saber PoC',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _status,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          // 工具栏
+          // ✅ 工具栏（移除状态提示区域）
           HandwritingSaberToolbar(
             currentTool: _currentTool,
             onToolChanged: _onToolChanged,
@@ -644,58 +801,52 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           Expanded(
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
-                // 计算页面坐标变换参数（与 SaberCoreCanvas 中的变换保持一致）
-                final EditorPage page = _coreInfo.firstPage;
-                
-                // 防止除零错误
-                if (page.size.width <= 0 || page.size.height <= 0) {
+                // ✅ 支持多页滚动显示
+                if (_coreInfo.pages.isEmpty) {
                   return const Center(
-                    child: Text('页面尺寸无效'),
+                    child: Text('没有页面'),
                   );
                 }
                 
-                final double scaleX = constraints.maxWidth / page.size.width;
-                final double scaleY = constraints.maxHeight / page.size.height;
-                final double scale = scaleX < scaleY ? scaleX : scaleY;
-                final double drawWidth = page.size.width * scale;
-                final double drawHeight = page.size.height * scale;
-                final double offsetX = (constraints.maxWidth - drawWidth) / 2;
-                final double offsetY = (constraints.maxHeight - drawHeight) / 2;
-
-                // 将 localPosition 转换为页面坐标
-                Offset toPageCoordinates(Offset localPosition) {
+                // ✅ 计算每页的显示大小（使用屏幕宽度，保持比例）
+                final double screenWidth = constraints.maxWidth;
+                final List<Widget> pageWidgets = [];
+                
+                for (int pageIndex = 0; pageIndex < _coreInfo.pages.length; pageIndex++) {
+                  final EditorPage page = _coreInfo.pages[pageIndex];
+                  
                   // 防止除零错误
-                  if (scale <= 0) {
-                    return localPosition;
+                  if (page.size.width <= 0 || page.size.height <= 0) {
+                    continue;
                   }
-                  return Offset(
-                    (localPosition.dx - offsetX) / scale,
-                    (localPosition.dy - offsetY) / scale,
+                  
+                  // ✅ 计算页面缩放（使用屏幕宽度，保持比例）
+                  // 确保页面宽度不超过屏幕宽度，高度按比例缩放
+                  final double pageScale = screenWidth / page.size.width;
+                  final double pageDisplayWidth = page.size.width * pageScale;
+                  final double pageDisplayHeight = page.size.height * pageScale;
+                  
+                  // ✅ 创建单页画布
+                  final pageWidget = _buildSinglePageCanvas(
+                    page: page,
+                    pageIndex: pageIndex,
+                    pageDisplayWidth: pageDisplayWidth,
+                    pageDisplayHeight: pageDisplayHeight,
+                    screenWidth: screenWidth,
                   );
+                  
+                  pageWidgets.add(pageWidget);
+                  
+                  // ✅ 页面之间的间距（除了最后一页）
+                  if (pageIndex < _coreInfo.pages.length - 1) {
+                    pageWidgets.add(const SizedBox(height: 16));
+                  }
                 }
-
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onPanStart: (DragStartDetails details) {
-                    final pagePos = toPageCoordinates(details.localPosition);
-                    if (pagePos.dx.isFinite && pagePos.dy.isFinite) {
-                      _startStroke(pagePos);
-                    }
-                  },
-                  onPanUpdate: (DragUpdateDetails details) {
-                    final pagePos = toPageCoordinates(details.localPosition);
-                    if (pagePos.dx.isFinite && pagePos.dy.isFinite) {
-                      _updateStroke(pagePos);
-                    }
-                  },
-                  onPanEnd: (DragEndDetails details) => _endStroke(),
-                  child: SizedBox(
-                    width: constraints.maxWidth,
-                    height: constraints.maxHeight,
-                    child: SaberCoreCanvas(
-                      coreInfo: _coreInfo,
-                      currentStroke: _currentStroke,
-                    ),
+                
+                // ✅ 使用 SingleChildScrollView 支持垂直滚动
+                return SingleChildScrollView(
+                  child: Column(
+                    children: pageWidgets,
                   ),
                 );
               },

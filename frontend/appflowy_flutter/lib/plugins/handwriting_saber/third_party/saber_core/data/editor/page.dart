@@ -12,6 +12,11 @@ import 'shape_strokes.dart';
 /// - 页面尺寸
 /// - 笔迹列表
 class EditorPage {
+  /// ✅ 默认页面宽度（参考 Saber 的 EditorPage.defaultWidth）
+  static const double defaultWidth = 1000.0;
+  static const double defaultHeight = defaultWidth * 1.4;
+  static const defaultSize = Size(defaultWidth, defaultHeight);
+
   EditorPage({
     required this.size,
     List<Stroke>? strokes,
@@ -96,6 +101,8 @@ class EditorPage {
             // ✅ 根据 shape 字段创建对应的形状笔迹
             final shape = json['shape'] as String?;
             switch (shape) {
+              case 'line':
+                return LineStroke.fromJson(json) as Stroke;
               case 'rectangle':
                 return RectangleStroke.fromJson(json) as Stroke;
               case 'circle':

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:perfect_freehand/perfect_freehand.dart' as pf;
 
 import '../canvas/canvas_background_pattern.dart';
-import '../canvas/image/pdf_editor_image.dart';
 import '../../data/editor/editor_core_info.dart';
 import '../../data/editor/page.dart';
 import '../../data/editor/shape_strokes.dart';
@@ -37,15 +36,46 @@ class SaberCoreCanvas extends StatelessWidget {
         final double scaleY = constraints.maxHeight / page.size.height;
         final double scale = scaleX < scaleY ? scaleX : scaleY;
         
-        // ✅ 如果有 PDF 背景图片，使用 Stack 叠加显示
+        // ✅ 计算绘制区域的实际大小和偏移
+        final double drawWidth = page.size.width * scale;
+        final double drawHeight = page.size.height * scale;
+        final double offsetX = (constraints.maxWidth - drawWidth) / 2;
+        final double offsetY = (constraints.maxHeight - drawHeight) / 2;
+        
+        // ✅ 如果有 PDF 背景图片，将 PDF 放在 CustomPaint 的 child 中
+        // 这样 PDF 在底层，笔迹在 foregroundPainter 中绘制在上层
         if (page.backgroundImage != null) {
+          // 异步加载 PDF 文档
+          page.backgroundImage!.loadPdfDocument();
+          
           return Stack(
             children: [
-              // PDF 背景层
-              Positioned.fill(
-                child: _buildPdfBackground(page.backgroundImage!, scale),
+              // ✅ PDF 背景层（使用 IgnorePointer 确保不阻挡触摸事件）
+              // PDF 背景填充整个绘制区域（参考 Saber 的实现）
+              Positioned(
+                left: offsetX,
+                top: offsetY,
+                width: drawWidth,
+                height: drawHeight,
+                child: IgnorePointer(
+                  // ✅ PDF 背景不阻挡触摸事件，让外层的 GestureDetector 处理手势
+                  child: SizedBox(
+                    width: drawWidth,
+                    height: drawHeight,
+                    child: FittedBox(
+                      fit: BoxFit.contain,  // ✅ 使用 contain 保持PDF比例，填充可用空间
+                      child: SizedBox(
+                        width: page.size.width,
+                        height: page.size.height,
+                        child: page.backgroundImage!.buildPdfPageWidget(
+                          boxFit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              // 画布层（绘制笔迹）
+              // ✅ 画布层（绘制笔迹，透明背景，不阻挡触摸事件）
               CustomPaint(
                 painter: _SaberCoreCanvasPainter(
                   page: page,
@@ -70,39 +100,6 @@ class SaberCoreCanvas extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-  
-  /// ✅ 构建 PDF 背景 Widget
-  Widget _buildPdfBackground(PdfEditorImage pdfImage, double scale) {
-    // 异步加载 PDF 文档
-    pdfImage.loadPdfDocument();
-    
-    // 计算 PDF 显示区域
-    final dstRect = pdfImage.dstRect ?? Rect.fromLTWH(
-      0,
-      0,
-      pdfImage.naturalSize.width,
-      pdfImage.naturalSize.height,
-    );
-    
-    return Positioned(
-      left: dstRect.left * scale,
-      top: dstRect.top * scale,
-      width: dstRect.width * scale,
-      height: dstRect.height * scale,
-      child: ClipRect(
-        child: FittedBox(
-          fit: BoxFit.contain,
-          child: SizedBox(
-            width: pdfImage.naturalSize.width,
-            height: pdfImage.naturalSize.height,
-            child: pdfImage.buildPdfPageWidget(
-              boxFit: BoxFit.contain,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -212,7 +209,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
         canvas.restore();
       } else if (currentStroke!.toolId == ToolId.laserPointer) {
         _drawLaserStroke(canvas, currentStroke!, scale, offsetX, offsetY);
-      } else if (currentStroke!.toolId == ToolId.rectangle || 
+      } else if (currentStroke!.toolId == ToolId.line ||
+                 currentStroke!.toolId == ToolId.rectangle || 
                  currentStroke!.toolId == ToolId.circle || 
                  currentStroke!.toolId == ToolId.triangle || 
                  currentStroke!.toolId == ToolId.diamond) {
@@ -358,8 +356,11 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       return;
     }
     
-    // ✅ 检查是否是形状笔迹（RectangleStroke, CircleStroke 等）
-    if (stroke is RectangleStroke) {
+    // ✅ 检查是否是形状笔迹（LineStroke, RectangleStroke, CircleStroke 等）
+    if (stroke is LineStroke) {
+      _drawLineStroke(canvas, stroke, scale, offsetX, offsetY);
+      return;
+    } else if (stroke is RectangleStroke) {
       _drawRectangleStroke(canvas, stroke, scale, offsetX, offsetY);
       return;
     } else if (stroke is CircleStroke) {
@@ -600,6 +601,24 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     );
   }
 
+  /// ✅ 绘制直线笔迹
+  void _drawLineStroke(Canvas canvas, LineStroke stroke, double scale, double offsetX, double offsetY) {
+    final start = stroke.startPoint;
+    final end = stroke.endPoint;
+    
+    canvas.save();
+    canvas.translate(offsetX, offsetY);
+    canvas.scale(scale);
+    
+    final paint = Paint()
+      ..color = stroke.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke.strokeWidth;
+    
+    canvas.drawLine(start, end, paint);
+    canvas.restore();
+  }
+
   /// ✅ 绘制矩形笔迹
   void _drawRectangleStroke(Canvas canvas, RectangleStroke stroke, double scale, double offsetX, double offsetY) {
     final rect = stroke.rect;
@@ -618,11 +637,9 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     canvas.restore();
   }
   
-  /// ✅ 绘制圆形笔迹
+  /// ✅ 绘制圆形/椭圆笔迹
   void _drawCircleStroke(Canvas canvas, CircleStroke stroke, double scale, double offsetX, double offsetY) {
-    final center = stroke.center;
-    final radius = stroke.radius;
-    if (radius <= 0) return;
+    if (stroke.points.length < 2) return;
     
     canvas.save();
     canvas.translate(offsetX, offsetY);
@@ -633,11 +650,18 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke.strokeWidth;
     
-    canvas.drawCircle(center, radius, paint);
+    // ✅ 支持椭圆：计算边界矩形
+    final left = stroke.points.map((p) => p.dx).reduce(math.min);
+    final top = stroke.points.map((p) => p.dy).reduce(math.min);
+    final right = stroke.points.map((p) => p.dx).reduce(math.max);
+    final bottom = stroke.points.map((p) => p.dy).reduce(math.max);
+    final rect = Rect.fromLTRB(left, top, right, bottom);
+    
+    canvas.drawOval(rect, paint);
     canvas.restore();
   }
   
-  /// ✅ 绘制三角形笔迹
+  /// ✅ 绘制三角形笔迹（支持任意三角形）
   void _drawTriangleStroke(Canvas canvas, TriangleStroke stroke, double scale, double offsetX, double offsetY) {
     if (stroke.points.length < 3) return;
     
@@ -650,12 +674,16 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke.strokeWidth;
     
-    final path = Path();
-    path.moveTo(stroke.points[0].dx, stroke.points[0].dy);
-    for (int i = 1; i < stroke.points.length; i++) {
-      path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
-    }
-    path.close();
+    // ✅ 使用三个点绘制三角形
+    final point1 = stroke.point1;
+    final point2 = stroke.point2;
+    final point3 = stroke.point3;
+    
+    final path = Path()
+      ..moveTo(point1.dx, point1.dy)
+      ..lineTo(point2.dx, point2.dy)
+      ..lineTo(point3.dx, point3.dy)
+      ..close();
     canvas.drawPath(path, paint);
     canvas.restore();
   }
@@ -685,12 +713,6 @@ class _SaberCoreCanvasPainter extends CustomPainter {
   
   /// ✅ 绘制形状预览（用于实时显示正在绘制的形状）
   void _drawShapePreview(Canvas canvas, Stroke stroke, double scale, double offsetX, double offsetY) {
-    if (stroke.points.length < 2) {
-      return;
-    }
-    
-    final startPoint = stroke.points.first;
-    final endPoint = stroke.points[1];
     final color = stroke.color;
     final strokeWidth = stroke.strokeWidth * scale;
     
@@ -704,68 +726,72 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       ..strokeWidth = strokeWidth;
     
     final toolId = stroke.toolId;
-    if (toolId == ToolId.rectangle) {
-      // ✅ 矩形
-      final left = math.min(startPoint.dx, endPoint.dx);
-      final top = math.min(startPoint.dy, endPoint.dy);
-      final right = math.max(startPoint.dx, endPoint.dx);
-      final bottom = math.max(startPoint.dy, endPoint.dy);
-      canvas.drawRect(Rect.fromLTRB(left, top, right, bottom), paint);
-    } else if (toolId == ToolId.circle) {
-      // ✅ 圆形
-      final center = Offset(
-        (startPoint.dx + endPoint.dx) / 2,
-        (startPoint.dy + endPoint.dy) / 2,
-      );
-      final radius = (startPoint - endPoint).distance / 2;
-      canvas.drawCircle(center, radius, paint);
-    } else if (toolId == ToolId.triangle) {
-      // ✅ 三角形
-      final center = Offset(
-        (startPoint.dx + endPoint.dx) / 2,
-        (startPoint.dy + endPoint.dy) / 2,
-      );
-      final width = (endPoint.dx - startPoint.dx).abs();
-      final height = (endPoint.dy - startPoint.dy).abs();
-      final radius = math.max(width, height) / 2;
+    if (toolId == ToolId.triangle) {
+      // ✅ 任意三角形：支持三个点的预览
+      if (stroke.points.length >= 3) {
+        // 有三个点，绘制完整三角形
+        final point1 = stroke.points[0];
+        final point2 = stroke.points[1];
+        final point3 = stroke.points[2];
+        final path = Path()
+          ..moveTo(point1.dx, point1.dy)
+          ..lineTo(point2.dx, point2.dy)
+          ..lineTo(point3.dx, point3.dy)
+          ..close();
+        canvas.drawPath(path, paint);
+      } else if (stroke.points.length == 2) {
+        // 只有两个点，显示一条线（预览）
+        canvas.drawLine(stroke.points[0], stroke.points[1], paint);
+      } else if (stroke.points.length == 1) {
+        // 只有一个点，显示一个点（预览）
+        canvas.drawCircle(stroke.points[0], strokeWidth / 2, paint);
+      }
+    } else if (stroke.points.length < 2) {
+      return;
+    } else {
+      final startPoint = stroke.points.first;
+      final endPoint = stroke.points[1];
       
-      final top = Offset(center.dx, center.dy - radius);
-      final bottomLeft = Offset(
-        center.dx - radius * math.cos(math.pi / 6),
-        center.dy + radius * math.sin(math.pi / 6),
-      );
-      final bottomRight = Offset(
-        center.dx + radius * math.cos(math.pi / 6),
-        center.dy + radius * math.sin(math.pi / 6),
-      );
-      
-      final path = Path()
-        ..moveTo(top.dx, top.dy)
-        ..lineTo(bottomRight.dx, bottomRight.dy)
-        ..lineTo(bottomLeft.dx, bottomLeft.dy)
-        ..close();
-      canvas.drawPath(path, paint);
-    } else if (toolId == ToolId.diamond) {
-      // ✅ 菱形
-      final center = Offset(
-        (startPoint.dx + endPoint.dx) / 2,
-        (startPoint.dy + endPoint.dy) / 2,
-      );
-      final width = (endPoint.dx - startPoint.dx).abs() / 2;
-      final height = (endPoint.dy - startPoint.dy).abs() / 2;
-      
-      final top = Offset(center.dx, center.dy - height);
-      final right = Offset(center.dx + width, center.dy);
-      final bottom = Offset(center.dx, center.dy + height);
-      final left = Offset(center.dx - width, center.dy);
-      
-      final path = Path()
-        ..moveTo(top.dx, top.dy)
-        ..lineTo(right.dx, right.dy)
-        ..lineTo(bottom.dx, bottom.dy)
-        ..lineTo(left.dx, left.dy)
-        ..close();
-      canvas.drawPath(path, paint);
+      if (toolId == ToolId.line) {
+        // ✅ 直线
+        canvas.drawLine(startPoint, endPoint, paint);
+      } else if (toolId == ToolId.rectangle) {
+        // ✅ 矩形
+        final left = math.min(startPoint.dx, endPoint.dx);
+        final top = math.min(startPoint.dy, endPoint.dy);
+        final right = math.max(startPoint.dx, endPoint.dx);
+        final bottom = math.max(startPoint.dy, endPoint.dy);
+        canvas.drawRect(Rect.fromLTRB(left, top, right, bottom), paint);
+      } else if (toolId == ToolId.circle) {
+        // ✅ 椭圆（支持非正圆）
+        final left = math.min(startPoint.dx, endPoint.dx);
+        final top = math.min(startPoint.dy, endPoint.dy);
+        final right = math.max(startPoint.dx, endPoint.dx);
+        final bottom = math.max(startPoint.dy, endPoint.dy);
+        final rect = Rect.fromLTRB(left, top, right, bottom);
+        canvas.drawOval(rect, paint);
+      } else if (toolId == ToolId.diamond) {
+        // ✅ 菱形
+        final center = Offset(
+          (startPoint.dx + endPoint.dx) / 2,
+          (startPoint.dy + endPoint.dy) / 2,
+        );
+        final width = (endPoint.dx - startPoint.dx).abs() / 2;
+        final height = (endPoint.dy - startPoint.dy).abs() / 2;
+        
+        final top = Offset(center.dx, center.dy - height);
+        final right = Offset(center.dx + width, center.dy);
+        final bottom = Offset(center.dx, center.dy + height);
+        final left = Offset(center.dx - width, center.dy);
+        
+        final path = Path()
+          ..moveTo(top.dx, top.dy)
+          ..lineTo(right.dx, right.dy)
+          ..lineTo(bottom.dx, bottom.dy)
+          ..lineTo(left.dx, left.dy)
+          ..close();
+        canvas.drawPath(path, paint);
+      }
     }
     
     canvas.restore();

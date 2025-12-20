@@ -9,6 +9,7 @@ enum ToolId {
   eraser,
   laserPointer,
   // ✅ 形状工具
+  line,        // ✅ 直线工具
   rectangle,
   circle,
   triangle,

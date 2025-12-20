@@ -5,6 +5,53 @@ import 'package:flutter/material.dart';
 import 'page.dart';
 import '../tools/tool.dart';
 
+/// ✅ 直线笔迹
+class LineStroke extends Stroke {
+  LineStroke({
+    required Offset startPoint,
+    required Offset endPoint,
+    required Color color,
+    required double strokeWidth,
+    ToolId? toolId,
+  }) : super(
+          points: [startPoint, endPoint],
+          color: color,
+          strokeWidth: strokeWidth,
+          toolId: toolId ?? ToolId.line,
+          pressureEnabled: false,
+        );
+
+  Offset get startPoint => points.isNotEmpty ? points.first : Offset.zero;
+  Offset get endPoint => points.length > 1 ? points[1] : Offset.zero;
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['shape'] = 'line';
+    return json;
+  }
+
+  factory LineStroke.fromJson(Map<String, dynamic> json) {
+    final stroke = Stroke.fromJson(json);
+    if (stroke.points.length < 2) {
+      return LineStroke(
+        startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
+        endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
+        color: stroke.color,
+        strokeWidth: stroke.strokeWidth,
+        toolId: stroke.toolId,
+      );
+    }
+    return LineStroke(
+      startPoint: stroke.points.first,
+      endPoint: stroke.points[1],
+      color: stroke.color,
+      strokeWidth: stroke.strokeWidth,
+      toolId: stroke.toolId,
+    );
+  }
+}
+
 /// ✅ 矩形笔迹
 class RectangleStroke extends Stroke {
   RectangleStroke({
@@ -94,15 +141,19 @@ class CircleStroke extends Stroke {
       (start.dx + end.dx) / 2,
       (start.dy + end.dy) / 2,
     );
-    final radius = (start - end).distance / 2;
+    // ✅ 支持椭圆：分别计算宽度和高度半径
+    final width = (end.dx - start.dx).abs();
+    final height = (end.dy - start.dy).abs();
+    final radiusX = width / 2;
+    final radiusY = height / 2;
     
-    // 生成圆形点（24个点）
+    // 生成椭圆点（24个点）
     final points = <Offset>[];
     for (int i = 0; i <= 24; i++) {
       final angle = i / 24 * 2 * pi;
       points.add(Offset(
-        center.dx + radius * cos(angle),
-        center.dy + radius * sin(angle),
+        center.dx + radiusX * cos(angle),
+        center.dy + radiusY * sin(angle),
       ));
     }
     return points;
@@ -152,38 +203,56 @@ class CircleStroke extends Stroke {
   }
 }
 
-/// ✅ 三角形笔迹
+/// ✅ 三角形笔迹（支持任意三角形，通过三个点定义）
 class TriangleStroke extends Stroke {
   TriangleStroke({
-    required Offset startPoint,
-    required Offset endPoint,
+    required Offset point1,
+    required Offset point2,
+    required Offset point3,
     required Color color,
     required double strokeWidth,
     ToolId? toolId,
   }) : super(
-          points: _calculateTrianglePoints(startPoint, endPoint),
+          points: [point1, point2, point3, point1], // 闭合三角形
           color: color,
           strokeWidth: strokeWidth,
           toolId: toolId ?? ToolId.triangle,
           pressureEnabled: false,
         );
 
-  static List<Offset> _calculateTrianglePoints(Offset start, Offset end) {
-    final center = Offset(
-      (start.dx + end.dx) / 2,
-      (start.dy + end.dy) / 2,
-    );
-    final width = (end.dx - start.dx).abs();
-    final height = (end.dy - start.dy).abs();
-    final radius = max(width, height) / 2;
+  // ✅ 兼容旧版本的构造函数（基于start和end的矩形区域）
+  TriangleStroke.fromRect({
+    required Offset startPoint,
+    required Offset endPoint,
+    required Color color,
+    required double strokeWidth,
+    ToolId? toolId,
+  }) : super(
+          points: _calculateTrianglePointsFromRect(startPoint, endPoint),
+          color: color,
+          strokeWidth: strokeWidth,
+          toolId: toolId ?? ToolId.triangle,
+          pressureEnabled: false,
+        );
+
+  static List<Offset> _calculateTrianglePointsFromRect(Offset start, Offset end) {
+    // ✅ 基于start和end的矩形区域（兼容旧版本）
+    final left = min(start.dx, end.dx);
+    final top = min(start.dy, end.dy);
+    final right = max(start.dx, end.dx);
+    final bottom = max(start.dy, end.dy);
     
-    // 等边三角形的三个顶点
-    final top = Offset(center.dx, center.dy - radius);
-    final bottomLeft = Offset(center.dx - radius * cos(pi / 6), center.dy + radius * sin(pi / 6));
-    final bottomRight = Offset(center.dx + radius * cos(pi / 6), center.dy + radius * sin(pi / 6));
+    // 三角形的三个顶点：左上角、右上角、底部中心
+    final topLeft = Offset(left, top);
+    final topRight = Offset(right, top);
+    final bottomCenter = Offset((left + right) / 2, bottom);
     
-    return [top, bottomRight, bottomLeft, top]; // 闭合
+    return [topLeft, topRight, bottomCenter, topLeft]; // 闭合
   }
+
+  Offset get point1 => points.isNotEmpty ? points[0] : Offset.zero;
+  Offset get point2 => points.length > 1 ? points[1] : Offset.zero;
+  Offset get point3 => points.length > 2 ? points[2] : Offset.zero;
 
   @override
   Map<String, dynamic> toJson() {
@@ -195,20 +264,34 @@ class TriangleStroke extends Stroke {
   factory TriangleStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
     if (stroke.points.length < 3) {
+      // ✅ 兼容旧版本：如果只有2个点，使用fromRect构造函数
+      if (stroke.points.length == 2) {
+        return TriangleStroke.fromRect(
+          startPoint: stroke.points[0],
+          endPoint: stroke.points[1],
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: stroke.toolId,
+        );
+      }
+      // 如果只有1个点或没有点，使用默认值
       return TriangleStroke(
-        startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
-        endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
+        point1: stroke.points.isNotEmpty ? stroke.points[0] : Offset.zero,
+        point2: stroke.points.length > 1 ? stroke.points[1] : const Offset(100, 0),
+        point3: stroke.points.length > 2 ? stroke.points[2] : const Offset(50, 100),
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
       );
     }
-    // 从三角形点计算起始点和结束点
-    final firstPoint = stroke.points.first;
-    final lastPoint = stroke.points[stroke.points.length - 2]; // 倒数第二个点
+    // ✅ 新版本：从三个点创建三角形（最后一个点是闭合点，忽略）
+    final point1 = stroke.points[0];
+    final point2 = stroke.points[1];
+    final point3 = stroke.points[2];
     return TriangleStroke(
-      startPoint: firstPoint,
-      endPoint: lastPoint,
+      point1: point1,
+      point2: point2,
+      point3: point3,
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
