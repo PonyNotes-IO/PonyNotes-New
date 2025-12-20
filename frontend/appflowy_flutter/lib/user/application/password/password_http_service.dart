@@ -130,16 +130,16 @@ class PasswordHttpService {
         'email': email,
       };
       
-      final result = await _makeRequest(
-        endpoint: PasswordEndpoint.forgotPassword,
+    final result = await _makeRequest(
+      endpoint: PasswordEndpoint.forgotPassword,
         body: body,
-        errorMessage: 'Failed to send password reset email',
-      );
+      errorMessage: 'Failed to send password reset email',
+    );
 
-      return result.fold(
-        (data) => FlowyResult.success(true),
-        (error) => FlowyResult.failure(error),
-      );
+    return result.fold(
+      (data) => FlowyResult.success(true),
+      (error) => FlowyResult.failure(error),
+    );
     }
   }
 

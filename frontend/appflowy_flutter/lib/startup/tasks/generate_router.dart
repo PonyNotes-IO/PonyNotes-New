@@ -757,7 +757,7 @@ GoRoute _rootRoute(Widget child) {
               final profileResult = await UserBackendService.getCurrentUserProfile();
               final profile = profileResult.fold(
                 (profile) => profile,
-                (error) => null,
+        (error) => null,
               );
               if (profile != null) {
                 final phone = profile.phone;

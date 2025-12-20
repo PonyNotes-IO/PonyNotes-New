@@ -140,6 +140,7 @@ class UserBackendService implements IUserBackendService {
       }
       
       // 调用云端 API 发送手机验证码
+      // 注意：手机号格式应由调用方确保（第三方绑定流程需要在调用前转换为 E.164 格式）
       final uri = Uri.parse('$baseUrl/api/user/send-phone-otp');
       final response = await http.post(
         uri,
@@ -246,6 +247,7 @@ class UserBackendService implements IUserBackendService {
       }
       
       // 调用 /api/user/verify-phone 端点
+      // 注意：手机号格式应由调用方确保（第三方绑定流程需要在调用前转换为 E.164 格式）
       final uri = Uri.parse('$baseUrl/api/user/verify-phone');
       final response = await http.post(
         uri,

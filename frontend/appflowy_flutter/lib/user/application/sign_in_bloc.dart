@@ -196,10 +196,10 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
               );
             } else {
               // 不需要绑定手机号，直接设置成功状态
-              return state.copyWith(
-                isSubmitting: false,
-                successOrFail: FlowyResult.success(s),
-              );
+            return state.copyWith(
+              isSubmitting: false,
+              successOrFail: FlowyResult.success(s),
+            );
             }
           },
           (f) => _stateFromCode(f),
@@ -428,18 +428,18 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             return state.copyWith(
               isSubmitting: false,
               successOrFail: FlowyResult.success(userProfile),
-            );
-          },
-          (error) {
+          );
+        },
+        (error) {
             Log.error('🟣 [SignInBloc] 兜底获取用户信息失败: ${error.msg}');
             return _stateFromCode(error);
           },
         );
       },
       (error) async {
-        Log.error('🟣 [SignInBloc] 验证码登录失败: ${error.msg}');
-        return _stateFromCode(error);
-      },
+          Log.error('🟣 [SignInBloc] 验证码登录失败: ${error.msg}');
+          return _stateFromCode(error);
+        },
     );
 
     emit(newState);
