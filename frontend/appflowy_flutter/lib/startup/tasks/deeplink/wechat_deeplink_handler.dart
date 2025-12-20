@@ -21,7 +21,6 @@ class WeChatDeepLinkHandler extends DeepLinkHandler<void> {
     required Uri uri,
     required DeepLinkStateHandler onStateChange,
   }) async {
-    Log.info('🟢 [WeChatDeepLinkHandler] handling uri: $uri');
     onStateChange(this, DeepLinkState.loading);
     final result = await WeChatLoginService.instance.handleWeChatDeepLink(uri);
     onStateChange(this, DeepLinkState.finish);

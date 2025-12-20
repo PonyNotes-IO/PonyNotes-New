@@ -59,24 +59,18 @@ class _SplashScreenState extends State<SplashScreen> {
           },
           listener: (context, state) {
             if (_hasHandledAuth) {
-              Log.info('🔵 [SplashScreen] BlocListener: already handled auth, skipping');
               return;
             }
-            Log.info('🔵 [SplashScreen] BlocListener triggered, auth state: ${state.auth}');
             state.auth.map(
               authenticated: (r) {
-                Log.info('🔵 [SplashScreen] BlocListener: authenticated state detected');
                 _hasHandledAuth = true;
                 _handleAuthenticated(context, r);
               },
               unauthenticated: (r) {
-                Log.info('🔵 [SplashScreen] BlocListener: unauthenticated state detected');
                 _hasHandledAuth = true;
                 _handleUnauthenticated(context, r);
               },
-              initial: (r) {
-                Log.info('🔵 [SplashScreen] BlocListener: initial state detected');
-              },
+              initial: (r) {},
             );
           },
           child: BlocBuilder<SplashBloc, SplashState>(
@@ -90,7 +84,6 @@ class _SplashScreenState extends State<SplashScreen> {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       // 检查是否已经处理过（通过检查 context 是否仍然 mounted）
                       if (mounted && !_hasHandledAuth) {
-                        Log.info('🔵 [SplashScreen] BlocBuilder: authenticated state detected in builder (first build)');
                         _hasHandledAuth = true;
                         _handleAuthenticated(context, r);
                       }
@@ -99,7 +92,6 @@ class _SplashScreenState extends State<SplashScreen> {
                   unauthenticated: (r) {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       if (mounted && !_hasHandledAuth) {
-                        Log.info('🔵 [SplashScreen] BlocBuilder: unauthenticated state detected in builder (first build)');
                         _hasHandledAuth = true;
                         _handleUnauthenticated(context, r);
                       }
@@ -128,21 +120,15 @@ class _SplashScreenState extends State<SplashScreen> {
     BuildContext context,
     Authenticated authenticated,
   ) async {
-    Log.info('🔵 [SplashScreen] _handleAuthenticated called');
-    
     // 检查用户是否需要绑定手机号（第三方登录但未绑定手机号）
     // 必须在进入主界面之前检查
     if (isAppFlowyCloudEnabled) {
       try {
-        Log.info('🔵 [SplashScreen] Checking phone binding requirement...');
         final profileResult = await UserBackendService.getCurrentUserProfile();
         final profile = profileResult.fold(
-          (profile) {
-            Log.info('🔵 [SplashScreen] Got user profile: email=${profile.email}, phone=${profile.phone}');
-            return profile;
-          },
+          (profile) => profile,
           (error) {
-            Log.error('🔵 [SplashScreen] Failed to get user profile: ${error.msg}');
+            Log.error('[SplashScreen] Failed to get user profile: ${error.msg}');
             return null;
           },
         );
@@ -150,10 +136,8 @@ class _SplashScreenState extends State<SplashScreen> {
         if (profile != null) {
           // 检查是否需要绑定手机号
           final needBindPhone = _needBindPhone(profile.phone);
-          Log.info('🔵 [SplashScreen] User phone: "${profile.phone}", needBindPhone: $needBindPhone');
           
           if (needBindPhone) {
-            Log.info('🔵 [SplashScreen] User needs phone binding, navigating to PhoneBindScreen (blocking home screen)');
             // 用户需要绑定手机号，跳转到绑定手机号页面
             // 使用同步方式，确保在进入主界面之前执行
             final rootContext = AppGlobals.rootNavKey.currentState?.context;
@@ -165,33 +149,26 @@ class _SplashScreenState extends State<SplashScreen> {
                   ),
                 ),
               );
-              Log.info('🔵 [SplashScreen] PhoneBindScreen pushed, returning without going to home screen');
               // 不进入主界面
               return;
             } else {
-              Log.error('🔵 [SplashScreen] Root context not available for PhoneBindScreen navigation');
+              Log.error('[SplashScreen] Root context not available for PhoneBindScreen navigation');
               // 如果 context 不可用，退出登录并重启应用
               try {
                 await getIt<AuthService>().signOut();
                 await runAppFlowy();
               } catch (e, stack) {
-                Log.error('🔵 [SplashScreen] Failed to sign out: $e', stack);
+                Log.error('[SplashScreen] Failed to sign out: $e', stack);
               }
               return;
             }
-          } else {
-            Log.info('🔵 [SplashScreen] User does not need phone binding, proceeding to home screen');
           }
-        } else {
-          Log.info('🔵 [SplashScreen] Profile is null, proceeding to home screen');
         }
       } catch (e, stack) {
-        Log.error('🔵 [SplashScreen] Error checking phone binding: $e', stack);
+        Log.error('[SplashScreen] Error checking phone binding: $e', stack);
         // 如果检查失败，继续正常流程
       }
     }
-    
-    Log.info('🔵 [SplashScreen] Proceeding to home screen...');
     
     // 🔧 修复登录后卡住问题：添加重试逻辑，等待 Folder 初始化完成
     // 原因：runAppFlowy() 重新初始化应用时，Folder 可能还未完全初始化
@@ -205,7 +182,6 @@ class _SplashScreenState extends State<SplashScreen> {
       final success = result.fold(
         (workspaceSetting) {
           // After login, replace Splash screen by corresponding home screen
-          Log.info('🔵 [SplashScreen] Navigating to home screen');
           getIt<SplashRouter>().goHomeScreen(
             context,
           );
@@ -236,18 +212,11 @@ class _SplashScreenState extends State<SplashScreen> {
   // 邮箱注册的用户手机号为空，不需要绑定
   // 手机号注册的用户有正常手机号，不需要绑定
   bool _needBindPhone(String? phone) {
-    if (phone == null) {
-      Log.info('🔵 [SplashScreen] _needBindPhone: phone is null, returning false');
-      return false;
-    }
-    if (phone.isEmpty) {
-      Log.info('🔵 [SplashScreen] _needBindPhone: phone is empty, returning false');
+    if (phone == null || phone.isEmpty) {
       return false;
     }
     // 只有临时手机号（第三方登录）才需要绑定
-    final result = phone.startsWith('+86temp');
-    Log.info('🔵 [SplashScreen] _needBindPhone: phone="$phone", startsWith("+86temp")=$result');
-    return result;
+    return phone.startsWith('+86temp');
   }
 
   void _handleUnauthenticated(BuildContext context, Unauthenticated result) {

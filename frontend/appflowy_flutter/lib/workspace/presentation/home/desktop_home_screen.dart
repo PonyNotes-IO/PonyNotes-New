@@ -27,6 +27,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
     show UserProfilePB;
+import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
 import 'package:flowy_infra_ui/style_widget/container.dart';
 import 'package:flutter/material.dart';
@@ -41,18 +42,32 @@ import 'home_layout.dart';
 import 'home_stack.dart';
 import 'menu/sidebar/slider_menu_hover_trigger.dart';
 
-class DesktopHomeScreen extends StatelessWidget {
+class DesktopHomeScreen extends StatefulWidget {
   const DesktopHomeScreen({super.key});
 
   static const routeName = '/DesktopHomeScreen';
 
   @override
+  State<DesktopHomeScreen> createState() => _DesktopHomeScreenState();
+}
+
+class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
+  late final Future<List<FlowyResult>> _initFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // 在 initState 中创建 future，避免在每次 rebuild 时重新创建
+    _initFuture = Future.wait([
+      FolderEventGetCurrentWorkspaceSetting().send(),
+      getIt<AuthService>().getUser(),
+    ]);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder(
-      future: Future.wait([
-        FolderEventGetCurrentWorkspaceSetting().send(),
-        getIt<AuthService>().getUser(),
-      ]),
+    return FutureBuilder<List<FlowyResult>>(
+      future: _initFuture,
       builder: (context, snapshots) {
         if (!snapshots.hasData) {
           return _buildLoading();

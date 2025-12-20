@@ -398,7 +398,6 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
   }
 
   void _handleSkip() {
-    Log.info('🟢 [SetPasswordPage] 用户选择跳过设置密码');
     // 直接进入系统
     _enterSystem();
   }
@@ -484,7 +483,6 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
 
     result.fold(
       (success) {
-        Log.info('🟢 [SetPasswordPage] 设置密码成功');
         // 设置密码成功，进入系统
         _enterSystem();
       },
@@ -498,7 +496,6 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
   }
 
   void _enterSystem() {
-    Log.info('🟢 [SetPasswordPage] 进入系统');
     // 使用正确的导航方式，而不是调用 runAppFlowy()
     // runAppFlowy() 会导致应用重启并可能引发 Navigator 相关的错误
     if (mounted && context.mounted) {
@@ -506,14 +503,12 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
         // 先关闭设置密码页面
         final navigator = Navigator.of(context, rootNavigator: true);
         if (navigator.canPop()) {
-          Log.info('🟢 [SetPasswordPage] 关闭设置密码页面');
           navigator.pop();
         }
         
         // 然后导航到主界面
         final rootContext = navigator.context;
         if (rootContext.mounted) {
-          Log.info('🟢 [SetPasswordPage] 调用 goHomeScreen');
           // 使用 AuthRouter.goHomeScreen 进行导航
           // 这与 SignInScreen 中的导航逻辑一致
           getIt<AuthRouter>().goHomeScreen(rootContext, widget.userProfile);

@@ -130,16 +130,16 @@ class PasswordHttpService {
         'email': email,
       };
       
-      final result = await _makeRequest(
-        endpoint: PasswordEndpoint.forgotPassword,
+    final result = await _makeRequest(
+      endpoint: PasswordEndpoint.forgotPassword,
         body: body,
-        errorMessage: 'Failed to send password reset email',
-      );
+      errorMessage: 'Failed to send password reset email',
+    );
 
-      return result.fold(
-        (data) => FlowyResult.success(true),
-        (error) => FlowyResult.failure(error),
-      );
+    return result.fold(
+      (data) => FlowyResult.success(true),
+      (error) => FlowyResult.failure(error),
+    );
     }
   }
 
@@ -275,12 +275,6 @@ class PasswordHttpService {
   }) async {
     try {
       final uri = endpoint.uri(baseUrl, queryParameters: queryParameters);
-      Log.info(
-        '🦋[PasswordHttpService] Making ${endpoint.method} request to: $uri',
-      );
-      Log.info(
-        '🦋[PasswordHttpService] baseUrl: $baseUrl, endpoint path: ${endpoint.path}',
-      );
       http.Response response;
 
       if (endpoint.method == 'POST') {
@@ -305,18 +299,11 @@ class PasswordHttpService {
           FlowyError(msg: 'Invalid request method: ${endpoint.method}'),
         );
       }
-
-      Log.info(
-        '🦋[PasswordHttpService] Response status: ${response.statusCode}, body length: ${response.body.length}',
-      );
       
       if (response.statusCode == 200) {
         if (response.body.isNotEmpty) {
           try {
             final decodedBody = jsonDecode(response.body);
-            Log.info(
-              '🦋[PasswordHttpService] Response decoded successfully: $decodedBody',
-            );
             return FlowyResult.success(decodedBody);
           } catch (e) {
             Log.error(
@@ -354,17 +341,11 @@ class PasswordHttpService {
         // 首次设置密码时，服务器可能因为重复提交返回 same_password，这里直接视为成功避免卡住用户
         if (endpoint == PasswordEndpoint.setupPassword &&
             errorCodeFromServer == 'same_password') {
-          Log.info(
-            '🦋[PasswordHttpService] setupPassword received same_password, treat as success because password is already up-to-date.',
-          );
           return FlowyResult.success(true);
         }
 
         // the checkHasPassword endpoint will return 403, which is not an error
         if (endpoint != PasswordEndpoint.checkHasPassword) {
-          Log.info(
-            '${endpoint.name} request failed: ${response.statusCode}, $errorBody ',
-          );
         }
 
         ErrorCode errorCode = ErrorCode.Internal;
@@ -420,12 +401,6 @@ class PasswordHttpService {
 
     try {
       final uri = Uri.parse('$baseUrl/token?grant_type=password');
-      Log.info(
-        '🦋[PasswordHttpService] Making password login request to: $uri',
-      );
-      Log.info(
-        '🦋[PasswordHttpService] email: ${email ?? "null"}, phone: ${phone ?? "null"}',
-      );
 
       final body = <String, dynamic>{
         'password': password,
@@ -445,16 +420,9 @@ class PasswordHttpService {
         body: jsonEncode(body),
       );
 
-      Log.info(
-        '🦋[PasswordHttpService] Password login response status: ${response.statusCode}, body length: ${response.body.length}',
-      );
-
       if (response.statusCode == 200) {
         try {
           final decodedBody = jsonDecode(response.body) as Map<String, dynamic>;
-          Log.info(
-            '🦋[PasswordHttpService] Password login successful',
-          );
           return FlowyResult.success(decodedBody);
         } catch (e) {
           Log.error(
@@ -519,12 +487,6 @@ class PasswordHttpService {
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/token?grant_type=third_party');
-      Log.info(
-        '🦋[PasswordHttpService] Making third party login request to: $uri',
-      );
-      Log.info(
-        '🦋[PasswordHttpService] platform: $platform',
-      );
 
       final body = <String, dynamic>{
         'platform': platform,
@@ -539,16 +501,9 @@ class PasswordHttpService {
         body: jsonEncode(body),
       );
 
-      Log.info(
-        '🦋[PasswordHttpService] Third party login response status: ${response.statusCode}, body length: ${response.body.length}',
-      );
-
       if (response.statusCode == 200) {
         try {
           final decodedBody = jsonDecode(response.body) as Map<String, dynamic>;
-          Log.info(
-            '🦋[PasswordHttpService] Third party login successful',
-          );
           return FlowyResult.success(decodedBody);
         } catch (e) {
           Log.error(

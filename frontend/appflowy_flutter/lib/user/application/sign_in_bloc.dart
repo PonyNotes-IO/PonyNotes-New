@@ -168,14 +168,11 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     DeepLinkResult result,
   ) async {
     final deepLinkState = result.state;
-    Log.info('[SignInBloc] DeepLink状态变化: $deepLinkState');
 
     switch (deepLinkState) {
       case DeepLinkState.none:
-        Log.info('[SignInBloc] DeepLink状态: none');
         break;
       case DeepLinkState.loading:
-        Log.info('[SignInBloc] DeepLink状态: loading');
         emit(
           state.copyWith(
             isSubmitting: true,
@@ -185,15 +182,11 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
           ),
         );
       case DeepLinkState.finish:
-        Log.info('[SignInBloc] DeepLink状态: finish');
-        Log.info('  - result.result: ${result.result}');
         final newState = result.result?.fold(
           (s) {
-            Log.info('[SignInBloc] DeepLink成功，检查是否需要绑定手机号: ${s.email}');
             // 检查是否需要绑定手机号（第三方登录且手机号是临时手机号）
             final needBindPhone = s.phone.isNotEmpty && s.phone.startsWith('+86temp');
             if (needBindPhone) {
-              Log.info('[SignInBloc] 需要绑定手机号，暂不设置successOrFail');
               // 第三方登录需要绑定手机号，暂不设置 successOrFail
               // 等绑定成功后再设置
               return state.copyWith(
@@ -202,25 +195,19 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
                 successOrFail: null, // 不设置成功状态，等绑定完成后再设置
               );
             } else {
-              Log.info('[SignInBloc] 不需要绑定手机号，设置successOrFail: ${s.email}');
               // 不需要绑定手机号，直接设置成功状态
-              return state.copyWith(
-                isSubmitting: false,
-                successOrFail: FlowyResult.success(s),
-              );
+            return state.copyWith(
+              isSubmitting: false,
+              successOrFail: FlowyResult.success(s),
+            );
             }
           },
-          (f) {
-            Log.info('[SignInBloc] DeepLink失败: ${f.msg}');
-            return _stateFromCode(f);
-          },
+          (f) => _stateFromCode(f),
         );
         if (newState != null) {
-          Log.info('[SignInBloc] emit新状态，successOrFail: ${newState.successOrFail}');
           emit(newState);
         }
       case DeepLinkState.error:
-        Log.info('[SignInBloc] DeepLink状态: error');
         emit(state.copyWith(isSubmitting: false));
     }
   }
@@ -245,7 +232,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     // 如果是手机号，直接调用 GoTrue API
     if (isPhone && passwordService != null) {
-      Log.info('🦋[SignInBloc] 使用手机号密码登录: $email');
       final result = await passwordService!.signInWithPassword(
         phone: email,
         password: password,
@@ -265,7 +251,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
                 ..providerAccessToken = tokenMap['provider_access_token'] as String? ?? ''
                 ..providerRefreshToken = tokenMap['provider_refresh_token'] as String? ?? '';
 
-              Log.info('🦋[SignInBloc] 手机号密码登录成功');
               getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
                 gotrueTokenResponse,
               );
@@ -289,7 +274,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     // 如果是邮箱，使用原有的方法
     if (isEmail) {
-      Log.info('🦋[SignInBloc] 使用邮箱密码登录: $email');
       final result = await authService.signInWithEmailPassword(
         email: email,
         password: password,
@@ -366,7 +350,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       return;
     }
 
-    Log.info('Sign in with magic link: $email');
 
     emit(
       state.copyWith(
@@ -399,7 +382,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       return;
     }
 
-    Log.info('Sign in with passcode: $email, $passcode');
 
     emit(
       state.copyWith(
@@ -415,20 +397,14 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       passcode: passcode,
     );
 
-    Log.info('🟣 [SignInBloc] signInWithPasscode result: ${result.isSuccess ? "success" : "failure"}');
-
     final newState = await result.fold(
       (gotrueTokenResponse) async {
-        Log.info('🟣 [SignInBloc] 验证码登录成功，传递token给DeepLink');
-        Log.info('🟣 [SignInBloc] access_token: ${gotrueTokenResponse.hasAccessToken() ? "present" : "missing"}');
-        Log.info('🟣 [SignInBloc] refresh_token: ${gotrueTokenResponse.hasRefreshToken() ? "present" : "missing"}');
 
         try {
           // 将 token 交给 Deep Link 处理（写入本地并触发登录流程）
           await getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
             gotrueTokenResponse,
           );
-          Log.info('🟣 [SignInBloc] passGotrueTokenResponse 完成');
         } catch (e, s) {
           Log.error('🟣 [SignInBloc] passGotrueTokenResponse error: $e\n$s');
         }
@@ -440,36 +416,32 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
         if (!isClosed &&
             state.successOrFail != null &&
             state.successOrFail!.isSuccess) {
-          Log.info('🟣 [SignInBloc] DeepLink 已返回成功结果，跳过兜底拉取用户信息');
           return state.copyWith(
             isSubmitting: false,
           );
         }
 
         // 兜底：直接获取用户信息并返回成功状态，确保不会卡在验证码页
-        Log.info('🟣 [SignInBloc] DeepLink 未返回结果，使用兜底逻辑获取用户信息');
         final profileResult = await authService.getUser();
         return profileResult.fold(
           (userProfile) {
-            Log.info('🟣 [SignInBloc] 兜底获取用户信息成功: ${userProfile.email}');
             return state.copyWith(
               isSubmitting: false,
               successOrFail: FlowyResult.success(userProfile),
-            );
-          },
-          (error) {
+          );
+        },
+        (error) {
             Log.error('🟣 [SignInBloc] 兜底获取用户信息失败: ${error.msg}');
             return _stateFromCode(error);
           },
         );
       },
       (error) async {
-        Log.error('🟣 [SignInBloc] 验证码登录失败: ${error.msg}');
-        return _stateFromCode(error);
-      },
+          Log.error('🟣 [SignInBloc] 验证码登录失败: ${error.msg}');
+          return _stateFromCode(error);
+        },
     );
 
-    Log.info('🟣 [SignInBloc] emit newState, successOrFail: ${newState.successOrFail?.isSuccess ?? "null"}');
     emit(newState);
   }
 
@@ -556,7 +528,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       return;
     }
 
-    Log.info('Validate reset password token: $email, $token');
 
     emit(
       state.copyWith(
@@ -574,7 +545,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     result?.fold(
       (authToken) {
-        Log.info('Validate reset password token success: $authToken');
 
         passwordService?.authToken = authToken;
 
@@ -608,7 +578,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       return;
     }
 
-    Log.info('Reset password: $email, ${newPassword.hashCode}');
 
     emit(
       state.copyWith(
@@ -623,7 +592,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     result?.fold(
       (success) {
-        Log.info('Reset password success');
         emit(
           state.copyWith(
             isSubmitting: false,
@@ -704,12 +672,10 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     }
 
     // 1. 获取微信授权码
-    Log.info('🟢[SignInBloc] Starting WeChat login...');
     final codeResult = await WeChatLoginService.instance.getAuthorizationCode();
     
     await codeResult.fold(
       (code) async {
-        Log.info('🟢[SignInBloc] Got WeChat authorization code, length: ${code.length}');
         await _completeWeChatLogin(emit, code);
       },
       (error) {
@@ -804,12 +770,10 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     }
 
     // 1. 获取抖音授权码
-    Log.info('🟢[SignInBloc] Starting DouYin login...');
     final codeResult = await DouYinLoginService.instance.getAuthorizationCode();
     
     await codeResult.fold(
       (code) async {
-        Log.info('🟢[SignInBloc] Got DouYin authorization code, length: ${code.length}');
         await _completeDouYinLogin(emit, code);
       },
       (error) {
@@ -848,7 +812,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
               ..providerAccessToken = tokenMap['provider_access_token'] as String? ?? ''
               ..providerRefreshToken = tokenMap['provider_refresh_token'] as String? ?? '';
 
-            Log.info('🟢[SignInBloc] DouYin login successful');
             getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
               gotrueTokenResponse,
             );

@@ -109,22 +109,17 @@ class AccountSignInOutButton extends StatelessWidget {
         create: (context) => getIt<SignInBloc>(),
         child: BlocListener<SignInBloc, SignInState>(
           listener: (listenerContext, state) async {
-            Log.info('[AccountSignInOut] BlocListener触发: isSubmitting=${state.isSubmitting}, successOrFail=${state.successOrFail}');
-            
             // 避免重复处理
             if (hasHandledSuccess) {
-              Log.info('[AccountSignInOut] 已处理过登录成功，忽略');
               return;
             }
             
             // 监听登录成功状态
             final successOrFail = state.successOrFail;
             if (successOrFail != null && successOrFail.isSuccess) {
-              Log.info('[AccountSignInOut] 检测到登录成功！');
               hasHandledSuccess = true;
               // 登录成功后，Deep Link Handler 会自动调用 runAppFlowy()
               // 这里不需要做任何操作，只需等待应用重启
-              Log.info('[AccountSignInOut] 等待应用重启...');
             }
           },
           child: const FlowyDialog(
