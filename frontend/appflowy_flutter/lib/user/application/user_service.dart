@@ -259,12 +259,38 @@ class UserBackendService implements IUserBackendService {
         }),
       );
       
+      // 解析响应体，检查是否有错误
       if (response.statusCode == 200) {
+        // 即使状态码是 200，也要检查响应体中是否有错误
+        if (response.body.isNotEmpty) {
+          try {
+            final json = jsonDecode(response.body) as Map<String, dynamic>;
+            if (json.containsKey('code') && json['code'] != 0) {
+              final errorMsg = json['message'] as String? ?? json['msg'] as String? ?? '绑定失败';
+              Log.error('[UserBackendService] Verify phone failed: $errorMsg');
+              return FlowyResult.failure(
+                FlowyError()
+                  ..code = ErrorCode.Internal
+                  ..msg = errorMsg,
+              );
+            }
+          } catch (e) {
+            // 响应体不是 JSON 或解析失败，但状态码是 200，认为成功
+            Log.info('[UserBackendService] Verify phone response is not JSON, but status is 200, treating as success');
+          }
+        }
         return FlowyResult.success(null);
       } else {
-        final errorMsg = response.body.isNotEmpty 
-            ? response.body 
-            : 'Failed to verify phone (HTTP ${response.statusCode})';
+        // 尝试解析错误响应
+        String errorMsg = 'Failed to verify phone (HTTP ${response.statusCode})';
+        if (response.body.isNotEmpty) {
+          try {
+            final json = jsonDecode(response.body) as Map<String, dynamic>;
+            errorMsg = json['message'] as String? ?? json['msg'] as String? ?? errorMsg;
+          } catch (e) {
+            errorMsg = response.body;
+          }
+        }
         Log.error('[UserBackendService] Verify phone failed: $errorMsg');
         return FlowyResult.failure(
           FlowyError()
