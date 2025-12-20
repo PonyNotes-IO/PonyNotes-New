@@ -939,22 +939,6 @@ class _CustomThirdPartyButtons extends StatelessWidget {
                     },
               isLoading: state.isSubmitting,
             ),
-            const SizedBox(width: 32),
-
-            // QQ 登录
-            _ThirdPartyIconButton(
-              label: "QQ",
-              backgroundColor: const Color(0xFF12B7F5),
-              onTap: state.isSubmitting
-                  ? null
-                  : () {
-                      showToastNotification(
-                        message: "QQ登录功能开发中",
-                        type: ToastificationType.info,
-                      );
-                    },
-              isLoading: false,
-            ),
           ],
         );
       },
