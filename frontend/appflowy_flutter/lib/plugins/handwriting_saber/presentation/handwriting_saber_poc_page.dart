@@ -1030,9 +1030,35 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
 
   void _onToolChanged(Tool tool) {
-    setState(() {
-      _currentTool = tool;
-    });
+    debugPrint('🦋[HandwritingSaber] _onToolChanged: ${tool.toolId}');
+    
+    // ✅ 如果切换到选择工具，清除之前的选择状态
+    if (tool.toolId == ToolId.select) {
+      debugPrint('🦋[HandwritingSaber] Switching to select tool, clearing selection');
+      setState(() {
+        _currentTool = tool;
+        _selectResult = null;
+        _isSelecting = false;
+        _selectStartPosition = null;
+      });
+    } else {
+      // ✅ 切换到其他工具时，也清除选择状态
+      if (_currentTool.toolId == ToolId.select) {
+        debugPrint('🦋[HandwritingSaber] Switching away from select tool, clearing selection');
+        setState(() {
+          _currentTool = tool;
+          _selectResult = null;
+          _isSelecting = false;
+          _selectStartPosition = null;
+        });
+      } else {
+        setState(() {
+          _currentTool = tool;
+        });
+      }
+    }
+    
+    debugPrint('🦋[HandwritingSaber] _onToolChanged completed: ${tool.toolId}');
   }
 
   void _onBackgroundPatternChanged(CanvasBackgroundPattern pattern) {

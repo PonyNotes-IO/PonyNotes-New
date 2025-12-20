@@ -69,15 +69,18 @@ class HandwritingSaberToolbar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // ✅ 工具选择（左侧主要区域，分组显示）
+          // ✅ 工具选择（左侧主要区域，分组显示，可滚动）
           Expanded(
-            flex: 4,
+            flex: 3,
             child: _buildToolSelectorGrouped(),
           ),
           // ✅ 分隔线
           _buildDivider(),
-          // ✅ 颜色和样式区域
-          _buildColorAndStyleSection(),
+          // ✅ 颜色和样式区域（使用Flexible避免固定宽度）
+          Flexible(
+            flex: 2,
+            child: _buildColorAndStyleSection(),
+          ),
           // ✅ 分隔线
           _buildDivider(),
           // ✅ 粗细调整
@@ -106,22 +109,19 @@ class HandwritingSaberToolbar extends StatelessWidget {
   /// ✅ 构建颜色和样式区域
   Widget _buildColorAndStyleSection() {
     return Builder(
-      builder: (context) => SizedBox(
-        width: _isShapeTool(currentTool.toolId) && onFillColorChanged != null ? 400 : 200,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ✅ 颜色选择
-              _buildColorSelector(),
-              // ✅ 填充颜色选择（仅形状工具显示）
-              if (_isShapeTool(currentTool.toolId) && onFillColorChanged != null) ...[
-                const SizedBox(width: 8),
-                _buildFillColorSelector(),
-              ],
+      builder: (context) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ✅ 颜色选择
+            _buildColorSelector(),
+            // ✅ 填充颜色选择（仅形状工具显示）
+            if (_isShapeTool(currentTool.toolId) && onFillColorChanged != null) ...[
+              const SizedBox(width: 8),
+              _buildFillColorSelector(),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -378,146 +378,6 @@ class HandwritingSaberToolbar extends StatelessWidget {
     );
   }
 
-  Widget _buildToolSelector() {
-    return Builder(
-      builder: (context) => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.penFancy,
-            tool: Pen(
-              toolId: ToolId.fountainPen,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '钢笔',
-          ),
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.pen,
-            tool: Pen(
-              toolId: ToolId.ballpointPen,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '圆珠笔',
-          ),
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.pencil,
-            tool: Pen(
-              toolId: ToolId.pencil,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '铅笔',
-          ),
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.highlighter,
-            tool: Pen(
-              toolId: ToolId.highlighter,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '荧光笔',
-          ),
-          _buildToolButton(
-            context: context,
-            icon: Symbols.stylus_laser_pointer,
-            tool: Pen(
-              toolId: ToolId.laserPointer,
-              color: Colors.red,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '激光笔',
-          ),
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.eraser,
-            tool: Eraser(strokeWidth: currentStrokeWidth),
-            label: '橡皮擦',
-          ),
-          // ✅ 形状工具
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.minus,
-            tool: Pen(
-              toolId: ToolId.line,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '直线',
-          ),
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.square,
-            tool: Pen(
-              toolId: ToolId.rectangle,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '矩形',
-          ),
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.circle,
-            tool: Pen(
-              toolId: ToolId.circle,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '圆形',
-          ),
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.shapes,  // ✅ 使用 shapes 图标代替 triangle
-            tool: Pen(
-              toolId: ToolId.triangle,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '三角形',
-          ),
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.diamond,
-            tool: Pen(
-              toolId: ToolId.diamond,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '菱形',
-          ),
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.drawPolygon,
-            tool: Pen(
-              toolId: ToolId.freePolygon,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '自由多边形',
-          ),
-          // ✅ 文本框工具
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.textHeight,
-            tool: Pen(
-              toolId: ToolId.textBox,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '文本框',
-          ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildToolButton({
     required BuildContext context,
