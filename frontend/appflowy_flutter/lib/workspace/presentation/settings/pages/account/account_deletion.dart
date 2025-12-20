@@ -213,7 +213,6 @@ Future<void> deleteMyAccount(
 
   await UserBackendService.deleteCurrentAccount().fold(
     (s) {
-      Log.info('account deletion success');
 
       loading.stop();
       showToastNotification(

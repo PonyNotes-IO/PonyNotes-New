@@ -21,7 +21,6 @@ class DouYinDeepLinkHandler extends DeepLinkHandler<void> {
     required Uri uri,
     required DeepLinkStateHandler onStateChange,
   }) async {
-    Log.info('🟢 [DouYinDeepLinkHandler] handling uri: $uri');
     onStateChange(this, DeepLinkState.loading);
     final result = await DouYinLoginService.instance.handleDouYinDeepLink(uri);
     onStateChange(this, DeepLinkState.finish);

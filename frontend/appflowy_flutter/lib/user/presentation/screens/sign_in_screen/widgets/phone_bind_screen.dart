@@ -197,11 +197,13 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
       _toast('手机号格式不正确');
       return;
     }
+    // 确保手机号格式为 E.164 格式（+86开头）
+    final e164Phone = cleanPhone.startsWith('+86') ? cleanPhone : '+86$cleanPhone';
     setState(() {
       _isSending = true;
     });
     final result =
-        await ContactBindingService.sendPhoneVerificationCode(cleanPhone);
+        await ContactBindingService.sendPhoneVerificationCode(e164Phone);
     if (!mounted) return;
     result.fold(
       (_) {
@@ -242,11 +244,13 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
       _toast('请输入6位验证码');
       return;
     }
+    // 确保手机号格式为 E.164 格式（+86开头），与发送验证码时保持一致
+    final e164Phone = cleanPhone.startsWith('+86') ? cleanPhone : '+86$cleanPhone';
     setState(() {
       _isBinding = true;
     });
     final result = await ContactBindingService.bindPhoneNumber(
-      cleanPhone,
+      e164Phone,
       _codeController.text,
     );
     if (!mounted) return;
@@ -255,29 +259,43 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
     });
     result.fold(
       (_) async {
-        // 绑定成功后刷新用户信息
+        // 绑定成功后，等待一小段时间确保后端数据已更新
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        
+        // 刷新用户信息
         final profileResult = await UserBackendService.getCurrentUserProfile();
+        // 再次检查 mounted，因为异步操作可能已经导致 widget 被销毁
+        if (!mounted) return;
         profileResult.fold(
           (profile) {
-            // 通过 SignInBloc 设置登录成功状态（如果可用）
-            try {
-              final signInBloc = BlocProvider.of<SignInBloc>(context);
-              signInBloc.add(SignInEvent.phoneBindingComplete(profile));
-            } catch (e) {
-              // SignInBloc 不可用（例如在 appflowy_cloud_task 中），
-              // 让 desktop_sign_in_screen 处理导航
-              Log.info('🔵 [PhoneBindScreen] SignInBloc not available, letting parent handle navigation');
+            // 验证手机号是否已成功更新（不再是临时手机号）
+            final phone = profile.phone;
+            if (phone != null && phone.isNotEmpty && phone.startsWith('+86temp')) {
+              // 手机号仍然是临时手机号，绑定可能失败
+              if (mounted) {
+                _toast('绑定失败，请重试');
+              }
+              return;
             }
-            // 返回 profile，让 desktop_sign_in_screen 处理导航
-            Navigator.of(context).pop(profile);
+            
+            // 直接返回 profile，让 desktop_sign_in_screen 处理导航
+            // 不在这里触发 phoneBindingComplete 事件，避免重复导航
+            if (mounted) {
+              Navigator.of(context).pop(profile);
+            }
           },
           (error) {
-            _toast(error.msg);
+            if (mounted) {
+              _toast('获取用户信息失败: ${error.msg}');
+            }
           },
         );
       },
       (error) {
-        _toast(error.msg);
+        if (mounted) {
+          _toast('绑定失败: ${error.msg}');
+        }
       },
     );
   }

@@ -47,13 +47,11 @@ class DeepLinkHandlerRegistry {
     required DeepLinkResultHandler onResult,
     required DeepLinkErrorHandler onError,
   }) async {
-    Log.info('Processing DeepLink: ${uri.toString()}');
 
     bool handled = false;
 
     for (final handler in _handlers) {
       if (handler.canHandle(uri)) {
-        Log.info('Handler ${handler.runtimeType} will handle the DeepLink');
 
         final result = await handler.handle(
           uri: uri,

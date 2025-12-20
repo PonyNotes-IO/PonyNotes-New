@@ -1,24 +1,56 @@
 import 'dart:ui';
 
+import 'package:flutter/material.dart';
+
+import '../../components/canvas/image/pdf_editor_image.dart';
+import '../tools/tool.dart';
+import 'shape_strokes.dart';
+
 /// 简化版的 EditorPage 数据结构，参考 Saber 的页面模型。
 ///
 /// 后续可以逐步对齐 Saber 仓库中的字段与行为，这里先提供最小可用集合：
 /// - 页面尺寸
 /// - 笔迹列表
 class EditorPage {
+  /// ✅ 默认页面宽度（参考 Saber 的 EditorPage.defaultWidth）
+  static const double defaultWidth = 1000.0;
+  static const double defaultHeight = defaultWidth * 1.4;
+  static const defaultSize = Size(defaultWidth, defaultHeight);
+
   EditorPage({
     required this.size,
     List<Stroke>? strokes,
+    this.backgroundImage,  // ✅ PDF 背景图片
   }) : strokes = strokes ?? <Stroke>[];
 
   final Size size;
   final List<Stroke> strokes;
+  final PdfEditorImage? backgroundImage;  // ✅ PDF 背景图片
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'width': size.width,
       'height': size.height,
       'strokes': strokes.map((Stroke s) => s.toJson()).toList(),
+      // ✅ 保存 PDF 背景图片信息
+      'backgroundImage': backgroundImage != null
+          ? <String, dynamic>{
+              'pdfFilePath': backgroundImage!.pdfFilePath,
+              'pdfPageIndex': backgroundImage!.pdfPageIndex,
+              'naturalSize': <String, double>{
+                'width': backgroundImage!.naturalSize.width,
+                'height': backgroundImage!.naturalSize.height,
+              },
+              'dstRect': backgroundImage!.dstRect != null
+                  ? <String, double>{
+                      'left': backgroundImage!.dstRect!.left,
+                      'top': backgroundImage!.dstRect!.top,
+                      'width': backgroundImage!.dstRect!.width,
+                      'height': backgroundImage!.dstRect!.height,
+                    }
+                  : null,
+            }
+          : null,
     };
   }
 
@@ -26,21 +58,86 @@ class EditorPage {
     final double width = (json['width'] as num?)?.toDouble() ?? 0;
     final double height = (json['height'] as num?)?.toDouble() ?? 0;
     final List<dynamic> strokeList = json['strokes'] as List<dynamic>? ?? <dynamic>[];
+    
+    // ✅ 读取 PDF 背景图片信息
+    PdfEditorImage? backgroundImage;
+    final bgImageJson = json['backgroundImage'] as Map<String, dynamic>?;
+    if (bgImageJson != null) {
+      final pdfFilePath = bgImageJson['pdfFilePath'] as String?;
+      final pdfPageIndex = bgImageJson['pdfPageIndex'] as int? ?? 0;
+      final naturalSizeJson = bgImageJson['naturalSize'] as Map<String, dynamic>?;
+      final dstRectJson = bgImageJson['dstRect'] as Map<String, dynamic>?;
+      
+      if (pdfFilePath != null && naturalSizeJson != null) {
+        final naturalSize = Size(
+          (naturalSizeJson['width'] as num?)?.toDouble() ?? 0,
+          (naturalSizeJson['height'] as num?)?.toDouble() ?? 0,
+        );
+        
+        Rect? dstRect;
+        if (dstRectJson != null) {
+          dstRect = Rect.fromLTWH(
+            (dstRectJson['left'] as num?)?.toDouble() ?? 0,
+            (dstRectJson['top'] as num?)?.toDouble() ?? 0,
+            (dstRectJson['width'] as num?)?.toDouble() ?? 0,
+            (dstRectJson['height'] as num?)?.toDouble() ?? 0,
+          );
+        }
+        
+        backgroundImage = PdfEditorImage(
+          pdfFilePath: pdfFilePath,
+          pdfPageIndex: pdfPageIndex,
+          naturalSize: naturalSize,
+          dstRect: dstRect,
+        );
+      }
+    }
+    
     return EditorPage(
       size: Size(width, height),
       strokes: strokeList
           .whereType<Map<String, dynamic>>()
-          .map(Stroke.fromJson)
+          .map((json) {
+            // ✅ 根据 shape 字段创建对应的形状笔迹
+            final shape = json['shape'] as String?;
+            switch (shape) {
+              case 'line':
+                return LineStroke.fromJson(json) as Stroke;
+              case 'rectangle':
+                return RectangleStroke.fromJson(json) as Stroke;
+              case 'circle':
+                return CircleStroke.fromJson(json) as Stroke;
+              case 'triangle':
+                return TriangleStroke.fromJson(json) as Stroke;
+              case 'diamond':
+                return DiamondStroke.fromJson(json) as Stroke;
+              case 'freePolygon':
+                return FreePolygonStroke.fromJson(json) as Stroke;
+              default:
+                return Stroke.fromJson(json);
+            }
+          })
           .toList(),
+      backgroundImage: backgroundImage,  // ✅ 设置 PDF 背景图片
     );
   }
 }
 
-/// 简化版 Stroke，参考 Saber 的 Stroke 结构，仅保留点集合。
+/// 简化版 Stroke，参考 Saber 的 Stroke 结构，包含点集合、颜色、线宽和工具类型。
 class Stroke {
-  Stroke(this.points);
+  Stroke({
+    required this.points,
+    this.color = Colors.black,
+    this.strokeWidth = 3,
+    this.toolId,
+    this.pressureEnabled = false,  // ✅ 是否支持压感（钢笔支持，圆珠笔不支持）
+  });
 
   final List<Offset> points;
+  final Color color;
+  final double strokeWidth;
+  final ToolId? toolId;
+  final bool pressureEnabled;  // ✅ 压感支持标志
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -52,6 +149,10 @@ class Stroke {
             },
           )
           .toList(),
+      'color': color.value,
+      'strokeWidth': strokeWidth,
+      'toolId': toolId?.name,
+      'pressureEnabled': pressureEnabled,  // ✅ 保存压感支持标志
     };
   }
 
@@ -67,7 +168,41 @@ class Stroke {
         }
       }
     }
-    return Stroke(pts);
+    final int? colorValue = json['color'] as int?;
+    final double? strokeWidth = (json['strokeWidth'] as num?)?.toDouble();
+    final String? toolIdName = json['toolId'] as String?;
+    final bool? pressureEnabled = json['pressureEnabled'] as bool?;  // ✅ 读取压感支持标志
+    ToolId? toolId;
+    if (toolIdName != null) {
+      toolId = ToolId.values.firstWhere(
+        (id) => id.name == toolIdName,
+        orElse: () => ToolId.fountainPen,
+      );
+    }
+    // ✅ 根据工具类型自动设置压感支持（如果未保存）
+    final bool finalPressureEnabled = pressureEnabled ?? 
+        (toolId == ToolId.fountainPen);  // 钢笔默认支持压感，其他工具不支持
+    return Stroke(
+      points: pts,
+      color: colorValue != null
+          ? Color.fromARGB(
+              (colorValue >> 24) & 0xFF,
+              (colorValue >> 16) & 0xFF,
+              (colorValue >> 8) & 0xFF,
+              colorValue & 0xFF,
+            )
+          : Colors.black,
+      strokeWidth: strokeWidth ?? 3,
+      toolId: toolId,
+      pressureEnabled: finalPressureEnabled,  // ✅ 设置压感支持标志
+    );
+  }
+  
+  /// ✅ 删除第一个点（用于激光笔淡出）
+  void popFirstPoint() {
+    if (points.isNotEmpty) {
+      points.removeAt(0);
+    }
   }
 }
 

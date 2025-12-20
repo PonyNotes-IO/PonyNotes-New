@@ -385,6 +385,14 @@ packages:
       url: "https://github.com/Xazin/flutter_calendar_view"
     source: git
     version: "1.0.5"
+  chalkdart:
+    dependency: transitive
+    description:
+      name: chalkdart
+      sha256: "7ffc6bd39c81453fb9ba8dbce042a9c960219b75ea1c07196a7fa41c2fab9e86"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "3.0.5"
   characters:
     dependency: transitive
     description:
@@ -1049,6 +1057,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "8.2.14"
+  font_awesome_flutter:
+    dependency: "direct main"
+    description:
+      name: font_awesome_flutter
+      sha256: b738e35f8bb4957896c34957baf922f99c5d415b38ddc8b070d14b7fa95715d4
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "10.9.1"
   freezed:
     dependency: "direct dev"
     description:
@@ -1483,6 +1499,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "0.11.1"
+  material_symbols_icons:
+    dependency: "direct main"
+    description:
+      name: material_symbols_icons
+      sha256: "02555a48e1ec02b16e532dfd4ef13c4f6bf7ec7c20230e58e56641a393433dc3"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "4.2892.0"
   media_kit:
     dependency: "direct main"
     description:
@@ -1707,6 +1731,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "3.11.3"
+  pdfrx:
+    dependency: "direct main"
+    description:
+      name: pdfrx
+      sha256: "472bb03646980879a348bc1f7a28de710534ec861bca1a35cbd461c43643425a"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.0.103"
   pdfx:
     dependency: "direct main"
     description:
@@ -1723,6 +1755,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "4.2.3"
+  perfect_freehand:
+    dependency: "direct main"
+    description:
+      name: perfect_freehand
+      sha256: "7a6a591832be33fe82d8ecab68562a794d39837af16e7413fe0ccebdd0c3e3c0"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "2.5.1"
   permission_handler:
     dependency: "direct main"
     description:

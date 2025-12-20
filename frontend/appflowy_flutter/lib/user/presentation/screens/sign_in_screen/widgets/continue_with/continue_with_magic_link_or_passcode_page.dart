@@ -223,19 +223,15 @@ class _ContinueWithMagicLinkOrPasscodePageState
               Future.microtask(() {
                 if (mounted && context.mounted) {
                   try {
-                    Log.info('🟢 [ContinueWithMagicLinkOrPasscodePage] 尝试导航到主界面');
-                    
                     // 先关闭当前页面（验证码页面）
                     final navigator = Navigator.of(context, rootNavigator: true);
                     if (navigator.canPop()) {
-                      Log.info('🟢 [ContinueWithMagicLinkOrPasscodePage] 关闭验证码页面');
                       navigator.pop();
                     }
                     
                     // 然后导航到主界面
                     final rootContext = navigator.context;
                     if (rootContext.mounted) {
-                      Log.info('🟢 [ContinueWithMagicLinkOrPasscodePage] 调用 goHomeScreen');
                       getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
                     } else {
                       Log.error('🟢 [ContinueWithMagicLinkOrPasscodePage] rootContext 未 mounted');
