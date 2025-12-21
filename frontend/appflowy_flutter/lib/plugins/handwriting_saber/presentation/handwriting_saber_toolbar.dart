@@ -50,7 +50,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         border: Border(
@@ -67,53 +67,16 @@ class HandwritingSaberToolbar extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          // ✅ 工具选择（左侧主要区域，分组显示，可滚动）
-          Expanded(
-            flex: 3,
-            child: _buildToolSelectorGrouped(),
-          ),
-          // ✅ 分隔线
-          _buildDivider(),
-          // ✅ 颜色和样式区域（使用Flexible避免固定宽度）
-          Flexible(
-            flex: 2,
-            child: _buildColorAndStyleSection(),
-          ),
-          // ✅ 分隔线
-          _buildDivider(),
-          // ✅ 粗细调整
-          _buildStrokeWidthSelector(),
-          // ✅ 分隔线
-          _buildDivider(),
-          // ✅ 其他工具（PDF导入、背景模式）
-          _buildOtherToolsSection(),
-        ],
-      ),
-    );
-  }
-  
-  /// ✅ 构建分隔线
-  Widget _buildDivider() {
-    return Builder(
-      builder: (context) => Container(
-        width: 1,
-        height: 36,
-        margin: const EdgeInsets.symmetric(horizontal: 12),
-        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-      ),
-    );
-  }
-  
-  /// ✅ 构建颜色和样式区域
-  Widget _buildColorAndStyleSection() {
-    return Builder(
-      builder: (context) => SingleChildScrollView(
+      // ✅ 使用SingleChildScrollView包裹整个工具栏，确保所有内容都可以横向滚动
+      child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // ✅ 工具选择（分组显示）
+            _buildToolSelectorGrouped(),
+            // ✅ 分隔线
+            _buildDivider(),
             // ✅ 颜色选择
             _buildColorSelector(),
             // ✅ 填充颜色选择（仅形状工具显示）
@@ -121,11 +84,32 @@ class HandwritingSaberToolbar extends StatelessWidget {
               const SizedBox(width: 8),
               _buildFillColorSelector(),
             ],
+            // ✅ 分隔线
+            _buildDivider(),
+            // ✅ 粗细调整
+            _buildStrokeWidthSelector(),
+            // ✅ 分隔线
+            _buildDivider(),
+            // ✅ 其他工具（PDF导入、背景模式）
+            _buildOtherToolsSection(),
           ],
         ),
       ),
     );
   }
+  
+  /// ✅ 构建分隔线（紧凑布局）
+  Widget _buildDivider() {
+    return Builder(
+      builder: (context) => Container(
+        width: 1,
+        height: 32,
+        margin: const EdgeInsets.symmetric(horizontal: 6),
+        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+      ),
+    );
+  }
+  
   
   /// ✅ 构建其他工具区域
   Widget _buildOtherToolsSection() {
@@ -157,11 +141,9 @@ class HandwritingSaberToolbar extends StatelessWidget {
   /// ✅ 构建分组工具选择器（专业、美观、大方）
   Widget _buildToolSelectorGrouped() {
     return Builder(
-      builder: (context) => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+      builder: (context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
             // ✅ 第一组：笔类工具
             _buildToolGroup(
               context: context,
@@ -321,59 +303,27 @@ class HandwritingSaberToolbar extends StatelessWidget {
             ),
           ],
         ),
-      ),
     );
   }
   
-  /// ✅ 构建工具组
+  /// ✅ 构建工具组（紧凑布局，不显示标题）
   Widget _buildToolGroup({
     required BuildContext context,
     required String title,
     required List<Widget> tools,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ✅ 组标题
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 4),
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-          // ✅ 工具按钮
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: tools,
-          ),
-        ],
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: tools,
     );
   }
   
-  /// ✅ 构建组分隔符
+  /// ✅ 构建组分隔符（紧凑布局）
   Widget _buildGroupSeparator(BuildContext context) {
     return Container(
       width: 1,
-      height: 50,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
+      height: 32,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
       color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
     );
   }
@@ -389,19 +339,23 @@ class HandwritingSaberToolbar extends StatelessWidget {
     return Tooltip(
       message: label,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 1),
         child: Material(
           color: isSelected
               ? Theme.of(context).colorScheme.primaryContainer
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(4),
           child: InkWell(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
             onTap: () => onToolChanged(tool),
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(6),
+              constraints: const BoxConstraints(
+                minWidth: 32,
+                minHeight: 32,
+              ),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(4),
                 border: isSelected
                     ? Border.all(
                         color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
@@ -458,15 +412,15 @@ class HandwritingSaberToolbar extends StatelessWidget {
               }
             },
             child: Container(
-              width: 28,
-              height: 28,
+              width: 24,
+              height: 24,
               decoration: BoxDecoration(
                 color: currentColor,
                 border: Border.all(
                   color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
                   width: 1.5,
                 ),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(4),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.1),
@@ -477,33 +431,33 @@ class HandwritingSaberToolbar extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 8),
-          // 预设颜色
+          const SizedBox(width: 4),
+          // 预设颜色（紧凑布局）
           ...presetColors.map((color) {
             final bool isSelected = color == currentColor;
             return Builder(
               builder: (ctx) => Padding(
-                padding: const EdgeInsets.only(right: 6),
+                padding: const EdgeInsets.only(right: 3),
                 child: GestureDetector(
                   onTap: () => onColorChanged(color),
                   child: Container(
-                    width: 24,
-                    height: 24,
+                    width: 20,
+                    height: 20,
                     decoration: BoxDecoration(
                       color: color,
                       border: Border.all(
                         color: isSelected
                             ? Theme.of(ctx).colorScheme.primary
                             : Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.3),
-                        width: isSelected ? 2.5 : 1.5,
+                        width: isSelected ? 2 : 1,
                       ),
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(3),
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
                                 color: Theme.of(ctx).colorScheme.primary.withValues(alpha: 0.3),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
+                                blurRadius: 3,
+                                offset: const Offset(0, 1),
                               ),
                             ]
                           : null,
@@ -520,40 +474,49 @@ class HandwritingSaberToolbar extends StatelessWidget {
 
   Widget _buildStrokeWidthSelector() {
     return Builder(
-      builder: (context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.line_weight,
-            size: 20,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 120,
-            child: Slider(
-              value: currentStrokeWidth,
-              min: 1,
-              max: 20,
-              divisions: 19,
-              label: currentStrokeWidth.toStringAsFixed(0),
-              onChanged: onStrokeWidthChanged,
+      builder: (context) {
+        // ✅ 判断当前工具是否需要显示粗细调整器
+        // 选择工具不需要调整粗细，所以禁用或隐藏
+        final bool isSelectTool = currentTool.toolId == ToolId.select;
+        
+        // ✅ 确保值在有效范围内（防止 SelectTool 的 strokeWidth=0 导致断言失败）
+        final double clampedWidth = currentStrokeWidth.clamp(1.0, 20.0);
+        
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.line_weight,
+              size: 20,
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: isSelectTool ? 0.3 : 0.7),
             ),
-          ),
-          SizedBox(
-            width: 36,
-            child: Text(
-              currentStrokeWidth.toStringAsFixed(0),
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Theme.of(context).colorScheme.onSurface,
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 120,
+              child: Slider(
+                value: clampedWidth,
+                min: 1,
+                max: 20,
+                divisions: 19,
+                label: clampedWidth.toStringAsFixed(0),
+                onChanged: isSelectTool ? null : onStrokeWidthChanged, // ✅ 选择工具时禁用
               ),
-              textAlign: TextAlign.center,
             ),
-          ),
-        ],
-      ),
+            SizedBox(
+              width: 36,
+              child: Text(
+                clampedWidth.toStringAsFixed(0),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: isSelectTool ? 0.3 : 1.0),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -581,13 +544,16 @@ class HandwritingSaberToolbar extends StatelessWidget {
           ),
         ],
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.grid_view, size: 20),
+              const Icon(Icons.grid_view, size: 18),
               const SizedBox(width: 4),
-              Text(_getBackgroundPatternName(currentBackgroundPattern)),
+              Text(
+                _getBackgroundPatternName(currentBackgroundPattern),
+                style: const TextStyle(fontSize: 12),
+              ),
             ],
           ),
         ),
@@ -616,19 +582,19 @@ class HandwritingSaberToolbar extends StatelessWidget {
         toolId == ToolId.diamond;
   }
 
-  /// ✅ 构建填充颜色选择器
+  /// ✅ 构建填充颜色选择器（紧凑布局）
   Widget _buildFillColorSelector() {
     return Builder(
       builder: (context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 填充颜色标签
+          // 填充颜色标签（紧凑）
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(right: 4),
             child: Text(
               '填充',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
               ),
             ),
@@ -648,8 +614,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
               }
             },
             child: Container(
-              width: 28,
-              height: 28,
+              width: 24,
+              height: 24,
               decoration: BoxDecoration(
                 color: currentFillColor ?? Colors.transparent,
                 border: Border.all(
@@ -658,7 +624,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
                       : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
                   width: 1.5,
                 ),
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(4),
                 boxShadow: currentFillColor != null
                     ? [
                         BoxShadow(
@@ -672,19 +638,19 @@ class HandwritingSaberToolbar extends StatelessWidget {
               child: currentFillColor == null
                   ? Icon(
                       Icons.close,
-                      size: 16,
+                      size: 14,
                       color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
                     )
                   : null,
             ),
           ),
-          const SizedBox(width: 8),
-          // 预设填充颜色
+          const SizedBox(width: 4),
+          // 预设填充颜色（紧凑布局）
           ...presetColors.map((color) {
             final bool isSelected = color == currentFillColor;
             return Builder(
               builder: (ctx) => Padding(
-                padding: const EdgeInsets.only(right: 6),
+                padding: const EdgeInsets.only(right: 3),
                 child: GestureDetector(
                   onTap: () {
                     if (onFillColorChanged != null) {
@@ -692,23 +658,23 @@ class HandwritingSaberToolbar extends StatelessWidget {
                     }
                   },
                   child: Container(
-                    width: 24,
-                    height: 24,
+                    width: 20,
+                    height: 20,
                     decoration: BoxDecoration(
                       color: color,
                       border: Border.all(
                         color: isSelected
                             ? Theme.of(ctx).colorScheme.primary
                             : Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.3),
-                        width: isSelected ? 2.5 : 1.5,
+                        width: isSelected ? 2 : 1,
                       ),
-                      borderRadius: BorderRadius.circular(4),
+                      borderRadius: BorderRadius.circular(3),
                       boxShadow: isSelected
                           ? [
                               BoxShadow(
                                 color: Theme.of(ctx).colorScheme.primary.withValues(alpha: 0.3),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
+                                blurRadius: 3,
+                                offset: const Offset(0, 1),
                               ),
                             ]
                           : null,
