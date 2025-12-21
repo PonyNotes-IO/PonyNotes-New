@@ -8,6 +8,8 @@ import '../../data/editor/editor_core_info.dart';
 import '../../data/editor/page.dart';
 import '../../data/editor/shape_strokes.dart';
 import '../../data/editor/stroke_extensions.dart';
+import '../../data/editor/text_box.dart' as saber_text;
+import '../../data/tools/select_result.dart';
 import '../../data/tools/tool.dart';
 
 /// 简化版的 Saber 画布组件，用于 PoC 阶段。
@@ -21,10 +23,14 @@ class SaberCoreCanvas extends StatelessWidget {
     super.key,
     required this.coreInfo,
     this.currentStroke,
+    this.selectResult, // ✅ 选择结果
+    this.isSelecting = false, // ✅ 是否正在选择
   });
 
   final EditorCoreInfo coreInfo;
   final Stroke? currentStroke;
+  final SelectResult? selectResult; // ✅ 选择结果
+  final bool isSelecting; // ✅ 是否正在选择
 
   @override
   Widget build(BuildContext context) {
@@ -83,6 +89,8 @@ class SaberCoreCanvas extends StatelessWidget {
                   currentStroke: currentStroke,
                   currentScale: scale,
                   laserStrokes: coreInfo.laserStrokes,
+                  selectResult: selectResult,
+                  isSelecting: isSelecting,
                 ),
                 size: Size(constraints.maxWidth, constraints.maxHeight),
               ),
@@ -97,6 +105,8 @@ class SaberCoreCanvas extends StatelessWidget {
             currentStroke: currentStroke,
             currentScale: scale,  // ✅ 传递缩放级别
             laserStrokes: coreInfo.laserStrokes,  // ✅ 传递激光笔笔迹列表
+            selectResult: selectResult,
+            isSelecting: isSelecting,
           ),
         );
       },
@@ -111,6 +121,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     this.currentStroke,
     this.currentScale = 1.0,  // ✅ 添加缩放级别，用于判断是否使用铅笔 shader
     this.laserStrokes = const [],  // ✅ 激光笔笔迹列表
+    this.selectResult, // ✅ 选择结果
+    this.isSelecting = false, // ✅ 是否正在选择
   });
 
   final EditorPage page;
@@ -118,6 +130,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
   final Stroke? currentStroke;
   final double currentScale;  // ✅ 当前缩放级别
   final List<Stroke> laserStrokes;  // ✅ 激光笔笔迹列表
+  final SelectResult? selectResult; // ✅ 选择结果
+  final bool isSelecting; // ✅ 是否正在选择
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -219,6 +233,18 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       } else {
         _drawStrokeIncomplete(canvas, currentStroke!, scale, offsetX, offsetY);
       }
+    }
+    
+    // ✅ 绘制文本框
+    for (final textBox in page.textBoxes) {
+      _drawTextBox(canvas, textBox, scale, offsetX, offsetY);
+    }
+    
+    // ✅ 绘制选择框（page.pageIndex 可能不存在，使用页面在列表中的索引）
+    if (selectResult != null) {
+      // ✅ 检查是否是当前页面（通过比较页面大小或使用第一个页面）
+      // 由于我们只传递了当前页面，所以直接绘制
+      _drawSelection(canvas, selectResult!, scale, offsetX, offsetY, isSelecting);
     }
     
     // 恢复画布状态
@@ -619,7 +645,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     canvas.restore();
   }
 
-  /// ✅ 绘制矩形笔迹
+  /// ✅ 绘制矩形笔迹（支持填充和描边）
   void _drawRectangleStroke(Canvas canvas, RectangleStroke stroke, double scale, double offsetX, double offsetY) {
     final rect = stroke.rect;
     if (rect.isEmpty) return;
@@ -628,27 +654,30 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     canvas.translate(offsetX, offsetY);
     canvas.scale(scale);
     
-    final paint = Paint()
+    // ✅ 先绘制填充（如果有fillColor）
+    if (stroke.fillColor != null) {
+      final fillPaint = Paint()
+        ..color = stroke.fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawRect(rect, fillPaint);
+    }
+    
+    // ✅ 再绘制描边
+    final strokePaint = Paint()
       ..color = stroke.color
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke.strokeWidth;
-    
-    canvas.drawRect(rect, paint);
+    canvas.drawRect(rect, strokePaint);
     canvas.restore();
   }
   
-  /// ✅ 绘制圆形/椭圆笔迹
+  /// ✅ 绘制圆形/椭圆笔迹（支持填充和描边）
   void _drawCircleStroke(Canvas canvas, CircleStroke stroke, double scale, double offsetX, double offsetY) {
     if (stroke.points.length < 2) return;
     
     canvas.save();
     canvas.translate(offsetX, offsetY);
     canvas.scale(scale);
-    
-    final paint = Paint()
-      ..color = stroke.color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke.strokeWidth;
     
     // ✅ 支持椭圆：计算边界矩形
     final left = stroke.points.map((p) => p.dx).reduce(math.min);
@@ -657,11 +686,24 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     final bottom = stroke.points.map((p) => p.dy).reduce(math.max);
     final rect = Rect.fromLTRB(left, top, right, bottom);
     
-    canvas.drawOval(rect, paint);
+    // ✅ 先绘制填充（如果有fillColor）
+    if (stroke.fillColor != null) {
+      final fillPaint = Paint()
+        ..color = stroke.fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawOval(rect, fillPaint);
+    }
+    
+    // ✅ 再绘制描边
+    final strokePaint = Paint()
+      ..color = stroke.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke.strokeWidth;
+    canvas.drawOval(rect, strokePaint);
     canvas.restore();
   }
   
-  /// ✅ 绘制三角形笔迹（支持任意三角形）
+  /// ✅ 绘制三角形笔迹（支持任意三角形，支持填充和描边）
   void _drawTriangleStroke(Canvas canvas, TriangleStroke stroke, double scale, double offsetX, double offsetY) {
     if (stroke.points.length < 3) return;
     
@@ -669,12 +711,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     canvas.translate(offsetX, offsetY);
     canvas.scale(scale);
     
-    final paint = Paint()
-      ..color = stroke.color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke.strokeWidth;
-    
-    // ✅ 使用三个点绘制三角形
+    // ✅ 使用三个点绘制三角形路径
     final point1 = stroke.point1;
     final point2 = stroke.point2;
     final point3 = stroke.point3;
@@ -684,11 +721,25 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       ..lineTo(point2.dx, point2.dy)
       ..lineTo(point3.dx, point3.dy)
       ..close();
-    canvas.drawPath(path, paint);
+    
+    // ✅ 先绘制填充（如果有fillColor）
+    if (stroke.fillColor != null) {
+      final fillPaint = Paint()
+        ..color = stroke.fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(path, fillPaint);
+    }
+    
+    // ✅ 再绘制描边
+    final strokePaint = Paint()
+      ..color = stroke.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke.strokeWidth;
+    canvas.drawPath(path, strokePaint);
     canvas.restore();
   }
   
-  /// ✅ 绘制菱形笔迹
+  /// ✅ 绘制菱形笔迹（支持填充和描边）
   void _drawDiamondStroke(Canvas canvas, DiamondStroke stroke, double scale, double offsetX, double offsetY) {
     if (stroke.points.length < 4) return;
     
@@ -696,18 +747,27 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     canvas.translate(offsetX, offsetY);
     canvas.scale(scale);
     
-    final paint = Paint()
-      ..color = stroke.color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke.strokeWidth;
-    
     final path = Path();
     path.moveTo(stroke.points[0].dx, stroke.points[0].dy);
     for (int i = 1; i < stroke.points.length; i++) {
       path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
     }
     path.close();
-    canvas.drawPath(path, paint);
+    
+    // ✅ 先绘制填充（如果有fillColor）
+    if (stroke.fillColor != null) {
+      final fillPaint = Paint()
+        ..color = stroke.fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(path, fillPaint);
+    }
+    
+    // ✅ 再绘制描边
+    final strokePaint = Paint()
+      ..color = stroke.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke.strokeWidth;
+    canvas.drawPath(path, strokePaint);
     canvas.restore();
   }
   
@@ -727,21 +787,17 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     
     final toolId = stroke.toolId;
     if (toolId == ToolId.triangle) {
-      // ✅ 任意三角形：支持三个点的预览
-      if (stroke.points.length >= 3) {
-        // 有三个点，绘制完整三角形
-        final point1 = stroke.points[0];
-        final point2 = stroke.points[1];
-        final point3 = stroke.points[2];
-        final path = Path()
-          ..moveTo(point1.dx, point1.dy)
-          ..lineTo(point2.dx, point2.dy)
-          ..lineTo(point3.dx, point3.dy)
-          ..close();
+      // ✅ 任意三角形：一笔绘制预览
+      if (stroke.points.length >= 2) {
+        // 实时显示绘制路径，结束时自动优化为三角形
+        final path = Path();
+        if (stroke.points.isNotEmpty) {
+          path.moveTo(stroke.points[0].dx, stroke.points[0].dy);
+          for (int i = 1; i < stroke.points.length; i++) {
+            path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
+          }
+        }
         canvas.drawPath(path, paint);
-      } else if (stroke.points.length == 2) {
-        // 只有两个点，显示一条线（预览）
-        canvas.drawLine(stroke.points[0], stroke.points[1], paint);
       } else if (stroke.points.length == 1) {
         // 只有一个点，显示一个点（预览）
         canvas.drawCircle(stroke.points[0], strokeWidth / 2, paint);
@@ -797,12 +853,116 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     canvas.restore();
   }
 
+  /// ✅ 绘制选择框
+  void _drawSelection(Canvas canvas, SelectResult selectResult, double scale, double offsetX, double offsetY, bool isSelecting) {
+    canvas.save();
+    canvas.translate(offsetX, offsetY);
+    canvas.scale(scale);
+    
+    if (isSelecting && !selectResult.selectionPath.getBounds().isEmpty) {
+      // ✅ 绘制拖拽选择区域（虚线边框）
+      final dashPaint = Paint()
+        ..color = const Color(0xFF2196F3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5 / scale;
+      
+      // 绘制选择区域路径（虚线）
+      final path = selectResult.selectionPath;
+      canvas.drawPath(path, dashPaint);
+      
+      // 绘制半透明填充
+      final fillPaint = Paint()
+        ..color = const Color(0xFF2196F3).withValues(alpha: 0.1)
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(path, fillPaint);
+    } else if (!selectResult.isEmpty) {
+      // ✅ 绘制选中对象的边界框
+      final boundingBox = selectResult.getBoundingBox();
+      if (boundingBox != null) {
+        // 绘制边界框（虚线边框）
+        final borderPaint = Paint()
+          ..color = const Color(0xFF2196F3)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0 / scale;
+        
+        // 绘制虚线边框（使用Path绘制虚线效果）
+        final path = Path()
+          ..addRect(boundingBox.inflate(4.0 / scale));
+        
+        canvas.drawPath(path, borderPaint);
+        
+        // 绘制半透明填充
+        final fillPaint = Paint()
+          ..color = const Color(0xFF2196F3).withValues(alpha: 0.1)
+          ..style = PaintingStyle.fill;
+        canvas.drawRect(boundingBox.inflate(4.0 / scale), fillPaint);
+      }
+    }
+    
+    canvas.restore();
+  }
+
+  /// ✅ 绘制文本框
+  void _drawTextBox(Canvas canvas, saber_text.TextBox textBox, double scale, double offsetX, double offsetY) {
+    canvas.save();
+    canvas.translate(offsetX, offsetY);
+    canvas.scale(scale);
+    
+    final rect = textBox.rect;
+    
+    // ✅ 绘制背景（如果有）
+    if (textBox.backgroundColor != null) {
+      final bgPaint = Paint()
+        ..color = textBox.backgroundColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawRect(rect, bgPaint);
+    }
+    
+    // ✅ 绘制边框（如果有）
+    if (textBox.borderColor != null && textBox.borderWidth > 0) {
+      final borderPaint = Paint()
+        ..color = textBox.borderColor!
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = textBox.borderWidth;
+      canvas.drawRect(rect, borderPaint);
+    }
+    
+    // ✅ 绘制文本
+    if (textBox.text.isNotEmpty) {
+      final textStyle = textBox.textStyle ?? const TextStyle(
+        fontSize: 16,
+        color: Colors.black,
+      );
+      
+      final textSpan = TextSpan(
+        text: textBox.text,
+        style: textStyle,
+      );
+      
+      final textPainter = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+        maxLines: null,
+      );
+      
+      textPainter.layout(maxWidth: rect.width);
+      
+      // 文本从左上角开始绘制
+      textPainter.paint(canvas, rect.topLeft);
+    }
+    
+    canvas.restore();
+  }
+
   @override
   bool shouldRepaint(covariant _SaberCoreCanvasPainter oldDelegate) {
     return oldDelegate.page != page ||
         oldDelegate.currentStroke != currentStroke ||
         oldDelegate.currentScale != currentScale ||  // ✅ 缩放级别改变时需要重绘
-        oldDelegate.laserStrokes.length != laserStrokes.length;  // ✅ 激光笔笔迹数量改变时需要重绘
+        oldDelegate.laserStrokes.length != laserStrokes.length ||  // ✅ 激光笔笔迹数量改变时需要重绘
+        oldDelegate.selectResult != selectResult || // ✅ 选择结果改变时需要重绘
+        oldDelegate.isSelecting != isSelecting || // ✅ 选择状态改变时需要重绘
+        oldDelegate.page.textBoxes.length != page.textBoxes.length; // ✅ 文本框数量改变时需要重绘
   }
 }
 

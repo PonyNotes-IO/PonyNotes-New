@@ -60,6 +60,7 @@ class RectangleStroke extends Stroke {
     required Color color,
     required double strokeWidth,
     ToolId? toolId,
+    this.fillColor, // ✅ 填充颜色（可选）
   }) : super(
           points: _calculateRectanglePoints(startPoint, endPoint),
           color: color,
@@ -67,6 +68,8 @@ class RectangleStroke extends Stroke {
           toolId: toolId ?? ToolId.rectangle,
           pressureEnabled: false,
         );
+  
+  final Color? fillColor; // ✅ 填充颜色（null表示不填充）
 
   static List<Offset> _calculateRectanglePoints(Offset start, Offset end) {
     final left = min(start.dx, end.dx);
@@ -96,11 +99,18 @@ class RectangleStroke extends Stroke {
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['shape'] = 'rectangle';
+    if (fillColor != null) {
+      json['fillColor'] = fillColor!.value; // ✅ 保存填充颜色
+    }
     return json;
   }
 
   factory RectangleStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
+    final fillColorValue = json['fillColor'] as int?;
+    final fillColor = fillColorValue != null 
+        ? Color(fillColorValue) 
+        : null; // ✅ 读取填充颜色
     if (stroke.points.length < 2) {
       return RectangleStroke(
         startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
@@ -108,6 +118,7 @@ class RectangleStroke extends Stroke {
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
+        fillColor: fillColor,
       );
     }
     return RectangleStroke(
@@ -116,6 +127,7 @@ class RectangleStroke extends Stroke {
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
+      fillColor: fillColor,
     );
   }
 }
@@ -128,6 +140,7 @@ class CircleStroke extends Stroke {
     required Color color,
     required double strokeWidth,
     ToolId? toolId,
+    this.fillColor, // ✅ 填充颜色（可选）
   }) : super(
           points: _calculateCirclePoints(startPoint, endPoint),
           color: color,
@@ -135,6 +148,8 @@ class CircleStroke extends Stroke {
           toolId: toolId ?? ToolId.circle,
           pressureEnabled: false,
         );
+  
+  final Color? fillColor; // ✅ 填充颜色（null表示不填充）
 
   static List<Offset> _calculateCirclePoints(Offset start, Offset end) {
     final center = Offset(
@@ -176,11 +191,18 @@ class CircleStroke extends Stroke {
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['shape'] = 'circle';
+    if (fillColor != null) {
+      json['fillColor'] = fillColor!.value; // ✅ 保存填充颜色
+    }
     return json;
   }
 
   factory CircleStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
+    final fillColorValue = json['fillColor'] as int?;
+    final fillColor = fillColorValue != null 
+        ? Color(fillColorValue) 
+        : null; // ✅ 读取填充颜色
     if (stroke.points.length < 2) {
       return CircleStroke(
         startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
@@ -188,6 +210,7 @@ class CircleStroke extends Stroke {
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
+        fillColor: fillColor,
       );
     }
     // 从圆形点计算起始点和结束点
@@ -199,55 +222,184 @@ class CircleStroke extends Stroke {
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
+      fillColor: fillColor,
     );
   }
 }
 
-/// ✅ 三角形笔迹（支持任意三角形，通过三个点定义）
+/// ✅ 三角形笔迹（支持一笔画出任意三角形）
 class TriangleStroke extends Stroke {
   TriangleStroke({
-    required Offset point1,
-    required Offset point2,
-    required Offset point3,
+    required List<Offset> points,
     required Color color,
     required double strokeWidth,
     ToolId? toolId,
+    this.isShiftPressed = false, // ✅ 是否按住Shift键（绘制正三角形或等腰三角形）
+    this.fillColor, // ✅ 填充颜色（可选）
   }) : super(
-          points: [point1, point2, point3, point1], // 闭合三角形
+          points: _optimizeToTriangle(points, isShiftPressed: isShiftPressed), // ✅ 优化为三角形（三个顶点）
           color: color,
           strokeWidth: strokeWidth,
           toolId: toolId ?? ToolId.triangle,
           pressureEnabled: false,
         );
 
-  // ✅ 兼容旧版本的构造函数（基于start和end的矩形区域）
-  TriangleStroke.fromRect({
-    required Offset startPoint,
-    required Offset endPoint,
-    required Color color,
-    required double strokeWidth,
-    ToolId? toolId,
-  }) : super(
-          points: _calculateTrianglePointsFromRect(startPoint, endPoint),
-          color: color,
-          strokeWidth: strokeWidth,
-          toolId: toolId ?? ToolId.triangle,
-          pressureEnabled: false,
-        );
+  final bool isShiftPressed; // ✅ 是否按住Shift键
+  final Color? fillColor; // ✅ 填充颜色（null表示不填充）
 
-  static List<Offset> _calculateTrianglePointsFromRect(Offset start, Offset end) {
-    // ✅ 基于start和end的矩形区域（兼容旧版本）
-    final left = min(start.dx, end.dx);
-    final top = min(start.dy, end.dy);
-    final right = max(start.dx, end.dx);
-    final bottom = max(start.dy, end.dy);
+  // ✅ 从绘制路径优化为三角形：提取三个关键点
+  static List<Offset> _optimizeToTriangle(List<Offset> inputPoints, {bool isShiftPressed = false}) {
+    if (inputPoints.isEmpty) {
+      return [];
+    }
+    if (inputPoints.length == 1) {
+      return [inputPoints[0], inputPoints[0], inputPoints[0], inputPoints[0]]; // 闭合
+    }
+    if (inputPoints.length == 2) {
+      // 只有两个点，添加第三个点形成三角形
+      final p1 = inputPoints[0];
+      final p2 = inputPoints[1];
+      
+      if (isShiftPressed) {
+        // ✅ 按住Shift：绘制正三角形或等腰三角形
+        // 计算两点之间的距离
+        final dx = p2.dx - p1.dx;
+        final dy = p2.dy - p1.dy;
+        final distance = sqrt(dx * dx + dy * dy);
+        
+        // 计算中点
+        final midX = (p1.dx + p2.dx) / 2;
+        final midY = (p1.dy + p2.dy) / 2;
+        
+        // 正三角形：第三个点在垂直平分线上，距离为边长的√3/2
+        final height = distance * sqrt(3) / 2;
+        // 垂直方向向量（归一化）
+        final perpX = -dy / distance;
+        final perpY = dx / distance;
+        
+        // 第三个点（可以选择上方或下方，这里选择上方）
+        final p3 = Offset(midX + perpX * height, midY + perpY * height);
+        return [p1, p2, p3, p1]; // 闭合
+      } else {
+        // 不按Shift：任意三角形
+        final midX = (p1.dx + p2.dx) / 2;
+        final midY = (p1.dy + p2.dy) / 2;
+        final dx = p2.dx - p1.dx;
+        final dy = p2.dy - p1.dy;
+        // 垂直方向上的点
+        final p3 = Offset(midX - dy, midY + dx);
+        return [p1, p2, p3, p1]; // 闭合
+      }
+    }
     
-    // 三角形的三个顶点：左上角、右上角、底部中心
-    final topLeft = Offset(left, top);
-    final topRight = Offset(right, top);
-    final bottomCenter = Offset((left + right) / 2, bottom);
+    // ✅ 从多个点中提取三个关键点
+    final startPoint = inputPoints.first;
+    final endPoint = inputPoints.last;
     
-    return [topLeft, topRight, bottomCenter, topLeft]; // 闭合
+    if (isShiftPressed) {
+      // ✅ 按住Shift：绘制正三角形或等腰三角形
+      // 计算两点之间的距离
+      final dx = endPoint.dx - startPoint.dx;
+      final dy = endPoint.dy - startPoint.dy;
+      final distance = sqrt(dx * dx + dy * dy);
+      
+      // 计算中点
+      final midX = (startPoint.dx + endPoint.dx) / 2;
+      final midY = (startPoint.dy + endPoint.dy) / 2;
+      
+      // 找到距离起始点和结束点连线最远的点
+      double maxDistance = 0;
+      Offset farthestPoint = endPoint;
+      
+      for (int i = 1; i < inputPoints.length - 1; i++) {
+        final point = inputPoints[i];
+        final distance = _pointToLineDistance(point, startPoint, endPoint);
+        if (distance > maxDistance) {
+          maxDistance = distance;
+          farthestPoint = point;
+        }
+      }
+      
+      // 如果最远点距离太小，使用正三角形的第三个点
+      if (maxDistance < 10) {
+        // 正三角形：第三个点在垂直平分线上
+        final height = distance * sqrt(3) / 2;
+        final perpX = -dy / distance;
+        final perpY = dx / distance;
+        farthestPoint = Offset(midX + perpX * height, midY + perpY * height);
+      } else {
+        // 等腰三角形：第三个点在垂直平分线上，距离为最远点的距离
+        final perpX = -dy / distance;
+        final perpY = dx / distance;
+        final height = maxDistance;
+        // 判断最远点在线的哪一侧
+        final side = (farthestPoint.dx - midX) * perpX + (farthestPoint.dy - midY) * perpY;
+        farthestPoint = Offset(
+          midX + perpX * height * (side >= 0 ? 1 : -1),
+          midY + perpY * height * (side >= 0 ? 1 : -1),
+        );
+      }
+      
+      return [startPoint, farthestPoint, endPoint, startPoint]; // 闭合三角形
+    } else {
+      // ✅ 不按Shift：任意三角形
+      // 找到距离起始点和结束点连线最远的点
+      double maxDistance = 0;
+      Offset farthestPoint = endPoint;
+      
+      for (int i = 1; i < inputPoints.length - 1; i++) {
+        final point = inputPoints[i];
+        // 计算点到起始点和结束点连线的距离
+        final distance = _pointToLineDistance(point, startPoint, endPoint);
+        if (distance > maxDistance) {
+          maxDistance = distance;
+          farthestPoint = point;
+        }
+      }
+      
+      // 如果最远点距离太小，使用中点
+      if (maxDistance < 10) {
+        final midX = (startPoint.dx + endPoint.dx) / 2;
+        final midY = (startPoint.dy + endPoint.dy) / 2;
+        final dx = endPoint.dx - startPoint.dx;
+        final dy = endPoint.dy - startPoint.dy;
+        farthestPoint = Offset(midX - dy, midY + dx);
+      }
+      
+      return [startPoint, farthestPoint, endPoint, startPoint]; // 闭合三角形
+    }
+  }
+
+  // ✅ 计算点到直线的距离
+  static double _pointToLineDistance(Offset point, Offset lineStart, Offset lineEnd) {
+    final A = point.dx - lineStart.dx;
+    final B = point.dy - lineStart.dy;
+    final C = lineEnd.dx - lineStart.dx;
+    final D = lineEnd.dy - lineStart.dy;
+    
+    final dot = A * C + B * D;
+    final lenSq = C * C + D * D;
+    if (lenSq == 0) {
+      // 线段退化为点
+      return sqrt(A * A + B * B);
+    }
+    
+    final param = dot / lenSq;
+    Offset closestPoint;
+    if (param < 0) {
+      closestPoint = lineStart;
+    } else if (param > 1) {
+      closestPoint = lineEnd;
+    } else {
+      closestPoint = Offset(
+        lineStart.dx + param * C,
+        lineStart.dy + param * D,
+      );
+    }
+    
+    final dx = point.dx - closestPoint.dx;
+    final dy = point.dy - closestPoint.dy;
+    return sqrt(dx * dx + dy * dy);
   }
 
   Offset get point1 => points.isNotEmpty ? points[0] : Offset.zero;
@@ -258,43 +410,27 @@ class TriangleStroke extends Stroke {
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['shape'] = 'triangle';
+    json['isShiftPressed'] = isShiftPressed; // ✅ 保存Shift键状态
+    if (fillColor != null) {
+      json['fillColor'] = fillColor!.value; // ✅ 保存填充颜色
+    }
     return json;
   }
 
   factory TriangleStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
-    if (stroke.points.length < 3) {
-      // ✅ 兼容旧版本：如果只有2个点，使用fromRect构造函数
-      if (stroke.points.length == 2) {
-        return TriangleStroke.fromRect(
-          startPoint: stroke.points[0],
-          endPoint: stroke.points[1],
-          color: stroke.color,
-          strokeWidth: stroke.strokeWidth,
-          toolId: stroke.toolId,
-        );
-      }
-      // 如果只有1个点或没有点，使用默认值
-      return TriangleStroke(
-        point1: stroke.points.isNotEmpty ? stroke.points[0] : Offset.zero,
-        point2: stroke.points.length > 1 ? stroke.points[1] : const Offset(100, 0),
-        point3: stroke.points.length > 2 ? stroke.points[2] : const Offset(50, 100),
-        color: stroke.color,
-        strokeWidth: stroke.strokeWidth,
-        toolId: stroke.toolId,
-      );
-    }
-    // ✅ 新版本：从三个点创建三角形（最后一个点是闭合点，忽略）
-    final point1 = stroke.points[0];
-    final point2 = stroke.points[1];
-    final point3 = stroke.points[2];
+    final fillColorValue = json['fillColor'] as int?;
+    final fillColor = fillColorValue != null 
+        ? Color(fillColorValue) 
+        : null; // ✅ 读取填充颜色
+    // ✅ 从保存的点列表创建三角形（会自动优化为三个顶点）
     return TriangleStroke(
-      point1: point1,
-      point2: point2,
-      point3: point3,
+      points: stroke.points,
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
+      isShiftPressed: json['isShiftPressed'] as bool? ?? false, // ✅ 读取Shift键状态
+      fillColor: fillColor,
     );
   }
 }
@@ -307,6 +443,7 @@ class DiamondStroke extends Stroke {
     required Color color,
     required double strokeWidth,
     ToolId? toolId,
+    this.fillColor, // ✅ 填充颜色（可选）
   }) : super(
           points: _calculateDiamondPoints(startPoint, endPoint),
           color: color,
@@ -314,6 +451,8 @@ class DiamondStroke extends Stroke {
           toolId: toolId ?? ToolId.diamond,
           pressureEnabled: false,
         );
+  
+  final Color? fillColor; // ✅ 填充颜色（null表示不填充）
 
   static List<Offset> _calculateDiamondPoints(Offset start, Offset end) {
     final center = Offset(
@@ -336,11 +475,18 @@ class DiamondStroke extends Stroke {
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['shape'] = 'diamond';
+    if (fillColor != null) {
+      json['fillColor'] = fillColor!.value; // ✅ 保存填充颜色
+    }
     return json;
   }
 
   factory DiamondStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
+    final fillColorValue = json['fillColor'] as int?;
+    final fillColor = fillColorValue != null 
+        ? Color(fillColorValue) 
+        : null; // ✅ 读取填充颜色
     if (stroke.points.length < 4) {
       return DiamondStroke(
         startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
@@ -348,6 +494,7 @@ class DiamondStroke extends Stroke {
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
+        fillColor: fillColor,
       );
     }
     // 从菱形点计算起始点和结束点
@@ -359,6 +506,7 @@ class DiamondStroke extends Stroke {
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
+      fillColor: fillColor,
     );
   }
 }
