@@ -5,10 +5,11 @@ import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/move_to/move_page_menu.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/pop_up_action.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -39,7 +40,7 @@ class ViewMoreActionPopover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wrappers = _buildActionTypeWrappers();
+    final wrappers = _buildActionTypeWrappers(context);
     return PopoverActionList<ViewMoreActionTypeWrapper>(
       controller: controller,
       direction: PopoverDirection.bottomWithLeftAligned,
@@ -54,8 +55,8 @@ class ViewMoreActionPopover extends StatelessWidget {
     );
   }
 
-  List<ViewMoreActionTypeWrapper> _buildActionTypeWrappers() {
-    final actionTypes = _buildActionTypes();
+  List<ViewMoreActionTypeWrapper> _buildActionTypeWrappers(BuildContext context) {
+    final actionTypes = _buildActionTypes(context);
     return actionTypes.map(
       (e) {
         final actionWrapper =
@@ -74,7 +75,7 @@ class ViewMoreActionPopover extends StatelessWidget {
     ).toList();
   }
 
-  List<ViewMoreActionType> _buildActionTypes() {
+  List<ViewMoreActionType> _buildActionTypes(BuildContext? context) {
     final List<ViewMoreActionType> actionTypes = [];
 
     // 如果是 Space 类型，显示 Space 专用菜单
@@ -93,7 +94,22 @@ class ViewMoreActionPopover extends StatelessWidget {
         actionTypes.add(ViewMoreActionType.divider);
       }
 
-      actionTypes.add(ViewMoreActionType.delete);
+      // 根据用户角色显示删除或离开工作区
+      if (context != null) {
+        final currentWorkspace = context.read<UserWorkspaceBloc>().state.currentWorkspace;
+        final userRole = currentWorkspace?.role;
+        
+        if (userRole == AFRolePB.Owner) {
+          // 拥有者显示删除
+          actionTypes.add(ViewMoreActionType.delete);
+        } else {
+          // 参与者显示离开工作区
+          actionTypes.add(ViewMoreActionType.leaveWorkspace);
+        }
+      } else {
+        // 如果无法获取上下文，默认显示删除
+        actionTypes.add(ViewMoreActionType.delete);
+      }
       return actionTypes;
     }
 

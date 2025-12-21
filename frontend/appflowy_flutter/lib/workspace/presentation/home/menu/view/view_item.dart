@@ -6,6 +6,7 @@ import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/rename_view/rename_view_bloc.dart';
@@ -950,6 +951,21 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               break;
             case ViewMoreActionType.rename:
               _startRenaming();
+              break;
+            case ViewMoreActionType.leaveWorkspace:
+              // 离开工作区
+              if (context.mounted) {
+                final workspaceId = context
+                    .read<UserWorkspaceBloc>()
+                    .state
+                    .currentWorkspace
+                    ?.workspaceId;
+                if (workspaceId != null) {
+                  context.read<UserWorkspaceBloc>().add(
+                        UserWorkspaceEvent.leaveWorkspace(workspaceId: workspaceId),
+                      );
+                }
+              }
               break;
             case ViewMoreActionType.delete:
               // 如果是 Space 类型，使用 SpaceBloc 删除
