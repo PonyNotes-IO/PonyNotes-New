@@ -22,6 +22,9 @@ import 'package:appflowy/workspace/presentation/home/menu/view/draggable_view_it
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/manage_space_popup.dart';
+import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
+import 'dart:convert';
 import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
@@ -949,23 +952,41 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               _startRenaming();
               break;
             case ViewMoreActionType.delete:
-              // get if current page contains published child views
-              final (containPublishedPage, _) =
-                  await ViewBackendService.containPublishedPage(widget.view);
-              if (containPublishedPage && context.mounted) {
-                await showConfirmDeletionDialog(
-                  context: context,
-                  name: widget.view.name,
-                  description: LocaleKeys.publish_containsPublishedPage.tr(),
-                  onConfirm: () =>
-                      context.read<ViewBloc>().add(const ViewEvent.delete()),
-                );
-              } else if (context.mounted) {
-                context.read<ViewBloc>().add(const ViewEvent.delete());
+              // 如果是 Space 类型，使用 SpaceBloc 删除
+              if (widget.view.isSpace) {
+                if (context.mounted) {
+                  context.read<SpaceBloc>().add(
+                        SpaceEvent.delete(widget.view),
+                      );
+                }
+              } else {
+                // get if current page contains published child views
+                final (containPublishedPage, _) =
+                    await ViewBackendService.containPublishedPage(widget.view);
+                if (containPublishedPage && context.mounted) {
+                  await showConfirmDeletionDialog(
+                    context: context,
+                    name: widget.view.name,
+                    description: LocaleKeys.publish_containsPublishedPage.tr(),
+                    onConfirm: () =>
+                        context.read<ViewBloc>().add(const ViewEvent.delete()),
+                  );
+                } else if (context.mounted) {
+                  context.read<ViewBloc>().add(const ViewEvent.delete());
+                }
               }
               break;
             case ViewMoreActionType.duplicate:
-              context.read<ViewBloc>().add(const ViewEvent.duplicate());
+              // 如果是 Space 类型，使用 SpaceBloc 复制空间
+              if (widget.view.isSpace) {
+                if (context.mounted) {
+                  context.read<SpaceBloc>().add(
+                        SpaceEvent.duplicate(space: widget.view),
+                      );
+                }
+              } else {
+                context.read<ViewBloc>().add(const ViewEvent.duplicate());
+              }
               break;
             case ViewMoreActionType.duplicateToMySpace:
               context.read<ViewBloc>().add(const ViewEvent.duplicateToMySpace());
@@ -980,10 +1001,55 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               if (data is! SelectedEmojiIconResult) {
                 return;
               }
-              await ViewBackendService.updateViewIcon(
-                view: widget.view,
-                viewIcon: data.data,
-              );
+              // 如果是 Space 类型，使用 SpaceBloc 更新图标
+              if (widget.view.isSpace) {
+                if (data.type == FlowyIconType.icon) {
+                  try {
+                    final iconsData = IconsData.fromJson(jsonDecode(data.emoji));
+                    if (context.mounted) {
+                      context.read<SpaceBloc>().add(
+                            SpaceEvent.changeIcon(
+                              space: widget.view,
+                              icon: '${iconsData.groupName}/${iconsData.iconName}',
+                              iconColor: iconsData.color,
+                            ),
+                          );
+                    }
+                  } on FormatException catch (e) {
+                    Log.warn('ViewItem changeIcon error: $e');
+                    if (context.mounted) {
+                      context.read<SpaceBloc>().add(
+                            SpaceEvent.changeIcon(
+                              space: widget.view,
+                              icon: '',
+                            ),
+                          );
+                    }
+                  }
+                }
+              } else {
+                await ViewBackendService.updateViewIcon(
+                  view: widget.view,
+                  viewIcon: data.data,
+                );
+              }
+              break;
+            case ViewMoreActionType.manageSpace:
+              // 显示管理空间弹窗，传入当前点击的 Space
+              if (context.mounted) {
+                await showDialog(
+                  context: context,
+                  builder: (_) => Dialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    child: BlocProvider.value(
+                      value: context.read<SpaceBloc>(),
+                      child: ManageSpacePopup(space: widget.view),
+                    ),
+                  ),
+                );
+              }
               break;
             case ViewMoreActionType.moveTo:
               final value = data;

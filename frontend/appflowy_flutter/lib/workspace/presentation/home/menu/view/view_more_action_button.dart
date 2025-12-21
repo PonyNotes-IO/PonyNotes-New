@@ -4,6 +4,7 @@ import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/move_to/move_page_menu.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/pop_up_action.dart';
@@ -76,6 +77,27 @@ class ViewMoreActionPopover extends StatelessWidget {
   List<ViewMoreActionType> _buildActionTypes() {
     final List<ViewMoreActionType> actionTypes = [];
 
+    // 如果是 Space 类型，显示 Space 专用菜单
+    if (view.isSpace) {
+      actionTypes.addAll([
+        ViewMoreActionType.rename,
+        ViewMoreActionType.changeIcon,
+        ViewMoreActionType.manageSpace,
+        ViewMoreActionType.duplicate, // 复制空间
+        ViewMoreActionType.divider,
+      ]);
+
+      // 如果有子视图且已展开，显示收起全部子页面
+      if (view.childViews.isNotEmpty && isExpanded) {
+        actionTypes.add(ViewMoreActionType.collapseAllPages);
+        actionTypes.add(ViewMoreActionType.divider);
+      }
+
+      actionTypes.add(ViewMoreActionType.delete);
+      return actionTypes;
+    }
+
+    // 文档类型的菜单（原有逻辑）
     if (spaceType == FolderSpaceType.favorite) {
       actionTypes.addAll([
         ViewMoreActionType.unFavorite,

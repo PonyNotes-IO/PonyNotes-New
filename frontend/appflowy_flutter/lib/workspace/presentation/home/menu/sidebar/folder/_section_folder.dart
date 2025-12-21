@@ -260,28 +260,76 @@ class _SectionFolderState extends State<SectionFolder> {
     final int itemLevel = isIndentedSection ? 1 : 0;
 
     return widget.views.map(
-      (view) => ViewItem(
-        key: ValueKey('${widget.spaceType.name} ${view.id}'),
-        spaceType: widget.spaceType,
-        engagedInExpanding: true,
-        isFirstChild: view.id == widget.views.first.id,
-        view: view,
-        level: itemLevel, // 使用计算得出的缩进级别
-        leftPadding: HomeSpaceViewSizes.leftPadding,
-        isFeedback: false,
-        isHovered: isHovered,
-        enableRightClickContext: true,
-        onSelected: (viewContext, view) {
-          if (HardwareKeyboard.instance.isControlPressed) {
-            context.read<TabsBloc>().openTab(view);
-          }
+      (view) {
+        // 识别 Space 类型和文档类型
+        final bool isSpace = view.isSpace;
+        final bool isDocument = view.isDocument;
 
-          context.read<TabsBloc>().openPlugin(view);
-        },
-        onTertiarySelected: (viewContext, view) =>
-            context.read<TabsBloc>().openTab(view),
-        isHoverEnabled: widget.isHoverEnabled,
-      ),
+        // 根据类型做不同的处理逻辑
+        if (isSpace) {
+          // Space 类型的特殊处理
+          Log.info(
+            '[SECTION_FOLDER] Building Space view: ${view.name} (id: ${view.id})',
+          );
+          // 可以在这里添加 Space 类型的特殊逻辑
+          // 例如：不同的样式、不同的点击行为等
+        } else if (isDocument) {
+          // 文档类型的特殊处理
+          Log.info(
+            '[SECTION_FOLDER] Building Document view: ${view.name} (id: ${view.id})',
+          );
+          // 可以在这里添加文档类型的特殊逻辑
+        }
+
+        // 创建 ViewItem（可以根据类型传入不同的参数）
+        return ViewItem(
+          key: ValueKey('${widget.spaceType.name} ${view.id}'),
+          spaceType: widget.spaceType,
+          engagedInExpanding: true,
+          isFirstChild: view.id == widget.views.first.id,
+          view: view,
+          level: itemLevel, // 使用计算得出的缩进级别
+          leftPadding: HomeSpaceViewSizes.leftPadding,
+          isFeedback: false,
+          isHovered: isHovered,
+          enableRightClickContext: true,
+          onSelected: (viewContext, view) {
+            // 如果是 Space 类型，只切换展开/收起，不打开页面
+            if (view.isSpace) {
+              // Space 类型的点击处理：切换展开/收起
+              Log.info('[SECTION_FOLDER] Space clicked: ${view.name}');
+              
+              // 使用 SpaceBloc 切换展开/收起状态
+              final spaceBloc = context.read<SpaceBloc>();
+              final currentSpace = spaceBloc.state.currentSpace;
+              
+              // 如果点击的是当前 Space，切换展开状态
+              if (currentSpace?.id == view.id) {
+                final isExpanded = spaceBloc.state.isExpanded;
+                spaceBloc.add(SpaceEvent.expand(view, !isExpanded));
+              } else {
+                // 如果点击的是其他 Space，先打开它，然后展开
+                spaceBloc.add(SpaceEvent.open(space: view));
+              }
+              
+              // Space 类型不打开插件页面
+              return;
+            }
+            
+            // 文档类型的点击处理
+            Log.info('[SECTION_FOLDER] Document clicked: ${view.name}');
+
+            if (HardwareKeyboard.instance.isControlPressed) {
+              context.read<TabsBloc>().openTab(view);
+            }
+
+            context.read<TabsBloc>().openPlugin(view);
+          },
+          onTertiarySelected: (viewContext, view) =>
+              context.read<TabsBloc>().openTab(view),
+          isHoverEnabled: widget.isHoverEnabled,
+        );
+      },
     );
   }
 }

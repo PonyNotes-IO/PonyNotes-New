@@ -3,13 +3,19 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon_popup.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class ManageSpacePopup extends StatefulWidget {
-  const ManageSpacePopup({super.key});
+  const ManageSpacePopup({
+    super.key,
+    this.space,
+  });
+
+  final ViewPB? space;
 
   @override
   State<ManageSpacePopup> createState() => _ManageSpacePopupState();
@@ -23,6 +29,9 @@ class _ManageSpacePopupState extends State<ManageSpacePopup> {
 
   @override
   Widget build(BuildContext context) {
+    // 使用传入的 space，如果没有则使用 currentSpace
+    final targetSpace = widget.space ?? context.read<SpaceBloc>().state.currentSpace;
+    
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 24.0),
       width: 500,
@@ -35,6 +44,7 @@ class _ManageSpacePopupState extends State<ManageSpacePopup> {
           ),
           const VSpace(16.0),
           _SpaceNameTextField(
+            space: targetSpace,
             onNameChanged: (name) => spaceName = name,
             onIconChanged: (icon, color) {
               spaceIcon = icon;
@@ -43,8 +53,7 @@ class _ManageSpacePopupState extends State<ManageSpacePopup> {
           ),
           const VSpace(16.0),
           SpacePermissionSwitch(
-            spacePermission:
-                context.read<SpaceBloc>().state.currentSpace?.spacePermission,
+            spacePermission: targetSpace?.spacePermission,
             onPermissionChanged: (value) => spacePermission = value,
           ),
           const VSpace(16.0),
@@ -54,6 +63,7 @@ class _ManageSpacePopupState extends State<ManageSpacePopup> {
             onConfirm: () {
               context.read<SpaceBloc>().add(
                     SpaceEvent.update(
+                      space: targetSpace,
                       name: spaceName,
                       icon: spaceIcon,
                       iconColor: spaceIconColor,
@@ -72,16 +82,17 @@ class _ManageSpacePopupState extends State<ManageSpacePopup> {
 
 class _SpaceNameTextField extends StatelessWidget {
   const _SpaceNameTextField({
+    required this.space,
     required this.onNameChanged,
     required this.onIconChanged,
   });
 
+  final ViewPB? space;
   final void Function(String name) onNameChanged;
   final void Function(String? icon, String? color) onIconChanged;
 
   @override
   Widget build(BuildContext context) {
-    final space = context.read<SpaceBloc>().state.currentSpace;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,

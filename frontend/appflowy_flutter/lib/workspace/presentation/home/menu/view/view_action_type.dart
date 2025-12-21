@@ -19,7 +19,8 @@ enum ViewMoreActionType {
   lastModified,
   created,
   lockPage,
-  leaveSharedPage;
+  leaveSharedPage,
+  manageSpace; // 管理空间
 
   static const disableInLockedView = [
     delete,
@@ -58,6 +59,8 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
         return LocaleKeys.disclosureAction_lockPage.tr();
       case ViewMoreActionType.leaveSharedPage:
         return 'Leave';
+      case ViewMoreActionType.manageSpace:
+        return LocaleKeys.space_manage.tr();
       case ViewMoreActionType.divider:
       case ViewMoreActionType.lastModified:
       case ViewMoreActionType.created:
@@ -91,6 +94,8 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
         return FlowySvgs.lock_page_s;
       case ViewMoreActionType.leaveSharedPage:
         return FlowySvgs.leave_workspace_s;
+      case ViewMoreActionType.manageSpace:
+        return FlowySvgs.settings_s; // 使用设置图标，或者可以添加专门的图标
       case ViewMoreActionType.divider:
       case ViewMoreActionType.lastModified:
       case ViewMoreActionType.copyLink:
@@ -117,6 +122,7 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
       case ViewMoreActionType.created:
       case ViewMoreActionType.lockPage:
       case ViewMoreActionType.leaveSharedPage:
+      case ViewMoreActionType.manageSpace:
         return const SizedBox.shrink();
     }
   }
