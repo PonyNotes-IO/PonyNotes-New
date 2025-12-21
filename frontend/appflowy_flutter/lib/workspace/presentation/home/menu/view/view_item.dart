@@ -28,6 +28,7 @@ import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
 import 'dart:convert';
 import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/rename_view_popover.dart';
 import 'package:appflowy_backend/log.dart';
@@ -950,7 +951,28 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                   .add(FavoriteEvent.toggle(widget.view));
               break;
             case ViewMoreActionType.rename:
-              _startRenaming();
+              // 如果是 Space 类型，显示弹框重命名
+              if (widget.view.isSpace) {
+                await showAFTextFieldDialog(
+                  context: context,
+                  title: LocaleKeys.space_rename.tr(),
+                  initialValue: widget.view.name,
+                  hintText: LocaleKeys.space_spaceName.tr(),
+                  onConfirm: (name) {
+                    if (context.mounted) {
+                      context.read<SpaceBloc>().add(
+                            SpaceEvent.rename(
+                              space: widget.view,
+                              name: name,
+                            ),
+                          );
+                    }
+                  },
+                );
+              } else {
+                // 非 Space 类型使用内联编辑
+                _startRenaming();
+              }
               break;
             case ViewMoreActionType.leaveWorkspace:
               // 离开工作区
