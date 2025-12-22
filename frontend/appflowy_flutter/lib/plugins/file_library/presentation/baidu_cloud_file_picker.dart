@@ -35,6 +35,11 @@ class _BaiduCloudFilePickerDialogState extends State<BaiduCloudFilePickerDialog>
   }
 
   Future<void> _checkAuthorization() async {
+    // Try migrate any local tokens to backend first (if any)
+    try {
+      await _baiduService.migrateLocalTokensToBackend();
+    } catch (_) {}
+
     final authorized = await _baiduService.isAuthorized();
     setState(() {
       _isAuthorized = authorized;
@@ -72,7 +77,7 @@ class _BaiduCloudFilePickerDialogState extends State<BaiduCloudFilePickerDialog>
       // 强制重新加载配置（如果之前加载失败的话）
       await BaiduCloudConfigService.instance.loadConfig(force: true);
       
-      final authUrl = _baiduService.getAuthorizationUrl();
+      final authUrl = await _baiduService.getAuthorizationUrl();
       debugPrint('🔗 授权URL: $authUrl');
       
       final uri = Uri.parse(authUrl);

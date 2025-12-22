@@ -93,11 +93,11 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
             final rootNavigator = Navigator.of(context, rootNavigator: true);
             if (rootNavigator != null) {
               final rootContext = rootNavigator.context;
-              if (rootContext.mounted) {
-                getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                if (rootContext.mounted) {
+                  getIt<AuthRouter>().goHomeScreen(rootContext, profile);
               }
-            }
-          } else {
+                }
+              } else {
             // 用户取消了绑定，立即设置标志（在 reset 之前），防止 BlocListener 被触发时进入主界面
             _phoneBindingCancelled = true;
                 showToastNotification(

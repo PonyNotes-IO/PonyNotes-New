@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:appflowy_backend/log.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// 百度网盘配置模型
@@ -72,56 +71,13 @@ class BaiduCloudConfigService {
   bool _isLoaded = false;
 
   /// 加载百度网盘配置
+  /// 为了安全，前端不再从本地文件加载包含 client_secret 的配置 (.env.baidu)。
+  /// 所有敏感配置应放在服务器环境变量（BAIDU_CLOUD_*），并通过后端代理完成 OAuth 流程。
   Future<void> loadConfig({bool force = false}) async {
     if (_isLoaded && !force) return;
-
-    try {
-      String? content;
-      
-      // 首先尝试从Flutter资源系统读取
-      try {
-        content = await rootBundle.loadString('.env.baidu');
-        Log.info('✅ 从Flutter资源系统加载百度网盘配置成功');
-      } catch (e) {
-        Log.info('⚠️ 无法从Flutter资源系统加载.env.baidu: $e');
-        
-        // 如果从资源系统读取失败，尝试从文件系统读取（开发环境）
-        final possiblePaths = [
-          '.env.baidu',
-          'appflowy_flutter/.env.baidu',
-          'frontend/appflowy_flutter/.env.baidu',
-          '../.env.baidu',
-          '../../.env.baidu',
-        ];
-        
-        File? configFile;
-        for (final path in possiblePaths) {
-          final file = File(path);
-          Log.info('🔍 尝试加载配置文件: ${file.absolute.path}');
-          if (await file.exists()) {
-            configFile = file;
-            Log.info('✅ 找到配置文件: ${file.absolute.path}');
-            break;
-          }
-        }
-        
-        if (configFile != null) {
-          content = await configFile.readAsString();
-          Log.info('✅ 从文件系统加载百度网盘配置成功: ${configFile.absolute.path}');
-        }
-      }
-      
-      if (content != null) {
-        _parseEnvContent(content);
-        _isLoaded = true;
-        Log.info('✅ 百度网盘配置解析成功');
-      } else {
-        Log.info('⚠️ 百度网盘配置文件未找到');
-        Log.info('📝 请确保.env.baidu文件存在并包含在Flutter资源中');
-      }
-    } catch (e) {
-      Log.info('❌ 加载百度网盘配置失败: $e');
-    }
+    _envVars.clear();
+    _isLoaded = true;
+    Log.info('✅ 前端百度网盘本地配置已禁用；请在后端设置 BAIDU_CLOUD_APP_KEY / BAIDU_CLOUD_SECRET_KEY 等环境变量。');
   }
 
   /// 解析环境变量内容
@@ -168,6 +124,13 @@ class BaiduCloudConfigService {
       maxCacheSize: int.tryParse(_envVars['BAIDU_CLOUD_MAX_CACHE_SIZE'] ?? '100') ?? 100,
       debugMode: _envVars['BAIDU_CLOUD_DEBUG_MODE']?.toLowerCase() == 'true',
     );
+  }
+
+  /// Whether to use backend proxy for Baidu Cloud operations.
+  /// When true, frontend will call backend endpoints instead of using client_secret.
+  bool get useBackendProxy {
+    // Default to true to avoid storing client_secret in frontend.
+    return (_envVars['BAIDU_CLOUD_USE_BACKEND']?.toLowerCase() ?? 'true') == 'true';
   }
 
   /// 检查是否有有效的配置
