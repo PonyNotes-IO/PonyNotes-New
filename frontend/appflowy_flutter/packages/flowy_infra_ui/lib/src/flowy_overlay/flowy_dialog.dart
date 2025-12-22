@@ -11,6 +11,7 @@ class FlowyDialog extends StatelessWidget {
     super.key,
     required this.child,
     this.title,
+    this.showCloseButton = true,
     this.shape,
     this.constraints,
     this.padding = _overlayContainerPadding,
@@ -19,9 +20,12 @@ class FlowyDialog extends StatelessWidget {
     this.alignment,
     this.insetPadding,
     this.width,
+    this.onClose,
   });
 
   final Widget? title;
+  /// 是否显示右上角关闭按钮，默认显示
+  final bool showCloseButton;
   final ShapeBorder? shape;
   final Widget child;
   final BoxConstraints? constraints;
@@ -36,6 +40,7 @@ class FlowyDialog extends StatelessWidget {
   final EdgeInsets? insetPadding;
 
   final double? width;
+  final VoidCallback? onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -54,11 +59,30 @@ class FlowyDialog extends StatelessWidget {
       children: [
         Material(
           type: MaterialType.transparency,
-          child: Container(
-            height: expandHeight ? size.height : null,
-            width: width ?? size.width,
-            constraints: constraints,
-            child: child,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // 为右上角关闭按钮预留一点顶部空间，避免压住内容
+              Container(
+                height: expandHeight ? size.height : null,
+                width: width ?? size.width,
+                constraints: constraints,
+                child: child,
+              ),
+              if (showCloseButton)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: IconButton(
+                    icon: const Icon(Icons.close),
+                    splashRadius: 18,
+                    onPressed: () {
+                      onClose?.call();
+                      Navigator.of(context).maybePop();
+                    },
+                  ),
+                ),
+            ],
           ),
         )
       ],
