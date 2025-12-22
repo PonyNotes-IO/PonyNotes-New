@@ -64,15 +64,29 @@ class _DialogHeader extends StatelessWidget {
     final titleStyle = Theme.of(context).textTheme.titleMedium;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-      child: Center(
-            child:  Text(
-              '共享设置',
-              style: titleStyle ??
-                  const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
+      child: Row(
+        children: [
+          // 左侧占位，保证标题整体居中
+          const SizedBox(width: 24),
+          Expanded(
+            child: Center(
+              child: Text(
+                '共享设置',
+                style: titleStyle ??
+                    const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
             ),
+          ),
+          // 右上角关闭按钮
+          IconButton(
+            icon: const Icon(Icons.close, size: 20),
+            splashRadius: 18,
+            onPressed: onClose,
+          ),
+        ],
       ),
     );
   }
