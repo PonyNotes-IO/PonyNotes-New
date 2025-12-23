@@ -40,7 +40,7 @@ class WorkspaceMembersPage extends StatelessWidget {
         listener: _showResultDialog,
         builder: (context, state) {
           return SettingsBody(
-            title: LocaleKeys.settings_appearance_members_title.tr(),
+            title: '人员管理',
             // Enable it when the backend support admin panel
             // descriptionBuilder: _buildDescription,
             autoSeparate: false,
