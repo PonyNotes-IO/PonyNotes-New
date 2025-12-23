@@ -87,8 +87,9 @@ class SettingsDialog extends StatelessWidget {
         initPage: initPage,
       )..add(const SettingsDialogEvent.initial()),
       child: BlocBuilder<SettingsDialogBloc, SettingsDialogState>(
-        builder: (context, state) => FlowyDialog(
+                builder: (context, state) => FlowyDialog(
           width: width,
+          backgroundColor: theme.backgroundColorScheme.primary,
           constraints: BoxConstraints(
             minWidth: 564,
             maxWidth: 1200,
@@ -126,12 +127,21 @@ class SettingsDialog extends StatelessWidget {
                       ),
                       Expanded(
                         flex: 5,
-                        child: getSettingsView(
-                          workspaceState.currentWorkspace!,
-                          context.read<SettingsDialogBloc>().state.page,
-                          state.userProfile,
-                          workspaceState.currentWorkspace?.role,
-                          context,
+                        child: Container(
+                          // Ensure right pane fully covers dialog area to avoid tiny gap
+                          // caused by rounding or inner padding of children.
+                          color: theme.backgroundColorScheme.primary,
+                          child: Padding(
+                            // Only reduce right padding to avoid visible gap on dialog edge.
+                            padding: const EdgeInsets.only(right: 12),
+                            child: getSettingsView(
+                              workspaceState.currentWorkspace!,
+                              context.read<SettingsDialogBloc>().state.page,
+                              state.userProfile,
+                              workspaceState.currentWorkspace?.role,
+                              context,
+                            ),
+                          ),
                         ),
                       ),
                     ],

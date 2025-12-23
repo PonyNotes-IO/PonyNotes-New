@@ -73,13 +73,29 @@ class FlowyDialog extends StatelessWidget {
                 Positioned(
                   top: 4,
                   right: 4,
-                  child: IconButton(
-                    icon: const Icon(Icons.close),
-                    splashRadius: 18,
-                    onPressed: () {
-                      onClose?.call();
-                      Navigator.of(context).maybePop();
-                    },
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        onClose?.call();
+                        Navigator.of(context).maybePop();
+                      },
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        alignment: Alignment.center,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.transparent, // keep no background
+                        ),
+                        child: Icon(
+                          Icons.close,
+                          size: 24,
+                          color: Theme.of(context).iconTheme.color,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
             ],
