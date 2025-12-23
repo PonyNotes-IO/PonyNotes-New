@@ -182,7 +182,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
             SettingsMenuElement(
               page: SettingsPage.notifications,
               selectedPage: widget.currentPage,
-              label: LocaleKeys.settings_menu_notifications.tr(),
+              label: "通知设置",
               changeSelectedPage: widget.changeSelectedPage,
             ),
             SettingsMenuElement(

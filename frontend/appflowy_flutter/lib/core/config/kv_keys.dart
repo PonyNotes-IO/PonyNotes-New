@@ -78,6 +78,12 @@ class KVKeys {
   ///
   /// The value is a boolean string
   static const String showNotificationIcon = 'showNotificationIcon';
+  // Notification per-type settings
+  static const String notificationAtMe = 'notification.at_me';
+  static const String notificationPending = 'notification.pending';
+  static const String notificationPermissionChange = 'notification.permission_change';
+  static const String notificationJoinTeam = 'notification.join_team';
+  static const String notificationClip = 'notification.clip';
 
   /// The key for saving the last opened workspace id
   ///

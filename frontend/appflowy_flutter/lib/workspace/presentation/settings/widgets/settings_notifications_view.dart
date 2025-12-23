@@ -15,8 +15,9 @@ class SettingsNotificationsView extends StatelessWidget {
     return BlocBuilder<NotificationSettingsCubit, NotificationSettingsState>(
       builder: (context, state) {
         return SettingsBody(
-          title: LocaleKeys.settings_menu_notifications.tr(),
+          title: '通知设置',
           children: [
+            // Master switch
             SettingListTile(
               label: LocaleKeys.settings_notifications_enableNotifications_label
                   .tr(),
@@ -31,18 +32,65 @@ class SettingsNotificationsView extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            // Per-type settings
             SettingListTile(
-              label: LocaleKeys
-                  .settings_notifications_showNotificationsIcon_label
-                  .tr(),
-              hint: LocaleKeys.settings_notifications_showNotificationsIcon_hint
-                  .tr(),
+              label: '@我',
+              hint: '当他人 @我 或在文档中提及时通知我',
               trailing: [
                 Toggle(
-                  value: state.isShowNotificationsIconEnabled,
+                  value: state.isAtMeEnabled,
                   onChanged: (_) => context
                       .read<NotificationSettingsCubit>()
-                      .toggleShowNotificationIconEnabled(),
+                      .toggleAtMeEnabled(),
+                ),
+              ],
+            ),
+            SettingListTile(
+              label: '待处理',
+              hint: '需要我审批的申请',
+              trailing: [
+                Toggle(
+                  value: state.isPendingEnabled,
+                  onChanged: (_) => context
+                      .read<NotificationSettingsCubit>()
+                      .togglePendingEnabled(),
+                ),
+              ],
+            ),
+            SettingListTile(
+              label: '权限变更',
+              hint: '当权限调整时，通知我',
+              trailing: [
+                Toggle(
+                  value: state.isPermissionChangeEnabled,
+                  onChanged: (_) => context
+                      .read<NotificationSettingsCubit>()
+                      .togglePermissionChangeEnabled(),
+                ),
+              ],
+            ),
+            SettingListTile(
+              label: '加入团队或加入协作时',
+              hint: '当加入团队或成员加入协作时通知我',
+              trailing: [
+                Toggle(
+                  value: state.isJoinTeamEnabled,
+                  onChanged: (_) => context
+                      .read<NotificationSettingsCubit>()
+                      .toggleJoinTeamEnabled(),
+                ),
+              ],
+            ),
+            SettingListTile(
+              label: '剪藏通知',
+              hint: '当剪藏图片、网页等成功或失败时通知我',
+              trailing: [
+                Toggle(
+                  value: state.isClipEnabled,
+                  onChanged: (_) => context
+                      .read<NotificationSettingsCubit>()
+                      .toggleClipEnabled(),
                 ),
               ],
             ),
