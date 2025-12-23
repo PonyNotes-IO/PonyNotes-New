@@ -17,22 +17,7 @@ class SettingsNotificationsView extends StatelessWidget {
         return SettingsBody(
           title: '通知设置',
           children: [
-            // Master switch
-            SettingListTile(
-              label: LocaleKeys.settings_notifications_enableNotifications_label
-                  .tr(),
-              hint: LocaleKeys.settings_notifications_enableNotifications_hint
-                  .tr(),
-              trailing: [
-                Toggle(
-                  value: state.isNotificationsEnabled,
-                  onChanged: (_) => context
-                      .read<NotificationSettingsCubit>()
-                      .toggleNotificationsEnabled(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
+            // Per-type settings
             // Per-type settings
             SettingListTile(
               label: '@我',
