@@ -270,7 +270,16 @@ class ViewBackendService {
   ) async {
     if (viewId.isEmpty) {
       Log.error('ViewId is empty');
+      // Avoid sending an empty view id to the backend which causes server-side validation
+      // errors (DocumentIdIsEmpty / InvalidParams). Return a failure early so callers can
+      // handle the absence of a valid id without invoking the Rust handler.
+      return Future.value(
+        FlowyResult<ViewPB, FlowyError>.failure(
+          FlowyError(msg: 'ViewId is empty'),
+        ),
+      );
     }
+
     final payload = ViewIdPB.create()..value = viewId;
     return FolderEventGetView(payload).send();
   }

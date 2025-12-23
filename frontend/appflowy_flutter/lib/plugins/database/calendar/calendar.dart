@@ -4,35 +4,29 @@ import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
-import 'package:easy_localization/easy_localization.dart';
+// removed unused: easy_localization
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/date_picker.dart';
-import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
-import 'package:flowy_infra_ui/style_widget/hover.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy_popover/appflowy_popover.dart';
+// removed unused: flowy_infra_ui, hover
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
-import 'package:appflowy/workspace/application/view/view_listener.dart';
+// removed unused: view_listener
 import 'package:appflowy/plugins/document/document_page.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../workspace/presentation/widgets/toggle/toggle.dart';
-import 'presentation/widgets/schedule_sidebar_content.dart';
+// removed unused: toggle, schedule_sidebar_content
 import 'package:flowy_infra/uuid.dart';
 import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
 import 'presentation/new_event_page.dart';
 import 'presentation/edit_event_page.dart';
 import 'models/schedule_model.dart';
-import 'package:appflowy/plugins/document/application/document_bloc.dart';
-import 'package:appflowy/workspace/application/view/view_bloc.dart';
-import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
-import 'package:appflowy_editor/appflowy_editor.dart';
-import 'package:appflowy_backend/protobuf/flowy-error/protobuf.dart';
-import 'package:appflowy/plugins/document/presentation/editor_page.dart';
-import 'package:appflowy/plugins/document/presentation/editor_style.dart';
+// removed unused document/editor related imports
 import 'application/calendar_content_cubit.dart';
 
 // 添加日历事件类

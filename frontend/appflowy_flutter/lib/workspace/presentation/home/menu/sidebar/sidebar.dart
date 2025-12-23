@@ -10,6 +10,7 @@ import 'package:appflowy/plugins/document/presentation/editor_notification.dart'
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/loading.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
@@ -141,10 +142,16 @@ class HomeSideBar extends StatelessWidget {
                 BlocListener<SidebarSectionsBloc, SidebarSectionsState>(
                   listenWhen: (p, c) =>
                       p.lastCreatedRootView?.id != c.lastCreatedRootView?.id,
-                  listener: (context, state) {
+                listener: (context, state) {
                     final view = state.lastCreatedRootView;
                     if (view != null) {
-                      context.read<TabsBloc>().openPlugin(view);
+                      if (view.id.isEmpty) {
+                        Log.error('Sidebar: lastCreatedRootView.id is empty, aborting openPlugin');
+                        // Open a blank page as a safe fallback to avoid passing empty id downstream.
+                        context.read<TabsBloc>().add(TabsEvent.openPlugin(plugin: BlankPagePlugin()));
+                      } else {
+                        context.read<TabsBloc>().openPlugin(view);
+                      }
                     }
                   },
                 ),

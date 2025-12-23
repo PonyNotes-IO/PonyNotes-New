@@ -157,12 +157,22 @@ class SubPageBlockTransactionHandler extends BlockTransactionHandler {
               .then((_) async {
             editorState.reload();
 
-            // Open the new page
-            if (UniversalPlatform.isDesktop) {
-              getIt<TabsBloc>().openPlugin(view);
-            } else {
+            // Open the new page (guard view id)
+            if (view.id.isEmpty) {
+              Log.error('Attempted to open sub-page plugin with empty view.id');
               if (context.mounted) {
-                await context.pushView(view);
+                showSnapBar(
+                  context,
+                  LocaleKeys.document_plugins_subPage_errors_failedCreatePage.tr(),
+                );
+              }
+            } else {
+              if (UniversalPlatform.isDesktop) {
+                getIt<TabsBloc>().openPlugin(view);
+              } else {
+                if (context.mounted) {
+                  await context.pushView(view);
+                }
               }
             }
           });

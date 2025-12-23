@@ -57,9 +57,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     strokeWidth: 3,
   );
 
-  /// 当前背景纸模式
+  /// 当前背景纸模式（使用 EditorCoreInfo.empty() 的默认以保证一致）
   CanvasBackgroundPattern _currentBackgroundPattern =
-      CanvasBackgroundPattern.lined;
+      EditorCoreInfo.empty().backgroundPattern;
   
   /// ✅ 当前填充颜色（用于形状工具）
   Color? _currentFillColor;
@@ -120,14 +120,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       if (bytes.isEmpty) {
         _coreInfo = EditorCoreInfo.empty();
+        // 保证 UI 上的当前背景纸样式与核心数据一致（避免新建时工具栏/画布不一致）
+        _currentBackgroundPattern = _coreInfo.backgroundPattern;
         _status = '已就绪';
       } else {
         final String content = utf8.decode(bytes);
         _coreInfo = EditorCoreInfo.fromJsonString(content);
+        // 同步当前背景纸样式，确保工具栏与数据一致
+        _currentBackgroundPattern = _coreInfo.backgroundPattern;
         _status = '已就绪';
       }
     } catch (e) {
       _coreInfo = EditorCoreInfo.empty();
+      // 如果读取失败，也同步当前背景样式为默认
+      _currentBackgroundPattern = _coreInfo.backgroundPattern;
       _status = '读取本地文件失败：$e';
     }
   }
@@ -168,6 +174,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   void _startStroke(Offset position, {int? pageIndex}) {
     // ✅ 设置当前页面索引
     _currentPageIndex = pageIndex ?? 0;
+    debugPrint('🦋[HandwritingSaber] _startStroke: pageIndex=$_currentPageIndex, position=$position, tool=${_currentTool.toolId}');
     
     // 确保页面索引有效
     if (_currentPageIndex! >= _coreInfo.pages.length) {
@@ -521,6 +528,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
     
     final Stroke? stroke = _currentStroke;
+    debugPrint('🦋[HandwritingSaber] _updateStroke: position=$position, tool=${_currentTool.toolId}, hasCurrentStroke=${stroke != null}');
     if (stroke == null) {
       return;
     }
@@ -553,8 +561,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       stroke.points.add(position);
     }
     
+    // 为确保 CustomPainter 能检测到变化，替换成新的 Stroke 实例（改变对象引用）
     setState(() {
-      // 触发重绘
+      _currentStroke = Stroke(
+        points: List<Offset>.from(stroke.points),
+        color: stroke.color,
+        strokeWidth: stroke.strokeWidth,
+        toolId: stroke.toolId,
+        pressureEnabled: stroke.pressureEnabled,
+      );
     });
   }
   
@@ -1129,6 +1144,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           return;
         }
         final pagePos = toPageCoordinates(details.localPosition);
+        debugPrint('🦋[HandwritingSaber] onPanStart: local=${details.localPosition}, pagePos=$pagePos, pageIndex=$pageIndex, tool=${_currentTool.toolId}');
         if (pagePos.dx.isFinite && pagePos.dy.isFinite) {
           // ✅ 如果点击在空白区域，结束文本框编辑
           if (_editingTextBoxId != null) {
@@ -1177,6 +1193,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           return;
         }
         final pagePos = toPageCoordinates(details.localPosition);
+        debugPrint('🦋[HandwritingSaber] onPanUpdate: local=${details.localPosition}, pagePos=$pagePos, pageIndex=$pageIndex, tool=${_currentTool.toolId}');
         if (pagePos.dx.isFinite && pagePos.dy.isFinite) {
           _updateStroke(pagePos);
         }
@@ -1192,21 +1209,29 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           child: Stack(
             children: [
               // ✅ 画布层
-              SaberCoreCanvas(
-                coreInfo: EditorCoreInfo(
-                  pages: [page],  // ✅ 只传递当前页面
-                  backgroundColor: _coreInfo.backgroundColor,
-                  backgroundPattern: _coreInfo.backgroundPattern,
-                  lineHeight: _coreInfo.lineHeight,
-                  lineThickness: _coreInfo.lineThickness,
-                )..laserStrokes.addAll(_coreInfo.laserStrokes),
-                currentStroke: _currentStroke,
-                selectResult: _selectResult != null && 
-                    _selectResult!.pageIndex == pageIndex ? _selectResult : null,
-                isSelecting: _isSelecting && 
-                    _selectResult != null && 
-                    _selectResult!.pageIndex == pageIndex,
-              ),
+                // 传递当前 UI 选择的背景样式，避免 coreInfo 未同步导致背景显示不一致
+                SaberCoreCanvas(
+                  coreInfo: EditorCoreInfo(
+                    pages: [page], // ✅ 只传递当前页面
+                    backgroundColor: _coreInfo.backgroundColor,
+                    backgroundPattern: _currentBackgroundPattern,
+                    lineHeight: _coreInfo.lineHeight,
+                    lineThickness: _coreInfo.lineThickness,
+                  )..laserStrokes.addAll(_coreInfo.laserStrokes),
+                  currentStroke: _currentStroke,
+                  selectResult: _selectResult != null &&
+                      _selectResult!.pageIndex == pageIndex
+                      ? _selectResult
+                      : null,
+                  isSelecting: _isSelecting &&
+                      _selectResult != null &&
+                      _selectResult!.pageIndex == pageIndex,
+                ),
+                // debug: 输出当前页面与背景信息，便于定位背景样式问题
+                Builder(builder: (context) {
+                  debugPrint('🦋[HandwritingSaber] _buildSinglePageCanvas: pageIndex=$pageIndex, page.backgroundImage=${page.backgroundImage != null}, coreInfo.backgroundPattern=${_coreInfo.backgroundPattern}, currentBackgroundPattern=$_currentBackgroundPattern, page.strokes=${page.strokes.length}');
+                  return const SizedBox.shrink();
+                }),
               // ✅ 文本框编辑层（直接在画布上编辑）
               if (_editingTextBoxId != null) ...[
                 for (final textBox in page.textBoxes)
@@ -1272,6 +1297,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _coreInfo.pages.clear();
       
       // ✅ 为每个 PDF 页面创建一个新的 EditorPage
+      bool _isFirstPdfPage = true;
       for (final pdfPage in pdfDocument.pages) {
         // pdfrx 页面编号从 1 开始
         assert(pdfPage.pageNumber >= 1, 'pdfrx page numbers start at 1');
@@ -1292,13 +1318,14 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           dstRect: Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
         );
         
-        // ✅ 创建新页面，如果是第一页则保留原有笔迹
+        // ✅ 创建新页面：仅将 existingStrokes 保留到导入前的“第一页”，其余页面不保留旧笔迹
         final page = EditorPage(
           size: pageSize,
-          strokes: _coreInfo.pages.isEmpty ? existingStrokes : <Stroke>[],
+          strokes: _isFirstPdfPage ? List<Stroke>.from(existingStrokes) : <Stroke>[],
           backgroundImage: pdfImage,
         );
         _coreInfo.pages.add(page);
+        _isFirstPdfPage = false;
       }
       
       // ✅ 添加一个空页面（参考 Saber 的实现）
@@ -1319,6 +1346,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           ),
         );
       }
+      debugPrint('🦋[HandwritingSaber] _importPdfFromFilePath: imported ${pdfDocument.pages.length} pages, coreInfo.pages=${_coreInfo.pages.length}');
       
       // 释放 PDF 文档资源（PdfEditorImage 会管理自己的文档）
       pdfDocument.dispose();

@@ -157,9 +157,12 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                     final currentPageManager =
                         context.read<TabsBloc>().state.currentPageManager;
 
-                    if (currentPageManager.plugin.pluginType ==
-                        PluginType.blank) {
-                      getIt<TabsBloc>().openPlugin(view);
+            if (currentPageManager.plugin.pluginType == PluginType.blank) {
+                      if (view.id.isEmpty) {
+                        Log.error('DesktopHomeScreen: latestView.id is empty, skip opening plugin');
+                      } else {
+                        getIt<TabsBloc>().openPlugin(view);
+                      }
                     }
 
                     // switch to the space that contains the last opened view
@@ -389,12 +392,16 @@ class DesktopHomeScreenStackAdaptor extends HomeStackDelegate {
       (result) => result.fold(
         (parentView) {
           final List<ViewPB> views = parentView.childViews;
-          if (views.isNotEmpty) {
+            if (views.isNotEmpty) {
             ViewPB lastView = views.last;
             if (index != null && index != 0 && views.length > index - 1) {
               lastView = views[index - 1];
             }
 
+            if (lastView.id.isEmpty) {
+              Log.error('DesktopHomeScreen: lastView.id is empty, skip opening plugin');
+              return;
+            }
             return getIt<TabsBloc>().openPlugin(lastView);
           }
 

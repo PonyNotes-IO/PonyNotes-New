@@ -323,7 +323,12 @@ class _SectionFolderState extends State<SectionFolder> {
               context.read<TabsBloc>().openTab(view);
             }
 
-            context.read<TabsBloc>().openPlugin(view);
+            // Defensive: ensure view has a valid id before attempting to open plugin.
+            if (view.id.isEmpty) {
+              Log.error('[SECTION_FOLDER] Attempted to open plugin with empty view.id, aborting. view.name=${view.name}');
+            } else {
+              context.read<TabsBloc>().openPlugin(view);
+            }
           },
           onTertiarySelected: (viewContext, view) =>
               context.read<TabsBloc>().openTab(view),

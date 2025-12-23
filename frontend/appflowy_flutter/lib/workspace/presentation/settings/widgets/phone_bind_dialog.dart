@@ -136,7 +136,7 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
             ),
             const VSpace(12),
             SlideVerificationWidget(
-              onVerified: () {
+              onVerificationSuccess: () {
                 setState(() {
                   _isSlideVerified = true;
                 });
@@ -166,9 +166,20 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
                 ),
                 const HSpace(12),
                 FlowyButton(
-                  text: _getButtonText(),
-                  onPressed: _canResendCode() ? _sendCode : null,
-                  isLoading: _isSending,
+                  text: _isSending
+                      ? Row(
+                          children: [
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            const HSpace(6),
+                            FlowyText(_getButtonText(), fontSize: 14),
+                          ],
+                        )
+                      : FlowyText(_getButtonText(), fontSize: 14),
+                  onTap: _canResendCode() ? _sendCode : null,
                 ),
               ],
             ),
@@ -176,9 +187,20 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
             SizedBox(
               width: double.infinity,
               child: FlowyButton(
-                text: '绑定手机号',
-                onPressed: _isBinding ? null : _bindPhone,
-                isLoading: _isBinding,
+                text: _isBinding
+                    ? Row(
+                        children: const [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          HSpace(6),
+                          FlowyText('绑定中', fontSize: 14),
+                        ],
+                      )
+                    : const FlowyText('绑定手机号', fontSize: 14),
+                onTap: _isBinding ? null : _bindPhone,
               ),
             ),
           ],

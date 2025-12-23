@@ -167,10 +167,47 @@ impl DocumentManager {
     data: Option<DocumentData>,
   ) -> FlowyResult<EncodedCollab> {
     if self.is_doc_exist(doc_id).await.unwrap_or(false) {
-      Err(FlowyError::new(
-        ErrorCode::RecordAlreadyExists,
-        format!("document {} already exists", doc_id),
-      ))
+      // Document record exists. Try to load existing document from persistence and return its encoded collab.
+      match self.create_document_instance(doc_id, false).await {
+        Ok(document) => {
+          // encode and return existing collab
+          let encoded = document
+            .try_read()
+            .map_err(internal_error)?
+            .encode_collab()
+            .map_err(internal_error)?;
+          return Ok(encoded);
+        }
+        Err(err) => {
+          // If data is invalid (incomplete collab), try to regenerate using provided data (or default)
+          if err.is_invalid_data() {
+            // regenerate encoded collab from given data
+            let encoded_collab = doc_state_from_document_data(doc_id, data).await?;
+            self
+              .persistence()?
+              .save_collab_to_disk(doc_id.to_string().as_str(), encoded_collab.clone())
+              .map_err(internal_error)?;
+
+            // Send the collab data to server with a background task to ensure cloud has the collab.
+            let cloud_service = self.cloud_service.clone();
+            let cloned_encoded_collab = encoded_collab.clone();
+            let workspace_id = self.user_service.workspace_id()?;
+            let doc_id = *doc_id;
+            tokio::spawn(async move {
+              let _ = cloud_service
+                .create_document_collab(&workspace_id, &doc_id, cloned_encoded_collab)
+                .await;
+            });
+            return Ok(encoded_collab);
+          } else {
+            // Other errors: propagate RecordAlreadyExists-like behavior
+            return Err(FlowyError::new(
+              ErrorCode::RecordAlreadyExists,
+              format!("document {} already exists", doc_id),
+            ));
+          }
+        }
+      }
     } else {
       let encoded_collab = doc_state_from_document_data(doc_id, data).await?;
       self

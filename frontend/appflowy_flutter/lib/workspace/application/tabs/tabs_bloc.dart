@@ -300,6 +300,14 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   /// Adds a [TabsEvent.openTab] event for the provided [ViewPB]
   void openTab(ViewPB view) {
     try {
+      if (view.id.isEmpty) {
+        Log.error('openTab called with empty view.id, aborting openTab');
+        showToastNotification(
+          message: '无法打开视图：视图 ID 为空',
+          type: ToastificationType.error,
+        );
+        return;
+      }
       final plugin = view.plugin();
       add(TabsEvent.openTab(plugin: plugin, view: view));
     } catch (e, stackTrace) {
@@ -336,6 +344,14 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     Map<String, dynamic> arguments = const {},
   }) {
     try {
+      if (view.id.isEmpty) {
+        Log.error('openPlugin called with empty view.id, aborting openPlugin');
+        showToastNotification(
+          message: '无法打开视图：视图 ID 为空',
+          type: ToastificationType.error,
+        );
+        return;
+      }
       final plugin = view.plugin(arguments: arguments);
       add(
         TabsEvent.openPlugin(

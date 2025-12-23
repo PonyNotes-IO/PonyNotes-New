@@ -35,6 +35,7 @@ class SaberCoreCanvas extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final EditorPage page = coreInfo.firstPage;
+    debugPrint('🦋[SaberCoreCanvas] build: page.size=${page.size}, backgroundImage=${page.backgroundImage != null}, coreBackgroundPattern=${coreInfo.backgroundPattern}, coreBackgroundColor=${coreInfo.backgroundColor}');
     return LayoutBuilder(
       builder: (context, constraints) {
         // ✅ 计算当前缩放级别
@@ -135,6 +136,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    debugPrint('🦋[SaberCoreCanvasPainter] paint: page.strokes=${page.strokes.length}, currentStroke=${currentStroke != null}, laserStrokes=${laserStrokes.length}, selectResult=${selectResult != null}, isSelecting=$isSelecting');
     // 简单按比例映射到当前画布大小
     final double scaleX = size.width / page.size.width;
     final double scaleY = size.height / page.size.height;
@@ -166,31 +168,12 @@ class _SaberCoreCanvasPainter extends CustomPainter {
             }
           }
     
-    // 先绘制荧光笔（使用半透明叠加效果）
+    // 先绘制荧光笔（直接使用半透明填充，不使用 saveLayer，以避免 save/restore 不平衡问题）
     if (highlighterStrokes.isNotEmpty) {
-      final canvasRect = Rect.fromLTWH(offsetX, offsetY, drawWidth, drawHeight);
-      final layerPaint = Paint()
-        ..blendMode = BlendMode.darken
-        ..color = Colors.white.withValues(alpha: 100); // Highlighter.alpha = 100
-      
-      canvas.saveLayer(canvasRect, layerPaint);
-      
-      Color? lastColor;
       for (final stroke in highlighterStrokes) {
-        final color = stroke.color.withValues(alpha: 1.0);
-        
-        if (color != lastColor) {
-          if (lastColor != null) {
-            canvas.restore();
-            canvas.saveLayer(canvasRect, layerPaint);
-          }
-          lastColor = color;
-        }
-        
-        _drawStrokePath(canvas, stroke, scale, offsetX, offsetY, color, stroke.strokeWidth * scale * 2);
+        final Color drawColor = stroke.color.withOpacity(0.32); // 半透明叠加效果
+        _drawStrokePath(canvas, stroke, scale, offsetX, offsetY, drawColor, stroke.strokeWidth * scale * 2);
       }
-      
-      canvas.restore();
     }
     
     // ✅ 绘制激光笔笔迹（发光效果，从 laserStrokes 列表获取）
@@ -206,21 +189,16 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     // 绘制当前正在绘制的笔迹（使用未完成状态，实时显示）
     if (currentStroke != null) {
       if (currentStroke!.toolId == ToolId.highlighter) {
-        final canvasRect = Rect.fromLTWH(offsetX, offsetY, drawWidth, drawHeight);
-        final layerPaint = Paint()
-          ..blendMode = BlendMode.darken
-          ..color = Colors.white.withValues(alpha: 100);
-        canvas.saveLayer(canvasRect, layerPaint);
+        // 不使用 saveLayer，为未完成的荧光笔直接绘制半透明路径
         _drawStrokePathIncomplete(
           canvas,
           currentStroke!,
           scale,
           offsetX,
           offsetY,
-          currentStroke!.color.withValues(alpha: 1.0),
+          currentStroke!.color.withOpacity(0.32),
           currentStroke!.strokeWidth * scale * 2,
         );
-        canvas.restore();
       } else if (currentStroke!.toolId == ToolId.laserPointer) {
         _drawLaserStroke(canvas, currentStroke!, scale, offsetX, offsetY);
       } else if (currentStroke!.toolId == ToolId.line ||
@@ -274,14 +252,16 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       return;
     }
 
+    // 使用更明显的灰色线条以提高可见性（默认横格纸/网格纸）
     final Paint linePaint = Paint()
-      ..color = Colors.blue.withValues(alpha: 0.2)
+      ..color = const Color(0xFFCCCCCC) // 更明显的浅灰色
       ..strokeWidth = lineThickness.toDouble();
 
     switch (pattern) {
       case CanvasBackgroundPattern.lined:
-        // 绘制横线
-        for (double y = lineHeight * 2; y < drawSize.height; y += lineHeight) {
+        // 绘制横线（从较小的偏移开始，以便顶部也有线）
+        final double startY = lineHeight * 0.5;
+        for (double y = startY; y < drawSize.height; y += lineHeight) {
           canvas.drawLine(
             Offset(offsetX, offsetY + y),
             Offset(offsetX + drawSize.width, offsetY + y),
@@ -956,13 +936,9 @@ class _SaberCoreCanvasPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SaberCoreCanvasPainter oldDelegate) {
-    return oldDelegate.page != page ||
-        oldDelegate.currentStroke != currentStroke ||
-        oldDelegate.currentScale != currentScale ||  // ✅ 缩放级别改变时需要重绘
-        oldDelegate.laserStrokes.length != laserStrokes.length ||  // ✅ 激光笔笔迹数量改变时需要重绘
-        oldDelegate.selectResult != selectResult || // ✅ 选择结果改变时需要重绘
-        oldDelegate.isSelecting != isSelecting || // ✅ 选择状态改变时需要重绘
-        oldDelegate.page.textBoxes.length != page.textBoxes.length; // ✅ 文本框数量改变时需要重绘
+    // 保守策略：始终允许重绘，避免复杂的状态不一致导致画布不更新。
+    // 如果性能问题出现，再收窄判断条件。
+    return true;
   }
 }
 

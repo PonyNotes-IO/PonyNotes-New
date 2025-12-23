@@ -1820,6 +1820,8 @@
   "errorDialog": {
     "title": "@:appName 错误",
     "howToFixFallback": "对于给您带来的不便, 我们深表歉意! 请在我们的 GitHub 页面上提交 issue 并描述您遇到的错误。",
+    "howToFixFallbackHint1": "对于给您带来的不便, 我们深表歉意! 请在我们的 ",
+    "howToFixFallbackHint2": " 页面上提交 issue 并描述您遇到的错误。",
     "github": "在 GitHub 查看"
   },
   "search": {
@@ -1979,6 +1981,8 @@
   "error": {
     "weAreSorry": "我们很抱歉",
     "loadingViewError": "我们在加载此视图时遇到问题。请检查您的互联网连接，刷新应用程序，如果问题仍然存在，请随时联系开发团队。"
+    ,
+    "clickToCopy": "点击复制"
   },
   "editor": {
     "bold": "加粗",
