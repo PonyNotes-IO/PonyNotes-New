@@ -32,6 +32,7 @@ import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
 import 'package:appflowy/plugins/shared/share/share_button.dart';
+import 'package:flowy_infra_ui/style_widget/text.dart';
 
 class DocumentPage extends StatefulWidget {
   const DocumentPage({
@@ -123,8 +124,26 @@ class _DocumentPageState extends State<DocumentPage>
               final editorState = state.editorState;
               this.editorState = editorState;
               final error = state.error;
-              if (error != null || editorState == null) {
+              if (error != null) {
                 Log.error(error);
+                return Center(child: AppFlowyErrorPage(error: error));
+              }
+              if (editorState == null) {
+                // if bloc is initializing (retrying open/create), show waiting UI
+                final bloc = context.read<DocumentBloc>();
+                if (bloc.isInitializing) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator.adaptive(),
+                        SizedBox(height: 12.0),
+                        FlowyText.regular('正在准备文档，请稍候...', fontSize: 14),
+                      ],
+                    ),
+                  );
+                }
+                Log.error('editorState is null and not initializing');
                 return Center(child: AppFlowyErrorPage(error: error));
               }
 

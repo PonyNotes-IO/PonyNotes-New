@@ -29,6 +29,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart'
     show AppFlowyEditorLogLevel, EditorState, TransactionTime;
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -77,8 +78,10 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
   final DocumentService _documentService = DocumentService();
   final TrashService _trashService = TrashService();
+  DocumentCollabAdapter? _documentCollabAdapter;
+  bool _isInitializing = false;
 
-  late DocumentCollabAdapter _documentCollabAdapter;
+  bool get isInitializing => _isInitializing;
 
   late final TransactionAdapter _transactionAdapter = TransactionAdapter(
     documentId: documentId,
@@ -147,29 +150,29 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
         if (_saveToBlocMap) {
           _documentBlocMap[documentId] = this;
         }
-        final result = await _fetchDocumentState();
         _onViewChanged();
         _onDocumentChanged();
-        final newState = await result.fold(
-          (s) async {
-            final userProfilePB =
-                await getIt<AuthService>().getUser().toNullable();
-            return state.copyWith(
-              error: null,
-              editorState: s,
-              isLoading: false,
-              userProfilePB: userProfilePB,
-            );
-          },
-          (f) async => state.copyWith(
-            error: f,
-            editorState: null,
+
+        // Try to fetch document state once. If fails, start retry loop while keeping loading state.
+        final result = await _fetchDocumentState();
+        if (result.isSuccess) {
+          final s = result.toNullable();
+          final userProfilePB = await getIt<AuthService>().getUser().toNullable();
+          final newState = state.copyWith(
+            error: null,
+            editorState: s,
             isLoading: false,
-          ),
-        );
-        emit(newState);
-        if (newState.userProfilePB != null) {
-          await _updateCollaborator();
+            userProfilePB: userProfilePB,
+          );
+          emit(newState);
+          if (newState.userProfilePB != null) {
+            await _updateCollaborator();
+          }
+        } else {
+          // keep loading state and start background retry to fetch document for a short period
+          emit(state.copyWith(error: null, editorState: null, isLoading: true));
+          final FlowyError? initialErr = result.fold((s) => null, (f) => f);
+          unawaited(_startRetryFetch(initialErr));
         }
       },
       moveToTrash: () async {
@@ -205,6 +208,43 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
         await _updateCollaborator();
       },
     );
+  }
+
+  /// Retry fetching document state in background when initial fetch failed.
+  Future<void> _startRetryFetch(FlowyError? initialError) async {
+    const int maxAttempts = 12;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      // exponential-ish backoff: first quick, then longer
+      final waitMs = attempt == 1 ? 300 : 300 + (attempt - 1) * 250;
+      await Future.delayed(Duration(milliseconds: waitMs));
+      final result = await _fetchDocumentState();
+      if (result.isSuccess) {
+        final s = result.toNullable();
+        final userProfilePB = await getIt<AuthService>().getUser().toNullable();
+        final newState = state.copyWith(
+          error: null,
+          editorState: s,
+          isLoading: false,
+          userProfilePB: userProfilePB,
+        );
+        // emit only if not closed
+        if (!isClosed) {
+          // ignore: invalid_use_of_visible_for_testing_member
+          emit(newState);
+          if (newState.userProfilePB != null) {
+            await _updateCollaborator();
+          }
+        }
+        return;
+      } else {
+        Log.debug('[DocumentBloc] retry attempt $attempt failed for documentId: $documentId, will retry');
+      }
+    }
+
+    // all attempts failed, emit error state
+    if (!isClosed) {
+      emit(state.copyWith(error: initialError, editorState: null, isLoading: false));
+    }
   }
 
   /// subscribe to the view(document page) change
@@ -252,16 +292,130 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
     }
 
     Log.info('[DocumentBloc] Calling data.toDocument()...');
-    final document = data.toDocument();
+    var document = data.toDocument();
     Log.info('[DocumentBloc] data.toDocument() completed, document is null: ${document == null}');
     if (document == null) {
       Log.error('[DocumentBloc] document is null for documentId: $documentId');
-      assert(false, 'document is null');
-      return null;
+
+      // mark initializing so UI can show waiting state
+      _isInitializing = true;
+
+      // Try to create an empty document on the backend and retry a few times.
+      try {
+        Log.info('[DocumentBloc] Attempting to create empty document for documentId: $documentId');
+        final payload = CreateDocumentPayloadPB()..documentId = documentId;
+        FlowyResult<dynamic, Object>? createResult;
+        const int maxAttempts = 5;
+        bool created = false;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+          Log.info('[DocumentBloc] create empty document attempt $attempt for documentId: $documentId');
+          createResult = await DocumentEventCreateDocument(payload).send();
+          created = createResult.isSuccess;
+          if (created) {
+            break;
+          }
+          // log failure details
+          try {
+            final failure = createResult.getFailure();
+            Log.error('[DocumentBloc] create empty document attempt $attempt failed for documentId: $documentId, error: $failure');
+          } catch (err) {
+            Log.error('[DocumentBloc] create empty document attempt $attempt failed for documentId: $documentId, unknown error');
+          }
+          // small backoff
+          await Future.delayed(Duration(milliseconds: 400 * attempt));
+        }
+
+        if (!created) {
+          Log.error('[DocumentBloc] Failed to create empty document after $maxAttempts attempts for documentId: $documentId');
+          // If failure reason is RecordAlreadyExists, try to open the document repeatedly for a short time
+          bool handledByOpening = false;
+          try {
+            final failure = createResult?.getFailure();
+            if (failure != null && failure.toString().contains('RecordAlreadyExists')) {
+              Log.info('[DocumentBloc] Detected RecordAlreadyExists for $documentId, will retry openDocument for a short period');
+              const int openAttempts = 12;
+              for (var attempt = 1; attempt <= openAttempts; attempt++) {
+                final retryResult = await _documentService.openDocument(documentId: documentId);
+                if (retryResult.isSuccess) {
+                  final retryData = retryResult.toNullable();
+                  final retryDocument = retryData?.toDocument();
+                  if (retryDocument != null) {
+                    Log.info('[DocumentBloc] openDocument succeeded on attempt $attempt for documentId: $documentId');
+                    document = retryDocument;
+                    handledByOpening = true;
+                    break;
+                  }
+                } else {
+                  Log.debug('[DocumentBloc] openDocument attempt $attempt returned failure for documentId: $documentId, error: ${retryResult.getFailure()}');
+                }
+                await Future.delayed(Duration(milliseconds: 500 * attempt));
+              }
+            }
+          } catch (e, st) {
+            Log.error('[DocumentBloc] Exception while retrying openDocument for documentId: $documentId, error: $e');
+            Log.error('StackTrace: $st');
+          }
+
+          if (!handledByOpening) {
+            // extended polling: continue to poll openDocument for a longer period before giving up
+            Log.info('[DocumentBloc] Entering extended openDocument polling for documentId: $documentId');
+            const int longOpenAttempts = 20; // ~10s with 500ms backoff
+            for (var attempt = 1; attempt <= longOpenAttempts; attempt++) {
+              final retryResult = await _documentService.openDocument(documentId: documentId);
+              if (retryResult.isSuccess) {
+                final retryData = retryResult.toNullable();
+                final retryDocument = retryData?.toDocument();
+                if (retryDocument != null) {
+                  Log.info('[DocumentBloc] openDocument succeeded during extended polling on attempt $attempt for documentId: $documentId');
+                  document = retryDocument;
+                  handledByOpening = true;
+                  break;
+                }
+              } else {
+                Log.debug('[DocumentBloc] extended openDocument attempt $attempt returned failure for documentId: $documentId, error: ${retryResult.getFailure()}');
+              }
+              await Future.delayed(Duration(milliseconds: 500));
+            }
+            if (!handledByOpening) {
+              Log.error('[DocumentBloc] extended polling exhausted for documentId: $documentId');
+              _isInitializing = false;
+              return null;
+            }
+          }
+        } else {
+          Log.info('[DocumentBloc] Created empty document, retrying openDocument for documentId: $documentId');
+          final retryResult = await _documentService.openDocument(documentId: documentId);
+          DocumentDataPB? retryData;
+          if (retryResult.isSuccess) {
+            retryData = retryResult.toNullable();
+          } else {
+            Log.error('[DocumentBloc] openDocument retry returned failure for documentId: $documentId, error: ${retryResult.getFailure()}');
+            retryData = null;
+          }
+          final retryDocument = retryData?.toDocument();
+          if (retryDocument == null) {
+            Log.error('[DocumentBloc] Retry failed: document is still null for documentId: $documentId');
+            _isInitializing = false;
+            return null;
+          }
+
+          // replace document with retried one
+          Log.info('[DocumentBloc] Retry succeeded: document created for documentId: $documentId');
+          document = retryDocument;
+        }
+      } catch (e, st) {
+        Log.error('[DocumentBloc] Exception while creating/retrying document for documentId: $documentId, error: $e');
+        Log.error('StackTrace: $st');
+        _isInitializing = false;
+        return null;
+      }
+      finally {
+        _isInitializing = false;
+      }
     }
 
     Log.info('[DocumentBloc] Creating EditorState...');
-    final editorState = EditorState(document: document);
+    final editorState = EditorState(document: document!);
     Log.info('[DocumentBloc] EditorState created successfully');
 
     Log.info('[DocumentBloc] Creating DocumentCollabAdapter...');
@@ -339,8 +493,11 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
     if (!docEvent.isRemote || !FeatureFlag.syncDocument.isOn) {
       return;
     }
-
-    unawaited(_documentCollabAdapter.syncV3(docEvent: docEvent));
+    if (_documentCollabAdapter != null) {
+      unawaited(_documentCollabAdapter!.syncV3(docEvent: docEvent));
+    } else {
+      Log.debug('[DocumentBloc] _onDocumentStateUpdate called but _documentCollabAdapter is not initialized yet for documentId: $documentId');
+    }
   }
 
   Future<void> _onAwarenessStatesUpdate(
@@ -352,10 +509,14 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
     final userId = state.userProfilePB?.id;
     if (userId != null) {
-      await _documentCollabAdapter.updateRemoteSelection(
-        userId.toString(),
-        awarenessStates,
-      );
+      if (_documentCollabAdapter != null) {
+        await _documentCollabAdapter!.updateRemoteSelection(
+          userId.toString(),
+          awarenessStates,
+        );
+      } else {
+        Log.debug('[DocumentBloc] _onAwarenessStatesUpdate called but _documentCollabAdapter is not initialized yet for documentId: $documentId');
+      }
     }
   }
 
@@ -427,7 +588,10 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
   }
 
   Future<void> forceReloadDocumentState() {
-    return _documentCollabAdapter.syncV3();
+    if (_documentCollabAdapter != null) {
+      return _documentCollabAdapter!.syncV3();
+    }
+    return Future.value();
   }
 
   // this is only used for debug mode

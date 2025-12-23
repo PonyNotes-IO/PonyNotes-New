@@ -160,11 +160,24 @@ class ViewItem extends StatelessWidget {
         engagedInExpanding: engagedInExpanding,
       )..add(const ViewEvent.initial()),
       child: BlocConsumer<ViewBloc, ViewState>(
-        listenWhen: (p, c) =>
-            c.lastCreatedView != null &&
-            p.lastCreatedView?.id != c.lastCreatedView!.id,
-        listener: (context, state) =>
-            context.read<TabsBloc>().openPlugin(state.lastCreatedView!),
+        listenWhen: (p, c) {
+          final newView = c.lastCreatedView;
+          final oldId = p.lastCreatedView?.id;
+          return newView != null && oldId != newView.id;
+        },
+        listener: (context, state) {
+          final created = state.lastCreatedView;
+          if (created == null) return;
+          // Guard: only open plugin automatically when view has been annotated as handwriting_saber
+          // to avoid opening a plugin too early before extra metadata is set.
+          final extra = created.extra;
+          final bool isHandwriting = extra.contains('handwriting_saber');
+          if (isHandwriting) {
+            context.read<TabsBloc>().openPlugin(created);
+          } else {
+            Log.info('🔵 [VIEW_ITEM] Skipping auto-open for created view ${created.id}, extra=$extra');
+          }
+        },
         builder: (context, state) {
           // filter the child views that should be ignored
           List<ViewPB> childViews = state.view.childViews;
@@ -859,7 +872,27 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         layoutType: pluginBuilder.layoutType!,
         openAfterCreate: openAfterCreated,
         section: widget.spaceType.toViewSectionPB,
+        // Ensure the backend receives view_type at creation time to avoid race where
+        // the view is opened before extra metadata (view_type) is set.
+        ext: const {'view_type': 'handwriting_saber'},
       );
+
+      // If the widget has been unmounted while waiting for createView, skip further UI actions.
+      if (!context.mounted) {
+        Log.warn('🔵 [VIEW_ITEM] Widget unmounted after createView returned, skipping UI open actions');
+        // Still ensure ViewBloc state is updated with created view if possible
+        await result.fold(
+          (createdView) async {
+            viewBloc.add(
+              ViewEvent.viewDidUpdate(FlowyResult.success(createdView)),
+            );
+          },
+          (error) async {
+            viewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.failure(error)));
+          },
+        );
+        return;
+      }
 
       await result.fold(
         (createdView) async {
@@ -874,29 +907,50 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
           );
 
           updateResult.fold(
-            (updatedView) {
+            (_) {
+              // Note: FolderEventUpdateView returns void on success. Use the createdView
+              // object (which contains the real id) when opening the plugin.
               Log.info(
                 '✅ [VIEW_ITEM] Successfully set extra for handwriting_saber view: ${createdView.id}, extra=$extraJson',
               );
+              // ensure the local createdView carries the extra so plugin selection
+              // will pick HandwritingSaber immediately (avoid race where backend
+              // hasn't yet propagated extra to returned view)
+              try {
+                createdView.extra = extraJson;
+              } catch (_) {}
               viewBloc.add(
-                ViewEvent.viewDidUpdate(FlowyResult.success(updatedView)),
+                ViewEvent.viewDidUpdate(FlowyResult.success(createdView)),
               );
               if (openAfterCreated) {
                 Log.info(
-                  '🔵 [VIEW_ITEM] Opening handwriting_saber view via TabsBloc.openPlugin: ${updatedView.id}',
+                  '🔵 [VIEW_ITEM] Attempting to open handwriting_saber view via TabsBloc (global): ${createdView.id}',
                 );
-                context.read<TabsBloc>().openPlugin(updatedView);
+                try {
+                  getIt<TabsBloc>().openPlugin(createdView);
+                } catch (e) {
+                  Log.warn('🔵 [VIEW_ITEM] Failed to open plugin globally for ${createdView.id}: $e');
+                }
               }
             },
             (error) {
               Log.error(
                 '❌ [VIEW_ITEM] Failed to set extra for handwriting_saber view: ${createdView.id}, error=${error.msg}',
               );
+              // even if update failed, set extra locally so the client will render
+              // HandwritingSaber instead of DocumentPlugin
+              try {
+                createdView.extra = extraJson;
+              } catch (_) {}
               viewBloc.add(
                 ViewEvent.viewDidUpdate(FlowyResult.success(createdView)),
               );
               if (openAfterCreated) {
-                context.read<TabsBloc>().openPlugin(createdView);
+                try {
+                  getIt<TabsBloc>().openPlugin(createdView);
+                } catch (e) {
+                  Log.warn('🔵 [VIEW_ITEM] Failed to open plugin globally for ${createdView.id}: $e');
+                }
               }
             },
           );
