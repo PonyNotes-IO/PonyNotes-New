@@ -51,8 +51,21 @@ class MemberHttpService {
 
   Map<String, String> get headers => {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $authToken',
+        'Authorization': 'Bearer ${_sanitizeAuthToken(authToken)}',
       };
+
+  String _sanitizeAuthToken(String token) {
+    var t = token.trim();
+    // remove surrounding quotes if any (some storages may keep quotes)
+    if (t.length >= 2 && ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'")))) {
+      t = t.substring(1, t.length - 1);
+    }
+    // ensure no "Bearer " prefix duplication
+    if (t.toLowerCase().startsWith('bearer ')) {
+      t = t.substring(7).trim();
+    }
+    return t;
+  }
 
   /// Gets the invite code for a workspace
   Future<FlowyResult<String, FlowyError>> getInviteCode({
@@ -167,22 +180,26 @@ class MemberHttpService {
 
       if (response.statusCode == 200) {
         if (response.body.isNotEmpty) {
-          return FlowyResult.success(jsonDecode(response.body));
+          try {
+            return FlowyResult.success(jsonDecode(response.body));
+          } catch (e) {
+            // Return a generic error when response cannot be parsed
+            return FlowyResult.failure(FlowyError(msg: 'Invalid JSON response from server'));
+          }
         }
         return FlowyResult.success(true);
       } else {
-        final errorBody =
-            response.body.isNotEmpty ? jsonDecode(response.body) : {};
-
-        Log.info(
-          '${endpoint.name} request failed: ${response.statusCode}, $errorBody',
-        );
-
-        return FlowyResult.failure(
-          FlowyError(
-            msg: errorBody['msg'] ?? errorMessage,
-          ),
-        );
+        // Try to decode error body; if fails, log raw body for debugging
+        try {
+          final errorBody = response.body.isNotEmpty ? jsonDecode(response.body) : {};
+          return FlowyResult.failure(
+            FlowyError(
+              msg: errorBody['msg'] ?? errorMessage,
+            ),
+          );
+        } catch (e) {
+          return FlowyResult.failure(FlowyError(msg: errorMessage));
+        }
       }
     } catch (e) {
       return FlowyResult.failure(

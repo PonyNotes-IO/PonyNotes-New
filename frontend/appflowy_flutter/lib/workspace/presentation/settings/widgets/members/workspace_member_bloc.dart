@@ -12,6 +12,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -358,10 +359,33 @@ class WorkspaceMemberBloc
     final baseUrl = await getAppFlowyCloudUrl();
     final authToken = userProfile.authToken;
     final workspaceId = _workspaceId.value;
-    if (authToken != null && workspaceId != null) {
+    String? _extractAuthToken(String? raw) {
+      if (raw == null) return null;
+      final s = raw.trim();
+      if (s.isEmpty) return null;
+      // If accidentally a JSON blob (e.g. serialised user object), try to decode and extract common token fields.
+      if (s.startsWith('{')) {
+        try {
+          final parsed = json.decode(s);
+          if (parsed is Map) {
+            if (parsed.containsKey('access_token')) return parsed['access_token']?.toString();
+            if (parsed.containsKey('token')) return parsed['token']?.toString();
+            if (parsed.containsKey('auth') && parsed['auth'] is Map && parsed['auth']['access_token'] != null) {
+              return parsed['auth']['access_token']?.toString();
+            }
+          }
+        } catch (_) {
+          // fallthrough to return raw
+        }
+      }
+      return s;
+    }
+
+    final extractedAuth = _extractAuthToken(authToken);
+    if (extractedAuth != null && workspaceId != null) {
       _memberHttpService = MemberHttpService(
         baseUrl: baseUrl,
-        authToken: authToken,
+        authToken: extractedAuth,
       );
       unawaited(
         _memberHttpService?.getInviteCode(workspaceId: workspaceId).fold(
