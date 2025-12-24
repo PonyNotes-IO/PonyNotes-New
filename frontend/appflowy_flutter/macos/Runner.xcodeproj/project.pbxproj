@@ -440,7 +440,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
-				EXCLUDED_ARCHS = "";
+				EXCLUDED_ARCHS = "x86_64";
 				INFOPLIST_FILE = Runner/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = PonyNotes;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -575,7 +575,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
-			EXCLUDED_ARCHS = "";
+			EXCLUDED_ARCHS = "x86_64";
 			INFOPLIST_FILE = Runner/Info.plist;
 			INFOPLIST_KEY_CFBundleDisplayName = PonyNotes;
 			LD_RUNPATH_SEARCH_PATHS = (
@@ -601,7 +601,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				EXCLUDED_ARCHS = "";
+				EXCLUDED_ARCHS = "x86_64";
 				INFOPLIST_FILE = Runner/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = PonyNotes;
 				LD_RUNPATH_SEARCH_PATHS = (
