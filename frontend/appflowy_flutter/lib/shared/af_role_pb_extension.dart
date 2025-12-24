@@ -18,11 +18,11 @@ extension AFRolePBExtension on AFRolePB {
   String get description {
     switch (this) {
       case AFRolePB.Owner:
-        return LocaleKeys.settings_appearance_members_owner.tr();
+        return '工作空间所有者';
       case AFRolePB.Member:
-        return LocaleKeys.settings_appearance_members_member.tr();
+        return '成员';
       case AFRolePB.Guest:
-        return LocaleKeys.settings_appearance_members_guest.tr();
+        return '受限成员';
     }
     throw UnimplementedError('Unknown role: $this');
   }

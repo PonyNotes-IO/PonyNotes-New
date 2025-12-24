@@ -1,6 +1,7 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/members/workspace_member_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -11,23 +12,168 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-class InviteMemberByLink extends StatelessWidget {
+class InviteMemberByLink extends StatefulWidget {
   const InviteMemberByLink({super.key});
 
   @override
+  State<InviteMemberByLink> createState() => _InviteMemberByLinkState();
+}
+
+class _InviteMemberByLinkState extends State<InviteMemberByLink> {
+  bool _linkEnabled = true;
+  late final TapGestureRecognizer _generateRecog;
+
+  @override
+  void initState() {
+    super.initState();
+    _generateRecog = TapGestureRecognizer()..onTap = _onGenerateInviteLink;
+  }
+
+  @override
+  void dispose() {
+    _generateRecog.dispose();
+    super.dispose();
+  }
+ 
+  Future<void> _onGenerateInviteLink() async {
+    final state = context.read<WorkspaceMemberBloc>().state;
+    final subscriptionInfo = state.subscriptionInfo;
+    final inviteLink = state.inviteLink;
+
+    if (inviteLink == null && subscriptionInfo != null) {
+      int memberLimit = 0;
+      String upgradeToPlan = '';
+
+      switch (subscriptionInfo.plan) {
+        case WorkspacePlanPB.FreePlan:
+          break;
+        case WorkspacePlanPB.StudentPlan:
+          memberLimit = 2;
+          upgradeToPlan = '标准版';
+          break;
+        case WorkspacePlanPB.StandardPlan:
+          memberLimit = 5;
+          upgradeToPlan = '团队版';
+          break;
+        case WorkspacePlanPB.TeamPlan:
+          memberLimit = 10;
+          break;
+      }
+
+      if (memberLimit > 0 && state.members.length >= memberLimit) {
+        await showConfirmDialog(
+          context: context,
+          title: LocaleKeys.settings_appearance_members_inviteFailedDialogTitle.tr(),
+          description: upgradeToPlan.isNotEmpty
+              ? '已达到当前计划的成员数量上限（$memberLimit人），请升级到$upgradeToPlan解锁更多成员'
+              : LocaleKeys.settings_appearance_members_inviteFailedMemberLimit.tr(),
+          confirmLabel: LocaleKeys.upgradePlanModal_actionButton.tr(),
+          onConfirm: (_) => context
+              .read<WorkspaceMemberBloc>()
+              .add(const WorkspaceMemberEvent.upgradePlan()),
+        );
+        return;
+      }
+    }
+
+    if (inviteLink != null) {
+      await showConfirmDialog(
+        context: context,
+        style: ConfirmPopupStyle.cancelAndOk,
+        title: LocaleKeys.settings_appearance_members_resetInviteLink.tr(),
+        description:
+            LocaleKeys.settings_appearance_members_resetInviteLinkDescription.tr(),
+        confirmLabel: LocaleKeys.settings_appearance_members_reset.tr(),
+        onConfirm: (_) {
+          context.read<WorkspaceMemberBloc>().add(
+                const WorkspaceMemberEvent.generateInviteLink(),
+              );
+        },
+        confirmButtonBuilder: (_) => AFFilledTextButton.destructive(
+          text: LocaleKeys.settings_appearance_members_reset.tr(),
+          onTap: () {
+            context.read<WorkspaceMemberBloc>().add(
+                  const WorkspaceMemberEvent.generateInviteLink(),
+                );
+
+            Navigator.of(context).pop();
+          },
+        ),
+      );
+    } else {
+      context.read<WorkspaceMemberBloc>().add(
+            const WorkspaceMemberEvent.generateInviteLink(),
+          );
+    }
+  }
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Title(),
-              _Description(),
+              const Text(
+                '通过邀请链接来新增成员',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 4),
+              if (_linkEnabled)
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text:
+                            '只有拥有邀请成员权限的人员才能查看此内容。你也可以 ',
+                        style: AppFlowyTheme.of(context)
+                            .textStyle
+                            .caption
+                            .standard(
+                              color: AppFlowyTheme.of(context).textColorScheme.primary,
+                            ),
+                      ),
+                      TextSpan(
+                        text: '创建新链接',
+                        style: AppFlowyTheme.of(context)
+                            .textStyle
+                            .caption
+                            .standard(
+                              color: AppFlowyTheme.of(context).textColorScheme.action,
+                            ),
+                        recognizer: _generateRecog,
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Text(
+                  '只有拥有邀请成员权限的人员才能查看此内容。',
+                  style: AppFlowyTheme.of(context).textStyle.caption.standard(
+                    color: AppFlowyTheme.of(context).textColorScheme.primary,
+                  ),
+                ),
             ],
           ),
         ),
-        _CopyLinkButton(),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_linkEnabled) ...[
+              _CopyLinkButton(),
+              const SizedBox(width: 12),
+            ],
+            Toggle(
+              value: _linkEnabled,
+              onChanged: (v) {
+                setState(() {
+                  _linkEnabled = v;
+                });
+                // persistence can be added later
+              },
+            ),
+          ],
+        ),
       ],
     );
   }
