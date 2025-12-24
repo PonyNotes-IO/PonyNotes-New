@@ -26,7 +26,7 @@ class _InviteMemberByLinkState extends State<InviteMemberByLink> {
   @override
   void initState() {
     super.initState();
-    _generateRecog = TapGestureRecognizer()..onTap = _onGenerateInviteLink;
+    _generateRecog = TapGestureRecognizer()..onTap = _onClickCreateLink;
   }
 
   @override
@@ -105,6 +105,65 @@ class _InviteMemberByLinkState extends State<InviteMemberByLink> {
             const WorkspaceMemberEvent.generateInviteLink(),
           );
     }
+  }
+
+  Future<void> _performGenerateInviteLink() async {
+    final state = context.read<WorkspaceMemberBloc>().state;
+    final subscriptionInfo = state.subscriptionInfo;
+    final inviteLink = state.inviteLink;
+
+    if (inviteLink == null && subscriptionInfo != null) {
+      int memberLimit = 0;
+      String upgradeToPlan = '';
+
+      switch (subscriptionInfo.plan) {
+        case WorkspacePlanPB.FreePlan:
+          break;
+        case WorkspacePlanPB.StudentPlan:
+          memberLimit = 2;
+          upgradeToPlan = '标准版';
+          break;
+        case WorkspacePlanPB.StandardPlan:
+          memberLimit = 5;
+          upgradeToPlan = '团队版';
+          break;
+        case WorkspacePlanPB.TeamPlan:
+          memberLimit = 10;
+          break;
+      }
+
+      if (memberLimit > 0 && state.members.length >= memberLimit) {
+        await showConfirmDialog(
+          context: context,
+          title: LocaleKeys.settings_appearance_members_inviteFailedDialogTitle.tr(),
+          description: upgradeToPlan.isNotEmpty
+              ? '已达到当前计划的成员数量上限（$memberLimit人），请升级到$upgradeToPlan解锁更多成员'
+              : LocaleKeys.settings_appearance_members_inviteFailedMemberLimit.tr(),
+          confirmLabel: LocaleKeys.upgradePlanModal_actionButton.tr(),
+          onConfirm: (_) => context
+              .read<WorkspaceMemberBloc>()
+              .add(const WorkspaceMemberEvent.upgradePlan()),
+        );
+        return;
+      }
+    }
+
+    // dispatch generate event (this will create or reset link on server)
+    context.read<WorkspaceMemberBloc>().add(const WorkspaceMemberEvent.generateInviteLink());
+  }
+
+  Future<void> _onClickCreateLink() async {
+    // Show iOS style confirm first
+    await showSimpleConfirmDialog(
+      context: context,
+      message: '确定要为工作空间所有成员重置邀请链接？旧链接将无法再使用。',
+      confirmText: '重置',
+      cancelText: '取消',
+      confirmTextColor: Theme.of(context).colorScheme.error,
+      onConfirm: () {
+        _performGenerateInviteLink();
+      },
+    );
   }
   Widget build(BuildContext context) {
     return Row(

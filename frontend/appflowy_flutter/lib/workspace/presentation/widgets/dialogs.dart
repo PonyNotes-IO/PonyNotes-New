@@ -826,6 +826,10 @@ Future<void> showSimpleConfirmDialog({
                   // 取消区域
                   Expanded(
                     child: InkWell(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      splashFactory: NoSplash.splashFactory,
                       onTap: () => Navigator.of(context).pop(),
                       child: Container(
                         alignment: Alignment.center,
@@ -848,6 +852,10 @@ Future<void> showSimpleConfirmDialog({
                   // 确认区域
                   Expanded(
                     child: InkWell(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      splashFactory: NoSplash.splashFactory,
                       onTap: () {
                         Navigator.of(context).pop();
                         onConfirm();
