@@ -1356,11 +1356,22 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // 触发UI更新（此时PDF还未完全加载，但页面结构已建立）
       setState(() {});
 
-      // 开始预加载所有PDF页面（非阻塞）
+      // ✅ 使用智能页面管理器进行预加载优化
+      final pageManager = PdfMultiPageManager();
+      final visiblePageKeys = <String>[];
+
+      // 收集所有页面键，用于智能加载
       for (final page in _coreInfo.pages) {
-        page.backgroundImage?.preloadPdfDocument();
+        if (page.backgroundImage != null) {
+          final pageKey = '${page.backgroundImage!.pdfFilePath}|${page.backgroundImage!.pdfPageIndex}';
+          visiblePageKeys.add(pageKey);
+        }
       }
-      debugPrint('🦋[HandwritingSaber] 已启动PDF预加载');
+
+      // 更新可见页面，启动智能加载策略
+      pageManager.updateVisiblePages(visiblePageKeys);
+
+      debugPrint('🦋[HandwritingSaber] 已启动智能PDF预加载，页面数: ${visiblePageKeys.length}');
 
       // 异步保存到存储（不阻塞UI）
       _saveToStorage().then((_) {

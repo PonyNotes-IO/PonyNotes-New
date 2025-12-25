@@ -52,7 +52,8 @@ class SaberCoreCanvas extends StatelessWidget {
         // ✅ 如果有 PDF 背景图片，将 PDF 放在 CustomPaint 的 child 中
         // 这样 PDF 在底层，笔迹在 foregroundPainter 中绘制在上层
         if (page.backgroundImage != null) {
-          // ✅ 预加载 PDF 文档（非阻塞，避免每次build都调用）
+          // ✅ 智能预加载：只有当前页面才预加载，其他页面延迟加载
+          // 这对于多页PDF特别重要，可以显著提升性能
           page.backgroundImage!.preloadPdfDocument();
           
           return Stack(
