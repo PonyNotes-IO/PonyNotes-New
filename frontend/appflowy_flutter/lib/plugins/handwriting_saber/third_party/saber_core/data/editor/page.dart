@@ -14,9 +14,10 @@ import 'list_box.dart' as saber_list;
 /// - 页面尺寸
 /// - 笔迹列表
 class EditorPage {
-  /// ✅ 默认页面宽度（参考 Saber 的 EditorPage.defaultWidth）
-  static const double defaultWidth = 1000.0;
-  static const double defaultHeight = defaultWidth * 1.4;
+  /// ✅ 默认页面宽度（改为 A4 纸尺寸，单位：逻辑像素）
+  /// A4 纸（纵向）常用点数：595 x 842（72 DPI），保持与之前相同的长宽比（sqrt(2)）
+  static const double defaultWidth = 595.0; // A4 宽度（逻辑像素）
+  static const double defaultHeight = 842.0; // A4 高度（逻辑像素）
   static const defaultSize = Size(defaultWidth, defaultHeight);
 
   EditorPage({

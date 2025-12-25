@@ -15,7 +15,7 @@ class EditorCoreInfo {
     required this.pages,
     this.backgroundColor,
     this.backgroundPattern = CanvasBackgroundPattern.lined,
-    this.lineHeight = 20,
+    this.lineHeight = 28, // ✅ 增大默认横线间距，便于视觉阅读（由 20 -> 28）
     this.lineThickness = 1,
   });
 
