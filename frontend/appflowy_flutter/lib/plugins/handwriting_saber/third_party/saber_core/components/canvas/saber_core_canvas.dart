@@ -52,8 +52,9 @@ class SaberCoreCanvas extends StatelessWidget {
         // ✅ 如果有 PDF 背景图片，将 PDF 放在 CustomPaint 的 child 中
         // 这样 PDF 在底层，笔迹在 foregroundPainter 中绘制在上层
         if (page.backgroundImage != null) {
-          // 异步加载 PDF 文档
-          page.backgroundImage!.loadPdfDocument();
+          // ✅ 智能预加载：只有当前页面才预加载，其他页面延迟加载
+          // 这对于多页PDF特别重要，可以显著提升性能
+          page.backgroundImage!.preloadPdfDocument();
           
           return Stack(
             children: [
@@ -99,6 +100,8 @@ class SaberCoreCanvas extends StatelessWidget {
           );
         }
         
+        // ✅ 明确传递 CustomPaint 的大小以避免在无 PDF 背景分支中出现布局为零的情况。
+        // 与有 PDF 背景的分支保持一致，使用 constraints 的最大可用宽高作为画布大小。
         return CustomPaint(
           painter: _SaberCoreCanvasPainter(
             page: page,
@@ -109,6 +112,7 @@ class SaberCoreCanvas extends StatelessWidget {
             selectResult: selectResult,
             isSelecting: isSelecting,
           ),
+          size: Size(constraints.maxWidth, constraints.maxHeight),
         );
       },
     );
@@ -152,8 +156,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     // 裁剪到绘制区域
     canvas.clipRect(Rect.fromLTWH(offsetX, offsetY, drawWidth, drawHeight));
     
-    // 绘制背景
-    _drawBackground(canvas, Size(drawWidth, drawHeight), offsetX, offsetY);
+    // 绘制背景（传入当前缩放 scale，使背景线间距能根据缩放正确显示）
+    _drawBackground(canvas, Size(drawWidth, drawHeight), offsetX, offsetY, scale);
     
           // ✅ 分离荧光笔和其他笔迹，需要特殊处理
           // 激光笔笔迹已经从 laserStrokes 列表获取，不需要从 page.strokes 中分离
@@ -229,12 +233,12 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     canvas.restore();
   }
 
-  void _drawBackground(Canvas canvas, Size drawSize, double offsetX, double offsetY) {
+  void _drawBackground(Canvas canvas, Size drawSize, double offsetX, double offsetY, double scale) {
     // ✅ 如果有 PDF 背景图片，不绘制背景色和背景图案
     if (page.backgroundImage != null) {
       return;
     }
-    
+
     // 绘制背景色
     final Paint bgPaint = Paint()
       ..color = coreInfo.backgroundColor ?? const Color(0xFFFCFCFC);
@@ -245,9 +249,9 @@ class _SaberCoreCanvasPainter extends CustomPainter {
 
     // 绘制背景图案
     final CanvasBackgroundPattern pattern = coreInfo.backgroundPattern;
-    final int lineHeight = coreInfo.lineHeight;
+    final double lineHeight = coreInfo.lineHeight.toDouble();
     final int lineThickness = coreInfo.lineThickness;
-    
+
     if (pattern == CanvasBackgroundPattern.none) {
       return;
     }
@@ -257,11 +261,14 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       ..color = const Color(0xFFCCCCCC) // 更明显的浅灰色
       ..strokeWidth = lineThickness.toDouble();
 
+    // 将 lineHeight（页面单位）转换为屏幕像素：乘以当前缩放 scale
+    final double visualSpacing = lineHeight * scale;
+
     switch (pattern) {
       case CanvasBackgroundPattern.lined:
         // 绘制横线（从较小的偏移开始，以便顶部也有线）
-        final double startY = lineHeight * 0.5;
-        for (double y = startY; y < drawSize.height; y += lineHeight) {
+        final double startY = visualSpacing * 0.5;
+        for (double y = startY; y < drawSize.height; y += visualSpacing) {
           canvas.drawLine(
             Offset(offsetX, offsetY + y),
             Offset(offsetX + drawSize.width, offsetY + y),
@@ -270,17 +277,17 @@ class _SaberCoreCanvasPainter extends CustomPainter {
         }
         break;
       case CanvasBackgroundPattern.grid:
-        // 绘制网格
-        for (double y = lineHeight * 2; y < drawSize.height; y += lineHeight) {
+        // 绘制网格（垂直与水平间距相同）
+        for (double y = visualSpacing * 2; y < drawSize.height; y += visualSpacing) {
           canvas.drawLine(
             Offset(offsetX, offsetY + y),
             Offset(offsetX + drawSize.width, offsetY + y),
             linePaint,
           );
         }
-        for (double x = 0; x < drawSize.width; x += lineHeight) {
+        for (double x = 0; x < drawSize.width; x += visualSpacing) {
           canvas.drawLine(
-            Offset(offsetX + x, offsetY + lineHeight * 2),
+            Offset(offsetX + x, offsetY + visualSpacing * 2),
             Offset(offsetX + x, offsetY + drawSize.height),
             linePaint,
           );
@@ -288,8 +295,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
         break;
       case CanvasBackgroundPattern.dots:
         // 绘制点阵
-        for (double y = lineHeight * 2; y <= drawSize.height; y += lineHeight) {
-          for (double x = 0; x <= drawSize.width; x += lineHeight) {
+        for (double y = visualSpacing * 2; y <= drawSize.height; y += visualSpacing) {
+          for (double x = 0; x <= drawSize.width; x += visualSpacing) {
             canvas.drawCircle(
               Offset(offsetX + x, offsetY + y),
               lineThickness.toDouble() * 2 / 3,

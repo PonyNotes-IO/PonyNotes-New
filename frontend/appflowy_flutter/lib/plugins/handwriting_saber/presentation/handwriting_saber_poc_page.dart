@@ -1272,43 +1272,60 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// ✅ 从文件路径导入 PDF（参考 Saber 的实现，支持多页）
   Future<void> _importPdfFromFilePath(String pdfFilePath) async {
     try {
-      // 加载 PDF 文档
-      final pdfDocument = await PdfDocument.openFile(pdfFilePath);
-      
-      // 检查PDF是否有页面
-      if (pdfDocument.pages.isEmpty) {
-        throw Exception('PDF 文件没有页面');
+      debugPrint('🦋[HandwritingSaber] 开始导入PDF: $pdfFilePath');
+      final importStartTime = DateTime.now();
+
+      // 显示加载提示（非阻塞）
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('正在分析PDF文件...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
-      
+
       // ✅ 保存当前第一页的笔迹（如果有）
       final List<Stroke> existingStrokes = _coreInfo.pages.isNotEmpty
           ? List<Stroke>.from(_coreInfo.pages.first.strokes)
           : <Stroke>[];
-      
+
       // ✅ 清空现有页面（除了最后一页空页面，如果有的话）
       // 参考 Saber 的实现：移除最后一页空页面，导入PDF后重新添加
       // 检查最后一页是否为空（没有笔迹、没有背景图片）
-      final bool hadEmptyPage = _coreInfo.pages.isNotEmpty && 
+      final bool hadEmptyPage = _coreInfo.pages.isNotEmpty &&
           _coreInfo.pages.last.strokes.isEmpty &&
           _coreInfo.pages.last.backgroundImage == null;
       if (hadEmptyPage && _coreInfo.pages.length > 1) {
         _coreInfo.pages.removeLast();
       }
       _coreInfo.pages.clear();
-      
+
+      // 异步加载PDF文档（在后台线程，避免阻塞UI）
+      final pdfDocument = await PdfDocument.openFile(pdfFilePath);
+      final loadTime = DateTime.now().difference(importStartTime);
+      debugPrint('🦋[HandwritingSaber] PDF文档加载完成: ${loadTime.inMilliseconds}ms, 页面数: ${pdfDocument.pages.length}');
+
+      // 检查PDF是否有页面
+      if (pdfDocument.pages.isEmpty) {
+        pdfDocument.dispose();
+        throw Exception('PDF 文件没有页面');
+      }
+
       // ✅ 为每个 PDF 页面创建一个新的 EditorPage
+      final pageCreationStartTime = DateTime.now();
       bool _isFirstPdfPage = true;
       for (final pdfPage in pdfDocument.pages) {
         // pdfrx 页面编号从 1 开始
         assert(pdfPage.pageNumber >= 1, 'pdfrx page numbers start at 1');
-        
+
         // ✅ 计算页面尺寸（参考 Saber 的实现）
         // resize to defaultWidth to keep pen sizes consistent
         final pageSize = Size(
           EditorPage.defaultWidth,
           EditorPage.defaultWidth * pdfPage.height / pdfPage.width,
         );
-        
+
         // ✅ 创建 PDF 背景图片
         // dstRect 设置为填充整个页面（从 (0,0) 开始，大小为 pageSize）
         final pdfImage = PdfEditorImage(
@@ -1317,8 +1334,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           naturalSize: pdfPage.size,
           dstRect: Rect.fromLTWH(0, 0, pageSize.width, pageSize.height),
         );
-        
-        // ✅ 创建新页面：仅将 existingStrokes 保留到导入前的“第一页”，其余页面不保留旧笔迹
+
+        // ✅ 创建新页面：仅将 existingStrokes 保留到导入前的"第一页"，其余页面不保留旧笔迹
         final page = EditorPage(
           size: pageSize,
           strokes: _isFirstPdfPage ? List<Stroke>.from(existingStrokes) : <Stroke>[],
@@ -1327,34 +1344,63 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         _coreInfo.pages.add(page);
         _isFirstPdfPage = false;
       }
-      
+
       // ✅ 添加一个空页面（参考 Saber 的实现）
       _coreInfo.pages.add(EditorPage(
         size: EditorPage.defaultSize,
       ));
-      
-      // 更新状态
+
+      final pageCreationTime = DateTime.now().difference(pageCreationStartTime);
+      debugPrint('🦋[HandwritingSaber] 页面创建完成: ${pageCreationTime.inMilliseconds}ms');
+
+      // 触发UI更新（此时PDF还未完全加载，但页面结构已建立）
       setState(() {});
-      
-      // 保存更改
-      await _saveToStorage();
-      
+
+      // ✅ 使用智能页面管理器进行预加载优化
+      final pageManager = PdfMultiPageManager();
+      final visiblePageKeys = <String>[];
+
+      // 收集所有页面键，用于智能加载
+      for (final page in _coreInfo.pages) {
+        if (page.backgroundImage != null) {
+          final pageKey = '${page.backgroundImage!.pdfFilePath}|${page.backgroundImage!.pdfPageIndex}';
+          visiblePageKeys.add(pageKey);
+        }
+      }
+
+      // 更新可见页面，启动智能加载策略
+      pageManager.updateVisiblePages(visiblePageKeys);
+
+      debugPrint('🦋[HandwritingSaber] 已启动智能PDF预加载，页面数: ${visiblePageKeys.length}');
+
+      // 异步保存到存储（不阻塞UI）
+      _saveToStorage().then((_) {
+        debugPrint('🦋[HandwritingSaber] 数据保存完成');
+      });
+
+      final totalImportTime = DateTime.now().difference(importStartTime);
+      debugPrint('🦋[HandwritingSaber] PDF导入完成: 总用时 ${totalImportTime.inMilliseconds}ms');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('PDF 导入成功（${pdfDocument.pages.length} 页）'),
+            content: Text('PDF导入成功（${pdfDocument.pages.length}页），正在加载页面内容...'),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
-      debugPrint('🦋[HandwritingSaber] _importPdfFromFilePath: imported ${pdfDocument.pages.length} pages, coreInfo.pages=${_coreInfo.pages.length}');
-      
-      // 释放 PDF 文档资源（PdfEditorImage 会管理自己的文档）
+
+      // 释放临时PDF文档（PdfEditorImage会管理自己的文档）
       pdfDocument.dispose();
+
     } catch (e) {
       debugPrint('❌ [HandwritingSaberPocPage] 导入 PDF 失败：$e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入 PDF 失败：$e')),
+          SnackBar(
+            content: Text('导入 PDF 失败：$e'),
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     }
