@@ -483,11 +483,11 @@ class PdfEditorImage {
     });
   }
 
-  /// 确保当前页面的PDF数据已加载（参考saber的ensureLoaded实现）
-  Future<void> ensurePageLoaded() async {
+  /// 预热页面数据（在pdfrx 1.x版本下的优化实现）
+  Future<void> warmUpPage() async {
     final pdfDocument = await cachedPdfDocument;
     if (pdfDocument == null) {
-      debugPrint('⚠️ [PdfEditorImage] PDF文档为空，无法加载页面');
+      debugPrint('⚠️ [PdfEditorImage] PDF文档为空，无法预热页面');
       return;
     }
 
@@ -498,11 +498,12 @@ class PdfEditorImage {
     }
 
     try {
-      // TODO: 页面级预加载 (需要pdfrx最新版本支持ensureLoaded)
-      // 暂时通过预加载文档来优化性能
-      debugPrint('🦋[PdfEditorImage] 页面 $pdfPageIndex 预加载完成');
+      // 在当前版本下，我们通过访问页面对象来触发预加载
+      // 这有助于提前初始化页面数据结构
+      final page = pdfDocument.pages[pdfPageIndex + 1];
+      debugPrint('🦋[PdfEditorImage] 页面 $pdfPageIndex 预热完成，大小: ${page.width}x${page.height}');
     } catch (e) {
-      debugPrint('❌ [PdfEditorImage] 页面 $pdfPageIndex 预加载失败: $e');
+      debugPrint('❌ [PdfEditorImage] 页面 $pdfPageIndex 预热失败: $e');
       // 不抛出异常，允许继续使用
     }
   }
@@ -605,8 +606,8 @@ class PdfEditorImage {
                   );
                 }
 
-                // ✅ 关键优化：确保页面数据已加载（非阻塞）
-                ensurePageLoaded();
+                // ✅ 关键优化：预热页面数据（非阻塞）
+                warmUpPage();
 
                 // ✅ 创建并缓存 PdfPageView
                 final pageWidget = PdfPageView(
