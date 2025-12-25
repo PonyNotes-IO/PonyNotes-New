@@ -25,6 +25,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_protocol/url_protocol.dart';
 import 'package:window_manager/window_manager.dart';
@@ -249,6 +250,9 @@ class AppFlowyCloudDeepLink {
                           // 用户已设置密码且已绑定手机号，不做任何操作
                           // 让 SignInBloc 的状态变化触发正常的导航流程
                           // (见 SignInScreen 的 BlocConsumer listener)
+
+                          // 检查是否有pending的邀请码需要自动加入
+                          _checkAndProcessPendingInvite();
                         }
                       },
                       (error) {
@@ -437,6 +441,13 @@ bool _needBindPhone(String? phone) {
   if (phone.isEmpty) return false;
   // 只有临时手机号（第三方登录）才需要绑定
   return phone.startsWith('+86temp');
+}
+
+/// 检查并处理pending的邀请码，在登录成功后自动加入工作空间
+void _checkAndProcessPendingInvite() {
+  // 暂时禁用这个功能，因为dart:html在非Web平台不可用
+  // TODO: 实现一个跨平台的解决方案
+  Log.info('🔵 [PendingInvite] 自动加入功能暂时不可用');
 }
 
 // wrapper for AppLinks to support multiple listeners
