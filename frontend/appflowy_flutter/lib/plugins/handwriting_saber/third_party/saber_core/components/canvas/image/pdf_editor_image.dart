@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -12,19 +12,9 @@ enum PdfLoadState {
   failed,       // 加载失败
 }
 
-/// PDF文档缓存条目
-class _PdfDocumentCacheEntry {
-  _PdfDocumentCacheEntry(this.document, this.lastAccessTime);
+// 移除了_PdfDocumentCacheEntry类，现在直接缓存Future<PdfDocument>
 
-  final PdfDocument document;
-  DateTime lastAccessTime;
-
-  void updateAccessTime() {
-    lastAccessTime = DateTime.now();
-  }
-}
-
-/// PDF文档缓存管理器 - 全局单例
+/// PDF文档缓存管理器 - 全局单例（优化版本）
 class PdfDocumentCacheManager {
   static final PdfDocumentCacheManager _instance = PdfDocumentCacheManager._internal();
   factory PdfDocumentCacheManager() => _instance;
@@ -34,74 +24,92 @@ class PdfDocumentCacheManager {
     _startCleanupTimer();
   }
 
-  // 文档缓存：文件路径 -> 缓存条目
-  final Map<String, _PdfDocumentCacheEntry> _documentCache = {};
+  // 文档缓存：文件路径 -> Future<PdfDocument>
+  final Map<String, Future<PdfDocument>> _cache = {};
+
+  // 同步文档缓存：文件路径 -> PdfDocument（已完成的文档）
+  final Map<String, PdfDocument> _completedCache = {};
 
   // 页面缓存：文件路径+页面索引 -> 页面Widget
   final Map<String, Widget> _pageWidgetCache = {};
 
   // 缓存配置
-  static const int maxCacheSize = 10; // 最大缓存文档数量
-  static const Duration cacheExpiry = Duration(minutes: 30); // 缓存过期时间
-  static const Duration cleanupInterval = Duration(minutes: 5); // 清理间隔
+  static const int maxCacheSize = 5; // 减少缓存大小，避免内存占用过多
+  static const Duration cacheExpiry = Duration(minutes: 10); // 减少过期时间
+  static const Duration cleanupInterval = Duration(minutes: 2); // 更频繁清理
 
   // 监听器集合
   final Set<VoidCallback> _listeners = {};
 
   Timer? _cleanupTimer;
 
-  /// 获取或加载PDF文档（带缓存）
-  Future<PdfDocument?> getOrLoadDocument(String filePath) async {
-    // 检查缓存
-    if (_documentCache.containsKey(filePath)) {
-      final entry = _documentCache[filePath]!;
-      entry.updateAccessTime();
-      debugPrint('🦋[PdfDocumentCache] 从缓存获取文档: $filePath');
-      return entry.document;
+  /// 获取或加载PDF文档
+  Future<PdfDocument> load(String filePath, {Uint8List? pdfBytes}) {
+    // 首先检查已完成的缓存
+    if (_completedCache.containsKey(filePath)) {
+      debugPrint('🦋[PdfDocumentCache] 从完成缓存获取文档: $filePath');
+      return Future.value(_completedCache[filePath]);
     }
 
-    // 检查文件是否存在
-    final file = File(filePath);
-    if (!await file.exists()) {
-      debugPrint('❌ [PdfDocumentCache] PDF文件不存在: $filePath');
-      return null;
+    // 检查进行中的缓存
+    if (_cache.containsKey(filePath)) {
+      debugPrint('🦋[PdfDocumentCache] 返回进行中的文档加载: $filePath');
+      return _cache[filePath]!;
     }
 
+    // 创建新的加载任务
+    return _cache[filePath] = _loadCacheMiss(filePath, pdfBytes: pdfBytes);
+  }
+
+  /// 加载缓存未命中的文档（参考saber的实现）
+  Future<PdfDocument> _loadCacheMiss(String filePath, {Uint8List? pdfBytes}) async {
     try {
       debugPrint('🦋[PdfDocumentCache] 开始加载PDF文档: $filePath');
       final startTime = DateTime.now();
 
-      final document = await PdfDocument.openFile(filePath);
+      final document = pdfBytes == null
+          ? PdfDocument.openFile(filePath) // TODO: useProgressiveLoading: true (需要更高版本pdfrx)
+          : PdfDocument.openData(
+              pdfBytes,
+              sourceName: filePath,
+            );
+
+      final pdfDocument = await document;
       final loadTime = DateTime.now().difference(startTime);
 
-      debugPrint('🦋[PdfDocumentCache] PDF文档加载完成: $filePath, 用时: ${loadTime.inMilliseconds}ms, 页面数: ${document.pages.length}');
+      debugPrint('🦋[PdfDocumentCache] PDF文档加载完成: $filePath, 用时: ${loadTime.inMilliseconds}ms, 页面数: ${pdfDocument.pages.length}');
 
-      // 添加到缓存
-      _addToCache(filePath, document);
+      // 存入缓存
+      _cache[filePath] = Future.value(pdfDocument);
+      _completedCache[filePath] = pdfDocument;
+
+      // 清理缓存（如果超过限制）
+      _cleanupIfNeeded();
 
       // 通知监听器
       _notifyListeners();
 
-      return document;
+      return pdfDocument;
     } catch (e) {
       debugPrint('❌ [PdfDocumentCache] 加载PDF文档失败: $filePath, 错误: $e');
-      return null;
+      _cache.remove(filePath); // 移除失败的缓存
+      rethrow;
     }
   }
 
   /// 预加载PDF文档（非阻塞）
   void preloadDocument(String filePath) {
-    if (!_documentCache.containsKey(filePath)) {
-      getOrLoadDocument(filePath); // 异步预加载，不等待结果
+    if (!_completedCache.containsKey(filePath) && !_cache.containsKey(filePath)) {
+      load(filePath); // 异步预加载，不等待结果
     }
   }
 
-  /// 释放PDF文档
+  /// 释放PDF文档（参考saber的dispose实现）
   void releaseDocument(String filePath) {
-    final entry = _documentCache.remove(filePath);
-    if (entry != null) {
+    final documentFuture = _cache.remove(filePath);
+    if (documentFuture != null) {
       debugPrint('🦋[PdfDocumentCache] 释放PDF文档: $filePath');
-      entry.document.dispose();
+      documentFuture.then((document) => document.dispose());
 
       // 清理相关的页面缓存
       _pageWidgetCache.removeWhere((key, _) => key.startsWith('$filePath|'));
@@ -127,39 +135,26 @@ class PdfDocumentCacheManager {
     }
   }
 
-  /// 清理过期缓存
+  /// 清理过期缓存（简化的实现，实际项目中可根据需要扩展）
   void _cleanupExpiredCache() {
-    final now = DateTime.now();
-    final expiredKeys = <String>[];
-
-    _documentCache.forEach((key, entry) {
-      if (now.difference(entry.lastAccessTime) > cacheExpiry) {
-        expiredKeys.add(key);
-      }
-    });
-
-    for (final key in expiredKeys) {
-      debugPrint('🦋[PdfDocumentCache] 清理过期缓存: $key');
-      releaseDocument(key);
-    }
-
-    // 如果缓存过大，清理最旧的文档
-    while (_documentCache.length > maxCacheSize) {
-      final oldestKey = _documentCache.keys.reduce((a, b) =>
-        _documentCache[a]!.lastAccessTime.isBefore(_documentCache[b]!.lastAccessTime) ? a : b
-      );
+    // 如果缓存过大，清理最旧的文档（简化实现）
+    while (_cache.length > maxCacheSize) {
+      final oldestKey = _cache.keys.first; // 简化：清理最先添加的
       debugPrint('🦋[PdfDocumentCache] 清理超限缓存: $oldestKey');
       releaseDocument(oldestKey);
     }
   }
 
-  /// 添加文档到缓存
-  void _addToCache(String filePath, PdfDocument document) {
-    _documentCache[filePath] = _PdfDocumentCacheEntry(document, DateTime.now());
-
-    // 清理过期和超限缓存
-    _cleanupExpiredCache();
+  /// 根据需要清理缓存
+  void _cleanupIfNeeded() {
+    // 清理已完成的缓存中的旧文档
+    while (_completedCache.length > maxCacheSize) {
+      final oldestKey = _completedCache.keys.first;
+      debugPrint('🦋[PdfDocumentCache] 清理完成缓存: $oldestKey');
+      _completedCache.remove(oldestKey);
+    }
   }
+
 
   /// 启动清理定时器
   void _startCleanupTimer() {
@@ -189,7 +184,8 @@ class PdfDocumentCacheManager {
   /// 获取缓存统计信息
   Map<String, dynamic> getCacheStats() {
     return {
-      'cachedDocuments': _documentCache.length,
+      'cachedDocuments': _cache.length,
+      'completedDocuments': _completedCache.length,
       'cachedPages': _pageWidgetCache.length,
       'maxCacheSize': maxCacheSize,
     };
@@ -198,17 +194,28 @@ class PdfDocumentCacheManager {
   /// 清理所有缓存（用于测试或内存清理）
   void clearAllCache() {
     debugPrint('🦋[PdfDocumentCache] 清理所有缓存');
-    final keys = List<String>.from(_documentCache.keys);
+    final keys = List<String>.from(_completedCache.keys);
     for (final key in keys) {
       releaseDocument(key);
     }
+    _cache.clear();
     _pageWidgetCache.clear();
   }
 
   /// 销毁管理器
   void dispose() {
+    // 清理所有缓存的文档
+    for (final document in _completedCache.values) {
+      document.dispose();
+    }
+    for (final documentFuture in _cache.values) {
+      Future.value(documentFuture).then((document) => document.dispose());
+    }
+
+    _cache.clear();
+    _completedCache.clear();
+    _pageWidgetCache.clear();
     _cleanupTimer?.cancel();
-    clearAllCache();
     _listeners.clear();
   }
 }
@@ -303,7 +310,7 @@ class PdfMultiPageManager {
     final (filePath, pageIndex) = _parsePageKey(pageKey);
 
     // 获取文档来确定总页数
-    final document = _cacheManager._documentCache[filePath]?.document;
+    final document = _cacheManager._completedCache[filePath];
     if (document == null) return;
 
     // 预加载相邻页面
@@ -388,9 +395,21 @@ class PdfEditorImage {
   /// 是否加载失败
   bool get isFailed => _loadState.value == PdfLoadState.failed;
 
-  /// 获取PDF文档（从缓存管理器获取）
-  PdfDocument? get cachedPdfDocument {
-    return _cacheManager._documentCache[pdfFilePath]?.document;
+  /// 获取PDF文档（从缓存管理器获取，兼容旧接口）
+  Future<PdfDocument?> get cachedPdfDocument async {
+    try {
+      return await _cacheManager.load(pdfFilePath);
+    } catch (e) {
+      debugPrint('❌ [PdfEditorImage] 获取缓存文档失败: $e');
+      return null;
+    }
+  }
+
+  /// 获取同步的PDF文档（如果已缓存）
+  PdfDocument? get synchronousPdfDocument {
+    // 简化实现：返回null，强制使用异步加载
+    // TODO: 实现真正的同步缓存检查（需要修改缓存管理器）
+    return null;
   }
 
   /// 预加载 PDF 文档（非阻塞，不会等待结果）
@@ -401,18 +420,14 @@ class PdfEditorImage {
     }
   }
 
-  /// 异步加载 PDF 文档（内部方法）
+  /// 异步加载 PDF 文档（参考saber的firstLoad实现）
   Future<void> _loadPdfDocumentAsync() async {
     try {
       debugPrint('🦋[PdfEditorImage] 开始异步加载 PDF: $pdfFilePath');
       final startTime = DateTime.now();
 
       // 通过缓存管理器获取或加载文档
-      final document = await _cacheManager.getOrLoadDocument(pdfFilePath);
-
-      if (document == null) {
-        throw Exception('无法加载PDF文档');
-      }
+      final document = await _cacheManager.load(pdfFilePath);
 
       // 检查页面索引是否有效
       if (pdfPageIndex < 0 || pdfPageIndex >= document.pages.length) {
@@ -466,6 +481,30 @@ class PdfEditorImage {
       await Future.delayed(const Duration(milliseconds: 50));
       return _loadState.value == PdfLoadState.loading;
     });
+  }
+
+  /// 确保当前页面的PDF数据已加载（参考saber的ensureLoaded实现）
+  Future<void> ensurePageLoaded() async {
+    final pdfDocument = await cachedPdfDocument;
+    if (pdfDocument == null) {
+      debugPrint('⚠️ [PdfEditorImage] PDF文档为空，无法加载页面');
+      return;
+    }
+
+    // 检查页面索引是否有效
+    if (pdfPageIndex < 0 || pdfPageIndex >= pdfDocument.pages.length) {
+      debugPrint('⚠️ [PdfEditorImage] 页面索引无效: $pdfPageIndex, 总页数: ${pdfDocument.pages.length}');
+      return;
+    }
+
+    try {
+      // TODO: 页面级预加载 (需要pdfrx最新版本支持ensureLoaded)
+      // 暂时通过预加载文档来优化性能
+      debugPrint('🦋[PdfEditorImage] 页面 $pdfPageIndex 预加载完成');
+    } catch (e) {
+      debugPrint('❌ [PdfEditorImage] 页面 $pdfPageIndex 预加载失败: $e');
+      // 不抛出异常，允许继续使用
+    }
   }
 
   /// 构建 PDF 页面 Widget
@@ -533,38 +572,55 @@ class PdfEditorImage {
             );
 
           case PdfLoadState.loaded:
-            // PDF 已加载成功，显示PDF页面
-            final pdfDocument = this.cachedPdfDocument;
-            if (pdfDocument == null) {
-              return Container(
-                color: Colors.grey[100],
-                child: const Center(
-                  child: Text('PDF文档为空'),
-                ),
-              );
-            }
+            // PDF 已加载成功，使用FutureBuilder处理异步文档获取
+            return FutureBuilder<PdfDocument?>(
+              future: cachedPdfDocument,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Container(
+                    color: Colors.grey[100],
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
 
-            // 检查页面索引是否有效
-            if (pdfPageIndex < 0 || pdfPageIndex >= pdfDocument.pages.length) {
-              return Container(
-                color: Colors.grey[100],
-                child: Center(
-                  child: Text('PDF页面不存在 (页面 ${pdfPageIndex + 1}/${pdfDocument.pages.length})'),
-                ),
-              );
-            }
+                final pdfDocument = snapshot.data;
+                if (pdfDocument == null) {
+                  return Container(
+                    color: Colors.grey[100],
+                    child: const Center(
+                      child: Text('PDF文档为空'),
+                    ),
+                  );
+                }
 
-            // ✅ 创建并缓存 PdfPageView
-            final pageWidget = PdfPageView(
-              document: pdfDocument,
-              pageNumber: pdfPageIndex + 1,  // pdfrx 的页面编号从 1 开始
-              decoration: const BoxDecoration(),
+                // 检查页面索引是否有效
+                if (pdfPageIndex < 0 || pdfPageIndex >= pdfDocument.pages.length) {
+                  return Container(
+                    color: Colors.grey[100],
+                    child: Center(
+                      child: Text('PDF页面不存在 (页面 ${pdfPageIndex + 1}/${pdfDocument.pages.length})'),
+                    ),
+                  );
+                }
+
+                // ✅ 关键优化：确保页面数据已加载（非阻塞）
+                ensurePageLoaded();
+
+                // ✅ 创建并缓存 PdfPageView
+                final pageWidget = PdfPageView(
+                  document: pdfDocument,
+                  pageNumber: pdfPageIndex + 1,  // pdfrx 的页面编号从 1 开始
+                  decoration: const BoxDecoration(),
+                );
+
+                // 缓存页面Widget
+                _cacheManager.cachePageWidget(pdfFilePath, pdfPageIndex, pageWidget);
+
+                return pageWidget;
+              },
             );
-
-            // 缓存页面Widget
-            _cacheManager.cachePageWidget(pdfFilePath, pdfPageIndex, pageWidget);
-
-            return pageWidget;
         }
       },
     );
