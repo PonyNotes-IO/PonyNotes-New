@@ -135,12 +135,19 @@ class PdfDocumentCacheManager {
     }
   }
 
-  /// 清理过期缓存（简化的实现，实际项目中可根据需要扩展）
+  /// 清理过期缓存（参考Saber的缓存清理策略）
   void _cleanupExpiredCache() {
     // 如果缓存过大，清理最旧的文档（简化实现）
     while (_cache.length > maxCacheSize) {
       final oldestKey = _cache.keys.first; // 简化：清理最先添加的
       debugPrint('🦋[PdfDocumentCache] 清理超限缓存: $oldestKey');
+      releaseDocument(oldestKey);
+    }
+
+    // 清理过期的已完成文档（如果超过缓存限制）
+    while (_completedCache.length > maxCacheSize) {
+      final oldestKey = _completedCache.keys.first;
+      debugPrint('🦋[PdfDocumentCache] 清理超限完成缓存: $oldestKey');
       releaseDocument(oldestKey);
     }
   }
@@ -202,21 +209,28 @@ class PdfDocumentCacheManager {
     _pageWidgetCache.clear();
   }
 
-  /// 销毁管理器
+  /// 销毁管理器（参考Saber的dispose实现）
   void dispose() {
-    // 清理所有缓存的文档
-    for (final document in _completedCache.values) {
-      document.dispose();
-    }
-    for (final documentFuture in _cache.values) {
-      Future.value(documentFuture).then((document) => document.dispose());
+    // 停止清理定时器
+    _cleanupTimer?.cancel();
+    _cleanupTimer = null;
+
+    // 清理所有监听器
+    _listeners.clear();
+
+    // 清理所有缓存的文档（异步处理，避免阻塞）
+    final keys = List<String>.from(_completedCache.keys);
+    for (final key in keys) {
+      releaseDocument(key);
     }
 
+    // 清理进行中的缓存
     _cache.clear();
-    _completedCache.clear();
+
+    // 清理页面Widget缓存
     _pageWidgetCache.clear();
-    _cleanupTimer?.cancel();
-    _listeners.clear();
+
+    debugPrint('🦋[PdfDocumentCacheManager] 已销毁缓存管理器');
   }
 }
 
@@ -508,16 +522,17 @@ class PdfEditorImage {
     }
   }
 
-  /// 构建 PDF 页面 Widget
+  /// 构建 PDF 页面 Widget（严格按照Saber的PdfEditorImage.buildImageWidget实现）
   Widget buildPdfPageWidget({
     required BoxFit boxFit,
   }) {
-    // 先检查页面Widget缓存
+    // 先检查页面Widget缓存，避免重复创建
     final cachedWidget = _cacheManager.getCachedPageWidget(pdfFilePath, pdfPageIndex);
     if (cachedWidget != null) {
       return cachedWidget;
     }
 
+    // 使用ValueNotifier监听PDF文档加载状态（参考Saber的实现）
     return ValueListenableBuilder<PdfLoadState>(
       valueListenable: _loadState,
       builder: (context, loadState, child) {
@@ -525,49 +540,24 @@ class PdfEditorImage {
           case PdfLoadState.notLoaded:
           case PdfLoadState.loading:
             // 显示加载状态
-            return Container(
-              color: Colors.grey[100],
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 8),
-                    Text(
-                      loadState == PdfLoadState.loading ? '正在加载PDF...' : '准备加载PDF...',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ],
+            return SizedBox.fromSize(
+              size: naturalSize,
+              child: Container(
+                color: Colors.grey[100],
+                child: const Center(
+                  child: CircularProgressIndicator(),
                 ),
               ),
             );
 
           case PdfLoadState.failed:
             // 显示加载失败状态
-            return Container(
-              color: Colors.grey[100],
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'PDF加载失败',
-                      style: TextStyle(fontSize: 14, color: Colors.red),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _loadError ?? '未知错误',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: preloadPdfDocument,
-                      child: const Text('重试'),
-                    ),
-                  ],
+            return SizedBox.fromSize(
+              size: naturalSize,
+              child: Container(
+                color: Colors.grey[100],
+                child: const Center(
+                  child: Icon(Icons.error_outline, color: Colors.red),
                 ),
               ),
             );
@@ -578,30 +568,39 @@ class PdfEditorImage {
               future: cachedPdfDocument,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Container(
-                    color: Colors.grey[100],
-                    child: const Center(
-                      child: CircularProgressIndicator(),
+                  return SizedBox.fromSize(
+                    size: naturalSize,
+                    child: Container(
+                      color: Colors.grey[100],
+                      child: const Center(
+                        child: CircularProgressIndicator(),
+                      ),
                     ),
                   );
                 }
 
                 final pdfDocument = snapshot.data;
                 if (pdfDocument == null) {
-                  return Container(
-                    color: Colors.grey[100],
-                    child: const Center(
-                      child: Text('PDF文档为空'),
+                  return SizedBox.fromSize(
+                    size: naturalSize,
+                    child: Container(
+                      color: Colors.grey[100],
+                      child: const Center(
+                        child: Text('PDF文档为空'),
+                      ),
                     ),
                   );
                 }
 
                 // 检查页面索引是否有效
                 if (pdfPageIndex < 0 || pdfPageIndex >= pdfDocument.pages.length) {
-                  return Container(
-                    color: Colors.grey[100],
-                    child: Center(
-                      child: Text('PDF页面不存在 (页面 ${pdfPageIndex + 1}/${pdfDocument.pages.length})'),
+                  return SizedBox.fromSize(
+                    size: naturalSize,
+                    child: Container(
+                      color: Colors.grey[100],
+                      child: Center(
+                        child: Text('PDF页面不存在 (页面 ${pdfPageIndex + 1}/${pdfDocument.pages.length})'),
+                      ),
                     ),
                   );
                 }
@@ -609,14 +608,14 @@ class PdfEditorImage {
                 // ✅ 关键优化：预热页面数据（非阻塞）
                 warmUpPage();
 
-                // ✅ 创建并缓存 PdfPageView
+                // ✅ 创建PdfPageView（参考Saber的方式，直接渲染PDF页面）
                 final pageWidget = PdfPageView(
                   document: pdfDocument,
                   pageNumber: pdfPageIndex + 1,  // pdfrx 的页面编号从 1 开始
-                  decoration: const BoxDecoration(),
+                  decoration: const BoxDecoration(),  // 无装饰，确保纯净显示
                 );
 
-                // 缓存页面Widget
+                // 缓存页面Widget，避免重复创建
                 _cacheManager.cachePageWidget(pdfFilePath, pdfPageIndex, pageWidget);
 
                 return pageWidget;
@@ -627,10 +626,12 @@ class PdfEditorImage {
     );
   }
 
-  /// 释放资源
+  /// 释放资源（参考Saber的dispose实现）
   void dispose() {
     _loadState.dispose();
     // 注意：PDF文档现在由PdfDocumentCacheManager管理，不在这里释放
+    // 但是可以清理页面Widget缓存以释放内存
+    _cacheManager.cachePageWidget(pdfFilePath, pdfPageIndex, const SizedBox.shrink());
   }
 }
 

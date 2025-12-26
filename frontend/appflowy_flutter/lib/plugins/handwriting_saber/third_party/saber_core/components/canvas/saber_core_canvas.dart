@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:perfect_freehand/perfect_freehand.dart' as pf;
 
 import '../canvas/canvas_background_pattern.dart';
@@ -23,12 +24,19 @@ class SaberCoreCanvas extends StatelessWidget {
     super.key,
     required this.coreInfo,
     this.currentStroke,
+    this.currentStrokeListenable,
+    this.repaintListenable,
     this.selectResult, // ✅ 选择结果
     this.isSelecting = false, // ✅ 是否正在选择
   });
 
   final EditorCoreInfo coreInfo;
   final Stroke? currentStroke;
+  /// 如果提供了 [currentStrokeListenable]，画布会使用该 Listenable 来触发重绘，
+  /// 从而避免在每次笔迹更新时回到父级 Widget 调用 setState 导致整页重建。
+  final ValueListenable<Stroke?>? currentStrokeListenable;
+  /// 额外的重绘监听器（用于激光笔等需要独立驱动的重绘）
+  final Listenable? repaintListenable;
   final SelectResult? selectResult; // ✅ 选择结果
   final bool isSelecting; // ✅ 是否正在选择
 
@@ -49,56 +57,60 @@ class SaberCoreCanvas extends StatelessWidget {
         final double offsetX = (constraints.maxWidth - drawWidth) / 2;
         final double offsetY = (constraints.maxHeight - drawHeight) / 2;
         
-        // ✅ 如果有 PDF 背景图片，将 PDF 放在 CustomPaint 的 child 中
-        // 这样 PDF 在底层，笔迹在 foregroundPainter 中绘制在上层
-        if (page.backgroundImage != null) {
-          // ✅ 智能预加载：只有当前页面才预加载，其他页面延迟加载
-          // 这对于多页PDF特别重要，可以显著提升性能
-          page.backgroundImage!.preloadPdfDocument();
-          
-          return Stack(
-            children: [
-              // ✅ PDF 背景层（使用 IgnorePointer 确保不阻挡触摸事件）
-              // PDF 背景填充整个绘制区域（参考 Saber 的实现）
-              Positioned(
-                left: offsetX,
-                top: offsetY,
+    // ✅ 如果有 PDF 背景图片，将 PDF 放在 CustomPaint 的 child 中
+    // 这样 PDF 在底层，笔迹在 foregroundPainter 中绘制在上层
+    if (page.backgroundImage != null) {
+      // ✅ 智能预加载：只有当前页面才预加载，其他页面延迟加载
+      // 这对于多页PDF特别重要，可以显著提升性能
+      page.backgroundImage!.preloadPdfDocument();
+
+      return Stack(
+        children: [
+          // ✅ PDF 背景层（使用 IgnorePointer 确保不阻挡触摸事件）
+          // PDF 背景填充整个绘制区域（参考 Saber 的实现）
+          Positioned(
+            left: offsetX,
+            top: offsetY,
+            width: drawWidth,
+            height: drawHeight,
+            child: IgnorePointer(
+              // ✅ PDF 背景不阻挡触摸事件，让外层的 GestureDetector 处理手势
+              child: SizedBox(
                 width: drawWidth,
                 height: drawHeight,
-                child: IgnorePointer(
-                  // ✅ PDF 背景不阻挡触摸事件，让外层的 GestureDetector 处理手势
+                child: FittedBox(
+                  fit: BoxFit.contain,  // ✅ 使用 contain 保持PDF比例，填充可用空间
                   child: SizedBox(
-                    width: drawWidth,
-                    height: drawHeight,
-                    child: FittedBox(
-                      fit: BoxFit.contain,  // ✅ 使用 contain 保持PDF比例，填充可用空间
-                      child: SizedBox(
-                        width: page.size.width,
-                        height: page.size.height,
-                        child: page.backgroundImage!.buildPdfPageWidget(
-                          boxFit: BoxFit.contain,
-                        ),
+                    width: page.size.width,
+                    height: page.size.height,
+                    // ✅ 使用 RepaintBoundary 隔离PDF重绘，避免与笔迹绘制冲突
+                    child: RepaintBoundary(
+                      child: page.backgroundImage!.buildPdfPageWidget(
+                        boxFit: BoxFit.contain,
                       ),
                     ),
                   ),
                 ),
               ),
-              // ✅ 画布层（绘制笔迹，透明背景，不阻挡触摸事件）
+            ),
+          ),
+          // ✅ 画布层（绘制笔迹，透明背景，不阻挡触摸事件）
               CustomPaint(
                 painter: _SaberCoreCanvasPainter(
                   page: page,
                   coreInfo: coreInfo,
                   currentStroke: currentStroke,
+                  currentStrokeListenable: currentStrokeListenable,
                   currentScale: scale,
-                  laserStrokes: coreInfo.laserStrokes,
                   selectResult: selectResult,
                   isSelecting: isSelecting,
+                    repaint: repaintListenable ?? currentStrokeListenable, // use extra repaint if provided
                 ),
                 size: Size(constraints.maxWidth, constraints.maxHeight),
               ),
-            ],
-          );
-        }
+        ],
+      );
+    }
         
         // ✅ 明确传递 CustomPaint 的大小以避免在无 PDF 背景分支中出现布局为零的情况。
         // 与有 PDF 背景的分支保持一致，使用 constraints 的最大可用宽高作为画布大小。
@@ -108,7 +120,6 @@ class SaberCoreCanvas extends StatelessWidget {
             coreInfo: coreInfo,
             currentStroke: currentStroke,
             currentScale: scale,  // ✅ 传递缩放级别
-            laserStrokes: coreInfo.laserStrokes,  // ✅ 传递激光笔笔迹列表
             selectResult: selectResult,
             isSelecting: isSelecting,
           ),
@@ -124,23 +135,26 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     required this.page,
     required this.coreInfo,
     this.currentStroke,
+    this.currentStrokeListenable,
     this.currentScale = 1.0,  // ✅ 添加缩放级别，用于判断是否使用铅笔 shader
-    this.laserStrokes = const [],  // ✅ 激光笔笔迹列表
     this.selectResult, // ✅ 选择结果
     this.isSelecting = false, // ✅ 是否正在选择
-  });
+    Listenable? repaint,
+  }) : super(repaint: repaint);
 
   final EditorPage page;
   final EditorCoreInfo coreInfo;
   final Stroke? currentStroke;
+  final ValueListenable<Stroke?>? currentStrokeListenable;
   final double currentScale;  // ✅ 当前缩放级别
-  final List<Stroke> laserStrokes;  // ✅ 激光笔笔迹列表
+  // 激光笔笔迹列表（不再作为独立字段，直接从 coreInfo 使用）
   final SelectResult? selectResult; // ✅ 选择结果
   final bool isSelecting; // ✅ 是否正在选择
 
   @override
   void paint(Canvas canvas, Size size) {
-    debugPrint('🦋[SaberCoreCanvasPainter] paint: page.strokes=${page.strokes.length}, currentStroke=${currentStroke != null}, laserStrokes=${laserStrokes.length}, selectResult=${selectResult != null}, isSelecting=$isSelecting');
+    // 减少调试日志输出，避免影响性能
+    // debugPrint('🦋[SaberCoreCanvasPainter] paint: page.strokes=${page.strokes.length}, currentStroke=${currentStroke != null}, laserStrokes=${laserStrokes.length}, selectResult=${selectResult != null}, isSelecting=$isSelecting');
     // 简单按比例映射到当前画布大小
     final double scaleX = size.width / page.size.width;
     final double scaleY = size.height / page.size.height;
@@ -180,8 +194,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       }
     }
     
-    // ✅ 绘制激光笔笔迹（发光效果，从 laserStrokes 列表获取）
-    for (final stroke in laserStrokes) {
+    // ✅ 绘制激光笔笔迹（发光效果，从 coreInfo.laserStrokes 获取）
+    for (final stroke in coreInfo.laserStrokes) {
       _drawLaserStroke(canvas, stroke, scale, offsetX, offsetY);
     }
     
@@ -191,29 +205,30 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     }
     
     // 绘制当前正在绘制的笔迹（使用未完成状态，实时显示）
-    if (currentStroke != null) {
-      if (currentStroke!.toolId == ToolId.highlighter) {
+    final Stroke? strokeToDraw = currentStrokeListenable?.value ?? currentStroke;
+    if (strokeToDraw != null) {
+      if (strokeToDraw.toolId == ToolId.highlighter) {
         // 不使用 saveLayer，为未完成的荧光笔直接绘制半透明路径
         _drawStrokePathIncomplete(
           canvas,
-          currentStroke!,
+          strokeToDraw,
           scale,
           offsetX,
           offsetY,
-          currentStroke!.color.withOpacity(0.32),
-          currentStroke!.strokeWidth * scale * 2,
+          strokeToDraw.color.withOpacity(0.32),
+          strokeToDraw.strokeWidth * scale * 2,
         );
-      } else if (currentStroke!.toolId == ToolId.laserPointer) {
-        _drawLaserStroke(canvas, currentStroke!, scale, offsetX, offsetY);
-      } else if (currentStroke!.toolId == ToolId.line ||
-                 currentStroke!.toolId == ToolId.rectangle || 
-                 currentStroke!.toolId == ToolId.circle || 
-                 currentStroke!.toolId == ToolId.triangle || 
-                 currentStroke!.toolId == ToolId.diamond) {
+      } else if (strokeToDraw.toolId == ToolId.laserPointer) {
+        _drawLaserStroke(canvas, strokeToDraw, scale, offsetX, offsetY);
+      } else if (strokeToDraw.toolId == ToolId.line ||
+                 strokeToDraw.toolId == ToolId.rectangle || 
+                 strokeToDraw.toolId == ToolId.circle || 
+                 strokeToDraw.toolId == ToolId.triangle || 
+                 strokeToDraw.toolId == ToolId.diamond) {
         // ✅ 形状工具：实时绘制形状预览
-        _drawShapePreview(canvas, currentStroke!, scale, offsetX, offsetY);
+        _drawShapePreview(canvas, strokeToDraw, scale, offsetX, offsetY);
       } else {
-        _drawStrokeIncomplete(canvas, currentStroke!, scale, offsetX, offsetY);
+        _drawStrokeIncomplete(canvas, strokeToDraw, scale, offsetX, offsetY);
       }
     }
     
@@ -943,9 +958,18 @@ class _SaberCoreCanvasPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SaberCoreCanvasPainter oldDelegate) {
-    // 保守策略：始终允许重绘，避免复杂的状态不一致导致画布不更新。
-    // 如果性能问题出现，再收窄判断条件。
-    return true;
+    // 参考Saber的CanvasPainter.shouldRepaint实现，精确控制重绘条件，避免过度重绘
+    return false ||
+        // 当前笔画正在绘制时，强制重绘
+        (currentStroke != null || oldDelegate.currentStroke != null) ||
+        // 激光笔笔迹正在淡出时，强制重绘（比较 coreInfo 中的激光笔列表）
+        (coreInfo.laserStrokes.isNotEmpty || oldDelegate.coreInfo.laserStrokes.isNotEmpty) ||
+        // 其他状态变化时重绘
+        page != oldDelegate.page ||
+        coreInfo != oldDelegate.coreInfo ||
+        currentScale != oldDelegate.currentScale ||
+        selectResult != oldDelegate.selectResult ||
+        isSelecting != oldDelegate.isSelecting;
   }
 }
 
