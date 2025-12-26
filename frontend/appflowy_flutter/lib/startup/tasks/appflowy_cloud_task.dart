@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+// platform-specific pending-invite processing (web uses `dart:html`)
+import 'pending_invite_stub.dart'
+    if (dart.library.html) 'pending_invite_web.dart';
 
 import 'package:app_links/app_links.dart';
 import 'package:appflowy/env/cloud_env.dart';
@@ -25,7 +28,6 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_protocol/url_protocol.dart';
 import 'package:window_manager/window_manager.dart';
@@ -155,7 +157,7 @@ class AppFlowyCloudDeepLink {
                     var isEmail = !hasPhone;
                     
                     // 如果 phone 和 email 都为空，尝试从 token 中提取手机号
-                    if (phoneOrEmail.isEmpty && accessToken != null) {
+                    if (phoneOrEmail.isEmpty) {
                       try {
                         // 尝试从 JWT token 中提取手机号（token 格式：header.payload.signature）
                         final parts = accessToken.split('.');
@@ -252,7 +254,9 @@ class AppFlowyCloudDeepLink {
                           // (见 SignInScreen 的 BlocConsumer listener)
 
                           // 检查是否有pending的邀请码需要自动加入
-                          _checkAndProcessPendingInvite();
+                          Future.microtask(() async {
+                            await processPendingInvite();
+                          });
                         }
                       },
                       (error) {
@@ -443,12 +447,6 @@ bool _needBindPhone(String? phone) {
   return phone.startsWith('+86temp');
 }
 
-/// 检查并处理pending的邀请码，在登录成功后自动加入工作空间
-void _checkAndProcessPendingInvite() {
-  // 暂时禁用这个功能，因为dart:html在非Web平台不可用
-  // TODO: 实现一个跨平台的解决方案
-  Log.info('🔵 [PendingInvite] 自动加入功能暂时不可用');
-}
 
 // wrapper for AppLinks to support multiple listeners
 class _AppLinkWrapper {

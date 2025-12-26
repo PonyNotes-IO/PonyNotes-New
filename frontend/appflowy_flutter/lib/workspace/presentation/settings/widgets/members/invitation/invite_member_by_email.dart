@@ -76,9 +76,8 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                   // 输入框：搜索名称或邮箱/手机号
                   TextField(
                     controller: _inputController,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: '搜索名称或者邮箱/手机号',
-                      border: OutlineInputBorder(),
                     ),
                     autofocus: true,
                     onChanged: (v) {},
