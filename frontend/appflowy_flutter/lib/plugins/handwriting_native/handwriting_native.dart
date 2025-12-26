@@ -11,22 +11,20 @@ import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/handwriting_native/presentation/handwriting_native_page.dart';
 
 class HandwritingNativePluginBuilder extends PluginBuilder {
   @override
   Plugin build(dynamic data) {
-    print('🏗️ [HandwritingNativePluginBuilder] build() called');
-    print('🏗️ [HandwritingNativePluginBuilder] data type: ${data.runtimeType}');
+    // debug logs removed
     
     if (data is ViewPB) {
-      print('🏗️ [HandwritingNativePluginBuilder] Creating HandwritingNativePlugin for view: ${data.id}');
-      print('🏗️ [HandwritingNativePluginBuilder] View name: ${data.name}');
-      print('🏗️ [HandwritingNativePluginBuilder] View layout: ${data.layout}');
+      // debug logs removed
       return HandwritingNativePlugin(pluginType: pluginType, view: data);
     }
 
-    print('❌ [HandwritingNativePluginBuilder] Invalid data type, throwing exception');
+    Log.error('❌ [HandwritingNativePluginBuilder] Invalid data type, throwing exception');
     throw FlowyPluginException.invalidData;
   }
 
@@ -48,7 +46,7 @@ class HandwritingNativePlugin extends Plugin {
     required ViewPB view,
     required PluginType pluginType,
   }) : notifier = ViewPluginNotifier(view: view) {
-    print('🎯 [HandwritingNativePlugin] Constructor called for view: ${view.id}');
+    // debug log removed
     _pluginType = pluginType;
   }
 
@@ -71,10 +69,10 @@ class HandwritingNativePlugin extends Plugin {
 
   @override
   void init() {
-    print('🔧 [HandwritingNativePlugin] init() called for view: ${notifier.view.id}');
+    // debug log removed
     _pageAccessLevelBloc = PageAccessLevelBloc(view: notifier.view)
       ..add(const PageAccessLevelEvent.initial());
-    print('✅ [HandwritingNativePlugin] init() completed');
+    // debug log removed
   }
 
   @override
@@ -99,11 +97,7 @@ class HandwritingNativePluginWidgetBuilder extends PluginWidgetBuilder {
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    print('🎨 [HandwritingNativePluginWidgetBuilder] buildWidget() called');
-    print('🎨 [HandwritingNativePluginWidgetBuilder] view: ${notifier.view.id}');
-    print('🎨 [HandwritingNativePluginWidgetBuilder] view name: ${notifier.view.name}');
-    
-    print('🎨 [HandwritingNativePluginWidgetBuilder] Creating HandwritingNativePage...');
+    // debug logs removed
     final widget = BlocProvider<PageAccessLevelBloc>.value(
       value: pageAccessLevelBloc,
       child: HandwritingNativePage(
@@ -112,7 +106,7 @@ class HandwritingNativePluginWidgetBuilder extends PluginWidgetBuilder {
         onViewChanged: (view) => notifier.view = view,
       ),
     );
-    print('🎨 [HandwritingNativePluginWidgetBuilder] HandwritingNativePage created, returning widget');
+    // debug log removed
     return widget;
   }
 

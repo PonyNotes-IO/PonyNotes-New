@@ -844,8 +844,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     bool openAfterCreated,
     bool createNewView,
   ) async {
-    Log.info('🔵 [VIEW_ITEM] _onSelected called with pluginBuilder: ${pluginBuilder.runtimeType}, menuName: ${pluginBuilder.menuName}');
-    
+    // debug logs removed
     final viewBloc = context.read<ViewBloc>();
     // 如果是 HandwritingSaberPluginBuilder，使用"未命名手记"作为默认名称
     final isHandwritingSaber = pluginBuilder is HandwritingSaberPluginBuilder;
@@ -853,8 +852,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         ? '未命名手记' 
         : (pluginBuilder.layoutType?.defaultName ?? '');
     
-    Log.info('🔵 [VIEW_ITEM] Creating view with layout: ${pluginBuilder.layoutType}, viewName: "$viewName", isHandwritingSaber: $isHandwritingSaber');
-    Log.info('🔵 [VIEW_ITEM] isHandwritingSaber: $isHandwritingSaber, pluginBuilder type: ${pluginBuilder.runtimeType}');
+    // debug logs removed
     
     // 如果是 Saber 手写视图，需要先创建视图，然后立即更新 extra 字段
     // 否则，直接通过 ViewBloc 创建视图
@@ -879,7 +877,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
       // If the widget has been unmounted while waiting for createView, skip further UI actions.
       if (!context.mounted) {
-        Log.warn('🔵 [VIEW_ITEM] Widget unmounted after createView returned, skipping UI open actions');
+        Log.error('🔵 [VIEW_ITEM] Widget unmounted after createView returned, skipping UI open actions');
         // Still ensure ViewBloc state is updated with created view if possible
         await result.fold(
           (createdView) async {
@@ -896,9 +894,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
       await result.fold(
         (createdView) async {
-          Log.info(
-            '🔵 [VIEW_ITEM] Handwriting_saber view created successfully: ${createdView.id}, layout: ${createdView.layout}, extra: ${createdView.extra}',
-          );
+          // debug log removed
 
           const extraJson = '{"view_type": "handwriting_saber"}';
           final updateResult = await ViewBackendService.updateView(
@@ -910,9 +906,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
             (_) {
               // Note: FolderEventUpdateView returns void on success. Use the createdView
               // object (which contains the real id) when opening the plugin.
-              Log.info(
-                '✅ [VIEW_ITEM] Successfully set extra for handwriting_saber view: ${createdView.id}, extra=$extraJson',
-              );
+              // debug log removed
               // ensure the local createdView carries the extra so plugin selection
               // will pick HandwritingSaber immediately (avoid race where backend
               // hasn't yet propagated extra to returned view)
@@ -923,13 +917,11 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                 ViewEvent.viewDidUpdate(FlowyResult.success(createdView)),
               );
               if (openAfterCreated) {
-                Log.info(
-                  '🔵 [VIEW_ITEM] Attempting to open handwriting_saber view via TabsBloc (global): ${createdView.id}',
-                );
+                // debug log removed
                 try {
                   getIt<TabsBloc>().openPlugin(createdView);
                 } catch (e) {
-                  Log.warn('🔵 [VIEW_ITEM] Failed to open plugin globally for ${createdView.id}: $e');
+                Log.error('🔵 [VIEW_ITEM] Failed to open plugin globally for ${createdView.id}: $e');
                 }
               }
             },

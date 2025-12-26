@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy/plugins/handwriting_native/application/handwriting_native_service.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwriting_canvas_background_painter.dart';
 import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwriting_page_thumbnails.dart';
 import 'package:appflowy/plugins/handwriting_native/presentation/widgets/handwriting_status_bar.dart';
@@ -68,17 +69,14 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
   @override
   void initState() {
     super.initState();
-    print('🎨 [HandwritingNativePage] initState called');
-    print('🎨 [HandwritingNativePage] view.id: ${widget.view.id}');
-    print('🎨 [HandwritingNativePage] view.name: ${widget.view.name}');
-    print('🎨 [HandwritingNativePage] view.layout: ${widget.view.layout}');
+    // debug logs removed
     
     _initializeDocument();
   }
 
   Future<void> _initializeDocument() async {
     try {
-      print('🔧 [HandwritingNativePage] Initializing document...');
+      Log.debug('🔧 [HandwritingNativePage] Initializing document...');
       final docId = await _service.getOrCreateDoc(widget.view.id);
       
       if (!mounted) {
@@ -99,7 +97,7 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
         await _renderAndUpdateCanvas();
       }
     } catch (e) {
-      print('❌ [HandwritingNativePage] Initialization error: $e');
+      Log.error('❌ [HandwritingNativePage] Initialization error: $e');
       if (mounted) {
         setState(() {
           _isInitializing = false;
@@ -117,7 +115,7 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
         return;
       }
       if (size == null) {
-        print('⚠️ [HandwritingNativePage] getPageSize returned null');
+        Log.error('⚠️ [HandwritingNativePage] getPageSize returned null');
         return;
       }
 
@@ -126,12 +124,9 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
         _pageHeight = size['height'];
       });
 
-      print(
-        '📐 [HandwritingNativePage] Page size loaded: '
-        'width=$_pageWidth, height=$_pageHeight',
-      );
+      // debug log removed
     } catch (e) {
-      print('❌ [HandwritingNativePage] _loadPageSize error: $e');
+      Log.error('❌ [HandwritingNativePage] _loadPageSize error: $e');
     }
   }
 
@@ -149,19 +144,19 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
       // 预渲染当前页缩略图
       await _renderThumbnail(_currentPageIndex);
     } catch (e) {
-      print('❌ [HandwritingNativePage] _loadPageCount error: $e');
+      Log.error('❌ [HandwritingNativePage] _loadPageCount error: $e');
     }
   }
 
   @override
   void dispose() {
-    print('🗑️ [HandwritingNativePage] dispose called for view: ${widget.view.id}');
+    // debug log removed
     // 关闭文档
     _service.closeDoc(widget.view.id).then((success) {
       if (success) {
-        print('✅ [HandwritingNativePage] Document closed');
+        // document closed
       } else {
-        print('⚠️ [HandwritingNativePage] Failed to close document');
+        Log.error('⚠️ [HandwritingNativePage] Failed to close document');
       }
     });
     super.dispose();
@@ -169,7 +164,7 @@ class _HandwritingNativePageState extends State<HandwritingNativePage> {
 
   @override
   Widget build(BuildContext context) {
-    print('🖼️ [HandwritingNativePage] build() called');
+    // debug log removed
 
     if (_isInitializing) {
       return Scaffold(

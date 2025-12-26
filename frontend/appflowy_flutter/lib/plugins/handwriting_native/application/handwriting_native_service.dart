@@ -1,4 +1,5 @@
 import 'package:appflowy/plugins/handwriting_native/platform/handwriting_native_platform.dart';
+import 'package:appflowy_backend/log.dart';
 
 /// 手写笔记数据服务
 class HandwritingNativeService {
@@ -15,14 +16,14 @@ class HandwritingNativeService {
       return true;
     }
 
-    print('🔧 [HandwritingNativeService] Initializing...');
+    Log.debug('🔧 [HandwritingNativeService] Initializing...');
     final success = await HandwritingNativePlatform.init('{}');
     
     if (success) {
       _initialized = true;
-      print('✅ [HandwritingNativeService] Initialized successfully');
+      Log.debug('✅ [HandwritingNativeService] Initialized successfully');
     } else {
-      print('❌ [HandwritingNativeService] Initialization failed');
+      Log.error('❌ [HandwritingNativeService] Initialization failed');
     }
     
     return success;
@@ -32,7 +33,7 @@ class HandwritingNativeService {
   Future<String?> getOrCreateDoc(String viewId, {String? xoppPath, String? pdfPath, bool attachPdfToDocument = false}) async {
     // 如果已有docId，直接返回（除非是打开PDF，需要强制重新打开）
     if (_docIdMap.containsKey(viewId) && pdfPath == null) {
-      print('📄 [HandwritingNativeService] Using existing docId for view: $viewId, docId: ${_docIdMap[viewId]}');
+      Log.debug('📄 [HandwritingNativeService] Using existing docId for view: $viewId, docId: ${_docIdMap[viewId]}');
       return _docIdMap[viewId];
     }
 
@@ -41,24 +42,24 @@ class HandwritingNativeService {
     String? docId;
     if (pdfPath != null && pdfPath.isNotEmpty) {
       // 打开PDF文档
-      print('📄 [HandwritingNativeService] Opening PDF for view: $viewId, path: $pdfPath');
+      Log.debug('📄 [HandwritingNativeService] Opening PDF for view: $viewId, path: $pdfPath');
       docId = await HandwritingNativePlatform.openPdf(pdfPath, attachToDocument: attachPdfToDocument);
-      print('📄 [HandwritingNativeService] openPdf returned docId: $docId');
+      Log.debug('📄 [HandwritingNativeService] openPdf returned docId: $docId');
     } else if (xoppPath != null && xoppPath.isNotEmpty) {
       // 打开现有xopp文档
-      print('📂 [HandwritingNativeService] Opening document for view: $viewId');
+      Log.debug('📂 [HandwritingNativeService] Opening document for view: $viewId');
       docId = await HandwritingNativePlatform.openDoc(xoppPath);
     } else {
       // 创建新文档
-      print('📄 [HandwritingNativeService] Creating document for view: $viewId');
+      Log.debug('📄 [HandwritingNativeService] Creating document for view: $viewId');
       docId = await HandwritingNativePlatform.createDoc('{}');
     }
 
     if (docId != null) {
       _docIdMap[viewId] = docId;
-      print('✅ [HandwritingNativeService] Document ready for view: $viewId, docId: $docId');
+      Log.debug('✅ [HandwritingNativeService] Document ready for view: $viewId, docId: $docId');
     } else {
-      print('❌ [HandwritingNativeService] Failed to get/create document for view: $viewId');
+      Log.error('❌ [HandwritingNativeService] Failed to get/create document for view: $viewId');
     }
 
     return docId;
@@ -68,11 +69,11 @@ class HandwritingNativeService {
   Future<bool> saveDoc(String viewId, String xoppPath) async {
     final docId = _docIdMap[viewId];
     if (docId == null) {
-      print('❌ [HandwritingNativeService] No document found for view: $viewId');
+      Log.error('❌ [HandwritingNativeService] No document found for view: $viewId');
       return false;
     }
 
-    print('💾 [HandwritingNativeService] Saving document for view: $viewId');
+    Log.debug('💾 [HandwritingNativeService] Saving document for view: $viewId');
     return await HandwritingNativePlatform.saveDoc(docId, xoppPath);
   }
 
@@ -80,18 +81,18 @@ class HandwritingNativeService {
   Future<bool> closeDoc(String viewId) async {
     final docId = _docIdMap[viewId];
     if (docId == null) {
-      print('⚠️ [HandwritingNativeService] No document found for view: $viewId');
+      Log.debug('⚠️ [HandwritingNativeService] No document found for view: $viewId');
       return true; // 没有文档也算成功
     }
 
-    print('🗑️ [HandwritingNativeService] Closing document for view: $viewId, docId: $docId');
+    Log.debug('🗑️ [HandwritingNativeService] Closing document for view: $viewId, docId: $docId');
     final success = await HandwritingNativePlatform.closeDoc(docId);
     
     if (success) {
       _docIdMap.remove(viewId);
-      print('✅ [HandwritingNativeService] Document closed and removed from map');
+      Log.debug('✅ [HandwritingNativeService] Document closed and removed from map');
     } else {
-      print('⚠️ [HandwritingNativeService] closeDoc failed, but docId will be removed from map anyway');
+      Log.error('⚠️ [HandwritingNativeService] closeDoc failed, but docId will be removed from map anyway');
       // 即使closeDoc失败，也移除_docIdMap中的条目，避免后续getOrCreateDoc返回无效的docId
       _docIdMap.remove(viewId);
     }
@@ -104,7 +105,7 @@ class HandwritingNativeService {
     if (_docIdMap.containsKey(viewId)) {
       final oldDocId = _docIdMap[viewId];
       _docIdMap.remove(viewId);
-      print('🗑️ [HandwritingNativeService] Force removed docId mapping: viewId=$viewId, oldDocId=$oldDocId');
+      Log.debug('🗑️ [HandwritingNativeService] Force removed docId mapping: viewId=$viewId, oldDocId=$oldDocId');
     }
   }
 

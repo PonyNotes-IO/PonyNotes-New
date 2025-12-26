@@ -1,5 +1,6 @@
 import 'package:scaled_app/scaled_app.dart';
 import 'package:flutter/services.dart';
+import 'package:appflowy_backend/log.dart';
 
 import 'startup/startup.dart';
 
@@ -16,16 +17,15 @@ Future<void> main() async {
         final phys = event.physicalKey.debugName;
         final logical = event.logicalKey.debugName;
         final pressed = HardwareKeyboard.instance.physicalKeysPressed;
-        // 使用 print 让 flutter log 捕获，便于收集
-        print('[RAW_KEY_LOG] $now type=${event.runtimeType} physical=$phys logical=$logical pressedSetCount=${pressed.length}');
+        // 诊断信息已被禁用（删除以减少日志噪声）
       } catch (e, st) {
         // 防止诊断代码抛异常影响启动
-        print('[RAW_KEY_LOG] diagnostic error: $e\n$st');
+        Log.error('[RAW_KEY_LOG] diagnostic error: $e', st);
       }
     });
   } catch (e) {
-    // 在极少数环境 RawKeyboard 未就绪，打印并继续
-    print('[RAW_KEY_LOG] attach failed: $e');
+    // 在极少数环境 RawKeyboard 未就绪，记录并继续
+    Log.error('[RAW_KEY_LOG] attach failed: $e');
   }
 
   await runAppFlowy();

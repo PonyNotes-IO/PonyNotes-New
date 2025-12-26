@@ -66,7 +66,7 @@ class AppFlowyCloudDeepLink {
   Completer<FlowyResult<UserProfilePB, FlowyError>>? _completer;
 
   set completer(Completer<FlowyResult<UserProfilePB, FlowyError>>? value) {
-    Log.debug('AppFlowyCloudDeepLink: $hashCode completer');
+    // debug log removed
     _completer = value;
   }
 
@@ -74,7 +74,7 @@ class AppFlowyCloudDeepLink {
   late final DeepLinkHandlerRegistry _deepLinkHandlerRegistry;
 
   Future<void> dispose() async {
-    Log.debug('AppFlowyCloudDeepLink: $hashCode dispose');
+    // debug log removed
     await _deepLinkSubscription.cancel();
 
     _stateNotifier?.dispose();

@@ -4,6 +4,7 @@ import 'package:appflowy/plugins/homepage/application/todo_models.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/calendar_entities.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:flowy_infra/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -218,7 +219,7 @@ class TodoService {
       
       _todosController.add(List.unmodifiable(_todos));
     } catch (e) {
-      print('加载待办事项时出错: $e');
+      Log.error('加载待办事项时出错: $e');
       // 清除可能损坏的数据
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_todosKey);

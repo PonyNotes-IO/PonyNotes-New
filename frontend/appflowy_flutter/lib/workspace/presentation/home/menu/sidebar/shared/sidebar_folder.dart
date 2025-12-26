@@ -35,12 +35,12 @@ class SidebarFolder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Log.debug('SidebarFolder.build() called');
+    // debug log removed
     const sectionPadding = 4.0;
     return ValueListenableBuilder(
       valueListenable: getIt<MenuSharedState>().notifier,
       builder: (context, value, child) {
-        Log.debug('SidebarFolder building menu items');
+        // debug log removed
         return Column(
           children: [
             const VSpace(sectionPadding),

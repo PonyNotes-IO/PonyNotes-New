@@ -16,6 +16,7 @@ import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:collection/collection.dart';
 import '../models/schedule_model.dart';
+import 'package:appflowy_backend/log.dart';
 import 'new_event_page.dart'; // 重用一些组件
 
 class EditEventPage extends StatefulWidget {
@@ -59,7 +60,7 @@ class _EditEventPageState extends State<EditEventPage> {
   @override
   void initState() {
     super.initState();
-    print('🆕 [EditEventPage] initState: schedule.id=${widget.schedule.id}, schedule.title=${widget.schedule.title}');
+    Log.debug('🆕 [EditEventPage] initState: schedule.id=${widget.schedule.id}, schedule.title=${widget.schedule.title}');
     
     // 从传入的日程初始化数据
     _initializeFromSchedule();
@@ -78,11 +79,11 @@ class _EditEventPageState extends State<EditEventPage> {
     super.didUpdateWidget(oldWidget);
     // 当 schedule 发生变化时，重新初始化表单数据并触发 UI 更新
     if (oldWidget.schedule.id != widget.schedule.id) {
-      print('🔄 [EditEventPage] schedule 发生变化: ${oldWidget.schedule.id} -> ${widget.schedule.id}');
+      Log.debug('🔄 [EditEventPage] schedule 发生变化: ${oldWidget.schedule.id} -> ${widget.schedule.id}');
       setState(() {
         _initializeFromSchedule();
       });
-      print('✅ [EditEventPage] 已重新初始化表单数据: title=${widget.schedule.title}');
+      Log.debug('✅ [EditEventPage] 已重新初始化表单数据: title=${widget.schedule.title}');
     }
   }
 
@@ -146,7 +147,7 @@ class _EditEventPageState extends State<EditEventPage> {
         schedule.reminderId!.isNotEmpty && 
         schedule.reminderOption == ReminderOption.none) {
       try {
-        print('🔄 [EditEventPage] 检测到有 reminderId 但 reminderOption 为 none，尝试从 ReminderBloc 读取');
+        Log.debug('🔄 [EditEventPage] 检测到有 reminderId 但 reminderOption 为 none，尝试从 ReminderBloc 读取');
         final reminderBloc = getIt<ReminderBloc>();
         final reminder = reminderBloc.state.reminders.firstWhereOrNull(
               (r) => r.id == schedule.reminderId,
@@ -161,14 +162,14 @@ class _EditEventPageState extends State<EditEventPage> {
             schedule.startTime,
             scheduledAt,
           );
-          print('✅ [EditEventPage] 从 ReminderBloc 读取到提醒选项: ${optionFromBloc.name}');
+          Log.debug('✅ [EditEventPage] 从 ReminderBloc 读取到提醒选项: ${optionFromBloc.name}');
           if (mounted) {
             setState(() {
               _reminderOption = optionFromBloc;
             });
           }
         } else {
-          print('⚠️ [EditEventPage] ReminderBloc 中未找到提醒，等待状态同步');
+          Log.debug('⚠️ [EditEventPage] ReminderBloc 中未找到提醒，等待状态同步');
           // 等待一段时间后重试（最多等待1秒）
           for (int i = 0; i < 10; i++) {
             await Future.delayed(const Duration(milliseconds: 100));
@@ -184,7 +185,7 @@ class _EditEventPageState extends State<EditEventPage> {
                 schedule.startTime,
                 scheduledAt,
               );
-              print('✅ [EditEventPage] 重试后从 ReminderBloc 读取到提醒选项: ${optionFromBloc.name}');
+              Log.debug('✅ [EditEventPage] 重试后从 ReminderBloc 读取到提醒选项: ${optionFromBloc.name}');
               if (mounted) {
                 setState(() {
                   _reminderOption = optionFromBloc;
@@ -194,8 +195,8 @@ class _EditEventPageState extends State<EditEventPage> {
             }
           }
         }
-      } catch (e) {
-        print('⚠️ [EditEventPage] 从 ReminderBloc 读取提醒失败: $e');
+        } catch (e) {
+        Log.error('⚠️ [EditEventPage] 从 ReminderBloc 读取提醒失败: $e');
       }
     }
   }

@@ -91,7 +91,6 @@ class TodoPlanSectionContent extends StatelessWidget {
                   child: QuickEventCreator(
                     onEventCreated: (todoItem) {
                       // 创建成功后刷新待办列表
-                      print('待办事项创建成功，正在刷新列表: ${todoItem.title}');
                       context.read<TodoBloc>().add(const TodoEvent.loadTodos());
                     },
                   ),

@@ -103,10 +103,10 @@ class BaiduCloudService {
         }
       }
 
-      print('Token exchange failed: ${response.body}');
+      Log.error('Token exchange failed: ${response.body}');
       return false;
     } catch (e) {
-      print('Error exchanging code for token: $e');
+      Log.error('Error exchanging code for token: $e');
       return false;
     }
   }
@@ -191,7 +191,7 @@ class BaiduCloudService {
 
       return false;
     } catch (e) {
-      print('Error refreshing token: $e');
+      Log.error('Error refreshing token: $e');
       return false;
     }
   }
@@ -225,7 +225,7 @@ class BaiduCloudService {
       }
       return success;
     } catch (e) {
-      print('Error migrating local tokens to backend: $e');
+      Log.error('Error migrating local tokens to backend: $e');
       return false;
     }
   }

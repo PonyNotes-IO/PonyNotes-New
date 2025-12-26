@@ -12,6 +12,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:appflowy_backend/log.dart';
 
 class PermissionChecker {
   static Future<bool> checkPhotoPermission(BuildContext context) async {
@@ -105,7 +106,7 @@ class PermissionChecker {
     try {
       // 检查是否在支持的平台上
       if (!UniversalPlatform.isAndroid && !UniversalPlatform.isIOS) {
-        print('日历权限检查仅在Android和iOS平台上支持');
+        // 日历权限检查仅在Android和iOS平台上支持（调试信息已删除）
         return false;
       }
 
@@ -146,7 +147,7 @@ class PermissionChecker {
 
       return true;
     } catch (e) {
-      print('检查日历权限时出错: $e');
+      Log.error('检查日历权限时出错: $e');
       // 如果是插件缺失错误，返回false
       if (e.toString().contains('MissingPluginException')) {
         return false;

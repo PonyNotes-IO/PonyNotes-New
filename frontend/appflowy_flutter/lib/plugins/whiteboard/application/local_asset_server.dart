@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:appflowy_backend/log.dart';
 
 /// 本地资源HTTP服务器
 /// 用于解决file://协议下JavaScript模块加载的安全限制
@@ -27,7 +28,6 @@ class LocalAssetServer {
       // 创建请求处理器
       final handler = (shelf.Request request) async {
         final assetPath = 'assets/excalidraw/${request.url.path}';
-        print('📥 HTTP请求: ${request.method} /$assetPath');
 
         try {
           // 加载Flutter asset
@@ -36,7 +36,7 @@ class LocalAssetServer {
           // 确定Content-Type
           final contentType = _getContentType(assetPath);
           
-          print('✅ 返回资源: $assetPath (${bytes.lengthInBytes} bytes, $contentType)');
+          // 返回资源信息日志已移除
           
           return shelf.Response.ok(
             bytes.buffer.asUint8List(),
@@ -47,7 +47,7 @@ class LocalAssetServer {
             },
           );
         } catch (e) {
-          print('❌ 加载资源失败 $assetPath: $e');
+          Log.error('❌ 加载资源失败 $assetPath: $e');
           return shelf.Response.notFound('Asset not found: $assetPath');
         }
       };
@@ -61,11 +61,11 @@ class LocalAssetServer {
 
       _port = _server!.port;
 
-      print('🚀 本地资源服务器已启动: $baseUrl');
+      Log.info('🚀 本地资源服务器已启动: $baseUrl');
 
       return baseUrl!;
     } catch (e) {
-      print('❌ 启动本地资源服务器失败: $e');
+      Log.error('❌ 启动本地资源服务器失败: $e');
       rethrow;
     }
   }
@@ -76,7 +76,7 @@ class LocalAssetServer {
       await _server!.close(force: true);
       _server = null;
       _port = null;
-      print('🛑 本地资源服务器已停止');
+      Log.info('🛑 本地资源服务器已停止');
     }
   }
 

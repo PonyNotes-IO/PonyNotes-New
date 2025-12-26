@@ -203,6 +203,10 @@ class WorkspaceMemberBloc
         ),
       ),
     );
+    // Refresh members list when invite succeeds so UI updates immediately.
+    result.onSuccess((_) {
+      add(const WorkspaceMemberEvent.getWorkspaceMembers());
+    });
   }
 
   Future<void> _onRemoveWorkspaceMemberByEmail(
@@ -400,7 +404,8 @@ class WorkspaceMemberBloc
         ),
       );
     } else {
-      Log.error('Failed to get auth token');
+      // Auth token missing — not a fatal error for UI; log as info to avoid noisy error logs.
+      Log.info('Auth token not available; skipping invite-link HTTP client initialization');
     }
   }
 

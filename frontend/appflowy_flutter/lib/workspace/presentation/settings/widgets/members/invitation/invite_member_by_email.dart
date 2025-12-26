@@ -56,95 +56,99 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
     await showDialog(
       context: context,
       builder: (ctx) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12.0),
-          ),
-          child: SizedBox(
-            width: 520,
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '添加成员',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  // 输入框：搜索名称或邮箱/手机号
-                  TextField(
-                    controller: _inputController,
-                    decoration: const InputDecoration(
-                      hintText: '搜索名称或者邮箱/手机号',
+        // use StatefulBuilder so the dialog has its own immediate state
+        return StatefulBuilder(builder: (dialogCtx, setStateDialog) {
+          AFRolePB selectedRole = _selectedRole;
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12.0),
+            ),
+            child: SizedBox(
+              width: 520,
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '添加成员',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    autofocus: true,
-                    onChanged: (v) {},
-                  ),
-                  const SizedBox(height: 12),
-                  Text('权限级别', style: Theme.of(context).textTheme.bodyMedium),
-                  const SizedBox(height: 8),
-                  // Role selector (use PopupMenuButton for predictable immediate UI update)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: PopupMenuButton<AFRolePB>(
-                      padding: EdgeInsets.zero,
-                      color: Theme.of(context).cardColor,
-                      onSelected: (v) {
-                        setState(() {
-                          _selectedRole = v;
-                        });
-                      },
-                      itemBuilder: (ctx) => [
-                        const PopupMenuItem(value: AFRolePB.Owner, child: Text('工作空间所有者')),
-                        const PopupMenuItem(value: AFRolePB.Member, child: Text('成员')),
-                        const PopupMenuItem(value: AFRolePB.Guest, child: Text('受限成员')),
-                      ],
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _selectedRole == AFRolePB.Owner
-                                ? '工作空间所有者'
-                                : _selectedRole == AFRolePB.Guest
-                                    ? '受限成员'
-                                    : '成员',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.arrow_drop_down),
-                        ],
+                    const SizedBox(height: 12),
+                    // 输入框：搜索名称或邮箱/手机号
+                    TextField(
+                      controller: _inputController,
+                      decoration: const InputDecoration(
+                        hintText: '搜索名称或者邮箱/手机号',
                       ),
+                      autofocus: true,
+                      onChanged: (v) {},
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        child: Text('取消'),
+                    const SizedBox(height: 12),
+                    Text('权限级别', style: Theme.of(context).textTheme.bodyMedium),
+                    const SizedBox(height: 8),
+                    // Role selector (use PopupMenuButton inside dialog-local state)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: () {
-                          final value = _inputController.text.trim();
-                          _inviteMemberFromDialog(value, ctx, _selectedRole);
+                      child: PopupMenuButton<AFRolePB>(
+                        padding: EdgeInsets.zero,
+                        color: Theme.of(context).cardColor,
+                        onSelected: (v) {
+                          setStateDialog(() {
+                            selectedRole = v;
+                          });
                         },
-                        child: Text('邀请'),
+                        itemBuilder: (ctx) => [
+                          const PopupMenuItem(value: AFRolePB.Owner, child: Text('工作空间所有者')),
+                          const PopupMenuItem(value: AFRolePB.Member, child: Text('成员')),
+                          const PopupMenuItem(value: AFRolePB.Guest, child: Text('受限成员')),
+                        ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              selectedRole == AFRolePB.Owner
+                                  ? '工作空间所有者'
+                                  : selectedRole == AFRolePB.Guest
+                                      ? '受限成员'
+                                      : '成员',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.arrow_drop_down),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: Text('取消'),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          onPressed: () {
+                            final value = _inputController.text.trim();
+                            _inviteMemberFromDialog(value, ctx, selectedRole);
+                          },
+                          child: Text('邀请'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        );
+          );
+        });
       },
     );
   }

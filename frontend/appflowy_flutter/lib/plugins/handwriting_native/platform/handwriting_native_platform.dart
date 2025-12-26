@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:appflowy_backend/log.dart';
 
 /// 手写笔记原生平台接口
 class HandwritingNativePlatform {
@@ -10,7 +11,7 @@ class HandwritingNativePlatform {
       final result = await _channel.invokeMethod<bool>('init', {'config': configJson});
       return result ?? false;
     } catch (e) {
-      print('❌ [HandwritingNativePlatform] init failed: $e');
+      Log.error('❌ [HandwritingNativePlatform] init failed: $e');
       return false;
     }
   }
@@ -21,7 +22,7 @@ class HandwritingNativePlatform {
       final result = await _channel.invokeMethod<String>('create_doc', {'options': optionsJson});
       return result;
     } catch (e) {
-      print('❌ [HandwritingNativePlatform] createDoc failed: $e');
+      Log.error('❌ [HandwritingNativePlatform] createDoc failed: $e');
       return null;
     }
   }
@@ -32,7 +33,7 @@ class HandwritingNativePlatform {
       final result = await _channel.invokeMethod<String>('open_doc', {'path': xoppPath});
       return result;
     } catch (e) {
-      print('❌ [HandwritingNativePlatform] openDoc failed: $e');
+      Log.error('❌ [HandwritingNativePlatform] openDoc failed: $e');
       return null;
     }
   }
@@ -46,7 +47,7 @@ class HandwritingNativePlatform {
       });
       return result;
     } catch (e) {
-      print('❌ [HandwritingNativePlatform] openPdf failed: $e');
+      Log.error('❌ [HandwritingNativePlatform] openPdf failed: $e');
       return null;
     }
   }
@@ -60,7 +61,7 @@ class HandwritingNativePlatform {
       });
       return result ?? false;
     } catch (e) {
-      print('❌ [HandwritingNativePlatform] saveDoc failed: $e');
+      Log.error('❌ [HandwritingNativePlatform] saveDoc failed: $e');
       return false;
     }
   }
@@ -71,7 +72,7 @@ class HandwritingNativePlatform {
       final result = await _channel.invokeMethod<bool>('close_doc', {'docId': docId});
       return result ?? false;
     } catch (e) {
-      print('❌ [HandwritingNativePlatform] closeDoc failed: $e');
+      Log.error('❌ [HandwritingNativePlatform] closeDoc failed: $e');
       return false;
     }
   }
@@ -85,7 +86,7 @@ class HandwritingNativePlatform {
       });
       return result ?? false;
     } catch (e) {
-      print('❌ [HandwritingNativePlatform] handleStroke failed: $e');
+      Log.error('❌ [HandwritingNativePlatform] handleStroke failed: $e');
       return false;
     }
   }
@@ -110,7 +111,7 @@ class HandwritingNativePlatform {
       });
       return result;
     } catch (e) {
-      print('❌ [HandwritingNativePlatform] renderPage failed: $e');
+      Log.error('❌ [HandwritingNativePlatform] renderPage failed: $e');
       return null;
     }
   }
@@ -121,7 +122,7 @@ class HandwritingNativePlatform {
       final result = await _channel.invokeMethod<int>('get_page_count', {'docId': docId});
       return result;
     } catch (e) {
-      print('❌ [HandwritingNativePlatform] getPageCount failed: $e');
+      Log.error('❌ [HandwritingNativePlatform] getPageCount failed: $e');
       return null;
     }
   }
@@ -141,7 +142,7 @@ class HandwritingNativePlatform {
       }
       return null;
     } catch (e) {
-      print('❌ [HandwritingNativePlatform] getPageSize failed: $e');
+      Log.error('❌ [HandwritingNativePlatform] getPageSize failed: $e');
       return null;
     }
   }

@@ -6,6 +6,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy/plugins/whiteboard/application/local_asset_server.dart';
 
 import '../application/whiteboard_data_service.dart';
+import 'package:appflowy_backend/log.dart';
 
 /// Excalidraw WebView 组件
 /// 使用 flutter_inappwebview 实现跨平台支持（包括 Windows）
@@ -65,14 +66,14 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           return;
         }
       } on MissingPluginException catch (e) {
-        print('⚠️ [ExcalidrawWebView] MissingPluginException on $tag attempt#$attempt: $e');
+        Log.warn('⚠️ [ExcalidrawWebView] MissingPluginException on $tag attempt#$attempt: $e');
       } catch (e) {
-        print('⚠️ [ExcalidrawWebView] error on $tag attempt#$attempt: $e');
+        Log.error('⚠️ [ExcalidrawWebView] error on $tag attempt#$attempt: $e');
       }
       await Future.delayed(delay);
       delay += const Duration(milliseconds: 60);
     }
-    print('❌ [ExcalidrawWebView] $tag failed after $maxAttempts attempts, giving up.');
+    Log.error('❌ [ExcalidrawWebView] $tag failed after $maxAttempts attempts, giving up.');
   }
 
   void _initializeSettings() {
@@ -95,7 +96,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
   Future<void> _loadExcalidrawHTML() async {
     try {
-      print('🔄 [ExcalidrawWebView] 启动本地HTTP服务器...');
+      // debug log removed
 
       // 启动本地HTTP服务器
       final baseUrl = await _assetServer.start();
@@ -104,11 +105,8 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 注意：localStorage 已在 HTML 中被完全禁用，数据隔离由 Flutter 管理
       final url = '$baseUrl/index.html';
 
-      print('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
-      print('📄 [ExcalidrawWebView] 加载URL: $url');
-      print('🆔 [ExcalidrawWebView] ViewID: ${widget.viewId}');
-      print('🔒 [ExcalidrawWebView] localStorage: DISABLED (数据由 Flutter 管理)');
-      print('💾 [ExcalidrawWebView] 数据源: ${widget.initialData != null ? "从文件加载 (${widget.initialData!.keys.length} keys)" : "新建空白板"}');
+      Log.info('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
+      // debug logs removed
 
       // ✅ 关键：设置 URL 并触发重新构建
       if (mounted) {
@@ -125,7 +123,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       }
       // 否则在 build 方法中通过 initialUrlRequest 加载
     } catch (e) {
-      print('❌ 加载Excalidraw失败: $e');
+      Log.error('❌ 加载Excalidraw失败: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -147,7 +145,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           key: key,
           value: value,
         );
-        print('💾 localStorage set: $key = $value');
+        // debug log removed
       });
     });
     controller.addJavaScriptHandler(handlerName: "localStorageOnSet", callback:(args){
@@ -158,37 +156,36 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           widget.onDataChanged?.call('update',singleEntryMap);
         } else {
           // 防护：不符合预期的结构
-          print('⚠️ [localStorageOnSet] Unexpected argument structure: $arg');
+          Log.warn('⚠️ [localStorageOnSet] Unexpected argument structure: $arg');
         }
       }
     });
     controller.addJavaScriptHandler(handlerName: "localStorageOnRemove", callback:(args){
-      print('localStorageOnRemove ${args}');
+      // debug log removed
     });
     controller.addJavaScriptHandler(handlerName: "localStorageOnClear", callback:(args){
-      print('localStorageOnClear ${args}');
+      // debug log removed
     });
   }
 
   Future<void> _initializeExcalidraw() async {
     try {
-      print('🎨 [ExcalidrawWebView] Initializing Excalidraw...');
-      print('🆔 [ExcalidrawWebView] ViewID: ${widget.viewId}');
+      // debug logs removed
 
       // 准备加载的数据（包含viewId）
       Map<String, dynamic> dataToLoad = {};
       if (widget.initialData != null) {
         dataToLoad = Map.from(widget.initialData!);
-        print('📦 [ExcalidrawWebView] Loading initial data: ${dataToLoad.keys.length} keys');
+        // debug log removed
       } else {
-        print('⚠️ [ExcalidrawWebView] No initial data, creating empty whiteboard');
+        // debug log removed
       }
 
       // 🔑 关键：添加 viewId 到数据中
       dataToLoad['viewId'] = widget.viewId;
 
       final dataJson = jsonEncode(dataToLoad);
-      print('📝 [ExcalidrawWebView] Data JSON length: ${dataJson.length} chars');
+      // debug log removed
 
       // await _controller?.evaluateJavascript(source: '''
       //   console.log('[ExcalidrawWebView] Loading data into Excalidraw with viewId: ${widget.viewId}');
@@ -199,11 +196,11 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       //     console.error('[ExcalidrawWebView] window.loadExcalidrawData not found!');
       //   }
       // ''');
-      print('✅ [ExcalidrawWebView] Initial data loaded with viewId');
+      // debug log removed
 
       // 设置主题
       final theme = Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
-      print('🎨 [ExcalidrawWebView] Setting theme: $theme');
+      // debug log removed
       await _safeEvalJs('''
         console.log('[ExcalidrawWebView] Setting theme to $theme');
         if (window.setTheme) {
@@ -212,9 +209,9 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           console.error('[ExcalidrawWebView] window.setTheme not found!');
         }
       ''', tag: 'setTheme');
-      print('✅ [ExcalidrawWebView] Initialization complete');
+      // debug log removed
     } catch (e) {
-      print('❌ [ExcalidrawWebView] Initialization failed: $e');
+      Log.error('❌ [ExcalidrawWebView] Initialization failed: $e');
       widget.onError?.call('初始化Excalidraw失败: $e');
     }
   }

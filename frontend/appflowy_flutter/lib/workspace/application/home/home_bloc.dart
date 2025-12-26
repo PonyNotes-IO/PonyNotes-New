@@ -127,7 +127,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                     orElse: () => publicViews.first, // Use first view if all are spaces
                   );
                   
-                  print('Found default view: ${defaultView.name} (id: ${defaultView.id}, isSpace: ${defaultView.isSpace})');
+                  Log.debug('Found default view: ${defaultView.name} (id: ${defaultView.id}, isSpace: ${defaultView.isSpace})');
                   validLatestView = defaultView;
                   
                   // Set this view as the latest view in the backend

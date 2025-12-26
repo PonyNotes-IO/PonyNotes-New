@@ -11,6 +11,7 @@ import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
@@ -18,17 +19,14 @@ import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
   Plugin build(dynamic data) {
-    print('🏗️ [WhiteboardPluginBuilder] build() called');
-    print('🏗️ [WhiteboardPluginBuilder] data type: ${data.runtimeType}');
+    // debug logs removed
     
     if (data is ViewPB) {
-      print('🏗️ [WhiteboardPluginBuilder] Creating WhiteboardPlugin for view: ${data.id}');
-      print('🏗️ [WhiteboardPluginBuilder] View name: ${data.name}');
-      print('🏗️ [WhiteboardPluginBuilder] View layout: ${data.layout}');
+      // debug logs removed
       return WhiteboardPlugin(pluginType: pluginType, view: data);
     }
 
-    print('❌ [WhiteboardPluginBuilder] Invalid data type, throwing exception');
+    Log.error('❌ [WhiteboardPluginBuilder] Invalid data type, throwing exception');
     throw FlowyPluginException.invalidData;
   }
 
@@ -50,7 +48,7 @@ class WhiteboardPlugin extends Plugin {
     required ViewPB view,
     required PluginType pluginType,
   }) : notifier = ViewPluginNotifier(view: view) {
-    print('🎯 [WhiteboardPlugin] Constructor called for view: ${view.id}');
+    // debug log removed
     _pluginType = pluginType;
   }
 
@@ -73,10 +71,10 @@ class WhiteboardPlugin extends Plugin {
 
   @override
   void init() {
-    print('🔧 [WhiteboardPlugin] init() called for view: ${notifier.view.id}');
+    // debug log removed
     _pageAccessLevelBloc = PageAccessLevelBloc(view: notifier.view)
       ..add(const PageAccessLevelEvent.initial());
-    print('✅ [WhiteboardPlugin] init() completed');
+    // debug log removed
   }
 
   @override
@@ -101,14 +99,7 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    print('🎨 [WhiteboardPluginWidgetBuilder] buildWidget() called');
-    print('🎨 [WhiteboardPluginWidgetBuilder] view: ${notifier.view.id}');
-    print('🎨 [WhiteboardPluginWidgetBuilder] view name: ${notifier.view.name}');
-    print('🎨 [WhiteboardPluginWidgetBuilder] PluginContext: $context');
-    print('🎨 [WhiteboardPluginWidgetBuilder] shrinkWrap: $shrinkWrap');
-    print('🎨 [WhiteboardPluginWidgetBuilder] data: $data');
-    
-    print('🎨 [WhiteboardPluginWidgetBuilder] Creating WhiteboardPage...');
+    // debug logs removed
     final widget = BlocProvider<PageAccessLevelBloc>.value(
       value: pageAccessLevelBloc,
       child: WhiteboardPage(
@@ -117,7 +108,7 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
         onViewChanged: (view) => notifier.view = view,
       ),
     );
-    print('🎨 [WhiteboardPluginWidgetBuilder] WhiteboardPage created, returning widget');
+    // debug log removed
     return widget;
   }
 
@@ -147,7 +138,7 @@ class WhiteboardPage extends StatefulWidget {
     required this.view,
     required this.onViewChanged,
   }) {
-    print('🏗️ [WhiteboardPage] Constructor called for view: ${view.id} (${view.name})');
+    // debug log removed
   }
 
   final ViewPB view;
@@ -155,7 +146,7 @@ class WhiteboardPage extends StatefulWidget {
 
   @override
   State<WhiteboardPage> createState() {
-    print('🏭 [WhiteboardPage] createState() called for view: ${view.id} (${view.name})');
+    // debug log removed
     return _WhiteboardPageState();
   }
 }
@@ -176,11 +167,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   @override
   void initState() {
     super.initState();
-    print('🎨 [WhiteboardPage] initState called');
-    print('🎨 [WhiteboardPage] view.id: ${widget.view.id}');
-    print('🎨 [WhiteboardPage] view.name: ${widget.view.name}');
-    print('🎨 [WhiteboardPage] view.layout: ${widget.view.layout}');
-    print('🎨 [WhiteboardPage] view.extra: ${widget.view.extra}');
+    // debug logs removed
     
     // 初始化 Collab 适配器（模仿 DocumentBloc）
     _initCollabAdapter();
@@ -190,7 +177,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   @override
   void dispose() {
-    print('🗑️ [WhiteboardPage] dispose called for view: ${widget.view.id}');
+    // debug log removed
     _isDisposing = true;
     
     // 销毁 Collab 适配器（模仿 DocumentBloc）
@@ -201,8 +188,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     final service = WhiteboardDataService();
     service.closeWhiteboard(viewId: widget.view.id).then((result) {
       result.fold(
-        (_) => print('✅ [WhiteboardPage] Whiteboard closed successfully'),
-        (error) => print('⚠️ [WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
+        (_) => null,
+        (error) => Log.error('⚠️ [WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
       );
     });
     
@@ -211,7 +198,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   /// 初始化 Collab 适配器（完全模仿 DocumentBloc 的 TransactionAdapter）
   void _initCollabAdapter() {
-    print('🔧 [WhiteboardPage] Initializing Collab Adapter (like DocumentBloc)');
+    // debug log removed
     _collabAdapter = WhiteboardCollabAdapter(
       viewId: widget.view.id,
       onDataChanged: (data) {
@@ -223,15 +210,15 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         }
       },
     );
-    print('✅ [WhiteboardPage] Collab Adapter initialized');
+    // debug log removed
   }
 
   Future<void> _loadInitialData() async {
-    print('🔄 [Whiteboard] Loading initial data for view: ${widget.view.id}');
+    // debug log removed
     final service = WhiteboardDataService();
     final data = await service.loadWhiteboardData(widget.view.id);
     
-    print('📦 [Whiteboard] Loaded data: ${data.isEmpty ? "空数据" : "有数据 (${data.keys.length} keys)"}');
+    // debug log removed
     
     // 生成新的唯一实例ID
     _globalWebViewInstanceCounter++;
@@ -246,22 +233,17 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       });
     }
     
-    print('🔑 [Whiteboard] Assigned unique instance ID: $_webViewInstanceId');
+    // debug log removed
   }
 
   /// 白板数据变更回调 - 完全模仿 DocumentBloc 的 transactionStream 监听
   void _onWhiteboardDataChanged(String type, Map<String, dynamic> data) {
     if (_isDisposing) {
-      print('⚠️ [Whiteboard] Data change ignored - widget is disposing');
+      Log.debug('⚠️ [Whiteboard] Data change ignored - widget is disposing');
       return;
     }
     
-    print('📝 [WhiteboardPage] =====================================================');
-    print('📝 [WhiteboardPage] Data changed callback triggered (like EditorState.transactionStream)');
-    print('📝 [WhiteboardPage] ViewID: ${widget.view.id}');
-    print('📝 [WhiteboardPage] Data keys: ${data.keys.toList()}');
-    print('📝 [WhiteboardPage] Forwarding to CollabAdapter (like TransactionAdapter.apply)...');
-    print('📝 [WhiteboardPage] =====================================================');
+    // debug log removed
     
     // 转发给 CollabAdapter 处理（完全模仿 DocumentBloc 的 TransactionAdapter）
     _collabAdapter?.onWhiteboardDataChanged(type,data);
@@ -269,7 +251,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   void _onWhiteboardExport(String format, dynamic data) {
     // 处理导出
-    print('Export format: $format, data: $data');
+    Log.debug('Export format: $format, data: $data');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('导出 $format 格式完成')),
     );
@@ -277,12 +259,12 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   void _onWhiteboardError(String error) {
     if (_isDisposing) {
-      print('⚠️ [Whiteboard] Error ignored - widget is disposing: $error');
+      Log.debug('⚠️ [Whiteboard] Error ignored - widget is disposing: $error');
       return; // 如果正在销毁，忽略错误通知
     }
     
     // 处理错误
-    print('❌ [Whiteboard] Error: $error');
+    Log.error('❌ [Whiteboard] Error: $error');
     if (mounted && !_isDisposing) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -295,13 +277,13 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   /// 手动保存白板数据（现在通过 CollabAdapter 自动处理）
   Future<void> _saveWhiteboard() async {
-    print('💾 [Whiteboard] Manual save triggered - forcing immediate sync (like DocumentBloc)');
+    Log.debug('💾 [Whiteboard] Manual save triggered - forcing immediate sync (like DocumentBloc)');
     
     // 强制立即同步（模仿 DocumentBloc 的行为）
     await _collabAdapter?.forceSync();
     
     if (mounted) {
-      print('✅ [Whiteboard] Manual save completed via CollabAdapter');
+      Log.debug('✅ [Whiteboard] Manual save completed via CollabAdapter');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('白板已保存'),
@@ -318,10 +300,10 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    print('🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData');
+    Log.debug('🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData');
     
     if (_isLoadingData) {
-      print('⏳ [WhiteboardPage] Showing loading indicator');
+      Log.debug('⏳ [WhiteboardPage] Showing loading indicator');
       return Scaffold(
         body: const Center(
           child: Column(
@@ -336,7 +318,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       );
     }
     
-    print('✅ [WhiteboardPage] Building whiteboard content');
+    Log.debug('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
           appBar: AppBar(
             elevation: 0,
@@ -492,7 +474,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     // 📌 Key的组成：viewId（白板ID） + 全局唯一的实例编号
     // 🎯 这样即使快速切换白板视图，每个WebView的Key也是全局唯一的
     final uniqueKey = '${widget.view.id}_global_$_webViewInstanceId';
-    print('🔑 [Whiteboard] Creating ExcalidrawWebView with unique key: $uniqueKey');
+    Log.debug('🔑 [Whiteboard] Creating ExcalidrawWebView with unique key: $uniqueKey');
     
     return ExcalidrawWebView(
       key: ValueKey(uniqueKey), // 全局唯一的Key，确保PlatformView正确创建和清理

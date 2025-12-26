@@ -20,6 +20,7 @@ import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy/plugins/document/document_page.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy_backend/log.dart';
 // removed unused: toggle, schedule_sidebar_content
 import 'package:flowy_infra/uuid.dart';
 import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
@@ -182,8 +183,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     // 初始化时尝试创建或获取日历视图
     _initializeCalendarView();
 
-    // 调试：打印初始状态
-    print('日历组件初始化，订阅状态: $_isSubscribeSystemCalendar');
+    // 调试输出已移除以减少运行时噪声
   }
 
   // 月份切换：delta为-1上一月，1下一月
@@ -467,11 +467,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                                     debugInfo = '错误代码: ${error.code}';
                                   }
 
-                                  // 打印调试信息到控制台
-                                  print('日记创建失败: $errorMsg');
-                                  print('调试信息: $debugInfo');
-                                  print(
-                                      '使用的参数: name=${documentTitle.trim()}, layoutType=Document');
+                                  // 打印调试信息到日志
+                                  Log.error('日记创建失败: $errorMsg');
+                                  // 调试信息已移除
 
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
@@ -554,9 +552,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   // 处理点击日程
   void _onScheduleTap(ScheduleItem schedule) {
-    print('🖱️ [Calendar] _onScheduleTap 被调用: schedule.id=${schedule.id}, schedule.title=${schedule.title}');
-    print('  - 当前 _editingSchedule: ${_editingSchedule?.id}');
-    print('  - 当前 _showEditEventPage: $_showEditEventPage');
+    // 调试输出已移除: _onScheduleTap info
     
     setState(() {
       _showEditEventPage = true;
@@ -565,8 +561,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       _selectedNote = null; // 清除选中的笔记
     });
     
-    print('  - 更新后 _editingSchedule: ${_editingSchedule?.id}');
-    print('  - 更新后 _showEditEventPage: $_showEditEventPage');
+    // 调试输出已移除: post _onScheduleTap state
   }
 
   // 处理点击笔记
@@ -602,16 +597,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     final endTime = eventData['endTime'] as TimeOfDay;
     final eventId = eventData['id'] as String?;
 
-    print('📅 日程创建回调被调用:');
-    print('  - 描述: $description');
-    print('  - ID: $eventId');
-    print('  - 全天: $isAllDay');
-    print('  - 开始时间: $startTime');
-    print('  - 结束时间: $endTime');
+    // 日程创建回调（调试输出已移除）
 
     // 检查是否有有效的ID
     if (eventId == null || eventId.isEmpty) {
-      print('❌ 错误: 日程ID为空，保存可能失败');
+      Log.error('❌ 错误: 日程ID为空，保存可能失败');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('❌ 日程创建失败：未返回有效ID'),
@@ -623,7 +613,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     }
 
     // 刷新日历内容以显示新创建的日程
-    print('🔄 刷新日历内容...');
+    // 刷新日历内容（调试输出已移除）
     context.read<CalendarContentCubit>().refresh();
 
     // 刷新日程列表以显示新创建的日程
@@ -734,7 +724,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Widget _buildSettingsMenu() {
-    print('_buildSettingsMenu 被调用，当前订阅状态: $_isSubscribeSystemCalendar');
+    // _buildSettingsMenu 调试输出已移除
 
     return StatefulBuilder(
       builder: (context, setPopupState) => Container(

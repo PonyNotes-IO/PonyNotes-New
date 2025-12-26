@@ -28,6 +28,7 @@ import 'package:flowy_infra/uuid.dart';
 import 'package:collection/collection.dart';
 
 import '../../application/field/field_info.dart';
+import 'package:appflowy_backend/log.dart';
 
 // 日程数据模型 - 基于 AppFlowy 数据库行
 class ScheduleItem {
@@ -389,21 +390,21 @@ class ScheduleModel extends ChangeNotifier {
   // 设置视图ID
   void setViewId(String viewId) {
     if (_currentViewId == viewId) {
-      print('⏸️ [ScheduleModel] setViewId() 跳过：视图ID未变化 ($viewId)');
+      // 调试输出已移除
       return;
     }
     
-    print('🔄 [ScheduleModel] setViewId() 切换到新视图: $viewId');
+    // 调试输出已移除
     _currentViewId = viewId;
     notifyListeners();
     
     // 初始化数据库监听器（异步，不等待完成）
     _initializeDatabaseListener(viewId).then((_) {
       // 监听器初始化完成后再刷新数据，避免重复调用
-      print('✅ [ScheduleModel] 数据库监听器初始化完成，开始刷新数据');
+      // 调试输出已移除
       refresh();
     }).catchError((e) {
-      print('❌ [ScheduleModel] 数据库监听器初始化失败: $e');
+      Log.error('❌ [ScheduleModel] 数据库监听器初始化失败: $e');
       // 即使初始化失败，也尝试刷新一次
       refresh();
     });
@@ -440,7 +441,7 @@ class ScheduleModel extends ChangeNotifier {
   Future<void> refresh() async {
     // 如果正在加载，直接返回
     if (_isLoading) {
-      print('⏸️ [ScheduleModel] refresh() 跳过：正在加载中');
+      // 调试输出已移除
       return;
     }
     
@@ -448,14 +449,13 @@ class ScheduleModel extends ChangeNotifier {
     final now = DateTime.now();
     if (_lastRefreshAt != null && 
         now.difference(_lastRefreshAt!) < _refreshThrottleDuration) {
-      print(
-          '⏸️ [ScheduleModel] refresh() 跳过：距离上次刷新仅 ${now.difference(_lastRefreshAt!).inMilliseconds}ms');
+      // 调试输出已移除
       return;
     }
     
     // 如果已有待处理的刷新请求，等待它完成
     if (_refreshFuture != null) {
-      print('⏸️ [ScheduleModel] refresh() 跳过：已有待处理的刷新请求');
+      // 调试输出已移除
       try {
         await _refreshFuture;
       } catch (_) {}
@@ -475,7 +475,7 @@ class ScheduleModel extends ChangeNotifier {
   Future<void> _loadSchedulesFromDatabase() async {
     // 如果已经在加载，直接返回
     if (_isLoading) {
-      print('⏸️ [ScheduleModel] _loadSchedulesFromDatabase() 跳过：正在加载中');
+      // 调试输出已移除
       return;
     }
     
@@ -484,7 +484,7 @@ class ScheduleModel extends ChangeNotifier {
     try {
       // 使用当前视图ID，如果没有设置则使用默认的新建日程视图ID
       final viewId = _currentViewId ?? _newScheduleViewId;
-      print('📋 [ScheduleModel] 开始加载日程数据, viewId: $viewId');
+      // 调试输出已移除
       
       // 获取所有日历事件
       final payload = CalendarEventRequestPB.create()..viewId = viewId;
@@ -492,7 +492,7 @@ class ScheduleModel extends ChangeNotifier {
       
       await result.fold(
         (events) async {
-          print('📋 [ScheduleModel] 从数据库获取到 ${events.items.length} 个事件');
+          // 调试输出已移除
           
           // 先构建最小集，再用 cells 补齐其它字段
           try {
@@ -501,10 +501,9 @@ class ScheduleModel extends ChangeNotifier {
 
           final fieldInfos =
               _databaseController?.fieldController.fieldInfos ?? [];
-          print('📋 [ScheduleModel] 数据库字段数量: ${fieldInfos.length}');
+          // 调试输出已移除
           for (final f in fieldInfos) {
-            print(
-                '  - 字段: ${f.name} (${f.fieldType.toString().split('.').last}), ID: ${f.field.id}');
+            // 调试输出已移除
           }
           
           final Map<String, FieldInfo> fieldById = {
@@ -514,55 +513,25 @@ class ScheduleModel extends ChangeNotifier {
           final newSchedules = <ScheduleItem>[];
           for (int i = 0; i < events.items.length; i++) {
             final eventPB = events.items[i];
-            print('\n📅 [ScheduleModel] 处理日程 #${i + 1}/${events.items.length}');
-            print('  - 行ID: ${eventPB.rowMeta.id}');
-            print('  - 日期字段ID: ${eventPB.dateFieldId}');
-            print('  - 标题: ${eventPB.title}');
-            print('  - 时间戳: ${eventPB.timestamp}');
+            // 调试输出已移除
             
             var item = ScheduleItem.fromCalendarEventPB(eventPB);
-            print('  📦 初始 ScheduleItem:');
-            print('    - ID: ${item.id}');
-            print('    - 标题: ${item.title}');
-            print('    - 描述: ${item.description}');
-            print('    - 开始时间: ${item.startTime}');
-            print('    - 结束时间: ${item.endTime}');
-            print('    - 全天: ${item.isAllDay}');
-            print('    - 重要: ${item.isImportant}');
-            print('    - 分类: ${item.category}');
-            print('    - 提醒ID: ${item.reminderId}');
-            print('    - 提醒选项: ${item.reminderOption}');
-            print('    - 重复类型: ${item.repeatType}');
-            print('    - 重复规则: ${item.repeatRuleJson}');
+            // 调试输出已移除
             
             if (fieldInfos.isNotEmpty) {
               try {
-                print('  🔄 开始从 cells 丰富数据...');
+                // 调试输出已移除
                 item = await _enrichFromCells(
                     viewId, fieldInfos, fieldById, item, eventPB);
-                print('  ✅ 丰富后的 ScheduleItem:');
-                print('    - ID: ${item.id}');
-                print('    - 标题: ${item.title}');
-                print('    - 描述: ${item.description}');
-                print('    - 开始时间: ${item.startTime}');
-                print('    - 结束时间: ${item.endTime}');
-                print('    - 全天: ${item.isAllDay}');
-                print('    - 重要: ${item.isImportant}');
-                print('    - 分类: ${item.category}');
-                print('    - 提醒ID: ${item.reminderId}');
-                print('    - 提醒选项: ${item.reminderOption}');
-                print('    - 截止日期: ${item.dueDate}');
-                print('    - 重复类型: ${item.repeatType}');
-                print('    - 重复规则: ${item.repeatRuleJson}');
               } catch (e, stackTrace) {
-                print('  ❌ 丰富数据时出错: $e');
-                print('  📍 堆栈: $stackTrace');
+                Log.error('  ❌ 丰富数据时出错: $e');
+                // 堆栈信息已降级/移除
               }
             }
             newSchedules.add(item);
           }
 
-          print('\n📋 [ScheduleModel] 加载完成，共 ${newSchedules.length} 个日程');
+          // 调试输出已移除
           _schedules.clear();
           _schedules.addAll(newSchedules);
 
@@ -571,7 +540,7 @@ class ScheduleModel extends ChangeNotifier {
           }
         },
         (error) {
-          print('❌ [ScheduleModel] 加载日程失败: ${error.msg}');
+          Log.error('❌ [ScheduleModel] 加载日程失败: ${error.msg}');
           // 如果加载失败，清空列表
           _schedules.clear();
           if (!_isDisposed) {
