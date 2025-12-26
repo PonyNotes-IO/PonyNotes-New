@@ -42,8 +42,8 @@ class WorkspaceMemberBloc
         initial: () async => _onInitial(emit, workspaceId),
         getWorkspaceMembers: () async => _onGetWorkspaceMembers(emit),
         addWorkspaceMember: (email) async => _onAddWorkspaceMember(emit, email),
-        inviteWorkspaceMemberByEmail: (email) async =>
-            _onInviteWorkspaceMemberByEmail(emit, email),
+        inviteWorkspaceMemberByEmail: (email, role) async =>
+            _onInviteWorkspaceMemberByEmail(emit, email, role),
         removeWorkspaceMemberByEmail: (email) async =>
             _onRemoveWorkspaceMemberByEmail(emit, email),
         inviteWorkspaceMemberByLink: (link) async =>
@@ -180,6 +180,7 @@ class WorkspaceMemberBloc
   Future<void> _onInviteWorkspaceMemberByEmail(
     Emitter<WorkspaceMemberState> emit,
     String email,
+    AFRolePB role,
   ) async {
     final workspaceId = _workspaceId.value;
     if (workspaceId == null) {
@@ -192,7 +193,7 @@ class WorkspaceMemberBloc
     final result = await _userBackendService.inviteWorkspaceMember(
       workspaceId,
       email,
-      role: AFRolePB.Member,
+      role: role,
     );
     emit(
       state.copyWith(
@@ -474,6 +475,7 @@ class WorkspaceMemberEvent with _$WorkspaceMemberEvent {
       AddWorkspaceMember;
   const factory WorkspaceMemberEvent.inviteWorkspaceMemberByEmail(
     String email,
+    AFRolePB role,
   ) = InviteWorkspaceMemberByEmail;
   const factory WorkspaceMemberEvent.removeWorkspaceMemberByEmail(
     String email,

@@ -4,6 +4,7 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:string_validator/string_validator.dart';
@@ -81,7 +82,7 @@ class _MInviteMemberByEmailState extends State<MInviteMemberByEmail> {
 
     context
         .read<WorkspaceMemberBloc>()
-        .add(WorkspaceMemberEvent.inviteWorkspaceMemberByEmail(email));
+        .add(WorkspaceMemberEvent.inviteWorkspaceMemberByEmail(email, AFRolePB.Member));
     // clear the email field after inviting
     _emailController.clear();
   }

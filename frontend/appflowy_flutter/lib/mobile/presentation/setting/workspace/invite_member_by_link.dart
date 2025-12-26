@@ -6,6 +6,7 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/members/workspace_member_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
@@ -288,7 +289,7 @@ class _InviteMemberPageState extends State<_InviteMemberPage> {
     }
     context
         .read<WorkspaceMemberBloc>()
-        .add(WorkspaceMemberEvent.inviteWorkspaceMemberByEmail(email));
+        .add(WorkspaceMemberEvent.inviteWorkspaceMemberByEmail(email, AFRolePB.Member));
     // clear the email field after inviting
     emailController.clear();
   }
