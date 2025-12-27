@@ -308,3 +308,13 @@ script = ["""
       cargo build -vv --features=dart
       """]
 script_runner = "@shell"
+
+[tasks.build-universal-dart-ffi]
+description = "Build universal libdart_ffi.a for macOS (x86_64 + arm64)"
+script = [
+  '''
+  set -e
+  ./scripts/build_universal_dart_ffi.sh frontend/rust-lib/dart-ffi frontend/appflowy_flutter/packages/appflowy_backend/macos/libdart_ffi.a
+  '''
+]
+script_runner = "@shell"

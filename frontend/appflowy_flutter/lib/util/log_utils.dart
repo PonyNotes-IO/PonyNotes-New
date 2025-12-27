@@ -77,4 +77,19 @@ class LogUtils {
     }
   }
 
+  /// 仅用于非常详细的调试日志（默认关闭）
+  static bool verbose = false;
+
+  /// 开启/关闭详细日志（运行时可调用）
+  static void setVerbose(bool v) {
+    verbose = v;
+  }
+
+  /// 只有在 verbose == true 时才打印（避免控制台被频繁占满）
+  static debug(Object printObj, {StackTrace? stackTrace, String? funcName}) {
+    if (!_isRelease && verbose) {
+      _print(printObj, title: "🐛", stackTrace: stackTrace, funcName: funcName);
+    }
+  }
+
 }

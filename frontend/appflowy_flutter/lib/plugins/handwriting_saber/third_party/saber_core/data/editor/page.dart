@@ -236,4 +236,41 @@ class Stroke {
   }
 }
 
+/// ✅ 页面状态包装器，用于精确的状态更新通知
+/// 避免橡皮擦操作时触发全量重建
+class EditorPageNotifier extends ChangeNotifier {
+  EditorPageNotifier(this._page);
+
+  EditorPage _page;
+
+  EditorPage get page => _page;
+
+  /// 更新页面数据并通知监听器
+  void updatePage(EditorPage newPage) {
+    _page = newPage;
+    notifyListeners();
+  }
+
+  /// 只更新笔迹列表
+  void updateStrokes(List<Stroke> newStrokes) {
+    _page = EditorPage(
+      size: _page.size,
+      strokes: newStrokes,
+      backgroundImage: _page.backgroundImage,
+      textBoxes: _page.textBoxes,
+      listBoxes: _page.listBoxes,
+      taskListBoxes: _page.taskListBoxes,
+    );
+    notifyListeners();
+  }
+
+  /// 删除指定的笔迹
+  void removeStrokes(List<Stroke> strokesToRemove) {
+    final newStrokes = List<Stroke>.from(_page.strokes)
+      ..removeWhere((stroke) => strokesToRemove.contains(stroke));
+
+    updateStrokes(newStrokes);
+  }
+}
+
 
