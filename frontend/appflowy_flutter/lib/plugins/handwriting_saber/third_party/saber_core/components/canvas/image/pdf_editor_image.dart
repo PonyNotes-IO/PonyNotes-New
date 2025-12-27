@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
+import '../../../../../../../util/log_utils.dart';
 
 /// PDF加载状态枚举
 enum PdfLoadState {
@@ -47,13 +48,13 @@ class PdfDocumentCacheManager {
   Future<PdfDocument> load(String filePath, {Uint8List? pdfBytes}) {
     // 首先检查已完成的缓存
     if (_completedCache.containsKey(filePath)) {
-      debugPrint('🦋[PdfDocumentCache] 从完成缓存获取文档: $filePath');
+      LogUtils.debug('🦋[PdfDocumentCache] 从完成缓存获取文档: $filePath');
       return Future.value(_completedCache[filePath]);
     }
 
     // 检查进行中的缓存
     if (_cache.containsKey(filePath)) {
-      debugPrint('🦋[PdfDocumentCache] 返回进行中的文档加载: $filePath');
+      LogUtils.debug('🦋[PdfDocumentCache] 返回进行中的文档加载: $filePath');
       return _cache[filePath]!;
     }
 
@@ -64,7 +65,7 @@ class PdfDocumentCacheManager {
   /// 加载缓存未命中的文档（参考saber的实现）
   Future<PdfDocument> _loadCacheMiss(String filePath, {Uint8List? pdfBytes}) async {
     try {
-      debugPrint('🦋[PdfDocumentCache] 开始加载PDF文档: $filePath');
+      LogUtils.debug('🦋[PdfDocumentCache] 开始加载PDF文档: $filePath');
       final startTime = DateTime.now();
 
       final document = pdfBytes == null
@@ -77,7 +78,7 @@ class PdfDocumentCacheManager {
       final pdfDocument = await document;
       final loadTime = DateTime.now().difference(startTime);
 
-      debugPrint('🦋[PdfDocumentCache] PDF文档加载完成: $filePath, 用时: ${loadTime.inMilliseconds}ms, 页面数: ${pdfDocument.pages.length}');
+      LogUtils.info('🦋[PdfDocumentCache] PDF文档加载完成: $filePath, 用时: ${loadTime.inMilliseconds}ms, 页面数: ${pdfDocument.pages.length}');
 
       // 存入缓存
       _cache[filePath] = Future.value(pdfDocument);
@@ -91,7 +92,7 @@ class PdfDocumentCacheManager {
 
       return pdfDocument;
     } catch (e) {
-      debugPrint('❌ [PdfDocumentCache] 加载PDF文档失败: $filePath, 错误: $e');
+      LogUtils.error('❌ [PdfDocumentCache] 加载PDF文档失败: $filePath, 错误: $e');
       _cache.remove(filePath); // 移除失败的缓存
       rethrow;
     }
@@ -108,7 +109,7 @@ class PdfDocumentCacheManager {
   void releaseDocument(String filePath) {
     final documentFuture = _cache.remove(filePath);
     if (documentFuture != null) {
-      debugPrint('🦋[PdfDocumentCache] 释放PDF文档: $filePath');
+      LogUtils.debug('🦋[PdfDocumentCache] 释放PDF文档: $filePath');
       documentFuture.then((document) => document.dispose());
 
       // 清理相关的页面缓存
@@ -140,14 +141,14 @@ class PdfDocumentCacheManager {
     // 如果缓存过大，清理最旧的文档（简化实现）
     while (_cache.length > maxCacheSize) {
       final oldestKey = _cache.keys.first; // 简化：清理最先添加的
-      debugPrint('🦋[PdfDocumentCache] 清理超限缓存: $oldestKey');
+      LogUtils.debug('🦋[PdfDocumentCache] 清理超限缓存: $oldestKey');
       releaseDocument(oldestKey);
     }
 
     // 清理过期的已完成文档（如果超过缓存限制）
     while (_completedCache.length > maxCacheSize) {
       final oldestKey = _completedCache.keys.first;
-      debugPrint('🦋[PdfDocumentCache] 清理超限完成缓存: $oldestKey');
+      LogUtils.debug('🦋[PdfDocumentCache] 清理超限完成缓存: $oldestKey');
       releaseDocument(oldestKey);
     }
   }
@@ -157,7 +158,7 @@ class PdfDocumentCacheManager {
     // 清理已完成的缓存中的旧文档
     while (_completedCache.length > maxCacheSize) {
       final oldestKey = _completedCache.keys.first;
-      debugPrint('🦋[PdfDocumentCache] 清理完成缓存: $oldestKey');
+      LogUtils.debug('🦋[PdfDocumentCache] 清理完成缓存: $oldestKey');
       _completedCache.remove(oldestKey);
     }
   }
@@ -200,7 +201,7 @@ class PdfDocumentCacheManager {
 
   /// 清理所有缓存（用于测试或内存清理）
   void clearAllCache() {
-    debugPrint('🦋[PdfDocumentCache] 清理所有缓存');
+      LogUtils.debug('🦋[PdfDocumentCache] 清理所有缓存');
     final keys = List<String>.from(_completedCache.keys);
     for (final key in keys) {
       releaseDocument(key);
@@ -230,7 +231,7 @@ class PdfDocumentCacheManager {
     // 清理页面Widget缓存
     _pageWidgetCache.clear();
 
-    debugPrint('🦋[PdfDocumentCacheManager] 已销毁缓存管理器');
+    LogUtils.debug('🦋[PdfDocumentCacheManager] 已销毁缓存管理器');
   }
 }
 

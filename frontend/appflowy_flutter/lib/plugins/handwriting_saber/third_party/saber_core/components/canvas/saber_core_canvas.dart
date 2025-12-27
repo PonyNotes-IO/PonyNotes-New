@@ -6,6 +6,7 @@ import 'package:perfect_freehand/perfect_freehand.dart' as pf;
 
 import '../canvas/canvas_background_pattern.dart';
 import '../canvas/image/pdf_editor_image.dart';
+import '../../../../../../util/log_utils.dart';
 import '../../data/editor/editor_core_info.dart';
 import '../../data/editor/page.dart';
 import '../../data/editor/shape_strokes.dart';
@@ -107,7 +108,8 @@ class SaberCoreCanvas extends StatelessWidget {
   Widget build(BuildContext context) {
     final EditorPage page = coreInfo.firstPage;
 
-    debugPrint('🎨 [SaberCoreCanvas] build: page.strokes=${page.strokes.length}, currentStroke=$currentStroke, selectResult=$selectResult, isSelecting=$isSelecting');
+    // 只在需要时输出详细布局/构建日志，默认关闭（可在运行时通过 LogUtils.setVerbose(true) 打开）
+    LogUtils.debug('🎨 [SaberCoreCanvas] build: page.strokes=${page.strokes.length}, currentStroke=$currentStroke, selectResult=$selectResult, isSelecting=$isSelecting');
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -122,7 +124,7 @@ class SaberCoreCanvas extends StatelessWidget {
         final double offsetX = (constraints.maxWidth - drawWidth) / 2;
         final double offsetY = (constraints.maxHeight - drawHeight) / 2;
 
-        debugPrint('📐 [SaberCoreCanvas] layout: scale=$scale, offset=($offsetX,$offsetY), size=(${drawWidth}x${drawHeight})');
+        LogUtils.debug('📐 [SaberCoreCanvas] layout: scale=$scale, offset=($offsetX,$offsetY), size=(${drawWidth}x${drawHeight})');
         
         // ✅ 参考Saber原版架构：PDF背景和笔迹完全分离
         // 使用专门的StatefulWidget确保PDF背景完全隔离于画布重绘
