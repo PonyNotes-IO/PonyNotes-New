@@ -53,12 +53,13 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
   }
 
   Future<void> _openInviteDialog(BuildContext context) async {
+    AFRolePB dialogSelectedRole = _selectedRole;
+
     await showDialog(
       context: context,
       builder: (ctx) {
         // use StatefulBuilder so the dialog has its own immediate state
         return StatefulBuilder(builder: (dialogCtx, setStateDialog) {
-          AFRolePB selectedRole = _selectedRole;
           return Dialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12.0),
@@ -76,11 +77,11 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 12),
-                    // 输入框：搜索名称或邮箱/手机号
+                    // 输入框：仅支持通过邮箱或手机号搜索
                     TextField(
                       controller: _inputController,
                       decoration: const InputDecoration(
-                        hintText: '搜索名称或者邮箱/手机号',
+                        hintText: '搜索邮箱或手机号',
                       ),
                       autofocus: true,
                       onChanged: (v) {},
@@ -100,7 +101,7 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                         color: Theme.of(context).cardColor,
                         onSelected: (v) {
                           setStateDialog(() {
-                            selectedRole = v;
+                            dialogSelectedRole = v;
                           });
                         },
                         itemBuilder: (ctx) => [
@@ -112,11 +113,11 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              selectedRole == AFRolePB.Owner
-                                  ? '工作空间所有者'
-                                  : selectedRole == AFRolePB.Guest
-                                      ? '受限成员'
-                                      : '成员',
+                            dialogSelectedRole == AFRolePB.Owner
+                                ? '工作空间所有者'
+                                : dialogSelectedRole == AFRolePB.Guest
+                                    ? '受限成员'
+                                    : '成员',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                             const SizedBox(width: 8),
@@ -135,10 +136,14 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                         ),
                         const SizedBox(width: 12),
                         ElevatedButton(
-                          onPressed: () {
-                            final value = _inputController.text.trim();
-                            _inviteMemberFromDialog(value, ctx, selectedRole);
-                          },
+                            onPressed: () {
+                              final value = _inputController.text.trim();
+                              // persist selection to outer state for next time
+                              setState(() {
+                                _selectedRole = dialogSelectedRole;
+                              });
+                              _inviteMemberFromDialog(value, ctx, dialogSelectedRole);
+                            },
                           child: Text('邀请'),
                         ),
                       ],
@@ -153,18 +158,31 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
     );
   }
 
-  void _inviteMemberFromDialog(String email, BuildContext dialogContext, [AFRolePB? role]) {
-    if (!isEmail(email)) {
+  bool _isPhoneNumber(String input) {
+    // Normalize: remove non-digit characters
+    final digits = input.replaceAll(RegExp(r'\\D'), '');
+    // Basic length check for phone numbers (allow 6-15 digits)
+    return digits.length >= 6 && digits.length <= 15;
+  }
+
+  void _inviteMemberFromDialog(String contact, BuildContext dialogContext, [AFRolePB? role]) {
+    final value = contact.trim();
+
+    final isEmailAddr = isEmail(value);
+    final isPhone = _isPhoneNumber(value);
+
+    if (!isEmailAddr && !isPhone) {
       showToastNotification(
         type: ToastificationType.error,
-        message: LocaleKeys.settings_appearance_members_emailInvalidError.tr(),
+        message: '请输入有效的邮箱或手机号',
       );
       return;
     }
 
+    // The backend expects the identifier (email or phone). Use the raw input.
     context
         .read<WorkspaceMemberBloc>()
-        .add(WorkspaceMemberEvent.inviteWorkspaceMemberByEmail(email, role ?? AFRolePB.Member));
+        .add(WorkspaceMemberEvent.inviteWorkspaceMemberByEmail(value, role ?? AFRolePB.Member));
     // close the dialog after dispatch
     try {
       Navigator.of(dialogContext).pop();
