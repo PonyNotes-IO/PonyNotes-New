@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:file_picker/file_picker.dart';
@@ -54,6 +54,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 合并 repaint notifier（当 current stroke 或 laser strokes 变化时通知 painter）
   final ValueNotifier<int> _repaintTick = ValueNotifier<int>(0);
 
+  /// ✅ 页面状态notifier列表（用于精确更新，避免全量重建）
+  final List<EditorPageNotifier> _pageNotifiers = [];
+
   /// 当前工具（使用 ValueNotifier 以便在切换工具时避免触发父级整页重建）
   final ValueNotifier<Tool> _currentToolNotifier = ValueNotifier<Tool>(const Pen(
     toolId: ToolId.fountainPen,
@@ -65,11 +68,17 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   CanvasBackgroundPattern _currentBackgroundPattern =
       EditorCoreInfo.empty().backgroundPattern;
   
-  /// ✅ 当前填充颜色（用于形状工具）
-  Color? _currentFillColor;
+  /// ✅ 当前填充颜色（用于形状工具） - 使用 ValueNotifier 避免父级 setState 导致整页重建
+  final ValueNotifier<Color?> _currentFillColorNotifier = ValueNotifier<Color?>(null);
   
   /// ✅ 激光笔淡出定时器（用于管理多个激光笔笔迹的淡出）
   final Map<Stroke, Timer> _laserFadeOutTimers = {};
+  /// 激光笔绘制时每点延迟记录（用于实现按绘制速度淡出）
+  final Map<Stroke, List<Duration>> _laserStrokePointDelays = {};
+  /// 激光笔绘制时的 Stopwatches（用于记录点间时间）
+  final Map<Stroke, Stopwatch> _laserStrokeStopwatches = {};
+  /// 当前是否有激光笔正在淡出（用于抑制保存等操作）
+  bool _isLaserFadeInProgress = false;
 
   /// ✅ 选择工具状态
   SelectResult? _selectResult;
@@ -93,6 +102,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _laserStrokesNotifier.addListener(() {
       _repaintTick.value++;
     });
+  }
+
+  /// ✅ 初始化页面状态notifier（用于精确更新，避免全量重建）
+  void _initPageNotifiers() {
+    // 清理旧的notifier
+    for (final notifier in _pageNotifiers) {
+      notifier.dispose();
+    }
+    _pageNotifiers.clear();
+
+    // 为每个页面创建notifier
+    for (final page in _coreInfo.pages) {
+      _pageNotifiers.add(EditorPageNotifier(page));
+    }
   }
 
   /// 初始化本地数据：
@@ -141,6 +164,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         _currentBackgroundPattern = _coreInfo.backgroundPattern;
         _status = '已就绪';
       }
+
+      // ✅ 初始化页面notifier（用于精确状态更新）
+      _initPageNotifiers();
     } catch (e) {
       _coreInfo = EditorCoreInfo.empty();
       // 如果读取失败，也同步当前背景样式为默认
@@ -153,6 +179,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   ///
   /// PoC 阶段采用 JSON 文本保存，后续切换为 .sbn2 时只需调整序列化逻辑。
   Future<void> _saveToStorage({bool suppressStatusUpdate = false}) async {
+    // 如果正在进行激光淡出，延迟保存以避免 I/O 干扰渲染
+    if (_isLaserFadeInProgress) {
+      _pendingSave = true;
+      debugPrint('🦋[HandwritingSaber] _saveToStorage deferred due to laser fade in progress');
+      return;
+    }
     try {
       final String json = _coreInfo.toJsonString();
       final List<int> bytes = utf8.encode(json);
@@ -201,7 +233,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return;
     }
     // 如果当前正在绘制，推迟保存，设置 pending 标记
-    if (_currentStrokeNotifier.value != null) {
+    if (_currentStrokeNotifier.value != null || _isLaserFadeInProgress) {
       _pendingSave = true;
       return;
     }
@@ -257,6 +289,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     );
     // 使用 notifier 更新当前笔迹，避免触发整个页面的 rebuild
     _currentStrokeNotifier.value = stroke;
+    // 如果是激光笔，初始化点间延迟记录与计时器（参考 Saber 的实现）
+    if (stroke.toolId == ToolId.laserPointer) {
+      _laserStrokePointDelays[stroke] = <Duration>[Duration.zero];
+      _laserStrokeStopwatches[stroke] = Stopwatch()..reset()..start();
+    }
   }
   
   /// ✅ 开始选择
@@ -496,11 +533,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       }
     }
     
-    // 删除相交的笔迹
+    // 删除相交的笔迹（使用notifier避免全量重建）
     if (strokesToRemove.isNotEmpty) {
-      setState(() {
-        page.strokes.removeWhere((s) => strokesToRemove.contains(s));
-      });
+      final pageNotifier = _pageNotifiers[targetPageIndex];
+      pageNotifier.removeStrokes(strokesToRemove);
       _scheduleSave();
     }
   }
@@ -579,6 +615,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     if (toolId == ToolId.triangle) {
       // ✅ 三角形工具：一笔绘制，像自由多边形一样添加点
       stroke.points.add(position);
+      // 如果是激光笔，记录点间时间
+      if (stroke.toolId == ToolId.laserPointer && _laserStrokeStopwatches.containsKey(stroke)) {
+        final sw = _laserStrokeStopwatches[stroke]!;
+        final elapsed = sw.elapsed;
+        _laserStrokePointDelays[stroke]?.add(elapsed);
+        sw.reset();
+      }
     } else if (toolId == ToolId.line ||
         toolId == ToolId.rectangle || 
         toolId == ToolId.circle || 
@@ -600,16 +643,36 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     } else {
       // 其他工具：正常添加点
       stroke.points.add(position);
+      // 如果是激光笔，记录点间时间
+      if (stroke.toolId == ToolId.laserPointer && _laserStrokeStopwatches.containsKey(stroke)) {
+        final sw = _laserStrokeStopwatches[stroke]!;
+        final elapsed = sw.elapsed;
+        _laserStrokePointDelays[stroke]?.add(elapsed);
+        sw.reset();
+      }
     }
     
     // 为确保 CustomPainter 能检测到变化，替换成新的 Stroke 实例（改变对象引用）
-    _currentStrokeNotifier.value = Stroke(
+    final Stroke oldStrokeRef = stroke;
+    final Stroke newStroke = Stroke(
       points: List<Offset>.from(stroke.points),
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
       pressureEnabled: stroke.pressureEnabled,
     );
+    _currentStrokeNotifier.value = newStroke;
+    // 如果之前为激光笔记录了点间延迟或计时器，需要把这些临时记录从旧实例移动到新实例
+    try {
+      if (_laserStrokePointDelays.containsKey(oldStrokeRef)) {
+        _laserStrokePointDelays[newStroke] = _laserStrokePointDelays.remove(oldStrokeRef)!;
+      }
+      if (_laserStrokeStopwatches.containsKey(oldStrokeRef)) {
+        _laserStrokeStopwatches[newStroke] = _laserStrokeStopwatches.remove(oldStrokeRef)!;
+      }
+    } catch (_) {
+      // 忽略意外情况，保持原有行为
+    }
   }
   
   /// ✅ 更新选择
@@ -706,7 +769,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     
     // ✅ 创建新文本框（默认大小）
     final textBox = saber_text.TextBox(
-      id: 'textbox_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(1000)}',
+      id: 'textbox_${DateTime.now().millisecondsSinceEpoch}_${math.Random().nextInt(1000)}',
       position: position,
       size: const Size(200, 100), // 默认大小
       text: '',
@@ -973,7 +1036,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           color: stroke.color,
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
-          fillColor: _currentFillColor, // ✅ 传递填充颜色
+          fillColor: _currentFillColorNotifier.value, // ✅ 传递填充颜色
         );
       }
     } else if (toolId == ToolId.circle) {
@@ -985,7 +1048,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           color: stroke.color,
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
-          fillColor: _currentFillColor, // ✅ 传递填充颜色
+          fillColor: _currentFillColorNotifier.value, // ✅ 传递填充颜色
         );
       }
     } else if (toolId == ToolId.triangle) {
@@ -999,7 +1062,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
           isShiftPressed: isShiftPressed, // ✅ 传递Shift键状态
-          fillColor: _currentFillColor, // ✅ 传递填充颜色
+          fillColor: _currentFillColorNotifier.value, // ✅ 传递填充颜色
         );
       }
     } else if (toolId == ToolId.diamond) {
@@ -1011,7 +1074,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           color: stroke.color,
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
-          fillColor: _currentFillColor, // ✅ 传递填充颜色
+          fillColor: _currentFillColorNotifier.value, // ✅ 传递填充颜色
         );
       }
     } else if (toolId == ToolId.freePolygon) {
@@ -1036,11 +1099,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _coreInfo.laserStrokes.add(laserStroke);
       // 同步到激光笔 notifier（用于局部重绘）
       _laserStrokesNotifier.value = List<Stroke>.from(_laserStrokesNotifier.value)..add(laserStroke);
+      // 从记录的点延迟中获取用于淡出的 timing（参考 Saber）
+      final recordedDelays = _laserStrokePointDelays[stroke];
+      // 清理临时记录（不再需要）
+      _laserStrokePointDelays.remove(stroke);
+      final sw = _laserStrokeStopwatches.remove(stroke);
+      if (sw != null) {
+        try {
+          sw.stop();
+        } catch (_) {}
+      }
       // ✅ 启动激光笔淡出动画（不使用 setState，使用 notifier 驱动局部重绘）
-      _startLaserFadeOut(laserStroke);
+      _startLaserFadeOut(laserStroke, strokePointDelays: recordedDelays);
       // 使用 notifier 清空当前笔迹（避免触发整页重建）
       _currentStrokeNotifier.value = null;
-      await _saveToStorage(suppressStatusUpdate: true);
       return;
     } else {
       // ✅ 其他工具：普通笔迹
@@ -1127,9 +1199,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 填充颜色改变回调
   void _onFillColorChanged(Color? fillColor) {
-    setState(() {
-      _currentFillColor = fillColor;
-    });
+    // 仅更新 notifier 的值，避免触发父级整页重建导致 PDF 重绘闪烁
+    _currentFillColorNotifier.value = fillColor;
   }
 
   void _onStrokeWidthChanged(double width) {
@@ -1452,28 +1523,32 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
   
   /// ✅ 启动激光笔淡出动画（参考 Saber 的 fadeOutStroke 逻辑）
-  void _startLaserFadeOut(Stroke laserStroke) {
+  void _startLaserFadeOut(Stroke laserStroke, {List<Duration>? strokePointDelays}) {
     if (laserStroke.points.isEmpty) {
       return;
     }
+    // 标记淡出进行中，抑制保存操作以避免 I/O 干扰渲染
+    _isLaserFadeInProgress = true;
     
-    // ✅ 计算每个点之间的延迟时间（模拟绘制时的速度）
-    final List<Duration> strokePointDelays = [];
-    
-    // 为每个点计算延迟（第一个点延迟为0，后续点根据时间间隔）
-    for (int i = 0; i < laserStroke.points.length; i++) {
-      if (i == 0) {
-        strokePointDelays.add(Duration.zero);
-      } else {
-        // 模拟点之间的延迟（实际应该记录绘制时的时间，这里简化处理）
-        strokePointDelays.add(const Duration(milliseconds: 50));
+    // 如果外部传入了记录的点延迟，优先使用；否则回退到固定延迟模拟
+    final List<Duration> delaysToUse;
+    if (strokePointDelays != null && strokePointDelays.isNotEmpty) {
+      delaysToUse = List<Duration>.from(strokePointDelays);
+    } else {
+      // 归一化为每点固定 50ms 的延迟（第一个点为 0）
+      delaysToUse = <Duration>[];
+      for (int i = 0; i < laserStroke.points.length; i++) {
+        delaysToUse.add(i == 0 ? Duration.zero : const Duration(milliseconds: 50));
       }
     }
-    
+
+    // 打印用于诊断的延迟信息（临时调试）
+    debugPrint('🦋[HandwritingSaber] _startLaserFadeOut: strokePoints=${laserStroke.points.length}, delays=${delaysToUse.map((d) => d.inMilliseconds).toList()}');
+
     // ✅ 启动淡出动画
     _fadeOutLaserStroke(
       stroke: laserStroke,
-      strokePointDelays: strokePointDelays,
+      strokePointDelays: delaysToUse,
     );
   }
   
@@ -1486,42 +1561,119 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     const fadeOutDelay = Duration(seconds: 2);
     await Future.delayed(fadeOutDelay);
 
-    // ✅ 如果笔迹已经被删除，直接返回
-    if (!_laserStrokesNotifier.value.contains(stroke)) {
+    // 如果笔迹已被移除，直接返回
+    if (!_laserStrokesNotifier.value.contains(stroke)) return;
+
+    // 归一化每点延迟，避免零延迟导致瞬间消失（调大阈值以确保可见的淡出效果）
+    final minDelay = Duration(milliseconds: 60);
+    final normalizedDelays = <Duration>[];
+    if (strokePointDelays.isEmpty) {
+      // 如果没有记录到点间延迟，使用固定小延迟逐点淡出
+      normalizedDelays.addAll(List.generate(stroke.points.length, (_) => minDelay));
+    } else {
+      for (final d in strokePointDelays) {
+        if (d <= Duration.zero) {
+          normalizedDelays.add(minDelay);
+        } else if (d < minDelay) {
+          normalizedDelays.add(minDelay);
+        } else {
+          normalizedDelays.add(d);
+        }
+      }
+      // 如果记录的延迟少于点数，补齐最小延迟
+      if (normalizedDelays.length < stroke.points.length) {
+        final diff = stroke.points.length - normalizedDelays.length;
+        normalizedDelays.addAll(List.generate(diff, (_) => minDelay));
+      }
+    }
+
+    // 如果笔迹非常长或记录的延迟几乎全为零，使用基于透明度的淡出策略（更稳健且视觉更平滑）
+    final int longStrokeThreshold = 120;
+    final bool delaysMostlyZero = normalizedDelays.where((d) => d > minDelay).length < (normalizedDelays.length * 0.15);
+    if (stroke.points.length > longStrokeThreshold || delaysMostlyZero) {
+    debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: using batch-removal fallback for strokePoints=${stroke.points.length}');
+      // Batch removal strategy: 每个 tick 删除多个点以实现可见且平滑的淡出效果
+      final int totalPoints = stroke.points.length;
+      final int batchCount = math.max(1, totalPoints ~/ 15); // 每次删除的点数（对长笔迹增大以更平滑可见）
+      final Duration stepDelay = const Duration(milliseconds: 120); // 每次删除间隔（放慢以便用户可见）
+
+      final Timer timer = Timer.periodic(stepDelay, (t) async {
+        // 如果笔迹已被外部移除或为空，结束定时器
+        if (!_laserStrokesNotifier.value.contains(stroke) || stroke.points.isEmpty) {
+          t.cancel();
+          _laserFadeOutTimers.remove(stroke);
+          _isLaserFadeInProgress = false;
+          if (_pendingSave) {
+            _pendingSave = false;
+            await _saveToStorage(suppressStatusUpdate: true);
+          }
+          return;
+        }
+
+        // 删除 batchCount 个点
+        for (int k = 0; k < batchCount; k++) {
+          if (stroke.points.isEmpty) break;
+          stroke.popFirstPoint();
+        }
+        // 通知绘制层更新
+        _laserStrokesNotifier.value = List<Stroke>.from(_laserStrokesNotifier.value);
+
+        // 如果已经删除完毕，终止定时器并移除笔迹
+        if (stroke.points.isEmpty) {
+          t.cancel();
+          final int idx = _coreInfo.laserStrokes.indexOf(stroke);
+          if (idx != -1) {
+            _coreInfo.laserStrokes.removeAt(idx);
+            _laserStrokesNotifier.value = List<Stroke>.from(_coreInfo.laserStrokes);
+          }
+          _laserFadeOutTimers.remove(stroke);
+          _isLaserFadeInProgress = false;
+          if (_pendingSave) {
+            _pendingSave = false;
+            await _saveToStorage(suppressStatusUpdate: true);
+          }
+        }
+      });
+
+      _laserFadeOutTimers[stroke] = timer;
       return;
     }
 
-    // ✅ 逐个删除点（使用 notifier 驱动局部重绘，避免父级 setState）
-    for (final delay in strokePointDelays) {
+    // 逐点淡出（使用 notifier 驱动局部重绘）
+    for (int i = 0; i < normalizedDelays.length; i++) {
+      final delay = normalizedDelays[i];
+      debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: popIndex=$i delay=${delay.inMilliseconds}ms remainingPoints=${stroke.points.length}');
       await Future.delayed(delay);
 
-      // ✅ 如果笔迹已经被删除或点数为0，退出
-      if (!_laserStrokesNotifier.value.contains(stroke) || stroke.points.isEmpty) {
-        break;
-      }
+      // 如果笔迹已被移除或点数不足，退出
+      if (!_laserStrokesNotifier.value.contains(stroke) || stroke.points.isEmpty) break;
 
-      // 删除第一个点
+      // 删除第一个点并通知绘制层更新
       stroke.popFirstPoint();
-
-      // 更新 notifier 触发 painter 局部重绘
       _laserStrokesNotifier.value = List<Stroke>.from(_laserStrokesNotifier.value);
 
-      // 如果用户重新开始绘制（currentStroke 非空），等待用户停止再继续淡出
+      // 如果用户重新开始绘制（currentStroke 非空），暂停淡出并等待用户停止
       if (_currentStrokeNotifier.value != null) {
         const waitTime = Duration(milliseconds: 100);
         while (_currentStrokeNotifier.value != null) {
           await Future.delayed(waitTime);
         }
-        // 等待一个较短时间，避免立即继续导致突兀
-        await Future.delayed(fadeOutDelay - waitTime);
+        // 等待一段时间再继续淡出，避免与刚结束的绘制冲突
+        await Future.delayed(fadeOutDelay);
       }
     }
 
-    // ✅ 循环结束后删除整个笔迹并更新 notifier
+    // 最后删除整个笔迹并更新 notifier、持久化（抑制 UI 状态更新）
     _coreInfo.laserStrokes.remove(stroke);
     _laserStrokesNotifier.value = List<Stroke>.from(_laserStrokesNotifier.value)..remove(stroke);
     _laserFadeOutTimers.remove(stroke);
-    await _saveToStorage(suppressStatusUpdate: true);
+    _isLaserFadeInProgress = false;
+    if (_pendingSave) {
+      _pendingSave = false;
+      await _saveToStorage(suppressStatusUpdate: true);
+    } else {
+      await _saveToStorage(suppressStatusUpdate: true);
+    }
   }
   
   @override
@@ -1532,10 +1684,25 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
     _laserFadeOutTimers.clear();
 
+    // 停止并清理激光笔绘制时使用的计时器与延迟记录
+    for (final sw in _laserStrokeStopwatches.values) {
+      try {
+        sw.stop();
+      } catch (_) {}
+    }
+    _laserStrokeStopwatches.clear();
+    _laserStrokePointDelays.clear();
+
     // ✅ 清理PDF背景图片资源
     for (final page in _coreInfo.pages) {
       page.backgroundImage?.dispose();
     }
+
+    // ✅ 清理页面notifier
+    for (final notifier in _pageNotifiers) {
+      notifier.dispose();
+    }
+    _pageNotifiers.clear();
 
     // ✅ 清理PDF文档缓存管理器
     PdfDocumentCacheManager().dispose();
@@ -1544,6 +1711,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _currentStrokeNotifier.dispose();
     _laserStrokesNotifier.dispose();
     _repaintTick.dispose();
+    // ✅ 清理填充颜色 notifier
+    _currentFillColorNotifier.dispose();
 
     super.dispose();
   }
@@ -1575,18 +1744,23 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           ValueListenableBuilder<Tool>(
             valueListenable: _currentToolNotifier,
             builder: (context, currentTool, child) {
-              return HandwritingSaberToolbar(
-                currentTool: currentTool,
-                onToolChanged: _onToolChanged,
-                currentBackgroundPattern: _currentBackgroundPattern,
-                onBackgroundPatternChanged: _onBackgroundPatternChanged,
-                currentColor: currentTool.color,
-                onColorChanged: _onColorChanged,
-                currentStrokeWidth: currentTool.strokeWidth,
-                onStrokeWidthChanged: _onStrokeWidthChanged,
-                currentFillColor: _currentFillColor, // ✅ 填充颜色
-                onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
-                onImportPdf: _importPdf,  // ✅ PDF 导入回调
+              return ValueListenableBuilder<Color?>(
+                valueListenable: _currentFillColorNotifier,
+                builder: (ctx, fillColor, _) {
+                  return HandwritingSaberToolbar(
+                    currentTool: currentTool,
+                    onToolChanged: _onToolChanged,
+                    currentBackgroundPattern: _currentBackgroundPattern,
+                    onBackgroundPatternChanged: _onBackgroundPatternChanged,
+                    currentColor: currentTool.color,
+                    onColorChanged: _onColorChanged,
+                    currentStrokeWidth: currentTool.strokeWidth,
+                    onStrokeWidthChanged: _onStrokeWidthChanged,
+                    currentFillColor: fillColor, // ✅ 填充颜色（由 notifier 驱动）
+                    onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
+                    onImportPdf: _importPdf,  // ✅ PDF 导入回调
+                  );
+                },
               );
             },
           ),
@@ -1606,28 +1780,39 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                 final List<Widget> pageWidgets = [];
                 
                 for (int pageIndex = 0; pageIndex < _coreInfo.pages.length; pageIndex++) {
-                  final EditorPage page = _coreInfo.pages[pageIndex];
-                  
-                  // 防止除零错误
-                  if (page.size.width <= 0 || page.size.height <= 0) {
-                    continue;
+                  // 确保 page notifier 已初始化，避免 index out of range 导致 RangeError
+                  if (_pageNotifiers.length <= pageIndex) {
+                    _pageNotifiers.add(EditorPageNotifier(_coreInfo.pages[pageIndex]));
                   }
-                  
-                  // ✅ 计算页面缩放（使用屏幕宽度，保持比例）
-                  // 确保页面宽度不超过屏幕宽度，高度按比例缩放
-                  final double pageScale = screenWidth / page.size.width;
-                  final double pageDisplayWidth = page.size.width * pageScale;
-                  final double pageDisplayHeight = page.size.height * pageScale;
-                  
-                  // ✅ 创建单页画布
-                  final pageWidget = _buildSinglePageCanvas(
-                    page: page,
-                    pageIndex: pageIndex,
-                    pageDisplayWidth: pageDisplayWidth,
-                    pageDisplayHeight: pageDisplayHeight,
-                    screenWidth: screenWidth,
+
+                  // ✅ 使用ListenableBuilder包装页面，只在特定页面数据变化时重建
+                  final pageWidget = ListenableBuilder(
+                    listenable: _pageNotifiers[pageIndex],
+                    builder: (context, child) {
+                      final page = _pageNotifiers[pageIndex].page;
+
+                      // 防止除零错误
+                      if (page.size.width <= 0 || page.size.height <= 0) {
+                        return const SizedBox.shrink();
+                      }
+
+                      // ✅ 计算页面缩放（使用屏幕宽度，保持比例）
+                      // 确保页面宽度不超过屏幕宽度，高度按比例缩放
+                      final double pageScale = screenWidth / page.size.width;
+                      final double pageDisplayWidth = page.size.width * pageScale;
+                      final double pageDisplayHeight = page.size.height * pageScale;
+
+                      // ✅ 创建单页画布
+                      return _buildSinglePageCanvas(
+                        page: page,
+                        pageIndex: pageIndex,
+                        pageDisplayWidth: pageDisplayWidth,
+                        pageDisplayHeight: pageDisplayHeight,
+                        screenWidth: screenWidth,
+                      );
+                    },
                   );
-                  
+
                   pageWidgets.add(pageWidget);
                   
                   // ✅ 页面之间的间距（除了最后一页）

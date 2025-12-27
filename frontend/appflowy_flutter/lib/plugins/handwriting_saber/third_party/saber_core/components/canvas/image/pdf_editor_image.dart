@@ -543,7 +543,7 @@ class PdfEditorImage {
             return SizedBox.fromSize(
               size: naturalSize,
               child: Container(
-                color: Colors.grey[100],
+              color: Colors.grey[100],
                 child: const Center(
                   child: CircularProgressIndicator(),
                 ),
@@ -555,7 +555,7 @@ class PdfEditorImage {
             return SizedBox.fromSize(
               size: naturalSize,
               child: Container(
-                color: Colors.grey[100],
+              color: Colors.grey[100],
                 child: const Center(
                   child: Icon(Icons.error_outline, color: Colors.red),
                 ),
@@ -571,9 +571,9 @@ class PdfEditorImage {
                   return SizedBox.fromSize(
                     size: naturalSize,
                     child: Container(
-                      color: Colors.grey[100],
-                      child: const Center(
-                        child: CircularProgressIndicator(),
+                    color: Colors.grey[100],
+                    child: const Center(
+                      child: CircularProgressIndicator(),
                       ),
                     ),
                   );
@@ -584,9 +584,9 @@ class PdfEditorImage {
                   return SizedBox.fromSize(
                     size: naturalSize,
                     child: Container(
-                      color: Colors.grey[100],
-                      child: const Center(
-                        child: Text('PDF文档为空'),
+                    color: Colors.grey[100],
+                    child: const Center(
+                      child: Text('PDF文档为空'),
                       ),
                     ),
                   );
@@ -597,9 +597,9 @@ class PdfEditorImage {
                   return SizedBox.fromSize(
                     size: naturalSize,
                     child: Container(
-                      color: Colors.grey[100],
-                      child: Center(
-                        child: Text('PDF页面不存在 (页面 ${pdfPageIndex + 1}/${pdfDocument.pages.length})'),
+                    color: Colors.grey[100],
+                    child: Center(
+                      child: Text('PDF页面不存在 (页面 ${pdfPageIndex + 1}/${pdfDocument.pages.length})'),
                       ),
                     ),
                   );

@@ -134,3 +134,4 @@ frontend/*.deb
 frontend/appflowy_flutter/packages/appflowy_backend/macos/libdart_ffi.a.arm64
 
 frontend/appflowy_flutter/packages/appflowy_backend/macos/libdart_ffi.a.orig
+frontend/appflowy_flutter/packages/appflowy_backend/macos/libdart_ffi.a.backup

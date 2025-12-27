@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:perfect_freehand/perfect_freehand.dart' as pf;
 
 import '../canvas/canvas_background_pattern.dart';
+import '../canvas/image/pdf_editor_image.dart';
 import '../../data/editor/editor_core_info.dart';
 import '../../data/editor/page.dart';
 import '../../data/editor/shape_strokes.dart';
@@ -12,6 +13,68 @@ import '../../data/editor/stroke_extensions.dart';
 import '../../data/editor/text_box.dart' as saber_text;
 import '../../data/tools/select_result.dart';
 import '../../data/tools/tool.dart';
+
+/// 专门的PDF背景组件，参考Saber的CanvasImage设计
+/// 使用StatefulWidget确保组件稳定性，完全隔离于画布重绘逻辑
+class _PdfBackground extends StatefulWidget {
+  const _PdfBackground({
+    super.key, // 使用稳定的key确保组件身份
+    required this.pdfImage,
+    required this.offsetX,
+    required this.offsetY,
+    required this.drawWidth,
+    required this.drawHeight,
+    required this.pageSize,
+  });
+
+  final PdfEditorImage pdfImage;
+  final double offsetX;
+  final double offsetY;
+  final double drawWidth;
+  final double drawHeight;
+  final Size pageSize;
+
+  @override
+  State<_PdfBackground> createState() => _PdfBackgroundState();
+}
+
+class _PdfBackgroundState extends State<_PdfBackground> {
+  @override
+  void initState() {
+    super.initState();
+    // 预加载PDF，确保显示
+    widget.pdfImage.preloadPdfDocument();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: widget.offsetX,
+      top: widget.offsetY,
+      width: widget.drawWidth,
+      height: widget.drawHeight,
+      child: IgnorePointer(
+        child: SizedBox(
+          width: widget.drawWidth,
+          height: widget.drawHeight,
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: SizedBox(
+              width: widget.pageSize.width,
+              height: widget.pageSize.height,
+              child: RepaintBoundary(
+                child: widget.pdfImage.buildPdfPageWidget(
+                  boxFit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 /// 简化版的 Saber 画布组件，用于 PoC 阶段。
 ///
@@ -43,87 +106,54 @@ class SaberCoreCanvas extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final EditorPage page = coreInfo.firstPage;
-    debugPrint('🦋[SaberCoreCanvas] build: page.size=${page.size}, backgroundImage=${page.backgroundImage != null}, coreBackgroundPattern=${coreInfo.backgroundPattern}, coreBackgroundColor=${coreInfo.backgroundColor}');
+
+    debugPrint('🎨 [SaberCoreCanvas] build: page.strokes=${page.strokes.length}, currentStroke=$currentStroke, selectResult=$selectResult, isSelecting=$isSelecting');
+
     return LayoutBuilder(
       builder: (context, constraints) {
         // ✅ 计算当前缩放级别
         final double scaleX = constraints.maxWidth / page.size.width;
         final double scaleY = constraints.maxHeight / page.size.height;
         final double scale = scaleX < scaleY ? scaleX : scaleY;
-        
+
         // ✅ 计算绘制区域的实际大小和偏移
         final double drawWidth = page.size.width * scale;
         final double drawHeight = page.size.height * scale;
         final double offsetX = (constraints.maxWidth - drawWidth) / 2;
         final double offsetY = (constraints.maxHeight - drawHeight) / 2;
-        
-    // ✅ 如果有 PDF 背景图片，将 PDF 放在 CustomPaint 的 child 中
-    // 这样 PDF 在底层，笔迹在 foregroundPainter 中绘制在上层
-    if (page.backgroundImage != null) {
-      // ✅ 智能预加载：只有当前页面才预加载，其他页面延迟加载
-      // 这对于多页PDF特别重要，可以显著提升性能
-      page.backgroundImage!.preloadPdfDocument();
 
-      return Stack(
-        children: [
-          // ✅ PDF 背景层（使用 IgnorePointer 确保不阻挡触摸事件）
-          // PDF 背景填充整个绘制区域（参考 Saber 的实现）
-          Positioned(
-            left: offsetX,
-            top: offsetY,
-            width: drawWidth,
-            height: drawHeight,
-            child: IgnorePointer(
-              // ✅ PDF 背景不阻挡触摸事件，让外层的 GestureDetector 处理手势
-              child: SizedBox(
-                width: drawWidth,
-                height: drawHeight,
-                child: FittedBox(
-                  fit: BoxFit.contain,  // ✅ 使用 contain 保持PDF比例，填充可用空间
-                  child: SizedBox(
-                    width: page.size.width,
-                    height: page.size.height,
-                    // ✅ 使用 RepaintBoundary 隔离PDF重绘，避免与笔迹绘制冲突
-                    child: RepaintBoundary(
-                      child: page.backgroundImage!.buildPdfPageWidget(
-                        boxFit: BoxFit.contain,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // ✅ 画布层（绘制笔迹，透明背景，不阻挡触摸事件）
-              CustomPaint(
-                painter: _SaberCoreCanvasPainter(
-                  page: page,
-                  coreInfo: coreInfo,
-                  currentStroke: currentStroke,
-                  currentStrokeListenable: currentStrokeListenable,
-                  currentScale: scale,
-                  selectResult: selectResult,
-                  isSelecting: isSelecting,
-                    repaint: repaintListenable ?? currentStrokeListenable, // use extra repaint if provided
-                ),
-                size: Size(constraints.maxWidth, constraints.maxHeight),
-              ),
-        ],
-      );
-    }
+        debugPrint('📐 [SaberCoreCanvas] layout: scale=$scale, offset=($offsetX,$offsetY), size=(${drawWidth}x${drawHeight})');
         
-        // ✅ 明确传递 CustomPaint 的大小以避免在无 PDF 背景分支中出现布局为零的情况。
-        // 与有 PDF 背景的分支保持一致，使用 constraints 的最大可用宽高作为画布大小。
-        return CustomPaint(
-          painter: _SaberCoreCanvasPainter(
-            page: page,
-            coreInfo: coreInfo,
-            currentStroke: currentStroke,
-            currentScale: scale,  // ✅ 传递缩放级别
-            selectResult: selectResult,
-            isSelecting: isSelecting,
-          ),
-          size: Size(constraints.maxWidth, constraints.maxHeight),
+        // ✅ 参考Saber原版架构：PDF背景和笔迹完全分离
+        // 使用专门的StatefulWidget确保PDF背景完全隔离于画布重绘
+        return Stack(
+          children: [
+            // ✅ PDF背景层 - 使用专门的StatefulWidget，完全隔离重绘逻辑
+            if (page.backgroundImage != null)
+              _PdfBackground(
+                key: ValueKey('pdf_bg_${page.backgroundImage!.pdfFilePath}_${page.backgroundImage!.pdfPageIndex}'),
+                pdfImage: page.backgroundImage!,
+                offsetX: offsetX,
+                offsetY: offsetY,
+                drawWidth: drawWidth,
+                drawHeight: drawHeight,
+                pageSize: page.size,
+              ),
+            // ✅ 笔迹层 - CustomPaint只负责绘制笔迹和选择框，完全不包含PDF
+            CustomPaint(
+              painter: _SaberCoreCanvasPainter(
+                page: page,
+                coreInfo: coreInfo,
+                currentStroke: currentStroke,
+                currentStrokeListenable: currentStrokeListenable,
+                currentScale: scale,
+                selectResult: selectResult,
+                isSelecting: isSelecting,
+                repaint: repaintListenable ?? currentStrokeListenable,
+              ),
+              size: Size(constraints.maxWidth, constraints.maxHeight),
+            ),
+          ],
         );
       },
     );
@@ -189,7 +219,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     // 先绘制荧光笔（直接使用半透明填充，不使用 saveLayer，以避免 save/restore 不平衡问题）
     if (highlighterStrokes.isNotEmpty) {
       for (final stroke in highlighterStrokes) {
-        final Color drawColor = stroke.color.withOpacity(0.32); // 半透明叠加效果
+        final Color drawColor = stroke.color.withValues(alpha: 0.32); // 半透明叠加效果
         _drawStrokePath(canvas, stroke, scale, offsetX, offsetY, drawColor, stroke.strokeWidth * scale * 2);
       }
     }
@@ -215,7 +245,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
           scale,
           offsetX,
           offsetY,
-          strokeToDraw.color.withOpacity(0.32),
+          strokeToDraw.color.withValues(alpha: 0.32),
           strokeToDraw.strokeWidth * scale * 2,
         );
       } else if (strokeToDraw.toolId == ToolId.laserPointer) {
@@ -958,18 +988,87 @@ class _SaberCoreCanvasPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _SaberCoreCanvasPainter oldDelegate) {
-    // 参考Saber的CanvasPainter.shouldRepaint实现，精确控制重绘条件，避免过度重绘
-    return false ||
-        // 当前笔画正在绘制时，强制重绘
-        (currentStroke != null || oldDelegate.currentStroke != null) ||
-        // 激光笔笔迹正在淡出时，强制重绘（比较 coreInfo 中的激光笔列表）
-        (coreInfo.laserStrokes.isNotEmpty || oldDelegate.coreInfo.laserStrokes.isNotEmpty) ||
-        // 其他状态变化时重绘
-        page != oldDelegate.page ||
-        coreInfo != oldDelegate.coreInfo ||
-        currentScale != oldDelegate.currentScale ||
-        selectResult != oldDelegate.selectResult ||
-        isSelecting != oldDelegate.isSelecting;
+    // 参考Saber原版的精确重绘控制逻辑，确保PDF背景完全不参与重绘
+
+    // 调试日志：详细记录重绘触发原因
+    bool needsRepaint = false;
+    String repaintReason = '';
+
+    // 当前笔画正在绘制时，强制重绘
+    if (currentStroke != null || oldDelegate.currentStroke != null) {
+      needsRepaint = true;
+      repaintReason = 'currentStroke changed';
+    }
+    // 激光笔笔迹正在淡出时，强制重绘
+    else if (coreInfo.laserStrokes.isNotEmpty || oldDelegate.coreInfo.laserStrokes.isNotEmpty) {
+      needsRepaint = true;
+      repaintReason = 'laserStrokes changed';
+    }
+    // 页面笔迹数量变化时重绘（参考Saber原版，简化比较逻辑）
+    else if (page.strokes.length != oldDelegate.page.strokes.length) {
+      needsRepaint = true;
+      repaintReason = 'strokes length changed (${page.strokes.length} vs ${oldDelegate.page.strokes.length})';
+    }
+    // 页面文本框变化时重绘
+    else if (!_areTextBoxesEqual(page.textBoxes, oldDelegate.page.textBoxes)) {
+      needsRepaint = true;
+      repaintReason = 'textBoxes changed';
+    }
+    // 选择状态变化时重绘（只在真正需要时）
+    else if (!_areSelectResultsEqual(selectResult, oldDelegate.selectResult)) {
+      needsRepaint = true;
+      repaintReason = 'selectResult changed';
+    }
+    // 选择操作状态变化时重绘
+    else if (isSelecting != oldDelegate.isSelecting) {
+      needsRepaint = true;
+      repaintReason = 'isSelecting changed';
+    }
+    // 缩放级别变化时重绘
+    else if (currentScale != oldDelegate.currentScale) {
+      needsRepaint = true;
+      repaintReason = 'currentScale changed';
+    }
+    // 背景配置变化时重绘（不影响PDF层）
+    else if (coreInfo.backgroundColor != oldDelegate.coreInfo.backgroundColor ||
+             coreInfo.backgroundPattern != oldDelegate.coreInfo.backgroundPattern) {
+      needsRepaint = true;
+      repaintReason = 'background config changed';
+    }
+
+    // 只有在真正需要重绘时才输出日志，避免日志过多
+    if (needsRepaint) {
+      debugPrint('🖌️ [SaberCoreCanvasPainter] shouldRepaint: true - $repaintReason');
+    }
+
+    return needsRepaint;
+  }
+
+  /// 检查文本框列表是否相等
+  bool _areTextBoxesEqual(List<saber_text.TextBox> a, List<saber_text.TextBox> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// 检查笔画列表是否相等
+  bool _areStrokesEqual(List<Stroke> a, List<Stroke> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+
+  /// 检查选择结果是否相等
+  bool _areSelectResultsEqual(SelectResult? a, SelectResult? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return a.pageIndex == b.pageIndex &&
+           _areStrokesEqual(a.strokes, b.strokes);
   }
 }
 
