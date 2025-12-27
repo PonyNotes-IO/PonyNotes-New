@@ -311,6 +311,7 @@ impl UserCloudService for LocalServerUserServiceImpl {
       Ok(row) => Ok(AFWorkspaceSettings {
         disable_search_indexing: row.disable_search_indexing,
         ai_model: row.ai_model,
+        only_owner_can_create_team_workspace: row.only_owner_can_create_team_workspace,
       }),
       Err(err) => {
         if err.is_record_not_found() {
@@ -318,10 +319,12 @@ impl UserCloudService for LocalServerUserServiceImpl {
             id: workspace_id.to_string(),
             disable_search_indexing: false,
             ai_model: "".to_string(),
+            only_owner_can_create_team_workspace: true,
           };
           let setting = AFWorkspaceSettings {
             disable_search_indexing: row.disable_search_indexing,
             ai_model: row.ai_model.clone(),
+            only_owner_can_create_team_workspace: row.only_owner_can_create_team_workspace,
           };
           upsert_workspace_setting(&mut conn, row)?;
           Ok(setting)
@@ -344,6 +347,7 @@ impl UserCloudService for LocalServerUserServiceImpl {
       id: workspace_id.to_string(),
       disable_search_indexing: workspace_settings.disable_search_indexing,
       ai_model: workspace_settings.ai_model,
+      only_owner_can_create_team_workspace: workspace_settings.only_owner_can_create_team_workspace,
     };
 
     update_workspace_setting(&mut conn, changeset)?;
@@ -352,6 +356,7 @@ impl UserCloudService for LocalServerUserServiceImpl {
     Ok(AFWorkspaceSettings {
       disable_search_indexing: row.disable_search_indexing,
       ai_model: row.ai_model,
+      only_owner_can_create_team_workspace: row.only_owner_can_create_team_workspace,
     })
   }
 }

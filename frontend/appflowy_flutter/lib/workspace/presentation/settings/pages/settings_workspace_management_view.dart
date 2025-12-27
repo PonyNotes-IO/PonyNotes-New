@@ -1,5 +1,6 @@
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_category.dart';
@@ -19,9 +20,11 @@ class SettingsWorkspaceManagementView extends StatefulWidget {
   const SettingsWorkspaceManagementView({
     super.key,
     required this.userProfile,
+    required this.workspace,
   });
 
   final UserProfilePB userProfile;
+  final UserWorkspacePB workspace;
 
   @override
   State<SettingsWorkspaceManagementView> createState() => _SettingsWorkspaceManagementViewState();
@@ -29,6 +32,94 @@ class SettingsWorkspaceManagementView extends StatefulWidget {
 
 class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManagementView> {
   bool _onlyOwnerCanCreateTeamWorkspace = true;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // 延迟加载设置，避免在应用启动初期调用 API
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        _loadWorkspaceSettings();
+      }
+    });
+  }
+
+  Future<void> _loadWorkspaceSettings() async {
+    try {
+      final payload = UserWorkspaceIdPB(workspaceId: widget.workspace.workspaceId);
+      final result = await UserEventGetWorkspaceSetting(payload).send();
+
+      if (mounted) {
+        result.fold(
+          (settings) {
+            setState(() {
+              _onlyOwnerCanCreateTeamWorkspace = settings.onlyOwnerCanCreateTeamWorkspace;
+              _isLoading = false;
+            });
+          },
+          (err) {
+            Log.error('Failed to load workspace settings: $err');
+            // 即使失败也设置加载完成，避免界面卡住
+            setState(() {
+              _isLoading = false;
+            });
+          },
+        );
+      }
+    } catch (e) {
+      Log.error('Exception loading workspace settings: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _updateWorkspaceSetting(bool value) async {
+    try {
+      final payload = UpdateUserWorkspaceSettingPB(
+        workspaceId: widget.workspace.workspaceId,
+        onlyOwnerCanCreateTeamWorkspace: value,
+      );
+
+      final result = await UserEventUpdateWorkspaceSetting(payload).send();
+
+      result.fold(
+        (ok) {
+          Log.info('Update workspace setting success');
+          if (mounted) {
+            setState(() {
+              _onlyOwnerCanCreateTeamWorkspace = value;
+            });
+          }
+        },
+        (err) {
+          Log.error('Update workspace setting failed: $err');
+          // 显示用户友好的错误提示
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('设置更新失败: ${err.msg}'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      Log.error('Exception updating workspace setting: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('设置更新失败，请稍后重试'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +137,13 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
   }
 
   Widget _buildCreatePermissionSection() {
+    if (_isLoading) {
+      return const SettingsCategory(
+        title: '正在加载设置...',
+        children: [],
+      );
+    }
+
     return SettingsCategory(
       title: '仅工作空间所有者可以创建团队协作区',
       description: '仅允许工作空间所有者创建团队协作区',
@@ -64,9 +162,7 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
               message: message,
               confirmText: '确认',
               onConfirm: () {
-                setState(() {
-                  _onlyOwnerCanCreateTeamWorkspace = value;
-                });
+                _updateWorkspaceSetting(value);
               },
             );
           },
@@ -178,7 +274,6 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
       ),
     );
   }
-
 }
 
 // 团队协作区表格行组件
@@ -384,6 +479,3 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
     );
   }
 }
-
-
-

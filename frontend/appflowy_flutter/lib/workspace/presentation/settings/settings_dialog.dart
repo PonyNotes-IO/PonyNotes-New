@@ -203,6 +203,7 @@ class SettingsDialog extends StatelessWidget {
       case SettingsPage.workspaceManagement:
         return SettingsWorkspaceManagementView(
           userProfile: user,
+          workspace: workspace,
         );
       case SettingsPage.storage:
         return SettingsStorageView(

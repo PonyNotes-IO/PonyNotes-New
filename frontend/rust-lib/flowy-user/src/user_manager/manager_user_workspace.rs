@@ -631,6 +631,7 @@ impl UserManager {
       id: workspace_id.to_string(),
       disable_search_indexing: updated_settings.disable_search_indexing,
       ai_model: updated_settings.ai_model.clone(),
+      only_owner_can_create_team_workspace: updated_settings.only_owner_can_create_team_workspace,
     };
 
     let uid = self.user_id()?;
@@ -659,6 +660,7 @@ impl UserManager {
           disable_search_indexing: workspace_settings.disable_search_indexing,
           ai_model: workspace_settings.ai_model,
           workspace_type: WorkspaceTypePB::from(workspace_type),
+          only_owner_can_create_team_workspace: workspace_settings.only_owner_can_create_team_workspace,
         };
         let old_pb = pb.clone();
         let workspace_id = *workspace_id;

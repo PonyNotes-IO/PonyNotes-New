@@ -12,6 +12,7 @@ pub struct WorkspaceSettingsTable {
   pub id: String,
   pub disable_search_indexing: bool,
   pub ai_model: String,
+  pub only_owner_can_create_team_workspace: bool,
 }
 
 #[derive(AsChangeset, Identifiable, Default, Debug)]
@@ -20,6 +21,7 @@ pub struct WorkspaceSettingsChangeset {
   pub id: String,
   pub disable_search_indexing: Option<bool>,
   pub ai_model: Option<String>,
+  pub only_owner_can_create_team_workspace: Option<bool>,
 }
 
 impl WorkspaceSettingsTable {
@@ -28,6 +30,7 @@ impl WorkspaceSettingsTable {
       id: workspace_id.to_string(),
       disable_search_indexing: settings.disable_search_indexing,
       ai_model: settings.ai_model.clone(),
+      only_owner_can_create_team_workspace: settings.only_owner_can_create_team_workspace,
     }
   }
 }
@@ -55,6 +58,7 @@ pub fn upsert_workspace_setting(
     .set((
       workspace_setting_table::disable_search_indexing.eq(settings.disable_search_indexing),
       workspace_setting_table::ai_model.eq(settings.ai_model),
+      workspace_setting_table::only_owner_can_create_team_workspace.eq(settings.only_owner_can_create_team_workspace),
     ))
     .execute(conn)?;
   Ok(())

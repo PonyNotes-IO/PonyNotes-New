@@ -662,6 +662,10 @@ pub struct WorkspaceSettingsPB {
 
   #[pb(index = 3)]
   pub workspace_type: WorkspaceTypePB,
+ 
+  /// 新增：仅工作空间所有者可创建团队协作区
+  #[pb(index = 4)]
+  pub only_owner_can_create_team_workspace: bool,
 }
 
 impl From<&AFWorkspaceSettings> for WorkspaceSettingsPB {
@@ -670,6 +674,7 @@ impl From<&AFWorkspaceSettings> for WorkspaceSettingsPB {
       disable_search_indexing: value.disable_search_indexing,
       ai_model: value.ai_model.clone(),
       workspace_type: WorkspaceTypePB::ServerW,
+      only_owner_can_create_team_workspace: value.only_owner_can_create_team_workspace,
     }
   }
 }
@@ -685,6 +690,9 @@ pub struct UpdateUserWorkspaceSettingPB {
 
   #[pb(index = 3, one_of)]
   pub ai_model: Option<String>,
+
+  #[pb(index = 4, one_of)]
+  pub only_owner_can_create_team_workspace: Option<bool>,
 }
 
 impl From<UpdateUserWorkspaceSettingPB> for AFWorkspaceSettingsChange {
@@ -695,6 +703,9 @@ impl From<UpdateUserWorkspaceSettingPB> for AFWorkspaceSettingsChange {
     }
     if let Some(ai_model) = value.ai_model {
       change.ai_model = Some(ai_model);
+    }
+    if let Some(only_owner_flag) = value.only_owner_can_create_team_workspace {
+      change.only_owner_can_create_team_workspace = Some(only_owner_flag);
     }
     change
   }

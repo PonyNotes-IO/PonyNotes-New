@@ -145,6 +145,7 @@ diesel::table! {
         id -> Text,
         disable_search_indexing -> Bool,
         ai_model -> Text,
+        only_owner_can_create_team_workspace -> Bool,
     }
 }
 
