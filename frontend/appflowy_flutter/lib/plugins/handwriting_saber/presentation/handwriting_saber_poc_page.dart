@@ -62,10 +62,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   int _cachedPagesCount = 0;
 
   /// 当前工具（使用 ValueNotifier 以便在切换工具时避免触发父级整页重建）
+  // 默认工具：钢笔，默认颜色黑色，默认粗细 2（用户要求）
   final ValueNotifier<Tool> _currentToolNotifier = ValueNotifier<Tool>(const Pen(
     toolId: ToolId.fountainPen,
     color: Colors.black,
-    strokeWidth: 3,
+    strokeWidth: 2,
   ));
 
   /// 当前背景纸模式（使用 EditorCoreInfo.empty() 的默认以保证一致）
@@ -74,6 +75,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   
   /// ✅ 当前填充颜色（用于形状工具） - 使用 ValueNotifier 避免父级 setState 导致整页重建
   final ValueNotifier<Color?> _currentFillColorNotifier = ValueNotifier<Color?>(null);
+  /// ✅ 全局当前描边颜色（保证切换工具时保留用户选择的颜色）
+  final ValueNotifier<Color> _globalColorNotifier = ValueNotifier<Color>(Colors.black);
+  /// ✅ 全局当前描边宽度（保证切换工具时保留用户选择的线宽）
+  final ValueNotifier<double> _globalStrokeWidthNotifier = ValueNotifier<double>(2.0);
   
   /// ✅ 激光笔淡出定时器（用于管理多个激光笔笔迹的淡出）
   final Map<Stroke, Timer> _laserFadeOutTimers = {};
@@ -541,6 +546,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     if (strokesToRemove.isNotEmpty) {
       final pageNotifier = _pageNotifiers[targetPageIndex];
       pageNotifier.removeStrokes(strokesToRemove);
+      // 重要：同步更新核心数据结构 _coreInfo.pages，确保持久化与后续的页面重建使用一致的数据源。
+      // 否则在后续的工具切换（例如切换到选择工具时会使用 _coreInfo.pages 来更新页面）
+      // 会把已擦除的笔迹恢复回来（因为 _coreInfo.pages 仍然包含旧笔迹）。
+      try {
+        _coreInfo.pages[targetPageIndex] = pageNotifier.page;
+      } catch (e) {
+        // 保底日志，避免抛出异常影响 UI
+        debugPrint('🦋[HandwritingSaber] Warning: failed to sync _coreInfo.pages[$targetPageIndex]: $e');
+      }
       _scheduleSave();
     }
   }
@@ -1209,7 +1223,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
 
   void _onColorChanged(Color color) {
-    // 仅更新当前工具的颜色，不触发父级重建（toolbar 会通过 notifier 更新自身）
+    // 更新全局颜色，保持切换工具时颜色不丢失
+    _globalColorNotifier.value = color;
+    // 如果当前工具是笔类（包括形状工具也使用 Pen 表示），同时更新当前工具的颜色以便立即生效
     if (_currentToolNotifier.value is Pen) {
       final updated = (_currentToolNotifier.value as Pen).copyWith(color: color);
       _currentToolNotifier.value = updated;
@@ -1223,7 +1239,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
 
   void _onStrokeWidthChanged(double width) {
-    // 更新当前工具的 strokeWidth，不触发父级重建
+    // 更新全局线宽，保持切换工具时线宽不丢失
+    _globalStrokeWidthNotifier.value = width;
+    // 同步更新当前工具以便立刻生效
     if (_currentToolNotifier.value is Pen) {
       _currentToolNotifier.value = (_currentToolNotifier.value as Pen).copyWith(strokeWidth: width);
     } else if (_currentToolNotifier.value is Eraser) {
@@ -1732,6 +1750,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _repaintTick.dispose();
     // ✅ 清理填充颜色 notifier
     _currentFillColorNotifier.dispose();
+    // ✅ 清理全局颜色与线宽 notifier
+    _globalColorNotifier.dispose();
+    _globalStrokeWidthNotifier.dispose();
 
     super.dispose();
   }
@@ -1771,9 +1792,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                     onToolChanged: _onToolChanged,
                     currentBackgroundPattern: _currentBackgroundPattern,
                     onBackgroundPatternChanged: _onBackgroundPatternChanged,
-                    currentColor: currentTool.color,
+                    // 使用全局颜色/线宽，确保切换工具时保持用户设置
+                    currentColor: _globalColorNotifier.value,
                     onColorChanged: _onColorChanged,
-                    currentStrokeWidth: currentTool.strokeWidth,
+                    currentStrokeWidth: _globalStrokeWidthNotifier.value,
                     onStrokeWidthChanged: _onStrokeWidthChanged,
                     currentFillColor: fillColor, // ✅ 填充颜色（由 notifier 驱动）
                     onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
