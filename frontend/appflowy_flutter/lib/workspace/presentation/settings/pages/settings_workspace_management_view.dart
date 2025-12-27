@@ -46,29 +46,19 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
 
   Widget _buildCreatePermissionSection() {
     return SettingsCategory(
-      title: '仅工作空间所有者才能创建团队协作区',
-      description: '仅允许工作空间所有者才能创建团队协作区',
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: FlowyText(
-                '仅工作空间所有者才能创建团队协作区',
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
-              ),
-            ),
-            Toggle(
-              value: _onlyOwnerCanCreateTeamWorkspace,
-              onChanged: (value) {
-                setState(() {
-                  _onlyOwnerCanCreateTeamWorkspace = value;
-                });
-              },
-            ),
-          ],
+      title: '仅工作空间所有者可以创建团队协作区',
+      description: '仅允许工作空间所有者创建团队协作区',
+      actions: [
+        Toggle(
+          value: _onlyOwnerCanCreateTeamWorkspace,
+          onChanged: (value) {
+            setState(() {
+              _onlyOwnerCanCreateTeamWorkspace = value;
+            });
+          },
         ),
       ],
+      children: const [],
     );
   }
 

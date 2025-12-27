@@ -31,37 +31,55 @@ class SettingsCategory extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              title,
-              style: theme.textStyle.heading4.enhanced(
-                color: theme.textColorScheme.primary,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: theme.textStyle.heading4.enhanced(
+                            color: theme.textColorScheme.primary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (tooltip != null) ...[
+                        const HSpace(4),
+                        FlowyTooltip(
+                          message: tooltip,
+                          child: const FlowySvg(FlowySvgs.information_s),
+                        ),
+                      ],
+                    ],
+                  ),
+                  if (description?.isNotEmpty ?? false) ...[
+                    const VSpace(8),
+                    FlowyText.regular(
+                      description!,
+                      maxLines: 4,
+                      fontSize: 12,
+                      overflow: TextOverflow.ellipsis,
+                      color: descriptionColor,
+                    ),
+                  ],
+                ],
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-            if (tooltip != null) ...[
-              const HSpace(4),
-              FlowyTooltip(
-                message: tooltip,
-                child: const FlowySvg(FlowySvgs.information_s),
+            if (actions != null)
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: actions!,
               ),
-            ],
-            const Spacer(),
-            if (actions != null) ...actions!,
           ],
         ),
-        const VSpace(16),
-        if (description?.isNotEmpty ?? false) ...[
-          FlowyText.regular(
-            description!,
-            maxLines: 4,
-            fontSize: 12,
-            overflow: TextOverflow.ellipsis,
-            color: descriptionColor,
-          ),
-          const VSpace(8),
-        ],
+        const VSpace(8),
         SeparatedColumn(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
