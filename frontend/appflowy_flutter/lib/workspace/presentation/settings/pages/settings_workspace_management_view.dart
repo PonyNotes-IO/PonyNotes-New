@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_category.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -52,9 +53,22 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
         Toggle(
           value: _onlyOwnerCanCreateTeamWorkspace,
           onChanged: (value) {
-            setState(() {
-              _onlyOwnerCanCreateTeamWorkspace = value;
-            });
+            // value == true means turning on (limit to owners)
+            // value == false means turning off (allow all members)
+            final message = value
+                ? '限定此工作空间只有工作空间所有者可以创建团队协作区？'
+                : '允许此工作空间的所有成员创建团队协作区？';
+
+            showSimpleConfirmDialog(
+              context: context,
+              message: message,
+              confirmText: '确认',
+              onConfirm: () {
+                setState(() {
+                  _onlyOwnerCanCreateTeamWorkspace = value;
+                });
+              },
+            );
           },
         ),
       ],
