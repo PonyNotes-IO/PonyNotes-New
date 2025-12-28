@@ -227,13 +227,19 @@ class _AccountManagementViewState extends State<AccountManagementView> {
   }
 
   WorkspacePlanPB? get _effectivePlan {
-    final availablePlans = _planConfigs.keys.toList();
+    // 过滤掉免费版，只考虑其他计划
+    final availablePlans = _planConfigs.keys
+        .where((plan) => plan != WorkspacePlanPB.FreePlan)
+        .toList();
     if (availablePlans.isEmpty) return null;
 
-    if (_selectedPlan != null && _planConfigs.containsKey(_selectedPlan)) {
+    if (_selectedPlan != null && 
+        _selectedPlan != WorkspacePlanPB.FreePlan &&
+        _planConfigs.containsKey(_selectedPlan)) {
       return _selectedPlan;
     }
     if (_subscriptionInfo != null &&
+        _subscriptionInfo!.plan != WorkspacePlanPB.FreePlan &&
         _planConfigs.containsKey(_subscriptionInfo!.plan)) {
       return _subscriptionInfo!.plan;
     }
@@ -360,8 +366,9 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     final theme = AppFlowyTheme.of(context);
     // final currentPlan = _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
     final selectedPlan = _effectivePlan;
+    // 过滤掉免费版，只展示其他三项（学生版、标准版、团队版）
     final plans = _planConfigs.entries
-        .where((e) => e.value.isActive)
+        .where((e) => e.value.isActive && e.key != WorkspacePlanPB.FreePlan)
         .map((e) => e.key)
         .toList();
 
