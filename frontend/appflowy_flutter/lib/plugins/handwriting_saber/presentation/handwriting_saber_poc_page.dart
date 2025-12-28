@@ -57,9 +57,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 页面状态notifier列表（用于精确更新，避免全量重建）
   final List<EditorPageNotifier> _pageNotifiers = [];
-  /// 缓存构建好的页面 widgets，避免父级重建时重新创建大量 ListenableBuilder 导致瞬时构建溢出
-  List<Widget>? _cachedPageWidgets;
-  int _cachedPagesCount = 0;
 
   /// 当前工具（使用 ValueNotifier 以便在切换工具时避免触发父级整页重建）
   // 默认工具：钢笔，默认颜色黑色，默认粗细 2（用户要求）
@@ -94,11 +91,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   bool _isSelecting = false; // 是否正在选择（拖拽选择区域）
   Offset? _selectStartPosition; // 选择开始位置
   
-  /// ✅ 当前正在编辑的文本框ID
-  String? _editingTextBoxId;
+  /// ✅ 当前正在编辑的文本框ID（使用ValueNotifier避免全局setState）
+  final ValueNotifier<String?> _editingTextBoxIdNotifier = ValueNotifier<String?>(null);
   
   /// ✅ 文本框编辑控制器
   final Map<String, TextEditingController> _textBoxControllers = {};
+  
+  /// ✅ 页面widgets缓存（避免父级重建时重新创建所有页面，参考2025-12-27-小手工具闪烁终极修复记录.md）
+  List<Widget>? _cachedPageWidgets;
+  int _cachedPagesCount = 0;
 
   @override
   void initState() {
@@ -775,12 +776,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   
   /// ✅ 创建文本框（直接在画布上编辑，不弹出对话框）
   void _createTextBox(Offset position, {int? pageIndex}) {
+    debugPrint('🦋[HandwritingSaber] _createTextBox called: position=$position, pageIndex=$pageIndex');
     final pageIdx = pageIndex ?? 0;
     if (pageIdx < 0 || pageIdx >= _coreInfo.pages.length) {
+      debugPrint('🦋[HandwritingSaber] _createTextBox: invalid pageIdx=$pageIdx, pages.length=${_coreInfo.pages.length}');
       return;
     }
     
     final page = _coreInfo.pages[pageIdx];
+    debugPrint('🦋[HandwritingSaber] _createTextBox: page.textBoxes.length=${page.textBoxes.length}');
     
     // ✅ 根据工具类型确定文本框类型
     saber_text.TextBoxType textBoxType = saber_text.TextBoxType.normal;
@@ -816,16 +820,56 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     final controller = TextEditingController(text: '');
     _textBoxControllers[textBox.id] = controller;
     
-    // ✅ 添加到页面并进入编辑模式
-    setState(() {
-      page.textBoxes.add(textBox);
-      _editingTextBoxId = textBox.id;
-    });
+    // ✅ 添加到页面并进入编辑模式（使用EditorPageNotifier避免全局setState）
+    debugPrint('🦋[HandwritingSaber] _createTextBox: adding textBox id=${textBox.id} to page, position=${textBox.position}, size=${textBox.size}');
+    
+    // ✅ 更新页面数据（使用EditorPageNotifier，只触发该页面的局部重建）
+    final updatedPage = EditorPage(
+      size: page.size,
+      strokes: page.strokes,
+      backgroundImage: page.backgroundImage,
+      textBoxes: List<saber_text.TextBox>.from(page.textBoxes)..add(textBox),
+      listBoxes: page.listBoxes,
+      taskListBoxes: page.taskListBoxes,
+    );
+    
+    // ✅ 更新coreInfo中的页面数据
+    final updatedPages = List<EditorPage>.from(_coreInfo.pages);
+    updatedPages[pageIdx] = updatedPage;
+    _coreInfo = EditorCoreInfo(
+      pages: updatedPages,
+      backgroundColor: _coreInfo.backgroundColor,
+      backgroundPattern: _coreInfo.backgroundPattern,
+      lineHeight: _coreInfo.lineHeight,
+      lineThickness: _coreInfo.lineThickness,
+    );
+    
+    // ✅ 使用EditorPageNotifier更新页面（只触发该页面的局部重建，不影响PDF）
+    if (pageIdx < _pageNotifiers.length) {
+      _pageNotifiers[pageIdx].updatePage(updatedPage);
+    }
+    
+    // ✅ 使用ValueNotifier更新编辑状态（不触发全局setState）
+    _editingTextBoxIdNotifier.value = textBox.id;
+    debugPrint('🦋[HandwritingSaber] _createTextBox: completed, _editingTextBoxId=${_editingTextBoxIdNotifier.value}, page.textBoxes.length=${updatedPage.textBoxes.length}');
     
     // ✅ 监听文本变化（仅更新模型并使用防抖保存，避免频繁 setState）
     controller.addListener(() {
-      if (_editingTextBoxId == textBox.id) {
+      if (_editingTextBoxIdNotifier.value == textBox.id) {
         textBox.text = controller.text;
+        // ✅ 更新页面数据（使用EditorPageNotifier，只触发画布重绘，不影响PDF）
+        if (pageIdx < _pageNotifiers.length) {
+          final currentPage = _coreInfo.pages[pageIdx];
+          final updatedPageForText = EditorPage(
+            size: currentPage.size,
+            strokes: currentPage.strokes,
+            backgroundImage: currentPage.backgroundImage,
+            textBoxes: currentPage.textBoxes,
+            listBoxes: currentPage.listBoxes,
+            taskListBoxes: currentPage.taskListBoxes,
+          );
+          _pageNotifiers[pageIdx].updatePage(updatedPageForText);
+        }
         _scheduleSave();
       }
     });
@@ -853,6 +897,22 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   
   /// ✅ 编辑文本框（点击已存在的文本框时调用，直接在画布上编辑）
   void _editTextBox(saber_text.TextBox textBox) {
+    // ✅ 查找文本框所在的页面索引
+    int? pageIndex;
+    for (int i = 0; i < _coreInfo.pages.length; i++) {
+      if (_coreInfo.pages[i].textBoxes.contains(textBox)) {
+        pageIndex = i;
+        break;
+      }
+    }
+    if (pageIndex == null) {
+      debugPrint('🦋[HandwritingSaber] _editTextBox: textBox not found in any page');
+      return;
+    }
+    
+    // ✅ 保存页面索引为final变量，避免闭包中的null检查问题
+    final finalPageIndex = pageIndex;
+    
     // ✅ 创建或获取文本编辑控制器
     if (!_textBoxControllers.containsKey(textBox.id)) {
       final controller = TextEditingController(text: textBox.text);
@@ -860,8 +920,21 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       
       // ✅ 监听文本变化（仅更新模型并使用防抖保存，避免频繁 setState）
       controller.addListener(() {
-        if (_editingTextBoxId == textBox.id) {
+        if (_editingTextBoxIdNotifier.value == textBox.id) {
           textBox.text = controller.text;
+          // ✅ 更新页面数据（使用EditorPageNotifier，只触发画布重绘，不影响PDF）
+          if (finalPageIndex < _pageNotifiers.length) {
+            final currentPage = _coreInfo.pages[finalPageIndex];
+            final updatedPage = EditorPage(
+              size: currentPage.size,
+              strokes: currentPage.strokes,
+              backgroundImage: currentPage.backgroundImage,
+              textBoxes: currentPage.textBoxes,
+              listBoxes: currentPage.listBoxes,
+              taskListBoxes: currentPage.taskListBoxes,
+            );
+            _pageNotifiers[finalPageIndex].updatePage(updatedPage);
+          }
           _scheduleSave();
         }
       });
@@ -870,17 +943,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _textBoxControllers[textBox.id]!.text = textBox.text;
     }
     
-    // ✅ 进入编辑模式
-    setState(() {
-      _editingTextBoxId = textBox.id;
-    });
+    // ✅ 进入编辑模式（使用ValueNotifier，不触发全局setState）
+    _editingTextBoxIdNotifier.value = textBox.id;
   }
   
-  /// ✅ 结束文本框编辑
+  /// ✅ 结束文本框编辑（使用ValueNotifier，不触发全局setState）
   void _endTextBoxEditing() {
-    setState(() {
-      _editingTextBoxId = null;
-    });
+    _editingTextBoxIdNotifier.value = null;
   }
   
   /// ✅ 构建文本框编辑器（直接在画布上显示）
@@ -891,21 +960,23 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     double pageDisplayWidth,
     double pageDisplayHeight,
   ) {
-    // ✅ 计算页面缩放和偏移
+    debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor called: textBox.id=${textBox.id}, pageIndex=$pageIndex');
+    debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor: screenWidth=$screenWidth, pageDisplayWidth=$pageDisplayWidth, pageDisplayHeight=$pageDisplayHeight');
+    
+    // ✅ 计算页面缩放和偏移（与 _buildSinglePageCanvas 保持一致）
     final page = _coreInfo.pages[pageIndex];
-    final double scaleX = pageDisplayWidth / page.size.width;
-    final double scaleY = pageDisplayHeight / page.size.height;
-    final double scale = scaleX < scaleY ? scaleX : scaleY;
-    final double drawWidth = page.size.width * scale;
-    final double drawHeight = page.size.height * scale;
-    final double offsetX = (screenWidth - drawWidth) / 2;
-    final double offsetY = (pageDisplayHeight - drawHeight) / 2;
+    final double scale = pageDisplayWidth / page.size.width;
+    // 注意：offsetX 和 offsetY 应该与 _buildSinglePageCanvas 中的计算一致
+    final double offsetX = (screenWidth - pageDisplayWidth) / 2;
+    final double offsetY = 0;  // 页面顶部对齐，与 _buildSinglePageCanvas 一致
+    debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor: page.size=${page.size}, scale=$scale, offsetX=$offsetX, offsetY=$offsetY');
     
     // ✅ 计算文本框在屏幕上的位置
     final double textBoxLeft = offsetX + textBox.position.dx * scale;
     final double textBoxTop = offsetY + textBox.position.dy * scale;
     final double textBoxWidth = textBox.size.width * scale;
     final double textBoxHeight = textBox.size.height * scale;
+    debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor: textBoxLeft=$textBoxLeft, textBoxTop=$textBoxTop, textBoxWidth=$textBoxWidth, textBoxHeight=$textBoxHeight');
     
     // ✅ 获取或创建文本控制器
     if (!_textBoxControllers.containsKey(textBox.id)) {
@@ -914,8 +985,21 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       
       // ✅ 监听文本变化（仅更新模型并使用防抖保存，避免频繁 setState）
       controller.addListener(() {
-        if (_editingTextBoxId == textBox.id) {
+        if (_editingTextBoxIdNotifier.value == textBox.id) {
           textBox.text = controller.text;
+          // ✅ 更新页面数据（使用EditorPageNotifier，只触发画布重绘，不影响PDF）
+          if (pageIndex < _pageNotifiers.length) {
+            final currentPage = _coreInfo.pages[pageIndex];
+            final updatedPage = EditorPage(
+              size: currentPage.size,
+              strokes: currentPage.strokes,
+              backgroundImage: currentPage.backgroundImage,
+              textBoxes: currentPage.textBoxes,
+              listBoxes: currentPage.listBoxes,
+              taskListBoxes: currentPage.taskListBoxes,
+            );
+            _pageNotifiers[pageIndex].updatePage(updatedPage);
+          }
           _scheduleSave();
         }
       });
@@ -923,31 +1007,68 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     
     final controller = _textBoxControllers[textBox.id]!;
     
+    // ✅ 计算缩放后的字体大小，确保最小为 12
+    final double baseFontSize = textBox.textStyle?.fontSize ?? 16;
+    final double scaledFontSize = (baseFontSize * scale).clamp(12.0, 72.0);
+    
+    // ✅ 确保文本框有最小尺寸以便正常显示和输入
+    final double minWidth = 150.0;
+    final double minHeight = 50.0;
+    final double finalWidth = textBoxWidth < minWidth ? minWidth : textBoxWidth;
+    final double finalHeight = textBoxHeight < minHeight ? minHeight : textBoxHeight;
+    
+    debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor: scaledFontSize=$scaledFontSize, finalWidth=$finalWidth, finalHeight=$finalHeight');
+    
     return Positioned(
       left: textBoxLeft,
       top: textBoxTop,
-      width: textBoxWidth,
-      height: textBoxHeight,
-      child: TextField(
-        autofocus: true,
-        controller: controller,
-        maxLines: null,
-        minLines: 1,
-        style: textBox.textStyle ?? const TextStyle(fontSize: 16),
-        decoration: InputDecoration(
-          hintText: '输入文本...',
-          border: OutlineInputBorder(
-            borderSide: BorderSide(color: Colors.blue, width: 2),
+      width: finalWidth,
+      height: finalHeight,
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.95),
+            border: Border.all(color: Colors.blue, width: 2),
+            borderRadius: BorderRadius.circular(4),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-          filled: true,
-          fillColor: Colors.white.withValues(alpha: 0.95),
+          child: TextField(
+            autofocus: true,
+            controller: controller,
+            // ✅ 当 expands: true 时，maxLines 和 minLines 必须为 null
+            maxLines: null,
+            expands: true,
+            textAlignVertical: TextAlignVertical.top,
+            style: TextStyle(
+              fontSize: scaledFontSize,
+              color: textBox.textStyle?.color ?? Colors.black,
+              fontWeight: textBox.textStyle?.fontWeight,
+              fontStyle: textBox.textStyle?.fontStyle,
+            ),
+            decoration: InputDecoration(
+              hintText: '输入文本...',
+              hintStyle: TextStyle(
+                fontSize: scaledFontSize,
+                color: Colors.grey.withValues(alpha: 0.5),
+              ),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.all(8),
+            ),
+            onSubmitted: (_) {
+              _endTextBoxEditing();
+            },
+            onTapOutside: (_) {
+              _endTextBoxEditing();
+            },
+          ),
         ),
-        onSubmitted: (_) {
-          _endTextBoxEditing();
-        },
-        onTapOutside: (_) {
-          _endTextBoxEditing();
-        },
       ),
     );
   }
@@ -1175,6 +1296,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   void _onToolChanged(Tool tool) {
     debugPrint('🦋[HandwritingSaber] _onToolChanged: ${tool.toolId}');
     
+    // ✅ 如果是文本框工具，打印日志确认
+    if (tool.toolId == ToolId.textBox ||
+        tool.toolId == ToolId.heading1 ||
+        tool.toolId == ToolId.heading2 ||
+        tool.toolId == ToolId.heading3 ||
+        tool.toolId == ToolId.paragraph) {
+      debugPrint('🦋[HandwritingSaber] _onToolChanged: 切换到文本工具: ${tool.toolId}');
+    }
+    
     // ✅ 切换工具：避免使用 setState 导致全量重建，改为仅通知受影响的页面 notifier
     if (tool.toolId == ToolId.select) {
       debugPrint('🦋[HandwritingSaber] Switching to select tool, clearing selection');
@@ -1297,9 +1427,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         debugPrint('🦋[HandwritingSaber] onPanStart: local=${details.localPosition}, pagePos=$pagePos, pageIndex=$pageIndex, tool=${_currentToolNotifier.value.toolId}');
         if (pagePos.dx.isFinite && pagePos.dy.isFinite) {
           // ✅ 如果点击在空白区域，结束文本框编辑
-          if (_editingTextBoxId != null) {
+          if (_editingTextBoxIdNotifier.value != null) {
             final clickedTextBox = _findTextBoxAtPosition(pagePos, pageIndex);
-            if (clickedTextBox == null || clickedTextBox.id != _editingTextBoxId) {
+            if (clickedTextBox == null || clickedTextBox.id != _editingTextBoxIdNotifier.value) {
               _endTextBoxEditing();
             }
           }
@@ -1383,12 +1513,26 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                   LogUtils.debug('🦋[HandwritingSaber] _buildSinglePageCanvas: pageIndex=$pageIndex, page.backgroundImage=${page.backgroundImage != null}, coreInfo.backgroundPattern=${_coreInfo.backgroundPattern}, currentBackgroundPattern=$_currentBackgroundPattern, page.strokes=${page.strokes.length}');
                   return const SizedBox.shrink();
                 }),
-              // ✅ 文本框编辑层（直接在画布上编辑）
-              if (_editingTextBoxId != null) ...[
-                for (final textBox in page.textBoxes)
-                  if (textBox.id == _editingTextBoxId)
-                    _buildTextBoxEditor(textBox, pageIndex, screenWidth, pageDisplayWidth, pageDisplayHeight),
-              ],
+              // ✅ 文本框编辑层（直接在画布上编辑，使用ValueListenableBuilder避免全局重建）
+              ValueListenableBuilder<String?>(
+                valueListenable: _editingTextBoxIdNotifier,
+                builder: (context, editingTextBoxId, _) {
+                  if (editingTextBoxId != null) {
+                    // ✅ 查找匹配的文本框，使用try-catch避免空列表访问错误
+                    try {
+                      final textBox = page.textBoxes.firstWhere(
+                        (tb) => tb.id == editingTextBoxId,
+                      );
+                      return _buildTextBoxEditor(textBox, pageIndex, screenWidth, pageDisplayWidth, pageDisplayHeight);
+                    } catch (e) {
+                      // ✅ 如果找不到匹配的文本框（列表为空或没有匹配项），返回空widget
+                      debugPrint('🦋[HandwritingSaber] _buildSinglePageCanvas: textBox not found for id=$editingTextBoxId, error=$e');
+                      return const SizedBox.shrink();
+                    }
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
             ],
           ),
         ),
@@ -1860,7 +2004,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                     pageWidgets.add(const SizedBox(height: 16));
                   }
                 }
-                // 避免每次父组件重建时重新创建所有 page widgets，若页面数量未变化则复用缓存
+                // ✅ 页面widgets缓存机制（参考2025-12-27-小手工具闪烁终极修复记录.md）
+                // 只有当页面数量发生变化时才重新构建缓存，避免父级重建时重新创建所有页面
+                // 文本框编辑器的显示/隐藏通过ValueListenableBuilder处理，不影响缓存
                 if (_cachedPageWidgets == null || _cachedPagesCount != _coreInfo.pages.length) {
                   _cachedPageWidgets = List<Widget>.from(pageWidgets);
                   _cachedPagesCount = _coreInfo.pages.length;
