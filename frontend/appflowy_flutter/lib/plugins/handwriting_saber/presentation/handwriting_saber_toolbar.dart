@@ -21,6 +21,12 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.currentFillColor, // ✅ 当前填充颜色（可选）
     this.onFillColorChanged, // ✅ 填充颜色改变回调（可选）
     this.onImportPdf,  // ✅ PDF 导入回调（可选）
+    this.canUndo = false, // ✅ 是否可以撤销
+    this.canRedo = false, // ✅ 是否可以恢复
+    this.onUndo, // ✅ 撤销回调（可选）
+    this.onRedo, // ✅ 恢复回调（可选）
+    this.isDashed = false, // ✅ 是否为虚线模式
+    this.onDashedChanged, // ✅ 虚线模式改变回调（可选）
   });
 
   final Tool currentTool;
@@ -34,6 +40,12 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final Color? currentFillColor; // ✅ 当前填充颜色
   final ValueChanged<Color?>? onFillColorChanged; // ✅ 填充颜色改变回调
   final VoidCallback? onImportPdf;  // ✅ PDF 导入回调
+  final bool canUndo; // ✅ 是否可以撤销
+  final bool canRedo; // ✅ 是否可以恢复
+  final VoidCallback? onUndo; // ✅ 撤销回调
+  final VoidCallback? onRedo; // ✅ 恢复回调
+  final bool isDashed; // ✅ 是否为虚线模式
+  final ValueChanged<bool>? onDashedChanged; // ✅ 虚线模式改变回调
 
   // 预定义颜色列表
   static const List<Color> presetColors = [
@@ -73,6 +85,9 @@ class HandwritingSaberToolbar extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // ✅ 撤销/恢复按钮
+            _buildUndoRedoButtons(),
+            _buildDivider(),
             // ✅ 工具选择（分组显示）
             _buildToolSelectorGrouped(),
             // ✅ 分隔线
@@ -83,6 +98,12 @@ class HandwritingSaberToolbar extends StatelessWidget {
             if (_isShapeTool(currentTool.toolId) && onFillColorChanged != null) ...[
               const SizedBox(width: 8),
               _buildFillColorSelector(),
+            ],
+            // ✅ 虚线/实线切换（仅直线工具显示）
+            if ((currentTool.toolId == ToolId.line || currentTool.toolId == ToolId.arrowLine) && 
+                onDashedChanged != null) ...[
+              const SizedBox(width: 8),
+              _buildDashedToggle(),
             ],
             // ✅ 分隔线
             _buildDivider(),
@@ -217,6 +238,16 @@ class HandwritingSaberToolbar extends StatelessWidget {
                     strokeWidth: currentStrokeWidth,
                   ),
                   label: '直线',
+                ),
+                _buildToolButton(
+                  context: context,
+                  icon: FontAwesomeIcons.arrowRight,
+                  tool: Pen(
+                    toolId: ToolId.arrowLine,
+                    color: currentColor,
+                    strokeWidth: currentStrokeWidth,
+                  ),
+                  label: '箭头直线',
                 ),
                 _buildToolButton(
                   context: context,
@@ -685,6 +716,77 @@ class HandwritingSaberToolbar extends StatelessWidget {
             );
           }),
         ],
+      ),
+    );
+  }
+  
+  /// ✅ 构建撤销/恢复按钮
+  Widget _buildUndoRedoButtons() {
+    return Builder(
+      builder: (context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 撤销按钮
+          Tooltip(
+            message: '撤销',
+            child: IconButton(
+              icon: const Icon(Icons.undo, size: 20),
+              onPressed: canUndo ? onUndo : null,
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(
+                minWidth: 40,
+                minHeight: 40,
+              ),
+              color: canUndo
+                  ? Theme.of(context).colorScheme.onSurface
+                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+            ),
+          ),
+          // 恢复按钮
+          Tooltip(
+            message: '恢复',
+            child: IconButton(
+              icon: const Icon(Icons.redo, size: 20),
+              onPressed: canRedo ? onRedo : null,
+              padding: const EdgeInsets.all(8),
+              constraints: const BoxConstraints(
+                minWidth: 40,
+                minHeight: 40,
+              ),
+              color: canRedo
+                  ? Theme.of(context).colorScheme.onSurface
+                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// ✅ 构建虚线/实线切换按钮
+  Widget _buildDashedToggle() {
+    return Builder(
+      builder: (context) => Tooltip(
+            message: isDashed ? '实线' : '虚线',
+        child: IconButton(
+          icon: Icon(
+            isDashed ? Icons.remove : Icons.remove_done,
+            size: 20,
+          ),
+          onPressed: () {
+            if (onDashedChanged != null) {
+              onDashedChanged!(!isDashed);
+            }
+          },
+          padding: const EdgeInsets.all(8),
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+          ),
+          color: isDashed
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.onSurface,
+        ),
       ),
     );
   }

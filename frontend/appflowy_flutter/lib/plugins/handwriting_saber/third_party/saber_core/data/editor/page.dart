@@ -121,6 +121,8 @@ class EditorPage {
             switch (shape) {
               case 'line':
                 return LineStroke.fromJson(json) as Stroke;
+              case 'arrowLine':
+                return ArrowLineStroke.fromJson(json) as Stroke;
               case 'rectangle':
                 return RectangleStroke.fromJson(json) as Stroke;
               case 'circle':

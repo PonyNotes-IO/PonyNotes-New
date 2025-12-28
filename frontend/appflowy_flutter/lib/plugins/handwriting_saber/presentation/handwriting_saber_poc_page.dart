@@ -13,6 +13,7 @@ import '../third_party/saber_core/components/canvas/canvas_background_pattern.da
 import '../third_party/saber_core/components/canvas/image/pdf_editor_image.dart';
 import '../third_party/saber_core/components/canvas/saber_core_canvas.dart';
 import '../third_party/saber_core/data/editor/editor_core_info.dart';
+import '../third_party/saber_core/data/editor/editor_history.dart'; // ✅ 导入历史记录管理器
 import '../third_party/saber_core/data/editor/page.dart';
 import '../third_party/saber_core/data/editor/shape_strokes.dart';
 import '../third_party/saber_core/data/editor/stroke_extensions.dart'; // ✅ 导入扩展方法
@@ -100,6 +101,16 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// ✅ 页面widgets缓存（避免父级重建时重新创建所有页面，参考2025-12-27-小手工具闪烁终极修复记录.md）
   List<Widget>? _cachedPageWidgets;
   int _cachedPagesCount = 0;
+  
+  /// ✅ 历史记录管理器
+  final EditorHistory _history = EditorHistory();
+  
+  /// ✅ 撤销/恢复状态 notifier（用于更新工具栏按钮状态）
+  final ValueNotifier<bool> _canUndoNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _canRedoNotifier = ValueNotifier<bool>(false);
+  
+  /// ✅ 当前是否为虚线模式（用于直线工具）
+  final ValueNotifier<bool> _isDashedModeNotifier = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -545,6 +556,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     
     // 删除相交的笔迹（使用notifier避免全量重建）
     if (strokesToRemove.isNotEmpty) {
+      // ✅ 记录擦除操作到历史记录
+      _history.recordChange(EditorHistoryItem.erase(
+        pageIndex: targetPageIndex,
+        deletedStrokes: List<Stroke>.from(strokesToRemove),
+      ));
+      _updateUndoRedoState();
+      
       final pageNotifier = _pageNotifiers[targetPageIndex];
       pageNotifier.removeStrokes(strokesToRemove);
       // 重要：同步更新核心数据结构 _coreInfo.pages，确保持久化与后续的页面重建使用一致的数据源。
@@ -642,6 +660,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         sw.reset();
       }
     } else if (toolId == ToolId.line ||
+        toolId == ToolId.arrowLine ||
         toolId == ToolId.rectangle || 
         toolId == ToolId.circle || 
         toolId == ToolId.diamond) {
@@ -1173,6 +1192,19 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           color: stroke.color,
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
+          isDashed: _isDashedModeNotifier.value, // ✅ 使用虚线模式状态
+        );
+      }
+    } else if (toolId == ToolId.arrowLine) {
+      // ✅ 带箭头直线
+      if (stroke.points.length >= 2) {
+        finalStroke = ArrowLineStroke(
+          startPoint: stroke.points.first,
+          endPoint: stroke.points[1],
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: toolId,
+          isDashed: _isDashedModeNotifier.value, // ✅ 使用虚线模式状态
         );
       }
     } else if (toolId == ToolId.rectangle) {
@@ -1276,6 +1308,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // ✅ 保存完成的笔迹到正确的页面
     if (finalStroke != null) {
       _coreInfo.pages[targetPageIndex].strokes.add(finalStroke);
+      
+      // ✅ 记录绘制操作到历史记录
+      _history.recordChange(EditorHistoryItem.draw(
+        pageIndex: targetPageIndex,
+        strokes: [finalStroke],
+      ));
+      _updateUndoRedoState();
     }
     
     // 清空 notifier 值，触发 CustomPainter 的局部重绘
@@ -1291,6 +1330,92 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // 否则安排一次延迟保存（确保最终一致性）
       _scheduleSave();
     }
+  }
+  
+  /// ✅ 更新撤销/恢复按钮状态
+  void _updateUndoRedoState() {
+    _canUndoNotifier.value = _history.canUndo;
+    _canRedoNotifier.value = _history.canRedo;
+  }
+  
+  /// ✅ 撤销操作
+  void _undo() {
+    if (!_history.canUndo) return;
+    
+    final item = _history.undo();
+    _updateUndoRedoState();
+    
+    // 根据操作类型执行撤销
+    switch (item.type) {
+      case EditorHistoryItemType.draw:
+        // 撤销绘制：删除笔迹
+        for (final stroke in item.strokes) {
+          final page = _coreInfo.pages[item.pageIndex];
+          page.strokes.remove(stroke);
+        }
+        // 更新页面 notifier
+        if (item.pageIndex < _pageNotifiers.length) {
+          _pageNotifiers[item.pageIndex].updatePage(_coreInfo.pages[item.pageIndex]);
+        }
+        break;
+      case EditorHistoryItemType.erase:
+        // 撤销擦除：恢复笔迹
+        if (item.deletedStrokes != null) {
+          for (final stroke in item.deletedStrokes!) {
+            final page = _coreInfo.pages[item.pageIndex];
+            page.strokes.add(stroke);
+          }
+          // 更新页面 notifier
+          if (item.pageIndex < _pageNotifiers.length) {
+            _pageNotifiers[item.pageIndex].updatePage(_coreInfo.pages[item.pageIndex]);
+          }
+        }
+        break;
+      default:
+        break;
+    }
+    
+    _scheduleSave();
+  }
+  
+  /// ✅ 恢复操作
+  void _redo() {
+    if (!_history.canRedo) return;
+    
+    final item = _history.redo();
+    _updateUndoRedoState();
+    
+    // 根据操作类型执行恢复
+    switch (item.type) {
+      case EditorHistoryItemType.draw:
+        // 恢复绘制：添加笔迹
+        for (final stroke in item.strokes) {
+          final page = _coreInfo.pages[item.pageIndex];
+          page.strokes.add(stroke);
+        }
+        // 更新页面 notifier
+        if (item.pageIndex < _pageNotifiers.length) {
+          _pageNotifiers[item.pageIndex].updatePage(_coreInfo.pages[item.pageIndex]);
+        }
+        break;
+      case EditorHistoryItemType.erase:
+        // 恢复擦除：删除笔迹
+        if (item.deletedStrokes != null) {
+          for (final stroke in item.deletedStrokes!) {
+            final page = _coreInfo.pages[item.pageIndex];
+            page.strokes.remove(stroke);
+          }
+          // 更新页面 notifier
+          if (item.pageIndex < _pageNotifiers.length) {
+            _pageNotifiers[item.pageIndex].updatePage(_coreInfo.pages[item.pageIndex]);
+          }
+        }
+        break;
+      default:
+        break;
+    }
+    
+    _scheduleSave();
   }
 
   void _onToolChanged(Tool tool) {
@@ -1897,6 +2022,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // ✅ 清理全局颜色与线宽 notifier
     _globalColorNotifier.dispose();
     _globalStrokeWidthNotifier.dispose();
+    
+    // ✅ 清理撤销/恢复状态 notifier
+    _canUndoNotifier.dispose();
+    _canRedoNotifier.dispose();
+    _isDashedModeNotifier.dispose();
 
     super.dispose();
   }
@@ -1931,19 +2061,40 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
               return ValueListenableBuilder<Color?>(
                 valueListenable: _currentFillColorNotifier,
                 builder: (ctx, fillColor, _) {
-                  return HandwritingSaberToolbar(
-                    currentTool: currentTool,
-                    onToolChanged: _onToolChanged,
-                    currentBackgroundPattern: _currentBackgroundPattern,
-                    onBackgroundPatternChanged: _onBackgroundPatternChanged,
-                    // 使用全局颜色/线宽，确保切换工具时保持用户设置
-                    currentColor: _globalColorNotifier.value,
-                    onColorChanged: _onColorChanged,
-                    currentStrokeWidth: _globalStrokeWidthNotifier.value,
-                    onStrokeWidthChanged: _onStrokeWidthChanged,
-                    currentFillColor: fillColor, // ✅ 填充颜色（由 notifier 驱动）
-                    onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
-                    onImportPdf: _importPdf,  // ✅ PDF 导入回调
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: _canUndoNotifier,
+                    builder: (ctx, canUndo, _) {
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: _canRedoNotifier,
+                        builder: (ctx2, canRedo, _) {
+                          return ValueListenableBuilder<bool>(
+                            valueListenable: _isDashedModeNotifier,
+                            builder: (ctx3, isDashed, _) {
+                              return HandwritingSaberToolbar(
+                                currentTool: currentTool,
+                                onToolChanged: _onToolChanged,
+                                currentBackgroundPattern: _currentBackgroundPattern,
+                                onBackgroundPatternChanged: _onBackgroundPatternChanged,
+                                // 使用全局颜色/线宽，确保切换工具时保持用户设置
+                                currentColor: _globalColorNotifier.value,
+                                onColorChanged: _onColorChanged,
+                                currentStrokeWidth: _globalStrokeWidthNotifier.value,
+                                onStrokeWidthChanged: _onStrokeWidthChanged,
+                                currentFillColor: fillColor, // ✅ 填充颜色（由 notifier 驱动）
+                                onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
+                                onImportPdf: _importPdf,  // ✅ PDF 导入回调
+                                canUndo: canUndo, // ✅ 撤销按钮状态
+                                canRedo: canRedo, // ✅ 恢复按钮状态
+                                onUndo: _undo, // ✅ 撤销回调
+                                onRedo: _redo, // ✅ 恢复回调
+                                isDashed: isDashed, // ✅ 虚线模式状态
+                                onDashedChanged: (value) => _isDashedModeNotifier.value = value, // ✅ 虚线模式改变回调
+                              );
+                            },
+                          );
+                        },
+                      );
+                    },
                   );
                 },
               );

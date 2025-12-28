@@ -13,6 +13,7 @@ class LineStroke extends Stroke {
     required Color color,
     required double strokeWidth,
     ToolId? toolId,
+    this.isDashed = false, // ✅ 是否为虚线
   }) : super(
           points: [startPoint, endPoint],
           color: color,
@@ -21,6 +22,8 @@ class LineStroke extends Stroke {
           pressureEnabled: false,
         );
 
+  final bool isDashed; // ✅ 是否为虚线
+
   Offset get startPoint => points.isNotEmpty ? points.first : Offset.zero;
   Offset get endPoint => points.length > 1 ? points[1] : Offset.zero;
 
@@ -28,11 +31,13 @@ class LineStroke extends Stroke {
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['shape'] = 'line';
+    json['isDashed'] = isDashed; // ✅ 保存虚线状态
     return json;
   }
 
   factory LineStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
+    final isDashed = json['isDashed'] as bool? ?? false; // ✅ 读取虚线状态
     if (stroke.points.length < 2) {
       return LineStroke(
         startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
@@ -40,6 +45,7 @@ class LineStroke extends Stroke {
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
+        isDashed: isDashed,
       );
     }
     return LineStroke(
@@ -48,6 +54,56 @@ class LineStroke extends Stroke {
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
+      isDashed: isDashed,
+    );
+  }
+}
+
+/// ✅ 带箭头直线笔迹
+class ArrowLineStroke extends LineStroke {
+  ArrowLineStroke({
+    required Offset startPoint,
+    required Offset endPoint,
+    required Color color,
+    required double strokeWidth,
+    ToolId? toolId,
+    bool isDashed = false, // ✅ 是否为虚线
+  }) : super(
+          startPoint: startPoint,
+          endPoint: endPoint,
+          color: color,
+          strokeWidth: strokeWidth,
+          toolId: toolId ?? ToolId.arrowLine,
+          isDashed: isDashed,
+        );
+
+  @override
+  Map<String, dynamic> toJson() {
+    final json = super.toJson();
+    json['shape'] = 'arrowLine'; // ✅ 标记为箭头直线
+    return json;
+  }
+
+  factory ArrowLineStroke.fromJson(Map<String, dynamic> json) {
+    final stroke = Stroke.fromJson(json);
+    final isDashed = json['isDashed'] as bool? ?? false;
+    if (stroke.points.length < 2) {
+      return ArrowLineStroke(
+        startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
+        endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
+        color: stroke.color,
+        strokeWidth: stroke.strokeWidth,
+        toolId: stroke.toolId,
+        isDashed: isDashed,
+      );
+    }
+    return ArrowLineStroke(
+      startPoint: stroke.points.first,
+      endPoint: stroke.points[1],
+      color: stroke.color,
+      strokeWidth: stroke.strokeWidth,
+      toolId: stroke.toolId,
+      isDashed: isDashed,
     );
   }
 }

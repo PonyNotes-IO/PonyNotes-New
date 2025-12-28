@@ -416,8 +416,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       return;
     }
     
-    // ✅ 检查是否是形状笔迹（LineStroke, RectangleStroke, CircleStroke 等）
-    if (stroke is LineStroke) {
+    // ✅ 检查是否是形状笔迹（LineStroke, ArrowLineStroke, RectangleStroke, CircleStroke 等）
+    if (stroke is LineStroke || stroke is ArrowLineStroke) {
       _drawLineStroke(canvas, stroke, scale, offsetX, offsetY);
       return;
     } else if (stroke is RectangleStroke) {
@@ -662,21 +662,120 @@ class _SaberCoreCanvasPainter extends CustomPainter {
   }
 
   /// ✅ 绘制直线笔迹
-  void _drawLineStroke(Canvas canvas, LineStroke stroke, double scale, double offsetX, double offsetY) {
-    final start = stroke.startPoint;
-    final end = stroke.endPoint;
+  void _drawLineStroke(Canvas canvas, Stroke stroke, double scale, double offsetX, double offsetY) {
+    // ✅ 支持 LineStroke 和 ArrowLineStroke
+    final LineStroke lineStroke = stroke is LineStroke 
+        ? stroke 
+        : (stroke as ArrowLineStroke);
+    
+    final start = lineStroke.startPoint;
+    final end = lineStroke.endPoint;
     
     canvas.save();
     canvas.translate(offsetX, offsetY);
     canvas.scale(scale);
     
     final paint = Paint()
-      ..color = stroke.color
+      ..color = lineStroke.color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke.strokeWidth;
+      ..strokeWidth = lineStroke.strokeWidth
+      ..strokeCap = StrokeCap.round;
     
-    canvas.drawLine(start, end, paint);
+    // ✅ 如果是虚线，使用Path绘制虚线
+    if (lineStroke.isDashed) {
+      final path = Path();
+      final dx = end.dx - start.dx;
+      final dy = end.dy - start.dy;
+      final length = math.sqrt(dx * dx + dy * dy);
+      
+      if (length > 0) {
+        final unitX = dx / length;
+        final unitY = dy / length;
+        final dashLength = 10.0;
+        final gapLength = 5.0;
+        final dashGapLength = dashLength + gapLength;
+        
+        double currentLength = 0;
+        while (currentLength < length) {
+          final dashStart = Offset(
+            start.dx + unitX * currentLength,
+            start.dy + unitY * currentLength,
+          );
+          final dashEndLength = math.min(currentLength + dashLength, length);
+          final dashEnd = Offset(
+            start.dx + unitX * dashEndLength,
+            start.dy + unitY * dashEndLength,
+          );
+          path.moveTo(dashStart.dx, dashStart.dy);
+          path.lineTo(dashEnd.dx, dashEnd.dy);
+          currentLength += dashGapLength;
+        }
+        canvas.drawPath(path, paint);
+      }
+    } else {
+      // ✅ 绘制实线
+      canvas.drawLine(start, end, paint);
+    }
+    
+    // ✅ 如果是箭头直线，绘制箭头
+    if (stroke is ArrowLineStroke) {
+      _drawArrow(canvas, start, end, lineStroke.strokeWidth, lineStroke.color);
+    }
+    
     canvas.restore();
+  }
+  
+  /// ✅ 绘制箭头（在直线末端）
+  void _drawArrow(Canvas canvas, Offset start, Offset end, double strokeWidth, Color color) {
+    // 箭头大小（根据线宽调整）
+    final arrowSize = strokeWidth * 2.5;
+    final arrowAngle = math.pi / 6; // 30度角
+    
+    // 计算直线的方向向量
+    final dx = end.dx - start.dx;
+    final dy = end.dy - start.dy;
+    final length = math.sqrt(dx * dx + dy * dy);
+    
+    if (length < 0.1) return; // 直线太短，不绘制箭头
+    
+    // 归一化方向向量
+    final unitX = dx / length;
+    final unitY = dy / length;
+    
+    // 箭头起点（稍微向内，避免与直线重叠）
+    final arrowStart = Offset(
+      end.dx - unitX * arrowSize * 0.3,
+      end.dy - unitY * arrowSize * 0.3,
+    );
+    
+    // 计算箭头两个边的方向
+    final cosAngle = math.cos(arrowAngle);
+    final sinAngle = math.sin(arrowAngle);
+    
+    // 箭头左点
+    final arrowLeft = Offset(
+      arrowStart.dx - arrowSize * (unitX * cosAngle - unitY * sinAngle),
+      arrowStart.dy - arrowSize * (unitY * cosAngle + unitX * sinAngle),
+    );
+    
+    // 箭头右点
+    final arrowRight = Offset(
+      arrowStart.dx - arrowSize * (unitX * cosAngle + unitY * sinAngle),
+      arrowStart.dy - arrowSize * (unitY * cosAngle - unitX * sinAngle),
+    );
+    
+    // 绘制箭头（填充三角形）
+    final arrowPath = Path()
+      ..moveTo(end.dx, end.dy)
+      ..lineTo(arrowLeft.dx, arrowLeft.dy)
+      ..lineTo(arrowRight.dx, arrowRight.dy)
+      ..close();
+    
+    final arrowPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    
+    canvas.drawPath(arrowPath, arrowPaint);
   }
 
   /// ✅ 绘制矩形笔迹（支持填充和描边）

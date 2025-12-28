@@ -600,7 +600,9 @@
         "command": "cargo make --profile \"development-linux-$(uname -m)\" appflowy-core-dev"
       },
       "osx": {
-        "command": "cargo make --profile \"development-mac-$(uname -m)\" appflowy-core-dev"
+        // 由于Flutter运行在Rosetta模式下(darwin-arm64 Rosetta)，需要x86_64架构的库
+        // 参考：devops-docs/2025-12-27-Flutter全构建x86_64架构问题分析和解决方案.md
+        "command": "cargo make --profile development-mac-x86_64 appflowy-core-dev"
       },
       "group": "build",
       "options": {
