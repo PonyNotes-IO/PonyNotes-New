@@ -406,12 +406,16 @@ class _AccountManagementViewState extends State<AccountManagementView> {
               child: Container(
                 width: cardWidth,
                 decoration: BoxDecoration(
-                  color: theme.surfaceColorScheme.layer01,
+                  color: isSelected
+                      ? (Theme.of(context).brightness == Brightness.light
+                          ? theme.surfaceColorScheme.layer01
+                          : theme.surfaceColorScheme.layer02)
+                      : theme.surfaceColorScheme.layer01,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isSelected
                         ? const Color(0xFFFF6B47)
-                        : const Color(0xFFE9E9E9),
+                        : theme.borderColorScheme.primary,
                     width: isSelected ? 1.6 : 1.0,
                   ),
                 ),
@@ -662,13 +666,15 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                 ),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? const Color(0xFFFFF3EC)
+                      ? (Theme.of(context).brightness == Brightness.light
+                          ? const Color(0xFFFFF3EC)
+                          : theme.surfaceColorScheme.layer02)
                       : theme.surfaceColorScheme.layer01,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSelected
                         ? const Color(0xFFFF6B47)
-                        : const Color(0xFFE9E9E9),
+                        : theme.borderColorScheme.primary,
                     width: 1.4,
                   ),
                 ),

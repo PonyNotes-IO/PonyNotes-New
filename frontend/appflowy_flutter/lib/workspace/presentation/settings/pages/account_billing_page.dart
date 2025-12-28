@@ -121,13 +121,15 @@ class _BillingPageState extends State<BillingPage> {
                         ),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? const Color(0xFFFFF7F2)
+                              ? (Theme.of(context).brightness == Brightness.light
+                                  ? const Color(0xFFFFF7F2)
+                                  : theme.surfaceColorScheme.layer02)
                               : theme.surfaceColorScheme.layer01,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: isSelected
                                 ? const Color(0xFFFF6B47)
-                                : const Color(0xFFE9E9E9),
+                                : theme.borderColorScheme.primary,
                             width: isSelected ? 1.6 : 1.0,
                           ),
                         ),
@@ -181,7 +183,9 @@ class _BillingPageState extends State<BillingPage> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3EC),
+                  color: Theme.of(context).brightness == Brightness.light
+                      ? const Color(0xFFFFF3EC)
+                      : theme.surfaceColorScheme.layer02,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: FlowyText(
@@ -298,10 +302,10 @@ class _BillingPageState extends State<BillingPage> {
                 color: theme.textColorScheme.secondary,
               ),
             if (showArrow)
-              const Icon(
+              Icon(
                 Icons.arrow_forward_ios,
                 size: 16,
-                color: Colors.grey,
+                color: theme.iconColorScheme.secondary,
               ),
           ],
         ),
