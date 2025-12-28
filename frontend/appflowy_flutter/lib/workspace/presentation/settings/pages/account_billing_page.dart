@@ -7,6 +7,7 @@ import 'package:appflowy/util/validator.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -540,17 +541,20 @@ class _BillingPageState extends State<BillingPage> {
         return;
       }
 
-      final List<_AddonPlan> addons = [];
+      final List<_AddonPlan> allAddons = [];
       for (final item in data) {
         if (item is! Map<String, dynamic>) continue;
         final plan = _AddonPlan.fromJson(item);
         if (plan.isActive == true) {
-          addons.add(plan);
+          allAddons.add(plan);
         }
       }
 
+      final planFromSubscription = _getCurrentPlanFromSubscription() ?? WorkspacePlanPB.FreePlan;
+      final filteredAddons = _filterAddonsByPlan(allAddons, planFromSubscription);
+
       setState(() {
-        _addons = addons;
+        _addons = filteredAddons;
         _isLoading = false;
         _selectedPlanIndex = 0;
       });
@@ -560,6 +564,63 @@ class _BillingPageState extends State<BillingPage> {
         _addons = const [];
         _isLoading = false;
       });
+    }
+  }
+
+  /// 从 SettingsDialogBloc 的 currentSubscription 获取当前会员类型
+  WorkspacePlanPB? _getCurrentPlanFromSubscription() {
+    try {
+      final subscription = context.read<SettingsDialogBloc>().state.currentSubscription;
+      final planCode = subscription?.subscription?.planCode ?? 
+                      subscription?.planDetails?.planCode;
+      
+      if (planCode == null || planCode.isEmpty) {
+        return null;
+      }
+      
+      return _mapPlanCodeToPb(planCode);
+    } catch (e) {
+      Log.warn('从 currentSubscription 获取会员类型失败: $e');
+      return null;
+    }
+  }
+
+  /// 将 planCode 字符串转换为 WorkspacePlanPB
+  WorkspacePlanPB? _mapPlanCodeToPb(String code) {
+    switch (code.toLowerCase()) {
+      case 'free':
+      case 'free_local':
+        return WorkspacePlanPB.FreePlan;
+      case 'student':
+        return WorkspacePlanPB.StudentPlan;
+      case 'standard':
+        return WorkspacePlanPB.StandardPlan;
+      case 'team':
+        return WorkspacePlanPB.TeamPlan;
+      default:
+        return null;
+    }
+  }
+
+  /// 根据会员类型过滤补充包列表
+  /// - 免费版：只显示 AI Token 补充包
+  /// - 学生版、标准版、团队版：显示所有补充包（云存储和 AI Token）
+  List<_AddonPlan> _filterAddonsByPlan(
+    List<_AddonPlan> allAddons,
+    WorkspacePlanPB plan,
+  ) {
+    switch (plan) {
+      case WorkspacePlanPB.FreePlan:
+        // 免费版只显示 AI Token 补充包
+        return allAddons.where((addon) => addon.isAiToken).toList();
+      case WorkspacePlanPB.StudentPlan:
+      case WorkspacePlanPB.StandardPlan:
+      case WorkspacePlanPB.TeamPlan:
+        // 学生版、标准版、团队版显示所有补充包
+        return allAddons;
+      default:
+        // 默认情况，只显示 AI Token 补充包
+        return allAddons.where((addon) => addon.isAiToken).toList();
     }
   }
 
