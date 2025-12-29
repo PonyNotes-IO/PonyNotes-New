@@ -6,6 +6,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:pdfrx/pdfrx.dart';
 
 import '../application/handwriting_saber_data_service.dart';
@@ -15,6 +16,7 @@ import '../third_party/saber_core/components/canvas/saber_core_canvas.dart';
 import '../third_party/saber_core/data/editor/editor_core_info.dart';
 import '../third_party/saber_core/data/editor/editor_history.dart'; // ✅ 导入历史记录管理器
 import '../third_party/saber_core/data/editor/page.dart';
+import '../third_party/saber_core/data/editor/quill_styles.dart';
 import '../third_party/saber_core/data/editor/shape_strokes.dart';
 import '../third_party/saber_core/data/editor/stroke_extensions.dart'; // ✅ 导入扩展方法
 import '../third_party/saber_core/data/editor/text_box.dart' as saber_text; // ✅ 导入文本框（使用别名避免与Flutter的TextBox冲突）
@@ -116,6 +118,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   
   /// ✅ 当前箭头样式（用于箭头直线工具）
   final ValueNotifier<ArrowStyle> _arrowStyleNotifier = ValueNotifier<ArrowStyle>(ArrowStyle.filled);
+  
+  /// ✅ 文本编辑模式状态（用于切换富文本编辑模式）
+  final ValueNotifier<bool> _textEditingModeNotifier = ValueNotifier<bool>(false);
+  
+  /// ✅ 当前焦点页面的 Quill 结构（用于在编辑模式下显示工具栏）
+  final ValueNotifier<int?> _quillFocusPageIndexNotifier = ValueNotifier<int?>(null);
 
   @override
   void initState() {
@@ -1805,6 +1813,28 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _arrowStyleNotifier.value = style;
   }
   
+  /// ✅ 切换文本编辑模式
+  void _toggleTextEditingMode() {
+    debugPrint('📝 [HandwritingSaber] Toggling text editing mode: ${!_textEditingModeNotifier.value}');
+    _textEditingModeNotifier.value = !_textEditingModeNotifier.value;
+    
+    // 如果进入文本编辑模式，将焦点设置到第一个页面
+    if (_textEditingModeNotifier.value && _coreInfo.pages.isNotEmpty) {
+      _quillFocusPageIndexNotifier.value = 0;
+      // 请求焦点
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (_quillFocusPageIndexNotifier.value != null && 
+            _quillFocusPageIndexNotifier.value! < _coreInfo.pages.length) {
+          final page = _coreInfo.pages[_quillFocusPageIndexNotifier.value!];
+          page.quill.focusNode.requestFocus();
+        }
+      });
+    } else {
+      // 退出文本编辑模式，取消焦点
+      _quillFocusPageIndexNotifier.value = null;
+    }
+  }
+  
   /// ✅ 构建单页画布（支持触摸绘制）
   Widget _buildSinglePageCanvas({
     required EditorPage page,
@@ -1981,10 +2011,61 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                   return const SizedBox.shrink();
                 },
               ),
+              // ✅ Quill 富文本编辑层（只在文本编辑模式下显示）
+              _buildQuillEditorLayer(page, pageIndex),
             ],
           ),
         ),
       ),
+    );
+  }
+  
+  /// ✅ 构建 Quill 富文本编辑层
+  Widget _buildQuillEditorLayer(EditorPage page, int pageIndex) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _textEditingModeNotifier,
+      builder: (context, textEditingMode, _) {
+        return ValueListenableBuilder<int?>(
+          valueListenable: _quillFocusPageIndexNotifier,
+          builder: (context, quillFocusPageIndex, _) {
+            // 只有在文本编辑模式且当前页面有焦点时才显示编辑器
+            if (!textEditingMode || quillFocusPageIndex != pageIndex) {
+              return const SizedBox.shrink();
+            }
+            
+            final quillStruct = page.quill;
+            final colorScheme = Theme.of(context).colorScheme;
+            final invert = false; // 可以根据需要从设置中读取
+            
+            return IgnorePointer(
+              ignoring: !textEditingMode,
+              child: Container(
+                color: Colors.white.withValues(alpha: textEditingMode ? 0.95 : 0),
+                child: quill.QuillEditor.basic(
+                  controller: quillStruct.controller,
+                  config: quill.QuillEditorConfig(
+                    customStyles: HandwritingSaberQuillStyles.get(
+                      invert: invert,
+                      secondary: colorScheme.secondary,
+                      lineHeight: _coreInfo.lineHeight,
+                    ),
+                    scrollable: true,
+                    autoFocus: true,
+                    expands: false,
+                    placeholder: '在此输入富文本...',
+                    padding: EdgeInsets.only(
+                      top: _coreInfo.lineHeight * 1.2,
+                      left: _coreInfo.lineHeight * 0.5,
+                      right: _coreInfo.lineHeight * 0.5,
+                      bottom: _coreInfo.lineHeight * 0.5,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
   
@@ -2351,6 +2432,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _canRedoNotifier.dispose();
     _dashStyleNotifier.dispose();
     _arrowStyleNotifier.dispose();
+    _textEditingModeNotifier.dispose();
+    _quillFocusPageIndexNotifier.dispose();
 
     super.dispose();
   }
@@ -2391,27 +2474,43 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                       return ValueListenableBuilder<bool>(
                         valueListenable: _canRedoNotifier,
                         builder: (ctx2, canRedo, _) {
-                          return HandwritingSaberToolbar(
-                            currentTool: currentTool,
-                            onToolChanged: _onToolChanged,
-                            currentBackgroundPattern: _currentBackgroundPattern,
-                            onBackgroundPatternChanged: _onBackgroundPatternChanged,
-                            // 使用全局颜色/线宽，确保切换工具时保持用户设置
-                            currentColor: _globalColorNotifier.value,
-                            onColorChanged: _onColorChanged,
-                            currentStrokeWidth: _globalStrokeWidthNotifier.value,
-                            onStrokeWidthChanged: _onStrokeWidthChanged,
-                            currentFillColor: fillColor, // ✅ 填充颜色（由 notifier 驱动）
-                            onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
-                            onImportPdf: _importPdf,  // ✅ PDF 导入回调
-                            canUndo: canUndo, // ✅ 撤销按钮状态
-                            canRedo: canRedo, // ✅ 恢复按钮状态
-                            onUndo: _undo, // ✅ 撤销回调
-                            onRedo: _redo, // ✅ 恢复回调
-                            currentDashStyle: _dashStyleNotifier.value, // ✅ 当前虚线样式
-                            onDashStyleChanged: _onDashStyleChanged, // ✅ 虚线样式改变回调
-                            currentArrowStyle: _arrowStyleNotifier.value, // ✅ 当前箭头样式
-                            onArrowStyleChanged: _onArrowStyleChanged, // ✅ 箭头样式改变回调
+                          return ValueListenableBuilder<bool>(
+                            valueListenable: _textEditingModeNotifier,
+                            builder: (ctx3, textEditingMode, _) {
+                              return ValueListenableBuilder<int?>(
+                                valueListenable: _quillFocusPageIndexNotifier,
+                                builder: (ctx4, quillFocusPageIndex, _) {
+                                  return HandwritingSaberToolbar(
+                                    currentTool: currentTool,
+                                    onToolChanged: _onToolChanged,
+                                    currentBackgroundPattern: _currentBackgroundPattern,
+                                    onBackgroundPatternChanged: _onBackgroundPatternChanged,
+                                    // 使用全局颜色/线宽，确保切换工具时保持用户设置
+                                    currentColor: _globalColorNotifier.value,
+                                    onColorChanged: _onColorChanged,
+                                    currentStrokeWidth: _globalStrokeWidthNotifier.value,
+                                    onStrokeWidthChanged: _onStrokeWidthChanged,
+                                    currentFillColor: fillColor, // ✅ 填充颜色（由 notifier 驱动）
+                                    onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
+                                    onImportPdf: _importPdf,  // ✅ PDF 导入回调
+                                    canUndo: canUndo, // ✅ 撤销按钮状态
+                                    canRedo: canRedo, // ✅ 恢复按钮状态
+                                    onUndo: _undo, // ✅ 撤销回调
+                                    onRedo: _redo, // ✅ 恢复回调
+                                    currentDashStyle: _dashStyleNotifier.value, // ✅ 当前虚线样式
+                                    onDashStyleChanged: _onDashStyleChanged, // ✅ 虚线样式改变回调
+                                    currentArrowStyle: _arrowStyleNotifier.value, // ✅ 当前箭头样式
+                                    onArrowStyleChanged: _onArrowStyleChanged, // ✅ 箭头样式改变回调
+                                    textEditingMode: textEditingMode, // ✅ 文本编辑模式标志
+                                    onToggleTextEditingMode: _toggleTextEditingMode, // ✅ 切换文本编辑模式回调
+                                    quillFocus: quillFocusPageIndex != null && 
+                                        quillFocusPageIndex < _coreInfo.pages.length
+                                        ? _coreInfo.pages[quillFocusPageIndex].quill
+                                        : null, // ✅ 当前焦点的 Quill 结构
+                                  );
+                                },
+                              );
+                            },
                           );
                         },
                       );

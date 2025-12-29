@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:collapsible/collapsible.dart';
 
 import '../third_party/saber_core/components/canvas/canvas_background_pattern.dart';
 import '../third_party/saber_core/data/tools/tool.dart';
+import '../third_party/saber_core/data/editor/quill_struct.dart';
 import 'color_picker_dialog.dart';
 import 'widgets/tool_dropdown_button.dart';
 
@@ -30,6 +33,9 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.onDashStyleChanged, // ✅ 虚线样式改变回调（可选）
     this.currentArrowStyle, // ✅ 当前箭头样式（可选）
     this.onArrowStyleChanged, // ✅ 箭头样式改变回调（可选）
+    this.textEditingMode = false, // ✅ 文本编辑模式标志
+    this.onToggleTextEditingMode, // ✅ 切换文本编辑模式回调
+    this.quillFocus, // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
   });
 
   final Tool currentTool;
@@ -51,6 +57,9 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final ValueChanged<DashStyle>? onDashStyleChanged; // ✅ 虚线样式改变回调（可选）
   final ArrowStyle? currentArrowStyle; // ✅ 当前箭头样式（可选）
   final ValueChanged<ArrowStyle>? onArrowStyleChanged; // ✅ 箭头样式改变回调（可选）
+  final bool textEditingMode; // ✅ 文本编辑模式标志
+  final VoidCallback? onToggleTextEditingMode; // ✅ 切换文本编辑模式回调
+  final QuillStruct? quillFocus; // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
 
   // 预定义颜色列表
   static const List<Color> presetColors = [
@@ -66,55 +75,63 @@ class HandwritingSaberToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-            width: 1,
-          ),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      // ✅ 使用SingleChildScrollView包裹整个工具栏，确保所有内容都可以横向滚动
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ✅ 撤销/恢复按钮
-            _buildUndoRedoButtons(),
-            _buildDivider(),
-            // ✅ 工具选择（分组显示）
-            _buildToolSelectorGrouped(),
-            // ✅ 分隔线
-            _buildDivider(),
-            // ✅ 颜色选择
-            _buildColorSelector(),
-            // ✅ 填充颜色选择（仅形状工具显示）
-            if (_isShapeTool(currentTool.toolId) && onFillColorChanged != null) ...[
-              const SizedBox(width: 8),
-              _buildFillColorSelector(),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ✅ 主工具栏
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                width: 1,
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
             ],
-            // ✅ 分隔线
-            _buildDivider(),
-            // ✅ 粗细调整
-            _buildStrokeWidthSelector(),
-            // ✅ 分隔线
-            _buildDivider(),
-            // ✅ 其他工具（PDF导入、背景模式）
-            _buildOtherToolsSection(),
-          ],
+          ),
+          // ✅ 使用SingleChildScrollView包裹整个工具栏，确保所有内容都可以横向滚动
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ✅ 撤销/恢复按钮
+                _buildUndoRedoButtons(),
+                _buildDivider(),
+                // ✅ 工具选择（分组显示）
+                _buildToolSelectorGrouped(),
+                // ✅ 分隔线
+                _buildDivider(),
+                // ✅ 颜色选择
+                _buildColorSelector(),
+                // ✅ 填充颜色选择（仅形状工具显示）
+                if (_isShapeTool(currentTool.toolId) && onFillColorChanged != null) ...[
+                  const SizedBox(width: 8),
+                  _buildFillColorSelector(),
+                ],
+                // ✅ 分隔线
+                _buildDivider(),
+                // ✅ 粗细调整
+                _buildStrokeWidthSelector(),
+                // ✅ 分隔线
+                _buildDivider(),
+                // ✅ 其他工具（PDF导入、背景模式、文本编辑）
+                _buildOtherToolsSection(),
+              ],
+            ),
+          ),
         ),
-      ),
+        // ✅ Quill 富文本工具栏（只在文本编辑模式下显示）
+        _buildQuillToolbar(context),
+      ],
     );
   }
   
@@ -154,6 +171,26 @@ class HandwritingSaberToolbar extends StatelessWidget {
               child: IconButton(
                 icon: const Icon(FontAwesomeIcons.filePdf, size: 20),
                 onPressed: onImportPdf,
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                ),
+              ),
+            ),
+          // ✅ 文本编辑按钮
+          if (onToggleTextEditingMode != null)
+            Tooltip(
+              message: textEditingMode ? '退出文本编辑' : '文本编辑',
+              child: IconButton(
+                icon: Icon(
+                  textEditingMode ? Icons.text_fields : Icons.text_format,
+                  size: 20,
+                  color: textEditingMode 
+                      ? Theme.of(context).colorScheme.primary 
+                      : null,
+                ),
+                onPressed: onToggleTextEditingMode,
                 padding: const EdgeInsets.all(8),
                 constraints: const BoxConstraints(
                   minWidth: 40,
@@ -1163,6 +1200,77 @@ class HandwritingSaberToolbar extends StatelessWidget {
       case ArrowStyle.line:
         return '线条';
     }
+  }
+  
+  /// ✅ 构建 Quill 富文本工具栏（只在文本编辑模式下显示）
+  Widget _buildQuillToolbar(BuildContext context) {
+    final colorScheme = ColorScheme.of(context);
+    
+    // 创建图标主题
+    final baseButtonStyle = IconButtonTheme.of(context).style ?? const ButtonStyle();
+    final iconTheme = quill.QuillIconTheme(
+      iconButtonUnselectedData: quill.IconButtonData(
+        style: baseButtonStyle.copyWith(
+          backgroundColor: WidgetStateProperty.all(Colors.transparent),
+          foregroundColor: WidgetStateProperty.all(colorScheme.primary),
+        ),
+      ),
+      iconButtonSelectedData: quill.IconButtonData(
+        style: baseButtonStyle.copyWith(
+          backgroundColor: WidgetStateProperty.all(colorScheme.primary),
+          foregroundColor: WidgetStateProperty.all(colorScheme.onPrimary),
+        ),
+      ),
+    );
+    
+    return Collapsible(
+      axis: CollapsibleAxis.vertical,
+      maintainState: false,
+      collapsed: !textEditingMode || quillFocus == null,
+      child: quillFocus != null
+          ? Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: quill.QuillSimpleToolbar(
+                controller: quillFocus!.controller,
+                config: quill.QuillSimpleToolbarConfig(
+                  axis: Axis.horizontal,
+                  buttonOptions: quill.QuillSimpleToolbarButtonOptions(
+                    base: quill.QuillToolbarBaseButtonOptions(
+                      iconTheme: iconTheme,
+                    ),
+                  ),
+                  multiRowsDisplay: true,
+                  showUndo: false,
+                  showRedo: false,
+                  showFontSize: false,
+                  showFontFamily: false,
+                  showClearFormat: true,
+                  showBoldButton: true,
+                  showItalicButton: true,
+                  showUnderLineButton: true,
+                  showStrikeThrough: true,
+                  showColorButton: true,
+                  showBackgroundColorButton: true,
+                  showListNumbers: true,
+                  showListBullets: true,
+                  showAlignmentButtons: true,
+                  showDirection: false,
+                  showLink: true,
+                  showQuote: true,
+                  showIndent: true,
+                ),
+              ),
+            )
+          : const SizedBox.shrink(),
+    );
   }
 }
 

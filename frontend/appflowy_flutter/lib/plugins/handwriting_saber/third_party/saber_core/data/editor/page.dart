@@ -7,6 +7,7 @@ import '../tools/tool.dart';
 import 'shape_strokes.dart';
 import 'text_box.dart' as saber_text;
 import 'list_box.dart' as saber_list;
+import 'quill_struct.dart';
 
 /// 简化版的 EditorPage 数据结构，参考 Saber 的页面模型。
 ///
@@ -27,10 +28,12 @@ class EditorPage {
     List<saber_text.TextBox>? textBoxes, // ✅ 文本框列表
     List<saber_list.ListBox>? listBoxes, // ✅ 列表框列表
     List<saber_list.TaskListBox>? taskListBoxes, // ✅ 任务列表框列表
+    QuillStruct? quill, // ✅ Quill 富文本编辑器结构
   }) : strokes = strokes ?? <Stroke>[],
        textBoxes = textBoxes ?? <saber_text.TextBox>[],
        listBoxes = listBoxes ?? <saber_list.ListBox>[],
-       taskListBoxes = taskListBoxes ?? <saber_list.TaskListBox>[];
+       taskListBoxes = taskListBoxes ?? <saber_list.TaskListBox>[],
+       quill = quill ?? QuillStruct.createDefault();
 
   final Size size;
   final List<Stroke> strokes;
@@ -38,6 +41,7 @@ class EditorPage {
   final List<saber_text.TextBox> textBoxes; // ✅ 文本框列表
   final List<saber_list.ListBox> listBoxes; // ✅ 列表框列表
   final List<saber_list.TaskListBox> taskListBoxes; // ✅ 任务列表框列表
+  final QuillStruct quill; // ✅ Quill 富文本编辑器结构
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -47,6 +51,7 @@ class EditorPage {
       'textBoxes': textBoxes.map((saber_text.TextBox t) => t.toJson()).toList(), // ✅ 保存文本框列表
       'listBoxes': listBoxes.map((saber_list.ListBox l) => l.toJson()).toList(), // ✅ 保存列表框列表
       'taskListBoxes': taskListBoxes.map((saber_list.TaskListBox t) => t.toJson()).toList(), // ✅ 保存任务列表框列表
+      'quill': quill.toJson(), // ✅ 保存 Quill 富文本内容
       // ✅ 保存 PDF 背景图片信息
       'backgroundImage': backgroundImage != null
           ? <String, dynamic>{
@@ -76,6 +81,12 @@ class EditorPage {
     final List<dynamic> textBoxList = json['textBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取文本框列表
     final List<dynamic> listBoxList = json['listBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取列表框列表
     final List<dynamic> taskListBoxList = json['taskListBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取任务列表框列表
+    
+    // ✅ 读取 Quill 富文本内容
+    final quillJson = json['quill'] as Map<String, dynamic>?;
+    final quill = quillJson != null 
+        ? QuillStruct.fromJson(quillJson) 
+        : QuillStruct.createDefault();
     
     // ✅ 读取 PDF 背景图片信息
     PdfEditorImage? backgroundImage;
@@ -151,6 +162,7 @@ class EditorPage {
           .whereType<Map<String, dynamic>>()
           .map((json) => saber_list.TaskListBox.fromJson(json))
           .toList(), // ✅ 设置任务列表框列表
+      quill: quill, // ✅ 设置 Quill 富文本编辑器
     );
   }
 }
@@ -262,6 +274,7 @@ class EditorPageNotifier extends ChangeNotifier {
       textBoxes: _page.textBoxes,
       listBoxes: _page.listBoxes,
       taskListBoxes: _page.taskListBoxes,
+      quill: _page.quill,
     );
     notifyListeners();
   }
