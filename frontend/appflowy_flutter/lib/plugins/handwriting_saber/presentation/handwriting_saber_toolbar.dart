@@ -400,12 +400,12 @@ class HandwritingSaberToolbar extends StatelessWidget {
 
   Widget _buildColorSelector() {
     return Builder(
-      builder: (context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 当前颜色显示（可点击打开颜色选择器）
-          GestureDetector(
-            onTap: () async {
+      builder: (context) => PopupMenuButton<String>(
+        tooltip: '边框颜色',
+        onSelected: (value) {
+          if (value == '_custom_') {
+            // 自定义颜色选项 - 使用Future.microtask确保popup完全关闭后再显示对话框
+            Future.microtask(() async {
               final selectedColor = await ColorPickerDialog.show(
                 context,
                 initialColor: currentColor,
@@ -414,66 +414,108 @@ class HandwritingSaberToolbar extends StatelessWidget {
               if (selectedColor != null) {
                 onColorChanged(selectedColor);
               }
-            },
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: currentColor,
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                  width: 1.5,
-                ),
-                borderRadius: BorderRadius.circular(4),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 2,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          // 预设颜色（紧凑布局）
-          ...presetColors.map((color) {
+            });
+          } else {
+            // 预设颜色 - 从颜色索引解析
+            final colorIndex = int.parse(value);
+            onColorChanged(presetColors[colorIndex]);
+          }
+        },
+        itemBuilder: (ctx) => [
+          // 预设颜色选项
+          ...presetColors.asMap().entries.map((entry) {
+            final index = entry.key;
+            final color = entry.value;
             final bool isSelected = color == currentColor;
-            return Builder(
-              builder: (ctx) => Padding(
-                padding: const EdgeInsets.only(right: 3),
-                child: GestureDetector(
-                  onTap: () => onColorChanged(color),
-                  child: Container(
-                    width: 20,
-                    height: 20,
+            return PopupMenuItem<String>(
+              value: index.toString(),
+              child: Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
                     decoration: BoxDecoration(
                       color: color,
                       border: Border.all(
-                        color: isSelected
-                            ? Theme.of(ctx).colorScheme.primary
-                            : Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.3),
-                        width: isSelected ? 2 : 1,
+                        color: Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.3),
+                        width: 1.5,
                       ),
-                      borderRadius: BorderRadius.circular(3),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: Theme.of(ctx).colorScheme.primary.withValues(alpha: 0.3),
-                                blurRadius: 3,
-                                offset: const Offset(0, 1),
-                              ),
-                            ]
-                          : null,
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  Text(_getColorName(color)),
+                  if (isSelected) ...[
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.check,
+                      size: 16,
+                      color: Theme.of(ctx).colorScheme.primary,
+                    ),
+                  ],
+                ],
               ),
             );
           }),
+          // 分隔线
+          const PopupMenuDivider(),
+          // 自定义颜色选项
+          const PopupMenuItem<String>(
+            value: '_custom_',
+            child: Row(
+              children: [
+                Icon(Icons.color_lens, size: 24),
+                SizedBox(width: 12),
+                Text('自定义颜色'),
+              ],
+            ),
+          ),
         ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 当前颜色显示
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: currentColor,
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 2,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.arrow_drop_down, size: 16),
+            ],
+          ),
+        ),
       ),
     );
+  }
+
+  /// ✅ 获取颜色名称
+  String _getColorName(Color color) {
+    if (color == Colors.black) return '黑色';
+    if (color == Colors.blue) return '蓝色';
+    if (color == Colors.red) return '红色';
+    if (color == Colors.green) return '绿色';
+    if (color == Colors.orange) return '橙色';
+    if (color == Colors.purple) return '紫色';
+    if (color == Colors.pink) return '粉色';
+    if (color == Colors.brown) return '棕色';
+    return '自定义';
   }
 
   Widget _buildStrokeWidthSelector() {
@@ -586,7 +628,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
         toolId == ToolId.diamond;
   }
 
-  /// ✅ 构建填充颜色选择器（紧凑布局）
+  /// ✅ 构建填充颜色选择器（下拉框形式）
   Widget _buildFillColorSelector() {
     return Builder(
       builder: (context) => Row(
@@ -603,91 +645,160 @@ class HandwritingSaberToolbar extends StatelessWidget {
               ),
             ),
           ),
-          // 当前填充颜色显示（带"无填充"选项）
-          GestureDetector(
-            onTap: () {
-              // 点击切换填充/无填充
-              if (onFillColorChanged != null) {
-                if (currentFillColor == null) {
-                  // 当前无填充，设置为当前描边颜色
-                  onFillColorChanged!(currentColor);
-                } else {
-                  // 当前有填充，取消填充
-                  onFillColorChanged!(null);
-                }
+          // 填充颜色下拉按钮
+          PopupMenuButton<String>(
+            tooltip: '填充颜色',
+            onSelected: (value) {
+              if (onFillColorChanged == null) return;
+              
+              if (value == '_none_') {
+                // 无填充
+                onFillColorChanged!(null);
+              } else if (value == '_custom_') {
+                // 自定义颜色选项 - 使用Future.microtask确保popup完全关闭后再显示对话框
+                Future.microtask(() async {
+                  final selectedColor = await ColorPickerDialog.show(
+                    context,
+                    initialColor: currentFillColor ?? currentColor,
+                    colorHistory: const [], // TODO: 从存储中读取颜色历史
+                  );
+                  if (selectedColor != null) {
+                    onFillColorChanged!(selectedColor);
+                  }
+                });
+              } else {
+                // 预设颜色 - 从颜色索引解析
+                final colorIndex = int.parse(value);
+                onFillColorChanged!(presetColors[colorIndex]);
               }
             },
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: currentFillColor ?? Colors.transparent,
-                border: Border.all(
-                  color: currentFillColor == null
-                      ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)
-                      : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                  width: 1.5,
-                ),
-                borderRadius: BorderRadius.circular(4),
-                boxShadow: currentFillColor != null
-                    ? [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 2,
-                          offset: const Offset(0, 1),
+            itemBuilder: (ctx) => [
+              // 无填充选项
+              PopupMenuItem<String>(
+                value: '_none_',
+                child: Row(
+                  children: [
+                    Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        border: Border.all(
+                          color: Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.5),
+                          width: 1.5,
                         ),
-                      ]
-                    : null,
-              ),
-              child: currentFillColor == null
-                  ? Icon(
-                      Icons.close,
-                      size: 14,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-                    )
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 4),
-          // 预设填充颜色（紧凑布局）
-          ...presetColors.map((color) {
-            final bool isSelected = color == currentFillColor;
-            return Builder(
-              builder: (ctx) => Padding(
-                padding: const EdgeInsets.only(right: 3),
-                child: GestureDetector(
-                  onTap: () {
-                    if (onFillColorChanged != null) {
-                      onFillColorChanged!(color);
-                    }
-                  },
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: color,
-                      border: Border.all(
-                        color: isSelected
-                            ? Theme.of(ctx).colorScheme.primary
-                            : Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.3),
-                        width: isSelected ? 2 : 1,
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                      borderRadius: BorderRadius.circular(3),
-                      boxShadow: isSelected
+                      child: Icon(
+                        Icons.close,
+                        size: 14,
+                        color: Theme.of(ctx).colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text('无填充'),
+                    if (currentFillColor == null) ...[
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.check,
+                        size: 16,
+                        color: Theme.of(ctx).colorScheme.primary,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              // 预设颜色选项
+              ...presetColors.asMap().entries.map((entry) {
+                final index = entry.key;
+                final color = entry.value;
+                final bool isSelected = color == currentFillColor;
+                return PopupMenuItem<String>(
+                  value: index.toString(),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: color,
+                          border: Border.all(
+                            color: Theme.of(ctx).colorScheme.outline.withValues(alpha: 0.3),
+                            width: 1.5,
+                          ),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(_getColorName(color)),
+                      if (isSelected) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.check,
+                          size: 16,
+                          color: Theme.of(ctx).colorScheme.primary,
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }),
+              // 分隔线
+              const PopupMenuDivider(),
+              // 自定义颜色选项
+              const PopupMenuItem<String>(
+                value: '_custom_',
+                child: Row(
+                  children: [
+                    Icon(Icons.color_lens, size: 24),
+                    SizedBox(width: 12),
+                    Text('自定义颜色'),
+                  ],
+                ),
+              ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 当前填充颜色显示
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: currentFillColor ?? Colors.transparent,
+                      border: Border.all(
+                        color: currentFillColor == null
+                            ? Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)
+                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                        width: 1.5,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: currentFillColor != null
                           ? [
                               BoxShadow(
-                                color: Theme.of(ctx).colorScheme.primary.withValues(alpha: 0.3),
-                                blurRadius: 3,
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 2,
                                 offset: const Offset(0, 1),
                               ),
                             ]
                           : null,
                     ),
+                    child: currentFillColor == null
+                        ? Icon(
+                            Icons.close,
+                            size: 14,
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                          )
+                        : null,
                   ),
-                ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_drop_down, size: 16),
+                ],
               ),
-            );
-          }),
+            ),
+          ),
         ],
       ),
     );
