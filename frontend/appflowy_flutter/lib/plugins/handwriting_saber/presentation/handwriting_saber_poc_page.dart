@@ -98,9 +98,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// ✅ 文本框编辑控制器
   final Map<String, TextEditingController> _textBoxControllers = {};
   
-  /// ✅ 页面widgets缓存（避免父级重建时重新创建所有页面，参考2025-12-27-小手工具闪烁终极修复记录.md）
-  List<Widget>? _cachedPageWidgets;
-  int _cachedPagesCount = 0;
+  // ✅ 移除有问题的页面缓存机制
+  // 原因：缓存判断条件（仅检查页面数量）不够准确，导致数据更新后界面不刷新
+  // ListenableBuilder已经提供了充分的优化，不需要额外的缓存
+  // List<Widget>? _cachedPageWidgets;
+  // int _cachedPagesCount = 0;
   
   /// ✅ 历史记录管理器
   final EditorHistory _history = EditorHistory();
@@ -109,12 +111,18 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   final ValueNotifier<bool> _canUndoNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _canRedoNotifier = ValueNotifier<bool>(false);
   
-  /// ✅ 当前是否为虚线模式（用于直线工具）
-  final ValueNotifier<bool> _isDashedModeNotifier = ValueNotifier<bool>(false);
+  /// ✅ 当前虚线样式（用于直线工具）
+  final ValueNotifier<DashStyle> _dashStyleNotifier = ValueNotifier<DashStyle>(DashStyle.solid);
+  
+  /// ✅ 当前箭头样式（用于箭头直线工具）
+  final ValueNotifier<ArrowStyle> _arrowStyleNotifier = ValueNotifier<ArrowStyle>(ArrowStyle.filled);
 
   @override
   void initState() {
     super.initState();
+    debugPrint('🚀🚀🚀 [HandwritingSaber] ===== initState =====');
+    debugPrint('🚀🚀🚀 [HandwritingSaber] ViewID: ${widget.view.id}');
+    debugPrint('🚀🚀🚀 [HandwritingSaber] ViewName: ${widget.view.name}');
     _initLocalData();
     // 合并 repaint：当当前笔迹或激光笔列表变化时，更新 tick 以触发局部重绘
     _currentStrokeNotifier.addListener(() {
@@ -124,7 +132,59 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _repaintTick.value++;
     });
   }
-
+  
+  @override
+  void didUpdateWidget(HandwritingSaberPocPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    debugPrint('🔄🔄🔄 [HandwritingSaber] ===== didUpdateWidget =====');
+    debugPrint('🔄🔄🔄 [HandwritingSaber] Old ViewID: ${oldWidget.view.id}, Old ViewName: ${oldWidget.view.name}');
+    debugPrint('🔄🔄🔄 [HandwritingSaber] New ViewID: ${widget.view.id}, New ViewName: ${widget.view.name}');
+    // ✅ 如果视图ID发生变化，重新加载数据
+    if (oldWidget.view.id != widget.view.id) {
+      debugPrint('🔄🔄🔄 [HandwritingSaber] ViewID CHANGED! Reloading data...');
+      // 清理旧视图的状态
+      _cleanupViewState();
+      // 重新初始化数据
+      _initLocalData();
+    } else {
+      debugPrint('🔄🔄🔄 [HandwritingSaber] ViewID unchanged, skipping reload');
+    }
+  }
+  
+  /// ✅ 清理视图状态（切换视图时调用）
+  void _cleanupViewState() {
+    debugPrint('🦋[HandwritingSaber] _cleanupViewState called');
+    // 清理当前笔迹
+    _currentStrokeNotifier.value = null;
+    _currentPageIndex = null;
+    // 清理激光笔
+    _laserStrokesNotifier.value = [];
+    _coreInfo.laserStrokes.clear();
+    // 清理选择状态
+    _selectResult = null;
+    _selectStartPosition = null;
+    _isSelecting = false;
+    // 清理文本框控制器
+    for (final controller in _textBoxControllers.values) {
+      controller.dispose();
+    }
+    _textBoxControllers.clear();
+    // 清理历史记录
+    _history.clear();  // ✅ 使用clear()方法而不是重新赋值
+    _updateUndoRedoState();
+    // 清理页面notifier
+    for (final notifier in _pageNotifiers) {
+      notifier.dispose();
+    }
+    _pageNotifiers.clear();
+    // ✅ 清理页面缓存（已移除缓存机制）
+    // _cachedPageWidgets = null;
+    // _cachedPagesCount = 0;
+    // 取消待保存标记
+    _pendingSave = false;
+    _saveDebounceTimer?.cancel();
+  }
+  
   /// ✅ 初始化页面状态notifier（用于精确更新，避免全量重建）
   void _initPageNotifiers() {
     // 清理旧的notifier
@@ -138,18 +198,37 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _pageNotifiers.add(EditorPageNotifier(page));
     }
   }
+  
+  /// ✅ 预加载所有页面的PDF背景图（视图切换时调用，确保PDF图片能正确显示）
+  void _preloadPdfBackgrounds() {
+    int pdfPageCount = 0;
+    for (final page in _coreInfo.pages) {
+      if (page.backgroundImage != null) {
+        page.backgroundImage!.preloadPdfDocument();
+        pdfPageCount++;
+      }
+    }
+    if (pdfPageCount > 0) {
+      debugPrint('🦋[HandwritingSaber] _preloadPdfBackgrounds: Preloading $pdfPageCount PDF background images');
+    }
+  }
 
   /// 初始化本地数据：
   /// - 调用 HandwritingSaberDataService 打开/创建对应视图的数据文件；
   /// - 尝试从文件中加载 JSON 形式的 EditorCoreInfo；
   /// - 仅在 PoC 阶段使用 JSON 存储，后续会替换为真正的 .sbn2 二进制。
   Future<void> _initLocalData() async {
+    debugPrint('🦋🦋🦋 [HandwritingSaber] ===== _initLocalData START =====');
+    debugPrint('🦋🦋🦋 [HandwritingSaber] ViewID: ${widget.view.id}');
+    debugPrint('🦋🦋🦋 [HandwritingSaber] ViewName: ${widget.view.name}');
     try {
       // 1. 打开或创建手写笔记数据文件（通过统一数据服务）
       await _dataService.openHandwritingSaber(viewId: widget.view.id);
 
       // 2. 加载已有数据（PoC 阶段按 JSON 文本解析）
       await _loadFromStorage();
+      
+      debugPrint('🦋🦋🦋 [HandwritingSaber] _initLocalData: Data loaded, pages=${_coreInfo.pages.length}');
 
       if (mounted) {
         setState(() {
@@ -157,10 +236,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         });
       }
     } catch (e) {
+      debugPrint('❌❌❌ [HandwritingSaber] _initLocalData ERROR: $e');
       setState(() {
         _status = '本地数据初始化失败：$e';
       });
     }
+    debugPrint('🦋🦋🦋 [HandwritingSaber] ===== _initLocalData END =====');
   }
 
   /// 从统一数据服务加载手写笔记数据
@@ -169,31 +250,88 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// - 实际存储的还是 EditorCoreInfo 的 JSON 字符串；
   /// - 未来切换为 Saber 真正的 .sbn2 时，只需要替换序列化/反序列化实现。
   Future<void> _loadFromStorage() async {
+    debugPrint('📖📖📖 [HandwritingSaber] ===== _loadFromStorage START =====');
+    debugPrint('📖📖📖 [HandwritingSaber] 当前_coreInfo.pages.length: ${_coreInfo.pages.length}');
+    
     try {
       final List<int> bytes =
           await _dataService.loadHandwritingSaberData(widget.view.id);
+      
+      debugPrint('📖📖📖 [HandwritingSaber] Loaded ${bytes.length} bytes from storage');
 
       if (bytes.isEmpty) {
+        debugPrint('📖📖📖 [HandwritingSaber] Empty data, creating new EditorCoreInfo');
         _coreInfo = EditorCoreInfo.empty();
         // 保证 UI 上的当前背景纸样式与核心数据一致（避免新建时工具栏/画布不一致）
         _currentBackgroundPattern = _coreInfo.backgroundPattern;
         _status = '已就绪';
       } else {
         final String content = utf8.decode(bytes);
+        debugPrint('📖📖📖 [HandwritingSaber] Decoding JSON, content length: ${content.length}');
         _coreInfo = EditorCoreInfo.fromJsonString(content);
+        debugPrint('📖📖📖 [HandwritingSaber] Decoded: ${_coreInfo.pages.length} pages');
+        
+        // ✅ 修复无效的页面尺寸（兼容旧版本数据）
+        bool needsRepair = false;
+        for (int i = 0; i < _coreInfo.pages.length; i++) {
+          final page = _coreInfo.pages[i];
+          debugPrint('📖📖📖 [HandwritingSaber] Page $i: size=${page.size}, strokes=${page.strokes.length}');
+          if (page.size.width <= 0 || page.size.height <= 0) {
+            debugPrint('🔧🔧🔧 [HandwritingSaber] Repairing invalid page size at index $i: ${page.size} -> ${EditorPage.defaultSize}');
+            // 创建新的页面对象with正确的尺寸
+            _coreInfo.pages[i] = EditorPage(
+              size: EditorPage.defaultSize,
+              strokes: page.strokes,
+              backgroundImage: page.backgroundImage,
+              textBoxes: page.textBoxes,
+              listBoxes: page.listBoxes,
+              taskListBoxes: page.taskListBoxes,
+            );
+            needsRepair = true;
+          }
+        }
+        
+        // 如果修复了数据，保存回文件
+        if (needsRepair) {
+          debugPrint('🔧🔧🔧 [HandwritingSaber] Data repaired, saving...');
+          await _saveToStorage(suppressStatusUpdate: true);
+        }
+        
         // 同步当前背景纸样式，确保工具栏与数据一致
         _currentBackgroundPattern = _coreInfo.backgroundPattern;
         _status = '已就绪';
       }
 
+      debugPrint('📖📖📖 [HandwritingSaber] Final _coreInfo.pages.length: ${_coreInfo.pages.length}');
+      
       // ✅ 初始化页面notifier（用于精确状态更新）
       _initPageNotifiers();
+      debugPrint('📖📖📖 [HandwritingSaber] Page notifiers initialized: ${_pageNotifiers.length}');
+      
+      // ✅ 预加载所有页面的PDF背景图
+      _preloadPdfBackgrounds();
+      
+      // ✅ 强制刷新界面，确保加载的数据能正确显示
+      if (mounted) {
+        setState(() {
+          // 触发Widget树重建，确保页面notifier被正确使用
+          debugPrint('📖📖📖 [HandwritingSaber] setState called to rebuild UI');
+        });
+      }
     } catch (e) {
+      debugPrint('❌❌❌ [HandwritingSaber] _loadFromStorage ERROR: $e');
       _coreInfo = EditorCoreInfo.empty();
       // 如果读取失败，也同步当前背景样式为默认
       _currentBackgroundPattern = _coreInfo.backgroundPattern;
       _status = '读取本地文件失败：$e';
+      
+      if (mounted) {
+        setState(() {
+          // 触发界面更新显示错误状态
+        });
+      }
     }
+    debugPrint('📖📖📖 [HandwritingSaber] ===== _loadFromStorage END =====');
   }
 
   /// 将当前 EditorCoreInfo 保存到本地数据文件
@@ -266,6 +404,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// ✅ 当前正在绘制的页面索引
   int? _currentPageIndex;
   
+  /// ✅ 形状工具的起始点（用于矩形、圆形、菱形等工具）
+  Offset? _shapeStartPoint;
+  
   void _startStroke(Offset position, {int? pageIndex}) {
     // ✅ 设置当前页面索引
     _currentPageIndex = pageIndex ?? 0;
@@ -296,6 +437,19 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     if (_currentToolNotifier.value.toolId == ToolId.eraser) {
       _eraseStrokesAtPosition(position, pageIndex: _currentPageIndex);
       return;
+    }
+    
+    // ✅ 保存形状工具的起始点
+    final toolId = _currentToolNotifier.value.toolId;
+    if (toolId == ToolId.line ||
+        toolId == ToolId.arrowLine ||
+        toolId == ToolId.rectangle || 
+        toolId == ToolId.circle || 
+        toolId == ToolId.diamond) {
+      _shapeStartPoint = position;
+      debugPrint('🔶🔶🔶 [_startStroke] Saved shape start point: $_shapeStartPoint');
+    } else {
+      _shapeStartPoint = null;
     }
     
     // ✅ 创建新笔迹，初始只包含一个点
@@ -647,11 +801,16 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return;
     }
     
-    // ✅ 对于形状工具，更新结束点并重新计算形状点
+    // ✅ 关键修复：使用原始points而不是转换后的points
+    // 对于形状工具，我们需要保存原始的起始点和当前点，而不是让它变成RectangleStroke的5个角点
+    // 所以使用一个临时数组来保存原始的2个点
+    List<Offset> originalPoints;
+    
     final toolId = _currentToolNotifier.value.toolId;
     if (toolId == ToolId.triangle) {
       // ✅ 三角形工具：一笔绘制，像自由多边形一样添加点
       stroke.points.add(position);
+      originalPoints = List<Offset>.from(stroke.points);
       // 如果是激光笔，记录点间时间
       if (stroke.toolId == ToolId.laserPointer && _laserStrokeStopwatches.containsKey(stroke)) {
         final sw = _laserStrokeStopwatches[stroke]!;
@@ -664,23 +823,27 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         toolId == ToolId.rectangle || 
         toolId == ToolId.circle || 
         toolId == ToolId.diamond) {
-      // 其他形状工具：起始点是第一个点，结束点是当前位置
+      // ✅ 关键修复：形状工具始终只保持2个点（起始点和当前点）
+      // 不要让points数组变成转换后的角点数组
       if (stroke.points.isEmpty) {
-        stroke.points.add(position);
+        originalPoints = [position];
+        debugPrint('🔶🔶🔶 [_updateStroke] First point: $position');
+      } else if (stroke.points.length == 1) {
+        originalPoints = [stroke.points.first, position];
+        debugPrint('🔶🔶🔶 [_updateStroke] Second point: $position, start=${stroke.points.first}');
       } else {
-        // 更新结束点（第二个点）
-        if (stroke.points.length == 1) {
-          stroke.points.add(position);
-        } else {
-          stroke.points[1] = position;
-        }
+        // 已经有2个点，更新第二个点
+        originalPoints = [stroke.points.first, position];
+        debugPrint('🔶🔶🔶 [_updateStroke] Updated end: $position, start=${stroke.points.first}');
       }
     } else if (toolId == ToolId.freePolygon) {
       // ✅ 自由多边形：添加点
       stroke.points.add(position);
+      originalPoints = List<Offset>.from(stroke.points);
     } else {
       // 其他工具：正常添加点
       stroke.points.add(position);
+      originalPoints = List<Offset>.from(stroke.points);
       // 如果是激光笔，记录点间时间
       if (stroke.toolId == ToolId.laserPointer && _laserStrokeStopwatches.containsKey(stroke)) {
         final sw = _laserStrokeStopwatches[stroke]!;
@@ -690,15 +853,180 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       }
     }
     
+    // ✅ 关键修复：对于形状工具，使用保存的起始点
+    if (toolId == ToolId.line ||
+        toolId == ToolId.arrowLine ||
+        toolId == ToolId.rectangle || 
+        toolId == ToolId.circle || 
+        toolId == ToolId.diamond) {
+      // 使用保存的起始点，如果没有则从stroke中提取
+      Offset startPoint = _shapeStartPoint ?? (stroke.points.isNotEmpty ? stroke.points.first : position);
+      originalPoints = [startPoint, position];
+      debugPrint('🔶🔶🔶 [_updateStroke] Shape tool: start=$startPoint (saved=${_shapeStartPoint != null}), end=$position');
+    }
+    
     // 为确保 CustomPainter 能检测到变化，替换成新的 Stroke 实例（改变对象引用）
     final Stroke oldStrokeRef = stroke;
-    final Stroke newStroke = Stroke(
-      points: List<Offset>.from(stroke.points),
-      color: stroke.color,
-      strokeWidth: stroke.strokeWidth,
-      toolId: stroke.toolId,
-      pressureEnabled: stroke.pressureEnabled,
-    );
+    Stroke newStroke;
+    
+    // ✅ 根据工具类型创建对应的 Stroke 对象，使用originalPoints
+    if (toolId == ToolId.line) {
+      // 直线工具：创建 LineStroke 用于实时预览
+      if (originalPoints.length >= 2) {
+        newStroke = LineStroke(
+          startPoint: originalPoints.first,
+          endPoint: originalPoints.last,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: toolId,
+          dashStyle: _dashStyleNotifier.value,
+        );
+      } else {
+        newStroke = Stroke(
+          points: originalPoints,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: stroke.toolId,
+          pressureEnabled: stroke.pressureEnabled,
+        );
+      }
+    } else if (toolId == ToolId.arrowLine) {
+      // 箭头直线工具：创建 ArrowLineStroke 用于实时预览
+      if (originalPoints.length >= 2) {
+        newStroke = ArrowLineStroke(
+          startPoint: originalPoints.first,
+          endPoint: originalPoints.last,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: toolId,
+          dashStyle: _dashStyleNotifier.value,
+          arrowStyle: _arrowStyleNotifier.value,
+        );
+      } else {
+        newStroke = Stroke(
+          points: originalPoints,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: stroke.toolId,
+          pressureEnabled: stroke.pressureEnabled,
+        );
+      }
+    } else if (toolId == ToolId.rectangle) {
+      // 矩形工具：创建 RectangleStroke 用于实时预览
+      if (originalPoints.length >= 2) {
+        debugPrint('🔷🔷🔷 [_updateStroke] Creating RectangleStroke: start=${originalPoints.first}, end=${originalPoints.last}');
+        newStroke = RectangleStroke(
+          startPoint: originalPoints.first,
+          endPoint: originalPoints.last,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: toolId,
+          fillColor: _currentFillColorNotifier.value,
+        );
+        if (newStroke is RectangleStroke) {
+          debugPrint('🔷🔷🔷 [_updateStroke] RectangleStroke created: rect=${newStroke.rect}, isEmpty=${newStroke.rect.isEmpty}');
+        }
+      } else {
+        newStroke = Stroke(
+          points: originalPoints,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: stroke.toolId,
+          pressureEnabled: stroke.pressureEnabled,
+        );
+      }
+    } else if (toolId == ToolId.circle) {
+      // 圆形工具：创建 CircleStroke 用于实时预览
+      if (originalPoints.length >= 2) {
+        debugPrint('🔷🔷🔷 [_updateStroke] Creating CircleStroke: start=${originalPoints.first}, end=${originalPoints.last}');
+        newStroke = CircleStroke(
+          startPoint: originalPoints.first,
+          endPoint: originalPoints.last,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: toolId,
+          fillColor: _currentFillColorNotifier.value,
+        );
+      } else {
+        newStroke = Stroke(
+          points: originalPoints,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: stroke.toolId,
+          pressureEnabled: stroke.pressureEnabled,
+        );
+      }
+    } else if (toolId == ToolId.diamond) {
+      // 菱形工具：创建 DiamondStroke 用于实时预览
+      if (originalPoints.length >= 2) {
+        debugPrint('🔷🔷🔷 [_updateStroke] Creating DiamondStroke: start=${originalPoints.first}, end=${originalPoints.last}');
+        newStroke = DiamondStroke(
+          startPoint: originalPoints.first,
+          endPoint: originalPoints.last,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: toolId,
+          fillColor: _currentFillColorNotifier.value,
+        );
+      } else {
+        newStroke = Stroke(
+          points: originalPoints,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: stroke.toolId,
+          pressureEnabled: stroke.pressureEnabled,
+        );
+      }
+    } else if (toolId == ToolId.triangle) {
+      // 三角形工具：创建 TriangleStroke 用于实时预览
+      if (originalPoints.length >= 2) {
+        final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+        newStroke = TriangleStroke(
+          points: originalPoints,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: toolId,
+          isShiftPressed: isShiftPressed,
+          fillColor: _currentFillColorNotifier.value,
+        );
+      } else {
+        newStroke = Stroke(
+          points: originalPoints,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: stroke.toolId,
+          pressureEnabled: stroke.pressureEnabled,
+        );
+      }
+    } else if (toolId == ToolId.freePolygon) {
+      // 自由多边形工具：创建 FreePolygonStroke 用于实时预览
+      if (originalPoints.length >= 2) {
+        newStroke = FreePolygonStroke(
+          points: originalPoints,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: toolId,
+        );
+      } else {
+        newStroke = Stroke(
+          points: originalPoints,
+          color: stroke.color,
+          strokeWidth: stroke.strokeWidth,
+          toolId: stroke.toolId,
+          pressureEnabled: stroke.pressureEnabled,
+        );
+      }
+    } else {
+      // 其他工具：普通笔迹
+      newStroke = Stroke(
+        points: originalPoints,
+        color: stroke.color,
+        strokeWidth: stroke.strokeWidth,
+        toolId: stroke.toolId,
+        pressureEnabled: stroke.pressureEnabled,
+      );
+    }
+    
     _currentStrokeNotifier.value = newStroke;
     // 如果之前为激光笔记录了点间延迟或计时器，需要把这些临时记录从旧实例移动到新实例
     try {
@@ -984,7 +1312,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     
     // ✅ 计算页面缩放和偏移（与 _buildSinglePageCanvas 保持一致）
     final page = _coreInfo.pages[pageIndex];
+    
+    // ✅ 防止无效的页面尺寸
+    if (page.size.width <= 0 || page.size.height <= 0) {
+      debugPrint('❌[HandwritingSaber] _buildTextBoxEditor: Invalid page size: ${page.size}');
+      return const SizedBox.shrink();
+    }
+    
     final double scale = pageDisplayWidth / page.size.width;
+    // ✅ 检查scale有效性
+    if (!scale.isFinite || scale <= 0) {
+      debugPrint('❌[HandwritingSaber] _buildTextBoxEditor: Invalid scale: $scale');
+      return const SizedBox.shrink();
+    }
+    
     // 注意：offsetX 和 offsetY 应该与 _buildSinglePageCanvas 中的计算一致
     final double offsetX = (screenWidth - pageDisplayWidth) / 2;
     final double offsetY = 0;  // 页面顶部对齐，与 _buildSinglePageCanvas 一致
@@ -1157,6 +1498,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
 
   Future<void> _endStroke() async {
+    debugPrint('✍️✍️✍️ [HandwritingSaber] ===== _endStroke START =====');
+    
     // ✅ 如果是选择工具，结束选择
     if (_currentToolNotifier.value.toolId == ToolId.select) {
       _endSelection();
@@ -1164,110 +1507,38 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
     
     final Stroke? stroke = _currentStrokeNotifier.value;
+    debugPrint('✍️✍️✍️ [HandwritingSaber] Current stroke: ${stroke != null ? "exists, points=${stroke.points.length}" : "null"}');
     if (stroke == null || stroke.points.isEmpty) {
       _currentPageIndex = null;
+      debugPrint('✍️✍️✍️ [HandwritingSaber] No valid stroke, returning');
       return;
     }
+    
+    debugPrint('✍️✍️✍️ [HandwritingSaber] _coreInfo.pages.length: ${_coreInfo.pages.length}');
     if (_coreInfo.pages.isEmpty) {
+      debugPrint('⚠️⚠️⚠️ [HandwritingSaber] Pages empty, creating default');
       _coreInfo = EditorCoreInfo.empty();
     }
     
     // ✅ 确保页面索引有效
     final int targetPageIndex = _currentPageIndex ?? 0;
+    debugPrint('✍️✍️✍️ [HandwritingSaber] Target pageIndex: $targetPageIndex, total pages: ${_coreInfo.pages.length}');
     if (targetPageIndex >= _coreInfo.pages.length) {
+      debugPrint('❌❌❌ [HandwritingSaber] INVALID PAGE INDEX! pageIndex=$targetPageIndex >= pages.length=${_coreInfo.pages.length}');
+      debugPrint('❌❌❌ [HandwritingSaber] Stroke LOST! Tool: ${stroke.toolId}, Points: ${stroke.points.length}');
       _currentPageIndex = null;
       return;
     }
     
-    // ✅ 根据工具类型创建对应的形状笔迹
+    debugPrint('✍️✍️✍️ [HandwritingSaber] Valid page index, using current stroke as final stroke');
+    debugPrint('✍️✍️✍️ [HandwritingSaber] Stroke type: ${stroke.runtimeType}, toolId: ${stroke.toolId}, points: ${stroke.points.length}');
+    
+    // ✅ 关键修复：_updateStroke 中已经创建了正确类型的Stroke对象，直接使用即可！
+    // 不要重新创建，否则会从已转换的points数组中提取错误的点
     final toolId = stroke.toolId;
     Stroke? finalStroke;
     
-    if (toolId == ToolId.line) {
-      // ✅ 直线
-      if (stroke.points.length >= 2) {
-        finalStroke = LineStroke(
-          startPoint: stroke.points.first,
-          endPoint: stroke.points[1],
-          color: stroke.color,
-          strokeWidth: stroke.strokeWidth,
-          toolId: toolId,
-          isDashed: _isDashedModeNotifier.value, // ✅ 使用虚线模式状态
-        );
-      }
-    } else if (toolId == ToolId.arrowLine) {
-      // ✅ 带箭头直线
-      if (stroke.points.length >= 2) {
-        finalStroke = ArrowLineStroke(
-          startPoint: stroke.points.first,
-          endPoint: stroke.points[1],
-          color: stroke.color,
-          strokeWidth: stroke.strokeWidth,
-          toolId: toolId,
-          isDashed: _isDashedModeNotifier.value, // ✅ 使用虚线模式状态
-        );
-      }
-    } else if (toolId == ToolId.rectangle) {
-      // ✅ 矩形
-      if (stroke.points.length >= 2) {
-        finalStroke = RectangleStroke(
-          startPoint: stroke.points.first,
-          endPoint: stroke.points[1],
-          color: stroke.color,
-          strokeWidth: stroke.strokeWidth,
-          toolId: toolId,
-          fillColor: _currentFillColorNotifier.value, // ✅ 传递填充颜色
-        );
-      }
-    } else if (toolId == ToolId.circle) {
-      // ✅ 圆形
-      if (stroke.points.length >= 2) {
-        finalStroke = CircleStroke(
-          startPoint: stroke.points.first,
-          endPoint: stroke.points[1],
-          color: stroke.color,
-          strokeWidth: stroke.strokeWidth,
-          toolId: toolId,
-          fillColor: _currentFillColorNotifier.value, // ✅ 传递填充颜色
-        );
-      }
-    } else if (toolId == ToolId.triangle) {
-      // ✅ 三角形：一笔绘制，自动优化为三角形
-      if (stroke.points.length >= 2) {
-        // ✅ 检测Shift键状态
-        final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
-        finalStroke = TriangleStroke(
-          points: List<Offset>.from(stroke.points),
-          color: stroke.color,
-          strokeWidth: stroke.strokeWidth,
-          toolId: toolId,
-          isShiftPressed: isShiftPressed, // ✅ 传递Shift键状态
-          fillColor: _currentFillColorNotifier.value, // ✅ 传递填充颜色
-        );
-      }
-    } else if (toolId == ToolId.diamond) {
-      // ✅ 菱形
-      if (stroke.points.length >= 2) {
-        finalStroke = DiamondStroke(
-          startPoint: stroke.points.first,
-          endPoint: stroke.points[1],
-          color: stroke.color,
-          strokeWidth: stroke.strokeWidth,
-          toolId: toolId,
-          fillColor: _currentFillColorNotifier.value, // ✅ 传递填充颜色
-        );
-      }
-    } else if (toolId == ToolId.freePolygon) {
-      // ✅ 自由多边形
-      if (stroke.points.length >= 2) {
-        finalStroke = FreePolygonStroke(
-          points: List<Offset>.from(stroke.points),
-          color: stroke.color,
-          strokeWidth: stroke.strokeWidth,
-          toolId: toolId,
-        );
-      }
-    } else if (toolId == ToolId.laserPointer) {
+    if (toolId == ToolId.laserPointer) {
       // ✅ 激光笔
       final laserStroke = Stroke(
         points: List<Offset>.from(stroke.points),
@@ -1295,19 +1566,17 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _currentStrokeNotifier.value = null;
       return;
     } else {
-      // ✅ 其他工具：普通笔迹
-      finalStroke = Stroke(
-        points: List<Offset>.from(stroke.points),
-        color: stroke.color,
-        strokeWidth: stroke.strokeWidth,
-        toolId: stroke.toolId,
-        pressureEnabled: stroke.pressureEnabled,
-      );
+      // ✅ 其他工具：直接使用当前stroke
+      // _updateStroke中已经创建了正确类型的对象，不需要重新创建
+      finalStroke = stroke;
+      debugPrint('✍️✍️✍️ [HandwritingSaber] Using stroke directly: type=${stroke.runtimeType}');
     }
     
     // ✅ 保存完成的笔迹到正确的页面
     if (finalStroke != null) {
+      debugPrint('💾💾💾 [HandwritingSaber] Saving stroke to page $targetPageIndex, toolId=${finalStroke.toolId}, points=${finalStroke.points.length}');
       _coreInfo.pages[targetPageIndex].strokes.add(finalStroke);
+      debugPrint('💾💾💾 [HandwritingSaber] Page $targetPageIndex now has ${_coreInfo.pages[targetPageIndex].strokes.length} strokes');
       
       // ✅ 记录绘制操作到历史记录
       _history.recordChange(EditorHistoryItem.draw(
@@ -1315,12 +1584,26 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         strokes: [finalStroke],
       ));
       _updateUndoRedoState();
+      
+      // ✅ 通知页面notifier更新（关键！触发该页面的重绘）
+      if (targetPageIndex < _pageNotifiers.length) {
+        // 使用updatePage方法而不是直接调用notifyListeners
+        final currentPage = _coreInfo.pages[targetPageIndex];
+        _pageNotifiers[targetPageIndex].updatePage(currentPage);
+        debugPrint('💾💾💾 [HandwritingSaber] Page notifier $targetPageIndex updated');
+      }
+    } else {
+      debugPrint('⚠️⚠️⚠️ [HandwritingSaber] finalStroke is null! Tool: ${stroke.toolId}');
     }
     
     // 清空 notifier 值，触发 CustomPainter 的局部重绘
     _currentStrokeNotifier.value = null;
     // 不触发父级重建，仅重置页面索引
     _currentPageIndex = null;
+    // ✅ 清除形状工具的起始点
+    _shapeStartPoint = null;
+    debugPrint('✍️✍️✍️ [HandwritingSaber] ===== _endStroke END =====');
+    
     // 如果之前有待保存请求（在绘制期间调用过_scheduleSave），则立即保存一次
     if (_pendingSave) {
       _pendingSave = false;
@@ -1512,17 +1795,39 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     required double pageDisplayHeight,
     required double screenWidth,
   }) {
+    // ✅ 防止无效的页面尺寸导致渲染问题
+    if (page.size.width <= 0 || page.size.height <= 0) {
+      debugPrint('❌[HandwritingSaber] _buildSinglePageCanvas: Invalid page size: ${page.size}, pageIndex=$pageIndex');
+      return Container(
+        width: screenWidth,
+        height: pageDisplayHeight,
+        color: Colors.grey.withValues(alpha: 0.1),
+        child: const Center(
+          child: Text('页面尺寸无效，请重新创建'),
+        ),
+      );
+    }
+    
     // ✅ 计算页面坐标变换参数
     final double scale = pageDisplayWidth / page.size.width;
     final double offsetX = (screenWidth - pageDisplayWidth) / 2;
     final double offsetY = 0;  // 页面顶部对齐
     
+    // ✅ 额外检查：确保scale有效
+    if (!scale.isFinite || scale <= 0) {
+      debugPrint('❌[HandwritingSaber] _buildSinglePageCanvas: Invalid scale: $scale, pageDisplayWidth=$pageDisplayWidth, page.size.width=${page.size.width}');
+      return Container(
+        width: screenWidth,
+        height: pageDisplayHeight,
+        color: Colors.grey.withValues(alpha: 0.1),
+        child: const Center(
+          child: Text('缩放计算错误'),
+        ),
+      );
+    }
+    
     // ✅ 将 localPosition 转换为页面坐标
     Offset toPageCoordinates(Offset localPosition) {
-      // 防止除零错误
-      if (scale <= 0) {
-        return localPosition;
-      }
       return Offset(
         (localPosition.dx - offsetX) / scale,
         (localPosition.dy - offsetY) / scale,
@@ -2026,7 +2331,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // ✅ 清理撤销/恢复状态 notifier
     _canUndoNotifier.dispose();
     _canRedoNotifier.dispose();
-    _isDashedModeNotifier.dispose();
+    _dashStyleNotifier.dispose();
+    _arrowStyleNotifier.dispose();
 
     super.dispose();
   }
@@ -2067,30 +2373,23 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                       return ValueListenableBuilder<bool>(
                         valueListenable: _canRedoNotifier,
                         builder: (ctx2, canRedo, _) {
-                          return ValueListenableBuilder<bool>(
-                            valueListenable: _isDashedModeNotifier,
-                            builder: (ctx3, isDashed, _) {
-                              return HandwritingSaberToolbar(
-                                currentTool: currentTool,
-                                onToolChanged: _onToolChanged,
-                                currentBackgroundPattern: _currentBackgroundPattern,
-                                onBackgroundPatternChanged: _onBackgroundPatternChanged,
-                                // 使用全局颜色/线宽，确保切换工具时保持用户设置
-                                currentColor: _globalColorNotifier.value,
-                                onColorChanged: _onColorChanged,
-                                currentStrokeWidth: _globalStrokeWidthNotifier.value,
-                                onStrokeWidthChanged: _onStrokeWidthChanged,
-                                currentFillColor: fillColor, // ✅ 填充颜色（由 notifier 驱动）
-                                onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
-                                onImportPdf: _importPdf,  // ✅ PDF 导入回调
-                                canUndo: canUndo, // ✅ 撤销按钮状态
-                                canRedo: canRedo, // ✅ 恢复按钮状态
-                                onUndo: _undo, // ✅ 撤销回调
-                                onRedo: _redo, // ✅ 恢复回调
-                                isDashed: isDashed, // ✅ 虚线模式状态
-                                onDashedChanged: (value) => _isDashedModeNotifier.value = value, // ✅ 虚线模式改变回调
-                              );
-                            },
+                          return HandwritingSaberToolbar(
+                            currentTool: currentTool,
+                            onToolChanged: _onToolChanged,
+                            currentBackgroundPattern: _currentBackgroundPattern,
+                            onBackgroundPatternChanged: _onBackgroundPatternChanged,
+                            // 使用全局颜色/线宽，确保切换工具时保持用户设置
+                            currentColor: _globalColorNotifier.value,
+                            onColorChanged: _onColorChanged,
+                            currentStrokeWidth: _globalStrokeWidthNotifier.value,
+                            onStrokeWidthChanged: _onStrokeWidthChanged,
+                            currentFillColor: fillColor, // ✅ 填充颜色（由 notifier 驱动）
+                            onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
+                            onImportPdf: _importPdf,  // ✅ PDF 导入回调
+                            canUndo: canUndo, // ✅ 撤销按钮状态
+                            canRedo: canRedo, // ✅ 恢复按钮状态
+                            onUndo: _undo, // ✅ 撤销回调
+                            onRedo: _redo, // ✅ 恢复回调
                           );
                         },
                       );
@@ -2114,6 +2413,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                 // ✅ 计算每页的显示大小（使用屏幕宽度，保持比例）
                 final double screenWidth = constraints.maxWidth;
                 final List<Widget> pageWidgets = [];
+                
+                debugPrint('🖼️🖼️🖼️ [HandwritingSaber] Building ${_coreInfo.pages.length} pages for view: ${widget.view.name}');
                 
                 for (int pageIndex = 0; pageIndex < _coreInfo.pages.length; pageIndex++) {
                   // 确保 page notifier 已初始化，避免 index out of range 导致 RangeError
@@ -2155,18 +2456,16 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                     pageWidgets.add(const SizedBox(height: 16));
                   }
                 }
-                // ✅ 页面widgets缓存机制（参考2025-12-27-小手工具闪烁终极修复记录.md）
-                // 只有当页面数量发生变化时才重新构建缓存，避免父级重建时重新创建所有页面
-                // 文本框编辑器的显示/隐藏通过ValueListenableBuilder处理，不影响缓存
-                if (_cachedPageWidgets == null || _cachedPagesCount != _coreInfo.pages.length) {
-                  _cachedPageWidgets = List<Widget>.from(pageWidgets);
-                  _cachedPagesCount = _coreInfo.pages.length;
-                }
+                
+                // ✅ 直接使用新创建的pageWidgets，不使用缓存
+                // 原因：之前的缓存机制有严重bug - 只检查页面数量，导致数据更新后界面不刷新
+                // ListenableBuilder已经提供了充分的优化（每个页面只在自己的数据变化时重建）
+                debugPrint('🖼️🖼️🖼️ [HandwritingSaber] Rendering ${pageWidgets.length} page widgets directly (no cache)');
 
-                // ✅ 使用 SingleChildScrollView 支持垂直滚动（使用缓存的 page widgets）
+                // ✅ 使用 SingleChildScrollView 支持垂直滚动
                 return SingleChildScrollView(
                   child: Column(
-                    children: _cachedPageWidgets!,
+                    children: pageWidgets,  // 直接使用最新的pageWidgets
                   ),
                 );
               },

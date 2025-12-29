@@ -1,5 +1,21 @@
 import 'package:flutter/material.dart';
 
+/// 虚线样式枚举
+enum DashStyle {
+  solid,      // 实线
+  dot,        // 点虚线（由点组成）
+  shortDash,  // 短虚线（短划线）
+  longDash,   // 长虚线（长划线）
+  dashDot,    // 点划线（点和线交替）
+}
+
+/// 箭头样式枚举
+enum ArrowStyle {
+  filled,     // 实心箭头
+  hollow,     // 空心箭头
+  line,       // 线条箭头
+}
+
 /// 工具 ID 枚举
 enum ToolId {
   fountainPen,

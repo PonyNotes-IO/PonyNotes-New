@@ -252,14 +252,28 @@ class _SaberCoreCanvasPainter extends CustomPainter {
         );
       } else if (strokeToDraw.toolId == ToolId.laserPointer) {
         _drawLaserStroke(canvas, strokeToDraw, scale, offsetX, offsetY);
-      } else if (strokeToDraw.toolId == ToolId.line ||
-                 strokeToDraw.toolId == ToolId.rectangle || 
-                 strokeToDraw.toolId == ToolId.circle || 
-                 strokeToDraw.toolId == ToolId.triangle || 
-                 strokeToDraw.toolId == ToolId.diamond) {
-        // ✅ 形状工具：实时绘制形状预览
-        _drawShapePreview(canvas, strokeToDraw, scale, offsetX, offsetY);
+      } else if (strokeToDraw is LineStroke || strokeToDraw is ArrowLineStroke) {
+        // ✅ 直线和箭头：使用专门的绘制方法
+        debugPrint('🎨 [SaberCanvas] Drawing current LineStroke/ArrowLine');
+        _drawLineStroke(canvas, strokeToDraw, scale, offsetX, offsetY);
+      } else if (strokeToDraw is RectangleStroke) {
+        // ✅ 矩形：使用专门的绘制方法
+        debugPrint('🎨 [SaberCanvas] Drawing current RectangleStroke');
+        _drawRectangleStroke(canvas, strokeToDraw, scale, offsetX, offsetY);
+      } else if (strokeToDraw is CircleStroke) {
+        // ✅ 圆形：使用专门的绘制方法
+        debugPrint('🎨 [SaberCanvas] Drawing current CircleStroke');
+        _drawCircleStroke(canvas, strokeToDraw, scale, offsetX, offsetY);
+      } else if (strokeToDraw is TriangleStroke) {
+        // ✅ 三角形：使用专门的绘制方法
+        debugPrint('🎨 [SaberCanvas] Drawing current TriangleStroke');
+        _drawTriangleStroke(canvas, strokeToDraw, scale, offsetX, offsetY);
+      } else if (strokeToDraw is DiamondStroke) {
+        // ✅ 菱形：使用专门的绘制方法
+        debugPrint('🎨 [SaberCanvas] Drawing current DiamondStroke');
+        _drawDiamondStroke(canvas, strokeToDraw, scale, offsetX, offsetY);
       } else {
+        debugPrint('🎨 [SaberCanvas] Drawing current stroke as incomplete: toolId=${strokeToDraw.toolId}, type=${strokeToDraw.runtimeType}');
         _drawStrokeIncomplete(canvas, strokeToDraw, scale, offsetX, offsetY);
       }
     }
@@ -421,19 +435,26 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       _drawLineStroke(canvas, stroke, scale, offsetX, offsetY);
       return;
     } else if (stroke is RectangleStroke) {
+      debugPrint('🖼️ [SaberCanvas] Drawing saved RectangleStroke');
       _drawRectangleStroke(canvas, stroke, scale, offsetX, offsetY);
       return;
     } else if (stroke is CircleStroke) {
+      debugPrint('🖼️ [SaberCanvas] Drawing saved CircleStroke');
       _drawCircleStroke(canvas, stroke, scale, offsetX, offsetY);
       return;
     } else if (stroke is TriangleStroke) {
+      debugPrint('🖼️ [SaberCanvas] Drawing saved TriangleStroke');
       _drawTriangleStroke(canvas, stroke, scale, offsetX, offsetY);
       return;
     } else if (stroke is DiamondStroke) {
+      debugPrint('🖼️ [SaberCanvas] Drawing saved DiamondStroke');
       _drawDiamondStroke(canvas, stroke, scale, offsetX, offsetY);
       return;
     } else if (stroke is FreePolygonStroke) {
       // ✅ 自由多边形使用普通绘制逻辑，继续执行下面的代码
+      debugPrint('🖼️ [SaberCanvas] Drawing saved FreePolygonStroke');
+    } else {
+      debugPrint('🖼️ [SaberCanvas] Drawing saved regular stroke: toolId=${stroke.toolId}, type=${stroke.runtimeType}');
     }
     
     // 根据工具类型应用不同的绘制样式
@@ -681,8 +702,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       ..strokeWidth = lineStroke.strokeWidth
       ..strokeCap = StrokeCap.round;
     
-    // ✅ 如果是虚线，使用Path绘制虚线
-    if (lineStroke.isDashed) {
+    // ✅ 根据虚线样式绘制不同的线条
+    if (lineStroke.dashStyle != DashStyle.solid) {
       final path = Path();
       final dx = end.dx - start.dx;
       final dy = end.dy - start.dy;
@@ -691,26 +712,96 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       if (length > 0) {
         final unitX = dx / length;
         final unitY = dy / length;
-        final dashLength = 10.0;
-        final gapLength = 5.0;
-        final dashGapLength = dashLength + gapLength;
+        
+        // ✅ 根据虚线样式设置不同的参数
+        double dashLength;
+        double gapLength;
+        bool isDotStyle = false;
+        
+        switch (lineStroke.dashStyle) {
+          case DashStyle.dot:
+            // 点虚线：小圆点
+            dashLength = 2.0;
+            gapLength = 3.0;
+            isDotStyle = true;
+            break;
+          case DashStyle.shortDash:
+            // 短虚线
+            dashLength = 5.0;
+            gapLength = 3.0;
+            break;
+          case DashStyle.longDash:
+            // 长虚线
+            dashLength = 10.0;
+            gapLength = 5.0;
+            break;
+          case DashStyle.dashDot:
+            // 点划线：交替绘制点和短线
+            dashLength = 5.0;
+            gapLength = 3.0;
+            break;
+          case DashStyle.solid:
+            dashLength = length;
+            gapLength = 0;
+            break;
+        }
         
         double currentLength = 0;
+        bool isDot = false; // 用于点划线模式
+        
         while (currentLength < length) {
-          final dashStart = Offset(
-            start.dx + unitX * currentLength,
-            start.dy + unitY * currentLength,
-          );
-          final dashEndLength = math.min(currentLength + dashLength, length);
-          final dashEnd = Offset(
-            start.dx + unitX * dashEndLength,
-            start.dy + unitY * dashEndLength,
-          );
-          path.moveTo(dashStart.dx, dashStart.dy);
-          path.lineTo(dashEnd.dx, dashEnd.dy);
-          currentLength += dashGapLength;
+          if (lineStroke.dashStyle == DashStyle.dashDot) {
+            // 点划线：交替绘制点和短线
+            final currentDashLength = isDot ? 2.0 : dashLength;
+            final dashStart = Offset(
+              start.dx + unitX * currentLength,
+              start.dy + unitY * currentLength,
+            );
+            final dashEndLength = math.min(currentLength + currentDashLength, length);
+            final dashEnd = Offset(
+              start.dx + unitX * dashEndLength,
+              start.dy + unitY * dashEndLength,
+            );
+            
+            if (isDot) {
+              // 绘制点
+              canvas.drawCircle(dashStart, lineStroke.strokeWidth / 2, paint);
+            } else {
+              // 绘制短线
+              path.moveTo(dashStart.dx, dashStart.dy);
+              path.lineTo(dashEnd.dx, dashEnd.dy);
+            }
+            
+            currentLength += currentDashLength + gapLength;
+            isDot = !isDot;
+          } else if (isDotStyle) {
+            // 点虚线：绘制小圆点
+            final dotPos = Offset(
+              start.dx + unitX * currentLength,
+              start.dy + unitY * currentLength,
+            );
+            canvas.drawCircle(dotPos, lineStroke.strokeWidth / 2, paint);
+            currentLength += dashLength + gapLength;
+          } else {
+            // 普通虚线
+            final dashStart = Offset(
+              start.dx + unitX * currentLength,
+              start.dy + unitY * currentLength,
+            );
+            final dashEndLength = math.min(currentLength + dashLength, length);
+            final dashEnd = Offset(
+              start.dx + unitX * dashEndLength,
+              start.dy + unitY * dashEndLength,
+            );
+            path.moveTo(dashStart.dx, dashStart.dy);
+            path.lineTo(dashEnd.dx, dashEnd.dy);
+            currentLength += dashLength + gapLength;
+          }
         }
-        canvas.drawPath(path, paint);
+        
+        if (!isDotStyle) {
+          canvas.drawPath(path, paint);
+        }
       }
     } else {
       // ✅ 绘制实线
@@ -719,14 +810,14 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     
     // ✅ 如果是箭头直线，绘制箭头
     if (stroke is ArrowLineStroke) {
-      _drawArrow(canvas, start, end, lineStroke.strokeWidth, lineStroke.color);
+      _drawArrow(canvas, start, end, lineStroke.strokeWidth, lineStroke.color, stroke.arrowStyle);
     }
     
     canvas.restore();
   }
   
   /// ✅ 绘制箭头（在直线末端）
-  void _drawArrow(Canvas canvas, Offset start, Offset end, double strokeWidth, Color color) {
+  void _drawArrow(Canvas canvas, Offset start, Offset end, double strokeWidth, Color color, [ArrowStyle arrowStyle = ArrowStyle.filled]) {
     // 箭头大小（根据线宽调整）
     final arrowSize = strokeWidth * 2.5;
     final arrowAngle = math.pi / 6; // 30度角
@@ -764,24 +855,65 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       arrowStart.dy - arrowSize * (unitY * cosAngle - unitX * sinAngle),
     );
     
-    // 绘制箭头（填充三角形）
-    final arrowPath = Path()
-      ..moveTo(end.dx, end.dy)
-      ..lineTo(arrowLeft.dx, arrowLeft.dy)
-      ..lineTo(arrowRight.dx, arrowRight.dy)
-      ..close();
-    
-    final arrowPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-    
-    canvas.drawPath(arrowPath, arrowPaint);
+    // ✅ 根据箭头样式绘制不同的箭头
+    switch (arrowStyle) {
+      case ArrowStyle.filled:
+        // 实心箭头（填充三角形）
+        final arrowPath = Path()
+          ..moveTo(end.dx, end.dy)
+          ..lineTo(arrowLeft.dx, arrowLeft.dy)
+          ..lineTo(arrowRight.dx, arrowRight.dy)
+          ..close();
+        
+        final filledPaint = Paint()
+          ..color = color
+          ..style = PaintingStyle.fill;
+        
+        canvas.drawPath(arrowPath, filledPaint);
+        break;
+        
+      case ArrowStyle.hollow:
+        // 空心箭头（三角形描边）
+        final arrowPath = Path()
+          ..moveTo(end.dx, end.dy)
+          ..lineTo(arrowLeft.dx, arrowLeft.dy)
+          ..lineTo(arrowRight.dx, arrowRight.dy)
+          ..close();
+        
+        final hollowPaint = Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round;
+        
+        canvas.drawPath(arrowPath, hollowPaint);
+        break;
+        
+      case ArrowStyle.line:
+        // 线条箭头（两条斜线组成的 > 形状）
+        final linePaint = Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.round;
+        
+        // 绘制左边斜线
+        canvas.drawLine(end, arrowLeft, linePaint);
+        // 绘制右边斜线
+        canvas.drawLine(end, arrowRight, linePaint);
+        break;
+    }
   }
 
   /// ✅ 绘制矩形笔迹（支持填充和描边）
   void _drawRectangleStroke(Canvas canvas, RectangleStroke stroke, double scale, double offsetX, double offsetY) {
     final rect = stroke.rect;
-    if (rect.isEmpty) return;
+    debugPrint('🎨🎨🎨 [SaberCanvas] _drawRectangleStroke: rect=$rect, isEmpty=${rect.isEmpty}, color=${stroke.color}, strokeWidth=${stroke.strokeWidth}');
+    if (rect.isEmpty) {
+      debugPrint('⚠️⚠️⚠️ [SaberCanvas] _drawRectangleStroke: rect is empty, skipping');
+      return;
+    }
     
     canvas.save();
     canvas.translate(offsetX, offsetY);
@@ -793,6 +925,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
         ..color = stroke.fillColor!
         ..style = PaintingStyle.fill;
       canvas.drawRect(rect, fillPaint);
+      debugPrint('🎨🎨🎨 [SaberCanvas] Drew rectangle fill: ${stroke.fillColor}');
     }
     
     // ✅ 再绘制描边
@@ -801,12 +934,17 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke.strokeWidth;
     canvas.drawRect(rect, strokePaint);
+    debugPrint('🎨🎨🎨 [SaberCanvas] Drew rectangle stroke: color=${stroke.color}, width=${stroke.strokeWidth}');
     canvas.restore();
   }
   
   /// ✅ 绘制圆形/椭圆笔迹（支持填充和描边）
   void _drawCircleStroke(Canvas canvas, CircleStroke stroke, double scale, double offsetX, double offsetY) {
-    if (stroke.points.length < 2) return;
+    debugPrint('🎨🎨🎨 [SaberCanvas] _drawCircleStroke: points=${stroke.points.length}, color=${stroke.color}, strokeWidth=${stroke.strokeWidth}');
+    if (stroke.points.length < 2) {
+      debugPrint('⚠️⚠️⚠️ [SaberCanvas] _drawCircleStroke: not enough points, skipping');
+      return;
+    }
     
     canvas.save();
     canvas.translate(offsetX, offsetY);
@@ -901,88 +1039,6 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke.strokeWidth;
     canvas.drawPath(path, strokePaint);
-    canvas.restore();
-  }
-  
-  /// ✅ 绘制形状预览（用于实时显示正在绘制的形状）
-  void _drawShapePreview(Canvas canvas, Stroke stroke, double scale, double offsetX, double offsetY) {
-    final color = stroke.color;
-    final strokeWidth = stroke.strokeWidth * scale;
-    
-    canvas.save();
-    canvas.translate(offsetX, offsetY);
-    canvas.scale(scale);
-    
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
-    
-    final toolId = stroke.toolId;
-    if (toolId == ToolId.triangle) {
-      // ✅ 任意三角形：一笔绘制预览
-      if (stroke.points.length >= 2) {
-        // 实时显示绘制路径，结束时自动优化为三角形
-        final path = Path();
-        if (stroke.points.isNotEmpty) {
-          path.moveTo(stroke.points[0].dx, stroke.points[0].dy);
-          for (int i = 1; i < stroke.points.length; i++) {
-            path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
-          }
-        }
-        canvas.drawPath(path, paint);
-      } else if (stroke.points.length == 1) {
-        // 只有一个点，显示一个点（预览）
-        canvas.drawCircle(stroke.points[0], strokeWidth / 2, paint);
-      }
-    } else if (stroke.points.length < 2) {
-      return;
-    } else {
-      final startPoint = stroke.points.first;
-      final endPoint = stroke.points[1];
-      
-      if (toolId == ToolId.line) {
-        // ✅ 直线
-        canvas.drawLine(startPoint, endPoint, paint);
-      } else if (toolId == ToolId.rectangle) {
-        // ✅ 矩形
-        final left = math.min(startPoint.dx, endPoint.dx);
-        final top = math.min(startPoint.dy, endPoint.dy);
-        final right = math.max(startPoint.dx, endPoint.dx);
-        final bottom = math.max(startPoint.dy, endPoint.dy);
-        canvas.drawRect(Rect.fromLTRB(left, top, right, bottom), paint);
-      } else if (toolId == ToolId.circle) {
-        // ✅ 椭圆（支持非正圆）
-        final left = math.min(startPoint.dx, endPoint.dx);
-        final top = math.min(startPoint.dy, endPoint.dy);
-        final right = math.max(startPoint.dx, endPoint.dx);
-        final bottom = math.max(startPoint.dy, endPoint.dy);
-        final rect = Rect.fromLTRB(left, top, right, bottom);
-        canvas.drawOval(rect, paint);
-      } else if (toolId == ToolId.diamond) {
-        // ✅ 菱形
-        final center = Offset(
-          (startPoint.dx + endPoint.dx) / 2,
-          (startPoint.dy + endPoint.dy) / 2,
-        );
-        final width = (endPoint.dx - startPoint.dx).abs() / 2;
-        final height = (endPoint.dy - startPoint.dy).abs() / 2;
-        
-        final top = Offset(center.dx, center.dy - height);
-        final right = Offset(center.dx + width, center.dy);
-        final bottom = Offset(center.dx, center.dy + height);
-        final left = Offset(center.dx - width, center.dy);
-        
-        final path = Path()
-          ..moveTo(top.dx, top.dy)
-          ..lineTo(right.dx, right.dy)
-          ..lineTo(bottom.dx, bottom.dy)
-          ..lineTo(left.dx, left.dy)
-          ..close();
-        canvas.drawPath(path, paint);
-      }
-    }
-    
     canvas.restore();
   }
 

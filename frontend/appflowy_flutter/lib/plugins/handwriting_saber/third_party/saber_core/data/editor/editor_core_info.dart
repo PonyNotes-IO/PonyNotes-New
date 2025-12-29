@@ -91,11 +91,11 @@ class EditorCoreInfo {
   factory EditorCoreInfo.empty() {
     return EditorCoreInfo(
       pages: <EditorPage>[
-        EditorPage(size: const Size(800, 600)),
+        EditorPage(size: EditorPage.defaultSize),  // ✅ 使用 A4 默认尺寸
       ],
       backgroundColor: const Color(0xFFFCFCFC), // 浅灰色背景
       backgroundPattern: CanvasBackgroundPattern.lined,
-      lineHeight: 20,
+      lineHeight: 28,  // ✅ 使用统一的默认行高
       lineThickness: 1,
     );
   }

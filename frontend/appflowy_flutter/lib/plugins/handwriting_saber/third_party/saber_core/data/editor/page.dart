@@ -70,8 +70,8 @@ class EditorPage {
   }
 
   factory EditorPage.fromJson(Map<String, dynamic> json) {
-    final double width = (json['width'] as num?)?.toDouble() ?? 0;
-    final double height = (json['height'] as num?)?.toDouble() ?? 0;
+    final double width = (json['width'] as num?)?.toDouble() ?? defaultWidth;  // ✅ 使用默认宽度而不是0
+    final double height = (json['height'] as num?)?.toDouble() ?? defaultHeight;  // ✅ 使用默认高度而不是0
     final List<dynamic> strokeList = json['strokes'] as List<dynamic>? ?? <dynamic>[];
     final List<dynamic> textBoxList = json['textBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取文本框列表
     final List<dynamic> listBoxList = json['listBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取列表框列表

@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../third_party/saber_core/components/canvas/canvas_background_pattern.dart';
 import '../third_party/saber_core/data/tools/tool.dart';
 import 'color_picker_dialog.dart';
+import 'widgets/tool_dropdown_button.dart';
 
 /// 手写笔记工具栏组件
 class HandwritingSaberToolbar extends StatelessWidget {
@@ -25,8 +26,6 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.canRedo = false, // ✅ 是否可以恢复
     this.onUndo, // ✅ 撤销回调（可选）
     this.onRedo, // ✅ 恢复回调（可选）
-    this.isDashed = false, // ✅ 是否为虚线模式
-    this.onDashedChanged, // ✅ 虚线模式改变回调（可选）
   });
 
   final Tool currentTool;
@@ -44,8 +43,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final bool canRedo; // ✅ 是否可以恢复
   final VoidCallback? onUndo; // ✅ 撤销回调
   final VoidCallback? onRedo; // ✅ 恢复回调
-  final bool isDashed; // ✅ 是否为虚线模式
-  final ValueChanged<bool>? onDashedChanged; // ✅ 虚线模式改变回调
+  // 注意：虚线模式已整合到工具本身，不再需要单独的状态
 
   // 预定义颜色列表
   static const List<Color> presetColors = [
@@ -98,12 +96,6 @@ class HandwritingSaberToolbar extends StatelessWidget {
             if (_isShapeTool(currentTool.toolId) && onFillColorChanged != null) ...[
               const SizedBox(width: 8),
               _buildFillColorSelector(),
-            ],
-            // ✅ 虚线/实线切换（仅直线工具显示）
-            if ((currentTool.toolId == ToolId.line || currentTool.toolId == ToolId.arrowLine) && 
-                onDashedChanged != null) ...[
-              const SizedBox(width: 8),
-              _buildDashedToggle(),
             ],
             // ✅ 分隔线
             _buildDivider(),
@@ -159,193 +151,182 @@ class HandwritingSaberToolbar extends StatelessWidget {
     );
   }
   
-  /// ✅ 构建分组工具选择器（专业、美观、大方）
+  /// ✅ 构建分组工具选择器（使用下拉按钮优化布局）
   Widget _buildToolSelectorGrouped() {
     return Builder(
       builder: (context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-            // ✅ 第一组：笔类工具
-            _buildToolGroup(
-              context: context,
-              title: '笔类',
-              tools: [
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.penFancy,
-                  tool: Pen(
-                    toolId: ToolId.fountainPen,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '钢笔',
-                ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.pen,
-                  tool: Pen(
-                    toolId: ToolId.ballpointPen,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '圆珠笔',
-                ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.pencil,
-                  tool: Pen(
-                    toolId: ToolId.pencil,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '铅笔',
-                ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.highlighter,
-                  tool: Pen(
-                    toolId: ToolId.highlighter,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '荧光笔',
-                ),
-                _buildToolButton(
-                  context: context,
-                  icon: Symbols.stylus_laser_pointer,
-                  tool: Pen(
-                    toolId: ToolId.laserPointer,
-                    color: Colors.red,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '激光笔',
-                ),
-              ],
+          // ✅ 画笔工具下拉按钮
+          ToolDropdownButton(
+            currentTool: currentTool,
+            mainTool: Pen(
+              toolId: ToolId.pencil,
+              color: currentColor,
+              strokeWidth: currentStrokeWidth,
             ),
-            // ✅ 分隔符
-            _buildGroupSeparator(context),
-            // ✅ 第二组：形状工具
-            _buildToolGroup(
-              context: context,
-              title: '形状',
-              tools: [
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.minus,
-                  tool: Pen(
-                    toolId: ToolId.line,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '直线',
+            options: [
+              ToolOption(
+                icon: FontAwesomeIcons.penFancy,
+                label: '钢笔',
+                tool: Pen(
+                  toolId: ToolId.fountainPen,
+                  color: currentColor,
+                  strokeWidth: currentStrokeWidth,
                 ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.arrowRight,
-                  tool: Pen(
-                    toolId: ToolId.arrowLine,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '箭头直线',
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.pen,
+                label: '圆珠笔',
+                tool: Pen(
+                  toolId: ToolId.ballpointPen,
+                  color: currentColor,
+                  strokeWidth: currentStrokeWidth,
                 ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.square,
-                  tool: Pen(
-                    toolId: ToolId.rectangle,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '矩形',
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.pencil,
+                label: '铅笔',
+                tool: Pen(
+                  toolId: ToolId.pencil,
+                  color: currentColor,
+                  strokeWidth: currentStrokeWidth,
                 ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.circle,
-                  tool: Pen(
-                    toolId: ToolId.circle,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '圆形',
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.highlighter,
+                label: '荧光笔',
+                tool: Pen(
+                  toolId: ToolId.highlighter,
+                  color: currentColor,
+                  strokeWidth: currentStrokeWidth,
                 ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.shapes,
-                  tool: Pen(
-                    toolId: ToolId.triangle,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '三角形',
+              ),
+              ToolOption(
+                icon: Symbols.stylus_laser_pointer,
+                label: '激光笔',
+                tool: Pen(
+                  toolId: ToolId.laserPointer,
+                  color: Colors.red,
+                  strokeWidth: currentStrokeWidth,
                 ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.diamond,
-                  tool: Pen(
-                    toolId: ToolId.diamond,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '菱形',
-                ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.drawPolygon,
-                  tool: Pen(
-                    toolId: ToolId.freePolygon,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '自由多边形',
-                ),
-              ],
+              ),
+            ],
+            onToolChanged: onToolChanged,
+          ),
+          const SizedBox(width: 4),
+          
+          // ✅ 直线工具按钮（简化为单个按钮，虚线样式通过状态管理）
+          _buildToolButton(
+            context: context,
+            icon: FontAwesomeIcons.minus,
+            tool: Pen(
+              toolId: ToolId.line,
+              color: currentColor,
+              strokeWidth: currentStrokeWidth,
             ),
-            // ✅ 分隔符
-            _buildGroupSeparator(context),
-            // ✅ 第三组：其他工具
-            _buildToolGroup(
-              context: context,
-              title: '其他',
-              tools: [
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.eraser,
-                  tool: Eraser(strokeWidth: currentStrokeWidth),
-                  label: '橡皮擦',
-                ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.handPointer,
-                  tool: const SelectTool(),
-                  label: '选择',
-                ),
-                _buildToolButton(
-                  context: context,
-                  icon: FontAwesomeIcons.textHeight,
-                  tool: Pen(
-                    toolId: ToolId.textBox,
-                    color: currentColor,
-                    strokeWidth: currentStrokeWidth,
-                  ),
-                  label: '文本框',
-                ),
-              ],
+            label: '直线',
+          ),
+          
+          // ✅ 箭头直线工具按钮（简化为单个按钮，箭头样式通过状态管理）
+          _buildToolButton(
+            context: context,
+            icon: FontAwesomeIcons.arrowRight,
+            tool: Pen(
+              toolId: ToolId.arrowLine,
+              color: currentColor,
+              strokeWidth: currentStrokeWidth,
             ),
-          ],
-        ),
-    );
-  }
-  
-  /// ✅ 构建工具组（紧凑布局，不显示标题）
-  Widget _buildToolGroup({
-    required BuildContext context,
-    required String title,
-    required List<Widget> tools,
-  }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: tools,
+            label: '箭头直线',
+          ),
+          const SizedBox(width: 4),
+          
+          // ✅ 形状工具下拉按钮
+          ToolDropdownButton(
+            currentTool: currentTool,
+            mainTool: Pen(
+              toolId: ToolId.rectangle,
+              color: currentColor,
+              strokeWidth: currentStrokeWidth,
+            ),
+            options: [
+              ToolOption(
+                icon: FontAwesomeIcons.square,
+                label: '矩形',
+                tool: Pen(
+                  toolId: ToolId.rectangle,
+                  color: currentColor,
+                  strokeWidth: currentStrokeWidth,
+                ),
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.circle,
+                label: '圆形',
+                tool: Pen(
+                  toolId: ToolId.circle,
+                  color: currentColor,
+                  strokeWidth: currentStrokeWidth,
+                ),
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.shapes,
+                label: '三角形',
+                tool: Pen(
+                  toolId: ToolId.triangle,
+                  color: currentColor,
+                  strokeWidth: currentStrokeWidth,
+                ),
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.diamond,
+                label: '菱形',
+                tool: Pen(
+                  toolId: ToolId.diamond,
+                  color: currentColor,
+                  strokeWidth: currentStrokeWidth,
+                ),
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.drawPolygon,
+                label: '自由多边形',
+                tool: Pen(
+                  toolId: ToolId.freePolygon,
+                  color: currentColor,
+                  strokeWidth: currentStrokeWidth,
+                ),
+              ),
+            ],
+            onToolChanged: onToolChanged,
+          ),
+          
+          // ✅ 分隔符
+          _buildGroupSeparator(context),
+          
+          // ✅ 其他独立工具
+          _buildToolButton(
+            context: context,
+            icon: FontAwesomeIcons.eraser,
+            tool: Eraser(strokeWidth: currentStrokeWidth),
+            label: '橡皮擦',
+          ),
+          _buildToolButton(
+            context: context,
+            icon: FontAwesomeIcons.handPointer,
+            tool: const SelectTool(),
+            label: '选择',
+          ),
+          _buildToolButton(
+            context: context,
+            icon: FontAwesomeIcons.textHeight,
+            tool: Pen(
+              toolId: ToolId.textBox,
+              color: currentColor,
+              strokeWidth: currentStrokeWidth,
+            ),
+            label: '文本框',
+          ),
+        ],
+      ),
     );
   }
   
@@ -759,34 +740,6 @@ class HandwritingSaberToolbar extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-  
-  /// ✅ 构建虚线/实线切换按钮
-  Widget _buildDashedToggle() {
-    return Builder(
-      builder: (context) => Tooltip(
-            message: isDashed ? '实线' : '虚线',
-        child: IconButton(
-          icon: Icon(
-            isDashed ? Icons.remove : Icons.remove_done,
-            size: 20,
-          ),
-          onPressed: () {
-            if (onDashedChanged != null) {
-              onDashedChanged!(!isDashed);
-            }
-          },
-          padding: const EdgeInsets.all(8),
-          constraints: const BoxConstraints(
-            minWidth: 40,
-            minHeight: 40,
-          ),
-          color: isDashed
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.onSurface,
-        ),
       ),
     );
   }

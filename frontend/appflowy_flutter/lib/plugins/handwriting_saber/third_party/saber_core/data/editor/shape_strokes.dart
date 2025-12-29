@@ -13,7 +13,7 @@ class LineStroke extends Stroke {
     required Color color,
     required double strokeWidth,
     ToolId? toolId,
-    this.isDashed = false, // ✅ 是否为虚线
+    this.dashStyle = DashStyle.solid, // ✅ 虚线样式
   }) : super(
           points: [startPoint, endPoint],
           color: color,
@@ -22,7 +22,7 @@ class LineStroke extends Stroke {
           pressureEnabled: false,
         );
 
-  final bool isDashed; // ✅ 是否为虚线
+  final DashStyle dashStyle; // ✅ 虚线样式
 
   Offset get startPoint => points.isNotEmpty ? points.first : Offset.zero;
   Offset get endPoint => points.length > 1 ? points[1] : Offset.zero;
@@ -31,13 +31,25 @@ class LineStroke extends Stroke {
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['shape'] = 'line';
-    json['isDashed'] = isDashed; // ✅ 保存虚线状态
+    json['dashStyle'] = dashStyle.name; // ✅ 保存虚线样式
     return json;
   }
 
   factory LineStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
-    final isDashed = json['isDashed'] as bool? ?? false; // ✅ 读取虚线状态
+    // ✅ 兼容旧版本：如果有 isDashed 字段，转换为 dashStyle
+    DashStyle dashStyle = DashStyle.solid;
+    if (json.containsKey('dashStyle')) {
+      final styleStr = json['dashStyle'] as String?;
+      dashStyle = DashStyle.values.firstWhere(
+        (e) => e.name == styleStr,
+        orElse: () => DashStyle.solid,
+      );
+    } else if (json.containsKey('isDashed')) {
+      final isDashed = json['isDashed'] as bool? ?? false;
+      dashStyle = isDashed ? DashStyle.longDash : DashStyle.solid;
+    }
+    
     if (stroke.points.length < 2) {
       return LineStroke(
         startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
@@ -45,7 +57,7 @@ class LineStroke extends Stroke {
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
-        isDashed: isDashed,
+        dashStyle: dashStyle,
       );
     }
     return LineStroke(
@@ -54,7 +66,7 @@ class LineStroke extends Stroke {
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
-      isDashed: isDashed,
+      dashStyle: dashStyle,
     );
   }
 }
@@ -67,26 +79,53 @@ class ArrowLineStroke extends LineStroke {
     required Color color,
     required double strokeWidth,
     ToolId? toolId,
-    bool isDashed = false, // ✅ 是否为虚线
+    DashStyle dashStyle = DashStyle.solid, // ✅ 虚线样式
+    this.arrowStyle = ArrowStyle.filled, // ✅ 箭头样式
   }) : super(
           startPoint: startPoint,
           endPoint: endPoint,
           color: color,
           strokeWidth: strokeWidth,
           toolId: toolId ?? ToolId.arrowLine,
-          isDashed: isDashed,
+          dashStyle: dashStyle,
         );
+
+  final ArrowStyle arrowStyle; // ✅ 箭头样式
 
   @override
   Map<String, dynamic> toJson() {
     final json = super.toJson();
     json['shape'] = 'arrowLine'; // ✅ 标记为箭头直线
+    json['arrowStyle'] = arrowStyle.name; // ✅ 保存箭头样式
     return json;
   }
 
   factory ArrowLineStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
-    final isDashed = json['isDashed'] as bool? ?? false;
+    
+    // ✅ 兼容旧版本：如果有 isDashed 字段，转换为 dashStyle
+    DashStyle dashStyle = DashStyle.solid;
+    if (json.containsKey('dashStyle')) {
+      final styleStr = json['dashStyle'] as String?;
+      dashStyle = DashStyle.values.firstWhere(
+        (e) => e.name == styleStr,
+        orElse: () => DashStyle.solid,
+      );
+    } else if (json.containsKey('isDashed')) {
+      final isDashed = json['isDashed'] as bool? ?? false;
+      dashStyle = isDashed ? DashStyle.longDash : DashStyle.solid;
+    }
+    
+    // ✅ 读取箭头样式
+    ArrowStyle arrowStyle = ArrowStyle.filled;
+    if (json.containsKey('arrowStyle')) {
+      final styleStr = json['arrowStyle'] as String?;
+      arrowStyle = ArrowStyle.values.firstWhere(
+        (e) => e.name == styleStr,
+        orElse: () => ArrowStyle.filled,
+      );
+    }
+    
     if (stroke.points.length < 2) {
       return ArrowLineStroke(
         startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
@@ -94,7 +133,8 @@ class ArrowLineStroke extends LineStroke {
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
-        isDashed: isDashed,
+        dashStyle: dashStyle,
+        arrowStyle: arrowStyle,
       );
     }
     return ArrowLineStroke(
@@ -103,7 +143,8 @@ class ArrowLineStroke extends LineStroke {
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
-      isDashed: isDashed,
+      dashStyle: dashStyle,
+      arrowStyle: arrowStyle,
     );
   }
 }
