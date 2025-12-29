@@ -26,6 +26,10 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.canRedo = false, // ✅ 是否可以恢复
     this.onUndo, // ✅ 撤销回调（可选）
     this.onRedo, // ✅ 恢复回调（可选）
+    this.currentDashStyle, // ✅ 当前虚线样式（可选）
+    this.onDashStyleChanged, // ✅ 虚线样式改变回调（可选）
+    this.currentArrowStyle, // ✅ 当前箭头样式（可选）
+    this.onArrowStyleChanged, // ✅ 箭头样式改变回调（可选）
   });
 
   final Tool currentTool;
@@ -43,7 +47,10 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final bool canRedo; // ✅ 是否可以恢复
   final VoidCallback? onUndo; // ✅ 撤销回调
   final VoidCallback? onRedo; // ✅ 恢复回调
-  // 注意：虚线模式已整合到工具本身，不再需要单独的状态
+  final DashStyle? currentDashStyle; // ✅ 当前虚线样式（可选）
+  final ValueChanged<DashStyle>? onDashStyleChanged; // ✅ 虚线样式改变回调（可选）
+  final ArrowStyle? currentArrowStyle; // ✅ 当前箭头样式（可选）
+  final ValueChanged<ArrowStyle>? onArrowStyleChanged; // ✅ 箭头样式改变回调（可选）
 
   // 预定义颜色列表
   static const List<Color> presetColors = [
@@ -130,6 +137,16 @@ class HandwritingSaberToolbar extends StatelessWidget {
       builder: (context) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // ✅ 虚线样式选择器
+          if (onDashStyleChanged != null) ...[
+            _buildDashStyleSelector(),
+            const SizedBox(width: 4),
+          ],
+          // ✅ 箭头样式选择器
+          if (onArrowStyleChanged != null) ...[
+            _buildArrowStyleSelector(),
+            const SizedBox(width: 4),
+          ],
           // ✅ PDF 导入按钮
           if (onImportPdf != null)
             Tooltip(
@@ -213,31 +230,6 @@ class HandwritingSaberToolbar extends StatelessWidget {
               ),
             ],
             onToolChanged: onToolChanged,
-          ),
-          const SizedBox(width: 4),
-          
-          // ✅ 直线工具按钮（简化为单个按钮，虚线样式通过状态管理）
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.minus,
-            tool: Pen(
-              toolId: ToolId.line,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '直线',
-          ),
-          
-          // ✅ 箭头直线工具按钮（简化为单个按钮，箭头样式通过状态管理）
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.arrowRight,
-            tool: Pen(
-              toolId: ToolId.arrowLine,
-              color: currentColor,
-              strokeWidth: currentStrokeWidth,
-            ),
-            label: '箭头直线',
           ),
           const SizedBox(width: 4),
           
@@ -742,6 +734,324 @@ class HandwritingSaberToolbar extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// ✅ 构建虚线样式选择器（集成直线工具按钮）
+  Widget _buildDashStyleSelector() {
+    return Builder(
+      builder: (context) {
+        final bool isLineToolSelected = currentTool.toolId == ToolId.line;
+        return Container(
+          decoration: BoxDecoration(
+            color: isLineToolSelected
+                ? Theme.of(context).colorScheme.primaryContainer
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+            border: isLineToolSelected
+                ? Border.all(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                    width: 1,
+                  )
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 主按钮：切换到直线工具
+              Tooltip(
+                message: '直线',
+                child: InkWell(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    bottomLeft: Radius.circular(4),
+                  ),
+                  onTap: () {
+                    onToolChanged(Pen(
+                      toolId: ToolId.line,
+                      color: currentColor,
+                      strokeWidth: currentStrokeWidth,
+                    ));
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: _getDashStyleIcon(currentDashStyle ?? DashStyle.solid, context),
+                  ),
+                ),
+              ),
+              // 分隔线
+              Container(
+                width: 1,
+                height: 24,
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              ),
+              // 下拉按钮：选择虚线样式
+              PopupMenuButton<DashStyle>(
+                tooltip: '虚线样式',
+                onSelected: (style) {
+                  if (onDashStyleChanged != null) {
+                    onDashStyleChanged!(style);
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(
+                    value: DashStyle.solid,
+                    child: Row(
+                      children: [
+                        const Icon(FontAwesomeIcons.minus, size: 16),
+                        const SizedBox(width: 12),
+                        const Text('实线'),
+                        if (currentDashStyle == DashStyle.solid) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.check,
+                            size: 16,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: DashStyle.shortDash,
+                    child: Row(
+                      children: [
+                        const Text('- - -', style: TextStyle(letterSpacing: 2)),
+                        const SizedBox(width: 12),
+                        const Text('短虚线'),
+                        if (currentDashStyle == DashStyle.shortDash) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.check,
+                            size: 16,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: DashStyle.longDash,
+                    child: Row(
+                      children: [
+                        const Text('— —', style: TextStyle(letterSpacing: 2)),
+                        const SizedBox(width: 12),
+                        const Text('长虚线'),
+                        if (currentDashStyle == DashStyle.longDash) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.check,
+                            size: 16,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _getDashStyleName(currentDashStyle ?? DashStyle.solid),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      const Icon(Icons.arrow_drop_down, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// ✅ 构建箭头样式选择器（集成箭头工具按钮）
+  Widget _buildArrowStyleSelector() {
+    return Builder(
+      builder: (context) {
+        final bool isArrowToolSelected = currentTool.toolId == ToolId.arrowLine;
+        return Container(
+          decoration: BoxDecoration(
+            color: isArrowToolSelected
+                ? Theme.of(context).colorScheme.primaryContainer
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+            border: isArrowToolSelected
+                ? Border.all(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                    width: 1,
+                  )
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 主按钮：切换到箭头工具
+              Tooltip(
+                message: '箭头',
+                child: InkWell(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    bottomLeft: Radius.circular(4),
+                  ),
+                  onTap: () {
+                    onToolChanged(Pen(
+                      toolId: ToolId.arrowLine,
+                      color: currentColor,
+                      strokeWidth: currentStrokeWidth,
+                    ));
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: _getArrowStyleIcon(currentArrowStyle ?? ArrowStyle.filled),
+                  ),
+                ),
+              ),
+              // 分隔线
+              Container(
+                width: 1,
+                height: 24,
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              ),
+              // 下拉按钮：选择箭头样式
+              PopupMenuButton<ArrowStyle>(
+                tooltip: '箭头样式',
+                onSelected: (style) {
+                  if (onArrowStyleChanged != null) {
+                    onArrowStyleChanged!(style);
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(
+                    value: ArrowStyle.filled,
+                    child: Row(
+                      children: [
+                        const Text('➤', style: TextStyle(fontSize: 16)),
+                        const SizedBox(width: 12),
+                        const Text('实心箭头'),
+                        if (currentArrowStyle == ArrowStyle.filled) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.check,
+                            size: 16,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: ArrowStyle.hollow,
+                    child: Row(
+                      children: [
+                        const Text('⇢', style: TextStyle(fontSize: 16)),
+                        const SizedBox(width: 12),
+                        const Text('空心箭头'),
+                        if (currentArrowStyle == ArrowStyle.hollow) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.check,
+                            size: 16,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: ArrowStyle.line,
+                    child: Row(
+                      children: [
+                        const Icon(FontAwesomeIcons.arrowRight, size: 16),
+                        const SizedBox(width: 12),
+                        const Text('线条箭头'),
+                        if (currentArrowStyle == ArrowStyle.line) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.check,
+                            size: 16,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _getArrowStyleName(currentArrowStyle ?? ArrowStyle.filled),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      const Icon(Icons.arrow_drop_down, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// ✅ 获取虚线样式图标
+  Widget _getDashStyleIcon(DashStyle style, BuildContext context) {
+    switch (style) {
+      case DashStyle.solid:
+        return const Icon(FontAwesomeIcons.minus, size: 16);
+      case DashStyle.shortDash:
+        return const Text('- -', style: TextStyle(fontSize: 12, letterSpacing: 1));
+      case DashStyle.longDash:
+        return const Text('—', style: TextStyle(fontSize: 14));
+      default:
+        return const Icon(FontAwesomeIcons.minus, size: 16);
+    }
+  }
+
+  /// ✅ 获取虚线样式名称
+  String _getDashStyleName(DashStyle style) {
+    switch (style) {
+      case DashStyle.solid:
+        return '实线';
+      case DashStyle.shortDash:
+        return '短虚线';
+      case DashStyle.longDash:
+        return '长虚线';
+      default:
+        return '实线';
+    }
+  }
+
+  /// ✅ 获取箭头样式图标
+  Widget _getArrowStyleIcon(ArrowStyle style) {
+    switch (style) {
+      case ArrowStyle.filled:
+        return const Text('➤', style: TextStyle(fontSize: 14));
+      case ArrowStyle.hollow:
+        return const Text('⇢', style: TextStyle(fontSize: 14));
+      case ArrowStyle.line:
+        return const Icon(FontAwesomeIcons.arrowRight, size: 14);
+    }
+  }
+
+  /// ✅ 获取箭头样式名称
+  String _getArrowStyleName(ArrowStyle style) {
+    switch (style) {
+      case ArrowStyle.filled:
+        return '实心';
+      case ArrowStyle.hollow:
+        return '空心';
+      case ArrowStyle.line:
+        return '线条';
+    }
   }
 }
 

@@ -928,13 +928,21 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       debugPrint('🎨🎨🎨 [SaberCanvas] Drew rectangle fill: ${stroke.fillColor}');
     }
     
-    // ✅ 再绘制描边
+    // ✅ 再绘制描边（支持虚线）
     final strokePaint = Paint()
       ..color = stroke.color
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke.strokeWidth;
-    canvas.drawRect(rect, strokePaint);
-    debugPrint('🎨🎨🎨 [SaberCanvas] Drew rectangle stroke: color=${stroke.color}, width=${stroke.strokeWidth}');
+    
+    // ✅ 如果是虚线样式，使用虚线绘制
+    if (stroke.dashStyle != DashStyle.solid) {
+      final path = Path()..addRect(rect);
+      _drawDashedPath(canvas, path, strokePaint, stroke.dashStyle);
+      debugPrint('🎨🎨🎨 [SaberCanvas] Drew rectangle dashed stroke: dashStyle=${stroke.dashStyle}');
+    } else {
+      canvas.drawRect(rect, strokePaint);
+      debugPrint('🎨🎨🎨 [SaberCanvas] Drew rectangle stroke: color=${stroke.color}, width=${stroke.strokeWidth}');
+    }
     canvas.restore();
   }
   
@@ -965,12 +973,19 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       canvas.drawOval(rect, fillPaint);
     }
     
-    // ✅ 再绘制描边
+    // ✅ 再绘制描边（支持虚线）
     final strokePaint = Paint()
       ..color = stroke.color
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke.strokeWidth;
-    canvas.drawOval(rect, strokePaint);
+    
+    // ✅ 如果是虚线样式，使用虚线绘制
+    if (stroke.dashStyle != DashStyle.solid) {
+      final path = Path()..addOval(rect);
+      _drawDashedPath(canvas, path, strokePaint, stroke.dashStyle);
+    } else {
+      canvas.drawOval(rect, strokePaint);
+    }
     canvas.restore();
   }
   
@@ -1001,12 +1016,18 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       canvas.drawPath(path, fillPaint);
     }
     
-    // ✅ 再绘制描边
+    // ✅ 再绘制描边（支持虚线）
     final strokePaint = Paint()
       ..color = stroke.color
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke.strokeWidth;
-    canvas.drawPath(path, strokePaint);
+    
+    // ✅ 如果是虚线样式，使用虚线绘制
+    if (stroke.dashStyle != DashStyle.solid) {
+      _drawDashedPath(canvas, path, strokePaint, stroke.dashStyle);
+    } else {
+      canvas.drawPath(path, strokePaint);
+    }
     canvas.restore();
   }
   
@@ -1033,12 +1054,18 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       canvas.drawPath(path, fillPaint);
     }
     
-    // ✅ 再绘制描边
+    // ✅ 再绘制描边（支持虚线）
     final strokePaint = Paint()
       ..color = stroke.color
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke.strokeWidth;
-    canvas.drawPath(path, strokePaint);
+    
+    // ✅ 如果是虚线样式，使用虚线绘制
+    if (stroke.dashStyle != DashStyle.solid) {
+      _drawDashedPath(canvas, path, strokePaint, stroke.dashStyle);
+    } else {
+      canvas.drawPath(path, strokePaint);
+    }
     canvas.restore();
   }
 
@@ -1226,6 +1253,60 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     if (a == null || b == null) return false;
     return a.pageIndex == b.pageIndex &&
            _areStrokesEqual(a.strokes, b.strokes);
+  }
+
+  /// ✅ 绘制虚线路径（通用方法）
+  void _drawDashedPath(Canvas canvas, Path path, Paint paint, DashStyle dashStyle) {
+    // 根据虚线样式设置不同的参数
+    double dashLength;
+    double gapLength;
+    
+    switch (dashStyle) {
+      case DashStyle.dot:
+        // 点虚线：小圆点
+        dashLength = 2.0;
+        gapLength = 3.0;
+        break;
+      case DashStyle.shortDash:
+        // 短虚线
+        dashLength = 5.0;
+        gapLength = 3.0;
+        break;
+      case DashStyle.longDash:
+        // 长虚线
+        dashLength = 10.0;
+        gapLength = 5.0;
+        break;
+      case DashStyle.dashDot:
+        // 点划线：交替绘制点和短线
+        dashLength = 5.0;
+        gapLength = 3.0;
+        break;
+      case DashStyle.solid:
+        // 实线
+        canvas.drawPath(path, paint);
+        return;
+    }
+    
+    // 使用 PathMetric 来沿路径绘制虚线
+    final pathMetrics = path.computeMetrics();
+    for (final pathMetric in pathMetrics) {
+      double distance = 0.0;
+      bool isDash = true;
+      
+      while (distance < pathMetric.length) {
+        final double length = isDash ? dashLength : gapLength;
+        final double end = math.min(distance + length, pathMetric.length);
+        
+        if (isDash) {
+          final extractPath = pathMetric.extractPath(distance, end);
+          canvas.drawPath(extractPath, paint);
+        }
+        
+        distance = end;
+        isDash = !isDash;
+      }
+    }
   }
 }
 

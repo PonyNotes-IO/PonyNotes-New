@@ -158,6 +158,7 @@ class RectangleStroke extends Stroke {
     required double strokeWidth,
     ToolId? toolId,
     this.fillColor, // ✅ 填充颜色（可选）
+    this.dashStyle = DashStyle.solid, // ✅ 虚线样式
   }) : super(
           points: _calculateRectanglePoints(startPoint, endPoint),
           color: color,
@@ -167,6 +168,7 @@ class RectangleStroke extends Stroke {
         );
   
   final Color? fillColor; // ✅ 填充颜色（null表示不填充）
+  final DashStyle dashStyle; // ✅ 虚线样式
 
   static List<Offset> _calculateRectanglePoints(Offset start, Offset end) {
     final left = min(start.dx, end.dx);
@@ -199,6 +201,7 @@ class RectangleStroke extends Stroke {
     if (fillColor != null) {
       json['fillColor'] = fillColor!.value; // ✅ 保存填充颜色
     }
+    json['dashStyle'] = dashStyle.name; // ✅ 保存虚线样式
     return json;
   }
 
@@ -208,6 +211,17 @@ class RectangleStroke extends Stroke {
     final fillColor = fillColorValue != null 
         ? Color(fillColorValue) 
         : null; // ✅ 读取填充颜色
+    
+    // ✅ 读取虚线样式
+    DashStyle dashStyle = DashStyle.solid;
+    if (json.containsKey('dashStyle')) {
+      final styleStr = json['dashStyle'] as String?;
+      dashStyle = DashStyle.values.firstWhere(
+        (e) => e.name == styleStr,
+        orElse: () => DashStyle.solid,
+      );
+    }
+    
     if (stroke.points.length < 2) {
       return RectangleStroke(
         startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
@@ -216,6 +230,7 @@ class RectangleStroke extends Stroke {
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
         fillColor: fillColor,
+        dashStyle: dashStyle,
       );
     }
     return RectangleStroke(
@@ -225,6 +240,7 @@ class RectangleStroke extends Stroke {
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
       fillColor: fillColor,
+      dashStyle: dashStyle,
     );
   }
 }
@@ -238,6 +254,7 @@ class CircleStroke extends Stroke {
     required double strokeWidth,
     ToolId? toolId,
     this.fillColor, // ✅ 填充颜色（可选）
+    this.dashStyle = DashStyle.solid, // ✅ 虚线样式
   }) : super(
           points: _calculateCirclePoints(startPoint, endPoint),
           color: color,
@@ -247,6 +264,7 @@ class CircleStroke extends Stroke {
         );
   
   final Color? fillColor; // ✅ 填充颜色（null表示不填充）
+  final DashStyle dashStyle; // ✅ 虚线样式
 
   static List<Offset> _calculateCirclePoints(Offset start, Offset end) {
     final center = Offset(
@@ -291,6 +309,7 @@ class CircleStroke extends Stroke {
     if (fillColor != null) {
       json['fillColor'] = fillColor!.value; // ✅ 保存填充颜色
     }
+    json['dashStyle'] = dashStyle.name; // ✅ 保存虚线样式
     return json;
   }
 
@@ -300,6 +319,17 @@ class CircleStroke extends Stroke {
     final fillColor = fillColorValue != null 
         ? Color(fillColorValue) 
         : null; // ✅ 读取填充颜色
+    
+    // ✅ 读取虚线样式
+    DashStyle dashStyle = DashStyle.solid;
+    if (json.containsKey('dashStyle')) {
+      final styleStr = json['dashStyle'] as String?;
+      dashStyle = DashStyle.values.firstWhere(
+        (e) => e.name == styleStr,
+        orElse: () => DashStyle.solid,
+      );
+    }
+    
     if (stroke.points.length < 2) {
       return CircleStroke(
         startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
@@ -308,6 +338,7 @@ class CircleStroke extends Stroke {
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
         fillColor: fillColor,
+        dashStyle: dashStyle,
       );
     }
     // 从圆形点计算起始点和结束点
@@ -320,6 +351,7 @@ class CircleStroke extends Stroke {
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
       fillColor: fillColor,
+      dashStyle: dashStyle,
     );
   }
 }
@@ -333,6 +365,7 @@ class TriangleStroke extends Stroke {
     ToolId? toolId,
     this.isShiftPressed = false, // ✅ 是否按住Shift键（绘制正三角形或等腰三角形）
     this.fillColor, // ✅ 填充颜色（可选）
+    this.dashStyle = DashStyle.solid, // ✅ 虚线样式
   }) : super(
           points: _optimizeToTriangle(points, isShiftPressed: isShiftPressed), // ✅ 优化为三角形（三个顶点）
           color: color,
@@ -343,6 +376,7 @@ class TriangleStroke extends Stroke {
 
   final bool isShiftPressed; // ✅ 是否按住Shift键
   final Color? fillColor; // ✅ 填充颜色（null表示不填充）
+  final DashStyle dashStyle; // ✅ 虚线样式
 
   // ✅ 从绘制路径优化为三角形：提取三个关键点
   static List<Offset> _optimizeToTriangle(List<Offset> inputPoints, {bool isShiftPressed = false}) {
@@ -511,6 +545,7 @@ class TriangleStroke extends Stroke {
     if (fillColor != null) {
       json['fillColor'] = fillColor!.value; // ✅ 保存填充颜色
     }
+    json['dashStyle'] = dashStyle.name; // ✅ 保存虚线样式
     return json;
   }
 
@@ -520,6 +555,17 @@ class TriangleStroke extends Stroke {
     final fillColor = fillColorValue != null 
         ? Color(fillColorValue) 
         : null; // ✅ 读取填充颜色
+    
+    // ✅ 读取虚线样式
+    DashStyle dashStyle = DashStyle.solid;
+    if (json.containsKey('dashStyle')) {
+      final styleStr = json['dashStyle'] as String?;
+      dashStyle = DashStyle.values.firstWhere(
+        (e) => e.name == styleStr,
+        orElse: () => DashStyle.solid,
+      );
+    }
+    
     // ✅ 从保存的点列表创建三角形（会自动优化为三个顶点）
     return TriangleStroke(
       points: stroke.points,
@@ -528,6 +574,7 @@ class TriangleStroke extends Stroke {
       toolId: stroke.toolId,
       isShiftPressed: json['isShiftPressed'] as bool? ?? false, // ✅ 读取Shift键状态
       fillColor: fillColor,
+      dashStyle: dashStyle,
     );
   }
 }
@@ -541,6 +588,7 @@ class DiamondStroke extends Stroke {
     required double strokeWidth,
     ToolId? toolId,
     this.fillColor, // ✅ 填充颜色（可选）
+    this.dashStyle = DashStyle.solid, // ✅ 虚线样式
   }) : super(
           points: _calculateDiamondPoints(startPoint, endPoint),
           color: color,
@@ -550,6 +598,7 @@ class DiamondStroke extends Stroke {
         );
   
   final Color? fillColor; // ✅ 填充颜色（null表示不填充）
+  final DashStyle dashStyle; // ✅ 虚线样式
 
   static List<Offset> _calculateDiamondPoints(Offset start, Offset end) {
     final center = Offset(
@@ -575,6 +624,7 @@ class DiamondStroke extends Stroke {
     if (fillColor != null) {
       json['fillColor'] = fillColor!.value; // ✅ 保存填充颜色
     }
+    json['dashStyle'] = dashStyle.name; // ✅ 保存虚线样式
     return json;
   }
 
@@ -584,6 +634,17 @@ class DiamondStroke extends Stroke {
     final fillColor = fillColorValue != null 
         ? Color(fillColorValue) 
         : null; // ✅ 读取填充颜色
+    
+    // ✅ 读取虚线样式
+    DashStyle dashStyle = DashStyle.solid;
+    if (json.containsKey('dashStyle')) {
+      final styleStr = json['dashStyle'] as String?;
+      dashStyle = DashStyle.values.firstWhere(
+        (e) => e.name == styleStr,
+        orElse: () => DashStyle.solid,
+      );
+    }
+    
     if (stroke.points.length < 4) {
       return DiamondStroke(
         startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
@@ -592,6 +653,7 @@ class DiamondStroke extends Stroke {
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
         fillColor: fillColor,
+        dashStyle: dashStyle,
       );
     }
     // 从菱形点计算起始点和结束点
@@ -604,6 +666,7 @@ class DiamondStroke extends Stroke {
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
       fillColor: fillColor,
+      dashStyle: dashStyle,
     );
   }
 }

@@ -922,6 +922,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
           fillColor: _currentFillColorNotifier.value,
+          dashStyle: _dashStyleNotifier.value, // ✅ 使用全局虚线样式
         );
         if (newStroke is RectangleStroke) {
           debugPrint('🔷🔷🔷 [_updateStroke] RectangleStroke created: rect=${newStroke.rect}, isEmpty=${newStroke.rect.isEmpty}');
@@ -946,6 +947,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
           fillColor: _currentFillColorNotifier.value,
+          dashStyle: _dashStyleNotifier.value, // ✅ 使用全局虚线样式
         );
       } else {
         newStroke = Stroke(
@@ -967,6 +969,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           strokeWidth: stroke.strokeWidth,
           toolId: toolId,
           fillColor: _currentFillColorNotifier.value,
+          dashStyle: _dashStyleNotifier.value, // ✅ 使用全局虚线样式
         );
       } else {
         newStroke = Stroke(
@@ -988,6 +991,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           toolId: toolId,
           isShiftPressed: isShiftPressed,
           fillColor: _currentFillColorNotifier.value,
+          dashStyle: _dashStyleNotifier.value, // ✅ 使用全局虚线样式
         );
       } else {
         newStroke = Stroke(
@@ -1786,6 +1790,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _currentToolNotifier.value = Eraser(strokeWidth: width);
     }
   }
+
+  /// ✅ 虚线样式改变回调
+  void _onDashStyleChanged(DashStyle style) {
+    debugPrint('🎨 [HandwritingSaber] Dash style changed to: $style');
+    // 更新全局虚线样式，所有形状工具都将使用此样式
+    _dashStyleNotifier.value = style;
+  }
+
+  /// ✅ 箭头样式改变回调
+  void _onArrowStyleChanged(ArrowStyle style) {
+    debugPrint('🎨 [HandwritingSaber] Arrow style changed to: $style');
+    // 更新全局箭头样式，箭头直线工具将使用此样式
+    _arrowStyleNotifier.value = style;
+  }
   
   /// ✅ 构建单页画布（支持触摸绘制）
   Widget _buildSinglePageCanvas({
@@ -2390,6 +2408,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                             canRedo: canRedo, // ✅ 恢复按钮状态
                             onUndo: _undo, // ✅ 撤销回调
                             onRedo: _redo, // ✅ 恢复回调
+                            currentDashStyle: _dashStyleNotifier.value, // ✅ 当前虚线样式
+                            onDashStyleChanged: _onDashStyleChanged, // ✅ 虚线样式改变回调
+                            currentArrowStyle: _arrowStyleNotifier.value, // ✅ 当前箭头样式
+                            onArrowStyleChanged: _onArrowStyleChanged, // ✅ 箭头样式改变回调
                           );
                         },
                       );
