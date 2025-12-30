@@ -14,6 +14,7 @@ import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_menu.dart';
 
 
 class SettingsWorkspaceManagementView extends StatefulWidget {
@@ -167,9 +168,57 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
             );
           },
         ),
+        const VSpace(8),
+        // 如果用户有权限创建团队协作区，显示按钮
+        Builder(builder: (ctx) {
+          final canCreate = _canCreateTeamWorkspace();
+          if (!canCreate) return const SizedBox.shrink();
+          return SizedBox(
+            width: 140,
+            child: FlowyButton(
+              onTap: () async {
+              PopoverContainer.maybeOf(ctx)?.closeAll();
+                await Future.delayed(Duration.zero);
+                if (!ctx.mounted) return;
+                final workspaceBloc = ctx.read<UserWorkspaceBloc>();
+              await showDialog(
+                context: ctx,
+                builder: (dialogCtx) => BlocProvider.value(
+                  value: workspaceBloc,
+                  child: CreateWorkspaceDialog(
+                    title: '新建团队协作区',
+                    onConfirm: (name) {
+                      if (name.trim().isEmpty) return;
+                      workspaceBloc.add(
+                        UserWorkspaceEvent.createWorkspace(
+                          name: name,
+                          workspaceType: WorkspaceTypePB.ServerW,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
+              },
+              margin: EdgeInsets.zero,
+              text: FlowyText.regular('新建团队协作区'),
+            ),
+          );
+        }),
       ],
       children: const [],
     );
+  }
+
+  /// 判断当前用户是否有权限创建团队协作区
+  bool _canCreateTeamWorkspace() {
+    if (!_onlyOwnerCanCreateTeamWorkspace) return true;
+    try {
+      final role = widget.workspace.role;
+      return role == AFRolePB.Owner;
+    } catch (_) {
+      return false;
+    }
   }
 
   Widget _buildTeamWorkspaceList() {

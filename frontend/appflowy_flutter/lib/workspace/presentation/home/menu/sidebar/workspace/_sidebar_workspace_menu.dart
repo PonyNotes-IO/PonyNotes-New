@@ -18,8 +18,6 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:universal_platform/universal_platform.dart';
-
 import '_sidebar_import_notion.dart';
 
 @visibleForTesting
@@ -336,9 +334,11 @@ class CreateWorkspaceDialog extends StatefulWidget {
   const CreateWorkspaceDialog({
     super.key,
     required this.onConfirm,
+    this.title,
   });
 
   final void Function(String name) onConfirm;
+  final String? title;
 
   @override
   State<CreateWorkspaceDialog> createState() => _CreateWorkspaceDialogState();
@@ -388,14 +388,16 @@ class _CreateWorkspaceDialogState extends State<CreateWorkspaceDialog> {
 class _WorkspaceDialogContent extends StatelessWidget {
   const _WorkspaceDialogContent({
     required this.onConfirm,
+    this.title,
   });
 
   final void Function(String) onConfirm;
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
     return NavigatorTextFieldDialog(
-      title: LocaleKeys.workspace_create.tr(),
+      title: title ?? '新建团队协作区',
       value: '',
       hintText: '',
       autoSelectAllText: true,
@@ -465,6 +467,7 @@ class _CreateWorkspaceButton extends StatelessWidget {
       Log.info('Showing create workspace dialog for user: ${userProfile.email}, auth type: ${userProfile.userAuthType}');
       
       final dialog = CreateWorkspaceDialog(
+        title: LocaleKeys.workspace_create.tr(),
         onConfirm: (name) {
           // DEBUG BREAKPOINT 3: onConfirm 回调被调用
           Log.info('=== DEBUG BREAKPOINT 3 === onConfirm 回调被调用，工作空间名称: $name');
@@ -527,28 +530,29 @@ class _CreateWorkspaceButton extends StatelessWidget {
             builder: (dialogContext) => BlocProvider.value(
               value: context.read<UserWorkspaceBloc>(),
               child: CreateWorkspaceDialog(
-              onConfirm: (name) {
-                if (name.trim().isEmpty) {
-                  Log.warn('Workspace name is empty, cannot create workspace');
-                  return;
-                }
-                
-                final workspaceBloc = context.read<UserWorkspaceBloc>();
-                final userProfile = workspaceBloc.state.userProfile;
-                final workspaceType = userProfile.userAuthType == AuthTypePB.Local 
-                    ? WorkspaceTypePB.LocalW 
-                    : WorkspaceTypePB.LocalW;
-                
-                Log.info('Creating workspace via fallback: name="$name", type=$workspaceType');
-                
-                workspaceBloc.add(
-                  UserWorkspaceEvent.createWorkspace(
-                    name: name,
-                    workspaceType: workspaceType,
-                  ),
-                );
-              },
-            ),
+                title: LocaleKeys.workspace_create.tr(),
+                onConfirm: (name) {
+                  if (name.trim().isEmpty) {
+                    Log.warn('Workspace name is empty, cannot create workspace');
+                    return;
+                  }
+                  
+                  final workspaceBloc = context.read<UserWorkspaceBloc>();
+                  final userProfile = workspaceBloc.state.userProfile;
+                  final workspaceType = userProfile.userAuthType == AuthTypePB.Local 
+                      ? WorkspaceTypePB.LocalW 
+                      : WorkspaceTypePB.LocalW;
+                  
+                  Log.info('Creating workspace via fallback: name="$name", type=$workspaceType');
+                  
+                  workspaceBloc.add(
+                    UserWorkspaceEvent.createWorkspace(
+                      name: name,
+                      workspaceType: workspaceType,
+                    ),
+                  );
+                },
+              ),
             ),
           );
           Log.info('Fallback dialog worked');
