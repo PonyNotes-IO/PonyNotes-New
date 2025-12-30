@@ -25,6 +25,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.currentFillColor, // ✅ 当前填充颜色（可选）
     this.onFillColorChanged, // ✅ 填充颜色改变回调（可选）
     this.onImportPdf,  // ✅ PDF 导入回调（可选）
+    this.onImportImage, // ✅ 图片导入回调（可选）
     this.canUndo = false, // ✅ 是否可以撤销
     this.canRedo = false, // ✅ 是否可以恢复
     this.onUndo, // ✅ 撤销回调（可选）
@@ -49,6 +50,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final Color? currentFillColor; // ✅ 当前填充颜色
   final ValueChanged<Color?>? onFillColorChanged; // ✅ 填充颜色改变回调
   final VoidCallback? onImportPdf;  // ✅ PDF 导入回调
+  final VoidCallback? onImportImage;  // ✅ 图片导入回调
   final bool canUndo; // ✅ 是否可以撤销
   final bool canRedo; // ✅ 是否可以恢复
   final VoidCallback? onUndo; // ✅ 撤销回调
@@ -164,6 +166,20 @@ class HandwritingSaberToolbar extends StatelessWidget {
             _buildArrowStyleSelector(),
             const SizedBox(width: 4),
           ],
+          // ✅ 图片导入按钮
+          if (onImportImage != null)
+            Tooltip(
+              message: '导入图片',
+              child: IconButton(
+                icon: const Icon(FontAwesomeIcons.image, size: 20),
+                onPressed: onImportImage,
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                ),
+              ),
+            ),
           // ✅ PDF 导入按钮
           if (onImportPdf != null)
             Tooltip(
