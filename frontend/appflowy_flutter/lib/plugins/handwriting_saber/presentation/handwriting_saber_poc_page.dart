@@ -17,6 +17,7 @@ import '../third_party/saber_core/data/editor/editor_core_info.dart';
 import '../third_party/saber_core/data/editor/editor_history.dart'; // ✅ 导入历史记录管理器
 import '../third_party/saber_core/data/editor/page.dart';
 import '../third_party/saber_core/data/editor/quill_styles.dart';
+import '../third_party/saber_core/data/editor/quill_struct.dart'; // ✅ 导入 QuillStruct
 import '../third_party/saber_core/data/editor/shape_strokes.dart';
 import '../third_party/saber_core/data/editor/stroke_extensions.dart'; // ✅ 导入扩展方法
 import '../third_party/saber_core/data/editor/text_box.dart' as saber_text; // ✅ 导入文本框（使用别名避免与Flutter的TextBox冲突）
@@ -1157,17 +1158,18 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       textBoxType = saber_text.TextBoxType.paragraph;
     }
     
-    // ✅ 创建新文本框（默认大小）
+    // ✅ 创建新文本框（默认大小），包含 Quill 富文本编辑器
     final textBox = saber_text.TextBox(
       id: 'textbox_${DateTime.now().millisecondsSinceEpoch}_${math.Random().nextInt(1000)}',
       position: position,
-      size: const Size(200, 100), // 默认大小
+      size: const Size(300, 150), // ✅ 增大默认大小以适应富文本编辑器
       text: '',
       textStyle: TextStyle(
         fontSize: 16,
         color: _currentToolNotifier.value.color,
       ),
       textBoxType: textBoxType, // ✅ 设置文本框类型
+      quillContent: QuillStruct.createDefault(), // ✅ 创建 Quill 富文本编辑器
     );
     
     // ✅ 应用标题样式
@@ -1175,9 +1177,28 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       textBox.textStyle = textBox.getHeadingStyle(_currentToolNotifier.value.color);
     }
     
-    // ✅ 创建文本编辑控制器
-    final controller = TextEditingController(text: '');
-    _textBoxControllers[textBox.id] = controller;
+    // ✅ 不再使用 TextEditingController，改用 Quill 的变更监听
+    // 监听 Quill 内容变化
+    textBox.quillContent.controller.changes.listen((event) {
+      if (_editingTextBoxIdNotifier.value == textBox.id) {
+        // ✅ 同步纯文本到 text 字段（向后兼容）
+        textBox.text = textBox.quillContent.plainText;
+        // ✅ 更新页面数据（使用EditorPageNotifier，只触发画布重绘，不影响PDF）
+        if (pageIdx < _pageNotifiers.length) {
+          final currentPage = _coreInfo.pages[pageIdx];
+          final updatedPageForText = EditorPage(
+            size: currentPage.size,
+            strokes: currentPage.strokes,
+            backgroundImage: currentPage.backgroundImage,
+            textBoxes: currentPage.textBoxes,
+            listBoxes: currentPage.listBoxes,
+            taskListBoxes: currentPage.taskListBoxes,
+          );
+          _pageNotifiers[pageIdx].updatePage(updatedPageForText);
+        }
+        _scheduleSave();
+      }
+    });
     
     // ✅ 添加到页面并进入编辑模式（使用EditorPageNotifier避免全局setState）
     debugPrint('🦋[HandwritingSaber] _createTextBox: adding textBox id=${textBox.id} to page, position=${textBox.position}, size=${textBox.size}');
@@ -1211,27 +1232,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // ✅ 使用ValueNotifier更新编辑状态（不触发全局setState）
     _editingTextBoxIdNotifier.value = textBox.id;
     debugPrint('🦋[HandwritingSaber] _createTextBox: completed, _editingTextBoxId=${_editingTextBoxIdNotifier.value}, page.textBoxes.length=${updatedPage.textBoxes.length}');
-    
-    // ✅ 监听文本变化（仅更新模型并使用防抖保存，避免频繁 setState）
-    controller.addListener(() {
-      if (_editingTextBoxIdNotifier.value == textBox.id) {
-        textBox.text = controller.text;
-        // ✅ 更新页面数据（使用EditorPageNotifier，只触发画布重绘，不影响PDF）
-        if (pageIdx < _pageNotifiers.length) {
-          final currentPage = _coreInfo.pages[pageIdx];
-          final updatedPageForText = EditorPage(
-            size: currentPage.size,
-            strokes: currentPage.strokes,
-            backgroundImage: currentPage.backgroundImage,
-            textBoxes: currentPage.textBoxes,
-            listBoxes: currentPage.listBoxes,
-            taskListBoxes: currentPage.taskListBoxes,
-          );
-          _pageNotifiers[pageIdx].updatePage(updatedPageForText);
-        }
-        _scheduleSave();
-      }
-    });
   }
   
   
@@ -1269,46 +1269,48 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return;
     }
     
-    // ✅ 保存页面索引为final变量，避免闭包中的null检查问题
-    final finalPageIndex = pageIndex;
-    
-    // ✅ 创建或获取文本编辑控制器
-    if (!_textBoxControllers.containsKey(textBox.id)) {
-      final controller = TextEditingController(text: textBox.text);
-      _textBoxControllers[textBox.id] = controller;
-      
-      // ✅ 监听文本变化（仅更新模型并使用防抖保存，避免频繁 setState）
-      controller.addListener(() {
-        if (_editingTextBoxIdNotifier.value == textBox.id) {
-          textBox.text = controller.text;
-          // ✅ 更新页面数据（使用EditorPageNotifier，只触发画布重绘，不影响PDF）
-          if (finalPageIndex < _pageNotifiers.length) {
-            final currentPage = _coreInfo.pages[finalPageIndex];
-            final updatedPage = EditorPage(
-              size: currentPage.size,
-              strokes: currentPage.strokes,
-              backgroundImage: currentPage.backgroundImage,
-              textBoxes: currentPage.textBoxes,
-              listBoxes: currentPage.listBoxes,
-              taskListBoxes: currentPage.taskListBoxes,
-            );
-            _pageNotifiers[finalPageIndex].updatePage(updatedPage);
-          }
-          _scheduleSave();
-        }
-      });
-    } else {
-      // ✅ 更新控制器文本
-      _textBoxControllers[textBox.id]!.text = textBox.text;
+    // ✅ 不再需要 TextEditingController，直接使用 Quill
+    // 确保 Quill 内容已经初始化
+    if (textBox.quillContent.plainText.isEmpty && textBox.text.isNotEmpty) {
+      // ✅ 如果 Quill 内容为空但纯文本不为空，从纯文本初始化 Quill
+      textBox.quillContent.insertText(textBox.text);
     }
     
     // ✅ 进入编辑模式（使用ValueNotifier，不触发全局setState）
     _editingTextBoxIdNotifier.value = textBox.id;
+    
+    // ✅ 请求焦点
+    textBox.quillContent.focusNode.requestFocus();
   }
   
   /// ✅ 结束文本框编辑（使用ValueNotifier，不触发全局setState）
   void _endTextBoxEditing() {
     _editingTextBoxIdNotifier.value = null;
+  }
+  
+  /// ✅ 获取当前活动的 Quill 结构（可能来自页面的全局富文本编辑器或文本框）
+  QuillStruct? _getActiveQuillStruct() {
+    // ✅ 优先返回正在编辑的文本框的 Quill 结构
+    final editingTextBoxId = _editingTextBoxIdNotifier.value;
+    if (editingTextBoxId != null) {
+      // 查找正在编辑的文本框
+      for (final page in _coreInfo.pages) {
+        for (final textBox in page.textBoxes) {
+          if (textBox.id == editingTextBoxId) {
+            return textBox.quillContent;
+          }
+        }
+      }
+    }
+    
+    // ✅ 如果没有正在编辑的文本框，返回页面的全局 Quill 结构（用于全页面富文本编辑模式）
+    final quillFocusPageIndex = _quillFocusPageIndexNotifier.value;
+    if (quillFocusPageIndex != null && 
+        quillFocusPageIndex < _coreInfo.pages.length) {
+      return _coreInfo.pages[quillFocusPageIndex].quill;
+    }
+    
+    return null;
   }
   
   /// ✅ 构建文本框编辑器（直接在画布上显示）
@@ -1350,46 +1352,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     final double textBoxHeight = textBox.size.height * scale;
     debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor: textBoxLeft=$textBoxLeft, textBoxTop=$textBoxTop, textBoxWidth=$textBoxWidth, textBoxHeight=$textBoxHeight');
     
-    // ✅ 获取或创建文本控制器
-    if (!_textBoxControllers.containsKey(textBox.id)) {
-      final controller = TextEditingController(text: textBox.text);
-      _textBoxControllers[textBox.id] = controller;
-      
-      // ✅ 监听文本变化（仅更新模型并使用防抖保存，避免频繁 setState）
-      controller.addListener(() {
-        if (_editingTextBoxIdNotifier.value == textBox.id) {
-          textBox.text = controller.text;
-          // ✅ 更新页面数据（使用EditorPageNotifier，只触发画布重绘，不影响PDF）
-          if (pageIndex < _pageNotifiers.length) {
-            final currentPage = _coreInfo.pages[pageIndex];
-            final updatedPage = EditorPage(
-              size: currentPage.size,
-              strokes: currentPage.strokes,
-              backgroundImage: currentPage.backgroundImage,
-              textBoxes: currentPage.textBoxes,
-              listBoxes: currentPage.listBoxes,
-              taskListBoxes: currentPage.taskListBoxes,
-            );
-            _pageNotifiers[pageIndex].updatePage(updatedPage);
-          }
-          _scheduleSave();
-        }
-      });
-    }
-    
-    final controller = _textBoxControllers[textBox.id]!;
-    
-    // ✅ 计算缩放后的字体大小，确保最小为 12
-    final double baseFontSize = textBox.textStyle?.fontSize ?? 16;
-    final double scaledFontSize = (baseFontSize * scale).clamp(12.0, 72.0);
-    
     // ✅ 确保文本框有最小尺寸以便正常显示和输入
-    final double minWidth = 150.0;
-    final double minHeight = 50.0;
+    final double minWidth = 200.0;
+    final double minHeight = 100.0;
     final double finalWidth = textBoxWidth < minWidth ? minWidth : textBoxWidth;
     final double finalHeight = textBoxHeight < minHeight ? minHeight : textBoxHeight;
     
-    debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor: scaledFontSize=$scaledFontSize, finalWidth=$finalWidth, finalHeight=$finalHeight');
+    debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor: finalWidth=$finalWidth, finalHeight=$finalHeight');
+    
+    // ✅ 获取 Quill 控制器
+    final quillController = textBox.quillContent.controller;
+    
+    // ✅ 获取主题配置
+    final colorScheme = Theme.of(context).colorScheme;
+    final invert = false; // 可以根据需要从设置中读取
     
     return Positioned(
       left: textBoxLeft,
@@ -1411,34 +1387,25 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
               ),
             ],
           ),
-          child: TextField(
-            autofocus: true,
-            controller: controller,
-            // ✅ 当 expands: true 时，maxLines 和 minLines 必须为 null
-            maxLines: null,
-            expands: true,
-            textAlignVertical: TextAlignVertical.top,
-            style: TextStyle(
-              fontSize: scaledFontSize,
-              color: textBox.textStyle?.color ?? Colors.black,
-              fontWeight: textBox.textStyle?.fontWeight,
-              fontStyle: textBox.textStyle?.fontStyle,
-            ),
-            decoration: InputDecoration(
-              hintText: '输入文本...',
-              hintStyle: TextStyle(
-                fontSize: scaledFontSize,
-                color: Colors.grey.withValues(alpha: 0.5),
+          child: GestureDetector(
+            onTap: () {
+              // ✅ 点击外部时不关闭编辑器，让用户可以继续编辑
+            },
+            child: quill.QuillEditor.basic(
+              controller: quillController,
+              config: quill.QuillEditorConfig(
+                customStyles: HandwritingSaberQuillStyles.get(
+                  invert: invert,
+                  secondary: colorScheme.secondary,
+                  lineHeight: _coreInfo.lineHeight,
+                ),
+                scrollable: true,
+                autoFocus: true,
+                expands: false,
+                placeholder: '输入文本...',
+                padding: const EdgeInsets.all(8),
               ),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.all(8),
             ),
-            onSubmitted: (_) {
-              _endTextBoxEditing();
-            },
-            onTapOutside: (_) {
-              _endTextBoxEditing();
-            },
           ),
         ),
       ),
@@ -1584,28 +1551,24 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       debugPrint('✍️✍️✍️ [HandwritingSaber] Using stroke directly: type=${stroke.runtimeType}');
     }
     
-    // ✅ 保存完成的笔迹到正确的页面
-    if (finalStroke != null) {
-      debugPrint('💾💾💾 [HandwritingSaber] Saving stroke to page $targetPageIndex, toolId=${finalStroke.toolId}, points=${finalStroke.points.length}');
-      _coreInfo.pages[targetPageIndex].strokes.add(finalStroke);
-      debugPrint('💾💾💾 [HandwritingSaber] Page $targetPageIndex now has ${_coreInfo.pages[targetPageIndex].strokes.length} strokes');
-      
-      // ✅ 记录绘制操作到历史记录
-      _history.recordChange(EditorHistoryItem.draw(
-        pageIndex: targetPageIndex,
-        strokes: [finalStroke],
-      ));
-      _updateUndoRedoState();
-      
-      // ✅ 通知页面notifier更新（关键！触发该页面的重绘）
-      if (targetPageIndex < _pageNotifiers.length) {
-        // 使用updatePage方法而不是直接调用notifyListeners
-        final currentPage = _coreInfo.pages[targetPageIndex];
-        _pageNotifiers[targetPageIndex].updatePage(currentPage);
-        debugPrint('💾💾💾 [HandwritingSaber] Page notifier $targetPageIndex updated');
-      }
-    } else {
-      debugPrint('⚠️⚠️⚠️ [HandwritingSaber] finalStroke is null! Tool: ${stroke.toolId}');
+    // ✅ 保存完成的笔迹到正确的页面（finalStroke 在此处始终非空）
+    debugPrint('💾💾💾 [HandwritingSaber] Saving stroke to page $targetPageIndex, toolId=${finalStroke.toolId}, points=${finalStroke.points.length}');
+    _coreInfo.pages[targetPageIndex].strokes.add(finalStroke);
+    debugPrint('💾💾💾 [HandwritingSaber] Page $targetPageIndex now has ${_coreInfo.pages[targetPageIndex].strokes.length} strokes');
+    
+    // ✅ 记录绘制操作到历史记录
+    _history.recordChange(EditorHistoryItem.draw(
+      pageIndex: targetPageIndex,
+      strokes: [finalStroke],
+    ));
+    _updateUndoRedoState();
+    
+    // ✅ 通知页面notifier更新（关键！触发该页面的重绘）
+    if (targetPageIndex < _pageNotifiers.length) {
+      // 使用updatePage方法而不是直接调用notifyListeners
+      final currentPage = _coreInfo.pages[targetPageIndex];
+      _pageNotifiers[targetPageIndex].updatePage(currentPage);
+      debugPrint('💾💾💾 [HandwritingSaber] Page notifier $targetPageIndex updated');
     }
     
     // 清空 notifier 值，触发 CustomPainter 的局部重绘
@@ -2503,10 +2466,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                     onArrowStyleChanged: _onArrowStyleChanged, // ✅ 箭头样式改变回调
                                     textEditingMode: textEditingMode, // ✅ 文本编辑模式标志
                                     onToggleTextEditingMode: _toggleTextEditingMode, // ✅ 切换文本编辑模式回调
-                                    quillFocus: quillFocusPageIndex != null && 
-                                        quillFocusPageIndex < _coreInfo.pages.length
-                                        ? _coreInfo.pages[quillFocusPageIndex].quill
-                                        : null, // ✅ 当前焦点的 Quill 结构
+                                    quillFocus: _getActiveQuillStruct(), // ✅ 获取当前活动的 Quill 结构（可能来自页面或文本框）
                                   );
                                 },
                               );

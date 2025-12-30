@@ -178,26 +178,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
                 ),
               ),
             ),
-          // ✅ 文本编辑按钮
-          if (onToggleTextEditingMode != null)
-            Tooltip(
-              message: textEditingMode ? '退出文本编辑' : '文本编辑',
-              child: IconButton(
-                icon: Icon(
-                  textEditingMode ? Icons.text_fields : Icons.text_format,
-                  size: 20,
-                  color: textEditingMode 
-                      ? Theme.of(context).colorScheme.primary 
-                      : null,
-                ),
-                onPressed: onToggleTextEditingMode,
-                padding: const EdgeInsets.all(8),
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                ),
-              ),
-            ),
+          // ✅ 移除独立的富文本编辑按钮，整合到文本框工具中
           // ✅ 背景纸模式选择
           _buildBackgroundPatternSelector(),
         ],
@@ -1223,10 +1204,11 @@ class HandwritingSaberToolbar extends StatelessWidget {
       ),
     );
     
+    // ✅ 当有活动的 Quill 结构时显示工具栏（可能来自文本框或全页面富文本编辑）
     return Collapsible(
       axis: CollapsibleAxis.vertical,
       maintainState: false,
-      collapsed: !textEditingMode || quillFocus == null,
+      collapsed: quillFocus == null, // ✅ 只要有 Quill 焦点就显示，不再依赖 textEditingMode
       child: quillFocus != null
           ? Container(
               decoration: BoxDecoration(

@@ -1143,17 +1143,26 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       canvas.drawRect(rect, borderPaint);
     }
     
-    // ✅ 绘制文本
-    if (textBox.text.isNotEmpty) {
-      final textStyle = textBox.textStyle ?? const TextStyle(
+    // ✅ 绘制文本（优先使用 Quill 富文本，如果为空则使用纯文本）
+    final plainTextContent = textBox.quillContent.plainText.trim();
+    if (plainTextContent.isNotEmpty || textBox.text.isNotEmpty) {
+      final baseTextStyle = textBox.textStyle ?? const TextStyle(
         fontSize: 16,
         color: Colors.black,
       );
       
-      final textSpan = TextSpan(
-        text: textBox.text,
-        style: textStyle,
-      );
+      // ✅ 优先使用 Quill 富文本内容
+      final TextSpan textSpan;
+      if (plainTextContent.isNotEmpty) {
+        // 使用 Quill 的富文本内容（支持所有格式）
+        textSpan = textBox.quillContent.toTextSpan(baseStyle: baseTextStyle);
+      } else {
+        // 向后兼容：使用纯文本
+        textSpan = TextSpan(
+          text: textBox.text,
+          style: baseTextStyle,
+        );
+      }
       
       final textPainter = TextPainter(
         text: textSpan,

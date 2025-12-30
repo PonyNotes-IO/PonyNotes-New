@@ -77,5 +77,148 @@ class QuillStruct {
       TextSelection.collapsed(offset: selection.start + text.length),
     );
   }
+  
+  /// ✅ 将 Quill Document 转换为 TextSpan（用于在 Canvas 上绘制）
+  TextSpan toTextSpan({TextStyle? baseStyle}) {
+    final document = controller.document;
+    final List<InlineSpan> children = [];
+    
+    // 默认基础样式
+    final defaultBaseStyle = baseStyle ?? const TextStyle(
+      fontSize: 16,
+      color: Colors.black,
+    );
+    
+    // 遍历文档的所有节点
+    for (final node in document.root.children) {
+      // 获取节点的 Delta
+      final delta = node.toDelta();
+      
+      // 遍历 Delta 中的每个操作（使用 toList() 获取操作列表）
+      for (final op in delta.toList()) {
+        if (op.data is! String) continue;
+        
+        final text = op.data as String;
+        final attributes = op.attributes;
+        
+        // 构建文本样式
+        TextStyle style = defaultBaseStyle;
+        
+        if (attributes != null) {
+          // ✅ 粗体
+          if (attributes['bold'] == true) {
+            style = style.copyWith(fontWeight: FontWeight.bold);
+          }
+          
+          // ✅ 斜体
+          if (attributes['italic'] == true) {
+            style = style.copyWith(fontStyle: FontStyle.italic);
+          }
+          
+          // ✅ 下划线
+          if (attributes['underline'] == true) {
+            style = style.copyWith(decoration: TextDecoration.underline);
+          }
+          
+          // ✅ 删除线
+          if (attributes['strike'] == true) {
+            style = style.copyWith(
+              decoration: style.decoration != null
+                  ? TextDecoration.combine([
+                      style.decoration!,
+                      TextDecoration.lineThrough,
+                    ])
+                  : TextDecoration.lineThrough,
+            );
+          }
+          
+          // ✅ 文字颜色
+          if (attributes['color'] != null) {
+            try {
+              final colorValue = attributes['color'] as String;
+              // Quill 使用 CSS 颜色格式，如 "#FF0000" 或 "rgb(255,0,0)"
+              if (colorValue.startsWith('#')) {
+                final hexColor = colorValue.substring(1);
+                final intColor = int.parse('FF$hexColor', radix: 16);
+                style = style.copyWith(color: Color(intColor));
+              }
+            } catch (e) {
+              // 颜色解析失败，使用默认颜色
+            }
+          }
+          
+          // ✅ 背景颜色
+          if (attributes['background'] != null) {
+            try {
+              final bgColorValue = attributes['background'] as String;
+              if (bgColorValue.startsWith('#')) {
+                final hexColor = bgColorValue.substring(1);
+                final intColor = int.parse('FF$hexColor', radix: 16);
+                style = style.copyWith(backgroundColor: Color(intColor));
+              }
+            } catch (e) {
+              // 背景色解析失败，忽略
+            }
+          }
+          
+          // ✅ 字体大小
+          if (attributes['size'] != null) {
+            try {
+              final sizeValue = attributes['size'];
+              double? fontSize;
+              if (sizeValue is String) {
+                // Quill 使用字符串如 "18px" 或相对大小如 "small", "large"
+                if (sizeValue.endsWith('px')) {
+                  fontSize = double.tryParse(sizeValue.replaceAll('px', ''));
+                } else {
+                  // 相对大小映射
+                  final sizeMap = {
+                    'small': 12.0,
+                    'large': 20.0,
+                    'huge': 24.0,
+                  };
+                  fontSize = sizeMap[sizeValue];
+                }
+              } else if (sizeValue is num) {
+                fontSize = sizeValue.toDouble();
+              }
+              if (fontSize != null) {
+                style = style.copyWith(fontSize: fontSize);
+              }
+            } catch (e) {
+              // 字体大小解析失败，使用默认大小
+            }
+          }
+          
+          // ✅ 上标/下标
+          if (attributes['script'] != null) {
+            final scriptValue = attributes['script'];
+            if (scriptValue == 'super') {
+              // 上标：缩小字体并提升基线
+              style = style.copyWith(
+                fontSize: (style.fontSize ?? 16) * 0.7,
+                height: 0.5,
+              );
+            } else if (scriptValue == 'sub') {
+              // 下标：缩小字体并降低基线
+              style = style.copyWith(
+                fontSize: (style.fontSize ?? 16) * 0.7,
+                height: 1.5,
+              );
+            }
+          }
+        }
+        
+        children.add(TextSpan(text: text, style: style));
+      }
+    }
+    
+    // 如果没有内容，返回空的 TextSpan
+    if (children.isEmpty) {
+      return TextSpan(text: '', style: defaultBaseStyle);
+    }
+    
+    return TextSpan(children: children, style: defaultBaseStyle);
+  }
 }
 

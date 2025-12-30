@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'quill_struct.dart';
 
 /// ✅ 文本框类型枚举
 enum TextBoxType {
@@ -21,7 +22,8 @@ class TextBox {
     this.borderColor,
     this.borderWidth = 0,
     this.textBoxType = TextBoxType.normal, // ✅ 文本框类型
-  });
+    QuillStruct? quillContent, // ✅ Quill 富文本内容
+  }) : quillContent = quillContent ?? QuillStruct.createDefault();
 
   /// 唯一标识符
   final String id;
@@ -32,7 +34,7 @@ class TextBox {
   /// 大小
   Size size;
 
-  /// 文本内容
+  /// 文本内容（纯文本，向后兼容）
   String text;
 
   /// 文本样式
@@ -49,6 +51,9 @@ class TextBox {
   
   /// ✅ 文本框类型
   TextBoxType textBoxType;
+  
+  /// ✅ Quill 富文本内容
+  QuillStruct quillContent;
   
   /// ✅ 获取标题样式（根据类型自动应用）
   TextStyle getHeadingStyle(Color baseColor) {
@@ -96,11 +101,14 @@ class TextBox {
 
   /// 序列化为JSON
   Map<String, dynamic> toJson() {
+    // ✅ 如果 Quill 内容不为空，同步到纯文本（向后兼容）
+    final plainText = quillContent.plainText.trim();
+    
     return {
       'id': id,
       'position': {'x': position.dx, 'y': position.dy},
       'size': {'width': size.width, 'height': size.height},
-      'text': text,
+      'text': plainText.isNotEmpty ? plainText : text, // ✅ 优先使用 Quill 的纯文本
       'textStyle': textStyle != null
           ? {
               'fontSize': textStyle!.fontSize,
@@ -117,6 +125,7 @@ class TextBox {
       'borderColor': borderColor?.value,
       'borderWidth': borderWidth,
       'textBoxType': textBoxType.name, // ✅ 保存文本框类型
+      'quillContent': quillContent.toJson(), // ✅ 保存 Quill 富文本内容
     };
   }
 
@@ -152,6 +161,21 @@ class TextBox {
       );
     }
 
+    // ✅ 加载 Quill 富文本内容
+    QuillStruct? quillContent;
+    if (json['quillContent'] != null) {
+      try {
+        quillContent = QuillStruct.fromJson(json['quillContent'] as Map<String, dynamic>);
+      } catch (e) {
+        // ✅ 如果加载失败，从纯文本创建
+        final text = json['text'] as String? ?? '';
+        if (text.isNotEmpty) {
+          quillContent = QuillStruct.createDefault();
+          quillContent.insertText(text);
+        }
+      }
+    }
+
     return TextBox(
       id: json['id'] as String,
       position: Offset(
@@ -177,6 +201,7 @@ class TextBox {
               orElse: () => TextBoxType.normal,
             )
           : TextBoxType.normal, // ✅ 读取文本框类型
+      quillContent: quillContent, // ✅ 加载 Quill 富文本内容
     );
   }
 
@@ -216,6 +241,7 @@ class TextBox {
     Color? borderColor,
     double? borderWidth,
     TextBoxType? textBoxType,
+    QuillStruct? quillContent,
   }) {
     return TextBox(
       id: id ?? this.id,
@@ -227,7 +253,13 @@ class TextBox {
       borderColor: borderColor ?? this.borderColor,
       borderWidth: borderWidth ?? this.borderWidth,
       textBoxType: textBoxType ?? this.textBoxType,
+      quillContent: quillContent ?? this.quillContent,
     );
+  }
+  
+  /// ✅ 释放资源
+  void dispose() {
+    quillContent.dispose();
   }
 }
 
