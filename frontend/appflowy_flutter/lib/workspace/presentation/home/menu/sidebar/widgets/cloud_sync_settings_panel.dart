@@ -1,16 +1,36 @@
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+
+/// 会员状态枚举
+enum CloudSyncMembershipStatus {
+  notSubscribed, // 未开通会员
+  active, // 会员有效中
+  expired, // 已到期
+  storageFull, // 空间使用满
+}
 
 class CloudSyncSettingsPanel extends StatefulWidget {
   const CloudSyncSettingsPanel({
     super.key,
     required this.isEnabled,
     required this.onToggle,
+    required this.membershipStatus,
+    this.subscriptionInfo,
+    this.currentSubscription,
+    this.onUpgrade,
     this.storageTotal = '200G',
     this.maxFileSize = '3GB',
   });
 
   final bool isEnabled;
   final Function(bool) onToggle;
+  final CloudSyncMembershipStatus membershipStatus;
+  final WorkspaceSubscriptionInfoPB? subscriptionInfo;
+  final CurrentSubscription? currentSubscription;
+  final VoidCallback? onUpgrade;
   final String storageTotal;
   final String maxFileSize;
 
@@ -29,8 +49,10 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    
     return Container(
-      width: 280,
+      width: 320,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -51,35 +73,211 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 标题和开关
+          // 标题和开关（未开通会员时不显示开关）
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              FlowyText(
                 '云同步',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: theme.textColorScheme.primary,
               ),
-              _buildToggleSwitch(),
+              // 只有存在会员订阅时才显示开关按钮
+              if (widget.membershipStatus != CloudSyncMembershipStatus.notSubscribed)
+                _buildToggleSwitch(),
             ],
           ),
           
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           
-          // 存储信息
-          Text(
-            '你有${widget.storageTotal}免费空间，最大可上传${widget.maxFileSize}文件',
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              height: 1.4,
-            ),
-          ),
+          // 根据会员状态显示不同内容
+          _buildContentByMembershipStatus(theme),
         ],
       ),
+    );
+  }
+
+  Widget _buildContentByMembershipStatus(AppFlowyThemeData theme) {
+    switch (widget.membershipStatus) {
+      case CloudSyncMembershipStatus.notSubscribed:
+        return _buildNotSubscribedContent(theme);
+      case CloudSyncMembershipStatus.active:
+        return _buildActiveContent(theme);
+      case CloudSyncMembershipStatus.expired:
+      case CloudSyncMembershipStatus.storageFull:
+        return _buildExpiredOrFullContent(theme);
+    }
+  }
+
+  /// 未开通会员的内容
+  Widget _buildNotSubscribedContent(AppFlowyThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.light
+                ? const Color(0xFFFFF3EC)
+                : theme.surfaceColorScheme.layer02,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.info_outline,
+                size: 16,
+                color: Color(0xFFFF6B47),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FlowyText(
+                  '云同步功能需要开通会员',
+                  fontSize: 12,
+                  color: const Color(0xFFFF6B47),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        FlowyText(
+          '开通会员后即可享受云同步功能，数据安全备份，多设备同步',
+          fontSize: 12,
+          color: theme.textColorScheme.secondary,
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: AFFilledTextButton.primary(
+            text: '立即开通',
+            onTap: widget.onUpgrade ?? () {},
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 会员有效中的内容
+  Widget _buildActiveContent(AppFlowyThemeData theme) {
+    final usage = widget.currentSubscription?.usage;
+    final storageUsedGb = usage?.storageUsedGb ?? 0.0;
+    final storageTotalGb = usage?.storageTotalGb ?? 0.0;
+    final remainingGb = (storageTotalGb - storageUsedGb).clamp(0.0, double.infinity);
+    
+    String fmt(double gb) {
+      if (gb < 1) {
+        final mb = gb * 1024;
+        return '${mb.toStringAsFixed(0)}M';
+      }
+      return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
+    }
+
+    final subscription = widget.currentSubscription?.subscription;
+    final planName = subscription?.planNameCn ?? '会员';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.light
+                ? const Color(0xFFE8F5E9)
+                : theme.surfaceColorScheme.layer02,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.check_circle_outline,
+                size: 16,
+                color: Color(0xFF4CAF50),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FlowyText(
+                  '$planName有效中',
+                  fontSize: 12,
+                  color: const Color(0xFF4CAF50),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        FlowyText(
+          '剩余空间：${fmt(remainingGb)} / ${fmt(storageTotalGb)}',
+          fontSize: 12,
+          color: theme.textColorScheme.secondary,
+        ),
+        const SizedBox(height: 4),
+        FlowyText(
+          '最大可上传${widget.maxFileSize}文件',
+          fontSize: 12,
+          color: theme.textColorScheme.secondary,
+        ),
+      ],
+    );
+  }
+
+  /// 已到期或空间使用满的内容
+  Widget _buildExpiredOrFullContent(AppFlowyThemeData theme) {
+    final isExpired = widget.membershipStatus == CloudSyncMembershipStatus.expired;
+    final usage = widget.currentSubscription?.usage;
+    final storageUsedGb = usage?.storageUsedGb ?? 0.0;
+    final storageTotalGb = usage?.storageTotalGb ?? 0.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.light
+                ? const Color(0xFFFFEBEE)
+                : theme.surfaceColorScheme.layer02,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 16,
+                color: Color(0xFFF44336),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FlowyText(
+                  isExpired ? '会员已到期' : '空间使用已满',
+                  fontSize: 12,
+                  color: const Color(0xFFF44336),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        FlowyText(
+          isExpired
+              ? '您的会员已到期，请续费以继续使用云同步功能'
+              : '已使用 ${storageUsedGb.toStringAsFixed(1)}G / ${storageTotalGb.toStringAsFixed(1)}G，空间已满',
+          fontSize: 12,
+          color: theme.textColorScheme.secondary,
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: AFFilledTextButton.primary(
+            text: isExpired ? '立即续费' : '扩容空间',
+            onTap: widget.onUpgrade ?? () {},
+          ),
+        ),
+      ],
     );
   }
 

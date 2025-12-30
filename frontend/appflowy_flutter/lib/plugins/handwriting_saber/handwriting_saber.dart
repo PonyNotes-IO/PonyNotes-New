@@ -34,7 +34,7 @@ class HandwritingSaberPluginBuilder extends PluginBuilder {
   }
 
   @override
-  String get menuName => '手写笔记（Saber PoC）';
+  String get menuName => '手写笔记';
 
   @override
   FlowySvgData get icon => FlowySvgs.icon_board_s;
@@ -108,8 +108,15 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    return BlocProvider<PageAccessLevelBloc>.value(
-      value: pageAccessLevelBloc,
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<ViewInfoBloc>.value(
+          value: bloc,
+        ),
+        BlocProvider<PageAccessLevelBloc>.value(
+          value: pageAccessLevelBloc,
+        ),
+      ],
       child: HandwritingSaberPocPage(
         key: ValueKey('handwriting_saber_poc_page_${notifier.view.id}'),
         view: notifier.view,

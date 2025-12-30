@@ -694,8 +694,11 @@ class PageManager {
   }
 
   Widget stackTopBar({required HomeLayout layout}) {
-    // 所有页面都不显示顶部栏
-    return const SizedBox.shrink();
+    // 显示顶部标题栏（包含面包屑导航和右侧按钮）
+    return ChangeNotifierProvider.value(
+      value: _notifier,
+      child: HomeTopBar(layout: layout),
+    );
   }
 
   Widget stackWidget({
