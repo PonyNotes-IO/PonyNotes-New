@@ -494,6 +494,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   void _startSelection(Offset position, {int? pageIndex}) {
     final pageIdx = pageIndex ?? 0;
     
+    // ✅ 获取当前选择工具的选择模式
+    final currentTool = _currentToolNotifier.value;
+    SelectMode selectMode = SelectMode.click;
+    if (currentTool is SelectTool) {
+      selectMode = currentTool.selectMode;
+    }
+    
     // 检查是否点击在已选中的对象上
     if (_selectResult != null && 
         _selectResult!.pageIndex == pageIdx &&
@@ -503,24 +510,27 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return;
     }
     
-    // ✅ 先尝试点击选择单个对象（快速点击，不拖拽）
-    final clickedStroke = _findStrokeAtPosition(position, pageIdx);
-    if (clickedStroke != null) {
-      // 点击选中了单个笔迹
-      setState(() {
-        _selectResult = SelectResult(
-          pageIndex: pageIdx,
-          strokes: [clickedStroke],
-          images: [],
-          selectionPath: Path(), // 点击选择不需要路径
-        );
-        _isSelecting = false;
-        _selectStartPosition = position;
-      });
-      return;
+    // ✅ 点选模式：先尝试点击选择单个对象（快速点击，不拖拽）
+    if (selectMode == SelectMode.click) {
+      final clickedStroke = _findStrokeAtPosition(position, pageIdx);
+      if (clickedStroke != null) {
+        // 点击选中了单个笔迹
+        setState(() {
+          _selectResult = SelectResult(
+            pageIndex: pageIdx,
+            strokes: [clickedStroke],
+            images: [],
+            selectionPath: Path(), // 点击选择不需要路径
+            selectMode: selectMode,
+          );
+          _isSelecting = false;
+          _selectStartPosition = position;
+        });
+        return;
+      }
     }
     
-    // 开始新的拖拽选择区域
+    // 开始新的拖拽选择区域（框选或套索）
     setState(() {
       _isSelecting = true;
       _selectStartPosition = position;
@@ -528,7 +538,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         pageIndex: pageIdx,
         strokes: [],
         images: [],
-        selectionPath: Path()..moveTo(position.dx, position.dy),
+        selectionPath: selectMode == SelectMode.lasso 
+            ? (Path()..moveTo(position.dx, position.dy))
+            : Path(),
+        selectMode: selectMode,
+        selectionStartPoint: selectMode == SelectMode.rectangle ? position : null,
+        selectionEndPoint: selectMode == SelectMode.rectangle ? position : null,
       );
     });
   }
@@ -912,6 +927,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     } else if (toolId == ToolId.arrowLine) {
       // 箭头直线工具：创建 ArrowLineStroke 用于实时预览
       if (originalPoints.length >= 2) {
+        debugPrint('🎨 [HandwritingSaber] Creating ArrowLineStroke: arrowStyle=${_arrowStyleNotifier.value}');
         newStroke = ArrowLineStroke(
           startPoint: originalPoints.first,
           endPoint: originalPoints.last,
@@ -1089,9 +1105,17 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     
     // ✅ 更新选择路径（拖拽选择区域）
     if (_isSelecting) {
-        // 仅通知当前页面以触发局部重建（selectionPath 改变会在 SaberCoreCanvas 中生效）
-        _selectResult!.selectionPath.lineTo(position.dx, position.dy);
         final int targetPageIndex = _selectResult!.pageIndex;
+        
+        if (_selectResult!.selectMode == SelectMode.rectangle) {
+          // ✅ 矩形框选模式：只更新终点
+          _selectResult!.selectionEndPoint = position;
+        } else if (_selectResult!.selectMode == SelectMode.lasso) {
+          // ✅ 套索选择模式：继续添加路径点
+          _selectResult!.selectionPath.lineTo(position.dx, position.dy);
+        }
+        
+        // 仅通知当前页面以触发局部重建
         if (targetPageIndex < _pageNotifiers.length) {
           _pageNotifiers[targetPageIndex].updatePage(_coreInfo.pages[targetPageIndex]);
         }
@@ -1685,46 +1709,95 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
     
     final page = _coreInfo.pages[pageIndex];
-    final selectionPath = selectResult.selectionPath;
-    
-    // ✅ 检测笔迹（简化版：检查笔迹的点是否在选择区域内）
     final selectedStrokes = <Stroke>[];
-    for (final stroke in page.strokes) {
-      int pointsInside = 0;
-      for (final point in stroke.points) {
-        if (selectionPath.contains(point)) {
-          pointsInside++;
-        }
-      }
-      // 如果70%以上的点在选择区域内，则认为被选中
-      if (stroke.points.isNotEmpty && 
-          pointsInside / stroke.points.length >= 0.7) {
-        selectedStrokes.add(stroke);
-      }
-    }
-    
-    // ✅ 检测图片
     final selectedImages = <PdfEditorImage>[];
-    if (page.backgroundImage != null) {
-      final image = page.backgroundImage!;
-      if (image.dstRect != null) {
-        final rect = image.dstRect!;
-        // 检查矩形的四个角是否在选择区域内
-        int cornersInside = 0;
-        final corners = [
-          Offset(rect.left, rect.top),
-          Offset(rect.right, rect.top),
-          Offset(rect.right, rect.bottom),
-          Offset(rect.left, rect.bottom),
-        ];
-        for (final corner in corners) {
-          if (selectionPath.contains(corner)) {
-            cornersInside++;
+    
+    // ✅ 根据选择模式使用不同的检测方法
+    if (selectResult.selectMode == SelectMode.rectangle) {
+      // ✅ 矩形框选模式
+      final selectionRect = selectResult.getSelectionRect();
+      if (selectionRect == null) return;
+      
+      // 检测笔迹
+      for (final stroke in page.strokes) {
+        int pointsInside = 0;
+        for (final point in stroke.points) {
+          if (selectionRect.contains(point)) {
+            pointsInside++;
           }
         }
-        // 如果至少3个角在选择区域内，则认为被选中
-        if (cornersInside >= 3) {
-          selectedImages.add(image);
+        // 如果70%以上的点在选择区域内，则认为被选中
+        if (stroke.points.isNotEmpty && 
+            pointsInside / stroke.points.length >= 0.7) {
+          selectedStrokes.add(stroke);
+        }
+      }
+      
+      // 检测图片
+      if (page.backgroundImage != null) {
+        final image = page.backgroundImage!;
+        if (image.dstRect != null) {
+          final rect = image.dstRect!;
+          // 检查矩形的四个角是否在选择区域内
+          int cornersInside = 0;
+          final corners = [
+            Offset(rect.left, rect.top),
+            Offset(rect.right, rect.top),
+            Offset(rect.right, rect.bottom),
+            Offset(rect.left, rect.bottom),
+          ];
+          for (final corner in corners) {
+            if (selectionRect.contains(corner)) {
+              cornersInside++;
+            }
+          }
+          // 如果至少3个角在选择区域内，则认为被选中
+          if (cornersInside >= 3) {
+            selectedImages.add(image);
+          }
+        }
+      }
+    } else if (selectResult.selectMode == SelectMode.lasso) {
+      // ✅ 套索选择模式
+      final selectionPath = selectResult.selectionPath;
+      
+      // 检测笔迹
+      for (final stroke in page.strokes) {
+        int pointsInside = 0;
+        for (final point in stroke.points) {
+          if (selectionPath.contains(point)) {
+            pointsInside++;
+          }
+        }
+        // 如果70%以上的点在选择区域内，则认为被选中
+        if (stroke.points.isNotEmpty && 
+            pointsInside / stroke.points.length >= 0.7) {
+          selectedStrokes.add(stroke);
+        }
+      }
+      
+      // 检测图片
+      if (page.backgroundImage != null) {
+        final image = page.backgroundImage!;
+        if (image.dstRect != null) {
+          final rect = image.dstRect!;
+          // 检查矩形的四个角是否在选择区域内
+          int cornersInside = 0;
+          final corners = [
+            Offset(rect.left, rect.top),
+            Offset(rect.right, rect.top),
+            Offset(rect.right, rect.bottom),
+            Offset(rect.left, rect.bottom),
+          ];
+          for (final corner in corners) {
+            if (selectionPath.contains(corner)) {
+              cornersInside++;
+            }
+          }
+          // 如果至少3个角在选择区域内，则认为被选中
+          if (cornersInside >= 3) {
+            selectedImages.add(image);
+          }
         }
       }
     }
@@ -2147,17 +2220,26 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           
           // ✅ 如果是选择工具，检查是否点击在空白区域或文本框
           if (_currentToolNotifier.value.toolId == ToolId.select) {
+            debugPrint('🦋[HandwritingSaber] 选择工具点击，position=$pagePos');
             final clickedStroke = _findStrokeAtPosition(pagePos, pageIndex);
             final clickedTextBox = _findTextBoxAtPosition(pagePos, pageIndex);
+            debugPrint('🦋[HandwritingSaber] clickedStroke=${clickedStroke != null}, clickedTextBox=${clickedTextBox != null}, clickedTextBoxId=${clickedTextBox?.id}');
+            
+            // ✅ 修复：选择工具点击文本框时，不应该编辑文本框
+            // 用户需要使用文本框工具才能编辑文本框
+            if (clickedTextBox != null) {
+              debugPrint('🦋[HandwritingSaber] 选择工具点击文本框，但选择工具不支持文本框选择，忽略此操作');
+              // ✅ 忽略对文本框的点击，只有文本框工具才能操作文本框
+              return;
+            }
+            
             if (clickedStroke == null && clickedTextBox == null &&
                 (_selectResult == null || !_isPointInSelection(pagePos, _selectResult!))) {
               // ✅ 点击在空白区域，取消选择
+              debugPrint('🦋[HandwritingSaber] 选择工具点击空白区域，清除选择');
               _clearSelection();
-            } else if (clickedTextBox != null) {
-              // ✅ 点击在文本框上，编辑文本框
-              _editTextBox(clickedTextBox);
-              return;
             }
+            // ✅ 选择工具的操作由 _startStroke -> _startSelection 处理
           }
           // ✅ 如果是文本框工具或标题工具，检查是否点击在已存在的文本框上
           if (_currentToolNotifier.value.toolId == ToolId.textBox ||
@@ -2165,12 +2247,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
               _currentToolNotifier.value.toolId == ToolId.heading2 ||
               _currentToolNotifier.value.toolId == ToolId.heading3 ||
               _currentToolNotifier.value.toolId == ToolId.paragraph) {
+            debugPrint('🦋[HandwritingSaber] 文本框工具点击，position=$pagePos');
             final clickedTextBox = _findTextBoxAtPosition(pagePos, pageIndex);
             if (clickedTextBox != null) {
               // ✅ 点击在已存在的文本框上，编辑它
+              debugPrint('🦋[HandwritingSaber] 文本框工具点击已存在的文本框，编辑它：${clickedTextBox.id}');
               _editTextBox(clickedTextBox);
               return;
             }
+            debugPrint('🦋[HandwritingSaber] 文本框工具点击空白区域，创建新文本框');
           }
           // ✅ 确保笔迹添加到正确的页面
           if (pageIndex < _coreInfo.pages.length) {
@@ -2874,26 +2959,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
         return KeyEventResult.ignored;
       },
-      child: Scaffold(
-        appBar: AppBar(
-        title: Text(widget.view.name),
-        // ✅ 在AppBar底部显示状态信息（更合适的位置）
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(24),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            alignment: Alignment.centerLeft,
-            child: Text(
-              _status,
-              style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
-        ),
-      ),
-      body: Column(
+      child: Column(
         children: [
           // ✅ 工具栏（移除状态提示区域）
           ValueListenableBuilder<Tool>(
@@ -3025,7 +3091,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             ),
           ),
         ],
-      ),
       ),
     );
   }

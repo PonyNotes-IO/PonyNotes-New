@@ -8,6 +8,9 @@ import 'package:appflowy/plugins/whiteboard/application/local_asset_server.dart'
 import '../application/whiteboard_data_service.dart';
 import 'package:appflowy_backend/log.dart';
 
+// 全局InAppWebView实例计数器，确保每个InAppWebView的PlatformView ID全局唯一
+int _globalInAppWebViewInstanceCounter = 0;
+
 /// Excalidraw WebView 组件
 /// 使用 flutter_inappwebview 实现跨平台支持（包括 Windows）
 /// 集成 Excalidraw 编辑器和 excalidraw-libraries 图形库
@@ -40,10 +43,16 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   late InAppWebViewSettings _settings;
   bool _webViewCreated = false;
   bool _pageLoaded = false;
+  late final int _inAppWebViewInstanceId; // 每个InAppWebView的全局唯一ID
 
   @override
   void initState() {
     super.initState();
+    // 生成全局唯一的InAppWebView实例ID
+    _globalInAppWebViewInstanceCounter++;
+    _inAppWebViewInstanceId = _globalInAppWebViewInstanceCounter;
+    Log.debug('🌐 [ExcalidrawWebView] Created with global instance ID: $_inAppWebViewInstanceId, viewId: ${widget.viewId}');
+    
     _initializeSettings();
     _loadExcalidrawHTML();
   }
@@ -373,8 +382,12 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     return Stack(
       children: [
         InAppWebView(
-          // ❌ 不要使用 widget.key！会导致热重启时 view id 冲突
-          // ✅ InAppWebView 不需要 key，因为父 widget 已经有唯一 key 了
+          // ✅ 关键修复：InAppWebView（PlatformView）必须有全局唯一的key
+          // 原因：InAppWebView底层使用PlatformView与原生代码通信
+          // 问题：如果没有唯一key，Flutter可能会错误地复用或重复创建PlatformView
+          // 解决：使用全局唯一的实例ID确保每个InAppWebView的key绝对唯一
+          // 格式：viewId（业务标识） + 全局递增ID（确保唯一性）
+          key: ValueKey('inappwebview_${widget.viewId}_global_$_inAppWebViewInstanceId'),
           initialUrlRequest: URLRequest(
             url: WebUri(_whiteboardUrl!),
           ),

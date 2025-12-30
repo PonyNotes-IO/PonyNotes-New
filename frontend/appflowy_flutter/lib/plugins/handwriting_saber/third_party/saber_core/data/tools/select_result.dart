@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../editor/page.dart';
+import '../tools/tool.dart';
 import '../../components/canvas/image/pdf_editor_image.dart';
 
 /// ✅ 选择结果（存储选中的对象）
@@ -10,14 +11,37 @@ class SelectResult {
     required this.strokes,
     required this.images,
     required this.selectionPath,
+    this.selectMode = SelectMode.click,
+    this.selectionStartPoint,
+    this.selectionEndPoint,
   });
 
   int pageIndex; // 页面索引
   List<Stroke> strokes; // 选中的笔迹列表（可修改）
   List<PdfEditorImage> images; // 选中的图片列表（可修改）
-  Path selectionPath; // 选择区域的路径
+  Path selectionPath; // 选择区域的路径（用于套索模式）
+  
+  /// ✅ 新增：选择模式
+  SelectMode selectMode;
+  
+  /// ✅ 新增：选择起点（用于矩形框选）
+  Offset? selectionStartPoint;
+  
+  /// ✅ 新增：选择终点（用于矩形框选）
+  Offset? selectionEndPoint;
 
   bool get isEmpty => strokes.isEmpty && images.isEmpty;
+  
+  /// ✅ 获取矩形选择框（用于矩形框选模式）
+  Rect? getSelectionRect() {
+    if (selectMode != SelectMode.rectangle || 
+        selectionStartPoint == null || 
+        selectionEndPoint == null) {
+      return null;
+    }
+    
+    return Rect.fromPoints(selectionStartPoint!, selectionEndPoint!);
+  }
 
   /// ✅ 移动选中的对象
   void move(Offset offset) {

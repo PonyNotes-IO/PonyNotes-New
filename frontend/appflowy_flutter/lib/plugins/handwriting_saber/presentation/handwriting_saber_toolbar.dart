@@ -335,11 +335,28 @@ class HandwritingSaberToolbar extends StatelessWidget {
             tool: Eraser(strokeWidth: currentStrokeWidth),
             label: '橡皮擦',
           ),
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.handPointer,
-            tool: const SelectTool(),
-            label: '选择',
+          // ✅ 选择工具下拉按钮
+          ToolDropdownButton(
+            currentTool: currentTool,
+            mainTool: const SelectTool(),
+            options: [
+              ToolOption(
+                icon: FontAwesomeIcons.handPointer,
+                label: '点选',
+                tool: const SelectTool(selectMode: SelectMode.click),
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.vectorSquare,
+                label: '框选',
+                tool: const SelectTool(selectMode: SelectMode.rectangle),
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.drawPolygon,
+                label: '套索',
+                tool: const SelectTool(selectMode: SelectMode.lasso),
+              ),
+            ],
+            onToolChanged: onToolChanged,
           ),
           _buildToolButton(
             context: context,
@@ -1125,6 +1142,24 @@ class HandwritingSaberToolbar extends StatelessWidget {
                       ],
                     ),
                   ),
+                  PopupMenuItem(
+                    value: ArrowStyle.doubleArrow,
+                    child: Row(
+                      children: [
+                        const Icon(FontAwesomeIcons.arrowsLeftRight, size: 16),
+                        const SizedBox(width: 12),
+                        const Text('双向箭头'),
+                        if (currentArrowStyle == ArrowStyle.doubleArrow) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.check,
+                            size: 16,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ],
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
@@ -1184,6 +1219,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
         return const Text('⇢', style: TextStyle(fontSize: 14));
       case ArrowStyle.line:
         return const Icon(FontAwesomeIcons.arrowRight, size: 14);
+      case ArrowStyle.doubleArrow:
+        return const Icon(FontAwesomeIcons.arrowsLeftRight, size: 14);
     }
   }
 
@@ -1196,6 +1233,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
         return '空心';
       case ArrowStyle.line:
         return '线条';
+      case ArrowStyle.doubleArrow:
+        return '双向';
     }
   }
   

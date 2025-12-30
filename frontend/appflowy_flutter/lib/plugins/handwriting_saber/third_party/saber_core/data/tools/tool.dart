@@ -11,9 +11,10 @@ enum DashStyle {
 
 /// 箭头样式枚举
 enum ArrowStyle {
-  filled,     // 实心箭头
-  hollow,     // 空心箭头
-  line,       // 线条箭头
+  filled,       // 实心箭头
+  hollow,       // 空心箭头
+  line,         // 线条箭头
+  doubleArrow,  // 双向箭头
 }
 
 /// 工具 ID 枚举
@@ -98,9 +99,21 @@ class Eraser extends Tool {
   final double strokeWidth;
 }
 
+/// ✅ 选择模式枚举
+enum SelectMode {
+  click,      // 点选模式（默认）
+  rectangle,  // 矩形框选模式
+  lasso,      // 套索选择模式
+}
+
 /// ✅ 选择工具（对象移动工具）
 class SelectTool extends Tool {
-  const SelectTool();
+  const SelectTool({
+    this.selectMode = SelectMode.click,
+  });
+
+  /// 选择模式
+  final SelectMode selectMode;
 
   @override
   ToolId get toolId => ToolId.select;
@@ -108,5 +121,14 @@ class SelectTool extends Tool {
   Color get color => Colors.transparent; // 选择工具不绘制颜色
   @override
   double get strokeWidth => 0; // 选择工具不需要笔迹宽度
+  
+  /// 创建新的选择工具实例
+  SelectTool copyWith({
+    SelectMode? selectMode,
+  }) {
+    return SelectTool(
+      selectMode: selectMode ?? this.selectMode,
+    );
+  }
 }
 

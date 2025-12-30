@@ -810,14 +810,24 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     
     // ✅ 如果是箭头直线，绘制箭头
     if (stroke is ArrowLineStroke) {
-      _drawArrow(canvas, start, end, lineStroke.strokeWidth, lineStroke.color, stroke.arrowStyle);
+      debugPrint('🎯 [SaberCanvas] Drawing arrow: arrowStyle=${stroke.arrowStyle}');
+      if (stroke.arrowStyle == ArrowStyle.doubleArrow) {
+        // ✅ 双向箭头：在两端都绘制箭头
+        debugPrint('🎯 [SaberCanvas] Drawing double arrow');
+        _drawSingleArrow(canvas, start, end, lineStroke.strokeWidth, lineStroke.color, ArrowStyle.filled, isEndArrow: true);
+        _drawSingleArrow(canvas, start, end, lineStroke.strokeWidth, lineStroke.color, ArrowStyle.filled, isEndArrow: false);
+      } else {
+        // ✅ 单向箭头：只在末端绘制
+        debugPrint('🎯 [SaberCanvas] Drawing single arrow: style=${stroke.arrowStyle}');
+        _drawSingleArrow(canvas, start, end, lineStroke.strokeWidth, lineStroke.color, stroke.arrowStyle, isEndArrow: true);
+      }
     }
     
     canvas.restore();
   }
   
-  /// ✅ 绘制箭头（在直线末端）
-  void _drawArrow(Canvas canvas, Offset start, Offset end, double strokeWidth, Color color, [ArrowStyle arrowStyle = ArrowStyle.filled]) {
+  /// ✅ 绘制单个箭头（在直线的一端）
+  void _drawSingleArrow(Canvas canvas, Offset start, Offset end, double strokeWidth, Color color, ArrowStyle arrowStyle, {required bool isEndArrow}) {
     // 箭头大小（根据线宽调整）
     final arrowSize = strokeWidth * 2.5;
     final arrowAngle = math.pi / 6; // 30度角
@@ -833,26 +843,30 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     final unitX = dx / length;
     final unitY = dy / length;
     
-    // 箭头起点（稍微向内，避免与直线重叠）
-    final arrowStart = Offset(
-      end.dx - unitX * arrowSize * 0.3,
-      end.dy - unitY * arrowSize * 0.3,
+    // ✅ 箭头尖端位置和起点位置（根据是否是末端箭头来确定）
+    final arrowTip = isEndArrow ? end : start;
+    final arrowBase = Offset(
+      arrowTip.dx - unitX * arrowSize * 0.3 * (isEndArrow ? 1 : -1),
+      arrowTip.dy - unitY * arrowSize * 0.3 * (isEndArrow ? 1 : -1),
     );
     
     // 计算箭头两个边的方向
     final cosAngle = math.cos(arrowAngle);
     final sinAngle = math.sin(arrowAngle);
     
+    // ✅ 计算箭头方向（对于起始箭头需要反向）
+    final directionMultiplier = isEndArrow ? -1.0 : 1.0;
+    
     // 箭头左点
     final arrowLeft = Offset(
-      arrowStart.dx - arrowSize * (unitX * cosAngle - unitY * sinAngle),
-      arrowStart.dy - arrowSize * (unitY * cosAngle + unitX * sinAngle),
+      arrowBase.dx + directionMultiplier * arrowSize * (unitX * cosAngle - unitY * sinAngle),
+      arrowBase.dy + directionMultiplier * arrowSize * (unitY * cosAngle + unitX * sinAngle),
     );
     
     // 箭头右点
     final arrowRight = Offset(
-      arrowStart.dx - arrowSize * (unitX * cosAngle + unitY * sinAngle),
-      arrowStart.dy - arrowSize * (unitY * cosAngle - unitX * sinAngle),
+      arrowBase.dx + directionMultiplier * arrowSize * (unitX * cosAngle + unitY * sinAngle),
+      arrowBase.dy + directionMultiplier * arrowSize * (unitY * cosAngle - unitX * sinAngle),
     );
     
     // ✅ 根据箭头样式绘制不同的箭头
@@ -860,7 +874,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       case ArrowStyle.filled:
         // 实心箭头（填充三角形）
         final arrowPath = Path()
-          ..moveTo(end.dx, end.dy)
+          ..moveTo(arrowTip.dx, arrowTip.dy)
           ..lineTo(arrowLeft.dx, arrowLeft.dy)
           ..lineTo(arrowRight.dx, arrowRight.dy)
           ..close();
@@ -875,7 +889,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       case ArrowStyle.hollow:
         // 空心箭头（三角形描边）
         final arrowPath = Path()
-          ..moveTo(end.dx, end.dy)
+          ..moveTo(arrowTip.dx, arrowTip.dy)
           ..lineTo(arrowLeft.dx, arrowLeft.dy)
           ..lineTo(arrowRight.dx, arrowRight.dy)
           ..close();
@@ -899,9 +913,14 @@ class _SaberCoreCanvasPainter extends CustomPainter {
           ..strokeCap = StrokeCap.round;
         
         // 绘制左边斜线
-        canvas.drawLine(end, arrowLeft, linePaint);
+        canvas.drawLine(arrowTip, arrowLeft, linePaint);
         // 绘制右边斜线
-        canvas.drawLine(end, arrowRight, linePaint);
+        canvas.drawLine(arrowTip, arrowRight, linePaint);
+        break;
+        
+      case ArrowStyle.doubleArrow:
+        // ✅ 双向箭头不应该单独绘制，这是一个内部状态
+        // 双向箭头的绘制已经在调用处理（两次调用 _drawSingleArrow）
         break;
     }
   }
@@ -1075,22 +1094,32 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     canvas.translate(offsetX, offsetY);
     canvas.scale(scale);
     
-    if (isSelecting && !selectResult.selectionPath.getBounds().isEmpty) {
-      // ✅ 绘制拖拽选择区域（虚线边框）
+    if (isSelecting) {
+      // ✅ 绘制拖拽选择区域
       final dashPaint = Paint()
         ..color = const Color(0xFF2196F3)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5 / scale;
       
-      // 绘制选择区域路径（虚线）
-      final path = selectResult.selectionPath;
-      canvas.drawPath(path, dashPaint);
-      
-      // 绘制半透明填充
       final fillPaint = Paint()
         ..color = const Color(0xFF2196F3).withValues(alpha: 0.1)
         ..style = PaintingStyle.fill;
-      canvas.drawPath(path, fillPaint);
+      
+      if (selectResult.selectMode == SelectMode.rectangle) {
+        // ✅ 矩形框选模式：绘制矩形
+        final selectionRect = selectResult.getSelectionRect();
+        if (selectionRect != null && !selectionRect.isEmpty) {
+          canvas.drawRect(selectionRect, dashPaint);
+          canvas.drawRect(selectionRect, fillPaint);
+        }
+      } else if (selectResult.selectMode == SelectMode.lasso) {
+        // ✅ 套索选择模式：绘制自由路径
+        final path = selectResult.selectionPath;
+        if (!path.getBounds().isEmpty) {
+          canvas.drawPath(path, dashPaint);
+          canvas.drawPath(path, fillPaint);
+        }
+      }
     } else if (!selectResult.isEmpty) {
       // ✅ 绘制选中对象的边界框
       final boundingBox = selectResult.getBoundingBox();
