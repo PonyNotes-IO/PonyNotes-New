@@ -1,3 +1,4 @@
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
@@ -44,6 +45,7 @@ class UserWorkspaceState {
     this.isCollabWorkspaceOn = false,
     required this.userProfile,
     this.workspaceSubscriptionInfo,
+    this.currentSubscription,
   });
 
   final UserWorkspacePB? currentWorkspace;
@@ -52,6 +54,7 @@ class UserWorkspaceState {
   final bool isCollabWorkspaceOn;
   final UserProfilePB userProfile;
   final WorkspaceSubscriptionInfoPB? workspaceSubscriptionInfo;
+  final CurrentSubscription? currentSubscription;
 
   UserWorkspaceState copyWith({
     UserWorkspacePB? currentWorkspace,
@@ -60,6 +63,7 @@ class UserWorkspaceState {
     bool? isCollabWorkspaceOn,
     UserProfilePB? userProfile,
     WorkspaceSubscriptionInfoPB? workspaceSubscriptionInfo,
+    CurrentSubscription? currentSubscription,
   }) {
     return UserWorkspaceState(
       currentWorkspace: currentWorkspace ?? this.currentWorkspace,
@@ -69,6 +73,7 @@ class UserWorkspaceState {
       userProfile: userProfile ?? this.userProfile,
       workspaceSubscriptionInfo:
           workspaceSubscriptionInfo ?? this.workspaceSubscriptionInfo,
+      currentSubscription: currentSubscription ?? this.currentSubscription,
     );
   }
 
@@ -81,7 +86,8 @@ class UserWorkspaceState {
         other.actionResult == actionResult &&
         other.isCollabWorkspaceOn == isCollabWorkspaceOn &&
         other.userProfile == userProfile &&
-        other.workspaceSubscriptionInfo == workspaceSubscriptionInfo;
+        other.workspaceSubscriptionInfo == workspaceSubscriptionInfo &&
+        other.currentSubscription == currentSubscription;
   }
 
   @override
@@ -93,11 +99,12 @@ class UserWorkspaceState {
       isCollabWorkspaceOn,
       userProfile,
       workspaceSubscriptionInfo,
+      currentSubscription,
     );
   }
 
   @override
   String toString() {
-    return 'WorkspaceState(currentWorkspace: $currentWorkspace, workspaces: $workspaces, actionResult: $actionResult, isCollabWorkspaceOn: $isCollabWorkspaceOn, userProfile: $userProfile, workspaceSubscriptionInfo: $workspaceSubscriptionInfo)';
+    return 'WorkspaceState(currentWorkspace: $currentWorkspace, workspaces: $workspaces, actionResult: $actionResult, isCollabWorkspaceOn: $isCollabWorkspaceOn, userProfile: $userProfile, workspaceSubscriptionInfo: $workspaceSubscriptionInfo, currentSubscription: $currentSubscription)';
   }
 }

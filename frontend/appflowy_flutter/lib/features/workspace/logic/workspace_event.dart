@@ -1,3 +1,4 @@
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 
 sealed class UserWorkspaceEvent {
@@ -79,6 +80,16 @@ sealed class UserWorkspaceEvent {
     required UserWorkspacePB workspace,
   }) =>
       WorkspaceEventEmitCurrentWorkspace(workspace: workspace);
+
+  factory UserWorkspaceEvent.fetchCurrentSubscription() =>
+      WorkspaceEventFetchCurrentSubscription();
+
+  factory UserWorkspaceEvent.updateCurrentSubscription({
+    required CurrentSubscription? currentSubscription,
+  }) =>
+      WorkspaceEventUpdateCurrentSubscription(
+        currentSubscription: currentSubscription,
+      );
 }
 
 /// Initializes the workspace bloc.
@@ -199,4 +210,18 @@ class WorkspaceEventEmitCurrentWorkspace extends UserWorkspaceEvent {
   });
 
   final UserWorkspacePB workspace;
+}
+
+/// Fetches current subscription info (including usage details).
+class WorkspaceEventFetchCurrentSubscription extends UserWorkspaceEvent {
+  WorkspaceEventFetchCurrentSubscription();
+}
+
+/// Updates current subscription info.
+class WorkspaceEventUpdateCurrentSubscription extends UserWorkspaceEvent {
+  WorkspaceEventUpdateCurrentSubscription({
+    required this.currentSubscription,
+  });
+
+  final CurrentSubscription? currentSubscription;
 }
