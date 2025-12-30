@@ -42,35 +42,38 @@ class _NavigatorCustomDialog extends State<NavigatorCustomDialog> {
   Widget build(BuildContext context) {
     return StyledDialog(
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 1.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 400,
-                maxHeight: 260,
+        padding: const EdgeInsets.only(bottom: 12.0),
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: 260,
+                ),
+                child: widget.child,
               ),
-              child: widget.child,
-            ),
-            if (widget.confirm != null) ...[
-              const VSpace(20),
-              OkCancelButton(
-                onOkPressed: () {
-                  widget.confirm?.call();
-                  Navigator.of(context).pop();
-                },
-                onCancelPressed: widget.hideCancelButton
-                    ? null
-                    : () {
-                        widget.cancel?.call();
-                        Navigator.of(context).pop();
-                      },
-              ),
+              if (widget.confirm != null) ...[
+                const VSpace(20),
+                OkCancelButton(
+                  onOkPressed: () {
+                    widget.confirm?.call();
+                    Navigator.of(context).pop();
+                  },
+                  onCancelPressed: widget.hideCancelButton
+                      ? null
+                      : () {
+                          widget.cancel?.call();
+                          Navigator.of(context).pop();
+                        },
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -144,69 +147,72 @@ class _NavigatorTextFieldDialogState extends State<NavigatorTextFieldDialog> {
   Widget build(BuildContext context) {
     return StyledDialog(
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 1.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            FlowyText.medium(
-              widget.title,
-              color: Theme.of(context).colorScheme.tertiary,
-              fontSize: FontSizes.s16,
-            ),
-            VSpace(Insets.m),
-            FlowyFormTextInput(
-              hintText:
-                  widget.hintText ?? LocaleKeys.dialogCreatePageNameHint.tr(),
-              controller: controller,
-              textStyle: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(fontSize: FontSizes.s16),
-              maxLength: widget.maxLength,
-              showCounter: false,
-              autoFocus: true,
-              onChanged: (text) {
-                newValue = text;
-              },
-              onEditingComplete: () {
-                widget.onConfirm(newValue, context);
-                AppGlobals.nav.pop();
-              },
-            ),
-            VSpace(Insets.xl),
-            OkCancelButton(
-              onOkPressed: () {
-                // DEBUG BREAKPOINT 1: 用户点击确定按钮
-                Log.info('=== DEBUG BREAKPOINT 1 === 用户点击确定按钮创建工作空间: $newValue');
-                if (newValue.isEmpty) {
-                  showToastNotification(
-                    message: LocaleKeys.space_spaceNameCannotBeEmpty.tr(),
-                  );
-                  return;
-                }
-
-                // 🔧 FIX: Ensure dialog stays open until workspace creation process starts
-                try {
-                  Log.info('[DIALOG] 🚀 Calling onConfirm callback...');
+        padding: const EdgeInsets.only(bottom: 12.0),
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              FlowyText.medium(
+                widget.title,
+                color: Theme.of(context).colorScheme.tertiary,
+                fontSize: FontSizes.s16,
+              ),
+              VSpace(Insets.m),
+              FlowyFormTextInput(
+                hintText:
+                    widget.hintText ?? LocaleKeys.dialogCreatePageNameHint.tr(),
+                controller: controller,
+                textStyle: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(fontSize: FontSizes.s16),
+                maxLength: widget.maxLength,
+                showCounter: false,
+                autoFocus: true,
+                onChanged: (text) {
+                  newValue = text;
+                },
+                onEditingComplete: () {
                   widget.onConfirm(newValue, context);
-                  Log.info('[DIALOG] ✅ onConfirm callback completed');
-
-                  // 🔧 FIX: Don't close dialog here - let BlocListener handle it
-                  // This prevents Navigator state conflicts
-                  Log.info('[DIALOG] 🔄 Dialog will be closed by BlocListener');
-                } catch (e) {
-                  Log.error('[DIALOG] ❌ Error in onConfirm callback: $e');
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
+                  AppGlobals.nav.pop();
+                },
+              ),
+              VSpace(Insets.xl),
+              OkCancelButton(
+                onOkPressed: () {
+                  // DEBUG BREAKPOINT 1: 用户点击确定按钮
+                  Log.info('=== DEBUG BREAKPOINT 1 === 用户点击确定按钮创建工作空间: $newValue');
+                  if (newValue.isEmpty) {
+                    showToastNotification(
+                      message: LocaleKeys.space_spaceNameCannotBeEmpty.tr(),
+                    );
+                    return;
                   }
-                }
-              },
-              onCancelPressed: () {
-                widget.onCancel?.call();
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
+
+                  // 🔧 FIX: Ensure dialog stays open until workspace creation process starts
+                  try {
+                    Log.info('[DIALOG] 🚀 Calling onConfirm callback...');
+                    widget.onConfirm(newValue, context);
+                    Log.info('[DIALOG] ✅ onConfirm callback completed');
+
+                    // 🔧 FIX: Don't close dialog here - let BlocListener handle it
+                    // This prevents Navigator state conflicts
+                    Log.info('[DIALOG] 🔄 Dialog will be closed by BlocListener');
+                  } catch (e) {
+                    Log.error('[DIALOG] ❌ Error in onConfirm callback: $e');
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
+                  }
+                },
+                onCancelPressed: () {
+                  widget.onCancel?.call();
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

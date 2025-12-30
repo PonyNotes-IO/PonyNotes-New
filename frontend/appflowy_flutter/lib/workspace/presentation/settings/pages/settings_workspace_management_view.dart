@@ -4,6 +4,7 @@ import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_category.dart';
+import 'package:appflowy/workspace/presentation/settings/shared/settings_category_spacer.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -127,10 +128,12 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
     return SettingsBody(
       title: '空间管理',
       description: '管理您的工作空间设置和配置',
+      autoSeparate: false, // control separators manually to avoid duplicate dividers
       children: [
         // 创建团队协作区权限设置
         _buildCreatePermissionSection(),
-        const VSpace(24),
+        // keep a single visual separator between the two sections
+        const SettingsCategorySpacer(),
         // 团队协作区列表
         _buildTeamWorkspaceList(),
       ],
@@ -168,43 +171,6 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
             );
           },
         ),
-        const VSpace(8),
-        // 如果用户有权限创建团队协作区，显示按钮
-        Builder(builder: (ctx) {
-          final canCreate = _canCreateTeamWorkspace();
-          if (!canCreate) return const SizedBox.shrink();
-          return SizedBox(
-            width: 140,
-            child: FlowyButton(
-              onTap: () async {
-              PopoverContainer.maybeOf(ctx)?.closeAll();
-                await Future.delayed(Duration.zero);
-                if (!ctx.mounted) return;
-                final workspaceBloc = ctx.read<UserWorkspaceBloc>();
-              await showDialog(
-                context: ctx,
-                builder: (dialogCtx) => BlocProvider.value(
-                  value: workspaceBloc,
-                  child: CreateWorkspaceDialog(
-                    title: '新建团队协作区',
-                    onConfirm: (name) {
-                      if (name.trim().isEmpty) return;
-                      workspaceBloc.add(
-                        UserWorkspaceEvent.createWorkspace(
-                          name: name,
-                          workspaceType: WorkspaceTypePB.ServerW,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              );
-              },
-              margin: EdgeInsets.zero,
-              text: FlowyText.regular('新建团队协作区'),
-            ),
-          );
-        }),
       ],
       children: const [],
     );
@@ -224,6 +190,41 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
   Widget _buildTeamWorkspaceList() {
     return SettingsCategory(
       title: '团队协作区',
+      actions: [
+        if (_canCreateTeamWorkspace())
+          SizedBox(
+            width: 140,
+            height: 28,
+            child: FlowyButton(
+              onTap: () async {
+                PopoverContainer.maybeOf(context)?.closeAll();
+                await Future.delayed(Duration.zero);
+                if (!mounted) return;
+                final workspaceBloc = context.read<UserWorkspaceBloc>();
+                await showDialog(
+                  context: context,
+                  builder: (dialogCtx) => BlocProvider.value(
+                    value: workspaceBloc,
+                    child: CreateWorkspaceDialog(
+                      title: '新建团队协作区',
+                      onConfirm: (name) {
+                        if (name.trim().isEmpty) return;
+                        workspaceBloc.add(
+                          UserWorkspaceEvent.createWorkspace(
+                            name: name,
+                            workspaceType: WorkspaceTypePB.ServerW,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+              margin: EdgeInsets.zero,
+              text: Center(child: FlowyText.regular('新建团队协作区', fontSize: 12)),
+            ),
+          ),
+      ],
       children: [
         _buildTeamWorkspaceTable(),
       ],
@@ -276,7 +277,7 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
           Expanded(
             flex: 3,
             child: FlowyText(
-              '团队协作区',
+              '名称',
               fontSize: 12,
               color: Theme.of(context).hintColor,
               fontWeight: FontWeight.w500,
