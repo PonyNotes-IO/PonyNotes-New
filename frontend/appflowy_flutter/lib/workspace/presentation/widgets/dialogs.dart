@@ -179,7 +179,7 @@ class _NavigatorTextFieldDialogState extends State<NavigatorTextFieldDialog> {
                 },
               ),
               VSpace(Insets.xl),
-              OkCancelButton(
+          OkCancelButton(
                 onOkPressed: () {
                   // DEBUG BREAKPOINT 1: 用户点击确定按钮
                   Log.info('=== DEBUG BREAKPOINT 1 === 用户点击确定按钮创建工作空间: $newValue');
@@ -206,7 +206,8 @@ class _NavigatorTextFieldDialogState extends State<NavigatorTextFieldDialog> {
                     }
                   }
                 },
-                onCancelPressed: () {
+            okTitle: '确认',
+            onCancelPressed: () {
                   widget.onCancel?.call();
                   Navigator.of(context).pop();
                 },

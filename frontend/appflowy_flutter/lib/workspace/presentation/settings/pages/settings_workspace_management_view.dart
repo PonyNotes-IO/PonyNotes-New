@@ -8,6 +8,8 @@ import 'package:appflowy/workspace/presentation/settings/shared/settings_categor
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/create_space_popup.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pbenum.dart';
@@ -16,6 +18,7 @@ import 'package:fixnum/fixnum.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_menu.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
 
 
 class SettingsWorkspaceManagementView extends StatefulWidget {
@@ -200,23 +203,12 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
                 PopoverContainer.maybeOf(context)?.closeAll();
                 await Future.delayed(Duration.zero);
                 if (!mounted) return;
-                final workspaceBloc = context.read<UserWorkspaceBloc>();
+                final spaceBloc = context.read<SpaceBloc>();
                 await showDialog(
                   context: context,
                   builder: (dialogCtx) => BlocProvider.value(
-                    value: workspaceBloc,
-                    child: CreateWorkspaceDialog(
-                      title: '新建团队协作区',
-                      onConfirm: (name) {
-                        if (name.trim().isEmpty) return;
-                        workspaceBloc.add(
-                          UserWorkspaceEvent.createWorkspace(
-                            name: name,
-                            workspaceType: WorkspaceTypePB.ServerW,
-                          ),
-                        );
-                      },
-                    ),
+                    value: spaceBloc,
+                    child: const CreateSpacePopup(),
                   ),
                 );
               },
@@ -232,14 +224,11 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
   }
 
   Widget _buildTeamWorkspaceTable() {
-    return BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
-      builder: (context, workspaceState) {
-        // 获取所有协作区（Server 类型的工作空间）
-        final collaborativeWorkspaces = workspaceState.workspaces
-            .where((workspace) => workspace.workspaceType == WorkspaceTypePB.ServerW)
-            .toList();
+    return BlocBuilder<SpaceBloc, SpaceState>(
+      builder: (context, spaceState) {
+        final spaces = spaceState.spaces;
 
-        if (collaborativeWorkspaces.isEmpty) {
+        if (spaces.isEmpty) {
           return Padding(
             padding: const EdgeInsets.all(16.0),
             child: Center(
@@ -256,10 +245,10 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
           children: [
             // 表格头部
             _buildTableHeader(),
-            // 表格内容 - 动态生成
-            ...collaborativeWorkspaces.map((workspace) {
-              return _TeamWorkspaceRow(
-                workspace: workspace,
+            // 表格内容 - 使用 Space 行组件
+            ...spaces.map((space) {
+              return _SpaceRow(
+                space: space,
                 userProfile: widget.userProfile,
               );
             }).toList(),
@@ -514,6 +503,96 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
             flex: 2,
             child: FlowyText(
               access,
+              fontSize: 14,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: FlowyText(
+              updateTime,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpaceRow extends StatelessWidget {
+  const _SpaceRow({
+    required this.space,
+    required this.userProfile,
+  });
+
+  final ViewPB space;
+  final UserProfilePB userProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = space.name;
+    int createdAt = 0;
+    if (space.createTime != null) {
+      if (space.createTime is Int64) {
+        createdAt = (space.createTime as Int64).toInt();
+      } else if (space.createTime is int) {
+        createdAt = space.createTime as int;
+      }
+    }
+    final updateTime = createdAt == 0 ? '未知' : DateTime.fromMillisecondsSinceEpoch(createdAt).toLocal().toString().split(' ').first;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(
+                    Icons.groups,
+                    size: 16,
+                    color: Colors.orange,
+                  ),
+                ),
+                const HSpace(12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    FlowyText(
+                      name,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    const VSpace(2),
+                    FlowyText(
+                      '协作区',
+                      fontSize: 12,
+                      color: Theme.of(context).hintColor,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: FlowyText(
+              userProfile.name.isNotEmpty ? userProfile.name : userProfile.email,
+              fontSize: 14,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: FlowyText(
+              '—',
               fontSize: 14,
             ),
           ),

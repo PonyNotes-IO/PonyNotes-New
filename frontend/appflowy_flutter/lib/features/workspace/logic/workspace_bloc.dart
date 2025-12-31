@@ -554,7 +554,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       state.copyWith(userProfile: event.userProfile),
     );
     // 用户信息更新时，也更新会员信息
-    add(UserWorkspaceEvent.fetchCurrentSubscription());
+    _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
   }
 
   Future<void> _onEmitCurrentWorkspace(
@@ -572,11 +572,9 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         if (!isClosed) {
           result.fold(
             (newProfile) {
-              add(
-                UserWorkspaceEvent.emitUserProfile(userProfile: newProfile),
-              );
+              _safeAdd(UserWorkspaceEvent.emitUserProfile(userProfile: newProfile));
               // 用户信息更新时，也更新会员信息
-              add(UserWorkspaceEvent.fetchCurrentSubscription());
+              _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
             },
             (error) => Log.error("Failed to get user profile: $error"),
           );
@@ -599,6 +597,20 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         }
       },
     );
+  }
+
+  /// Safely add an event to the bloc, catching StateError when handler is missing.
+  void _safeAdd(UserWorkspaceEvent event) {
+    try {
+      add(event);
+    } on StateError catch (e, st) {
+      // Log detailed info but avoid crashing the UI
+      Log.error('[UserWorkspaceBloc] Failed to add event ${event.runtimeType}: $e', e);
+      Log.error('[UserWorkspaceBloc] Stack: $st');
+    } catch (e, st) {
+      Log.error('[UserWorkspaceBloc] Unexpected error when adding event ${event.runtimeType}: $e', e);
+      Log.error('[UserWorkspaceBloc] Stack: $st');
+    }
   }
 
   Future<void> _initializeWorkspaces(Emitter<UserWorkspaceState> emit) async {

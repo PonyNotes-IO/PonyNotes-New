@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/shared/appflowy_cache_manager.dart';
@@ -102,9 +103,14 @@ class SettingsDialog extends StatelessWidget {
               backgroundColor: theme.backgroundColorScheme.primary,
               body: BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
                 builder: (context, workspaceState) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                  return BlocProvider<SpaceBloc>(
+                    create: (context) => SpaceBloc(
+                      userProfile: user,
+                      workspaceId: workspaceState.currentWorkspace?.workspaceId ?? '',
+                    )..add(const SpaceEvent.initial(openFirstPage: false)),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                       Expanded(
                         flex: 2,
                         child: SettingsMenu(
@@ -145,6 +151,7 @@ class SettingsDialog extends StatelessWidget {
                         ),
                       ),
                     ],
+                  ),
                   );
                 },
               ),
