@@ -199,3 +199,4 @@ class SvgEditorImage extends EditorImage {
   }
 }
 
+

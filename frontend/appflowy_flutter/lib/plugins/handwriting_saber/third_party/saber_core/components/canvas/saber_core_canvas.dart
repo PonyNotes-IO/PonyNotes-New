@@ -227,6 +227,9 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     }
     
     // ✅ 绘制激光笔笔迹（发光效果，从 coreInfo.laserStrokes 获取）
+    if (coreInfo.laserStrokes.isNotEmpty) {
+      debugPrint('🔴 [SaberCanvas] Drawing ${coreInfo.laserStrokes.length} laser strokes');
+    }
     for (final stroke in coreInfo.laserStrokes) {
       _drawLaserStroke(canvas, stroke, scale, offsetX, offsetY);
     }
@@ -373,13 +376,17 @@ class _SaberCoreCanvasPainter extends CustomPainter {
 
   /// 绘制激光笔笔迹（发光效果）
   void _drawLaserStroke(Canvas canvas, Stroke stroke, double scale, double offsetX, double offsetY) {
+    debugPrint('🔴 [SaberCanvas] Drawing laser stroke: points=${stroke.points.length}');
+    
     if (stroke.points.isEmpty) {
+      debugPrint('🔴 [SaberCanvas] Laser stroke is empty, skipping');
       return;
     }
     
     // 使用 perfect_freehand 生成平滑路径
     final smoothPath = stroke.getSmoothPath(isComplete: true);
     if (smoothPath.getBounds().isEmpty) {
+      debugPrint('🔴 [SaberCanvas] Laser stroke smooth path is empty, skipping');
       return;
     }
     

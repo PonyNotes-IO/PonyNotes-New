@@ -17,7 +17,8 @@ class EditorCoreInfo {
     this.backgroundPattern = CanvasBackgroundPattern.lined,
     this.lineHeight = 28, // ✅ 增大默认横线间距，便于视觉阅读（由 20 -> 28）
     this.lineThickness = 1,
-  });
+    List<Stroke>? laserStrokes, // ✅ 可选：允许传入激光笔笔迹列表的引用
+  }) : laserStrokes = laserStrokes ?? <Stroke>[];
 
   final List<EditorPage> pages;
   final Color? backgroundColor;
@@ -26,7 +27,8 @@ class EditorCoreInfo {
   final int lineThickness;
   
   /// ✅ 激光笔笔迹列表（单独管理，用于淡出效果）
-  final List<Stroke> laserStrokes = [];
+  /// 如果通过构造函数传入，则直接使用该引用，避免复制数据
+  final List<Stroke> laserStrokes;
 
   EditorPage get firstPage {
     if (pages.isEmpty) {
