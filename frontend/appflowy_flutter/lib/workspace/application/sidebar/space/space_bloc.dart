@@ -14,6 +14,8 @@ import 'package:appflowy/workspace/application/workspace/prelude.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_sections_listener.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon_popup.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_request_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
@@ -32,6 +34,7 @@ part 'space_bloc.freezed.dart';
 enum SpacePermission {
   publicToAll,
   private,
+  closed,
 }
 
 class SidebarSection {
@@ -360,6 +363,126 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             final nextSpace = spaces[nextIndex];
             add(SpaceEvent.open(space: nextSpace));
           },
+          sendJoinRequest: (spaceId, reason) async {
+            // optimistic local handling: mark join request as pending
+            final pending = Map<String, bool>.from(state.joinRequestPending);
+            pending[spaceId] = true;
+            emit(state.copyWith(joinRequestPending: pending));
+
+            // call backend via SpaceRequestService
+            try {
+              final success = await _spaceRequestService.sendJoinRequest(spaceId: spaceId, reason: reason);
+              if (success) {
+                showToastNotification(message: '已发送加入请求');
+              } else {
+                Log.error('sendJoinRequest failed');
+                pending.remove(spaceId);
+                emit(state.copyWith(joinRequestPending: pending));
+                showToastNotification(message: '加入请求发送失败');
+              }
+            } catch (e, st) {
+              Log.error('sendJoinRequest exception: $e\n$st');
+              pending.remove(spaceId);
+              emit(state.copyWith(joinRequestPending: pending));
+              showToastNotification(message: '加入请求发送失败');
+            }
+          },
+          loadJoinRequests: (spaceId) async {
+            try {
+              final list = await _spaceRequestService.loadJoinRequests(spaceId: spaceId);
+              final current = Map<String, List<Map<String, dynamic>>>.from(state.joinRequests);
+              current[spaceId] = list;
+              emit(state.copyWith(joinRequests: current));
+            } catch (e, st) {
+              Log.error('loadJoinRequests exception: $e\n$st');
+              final current = Map<String, List<Map<String, dynamic>>>.from(state.joinRequests);
+              current[spaceId] = current[spaceId] ?? [];
+              emit(state.copyWith(joinRequests: current));
+            }
+          },
+          handleJoinRequest: (requestId, approve) async {
+            try {
+              // call backend
+              // need to find which space this request belongs to in local cache
+              String? targetSpaceId;
+              for (final entry in state.joinRequests.entries) {
+                if (entry.value.any((r) => (r['request_id'] ?? r['id'] ?? '') == requestId)) {
+                  targetSpaceId = entry.key;
+                  break;
+                }
+              }
+              if (targetSpaceId == null) {
+                Log.warn('handleJoinRequest: requestId not found locally: $requestId');
+              }
+
+              final ok = await _spaceRequestService.handleJoinRequest(
+                spaceId: targetSpaceId ?? '',
+                requestId: requestId,
+                approve: approve,
+              );
+              if (ok) {
+                // remove from local list
+                final current = Map<String, List<Map<String, dynamic>>>.from(state.joinRequests);
+                Map<String, dynamic>? matched;
+                for (final entry in current.entries) {
+                  entry.value.removeWhere((r) => (r['request_id'] ?? r['id'] ?? '') == requestId);
+                }
+                // try to find requester email from previous state (best-effort)
+                for (final entry in state.joinRequests.entries) {
+                  final found = entry.value.firstWhereOrNull((r) => (r['request_id'] ?? r['id'] ?? '') == requestId);
+                  if (found != null) {
+                    matched = found;
+                    break;
+                  }
+                }
+
+                emit(state.copyWith(joinRequests: current));
+                showToastNotification(message: approve ? '已通过加入请求' : '已拒绝加入请求');
+
+                if (approve) {
+                  // If backend did not auto-add, try to add workspace member by email if available
+                  final requesterEmail = matched != null
+                      ? (matched['requester_email'] ?? matched['requester_email_address'] ?? matched['email'])
+                      : null;
+                  if (requesterEmail is String && requesterEmail.isNotEmpty) {
+                    final addRes = await UserBackendService(userId: userProfile.id).addWorkspaceMember(workspaceId, requesterEmail);
+                    addRes.fold((_) {
+                      Log.info('Added workspace member: $requesterEmail after approval');
+                    }, (err2) {
+                      Log.error('Failed to add workspace member after approval: ${err2.msg}');
+                    });
+                  }
+
+                  // refresh spaces/members
+                  add(const SpaceEvent.didReceiveSpaceUpdate());
+                }
+              } else {
+                Log.error('handleJoinRequest failed');
+                showToastNotification(message: '审批操作失败');
+              }
+            } catch (e, st) {
+              Log.error('handleJoinRequest exception: $e\n$st');
+              showToastNotification(message: '审批操作失败');
+            }
+          },
+          cancelJoinRequest: (spaceId) async {
+            // call backend to cancel the current user's join request for this space
+            try {
+              final ok = await _spaceRequestService.cancelJoinRequest(spaceId: spaceId);
+              if (ok) {
+                final pending = Map<String, bool>.from(state.joinRequestPending);
+                pending.remove(spaceId);
+                emit(state.copyWith(joinRequestPending: pending));
+                showToastNotification(message: '已撤销加入请求');
+              } else {
+                Log.error('cancelJoinRequest failed');
+                showToastNotification(message: '撤销失败');
+              }
+            } catch (e, st) {
+              Log.error('cancelJoinRequest exception: $e\n$st');
+              showToastNotification(message: '撤销失败');
+            }
+          },
           duplicate: (space) async {
             space ??= state.currentSpace;
             if (space == null) {
@@ -386,6 +509,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
   }
 
   late WorkspaceService _workspaceService;
+  late SpaceRequestService _spaceRequestService;
   late String workspaceId;
   late UserProfilePB userProfile;
   WorkspaceSectionsListener? _listener;
@@ -423,6 +547,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
     final section = switch (permission) {
       SpacePermission.publicToAll => ViewSectionPB.Public,
       SpacePermission.private => ViewSectionPB.Private,
+      SpacePermission.closed => ViewSectionPB.Public,
     };
 
     final extra = {
@@ -503,6 +628,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
     this.userProfile = userProfile;
     this.workspaceId = workspaceId;
+    _spaceRequestService = SpaceRequestService(workspaceId: workspaceId, userId: userProfile.id);
   }
 
   Future<ViewPB?> _getLastOpenedSpace(List<ViewPB> spaces) async {
@@ -784,6 +910,20 @@ class SpaceEvent with _$SpaceEvent {
   ) = _Reset;
   const factory SpaceEvent.migrate() = _Migrate;
   const factory SpaceEvent.switchToNextSpace() = _SwitchToNextSpace;
+  const factory SpaceEvent.cancelJoinRequest({
+    required String spaceId,
+  }) = _CancelJoinRequest;
+  const factory SpaceEvent.sendJoinRequest({
+    required String spaceId,
+    String? reason,
+  }) = _SendJoinRequest;
+  const factory SpaceEvent.loadJoinRequests({
+    required String spaceId,
+  }) = _LoadJoinRequests;
+  const factory SpaceEvent.handleJoinRequest({
+    required String requestId,
+    required bool approve,
+  }) = _HandleJoinRequest;
 }
 
 @freezed
@@ -798,6 +938,8 @@ class SpaceState with _$SpaceState {
     @Default(false) bool shouldShowUpgradeDialog,
     @Default(false) bool isDuplicatingSpace,
     @Default(false) bool isInitialized,
+    @Default({}) Map<String, bool> joinRequestPending,
+    @Default({}) Map<String, List<Map<String, dynamic>>> joinRequests,
   }) = _SpaceState;
 
   factory SpaceState.initial() => const SpaceState();

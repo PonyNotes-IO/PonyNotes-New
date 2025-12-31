@@ -1,12 +1,11 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/_extension.dart';
+ 
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_space_menu.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
@@ -96,6 +95,10 @@ class _SpacePermissionSwitchState extends State<SpacePermissionSwitch> {
             permission: SpacePermission.private,
             onTap: () => _onPermissionChanged(SpacePermission.private),
           ),
+          SpacePermissionButton(
+            permission: SpacePermission.closed,
+            onTap: () => _onPermissionChanged(SpacePermission.closed),
+          ),
         ],
       ),
     );
@@ -137,6 +140,11 @@ class SpacePermissionButton extends StatelessWidget {
       SpacePermission.private => (
           LocaleKeys.space_privatePermission.tr(),
           LocaleKeys.space_privatePermissionDescription.tr(),
+          FlowySvgs.space_permission_private_s
+        ),
+      SpacePermission.closed => (
+          '封闭式',
+          '仅受邀请或审批后可加入',
           FlowySvgs.space_permission_private_s
         ),
     };

@@ -37,12 +37,21 @@ class _CreateSpacePopupState extends State<CreateSpacePopup> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 24.0),
-      width: 524,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+        width: 540,
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              // limit height so dialog can scroll when available space is small
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
           FlowyText(
             LocaleKeys.space_createNewSpace.tr(),
             fontSize: 18.0,
@@ -91,6 +100,9 @@ class _CreateSpacePopupState extends State<CreateSpacePopup> {
             onConfirm: () => _createSpace(),
           ),
         ],
+            ),
+          ),
+        ),
       ),
     );
   }

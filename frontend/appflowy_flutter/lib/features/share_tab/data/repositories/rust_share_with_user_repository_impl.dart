@@ -230,6 +230,7 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
     final sectionType = switch (space.spacePermission) {
       SpacePermission.publicToAll => SharedSectionType.public,
       SpacePermission.private => SharedSectionType.private,
+      SpacePermission.closed => SharedSectionType.private,
     };
 
     return FlowySuccess(sectionType);

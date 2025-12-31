@@ -19,6 +19,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_menu.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 
 
 class SettingsWorkspaceManagementView extends StatefulWidget {
@@ -206,9 +207,14 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
                 final spaceBloc = context.read<SpaceBloc>();
                 await showDialog(
                   context: context,
-                  builder: (dialogCtx) => BlocProvider.value(
-                    value: spaceBloc,
-                    child: const CreateSpacePopup(),
+                  builder: (dialogCtx) => Dialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    child: BlocProvider.value(
+                      value: spaceBloc,
+                      child: const CreateSpacePopup(),
+                    ),
                   ),
                 );
               },
@@ -592,7 +598,12 @@ class _SpaceRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: FlowyText(
-              '—',
+              switch (space.spacePermission) {
+                SpacePermission.publicToAll => '开放式',
+                SpacePermission.closed => '封闭式',
+                SpacePermission.private => '私人',
+                _ => '—',
+              },
               fontSize: 14,
             ),
           ),

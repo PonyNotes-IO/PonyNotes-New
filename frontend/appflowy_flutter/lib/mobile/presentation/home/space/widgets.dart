@@ -375,6 +375,8 @@ extension on SpacePermission {
         return LocaleKeys.space_publicPermission.tr();
       case SpacePermission.private:
         return LocaleKeys.space_privatePermission.tr();
+      case SpacePermission.closed:
+        return '封闭式';
     }
   }
 
@@ -383,6 +385,8 @@ extension on SpacePermission {
       case SpacePermission.publicToAll:
         return FlowySvgs.space_permission_public_s;
       case SpacePermission.private:
+        return FlowySvgs.space_permission_private_s;
+      case SpacePermission.closed:
         return FlowySvgs.space_permission_private_s;
     }
   }
