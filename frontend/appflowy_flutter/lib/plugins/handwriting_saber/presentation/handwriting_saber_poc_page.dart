@@ -2286,6 +2286,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             children: [
               // ✅ 画布层
                 // 传递当前 UI 选择的背景样式，避免 coreInfo 未同步导致背景显示不一致
+                // ✅ 关键修复：直接传递 _coreInfo.laserStrokes 的引用，而不是复制
+                // 这样当淡出过程中修改 stroke 时，Canvas 能够立即看到变化
                 SaberCoreCanvas(
                   coreInfo: EditorCoreInfo(
                     pages: [page], // ✅ 只传递当前页面
@@ -2293,9 +2295,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                     backgroundPattern: _currentBackgroundPattern,
                     lineHeight: _coreInfo.lineHeight,
                     lineThickness: _coreInfo.lineThickness,
-                  )..laserStrokes.addAll(_coreInfo.laserStrokes),
+                    laserStrokes: _coreInfo.laserStrokes, // ✅ 直接传递引用，不复制！
+                  ),
                   currentStrokeListenable: _currentStrokeNotifier,
-                  repaintListenable: _repaintTick,
+                  // ✅ 关键修复：合并 _repaintTick 和 _laserStrokesNotifier
+                  // 当 _laserStrokesNotifier 变化时，会触发 Widget rebuild，从而创建新的 Painter
+                  // 这样 Canvas 就能看到最新的激光笔笔迹状态
+                  repaintListenable: Listenable.merge([_repaintTick, _laserStrokesNotifier]),
                   selectResult: _selectResult != null &&
                       _selectResult!.pageIndex == pageIndex
                       ? _selectResult
@@ -2716,7 +2722,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
   }
   
-  /// ✅ 启动激光笔淡出动画（参考 Saber 的 fadeOutStroke 逻辑）
+  /// ✅ 启动激光笔淡出动画（完全参考 Saber 的逻辑）
   void _startLaserFadeOut(Stroke laserStroke, {List<Duration>? strokePointDelays}) {
     if (laserStroke.points.isEmpty) {
       return;
@@ -2724,150 +2730,101 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // 标记淡出进行中，抑制保存操作以避免 I/O 干扰渲染
     _isLaserFadeInProgress = true;
     
-    // 如果外部传入了记录的点延迟，优先使用；否则回退到固定延迟模拟
-    final List<Duration> delaysToUse;
-    if (strokePointDelays != null && strokePointDelays.isNotEmpty) {
-      delaysToUse = List<Duration>.from(strokePointDelays);
-    } else {
-      // 归一化为每点固定 50ms 的延迟（第一个点为 0）
-      delaysToUse = <Duration>[];
-      for (int i = 0; i < laserStroke.points.length; i++) {
-        delaysToUse.add(i == 0 ? Duration.zero : const Duration(milliseconds: 50));
-      }
-    }
+    // ✅ 关键修复：完全按照Saber的方式，直接使用记录的延迟
+    // 如果没有记录的延迟（理论上不应该发生），使用空列表也没关系，会直接跳过淡出循环
+    final List<Duration> delaysToUse = strokePointDelays ?? [];
 
-    // 打印用于诊断的延迟信息（临时调试）
+    // 打印用于诊断的延迟信息
     debugPrint('🦋[HandwritingSaber] _startLaserFadeOut: strokePoints=${laserStroke.points.length}, delays=${delaysToUse.map((d) => d.inMilliseconds).toList()}');
 
-    // ✅ 启动淡出动画
-    _fadeOutLaserStroke(
-      stroke: laserStroke,
-      strokePointDelays: delaysToUse,
+    // ✅ 关键修复：使用 unawaited 启动异步淡出动画（参考Saber的实现）
+    // 不使用 await，让淡出动画在后台异步执行
+    unawaited(
+      _fadeOutLaserStroke(
+        stroke: laserStroke,
+        strokePointDelays: delaysToUse,
+      ),
     );
   }
   
-  /// ✅ 淡出激光笔笔迹（参考 Saber 的 fadeOutStroke 方法）
+  /// ✅ 淡出激光笔笔迹（完全参考 Saber 的 fadeOutStroke 方法实现）
   Future<void> _fadeOutLaserStroke({
     required Stroke stroke,
     required List<Duration> strokePointDelays,
   }) async {
-    // ✅ 等待初始延迟（2秒）
+    debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: 开始执行，等待${Duration(seconds: 2).inSeconds}秒...');
+    
+    // ✅ 等待初始延迟（2秒）- 与Saber一致
     const fadeOutDelay = Duration(seconds: 2);
     await Future.delayed(fadeOutDelay);
 
+    debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: 初始延迟结束，开始逐点淡出...');
+    
     // 如果笔迹已被移除，直接返回
-    if (!_laserStrokesNotifier.value.contains(stroke)) return;
-
-    // 归一化每点延迟，避免零延迟导致瞬间消失（调大阈值以确保可见的淡出效果）
-    final minDelay = Duration(milliseconds: 60);
-    final normalizedDelays = <Duration>[];
-    if (strokePointDelays.isEmpty) {
-      // 如果没有记录到点间延迟，使用固定小延迟逐点淡出
-      normalizedDelays.addAll(List.generate(stroke.points.length, (_) => minDelay));
-    } else {
-      for (final d in strokePointDelays) {
-        if (d <= Duration.zero) {
-          normalizedDelays.add(minDelay);
-        } else if (d < minDelay) {
-          normalizedDelays.add(minDelay);
-        } else {
-          normalizedDelays.add(d);
-        }
-      }
-      // 如果记录的延迟少于点数，补齐最小延迟
-      if (normalizedDelays.length < stroke.points.length) {
-        final diff = stroke.points.length - normalizedDelays.length;
-        normalizedDelays.addAll(List.generate(diff, (_) => minDelay));
-      }
-    }
-
-    // 如果笔迹非常长或记录的延迟几乎全为零，使用基于透明度的淡出策略（更稳健且视觉更平滑）
-    final int longStrokeThreshold = 120;
-    final bool delaysMostlyZero = normalizedDelays.where((d) => d > minDelay).length < (normalizedDelays.length * 0.15);
-    if (stroke.points.length > longStrokeThreshold || delaysMostlyZero) {
-    debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: using batch-removal fallback for strokePoints=${stroke.points.length}');
-      // Batch removal strategy: 每个 tick 删除多个点以实现可见且平滑的淡出效果
-      final int totalPoints = stroke.points.length;
-      final int batchCount = math.max(1, totalPoints ~/ 15); // 每次删除的点数（对长笔迹增大以更平滑可见）
-      final Duration stepDelay = const Duration(milliseconds: 120); // 每次删除间隔（放慢以便用户可见）
-
-      final Timer timer = Timer.periodic(stepDelay, (t) async {
-        // 如果笔迹已被外部移除或为空，结束定时器
-        if (!_laserStrokesNotifier.value.contains(stroke) || stroke.points.isEmpty) {
-          t.cancel();
-          _laserFadeOutTimers.remove(stroke);
-          _isLaserFadeInProgress = false;
-          if (_pendingSave) {
-            _pendingSave = false;
-            await _saveToStorage(suppressStatusUpdate: true);
-          }
-          return;
-        }
-
-        // 删除 batchCount 个点
-        for (int k = 0; k < batchCount; k++) {
-          if (stroke.points.isEmpty) break;
-          stroke.popFirstPoint();
-        }
-        // 通知绘制层更新
-        _laserStrokesNotifier.value = List<Stroke>.from(_laserStrokesNotifier.value);
-
-        // 如果已经删除完毕，终止定时器并移除笔迹
-        if (stroke.points.isEmpty) {
-          t.cancel();
-          final int idx = _coreInfo.laserStrokes.indexOf(stroke);
-          if (idx != -1) {
-            _coreInfo.laserStrokes.removeAt(idx);
-            _laserStrokesNotifier.value = List<Stroke>.from(_coreInfo.laserStrokes);
-          }
-          _laserFadeOutTimers.remove(stroke);
-          _isLaserFadeInProgress = false;
-          if (_pendingSave) {
-            _pendingSave = false;
-            await _saveToStorage(suppressStatusUpdate: true);
-          }
-        }
-      });
-
-      _laserFadeOutTimers[stroke] = timer;
+    if (!_laserStrokesNotifier.value.contains(stroke)) {
+      debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: 笔迹已被移除，退出');
       return;
     }
 
-    // 逐点淡出（使用 notifier 驱动局部重绘）
-    for (int i = 0; i < normalizedDelays.length; i++) {
-      final delay = normalizedDelays[i];
-      debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: popIndex=$i delay=${delay.inMilliseconds}ms remainingPoints=${stroke.points.length}');
+    // ✅ 关键修复：完全按照Saber的方式，直接使用记录的延迟，不做任何归一化
+    // Saber的逻辑：按照绘制时的速度淡出，即使延迟为零也照用
+    // 这样可以完美复现用户的绘制速度，实现真实的淡出效果
+    for (int i = 0; i < strokePointDelays.length; i++) {
+      final delay = strokePointDelays[i];
+      
+      // 等待这个点的延迟时间
       await Future.delayed(delay);
 
-      // 如果笔迹已被移除或点数不足，退出
-      if (!_laserStrokesNotifier.value.contains(stroke) || stroke.points.isEmpty) break;
+      // 如果笔迹已被移除或点数不足（<=1），退出循环
+      if (!_laserStrokesNotifier.value.contains(stroke) || stroke.points.length <= 1) {
+        debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: 笔迹已移除或点数<=1，退出循环');
+        break;
+      }
 
       // 删除第一个点并通知绘制层更新
       stroke.popFirstPoint();
       _laserStrokesNotifier.value = List<Stroke>.from(_laserStrokesNotifier.value);
+      
+      // ✅ 关键修复：触发Canvas重绘（通过 _repaintTick）
+      _repaintTick.value++;
+      
+      // 每10个点打印一次进度
+      if (i % 10 == 0) {
+        debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: 进度 $i/${strokePointDelays.length}, 剩余点数=${stroke.points.length}');
+      }
 
-      // 如果用户重新开始绘制（currentStroke 非空），暂停淡出并等待用户停止
+      // ✅ 如果用户重新开始绘制（currentStroke 非空），暂停淡出并等待用户停止
+      // 这是Saber的关键特性：激光笔在用户继续书写时会暂停淡出
       if (_currentStrokeNotifier.value != null) {
         const waitTime = Duration(milliseconds: 100);
+        // 等待用户停止绘制
         while (_currentStrokeNotifier.value != null) {
           await Future.delayed(waitTime);
         }
-        // 等待一段时间再继续淡出，避免与刚结束的绘制冲突
-        await Future.delayed(fadeOutDelay);
+        // 用户停止后，等待正常的延迟时间再继续淡出
+        await Future.delayed(fadeOutDelay - waitTime);
       }
     }
 
-    // 最后删除整个笔迹并更新 notifier、持久化（抑制 UI 状态更新）
+    // 最后删除整个笔迹并更新 notifier
+    debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: 淡出完成，删除笔迹');
     _coreInfo.laserStrokes.remove(stroke);
     _laserStrokesNotifier.value = List<Stroke>.from(_laserStrokesNotifier.value)..remove(stroke);
     _laserFadeOutTimers.remove(stroke);
     _isLaserFadeInProgress = false;
+    
+    // ✅ 关键修复：触发Canvas重绘
+    _repaintTick.value++;
+    
+    // 持久化（抑制 UI 状态更新）
+    debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: 开始持久化...');
     if (_pendingSave) {
       _pendingSave = false;
       await _saveToStorage(suppressStatusUpdate: true);
     } else {
       await _saveToStorage(suppressStatusUpdate: true);
     }
+    debugPrint('🦋[HandwritingSaber] _fadeOutLaserStroke: 淡出流程全部完成');
   }
   
   @override
