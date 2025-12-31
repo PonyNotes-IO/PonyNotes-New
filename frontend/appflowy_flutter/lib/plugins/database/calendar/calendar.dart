@@ -1349,6 +1349,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           setState(() {});
         },
         tabs: [],
+        showShareAndFavorite: true, // 从日历笔记列表打开，显示分享和收藏工具栏
       ),
     );
   }
@@ -1604,6 +1605,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 });
               },
               tabs: [], // 空的tabs列表
+              showShareAndFavorite: true, // 从日历笔记列表打开，显示分享和收藏工具栏
             ),
     );
   }

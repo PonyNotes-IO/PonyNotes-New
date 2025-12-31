@@ -43,6 +43,7 @@ class DocumentPage extends StatefulWidget {
     this.initialSelection,
     this.initialBlockId,
     this.fixedTitle,
+    this.showShareAndFavorite = false, // 是否显示分享和收藏工具栏，默认不显示（工作区打开时不显示）
   });
 
   final ViewPB view;
@@ -51,6 +52,7 @@ class DocumentPage extends StatefulWidget {
   final String? initialBlockId;
   final String? fixedTitle;
   final List<PickerTabType> tabs;
+  final bool showShareAndFavorite; // 是否显示分享和收藏工具栏
 
   @override
   State<DocumentPage> createState() => _DocumentPageState();
@@ -251,6 +253,7 @@ class _DocumentPageState extends State<DocumentPage>
         editorState: state.editorState!,
         child: Column(
           children: [
+            if (widget.showShareAndFavorite)
             _buildTopActionsBar(context),
             // the banner only shows on desktop
             if (state.isDeleted && UniversalPlatform.isDesktop)

@@ -208,13 +208,13 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
                   const HSpace(16),
                 ]
               : [const HSpace(8)],
-          ShareButton(
-            key: ValueKey('share_button_${view.id}'),
+          ViewFavoriteButton(
+            key: ValueKey('favorite_button_${view.id}'),
             view: view,
           ),
           const HSpace(10),
-          ViewFavoriteButton(
-            key: ValueKey('favorite_button_${view.id}'),
+          ShareButton(
+            key: ValueKey('share_button_${view.id}'),
             view: view,
           ),
           const HSpace(4),

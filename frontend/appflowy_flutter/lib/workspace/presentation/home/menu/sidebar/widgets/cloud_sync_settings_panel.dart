@@ -143,10 +143,15 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
           ),
         ),
         const SizedBox(height: 12),
-        FlowyText(
+        Text(
           '开通会员后即可享受云同步功能，数据安全备份，多设备同步',
-          fontSize: 12,
-          color: theme.textColorScheme.secondary,
+          style: TextStyle(
+            fontSize: 12,
+            color: theme.textColorScheme.secondary,
+            height: 1.4, // 行高
+          ),
+          softWrap: true, // 允许换行
+          maxLines: null, // 不限制行数
         ),
         const SizedBox(height: 12),
         SizedBox(

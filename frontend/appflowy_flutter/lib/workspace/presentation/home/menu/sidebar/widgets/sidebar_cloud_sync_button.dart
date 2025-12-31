@@ -1,5 +1,6 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/cloud_sync_settings_panel.dart';
 import 'package:appflowy_backend/log.dart';
@@ -100,6 +101,9 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
 
     if (!mounted) return;
 
+    // 保存原始 context，用于后续打开设置对话框
+    final originalContext = context;
+
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -107,11 +111,11 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
       builder: (BuildContext dialogContext) {
         // 尝试获取 UserWorkspaceBloc，如果存在则监听状态变化
         try {
-          final workspaceBloc = context.read<UserWorkspaceBloc>();
+          final workspaceBloc = originalContext.read<UserWorkspaceBloc>();
           // 使用 BlocBuilder 监听 UserWorkspaceBloc 状态变化，自动更新会员信息
           return BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
             bloc: workspaceBloc,
-            builder: (context, state) {
+            builder: (builderContext, state) {
               // 获取最新的会员信息（优先使用状态中的最新数据）
               final latestSubscriptionInfo = state.workspaceSubscriptionInfo ?? subscriptionInfo;
               final latestCurrentSubscription = state.currentSubscription ?? currentSubscription;
@@ -125,7 +129,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
               Log.info('[云同步弹框] 更新会员信息: subscriptionInfo=${latestSubscriptionInfo?.plan}, currentSubscription=${latestCurrentSubscription?.subscription?.planCode}, status=$latestMembershipStatus');
               
               return _buildDialogContent(
-                dialogContext,
+                originalContext, // 使用原始 context，用于访问 UserWorkspaceBloc
+                dialogContext, // dialog context，用于关闭弹框
                 buttonPosition,
                 buttonSize,
                 latestMembershipStatus,
@@ -142,6 +147,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
             currentSubscription,
           );
           return _buildDialogContent(
+            originalContext, // 使用原始 context
             dialogContext,
             buttonPosition,
             buttonSize,
@@ -155,7 +161,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
   }
 
   Widget _buildDialogContent(
-    BuildContext dialogContext,
+    BuildContext context, // 原始 context，用于访问 UserWorkspaceBloc
+    BuildContext dialogContext, // dialog context，用于关闭弹框
     Offset buttonPosition,
     Size buttonSize,
     CloudSyncMembershipStatus membershipStatus,
@@ -182,15 +189,21 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
                 Navigator.of(dialogContext).pop();
               },
               onUpgrade: () {
+                // 关闭云同步弹框
                 Navigator.of(dialogContext).pop();
-                // 跳转到会员升级页面
+                // 打开设置对话框，并跳转到会员升级页面
                 try {
-                  final settingsBloc = dialogContext.read<SettingsDialogBloc>();
-                  settingsBloc.add(
-                    const SettingsDialogEvent.setSelectedPage(SettingsPage.accountManagement),
+                  // 使用原始 context（不是 dialogContext）来打开设置对话框
+                  final userProfile = context.read<UserWorkspaceBloc>().state.userProfile;
+                  final workspaceBloc = context.read<UserWorkspaceBloc>();
+                  showSettingsDialog(
+                    context,
+                    userProfile,
+                    workspaceBloc,
+                    SettingsPage.accountManagement,
                   );
-                } catch (e) {
-                  Log.warn('无法跳转到会员升级页面: $e');
+                } catch (e, stackTrace) {
+                  Log.error('无法打开设置对话框并跳转到会员升级页面: $e', e, stackTrace);
                 }
               },
             ),
