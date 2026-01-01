@@ -415,6 +415,16 @@ impl UserManager {
       state: AuthStatePB::AuthStateSignIn,
       message: "Sign in success".to_string(),
     });
+
+    // Record sign-in log asynchronously (don't block login flow)
+    // Try to get client from cloud service and record login
+    if let Ok(cloud_service) = self.cloud_service() {
+      if let Ok(user_service) = cloud_service.get_user_service() {
+        // We need to get the client, but UserCloudService doesn't expose it directly
+        // So we'll record the log in the cloud_service_impl.rs sign_in method instead
+      }
+    }
+
     Ok(user_profile)
   }
 

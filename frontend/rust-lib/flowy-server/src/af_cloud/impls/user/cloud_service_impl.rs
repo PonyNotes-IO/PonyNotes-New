@@ -639,6 +639,43 @@ pub async fn user_sign_in_with_url(
   let user_workspaces = to_user_workspaces(workspace_profile.workspaces)?;
   let encryption_type = encryption_type_from_profile(&user_profile);
 
+  // Record sign-in log asynchronously (don't block login flow)
+  let client_clone = client.clone();
+  let user_profile_uid = user_profile.uid;
+  let user_email = user_profile.email.clone();
+  let sign_in_url = params.sign_in_url.clone();
+  tokio::spawn(async move {
+    // Determine provider from email (email or phone) or from sign_in_url
+    let provider = if let Some(email) = &user_email {
+      if email.contains('@') {
+        Some("email".to_string())
+      } else {
+        Some("phone".to_string())
+      }
+    } else {
+      // Try to extract provider from sign_in_url if available
+      if sign_in_url.contains("wechat") {
+        Some("wechat".to_string())
+      } else if sign_in_url.contains("douyin") {
+        Some("douyin".to_string())
+      } else {
+        Some("oauth".to_string())
+      }
+    };
+
+    // Collect client metadata
+    let metadata = serde_json::json!({
+      "user_uid": user_profile_uid,
+      "platform": std::env::consts::OS,
+      "client_type": "desktop",
+    });
+
+    // Record sign-in log (ignore errors to not block login)
+    if let Err(e) = client_clone.record_sign_in_log(provider, true, None, Some(metadata)).await {
+      tracing::warn!("Failed to record sign-in log: {}", e);
+    }
+  });
+
   Ok(AuthResponse {
     user_id: user_profile.uid,
     user_uuid: user_profile.uuid,
