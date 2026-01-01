@@ -114,10 +114,10 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                           children: [
                             Text(
                             dialogSelectedRole == AFRolePB.Owner
-                                ? '工作空间所有者'
+                                  ? '工作空间所有者'
                                 : dialogSelectedRole == AFRolePB.Guest
-                                    ? '受限成员'
-                                    : '成员',
+                                      ? '受限成员'
+                                      : '成员',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                             const SizedBox(width: 8),
@@ -136,14 +136,14 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                         ),
                         const SizedBox(width: 12),
                         ElevatedButton(
-                            onPressed: () {
-                              final value = _inputController.text.trim();
+                          onPressed: () {
+                            final value = _inputController.text.trim();
                               // persist selection to outer state for next time
                               setState(() {
                                 _selectedRole = dialogSelectedRole;
                               });
                               _inviteMemberFromDialog(value, ctx, dialogSelectedRole);
-                            },
+                          },
                           child: Text('邀请'),
                         ),
                       ],
