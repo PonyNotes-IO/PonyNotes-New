@@ -298,21 +298,11 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
           ),
           Expanded(
             flex: 2,
-            child: Row(
-              children: [
-                FlowyText(
-                  '更新时间',
-                  fontSize: 12,
-                  color: Theme.of(context).hintColor,
-                  fontWeight: FontWeight.w500,
-                ),
-                const HSpace(4),
-                Icon(
-                  Icons.keyboard_arrow_down,
-                  size: 16,
-                  color: Theme.of(context).hintColor,
-                ),
-              ],
+            child: FlowyText(
+              '更新时间',
+              fontSize: 12,
+              color: Theme.of(context).hintColor,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -525,7 +515,7 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
   }
 }
 
-class _SpaceRow extends StatelessWidget {
+class _SpaceRow extends StatefulWidget {
   const _SpaceRow({
     required this.space,
     required this.userProfile,
@@ -535,24 +525,48 @@ class _SpaceRow extends StatelessWidget {
   final UserProfilePB userProfile;
 
   @override
-  Widget build(BuildContext context) {
-    final name = space.name;
-    int createdAt = 0;
-    if (space.createTime != null) {
-      if (space.createTime is Int64) {
-        createdAt = (space.createTime as Int64).toInt();
-      } else if (space.createTime is int) {
-        createdAt = space.createTime as int;
-      }
+  State<_SpaceRow> createState() => _SpaceRowState();
+}
+
+class _SpaceRowState extends State<_SpaceRow> {
+  late SpacePermission _selectedPermission;
+  bool _isUpdating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedPermission = widget.space.spacePermission ?? SpacePermission.publicToAll;
+  }
+
+  String _permissionLabel(SpacePermission p) {
+    switch (p) {
+      case SpacePermission.publicToAll:
+        return '开放式';
+      case SpacePermission.closed:
+        return '封闭式';
+      case SpacePermission.private:
+        return '私人';
     }
+  }
+
+  int _normalizeCreateTime(Object? createTime) {
+    if (createTime == null) return 0;
+    if (createTime is Int64) return createTime.toInt();
+    if (createTime is int) return createTime;
+    return 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.space.name;
+    final createdAt = _normalizeCreateTime(widget.space.createTime);
+
     String updateTime;
     if (createdAt == 0) {
       updateTime = '未知';
     } else {
-      // backend may return seconds or milliseconds; normalize to milliseconds
       var ms = createdAt;
       if (ms < 1000000000000) {
-        // looks like seconds -> convert to milliseconds
         ms = ms * 1000;
       }
       final date = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
@@ -603,20 +617,74 @@ class _SpaceRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: FlowyText(
-              userProfile.name.isNotEmpty ? userProfile.name : userProfile.email,
+              widget.userProfile.name.isNotEmpty ? widget.userProfile.name : widget.userProfile.email,
               fontSize: 14,
             ),
           ),
           Expanded(
             flex: 2,
-            child: FlowyText(
-              switch (space.spacePermission) {
-                SpacePermission.publicToAll => '开放式',
-                SpacePermission.closed => '封闭式',
-                SpacePermission.private => '私人',
-                _ => '—',
-              },
-              fontSize: 14,
+            child: Row(
+              children: [
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<SpacePermission>(
+                    isDense: true,
+                    isExpanded: false,
+                    value: _selectedPermission,
+                    items: [
+                      DropdownMenuItem(
+                        value: SpacePermission.publicToAll,
+                        child: FlowyText(_permissionLabel(SpacePermission.publicToAll), fontSize: 14),
+                      ),
+                      DropdownMenuItem(
+                        value: SpacePermission.closed,
+                        child: FlowyText(_permissionLabel(SpacePermission.closed), fontSize: 14),
+                      ),
+                      DropdownMenuItem(
+                        value: SpacePermission.private,
+                        child: FlowyText(_permissionLabel(SpacePermission.private), fontSize: 14),
+                      ),
+                    ],
+                    onChanged: _isUpdating
+                        ? null
+                        : (newPerm) async {
+                            if (newPerm == null) return;
+                            setState(() {
+                              _isUpdating = true;
+                              _selectedPermission = newPerm;
+                            });
+
+                            try {
+                              context.read<SpaceBloc>().add(
+                                    SpaceEvent.update(
+                                      space: widget.space,
+                                      permission: newPerm,
+                                    ),
+                                  );
+                              // optimistic UI; small delay to improve UX
+                              await Future.delayed(const Duration(milliseconds: 200));
+                              showToastNotification(message: '权限已更新');
+                            } catch (e) {
+                              // revert on error
+                              setState(() {
+                                _selectedPermission = widget.space.spacePermission ?? SpacePermission.publicToAll;
+                              });
+                              Log.error('Failed to update space permission: $e');
+                              showToastNotification(message: '更新失败，请重试', type: ToastificationType.error);
+                            } finally {
+                              if (mounted) {
+                                setState(() {
+                                  _isUpdating = false;
+                                });
+                              }
+                            }
+                          },
+                  ),
+                ),
+                if (_isUpdating) ...[
+                  const HSpace(8),
+                  const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                ],
+              ],
             ),
           ),
           Expanded(
