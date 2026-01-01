@@ -545,7 +545,19 @@ class _SpaceRow extends StatelessWidget {
         createdAt = space.createTime as int;
       }
     }
-    final updateTime = createdAt == 0 ? '未知' : DateTime.fromMillisecondsSinceEpoch(createdAt).toLocal().toString().split(' ').first;
+    String updateTime;
+    if (createdAt == 0) {
+      updateTime = '未知';
+    } else {
+      // backend may return seconds or milliseconds; normalize to milliseconds
+      var ms = createdAt;
+      if (ms < 1000000000000) {
+        // looks like seconds -> convert to milliseconds
+        ms = ms * 1000;
+      }
+      final date = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
+      updateTime = DateFormat('yyyy-MM-dd').format(date);
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
