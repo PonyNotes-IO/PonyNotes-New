@@ -520,6 +520,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             pageIndex: pageIdx,
             strokes: [clickedStroke],
             images: [],
+            webViews: [],
             selectionPath: Path(), // 点击选择不需要路径
             selectMode: selectMode,
           );
@@ -538,6 +539,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         pageIndex: pageIdx,
         strokes: [],
         images: [],
+        webViews: [],
         selectionPath: selectMode == SelectMode.lasso 
             ? (Path()..moveTo(position.dx, position.dy))
             : Path(),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../components/canvas/image/pdf_editor_image.dart';
 import '../../components/canvas/image/editor_image.dart';
+import '../../components/canvas/webview/webview_editor_element.dart';
 import '../tools/tool.dart';
 import 'shape_strokes.dart';
 import 'text_box.dart' as saber_text;
@@ -27,12 +28,14 @@ class EditorPage {
     List<Stroke>? strokes,
     this.backgroundImage,  // ✅ PDF 背景图片
     List<EditorImage>? images, // ✅ 普通图片列表（PNG、JPG、SVG等）
+    List<WebViewEditorElement>? webViews, // ✅ WebView列表
     List<saber_text.TextBox>? textBoxes, // ✅ 文本框列表
     List<saber_list.ListBox>? listBoxes, // ✅ 列表框列表
     List<saber_list.TaskListBox>? taskListBoxes, // ✅ 任务列表框列表
     QuillStruct? quill, // ✅ Quill 富文本编辑器结构
   }) : strokes = strokes ?? <Stroke>[],
        images = images ?? <EditorImage>[], // ✅ 初始化图片列表
+       webViews = webViews ?? <WebViewEditorElement>[], // ✅ 初始化WebView列表
        textBoxes = textBoxes ?? <saber_text.TextBox>[],
        listBoxes = listBoxes ?? <saber_list.ListBox>[],
        taskListBoxes = taskListBoxes ?? <saber_list.TaskListBox>[],
@@ -42,6 +45,7 @@ class EditorPage {
   final List<Stroke> strokes;
   final PdfEditorImage? backgroundImage;  // ✅ PDF 背景图片
   final List<EditorImage> images; // ✅ 普通图片列表
+  final List<WebViewEditorElement> webViews; // ✅ WebView列表
   final List<saber_text.TextBox> textBoxes; // ✅ 文本框列表
   final List<saber_list.ListBox> listBoxes; // ✅ 列表框列表
   final List<saber_list.TaskListBox> taskListBoxes; // ✅ 任务列表框列表
@@ -53,6 +57,8 @@ class EditorPage {
       'height': size.height,
       'strokes': strokes.map((Stroke s) => s.toJson()).toList(),
       'images': images.map((EditorImage img) => img.toJson()).toList(), // ✅ 保存图片列表
+      if (webViews.isNotEmpty)
+        'webViews': webViews.map((WebViewEditorElement wv) => wv.toJson()).toList(), // ✅ 保存WebView列表
       'textBoxes': textBoxes.map((saber_text.TextBox t) => t.toJson()).toList(), // ✅ 保存文本框列表
       'listBoxes': listBoxes.map((saber_list.ListBox l) => l.toJson()).toList(), // ✅ 保存列表框列表
       'taskListBoxes': taskListBoxes.map((saber_list.TaskListBox t) => t.toJson()).toList(), // ✅ 保存任务列表框列表
@@ -79,11 +85,12 @@ class EditorPage {
     };
   }
 
-  factory EditorPage.fromJson(Map<String, dynamic> json) {
+  factory EditorPage.fromJson(Map<String, dynamic> json, {String? sbnPath}) {
     final double width = (json['width'] as num?)?.toDouble() ?? defaultWidth;  // ✅ 使用默认宽度而不是0
     final double height = (json['height'] as num?)?.toDouble() ?? defaultHeight;  // ✅ 使用默认高度而不是0
     final List<dynamic> strokeList = json['strokes'] as List<dynamic>? ?? <dynamic>[];
     final List<dynamic> imageList = json['images'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取图片列表
+    final List<dynamic> webViewList = json['webViews'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取WebView列表
     final List<dynamic> textBoxList = json['textBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取文本框列表
     final List<dynamic> listBoxList = json['listBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取列表框列表
     final List<dynamic> taskListBoxList = json['taskListBoxes'] as List<dynamic>? ?? <dynamic>[]; // ✅ 读取任务列表框列表
@@ -160,6 +167,10 @@ class EditorPage {
           .whereType<Map<String, dynamic>>()
           .map((json) => EditorImage.fromJson(json))
           .toList(), // ✅ 设置图片列表
+      webViews: webViewList
+          .whereType<Map<String, dynamic>>()
+          .map((json) => WebViewEditorElement.fromJson(json, sbnPath: sbnPath ?? ''))
+          .toList(), // ✅ 设置WebView列表
       textBoxes: textBoxList
           .whereType<Map<String, dynamic>>()
           .map((json) => saber_text.TextBox.fromJson(json))
@@ -282,6 +293,7 @@ class EditorPageNotifier extends ChangeNotifier {
       strokes: newStrokes,
       backgroundImage: _page.backgroundImage,
       images: _page.images,
+      webViews: _page.webViews,
       textBoxes: _page.textBoxes,
       listBoxes: _page.listBoxes,
       taskListBoxes: _page.taskListBoxes,
