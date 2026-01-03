@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy_backend/log.dart';
 
 import '../../third_party/saber_core/components/canvas/webview/webview_editor_element.dart';
+
+// 全局InAppWebView实例计数器，确保每个InAppWebView的PlatformView ID全局唯一
+int _globalCanvasWebViewInstanceCounter = 0;
 
 /// WebView在画布上的渲染组件
 /// 支持拖拽、缩放和交互
@@ -54,6 +58,7 @@ class _CanvasWebViewWidgetState extends State<CanvasWebViewWidget> {
   bool _isLoading = true;
   String? _loadingError;
   bool _hasCachedContent = false;
+  late final int _webViewInstanceId; // 每个InAppWebView的全局唯一ID
 
   /// 拖拽相关
   Offset? _dragStartOffset;
@@ -67,6 +72,10 @@ class _CanvasWebViewWidgetState extends State<CanvasWebViewWidget> {
   @override
   void initState() {
     super.initState();
+    // 生成全局唯一的InAppWebView实例ID
+    _globalCanvasWebViewInstanceCounter++;
+    _webViewInstanceId = _globalCanvasWebViewInstanceCounter;
+    Log.debug('🌐 [CanvasWebViewWidget] Created with global instance ID: $_webViewInstanceId, webView.id: ${widget.webView.id}');
     _loadWebView();
   }
 
@@ -185,9 +194,13 @@ class _CanvasWebViewWidgetState extends State<CanvasWebViewWidget> {
     final newRect = _initialRect!.shift(delta);
 
     // 确保不超出画布边界
+    // 计算上限，确保不小于下限（0.0）
+    final maxLeft = math.max(0.0, widget.pageSize.width - newRect.width);
+    final maxTop = math.max(0.0, widget.pageSize.height - newRect.height);
+    
     final constrainedRect = Rect.fromLTWH(
-      newRect.left.clamp(0.0, widget.pageSize.width - newRect.width),
-      newRect.top.clamp(0.0, widget.pageSize.height - newRect.height),
+      newRect.left.clamp(0.0, maxLeft),
+      newRect.top.clamp(0.0, maxTop),
       newRect.width,
       newRect.height,
     );
@@ -419,6 +432,12 @@ class _CanvasWebViewWidgetState extends State<CanvasWebViewWidget> {
     return Stack(
       children: [
         InAppWebView(
+          // ✅ 关键修复：InAppWebView（PlatformView）必须有全局唯一的key
+          // 原因：InAppWebView底层使用PlatformView与原生代码通信
+          // 问题：如果没有唯一key，Flutter可能会错误地复用或重复创建PlatformView
+          // 解决：使用全局唯一的实例ID确保每个InAppWebView的key绝对唯一
+          // 格式：webView.id（业务标识） + 全局递增ID（确保唯一性）
+          key: ValueKey('canvas_webview_${widget.webView.id}_global_$_webViewInstanceId'),
           initialUrlRequest: URLRequest(url: WebUri(widget.webView.url)),
           initialSettings: InAppWebViewSettings(
             javaScriptEnabled: true,

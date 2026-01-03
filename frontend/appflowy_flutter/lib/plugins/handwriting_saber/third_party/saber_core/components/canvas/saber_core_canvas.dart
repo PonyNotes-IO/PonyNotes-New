@@ -92,6 +92,7 @@ class SaberCoreCanvas extends StatelessWidget {
     this.repaintListenable,
     this.selectResult, // ✅ 选择结果
     this.isSelecting = false, // ✅ 是否正在选择
+    this.pdfTextSelectionRect, // ✅ PDF文本选择区域
   });
 
   final EditorCoreInfo coreInfo;
@@ -103,6 +104,7 @@ class SaberCoreCanvas extends StatelessWidget {
   final Listenable? repaintListenable;
   final SelectResult? selectResult; // ✅ 选择结果
   final bool isSelecting; // ✅ 是否正在选择
+  final Rect? pdfTextSelectionRect; // ✅ PDF文本选择区域
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +153,7 @@ class SaberCoreCanvas extends StatelessWidget {
                 currentScale: scale,
                 selectResult: selectResult,
                 isSelecting: isSelecting,
+                pdfTextSelectionRect: pdfTextSelectionRect,
                 repaint: repaintListenable ?? currentStrokeListenable,
               ),
               size: Size(constraints.maxWidth, constraints.maxHeight),
@@ -171,6 +174,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     this.currentScale = 1.0,  // ✅ 添加缩放级别，用于判断是否使用铅笔 shader
     this.selectResult, // ✅ 选择结果
     this.isSelecting = false, // ✅ 是否正在选择
+    this.pdfTextSelectionRect, // ✅ PDF文本选择区域
     Listenable? repaint,
   }) : super(repaint: repaint);
 
@@ -182,6 +186,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
   // 激光笔笔迹列表（不再作为独立字段，直接从 coreInfo 使用）
   final SelectResult? selectResult; // ✅ 选择结果
   final bool isSelecting; // ✅ 是否正在选择
+  final Rect? pdfTextSelectionRect; // ✅ PDF文本选择区域
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -291,6 +296,11 @@ class _SaberCoreCanvasPainter extends CustomPainter {
       // ✅ 检查是否是当前页面（通过比较页面大小或使用第一个页面）
       // 由于我们只传递了当前页面，所以直接绘制
       _drawSelection(canvas, selectResult!, scale, offsetX, offsetY, isSelecting);
+    }
+    
+    // ✅ 绘制PDF文本选择区域
+    if (pdfTextSelectionRect != null) {
+      _drawPdfTextSelection(canvas, pdfTextSelectionRect!, scale, offsetX, offsetY);
     }
     
     // 恢复画布状态
@@ -1150,6 +1160,28 @@ class _SaberCoreCanvasPainter extends CustomPainter {
         canvas.drawRect(boundingBox.inflate(4.0 / scale), fillPaint);
       }
     }
+    
+    canvas.restore();
+  }
+
+  /// ✅ 绘制PDF文本选择区域
+  void _drawPdfTextSelection(Canvas canvas, Rect selectionRect, double scale, double offsetX, double offsetY) {
+    canvas.save();
+    canvas.translate(offsetX, offsetY);
+    canvas.scale(scale);
+    
+    // 绘制选择矩形（虚线边框 + 半透明填充）
+    final dashPaint = Paint()
+      ..color = const Color(0xFF4CAF50) // 使用绿色区分PDF文本选择
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0 / scale;
+    
+    final fillPaint = Paint()
+      ..color = const Color(0xFF4CAF50).withValues(alpha: 0.15)
+      ..style = PaintingStyle.fill;
+    
+    canvas.drawRect(selectionRect, fillPaint);
+    canvas.drawRect(selectionRect, dashPaint);
     
     canvas.restore();
   }

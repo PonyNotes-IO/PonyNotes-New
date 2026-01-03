@@ -17,6 +17,7 @@ yarn.lock
 node_modules
 **/.proto_cache
 **/.cache
+**/*.cache
 **/.DS_Store
 
 **/resources/proto

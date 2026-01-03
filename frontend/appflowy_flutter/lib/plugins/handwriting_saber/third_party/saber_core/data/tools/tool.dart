@@ -46,6 +46,8 @@ enum ToolId {
   orderedList,   // ✅ 有序列表
   unorderedList, // ✅ 无序列表
   taskList,      // ✅ 任务列表
+  // ✅ PDF文本选择工具
+  pdfTextSelect, // ✅ PDF文本选择工具
 }
 
 /// 基础工具抽象类
@@ -127,6 +129,38 @@ class SelectTool extends Tool {
     SelectMode? selectMode,
   }) {
     return SelectTool(
+      selectMode: selectMode ?? this.selectMode,
+    );
+  }
+}
+
+/// ✅ PDF文本选择模式枚举
+enum PdfTextSelectMode {
+  linear,    // 线性文本选择（沿着文本行选择）
+  rectangle, // 矩形文本选择（在矩形区域内选择）
+}
+
+/// ✅ PDF文本选择工具
+class PdfTextSelectTool extends Tool {
+  const PdfTextSelectTool({
+    this.selectMode = PdfTextSelectMode.rectangle,
+  });
+
+  /// 选择模式
+  final PdfTextSelectMode selectMode;
+
+  @override
+  ToolId get toolId => ToolId.pdfTextSelect;
+  @override
+  Color get color => Colors.transparent; // PDF文本选择工具不绘制颜色
+  @override
+  double get strokeWidth => 0; // PDF文本选择工具不需要笔迹宽度
+  
+  /// 创建新的PDF文本选择工具实例
+  PdfTextSelectTool copyWith({
+    PdfTextSelectMode? selectMode,
+  }) {
+    return PdfTextSelectTool(
       selectMode: selectMode ?? this.selectMode,
     );
   }

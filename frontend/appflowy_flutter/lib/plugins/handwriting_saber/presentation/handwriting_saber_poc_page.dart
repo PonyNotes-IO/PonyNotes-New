@@ -26,6 +26,11 @@ import '../third_party/saber_core/data/tools/select_result.dart';
 import '../third_party/saber_core/data/tools/tool.dart';
 import 'handwriting_saber_toolbar.dart';
 import 'widgets/canvas_image_widget.dart';
+import '../third_party/saber_core/components/canvas/webview/webview_editor_element.dart';
+import 'widgets/canvas_webview_widget.dart';
+import 'dialogs/insert_webview_dialog.dart';
+import '../widgets/pdf_text_selection_dialog.dart';
+import '../services/pdf_text_extraction_service.dart';
 import '../../../util/log_utils.dart';
 
 /// PoC 页面：暂时只展示占位 UI，并在本地创建一个占位的 .sbn2 文件。
@@ -94,6 +99,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 选择工具状态
   SelectResult? _selectResult;
+  
+  /// ✅ PDF文本选择状态
+  Rect? _pdfTextSelectionRect;
+  Offset? _pdfTextSelectionStart;
+  int? _pdfTextSelectionPageIndex;
   bool _isSelecting = false; // 是否正在选择（拖拽选择区域）
   Offset? _selectStartPosition; // 选择开始位置
   
@@ -110,6 +120,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   
   /// ✅ 文本框编辑控制器
   final Map<String, TextEditingController> _textBoxControllers = {};
+  
+  /// ✅ 当前视图的.sbn2文件路径（缓存，避免重复获取）
+  String? _cachedSbnFilePath;
   
   // ✅ 移除有问题的页面缓存机制
   // 原因：缓存判断条件（仅检查页面数量）不够准确，导致数据更新后界面不刷新
@@ -183,6 +196,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _selectResult = null;
     _selectStartPosition = null;
     _isSelecting = false;
+    // 清理缓存的文件路径
+    _cachedSbnFilePath = null;
     // 清理文本框控制器
     for (final controller in _textBoxControllers.values) {
       controller.dispose();
@@ -238,14 +253,18 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// - 仅在 PoC 阶段使用 JSON 存储，后续会替换为真正的 .sbn2 二进制。
   Future<void> _initLocalData() async {
     debugPrint('🦋🦋🦋 [HandwritingSaber] ===== _initLocalData START =====');
-    debugPrint('🦋🦋🦋 [HandwritingSaber] ViewID: ${widget.view.id}');
-    debugPrint('🦋🦋🦋 [HandwritingSaber] ViewName: ${widget.view.name}');
-    try {
-      // 1. 打开或创建手写笔记数据文件（通过统一数据服务）
-      await _dataService.openHandwritingSaber(viewId: widget.view.id);
+      debugPrint('🦋🦋🦋 [HandwritingSaber] ViewID: ${widget.view.id}');
+      debugPrint('🦋🦋🦋 [HandwritingSaber] ViewName: ${widget.view.name}');
+      try {
+        // 1. 打开或创建手写笔记数据文件（通过统一数据服务）
+        await _dataService.openHandwritingSaber(viewId: widget.view.id);
+        
+        // 1.1 获取并缓存.sbn2文件路径（用于WebView缓存）
+        _cachedSbnFilePath = await _dataService.getHandwritingSaberFilePathForDebug(widget.view.id);
+        debugPrint('🦋🦋🦋 [HandwritingSaber] SBN文件路径: $_cachedSbnFilePath');
 
-      // 2. 加载已有数据（PoC 阶段按 JSON 文本解析）
-      await _loadFromStorage();
+        // 2. 加载已有数据（PoC 阶段按 JSON 文本解析）
+        await _loadFromStorage();
       
       debugPrint('🦋🦋🦋 [HandwritingSaber] _initLocalData: Data loaded, pages=${_coreInfo.pages.length}');
 
@@ -439,6 +458,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // ✅ 如果是选择工具，开始选择
     if (_currentToolNotifier.value.toolId == ToolId.select) {
       _startSelection(position, pageIndex: _currentPageIndex);
+      return;
+    }
+    
+    // ✅ 如果是PDF文本选择工具，开始PDF文本选择
+    if (_currentToolNotifier.value.toolId == ToolId.pdfTextSelect) {
+      _startPdfTextSelection(position, pageIndex: _currentPageIndex);
       return;
     }
     
@@ -822,6 +847,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // ✅ 如果是选择工具，更新选择
     if (_currentToolNotifier.value.toolId == ToolId.select) {
       _updateSelection(position);
+      return;
+    }
+    
+    // ✅ 如果是PDF文本选择工具，更新PDF文本选择
+    if (_currentToolNotifier.value.toolId == ToolId.pdfTextSelect) {
+      _updatePdfTextSelection(position);
       return;
     }
     
@@ -1813,6 +1844,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
 
   Future<void> _endStroke() async {
+    // ✅ 如果是PDF文本选择工具，结束PDF文本选择
+    if (_currentToolNotifier.value.toolId == ToolId.pdfTextSelect) {
+      await _endPdfTextSelection();
+      return;
+    }
     debugPrint('✍️✍️✍️ [HandwritingSaber] ===== _endStroke START =====');
     
     // ✅ 如果是选择工具，结束选择
@@ -2311,6 +2347,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                   isSelecting: _isSelecting &&
                       _selectResult != null &&
                       _selectResult!.pageIndex == pageIndex,
+                  pdfTextSelectionRect: _pdfTextSelectionRect != null &&
+                      _pdfTextSelectionPageIndex == pageIndex
+                          ? _pdfTextSelectionRect
+                          : null,
                 ),
                 // debug: 输出当前页面与背景信息（使用受控日志，默认静默）
                 Builder(builder: (context) {
@@ -2324,6 +2364,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                   pageIndex,
                   pageDisplayWidth,
                   pageDisplayHeight,
+                  scale,
+                )),
+              // ✅ WebView层（在图片和文本框之间）
+              if (page.webViews.isNotEmpty)
+                ...page.webViews.map((webView) => _buildWebViewWidget(
+                  webView,
+                  pageIndex,
                   scale,
                 )),
               // ✅ 文本框编辑层（直接在画布上编辑，使用ValueListenableBuilder避免全局重建）
@@ -2439,6 +2486,25 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           },
         );
       },
+    );
+  }
+  
+  /// ✅ 构建WebView Widget
+  Widget _buildWebViewWidget(
+    WebViewEditorElement webView,
+    int pageIndex,
+    double scale,
+  ) {
+    return CanvasWebViewWidget(
+      key: ValueKey('webview_${webView.id}'),
+      filePath: _cachedSbnFilePath ?? widget.view.id, // ✅ 使用完整的.sbn2文件路径，而不是viewId
+      webView: webView,
+      pageSize: _coreInfo.pages[pageIndex].size,
+      readOnly: false,
+      selected: _selectResult?.webViews.contains(webView) ?? false,
+      onTap: () => _selectWebView(webView),
+      onDelete: () => _deleteWebView(webView, pageIndex),
+      onRefresh: () => _refreshWebView(webView),
     );
   }
   
@@ -2724,6 +2790,201 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
   }
   
+  /// ✅ 提取PDF文本
+  Future<void> _extractPdfText() async {
+    try {
+      // 查找当前页面或第一个有PDF背景的页面
+      int targetPageIndex = _currentPageIndex ?? 0;
+      if (targetPageIndex >= _coreInfo.pages.length) {
+        targetPageIndex = 0;
+      }
+      
+      // 尝试找到第一个有PDF背景的页面
+      PdfEditorImage? pdfImage;
+      for (int i = 0; i < _coreInfo.pages.length; i++) {
+        final page = _coreInfo.pages[i];
+        if (page.backgroundImage != null && page.backgroundImage is PdfEditorImage) {
+          pdfImage = page.backgroundImage as PdfEditorImage;
+          break;
+        }
+      }
+      
+      if (pdfImage == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('当前没有PDF页面')),
+          );
+        }
+        return;
+      }
+      
+      // 打开PDF文本选择对话框
+      if (mounted) {
+        await PdfTextSelectionDialog.show(
+          context: context,
+          pdfFilePath: pdfImage.pdfFilePath,
+          pageIndex: pdfImage.pdfPageIndex,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ [HandwritingSaberPocPage] 提取PDF文本失败：$e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('提取PDF文本失败：$e')),
+        );
+      }
+    }
+  }
+  
+  /// ✅ 插入网页
+  Future<void> _insertWebView() async {
+    try {
+      // 显示输入对话框
+      final result = await showInsertWebViewDialog(context);
+      if (result == null) return;
+      
+      // 获取当前页面
+      final currentPageIndex = 0;
+      if (currentPageIndex >= _coreInfo.pages.length) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('没有可用的页面')),
+          );
+        }
+        return;
+      }
+      
+      final page = _coreInfo.pages[currentPageIndex];
+      
+      // 生成唯一ID
+      final webViewId = _getNextWebViewId();
+      
+      // 创建WebView元素
+      final webView = WebViewEditorElement(
+        id: webViewId,
+        url: result.url,
+        title: result.title,
+        isInteractive: result.isInteractive,
+        pageIndex: currentPageIndex,
+        pageSize: page.size,
+        dstRect: const Rect.fromLTWH(100, 100, 600, 400), // 默认位置和大小
+      );
+      
+      // 添加到页面
+      page.webViews.add(webView);
+      
+      // 记录到历史
+      _history.recordChange(EditorHistoryItem.draw(
+        pageIndex: currentPageIndex,
+        strokes: [],
+      ));
+      _updateUndoRedoState();
+      
+      // 更新UI
+      setState(() {});
+      
+      // 保存
+      _scheduleSave();
+      
+      // 显示提示
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('网页已插入')),
+        );
+      }
+    } catch (e) {
+      debugPrint('插入网页失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('插入网页失败: $e')),
+        );
+      }
+    }
+  }
+
+  /// ✅ 获取下一个WebView ID
+  int _getNextWebViewId() {
+    int maxId = 0;
+    for (final page in _coreInfo.pages) {
+      for (final webView in page.webViews) {
+        if (webView.id > maxId) {
+          maxId = webView.id;
+        }
+      }
+    }
+    return maxId + 1;
+  }
+
+  /// ✅ 选中WebView
+  void _selectWebView(WebViewEditorElement webView) {
+    setState(() {
+      _selectResult = SelectResult(
+        pageIndex: webView.pageIndex,
+        strokes: [],
+        images: [],
+        webViews: [webView],
+        selectionPath: Path(),
+      );
+    });
+  }
+
+  /// ✅ 删除WebView
+  void _deleteWebView(WebViewEditorElement webView, int pageIndex) {
+    if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) return;
+    
+    final page = _coreInfo.pages[pageIndex];
+    page.webViews.remove(webView);
+    
+    // 清除选中状态
+    if (_selectResult?.webViews.contains(webView) ?? false) {
+      setState(() {
+        _selectResult = SelectResult(
+          pageIndex: pageIndex,
+          strokes: [],
+          images: [],
+          webViews: [],
+          selectionPath: Path(),
+        );
+      });
+    }
+    
+    // 清除缓存
+    final sbnPath = _cachedSbnFilePath ?? widget.view.id; // ✅ 使用完整的.sbn2文件路径
+    webView.clearCache(sbnPath);
+    
+    // 记录历史
+    _history.recordChange(EditorHistoryItem.erase(
+      pageIndex: pageIndex,
+      deletedStrokes: [],
+    ));
+    _updateUndoRedoState();
+    
+    // 更新UI
+    setState(() {});
+    
+    // 保存
+    _scheduleSave();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('网页已删除')),
+      );
+    }
+  }
+
+  /// ✅ 刷新WebView缓存
+  Future<void> _refreshWebView(WebViewEditorElement webView) async {
+    final sbnPath = _cachedSbnFilePath ?? widget.view.id; // ✅ 使用完整的.sbn2文件路径
+    await webView.clearCache(sbnPath);
+    setState(() {}); // 触发重新加载
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('网页缓存已清除，重新加载中...')),
+      );
+    }
+  }
+  
   /// ✅ 启动激光笔淡出动画（完全参考 Saber 的逻辑）
   void _startLaserFadeOut(Stroke laserStroke, {List<Duration>? strokePointDelays}) {
     if (laserStroke.points.isEmpty) {
@@ -2953,6 +3214,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                     onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
                                     onImportPdf: _importPdf,  // ✅ PDF 导入回调
                                     onImportImage: _importImage, // ✅ 图片导入回调
+                                    onInsertWebView: _insertWebView, // ✅ 网页嵌入回调
+                                    onExtractPdfText: _extractPdfText, // ✅ PDF文本提取回调
                                     canUndo: canUndo, // ✅ 撤销按钮状态
                                     canRedo: canRedo, // ✅ 恢复按钮状态
                                     onUndo: _undo, // ✅ 撤销回调
@@ -3052,6 +3315,147 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         ],
       ),
     );
+  }
+  
+  /// ✅ 开始PDF文本选择
+  void _startPdfTextSelection(Offset position, {int? pageIndex}) {
+    final pageIdx = pageIndex ?? 0;
+    
+    // 检查当前页面是否有PDF背景
+    if (pageIdx >= _coreInfo.pages.length) {
+      return;
+    }
+    
+    final page = _coreInfo.pages[pageIdx];
+    if (page.backgroundImage == null || !(page.backgroundImage is PdfEditorImage)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('当前页面没有PDF背景')),
+        );
+      }
+      return;
+    }
+    
+    _pdfTextSelectionStart = position;
+    _pdfTextSelectionPageIndex = pageIdx;
+    _pdfTextSelectionRect = null;
+    
+    debugPrint('🦋[HandwritingSaber] 开始PDF文本选择: position=$position, pageIndex=$pageIdx');
+  }
+  
+  /// ✅ 更新PDF文本选择
+  void _updatePdfTextSelection(Offset position) {
+    if (_pdfTextSelectionStart == null || _pdfTextSelectionPageIndex == null) {
+      return;
+    }
+    
+    // 计算选择矩形
+    final start = _pdfTextSelectionStart!;
+    _pdfTextSelectionRect = Rect.fromPoints(start, position);
+    
+    // 触发页面重绘以显示选择区域
+    final pageIdx = _pdfTextSelectionPageIndex!;
+    if (pageIdx < _pageNotifiers.length) {
+      _pageNotifiers[pageIdx].updatePage(_coreInfo.pages[pageIdx]);
+    }
+  }
+  
+  /// ✅ 结束PDF文本选择并提取文本
+  Future<void> _endPdfTextSelection() async {
+    if (_pdfTextSelectionStart == null || 
+        _pdfTextSelectionPageIndex == null || 
+        _pdfTextSelectionRect == null) {
+      _pdfTextSelectionStart = null;
+      _pdfTextSelectionPageIndex = null;
+      _pdfTextSelectionRect = null;
+      return;
+    }
+    
+    final pageIdx = _pdfTextSelectionPageIndex!;
+    if (pageIdx >= _coreInfo.pages.length) {
+      _pdfTextSelectionStart = null;
+      _pdfTextSelectionPageIndex = null;
+      _pdfTextSelectionRect = null;
+      return;
+    }
+    
+    final page = _coreInfo.pages[pageIdx];
+    if (page.backgroundImage == null || !(page.backgroundImage is PdfEditorImage)) {
+      _pdfTextSelectionStart = null;
+      _pdfTextSelectionPageIndex = null;
+      _pdfTextSelectionRect = null;
+      return;
+    }
+    
+    final pdfImage = page.backgroundImage as PdfEditorImage;
+    final selectionRect = _pdfTextSelectionRect!;
+    
+    // 检查选择区域是否足够大
+    if (selectionRect.width < 5 || selectionRect.height < 5) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('选择区域太小')),
+        );
+      }
+      _pdfTextSelectionStart = null;
+      _pdfTextSelectionPageIndex = null;
+      _pdfTextSelectionRect = null;
+      return;
+    }
+    
+    try {
+      // 获取PDF在画布上的显示区域
+      // 注意：这里需要根据实际的PDF渲染位置来计算
+      // 简化实现：假设PDF占满整个页面
+      final pageSize = page.size;
+      final pdfRect = pdfImage.dstRect ?? Rect.fromLTWH(0, 0, pageSize.width, pageSize.height);
+      
+      // 提取文本
+      final extractedText = await PdfTextExtractionService.extractTextFromRegionFromFile(
+        filePath: pdfImage.pdfFilePath,
+        pageIndex: pdfImage.pdfPageIndex,
+        canvasRect: selectionRect,
+        pdfRect: pdfRect,
+        pageSize: pdfImage.naturalSize,
+      );
+      
+      if (extractedText.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('选择的区域没有文本')),
+          );
+        }
+      } else {
+        // 复制到剪贴板
+        await Clipboard.setData(ClipboardData(text: extractedText));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('已复制 ${extractedText.length} 个字符到剪贴板'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        debugPrint('🦋[HandwritingSaber] PDF文本已复制到剪贴板: ${extractedText.length} 个字符');
+      }
+    } catch (e) {
+      debugPrint('❌ [HandwritingSaber] 提取PDF文本失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('提取PDF文本失败: $e')),
+        );
+      }
+    } finally {
+      // 清除选择状态
+      _pdfTextSelectionStart = null;
+      _pdfTextSelectionPageIndex = null;
+      _pdfTextSelectionRect = null;
+      
+      // 触发页面重绘以清除选择区域
+      if (pageIdx < _pageNotifiers.length) {
+        _pageNotifiers[pageIdx].updatePage(_coreInfo.pages[pageIdx]);
+      }
+    }
   }
 }
 

@@ -26,6 +26,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.onFillColorChanged, // ✅ 填充颜色改变回调（可选）
     this.onImportPdf,  // ✅ PDF 导入回调（可选）
     this.onImportImage, // ✅ 图片导入回调（可选）
+    this.onInsertWebView, // ✅ 网页嵌入回调（可选）
+    this.onExtractPdfText, // ✅ PDF文本提取回调（可选）
     this.canUndo = false, // ✅ 是否可以撤销
     this.canRedo = false, // ✅ 是否可以恢复
     this.onUndo, // ✅ 撤销回调（可选）
@@ -51,6 +53,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final ValueChanged<Color?>? onFillColorChanged; // ✅ 填充颜色改变回调
   final VoidCallback? onImportPdf;  // ✅ PDF 导入回调
   final VoidCallback? onImportImage;  // ✅ 图片导入回调
+  final VoidCallback? onInsertWebView;  // ✅ 网页嵌入回调
+  final VoidCallback? onExtractPdfText;  // ✅ PDF文本提取回调
   final bool canUndo; // ✅ 是否可以撤销
   final bool canRedo; // ✅ 是否可以恢复
   final VoidCallback? onUndo; // ✅ 撤销回调
@@ -187,6 +191,39 @@ class HandwritingSaberToolbar extends StatelessWidget {
               child: IconButton(
                 icon: const Icon(FontAwesomeIcons.filePdf, size: 20),
                 onPressed: onImportPdf,
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                ),
+              ),
+            ),
+          // ✅ PDF文本选择工具下拉按钮（替代原有的PDF文本提取按钮）
+          if (onExtractPdfText != null)
+            ToolDropdownButton(
+              currentTool: currentTool,
+              mainTool: const PdfTextSelectTool(selectMode: PdfTextSelectMode.rectangle),
+              options: [
+                ToolOption(
+                  icon: FontAwesomeIcons.rectangleList,
+                  label: '矩形选择',
+                  tool: const PdfTextSelectTool(selectMode: PdfTextSelectMode.rectangle),
+                ),
+                ToolOption(
+                  icon: FontAwesomeIcons.textWidth,
+                  label: '线性选择',
+                  tool: const PdfTextSelectTool(selectMode: PdfTextSelectMode.linear),
+                ),
+              ],
+              onToolChanged: onToolChanged,
+            ),
+          // ✅ 网页嵌入按钮
+          if (onInsertWebView != null)
+            Tooltip(
+              message: '嵌入网页',
+              child: IconButton(
+                icon: const Icon(FontAwesomeIcons.globe, size: 20),
+                onPressed: onInsertWebView,
                 padding: const EdgeInsets.all(8),
                 constraints: const BoxConstraints(
                   minWidth: 40,
