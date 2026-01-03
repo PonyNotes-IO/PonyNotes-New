@@ -478,13 +478,16 @@ class _CreateWorkspaceButton extends StatelessWidget {
           }
           
           // 智能选择工作空间类型：
-          // 1. 如果用户是本地认证类型，创建本地工作空间
-          // 2. 如果用户是服务器认证类型，优先创建本地工作空间（桌面端常用场景）
+          // 1. 默认创建 ServerW 类型的工作区（cloud 保存），与 AppFlowy 的默认行为一致
+          // 2. 如果云同步开启，创建服务器工作空间（会同步到服务端）
+          // 3. 如果云同步关闭，创建本地工作空间（不同步到服务端）
+          // 4. 如果用户是本地认证类型，强制创建本地工作空间
+          final isCloudSyncEnabled = workspaceBloc.state.isCloudSyncEnabled;
           final workspaceType = userProfile.userAuthType == AuthTypePB.Local 
               ? WorkspaceTypePB.LocalW 
-              : WorkspaceTypePB.LocalW; // 桌面端默认创建本地工作空间
+              : WorkspaceTypePB.ServerW; // 默认创建 ServerW 类型（cloud 保存），与 AppFlowy 的默认行为一致
           
-          Log.info('Creating workspace: name="$name", type=$workspaceType');
+          Log.info('Creating workspace: name="$name", type=$workspaceType, isCloudSyncEnabled=$isCloudSyncEnabled');
           
           // DEBUG BREAKPOINT 4: 即将发送创建工作空间事件
           Log.info('=== DEBUG BREAKPOINT 4 === 即将发送创建工作空间事件到 BLoC');
@@ -539,11 +542,12 @@ class _CreateWorkspaceButton extends StatelessWidget {
                   
                   final workspaceBloc = context.read<UserWorkspaceBloc>();
                   final userProfile = workspaceBloc.state.userProfile;
+                  final isCloudSyncEnabled = workspaceBloc.state.isCloudSyncEnabled;
                   final workspaceType = userProfile.userAuthType == AuthTypePB.Local 
                       ? WorkspaceTypePB.LocalW 
-                      : WorkspaceTypePB.LocalW;
+                      : WorkspaceTypePB.ServerW; // 默认创建 ServerW 类型（cloud 保存），与 AppFlowy 的默认行为一致
                   
-                  Log.info('Creating workspace via fallback: name="$name", type=$workspaceType');
+                  Log.info('Creating workspace via fallback: name="$name", type=$workspaceType, isCloudSyncEnabled=$isCloudSyncEnabled');
                   
                   workspaceBloc.add(
                     UserWorkspaceEvent.createWorkspace(

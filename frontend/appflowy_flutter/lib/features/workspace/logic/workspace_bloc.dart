@@ -16,6 +16,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:bloc/bloc.dart';
 import 'package:collection/collection.dart';
@@ -64,6 +65,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     on<WorkspaceEventEmitCurrentWorkspace>(_onEmitCurrentWorkspace);
     on<WorkspaceEventFetchCurrentSubscription>(_onFetchCurrentSubscription);
     on<WorkspaceEventUpdateCurrentSubscription>(_onUpdateCurrentSubscription);
+    on<WorkspaceEventUpdateCloudSyncEnabled>(_onUpdateCloudSyncEnabled);
   }
 
   final String? initialWorkspaceId;
@@ -81,8 +83,102 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventInitialize event,
     Emitter<UserWorkspaceState> emit,
   ) async {
+    // 如果用户是非免费版会员，根据 AppFlowy 的 sync 开关状态设置云同步开关
+    await _initializeCloudSyncFromAppFlowySync(emit);
+    
     await _setupListeners();
     await _initializeWorkspaces(emit);
+  }
+
+  /// 根据 AppFlowy 的 sync 开关状态初始化云同步开关
+  /// 如果用户是非免费版会员，则读取 AppFlowy 的 sync 开关状态并设置为云同步开关状态
+  /// 如果用户是免费版会员，强制关闭云同步开关（sync 始终关闭）
+  Future<void> _initializeCloudSyncFromAppFlowySync(
+    Emitter<UserWorkspaceState> emit,
+  ) async {
+    try {
+      // 获取会员订阅信息
+      final currentSubscription = state.currentSubscription;
+      final subscriptionInfo = state.workspaceSubscriptionInfo;
+      
+      // 判断用户是否为非免费版会员
+      final isNonFreeMember = _isNonFreeMember(currentSubscription, subscriptionInfo);
+      
+      if (!isNonFreeMember) {
+        // 免费版会员：强制关闭 sync，确保始终关闭
+        Log.info('[UserWorkspaceBloc] 用户是免费版会员，强制关闭云同步开关（sync 始终关闭）');
+        if (state.isCloudSyncEnabled) {
+          emit(state.copyWith(isCloudSyncEnabled: false));
+        }
+        // 同时确保 AppFlowy 的 enableSync 也是关闭的
+        try {
+          final config = UpdateCloudConfigPB.create()..enableSync = false;
+          await UserEventSetCloudConfig(config).send();
+          Log.info('[UserWorkspaceBloc] 已强制关闭 AppFlowy 的 enableSync（免费版用户）');
+        } catch (e) {
+          Log.warn('[UserWorkspaceBloc] 无法强制关闭 AppFlowy 的 enableSync: $e');
+        }
+        return;
+      }
+      
+      Log.info('[UserWorkspaceBloc] 用户是非免费版会员，读取 AppFlowy 的 sync 开关状态');
+      
+      // 读取 AppFlowy 的 sync 开关状态
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      
+      cloudConfigResult.fold(
+        (cloudConfig) {
+          final appFlowySyncEnabled = cloudConfig.enableSync;
+          Log.info('[UserWorkspaceBloc] AppFlowy sync 开关状态: $appFlowySyncEnabled');
+          
+          // 如果 AppFlowy sync 开关状态与当前云同步开关状态不同，则更新
+          if (state.isCloudSyncEnabled != appFlowySyncEnabled) {
+            Log.info('[UserWorkspaceBloc] 根据 AppFlowy sync 开关状态更新云同步开关: $appFlowySyncEnabled');
+            emit(state.copyWith(isCloudSyncEnabled: appFlowySyncEnabled));
+          }
+        },
+        (error) {
+          Log.warn('[UserWorkspaceBloc] 无法读取 AppFlowy sync 开关状态: $error');
+        },
+      );
+    } catch (e, stackTrace) {
+      Log.error('[UserWorkspaceBloc] 初始化云同步开关状态时出错: $e', e, stackTrace);
+    }
+  }
+
+  /// 判断用户是否为非免费版会员
+  bool _isNonFreeMember(
+    CurrentSubscription? currentSubscription,
+    WorkspaceSubscriptionInfoPB? subscriptionInfo,
+  ) {
+    // 优先使用 currentSubscription 判断
+    final subscription = currentSubscription?.subscription;
+    if (subscription != null && subscription.planCode != null && subscription.planCode!.isNotEmpty) {
+      final planCode = subscription.planCode!.toLowerCase();
+      // 如果是免费版，返回 false
+      if (planCode == 'free' || planCode == 'freeplan') {
+        return false;
+      }
+      // 检查是否已到期
+      final endDate = subscription.endDate;
+      if (endDate != null && endDate.isBefore(DateTime.now())) {
+        return false; // 已到期，视为免费版
+      }
+      // 非免费版且未到期
+      return true;
+    }
+    
+    // 降级方案：使用 subscriptionInfo 判断
+    if (subscriptionInfo != null) {
+      if (subscriptionInfo.plan == WorkspacePlanPB.FreePlan) {
+        return false;
+      }
+      // 非免费版
+      return true;
+    }
+    
+    // 没有会员信息，默认视为免费版
+    return false;
   }
 
   Future<void> _onFetchWorkspaces(
@@ -133,9 +229,19 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       ),
     );
 
+    // 检查云同步开关状态
+    final isCloudSyncEnabled = state.isCloudSyncEnabled;
+    Log.info('[UserWorkspaceBloc] 创建工作区: name=${event.name}, workspaceType=${event.workspaceType}, isCloudSyncEnabled=$isCloudSyncEnabled');
+
+    // 始终创建 ServerW 类型的工作区（服务类型），与用户需求一致
+    // 云同步开关只控制是否启用 sync 功能，不影响工作区类型
+    final workspaceType = WorkspaceTypePB.ServerW;
+    
+    Log.info('[UserWorkspaceBloc] 最终工作区类型: $workspaceType (始终创建 ServerW 类型，云同步: $isCloudSyncEnabled)');
+    
     final result = await repository.createWorkspace(
       name: event.name,
-      workspaceType: event.workspaceType,
+      workspaceType: workspaceType,
     );
 
     final workspaces = result.fold(
@@ -156,7 +262,13 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
 
     result
       ..onSuccess((s) {
-        Log.info('create workspace success: $s');
+        Log.info('[UserWorkspaceBloc] 工作区创建成功: workspaceId=${s.workspaceId}, isCloudSyncEnabled=$isCloudSyncEnabled');
+        // 如果云同步开启，确保工作区已同步到服务端
+        if (isCloudSyncEnabled) {
+          Log.info('[UserWorkspaceBloc] 云同步已开启，工作区已同步到服务端: workspaceId=${s.workspaceId}');
+        } else {
+          Log.warn('[UserWorkspaceBloc] 云同步已关闭，工作区可能未同步到服务端: workspaceId=${s.workspaceId}');
+        }
         add(
           UserWorkspaceEvent.openWorkspace(
             workspaceId: s.workspaceId,
@@ -165,7 +277,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         );
       })
       ..onFailure((f) {
-        Log.error('create workspace error: $f');
+        Log.error('[UserWorkspaceBloc] 工作区创建失败: $f');
       });
   }
 
@@ -328,10 +440,26 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventRenameWorkspace event,
     Emitter<UserWorkspaceState> emit,
   ) async {
-    final result = await repository.renameWorkspace(
-      workspaceId: event.workspaceId,
-      name: event.name,
-    );
+    // 检查工作区类型和云同步开关状态
+    final workspace = _findWorkspaceById(event.workspaceId);
+    final isCloudSyncEnabled = state.isCloudSyncEnabled;
+    final isServerWorkspace = workspace?.workspaceType == WorkspaceTypePB.ServerW;
+    
+    Log.info('[UserWorkspaceBloc] 重命名工作区: workspaceId=${event.workspaceId}, name=${event.name}, workspaceType=${workspace?.workspaceType}, isCloudSyncEnabled=$isCloudSyncEnabled');
+    
+    // 如果工作区类型是 ServerW 但云同步关闭，只做本地修改，不调用服务器 API
+    FlowyResult<void, FlowyError> result;
+    if (isServerWorkspace && !isCloudSyncEnabled) {
+      Log.info('[UserWorkspaceBloc] 工作区类型为 ServerW 但云同步已关闭，只做本地修改，不上传到服务器');
+      // 创建一个成功的结果，但不调用服务器 API
+      result = FlowyResult.success(null);
+    } else {
+      // 正常调用服务器 API
+      result = await repository.renameWorkspace(
+        workspaceId: event.workspaceId,
+        name: event.name,
+      );
+    }
 
     final workspaces = result.fold(
       (s) => _updateWorkspaceInList(event.workspaceId, (workspace) {
@@ -348,10 +476,10 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       workspaces,
     );
 
-    Log.info('rename workspace: ${event.workspaceId}, name: ${event.name}');
+    Log.info('[UserWorkspaceBloc] 重命名工作区完成: workspaceId=${event.workspaceId}, name=${event.name}');
 
     result.onFailure((f) {
-      Log.error('rename workspace error: $f');
+      Log.error('[UserWorkspaceBloc] 重命名工作区失败: $f');
     });
 
     emit(
@@ -373,19 +501,34 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     final workspace = _findWorkspaceById(event.workspaceId);
     if (workspace == null) {
-      Log.error('workspace not found: ${event.workspaceId}');
+      Log.error('[UserWorkspaceBloc] 工作区未找到: ${event.workspaceId}');
       return;
     }
 
     if (event.icon == workspace.icon) {
-      Log.info('ignore same icon update');
+      Log.info('[UserWorkspaceBloc] 忽略相同的图标更新');
       return;
     }
 
-    final result = await repository.updateWorkspaceIcon(
-      workspaceId: event.workspaceId,
-      icon: event.icon,
-    );
+    // 检查工作区类型和云同步开关状态
+    final isCloudSyncEnabled = state.isCloudSyncEnabled;
+    final isServerWorkspace = workspace.workspaceType == WorkspaceTypePB.ServerW;
+    
+    Log.info('[UserWorkspaceBloc] 更新工作区图标: workspaceId=${event.workspaceId}, icon=${event.icon}, workspaceType=${workspace.workspaceType}, isCloudSyncEnabled=$isCloudSyncEnabled');
+    
+    // 如果工作区类型是 ServerW 但云同步关闭，只做本地修改，不调用服务器 API
+    FlowyResult<void, FlowyError> result;
+    if (isServerWorkspace && !isCloudSyncEnabled) {
+      Log.info('[UserWorkspaceBloc] 工作区类型为 ServerW 但云同步已关闭，只做本地修改，不上传到服务器');
+      // 创建一个成功的结果，但不调用服务器 API
+      result = FlowyResult.success(null);
+    } else {
+      // 正常调用服务器 API
+      result = await repository.updateWorkspaceIcon(
+        workspaceId: event.workspaceId,
+        icon: event.icon,
+      );
+    }
 
     final workspaces = result.fold(
       (s) => _updateWorkspaceInList(event.workspaceId, (workspace) {
@@ -533,6 +676,17 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     emit(
       state.copyWith(workspaceSubscriptionInfo: event.subscriptionInfo),
     );
+    
+    // 工作区订阅信息更新后，如果是非免费版会员，根据 AppFlowy 的 sync 开关状态更新云同步开关
+    final isNonFreeMember = _isNonFreeMember(
+      state.currentSubscription,
+      event.subscriptionInfo,
+    );
+    
+    if (isNonFreeMember) {
+      Log.info('[UserWorkspaceBloc] 工作区订阅信息已更新，用户是非免费版会员，检查 AppFlowy sync 开关状态');
+      await _updateCloudSyncFromAppFlowySync(emit);
+    }
   }
 
   Future<void> _onEmitWorkspaces(
@@ -791,6 +945,45 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     emit(
       state.copyWith(currentSubscription: event.currentSubscription),
     );
+    
+    // 会员订阅信息更新后，如果是非免费版会员，根据 AppFlowy 的 sync 开关状态更新云同步开关
+    final isNonFreeMember = _isNonFreeMember(
+      event.currentSubscription,
+      state.workspaceSubscriptionInfo,
+    );
+    
+    if (isNonFreeMember) {
+      Log.info('[UserWorkspaceBloc] 会员订阅信息已更新，用户是非免费版会员，检查 AppFlowy sync 开关状态');
+      await _updateCloudSyncFromAppFlowySync(emit);
+    }
+  }
+
+  /// 根据 AppFlowy 的 sync 开关状态更新云同步开关
+  Future<void> _updateCloudSyncFromAppFlowySync(
+    Emitter<UserWorkspaceState> emit,
+  ) async {
+    try {
+      // 读取 AppFlowy 的 sync 开关状态
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      
+      cloudConfigResult.fold(
+        (cloudConfig) {
+          final appFlowySyncEnabled = cloudConfig.enableSync;
+          Log.info('[UserWorkspaceBloc] AppFlowy sync 开关状态: $appFlowySyncEnabled');
+          
+          // 如果 AppFlowy sync 开关状态与当前云同步开关状态不同，则更新
+          if (state.isCloudSyncEnabled != appFlowySyncEnabled) {
+            Log.info('[UserWorkspaceBloc] 根据 AppFlowy sync 开关状态更新云同步开关: $appFlowySyncEnabled');
+            emit(state.copyWith(isCloudSyncEnabled: appFlowySyncEnabled));
+          }
+        },
+        (error) {
+          Log.warn('[UserWorkspaceBloc] 无法读取 AppFlowy sync 开关状态: $error');
+        },
+      );
+    } catch (e, stackTrace) {
+      Log.error('[UserWorkspaceBloc] 更新云同步开关状态时出错: $e', e, stackTrace);
+    }
   }
 
   /// 获取当前订阅信息（包含使用量）
@@ -875,6 +1068,38 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     } catch (e, stackTrace) {
       Log.error('[UserWorkspaceBloc] 订阅信息接口请求异常: $e', e, stackTrace);
       return null;
+    }
+  }
+
+  Future<void> _onUpdateCloudSyncEnabled(
+    WorkspaceEventUpdateCloudSyncEnabled event,
+    Emitter<UserWorkspaceState> emit,
+  ) async {
+    Log.info('[UserWorkspaceBloc] 更新云同步开关状态: ${event.enabled}');
+    
+    // 检查用户是否为免费版会员
+    final isNonFreeMember = _isNonFreeMember(
+      state.currentSubscription,
+      state.workspaceSubscriptionInfo,
+    );
+    
+    // 如果是免费版会员，强制关闭 sync
+    if (!isNonFreeMember) {
+      Log.info('[UserWorkspaceBloc] 用户是免费版会员，强制关闭云同步开关');
+      emit(state.copyWith(isCloudSyncEnabled: false));
+      return;
+    }
+    
+    // 非免费版会员，更新云同步开关状态
+    emit(state.copyWith(isCloudSyncEnabled: event.enabled));
+    
+    // 同步更新 AppFlowy 的 enableSync 设置，使云同步按钮与 sync 功能一致
+    try {
+      final config = UpdateCloudConfigPB.create()..enableSync = event.enabled;
+      await UserEventSetCloudConfig(config).send();
+      Log.info('[UserWorkspaceBloc] 已同步更新 AppFlowy 的 enableSync 设置: ${event.enabled}');
+    } catch (e, stackTrace) {
+      Log.error('[UserWorkspaceBloc] 无法更新 AppFlowy 的 enableSync 设置: $e', e, stackTrace);
     }
   }
 

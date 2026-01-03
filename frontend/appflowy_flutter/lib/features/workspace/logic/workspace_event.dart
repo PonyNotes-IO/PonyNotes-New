@@ -90,6 +90,11 @@ sealed class UserWorkspaceEvent {
       WorkspaceEventUpdateCurrentSubscription(
         currentSubscription: currentSubscription,
       );
+
+  factory UserWorkspaceEvent.updateCloudSyncEnabled({
+    required bool enabled,
+  }) =>
+      WorkspaceEventUpdateCloudSyncEnabled(enabled: enabled);
 }
 
 /// Initializes the workspace bloc.
@@ -224,4 +229,13 @@ class WorkspaceEventUpdateCurrentSubscription extends UserWorkspaceEvent {
   });
 
   final CurrentSubscription? currentSubscription;
+}
+
+/// Updates cloud sync enabled status.
+class WorkspaceEventUpdateCloudSyncEnabled extends UserWorkspaceEvent {
+  WorkspaceEventUpdateCloudSyncEnabled({
+    required this.enabled,
+  });
+
+  final bool enabled;
 }

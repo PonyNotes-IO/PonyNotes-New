@@ -46,6 +46,7 @@ class UserWorkspaceState {
     required this.userProfile,
     this.workspaceSubscriptionInfo,
     this.currentSubscription,
+    this.isCloudSyncEnabled = false, // 云同步开关状态，默认关闭
   });
 
   final UserWorkspacePB? currentWorkspace;
@@ -55,6 +56,7 @@ class UserWorkspaceState {
   final UserProfilePB userProfile;
   final WorkspaceSubscriptionInfoPB? workspaceSubscriptionInfo;
   final CurrentSubscription? currentSubscription;
+  final bool isCloudSyncEnabled; // 云同步开关状态
 
   UserWorkspaceState copyWith({
     UserWorkspacePB? currentWorkspace,
@@ -64,6 +66,7 @@ class UserWorkspaceState {
     UserProfilePB? userProfile,
     WorkspaceSubscriptionInfoPB? workspaceSubscriptionInfo,
     CurrentSubscription? currentSubscription,
+    bool? isCloudSyncEnabled,
   }) {
     return UserWorkspaceState(
       currentWorkspace: currentWorkspace ?? this.currentWorkspace,
@@ -74,6 +77,7 @@ class UserWorkspaceState {
       workspaceSubscriptionInfo:
           workspaceSubscriptionInfo ?? this.workspaceSubscriptionInfo,
       currentSubscription: currentSubscription ?? this.currentSubscription,
+      isCloudSyncEnabled: isCloudSyncEnabled ?? this.isCloudSyncEnabled,
     );
   }
 
@@ -87,7 +91,8 @@ class UserWorkspaceState {
         other.isCollabWorkspaceOn == isCollabWorkspaceOn &&
         other.userProfile == userProfile &&
         other.workspaceSubscriptionInfo == workspaceSubscriptionInfo &&
-        other.currentSubscription == currentSubscription;
+        other.currentSubscription == currentSubscription &&
+        other.isCloudSyncEnabled == isCloudSyncEnabled;
   }
 
   @override
@@ -100,11 +105,12 @@ class UserWorkspaceState {
       userProfile,
       workspaceSubscriptionInfo,
       currentSubscription,
+      isCloudSyncEnabled,
     );
   }
 
   @override
   String toString() {
-    return 'WorkspaceState(currentWorkspace: $currentWorkspace, workspaces: $workspaces, actionResult: $actionResult, isCollabWorkspaceOn: $isCollabWorkspaceOn, userProfile: $userProfile, workspaceSubscriptionInfo: $workspaceSubscriptionInfo, currentSubscription: $currentSubscription)';
+    return 'WorkspaceState(currentWorkspace: $currentWorkspace, workspaces: $workspaces, actionResult: $actionResult, isCollabWorkspaceOn: $isCollabWorkspaceOn, userProfile: $userProfile, workspaceSubscriptionInfo: $workspaceSubscriptionInfo, currentSubscription: $currentSubscription, isCloudSyncEnabled: $isCloudSyncEnabled)';
   }
 }

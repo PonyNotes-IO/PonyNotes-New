@@ -22,7 +22,6 @@ class SidebarCloudSyncButton extends StatefulWidget {
 }
 
 class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
-  bool _isCloudSyncEnabled = false; // 云同步开关状态
   final GlobalKey _buttonKey = GlobalKey(); // 用于获取按钮位置
 
   @override
@@ -30,13 +29,14 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     // 尝试获取 UserWorkspaceBloc，如果不存在则直接显示按钮
     try {
       final workspaceBloc = context.read<UserWorkspaceBloc>();
-      // 使用 BlocBuilder 监听 UserWorkspaceBloc，获取最新的会员订阅信息
+      // 使用 BlocBuilder 监听 UserWorkspaceBloc，获取最新的会员订阅信息和云同步开关状态
       return BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
         bloc: workspaceBloc,
         builder: (context, workspaceState) {
           // 确保会员信息已加载
           final currentSubscription = workspaceState.currentSubscription;
           final subscriptionInfo = workspaceState.workspaceSubscriptionInfo;
+          final isCloudSyncEnabled = workspaceState.isCloudSyncEnabled; // 从 Bloc 状态中获取云同步开关状态
           
           // 如果会员信息还没有加载，触发获取
           if (currentSubscription == null) {
@@ -59,6 +59,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
               context,
               subscriptionInfo: subscriptionInfo,
               currentSubscription: currentSubscription,
+              isCloudSyncEnabled: isCloudSyncEnabled,
             ),
           );
         },
@@ -72,6 +73,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
           context,
           subscriptionInfo: null,
           currentSubscription: null,
+          isCloudSyncEnabled: false,
         ),
       );
     }
@@ -81,6 +83,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     BuildContext context, {
     required WorkspaceSubscriptionInfoPB? subscriptionInfo,
     required CurrentSubscription? currentSubscription,
+    required bool isCloudSyncEnabled,
   }) async {
     // 获取按钮的位置信息
     final RenderBox? renderBox = _buttonKey.currentContext?.findRenderObject() as RenderBox?;
@@ -119,6 +122,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
               // 获取最新的会员信息（优先使用状态中的最新数据）
               final latestSubscriptionInfo = state.workspaceSubscriptionInfo ?? subscriptionInfo;
               final latestCurrentSubscription = state.currentSubscription ?? currentSubscription;
+              final latestIsCloudSyncEnabled = state.isCloudSyncEnabled; // 从 Bloc 状态中获取最新的云同步开关状态
               
               // 重新判断会员状态（使用最新的数据）
               final latestMembershipStatus = _determineMembershipStatus(
@@ -126,7 +130,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
                 latestCurrentSubscription,
               );
               
-              Log.info('[云同步弹框] 更新会员信息: subscriptionInfo=${latestSubscriptionInfo?.plan}, currentSubscription=${latestCurrentSubscription?.subscription?.planCode}, status=$latestMembershipStatus');
+              Log.info('[云同步弹框] 更新会员信息: subscriptionInfo=${latestSubscriptionInfo?.plan}, currentSubscription=${latestCurrentSubscription?.subscription?.planCode}, status=$latestMembershipStatus, isCloudSyncEnabled=$latestIsCloudSyncEnabled');
               
               return _buildDialogContent(
                 originalContext, // 使用原始 context，用于访问 UserWorkspaceBloc
@@ -136,6 +140,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
                 latestMembershipStatus,
                 latestSubscriptionInfo,
                 latestCurrentSubscription,
+                latestIsCloudSyncEnabled,
               );
             },
           );
@@ -154,6 +159,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
             membershipStatus,
             subscriptionInfo,
             currentSubscription,
+            isCloudSyncEnabled,
           );
         }
       },
@@ -168,6 +174,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     CloudSyncMembershipStatus membershipStatus,
     WorkspaceSubscriptionInfoPB? subscriptionInfo,
     CurrentSubscription? currentSubscription,
+    bool isCloudSyncEnabled,
   ) {
     return Stack(
       children: [
@@ -177,14 +184,21 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
           child: Material(
             color: Colors.transparent,
             child: CloudSyncSettingsPanel(
-              isEnabled: _isCloudSyncEnabled,
+              isEnabled: isCloudSyncEnabled,
               membershipStatus: membershipStatus,
               subscriptionInfo: subscriptionInfo,
               currentSubscription: currentSubscription,
               onToggle: (enabled) {
-                setState(() {
-                  _isCloudSyncEnabled = enabled;
-                });
+                // 更新 UserWorkspaceBloc 中的云同步开关状态
+                try {
+                  final workspaceBloc = context.read<UserWorkspaceBloc>();
+                  workspaceBloc.add(
+                    UserWorkspaceEvent.updateCloudSyncEnabled(enabled: enabled),
+                  );
+                  Log.info('[云同步] 更新云同步开关状态: $enabled');
+                } catch (e, stackTrace) {
+                  Log.error('[云同步] 无法更新云同步开关状态: $e', e, stackTrace);
+                }
                 debugPrint('云同步状态: ${enabled ? "已启用" : "已禁用"}');
                 Navigator.of(dialogContext).pop();
               },
