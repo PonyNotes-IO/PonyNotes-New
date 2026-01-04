@@ -93,6 +93,7 @@ class SaberCoreCanvas extends StatelessWidget {
     this.selectResult, // ✅ 选择结果
     this.isSelecting = false, // ✅ 是否正在选择
     this.pdfTextSelectionRect, // ✅ PDF文本选择区域
+    this.editingTextBoxId, // ✅ 正在编辑的文本框ID（用于避免重影）
   });
 
   final EditorCoreInfo coreInfo;
@@ -105,6 +106,7 @@ class SaberCoreCanvas extends StatelessWidget {
   final SelectResult? selectResult; // ✅ 选择结果
   final bool isSelecting; // ✅ 是否正在选择
   final Rect? pdfTextSelectionRect; // ✅ PDF文本选择区域
+  final String? editingTextBoxId; // ✅ 正在编辑的文本框ID（用于避免重影）
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +156,7 @@ class SaberCoreCanvas extends StatelessWidget {
                 selectResult: selectResult,
                 isSelecting: isSelecting,
                 pdfTextSelectionRect: pdfTextSelectionRect,
+                editingTextBoxId: editingTextBoxId, // ✅ 传递正在编辑的文本框ID
                 repaint: repaintListenable ?? currentStrokeListenable,
               ),
               size: Size(constraints.maxWidth, constraints.maxHeight),
@@ -175,6 +178,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     this.selectResult, // ✅ 选择结果
     this.isSelecting = false, // ✅ 是否正在选择
     this.pdfTextSelectionRect, // ✅ PDF文本选择区域
+    this.editingTextBoxId, // ✅ 正在编辑的文本框ID（用于避免重影）
     Listenable? repaint,
   }) : super(repaint: repaint);
 
@@ -187,6 +191,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
   final SelectResult? selectResult; // ✅ 选择结果
   final bool isSelecting; // ✅ 是否正在选择
   final Rect? pdfTextSelectionRect; // ✅ PDF文本选择区域
+  final String? editingTextBoxId; // ✅ 正在编辑的文本框ID（用于避免重影）
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -288,7 +293,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     
     // ✅ 绘制文本框
     for (final textBox in page.textBoxes) {
-      _drawTextBox(canvas, textBox, scale, offsetX, offsetY);
+      _drawTextBox(canvas, textBox, scale, offsetX, offsetY, editingTextBoxId);
     }
     
     // ✅ 绘制选择框（page.pageIndex 可能不存在，使用页面在列表中的索引）
@@ -1187,7 +1192,7 @@ class _SaberCoreCanvasPainter extends CustomPainter {
   }
 
   /// ✅ 绘制文本框
-  void _drawTextBox(Canvas canvas, saber_text.TextBox textBox, double scale, double offsetX, double offsetY) {
+  void _drawTextBox(Canvas canvas, saber_text.TextBox textBox, double scale, double offsetX, double offsetY, String? editingTextBoxId) {
     canvas.save();
     canvas.translate(offsetX, offsetY);
     canvas.scale(scale);
@@ -1209,6 +1214,12 @@ class _SaberCoreCanvasPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = textBox.borderWidth;
       canvas.drawRect(rect, borderPaint);
+    }
+    
+    // ✅ 如果文本框正在编辑，不绘制文本内容（避免与TextField重影）
+    if (editingTextBoxId != null && textBox.id == editingTextBoxId) {
+      canvas.restore();
+      return;
     }
     
     // ✅ 绘制文本（优先使用 Quill 富文本，如果为空则使用纯文本）

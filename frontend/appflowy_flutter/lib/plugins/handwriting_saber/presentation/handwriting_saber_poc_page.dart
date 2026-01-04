@@ -1693,47 +1693,25 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       textBoxType = saber_text.TextBoxType.paragraph;
     }
     
-    // ✅ 创建新文本框（默认大小），包含 Quill 富文本编辑器
+    // ✅ 创建新文本框（单行输入，默认宽度，高度根据字体大小自动计算）
+    final textStyle = TextStyle(
+      fontSize: 16,
+      color: _currentToolNotifier.value.color,
+    );
     final textBox = saber_text.TextBox(
       id: 'textbox_${DateTime.now().millisecondsSinceEpoch}_${math.Random().nextInt(1000)}',
       position: position,
-      size: const Size(300, 150), // ✅ 增大默认大小以适应富文本编辑器
+      size: const Size(200, 24), // ✅ 单行输入框：默认宽度200，高度24（会在编辑时自动调整）
       text: '',
-      textStyle: TextStyle(
-        fontSize: 16,
-        color: _currentToolNotifier.value.color,
-      ),
+      textStyle: textStyle,
       textBoxType: textBoxType, // ✅ 设置文本框类型
-      quillContent: QuillStruct.createDefault(), // ✅ 创建 Quill 富文本编辑器
+      quillContent: QuillStruct.createDefault(), // ✅ 创建 Quill 富文本编辑器（用于数据存储）
     );
     
     // ✅ 应用标题样式
     if (textBoxType != saber_text.TextBoxType.normal) {
       textBox.textStyle = textBox.getHeadingStyle(_currentToolNotifier.value.color);
     }
-    
-    // ✅ 不再使用 TextEditingController，改用 Quill 的变更监听
-    // 监听 Quill 内容变化
-    textBox.quillContent.controller.changes.listen((event) {
-      if (_editingTextBoxIdNotifier.value == textBox.id) {
-        // ✅ 同步纯文本到 text 字段（向后兼容）
-        textBox.text = textBox.quillContent.plainText;
-        // ✅ 更新页面数据（使用EditorPageNotifier，只触发画布重绘，不影响PDF）
-        if (pageIdx < _pageNotifiers.length) {
-          final currentPage = _coreInfo.pages[pageIdx];
-          final updatedPageForText = EditorPage(
-            size: currentPage.size,
-            strokes: currentPage.strokes,
-            backgroundImage: currentPage.backgroundImage,
-            textBoxes: currentPage.textBoxes,
-            listBoxes: currentPage.listBoxes,
-            taskListBoxes: currentPage.taskListBoxes,
-          );
-          _pageNotifiers[pageIdx].updatePage(updatedPageForText);
-        }
-        _scheduleSave();
-      }
-    });
     
     // ✅ 添加到页面并进入编辑模式（使用EditorPageNotifier避免全局setState）
     debugPrint('🦋[HandwritingSaber] _createTextBox: adding textBox id=${textBox.id} to page, position=${textBox.position}, size=${textBox.size}');
@@ -1804,10 +1782,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return;
     }
     
-    // ✅ 不再需要 TextEditingController，直接使用 Quill
-    // 确保 Quill 内容已经初始化
-    if (textBox.quillContent.plainText.isEmpty && textBox.text.isNotEmpty) {
-      // ✅ 如果 Quill 内容为空但纯文本不为空，从纯文本初始化 Quill
+    // ✅ 确保 Quill 内容已初始化（如果为空则从 text 字段初始化）
+    if (textBox.quillContent.plainText.trim().isEmpty && textBox.text.isNotEmpty) {
+      textBox.quillContent.clear();
       textBox.quillContent.insertText(textBox.text);
     }
     
@@ -1848,7 +1825,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     return null;
   }
   
-  /// ✅ 构建文本框编辑器（直接在画布上显示）
+  /// ✅ 构建文本框编辑器（直接在画布上显示，单行输入，透明背景）
   Widget _buildTextBoxEditor(
     saber_text.TextBox textBox,
     int pageIndex,
@@ -1884,19 +1861,82 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     final double textBoxLeft = offsetX + textBox.position.dx * scale;
     final double textBoxTop = offsetY + textBox.position.dy * scale;
     final double textBoxWidth = textBox.size.width * scale;
-    final double textBoxHeight = textBox.size.height * scale;
-    debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor: textBoxLeft=$textBoxLeft, textBoxTop=$textBoxTop, textBoxWidth=$textBoxWidth, textBoxHeight=$textBoxHeight');
     
-    // ✅ 确保文本框有最小尺寸以便正常显示和输入
-    final double minWidth = 200.0;
-    final double minHeight = 100.0;
-    final double finalWidth = textBoxWidth < minWidth ? minWidth : textBoxWidth;
-    final double finalHeight = textBoxHeight < minHeight ? minHeight : textBoxHeight;
+    // ✅ 单行输入框，使用固定高度（根据字体大小和缩放计算）
+    final textStyle = textBox.textStyle ?? const TextStyle(
+      fontSize: 16,
+      color: Colors.black,
+    );
+    final double fontSize = textStyle.fontSize ?? 16;
+    final double scaledFontSize = fontSize * scale;
+    // 单行输入框高度：字体大小 + 上下padding
+    final double singleLineHeight = scaledFontSize + 8.0; // 上下各4px padding
     
-    debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor: finalWidth=$finalWidth, finalHeight=$finalHeight');
+    // ✅ 确保 Quill 内容已初始化（如果为空则从 text 字段初始化）
+    if (textBox.quillContent.plainText.trim().isEmpty && textBox.text.isNotEmpty) {
+      textBox.quillContent.clear();
+      textBox.quillContent.insertText(textBox.text);
+    }
     
-    // ✅ 获取 Quill 控制器
-    final quillController = textBox.quillContent.controller;
+    // ✅ 监听 Quill 内容变化，同步到 TextBox 并动态调整宽度
+    textBox.quillContent.controller.changes.listen((event) {
+      if (_editingTextBoxIdNotifier.value == textBox.id) {
+        // ✅ 同步纯文本到 text 字段（向后兼容）
+        final newText = textBox.quillContent.plainText;
+        textBox.text = newText;
+        
+        // ✅ 动态调整文本框宽度（根据文本内容）
+        // 注意：这里使用页面坐标（未缩放），因为在数据模型中存储的是页面坐标
+        final textPainter = TextPainter(
+          text: TextSpan(text: newText, style: textStyle.copyWith(fontSize: fontSize)),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+        final textWidth = textPainter.width;
+        // 文本框宽度 = 文本宽度 + 左右padding（20px），最小100px，最大页面宽度
+        final minWidth = 100.0;
+        final maxWidth = page.size.width;
+        final newWidth = (textWidth + 20.0).clamp(minWidth, maxWidth);
+        // 更新 TextBox 尺寸（使用页面坐标）
+        textBox.size = Size(newWidth, textBox.size.height);
+        
+        // ✅ 触发页面重建以更新编辑器显示
+        if (mounted && pageIndex < _pageNotifiers.length) {
+          final currentPage = _coreInfo.pages[pageIndex];
+          final updatedPageForText = EditorPage(
+            size: currentPage.size,
+            strokes: currentPage.strokes,
+            backgroundImage: currentPage.backgroundImage,
+            textBoxes: currentPage.textBoxes,
+            listBoxes: currentPage.listBoxes,
+            taskListBoxes: currentPage.taskListBoxes,
+          );
+          _pageNotifiers[pageIndex].updatePage(updatedPageForText);
+        }
+        _scheduleSave();
+      }
+    });
+    
+    // ✅ 计算实际显示宽度（根据当前文本内容或文本框的尺寸）
+    final currentText = textBox.quillContent.plainText;
+    double displayWidth;
+    if (currentText.isNotEmpty) {
+      // 根据文本内容计算宽度（使用缩放后的字体大小）
+      final textPainter = TextPainter(
+        text: TextSpan(text: currentText, style: textStyle.copyWith(fontSize: scaledFontSize)),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      final textWidth = textPainter.width;
+      final minWidth = 100.0;
+      final maxWidth = page.size.width * scale;
+      displayWidth = (textWidth + 20.0).clamp(minWidth, maxWidth);
+    } else {
+      // 使用文本框的当前宽度（已缩放）
+      displayWidth = textBoxWidth.clamp(100.0, page.size.width * scale);
+    }
+    
+    debugPrint('🦋[HandwritingSaber] _buildTextBoxEditor: displayWidth=$displayWidth, singleLineHeight=$singleLineHeight');
     
     // ✅ 获取主题配置
     final colorScheme = Theme.of(context).colorScheme;
@@ -1905,41 +1945,29 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     return Positioned(
       left: textBoxLeft,
       top: textBoxTop,
-      width: finalWidth,
-      height: finalHeight,
+      width: displayWidth,
+      height: singleLineHeight,
       child: Material(
-        color: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.95),
-            border: Border.all(color: Colors.blue, width: 2),
-            borderRadius: BorderRadius.circular(4),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: GestureDetector(
-            onTap: () {
-              // ✅ 点击外部时不关闭编辑器，让用户可以继续编辑
-            },
+        color: Colors.transparent, // ✅ 透明背景
+        child: ClipRect(
+          // ✅ 使用 ClipRect 限制高度，防止文本超出单行高度
+          child: SizedBox(
+            height: singleLineHeight,
             child: quill.QuillEditor.basic(
-              controller: quillController,
+              controller: textBox.quillContent.controller,
               config: quill.QuillEditorConfig(
                 customStyles: HandwritingSaberQuillStyles.get(
                   invert: invert,
                   secondary: colorScheme.secondary,
                   lineHeight: _coreInfo.lineHeight,
                 ),
-                scrollable: true,
+                scrollable: false, // ✅ 禁用滚动（单行）
                 autoFocus: true,
-                expands: false,
-                placeholder: '输入文本...',
-                padding: const EdgeInsets.all(8),
+                expands: false, // ✅ 不扩展
+                placeholder: null, // ✅ 不显示占位符
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0), // ✅ 最小padding
               ),
+              focusNode: textBox.quillContent.focusNode,
             ),
           ),
         ),
@@ -2574,31 +2602,37 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                 // 传递当前 UI 选择的背景样式，避免 coreInfo 未同步导致背景显示不一致
                 // ✅ 关键修复：直接传递 _coreInfo.laserStrokes 的引用，而不是复制
                 // 这样当淡出过程中修改 stroke 时，Canvas 能够立即看到变化
-                SaberCoreCanvas(
-                  coreInfo: EditorCoreInfo(
-                    pages: [page], // ✅ 只传递当前页面
-                    backgroundColor: _coreInfo.backgroundColor,
-                    backgroundPattern: _currentBackgroundPattern,
-                    lineHeight: _coreInfo.lineHeight,
-                    lineThickness: _coreInfo.lineThickness,
-                    laserStrokes: _coreInfo.laserStrokes, // ✅ 直接传递引用，不复制！
-                  ),
-                  currentStrokeListenable: _currentStrokeNotifier,
-                  // ✅ 关键修复：合并 _repaintTick 和 _laserStrokesNotifier
-                  // 当 _laserStrokesNotifier 变化时，会触发 Widget rebuild，从而创建新的 Painter
-                  // 这样 Canvas 就能看到最新的激光笔笔迹状态
-                  repaintListenable: Listenable.merge([_repaintTick, _laserStrokesNotifier]),
-                  selectResult: _selectResult != null &&
-                      _selectResult!.pageIndex == pageIndex
-                      ? _selectResult
-                      : null,
-                  isSelecting: _isSelecting &&
-                      _selectResult != null &&
-                      _selectResult!.pageIndex == pageIndex,
-                  pdfTextSelectionRect: _pdfTextSelectionRect != null &&
-                      _pdfTextSelectionPageIndex == pageIndex
-                          ? _pdfTextSelectionRect
+                ValueListenableBuilder<String?>(
+                  valueListenable: _editingTextBoxIdNotifier,
+                  builder: (context, editingTextBoxId, _) {
+                    return SaberCoreCanvas(
+                      coreInfo: EditorCoreInfo(
+                        pages: [page], // ✅ 只传递当前页面
+                        backgroundColor: _coreInfo.backgroundColor,
+                        backgroundPattern: _currentBackgroundPattern,
+                        lineHeight: _coreInfo.lineHeight,
+                        lineThickness: _coreInfo.lineThickness,
+                        laserStrokes: _coreInfo.laserStrokes, // ✅ 直接传递引用，不复制！
+                      ),
+                      currentStrokeListenable: _currentStrokeNotifier,
+                      // ✅ 关键修复：合并 _repaintTick 和 _laserStrokesNotifier
+                      // 当 _laserStrokesNotifier 变化时，会触发 Widget rebuild，从而创建新的 Painter
+                      // 这样 Canvas 就能看到最新的激光笔笔迹状态
+                      repaintListenable: Listenable.merge([_repaintTick, _laserStrokesNotifier]),
+                      selectResult: _selectResult != null &&
+                          _selectResult!.pageIndex == pageIndex
+                          ? _selectResult
                           : null,
+                      isSelecting: _isSelecting &&
+                          _selectResult != null &&
+                          _selectResult!.pageIndex == pageIndex,
+                      pdfTextSelectionRect: _pdfTextSelectionRect != null &&
+                          _pdfTextSelectionPageIndex == pageIndex
+                              ? _pdfTextSelectionRect
+                              : null,
+                      editingTextBoxId: editingTextBoxId, // ✅ 传递正在编辑的文本框ID，避免重影
+                    );
+                  },
                 ),
                 // debug: 输出当前页面与背景信息（使用受控日志，默认静默）
                 Builder(builder: (context) {
