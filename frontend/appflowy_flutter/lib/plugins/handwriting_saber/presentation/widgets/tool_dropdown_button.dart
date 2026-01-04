@@ -49,14 +49,35 @@ class ToolDropdownButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 找到当前选中的工具选项
+    // 对于Eraser，需要比较mode；对于SelectTool，需要比较selectMode；对于其他工具，只比较toolId
     final selectedOption = options.firstWhere(
-      (opt) => opt.tool.toolId == currentTool.toolId,
+      (opt) {
+        if (opt.tool is Eraser && currentTool is Eraser) {
+          return (opt.tool as Eraser).mode == (currentTool as Eraser).mode;
+        } else if (opt.tool is SelectTool && currentTool is SelectTool) {
+          return (opt.tool as SelectTool).selectMode == (currentTool as SelectTool).selectMode;
+        } else if (opt.tool is PdfTextSelectTool && currentTool is PdfTextSelectTool) {
+          return (opt.tool as PdfTextSelectTool).selectMode == (currentTool as PdfTextSelectTool).selectMode;
+        } else {
+          return opt.tool.toolId == currentTool.toolId;
+        }
+      },
       orElse: () => options.first,
     );
     
     final displayIcon = mainIcon ?? selectedOption.icon;
     final displayLabel = mainLabel ?? selectedOption.label;
-    final isSelected = options.any((opt) => opt.tool.toolId == currentTool.toolId);
+    final isSelected = options.any((opt) {
+      if (opt.tool is Eraser && currentTool is Eraser) {
+        return (opt.tool as Eraser).mode == (currentTool as Eraser).mode;
+      } else if (opt.tool is SelectTool && currentTool is SelectTool) {
+        return (opt.tool as SelectTool).selectMode == (currentTool as SelectTool).selectMode;
+      } else if (opt.tool is PdfTextSelectTool && currentTool is PdfTextSelectTool) {
+        return (opt.tool as PdfTextSelectTool).selectMode == (currentTool as PdfTextSelectTool).selectMode;
+      } else {
+        return opt.tool.toolId == currentTool.toolId;
+      }
+    });
 
     return Tooltip(
       message: displayLabel,
@@ -100,7 +121,13 @@ class ToolDropdownButton extends StatelessWidget {
               tooltip: '选择$displayLabel类型',
               onSelected: onToolChanged,
               itemBuilder: (ctx) => options.map((option) {
-                final isOptionSelected = option.tool.toolId == currentTool.toolId;
+                final isOptionSelected = option.tool is Eraser && currentTool is Eraser
+                    ? (option.tool as Eraser).mode == (currentTool as Eraser).mode
+                    : option.tool is SelectTool && currentTool is SelectTool
+                        ? (option.tool as SelectTool).selectMode == (currentTool as SelectTool).selectMode
+                        : option.tool is PdfTextSelectTool && currentTool is PdfTextSelectTool
+                            ? (option.tool as PdfTextSelectTool).selectMode == (currentTool as PdfTextSelectTool).selectMode
+                            : option.tool.toolId == currentTool.toolId;
                 return PopupMenuItem<Tool>(
                   value: option.tool,
                   child: Row(

@@ -7,12 +7,13 @@ use crate::notification::{ChatNotification, chat_notification_builder};
 use crate::stream_message::{AIFollowUpData, StreamMessage};
 use allo_isolate::Isolate;
 use flowy_ai_pub::cloud::{
-  AIModel, ChatCloudService, ChatMessage, MessageCursor, QuestionStreamValue, ResponseFormat,
+  AIModel, ChatCloudService, ChatMessage, ChatMessageType, MessageCursor, QuestionStreamValue, ResponseFormat,
 };
 use flowy_ai_pub::persistence::{
   ChatMessageTable, select_answer_where_match_reply_message_id, select_chat_messages,
   upsert_chat_messages,
 };
+use lib_infra::util::timestamp;
 use flowy_ai_pub::user_service::AIUserService;
 use flowy_error::{ErrorCode, FlowyError, FlowyResult};
 use flowy_sqlite::DBConnection;
@@ -22,7 +23,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 use tokio::sync::{Mutex, RwLock};
-use tracing::{error, instrument, trace};
+use tracing::{error, instrument, trace, warn};
 use uuid::Uuid;
 
 enum PrevMessageState {
@@ -91,7 +92,8 @@ impl Chat {
     let uid = self.user_service.user_id()?;
     let workspace_id = self.user_service.workspace_id()?;
 
-    let question = self
+    // 尝试创建问题，如果失败且是数据同步禁用错误，则在本地创建
+    let question = match self
       .chat_service
       .create_question(
         &workspace_id,
@@ -101,10 +103,37 @@ impl Chat {
         params.prompt_id.clone(),
       )
       .await
-      .map_err(|err| {
-        error!("Failed to send question: {}", err);
-        FlowyError::server_error()
-      })?;
+    {
+      Ok(question) => question,
+      Err(err) => {
+        // 如果是数据同步禁用错误，在本地创建问题记录，然后继续执行流式响应
+        if err.code == ErrorCode::DataSyncRequired {
+          warn!(
+            "[Chat] Data sync disabled, creating question locally: chat_id={}, message={}",
+            self.chat_id, params.message
+          );
+          
+          // 生成本地message_id（使用时间戳）
+          let message_id = timestamp();
+          
+          // 创建本地问题记录
+          let question = match params.message_type {
+            ChatMessageType::System => ChatMessage::new_system(message_id, params.message.clone()),
+            ChatMessageType::User => ChatMessage::new_human(message_id, params.message.clone(), None),
+          };
+          
+          // 保存到本地数据库
+          let conn = self.user_service.sqlite_connection(uid)?;
+          let record = ChatMessageTable::from_message(self.chat_id.to_string(), question.clone(), false);
+          upsert_chat_messages(conn, &[record])?;
+          
+          question
+        } else {
+          error!("Failed to send question: {}", err);
+          return Err(err);
+        }
+      }
+    };
 
     let _ = question_sink
       .send(StreamMessage::MessageId(question.message_id).to_string())

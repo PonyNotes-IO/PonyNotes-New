@@ -34,7 +34,7 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
   final SharedPagesRepository repository;
 
   // Used to listen for shared view updates.
-  late final FolderNotificationListener _folderNotificationListener;
+  FolderNotificationListener? _folderNotificationListener;
 
   // Since the backend doesn't provide a way to listen for shared view updates (websocket with shared view updates is not implemented yet),
   // we need to poll the shared views periodically.
@@ -47,8 +47,10 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
 
   @override
   Future<void> close() async {
-    await _folderNotificationListener.stop();
+    await _folderNotificationListener?.stop();
+    _folderNotificationListener = null;
     _pollingTimer?.cancel();
+    _pollingTimer = null;
     await super.close();
   }
 
@@ -136,6 +138,11 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
     _folderNotificationListener = FolderNotificationListener(
       objectId: workspaceId,
       handler: (notification, result) {
+        // 检查bloc是否已关闭，避免在dispose后调用add()
+        if (isClosed) {
+          return;
+        }
+        
         if (notification == FolderNotification.DidUpdateSharedViews) {
           final response = result.fold(
             (payload) {
@@ -145,7 +152,7 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
             },
             (error) => null,
           );
-          if (response != null) {
+          if (response != null && !isClosed) {
             add(
               SharedSectionEvent.updateSharedPages(
                 sharedPages: response.sharedPages,
@@ -162,19 +169,29 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
     Emitter<SharedSectionState> emit,
   ) async {
     final result = await repository.leaveSharedPage(event.pageId);
+    
+    // 检查bloc是否已关闭，避免在dispose后调用add()或emit()
+    if (isClosed) {
+      return;
+    }
+    
     result.fold(
       (success) {
-        add(
-          SharedSectionEvent.updateSharedPages(
-            sharedPages: state.sharedPages
-              ..removeWhere(
-                (page) => page.view.id == event.pageId,
-              ),
-          ),
-        );
+        if (!isClosed) {
+          add(
+            SharedSectionEvent.updateSharedPages(
+              sharedPages: state.sharedPages
+                ..removeWhere(
+                  (page) => page.view.id == event.pageId,
+                ),
+            ),
+          );
+        }
       },
       (error) {
-        emit(state.copyWith(errorMessage: error.msg));
+        if (!isClosed) {
+          emit(state.copyWith(errorMessage: error.msg));
+        }
       },
     );
   }
@@ -185,6 +202,13 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
       _pollingTimer = Timer.periodic(
         Duration(seconds: pollingIntervalSeconds),
         (_) {
+          // 检查bloc是否已关闭，避免在dispose后调用add()
+          if (isClosed) {
+            _pollingTimer?.cancel();
+            _pollingTimer = null;
+            return;
+          }
+          
           add(const SharedSectionEvent.refresh());
 
           Log.debug('Polling shared views');

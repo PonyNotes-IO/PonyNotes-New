@@ -477,9 +477,21 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return;
     }
     
-    // 如果是橡皮擦，不创建新笔迹，而是检测并删除相交的笔迹
+    // 如果是橡皮擦，根据模式处理
     if (_currentToolNotifier.value.toolId == ToolId.eraser) {
-      _eraseStrokesAtPosition(position, pageIndex: _currentPageIndex);
+      final eraserTool = _currentToolNotifier.value as Eraser;
+      if (eraserTool.mode == EraserMode.whiteout) {
+        // 涂白模式：初始化白色stroke（使用_currentStrokeNotifier以便实时显示）
+        _currentStrokeNotifier.value = Stroke(
+          points: [position],
+          color: Colors.white,
+          strokeWidth: eraserTool.strokeWidth,
+          toolId: ToolId.fountainPen, // 使用普通笔工具类型
+        );
+      } else {
+        // 标准模式和删除笔画模式：直接擦除
+        _eraseStrokesAtPosition(position, pageIndex: _currentPageIndex);
+      }
       return;
     }
     
@@ -746,6 +758,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     return false;
   }
   
+  
   /// 在指定位置擦除相交的笔迹
   void _eraseStrokesAtPosition(Offset position, {int? pageIndex}) {
     if (_coreInfo.pages.isEmpty) {
@@ -758,9 +771,36 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
     
     final page = _coreInfo.pages[targetPageIndex];
-    final eraserSize = _currentToolNotifier.value.strokeWidth;
+    final eraserTool = _currentToolNotifier.value;
+    
+    // 如果不是橡皮擦工具，直接返回
+    if (eraserTool.toolId != ToolId.eraser || eraserTool is! Eraser) {
+      return;
+    }
+    
+    final eraserSize = eraserTool.strokeWidth;
+    final eraserMode = eraserTool.mode;
     final sqrEraserSize = eraserSize * eraserSize;
     
+    // 根据橡皮擦模式执行不同的擦除行为
+    switch (eraserMode) {
+      case EraserMode.standard:
+        // 标准模式：整体删除stroke
+        _eraseStrokesStandard(page, targetPageIndex, position, sqrEraserSize);
+        break;
+      case EraserMode.whiteout:
+        // 涂白模式：在擦除区域绘制白色覆盖层
+        _eraseStrokesWhiteout(page, targetPageIndex, position, eraserSize);
+        break;
+      case EraserMode.deleteStrokes:
+        // 删除笔画模式：精确删除stroke中被擦除的部分
+        _eraseStrokesDeleteStrokes(page, targetPageIndex, position, eraserSize);
+        break;
+    }
+  }
+  
+  /// 标准模式擦除：整体删除stroke
+  void _eraseStrokesStandard(EditorPage page, int targetPageIndex, Offset position, double sqrEraserSize) {
     // 检测与橡皮擦相交的笔迹
     final strokesToRemove = <Stroke>[];
     for (final stroke in page.strokes) {
@@ -787,6 +827,155 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         _coreInfo.pages[targetPageIndex] = pageNotifier.page;
       } catch (e) {
         // 保底日志，避免抛出异常影响 UI
+        debugPrint('🦋[HandwritingSaber] Warning: failed to sync _coreInfo.pages[$targetPageIndex]: $e');
+      }
+      _scheduleSave();
+    }
+  }
+  
+  /// 涂白模式擦除：在擦除区域绘制白色覆盖层（此方法不再使用，涂白模式的路径跟踪在_startStroke和_updateStroke中处理）
+  void _eraseStrokesWhiteout(EditorPage page, int targetPageIndex, Offset position, double eraserSize) {
+    // 涂白模式的路径跟踪在_startStroke和_updateStroke中处理
+    // 这里不需要做任何事情
+  }
+  
+  /// 删除笔画模式擦除：精确删除stroke中被擦除的部分，将stroke分割成多个片段
+  void _eraseStrokesDeleteStrokes(EditorPage page, int targetPageIndex, Offset position, double eraserSize) {
+    final sqrEraserSize = eraserSize * eraserSize;
+    final strokesToRemove = <Stroke>[];
+    final strokesToAdd = <Stroke>[];
+    
+    // 处理每个stroke
+    for (int i = 0; i < page.strokes.length; i++) {
+      final stroke = page.strokes[i];
+      
+      // 跳过形状stroke（LineStroke, RectangleStroke等），因为它们只有2个点，分割意义不大
+      // 对于形状stroke，如果被擦除，直接删除
+      if (stroke is LineStroke || 
+          stroke is ArrowLineStroke ||
+          stroke is RectangleStroke ||
+          stroke is CircleStroke ||
+          stroke is TriangleStroke ||
+          stroke is DiamondStroke) {
+        if (_isStrokeIntersectingEraser(position, stroke, sqrEraserSize)) {
+          strokesToRemove.add(stroke);
+        }
+        continue;
+      }
+      
+      // 对于普通stroke，检查每个点是否在橡皮擦范围内
+      if (stroke.points.isEmpty) {
+        continue;
+      }
+      
+      final erasedPoints = List<bool>.filled(stroke.points.length, false);
+      bool hasErasedPoint = false;
+      
+      // 标记被擦除的点
+      for (int j = 0; j < stroke.points.length; j++) {
+        final point = stroke.points[j];
+        final dx = point.dx - position.dx;
+        final dy = point.dy - position.dy;
+        final sqrDistance = dx * dx + dy * dy;
+        final adjustedSqrSize = sqrEraserSize + (stroke.strokeWidth * stroke.strokeWidth);
+        
+        if (sqrDistance <= adjustedSqrSize) {
+          erasedPoints[j] = true;
+          hasErasedPoint = true;
+        }
+      }
+      
+      // 如果没有被擦除的点，跳过
+      if (!hasErasedPoint) {
+        continue;
+      }
+      
+      // 分割stroke：将未被擦除的部分提取为新的stroke片段
+      final segments = <List<Offset>>[];
+      List<Offset>? currentSegment;
+      
+      for (int j = 0; j < stroke.points.length; j++) {
+        if (!erasedPoints[j]) {
+          // 未被擦除的点，添加到当前片段
+          currentSegment ??= [];
+          currentSegment.add(stroke.points[j]);
+        } else {
+          // 被擦除的点，结束当前片段（如果存在）
+          if (currentSegment != null && currentSegment.length >= 2) {
+            segments.add(currentSegment);
+            currentSegment = null;
+          } else if (currentSegment != null) {
+            // 片段太短，丢弃
+            currentSegment = null;
+          }
+        }
+      }
+      
+      // 添加最后一个片段（如果存在）
+      if (currentSegment != null && currentSegment.length >= 2) {
+        segments.add(currentSegment);
+      }
+      
+      // 如果所有点都被擦除，或者没有有效的片段，删除整个stroke
+      if (segments.isEmpty) {
+        strokesToRemove.add(stroke);
+      } else if (segments.length == 1 && segments[0].length == stroke.points.length) {
+        // 如果没有实际分割（所有点都在同一个片段中），不需要分割
+        // 这种情况可能发生在边界情况，保持原样
+        continue;
+      } else {
+        // 创建新的stroke片段
+        for (final segmentPoints in segments) {
+          if (segmentPoints.length >= 2) {
+            final newStroke = Stroke(
+              points: segmentPoints,
+              color: stroke.color,
+              strokeWidth: stroke.strokeWidth,
+              toolId: stroke.toolId,
+              pressureEnabled: stroke.pressureEnabled,
+            );
+            strokesToAdd.add(newStroke);
+          }
+        }
+        strokesToRemove.add(stroke);
+      }
+    }
+    
+    // 执行删除和添加操作
+    if (strokesToRemove.isNotEmpty || strokesToAdd.isNotEmpty) {
+      // ✅ 记录擦除操作到历史记录
+      _history.recordChange(EditorHistoryItem.erase(
+        pageIndex: targetPageIndex,
+        deletedStrokes: List<Stroke>.from(strokesToRemove),
+      ));
+      
+      // 如果有新添加的stroke，记录绘制操作
+      if (strokesToAdd.isNotEmpty) {
+        _history.recordChange(EditorHistoryItem.draw(
+          pageIndex: targetPageIndex,
+          strokes: List<Stroke>.from(strokesToAdd),
+        ));
+      }
+      
+      _updateUndoRedoState();
+      
+      final pageNotifier = _pageNotifiers[targetPageIndex];
+      
+      // 删除被擦除的stroke
+      if (strokesToRemove.isNotEmpty) {
+        pageNotifier.removeStrokes(strokesToRemove);
+      }
+      
+      // 添加分割后的stroke片段
+      if (strokesToAdd.isNotEmpty) {
+        final newStrokes = List<Stroke>.from(pageNotifier.page.strokes)..addAll(strokesToAdd);
+        pageNotifier.updateStrokes(newStrokes);
+      }
+      
+      // 同步更新核心数据结构
+      try {
+        _coreInfo.pages[targetPageIndex] = pageNotifier.page;
+      } catch (e) {
         debugPrint('🦋[HandwritingSaber] Warning: failed to sync _coreInfo.pages[$targetPageIndex]: $e');
       }
       _scheduleSave();
@@ -856,9 +1045,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return;
     }
     
-    // 如果是橡皮擦，继续检测并删除相交的笔迹
+    // 如果是橡皮擦，根据模式处理
     if (_currentToolNotifier.value.toolId == ToolId.eraser) {
-      _eraseStrokesAtPosition(position, pageIndex: _currentPageIndex);
+      final eraserTool = _currentToolNotifier.value as Eraser;
+      if (eraserTool.mode == EraserMode.whiteout) {
+        // 涂白模式：更新白色stroke路径
+        final stroke = _currentStrokeNotifier.value;
+        if (stroke != null) {
+          stroke.points.add(position);
+          _currentStrokeNotifier.value = stroke; // 触发重绘
+        }
+      } else {
+        // 标准模式和删除笔画模式：继续检测并删除相交的笔迹
+        _eraseStrokesAtPosition(position, pageIndex: _currentPageIndex);
+      }
       return;
     }
     
@@ -1857,6 +2057,37 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return;
     }
     
+    // ✅ 如果是橡皮擦涂白模式，结束白色stroke
+    if (_currentToolNotifier.value.toolId == ToolId.eraser) {
+      final eraserTool = _currentToolNotifier.value as Eraser;
+      if (eraserTool.mode == EraserMode.whiteout) {
+        final whiteStroke = _currentStrokeNotifier.value;
+        if (whiteStroke != null && whiteStroke.points.length >= 2) {
+          final int targetPageIndex = _currentPageIndex ?? 0;
+          if (targetPageIndex < _coreInfo.pages.length) {
+            final page = _coreInfo.pages[targetPageIndex];
+            page.strokes.add(whiteStroke);
+            
+            // ✅ 记录绘制操作到历史记录
+            _history.recordChange(EditorHistoryItem.draw(
+              pageIndex: targetPageIndex,
+              strokes: [whiteStroke],
+            ));
+            _updateUndoRedoState();
+            
+            // 更新页面 notifier
+            if (targetPageIndex < _pageNotifiers.length) {
+              _pageNotifiers[targetPageIndex].updatePage(page);
+            }
+            _scheduleSave();
+          }
+        }
+        _currentStrokeNotifier.value = null;
+      }
+      _currentPageIndex = null;
+      return;
+    }
+    
     final Stroke? stroke = _currentStrokeNotifier.value;
     debugPrint('✍️✍️✍️ [HandwritingSaber] Current stroke: ${stroke != null ? "exists, points=${stroke.points.length}" : "null"}');
     if (stroke == null || stroke.points.isEmpty) {
@@ -2130,7 +2361,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     if (_currentToolNotifier.value is Pen) {
       _currentToolNotifier.value = (_currentToolNotifier.value as Pen).copyWith(strokeWidth: width);
     } else if (_currentToolNotifier.value is Eraser) {
-      _currentToolNotifier.value = Eraser(strokeWidth: width);
+      _currentToolNotifier.value = (_currentToolNotifier.value as Eraser).copyWith(strokeWidth: width);
     }
   }
 

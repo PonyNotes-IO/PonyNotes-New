@@ -365,12 +365,30 @@ class HandwritingSaberToolbar extends StatelessWidget {
           // ✅ 分隔符
           _buildGroupSeparator(context),
           
-          // ✅ 其他独立工具
-          _buildToolButton(
-            context: context,
-            icon: FontAwesomeIcons.eraser,
-            tool: Eraser(strokeWidth: currentStrokeWidth),
-            label: '橡皮擦',
+          // ✅ 橡皮擦下拉按钮
+          ToolDropdownButton(
+            currentTool: currentTool,
+            mainTool: (currentTool is Eraser)
+                ? (currentTool as Eraser).copyWith(strokeWidth: currentStrokeWidth)
+                : Eraser(strokeWidth: currentStrokeWidth, mode: EraserMode.standard),
+            options: [
+              ToolOption(
+                icon: FontAwesomeIcons.eraser,
+                label: '标准',
+                tool: Eraser(strokeWidth: currentStrokeWidth, mode: EraserMode.standard),
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.eraser,
+                label: '涂白',
+                tool: Eraser(strokeWidth: currentStrokeWidth, mode: EraserMode.whiteout),
+              ),
+              ToolOption(
+                icon: FontAwesomeIcons.eraser,
+                label: '删除笔画',
+                tool: Eraser(strokeWidth: currentStrokeWidth, mode: EraserMode.deleteStrokes),
+              ),
+            ],
+            onToolChanged: onToolChanged,
           ),
           // ✅ 选择工具下拉按钮
           ToolDropdownButton(

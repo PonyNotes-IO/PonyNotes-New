@@ -17,6 +17,13 @@ enum ArrowStyle {
   doubleArrow,  // 双向箭头
 }
 
+/// 橡皮擦模式枚举
+enum EraserMode {
+  standard,     // 标准模式：整体删除stroke
+  whiteout,     // 涂白模式：在擦除区域绘制白色覆盖层
+  deleteStrokes, // 删除笔画模式：精确删除stroke中被擦除的部分
+}
+
 /// 工具 ID 枚举
 enum ToolId {
   fountainPen,
@@ -91,6 +98,7 @@ class Pen extends Tool {
 class Eraser extends Tool {
   const Eraser({
     required this.strokeWidth,
+    this.mode = EraserMode.standard,
   });
 
   @override
@@ -99,6 +107,20 @@ class Eraser extends Tool {
   Color get color => Colors.transparent; // 橡皮擦不绘制颜色
   @override
   final double strokeWidth;
+  
+  /// 橡皮擦模式
+  final EraserMode mode;
+  
+  /// 创建新的橡皮擦实例
+  Eraser copyWith({
+    double? strokeWidth,
+    EraserMode? mode,
+  }) {
+    return Eraser(
+      strokeWidth: strokeWidth ?? this.strokeWidth,
+      mode: mode ?? this.mode,
+    );
+  }
 }
 
 /// ✅ 选择模式枚举

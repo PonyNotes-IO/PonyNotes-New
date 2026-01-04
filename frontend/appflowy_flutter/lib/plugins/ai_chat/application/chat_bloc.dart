@@ -377,10 +377,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   void _handleFailedSending(Emitter<ChatState> emit) {
-    final lastMessage = chatController.messages.lastOrNull;
-    if (lastMessage != null) {
-      chatController.remove(lastMessage);
-    }
+    // 不要移除最后一条消息，因为错误消息可能已经添加
+    // 如果移除，可能会删除错误消息，导致用户看不到错误提示
+    // 只更新状态为ready，让用户可以继续输入
     emit(state.copyWith(promptResponseState: PromptResponseState.ready));
   }
 
