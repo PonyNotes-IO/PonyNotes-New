@@ -465,7 +465,7 @@ class WorkspaceMemberBloc
     final workspaceId = workspace?.workspaceId ?? _workspaceId.value ?? '';
     if (authToken != null) {
       // Attach workspaceId as query param so visiting the link can be resolved
-      // by client-side logic even without a server-side landing page.
+      // by client-side landing page logic.
       final encodedCode = Uri.encodeComponent(inviteCode);
       final encodedWs = Uri.encodeComponent(workspaceId);
       return '$baseUrl/app/invited/$encodedCode?ws=$encodedWs';

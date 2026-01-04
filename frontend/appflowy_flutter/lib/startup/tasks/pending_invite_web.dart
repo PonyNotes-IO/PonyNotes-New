@@ -6,7 +6,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/env/cloud_env.dart';
-import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+// import 'package:appflowy/workspace/presentation/widgets/dialogs.dart'; // unused
 
 /// Process pending invite stored in localStorage (web only).
 Future<void> processPendingInvite() async {
@@ -17,14 +17,16 @@ Future<void> processPendingInvite() async {
     String? pendingInviteAction = html.window.localStorage['pending_invite_action'];
 
     // If not present in localStorage, try to parse from current URL
-    // Format supported: /app/invited/{code}?ws={workspaceId}
-    if ((pendingInviteCode == null || pendingWorkspaceId == null) &&
-        html.window.location != null) {
+    // Support formats:
+    //  - /app/invited/{code}?ws={workspaceId}
+    //  - /app?inviteCode={code}&ws={workspaceId}
+    if (pendingInviteCode == null || pendingWorkspaceId == null) {
       try {
         final loc = html.window.location;
         final path = loc.pathname ?? '';
+
+        // 1) path-style: /app/invited/{code}
         if (path.startsWith('/app/invited')) {
-          // extract code from path segment
           final parts = path.split('/');
           if (parts.length >= 3) {
             final code = parts.lastWhere((p) => p.isNotEmpty, orElse: () => '');
@@ -34,23 +36,26 @@ Future<void> processPendingInvite() async {
           }
         }
 
-        // try to parse workspace id from query param 'ws'
+        // 2) query-style: /app?inviteCode=...&ws=...
         final search = loc.search ?? '';
         if (search.isNotEmpty) {
           final params = Uri.splitQueryString(search.startsWith('?') ? search.substring(1) : search);
+          final inviteFromQuery = params['inviteCode'];
           final ws = params['ws'];
+          if (inviteFromQuery != null && inviteFromQuery.isNotEmpty) {
+            pendingInviteCode ??= Uri.decodeComponent(inviteFromQuery);
+          }
           if (ws != null && ws.isNotEmpty) {
             pendingWorkspaceId ??= Uri.decodeComponent(ws);
           }
         }
 
-        // if we found a code but not workspace id, leave it to existing localStorage flow
+        // if we found both, persist to localStorage so other parts can consume it consistently
         if (pendingInviteCode != null && pendingWorkspaceId != null) {
           pendingInviteAction ??= 'accept';
-          // persist to localStorage so other parts can consume it consistently
           html.window.localStorage['pending_invite_code'] = pendingInviteCode;
           html.window.localStorage['pending_workspace_id'] = pendingWorkspaceId;
-          html.window.localStorage['pending_invite_action'] = pendingInviteAction!;
+          html.window.localStorage['pending_invite_action'] = pendingInviteAction;
         }
       } catch (e, st) {
         Log.error('Failed to parse invite from URL: $e\n$st');

@@ -671,9 +671,8 @@ pub async fn user_sign_in_with_url(
     });
 
     // Record sign-in log (ignore errors to not block login)
-    if let Err(e) = client_clone.record_sign_in_log(provider, true, None, Some(metadata)).await {
-      tracing::warn!("Failed to record sign-in log: {}", e);
-    }
+    // TODO: Re-enable when record_sign_in_log method is available in client_api::Client
+    tracing::info!("User signed in with provider: {:?}", provider);
   });
 
   Ok(AuthResponse {
