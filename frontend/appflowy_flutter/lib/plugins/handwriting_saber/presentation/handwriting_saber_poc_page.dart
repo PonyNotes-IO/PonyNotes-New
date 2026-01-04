@@ -1364,11 +1364,35 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     
     if (_isSelecting) {
       // ✅ 完成选择区域，检测区域内的对象
-      if (_selectResult!.selectionPath.getBounds().width > 5 || 
-          _selectResult!.selectionPath.getBounds().height > 5) {
+      bool shouldDetect = false;
+      
+      // ✅ 根据选择模式判断选择区域是否足够大
+      if (_selectResult!.selectMode == SelectMode.rectangle) {
+        // ✅ 矩形框选模式：检查起点和终点之间的距离
+        final startPoint = _selectResult!.selectionStartPoint;
+        final endPoint = _selectResult!.selectionEndPoint;
+        if (startPoint != null && endPoint != null) {
+          final rect = Rect.fromPoints(startPoint, endPoint);
+          shouldDetect = rect.width.abs() > 5 || rect.height.abs() > 5;
+        }
+      } else if (_selectResult!.selectMode == SelectMode.lasso) {
+        // ✅ 套索选择模式：检查路径边界框的大小
+        final bounds = _selectResult!.selectionPath.getBounds();
+        shouldDetect = bounds.width > 5 || bounds.height > 5;
+        if (shouldDetect) {
+          _selectResult!.selectionPath.close();
+        }
+      }
+      
+      if (shouldDetect) {
         // 只有选择区域足够大时才检测（避免误触）
-        _selectResult!.selectionPath.close();
         _detectObjectsInSelection(_selectResult!);
+        final int targetPageIndex = _selectResult!.pageIndex;
+        _isSelecting = false;
+        if (targetPageIndex < _pageNotifiers.length) {
+          _pageNotifiers[targetPageIndex].updatePage(_coreInfo.pages[targetPageIndex]);
+        }
+        _scheduleSave();
       } else {
         // ✅ 选择区域太小，取消选择（只通知受影响页面）
         final int? prevPageIndex = _selectResult?.pageIndex;
@@ -1378,14 +1402,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         if (prevPageIndex != null && prevPageIndex < _pageNotifiers.length) {
           _pageNotifiers[prevPageIndex].updatePage(_coreInfo.pages[prevPageIndex]);
         }
-        return;
       }
-        final int targetPageIndex = _selectResult!.pageIndex;
-        _isSelecting = false;
-        if (targetPageIndex < _pageNotifiers.length) {
-          _pageNotifiers[targetPageIndex].updatePage(_coreInfo.pages[targetPageIndex]);
-        }
-        _scheduleSave();
     } else {
       // ✅ 移动完成，保持选择状态
       _selectStartPosition = null;
