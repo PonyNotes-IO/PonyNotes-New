@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
 import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
@@ -15,6 +16,7 @@ import 'package:bloc/bloc.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:protobuf/protobuf.dart';
+import 'package:appflowy_result/appflowy_result.dart';
 
 part 'settings_plan_bloc.freezed.dart';
 
@@ -85,10 +87,31 @@ class SettingsPlanBloc extends Bloc<SettingsPlanEvent, SettingsPlanState> {
           }
         },
         addSubscription: (plan) async {
-          final result = await _userService.createSubscription(
-            workspaceId,
-            plan,
-          );
+          Future<FlowyResult<PaymentLinkPB, FlowyError>> callCreate() =>
+              _userService.createSubscription(workspaceId, plan);
+
+          var result = await callCreate();
+
+          // If failure looks like token expired, try refresh and retry once
+          result.fold((pl) {}, (f) {});
+          if (result.isFailure) {
+            final failure = result.getFailure();
+            final msg = (failure?.msg ?? '').toLowerCase();
+            if (msg.contains('expired') || msg.contains('token') || msg.contains('expiredsignature') || msg.contains('unauthorized')) {
+              try {
+                final authService = getIt<AuthService>();
+                final refresh = await authService.refreshToken();
+                if (refresh.isSuccess) {
+                  // retry
+                  result = await callCreate();
+                } else {
+                  Log.warn('[SettingsPlanBloc] refresh token failed: ${refresh.getFailure()?.msg}');
+                }
+              } catch (e) {
+                Log.warn('[SettingsPlanBloc] Exception when refreshing token: $e');
+              }
+            }
+          }
 
           result.fold(
             (pl) => afLaunchUrlString(pl.paymentLink),
