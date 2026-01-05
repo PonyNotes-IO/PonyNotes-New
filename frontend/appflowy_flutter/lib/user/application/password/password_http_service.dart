@@ -480,6 +480,77 @@ class PasswordHttpService {
   /// [platform] - The platform name (e.g., "weixin", "douyin")
   /// [code] - The authorization code from the third party SDK
   ///
+  /// Refreshes the access token using a refresh token
+  ///
+  /// [refreshToken] - The refresh token to use for refreshing
+  ///
+  /// Returns GotrueTokenResponse with new access_token and refresh_token
+  Future<FlowyResult<Map<String, dynamic>, FlowyError>> refreshToken(
+    String refreshToken,
+  ) async {
+    try {
+      final uri = Uri.parse('$baseUrl/token?grant_type=refresh_token');
+
+      final body = <String, dynamic>{
+        'refresh_token': refreshToken,
+      };
+
+      final response = await client.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        try {
+          final decodedBody = jsonDecode(response.body) as Map<String, dynamic>;
+          return FlowyResult.success(decodedBody);
+        } catch (e) {
+          Log.error(
+            '🦋[PasswordHttpService] Failed to decode refresh token response: $e, body: ${response.body}',
+          );
+          return FlowyResult.failure(
+            FlowyError(msg: 'Failed to decode response: $e'),
+          );
+        }
+      } else {
+        Log.error(
+          '🦋[PasswordHttpService] Refresh token failed with status ${response.statusCode}, body: ${response.body}',
+        );
+
+        Map<String, dynamic> errorBody = {};
+        if (response.body.isNotEmpty) {
+          try {
+            errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+          } catch (e) {
+            Log.error(
+              '🦋[PasswordHttpService] Failed to parse error response as JSON: $e',
+            );
+            errorBody = {};
+          }
+        }
+
+        final errorMsg = errorBody['msg'] ?? errorBody['message'] ?? 'Refresh token failed';
+        return FlowyResult.failure(
+          FlowyError(
+            code: ErrorCode.UserUnauthorized,
+            msg: errorMsg,
+          ),
+        );
+      }
+    } catch (e) {
+      Log.error('🦋[PasswordHttpService] Refresh token request failed: $e');
+      return FlowyResult.failure(
+        FlowyError(
+          code: ErrorCode.Internal,
+          msg: 'Network error during token refresh: $e',
+        ),
+      );
+    }
+  }
+
   /// Returns GotrueTokenResponse with access_token and refresh_token
   Future<FlowyResult<Map<String, dynamic>, FlowyError>> signInWithThirdParty({
     required String platform,

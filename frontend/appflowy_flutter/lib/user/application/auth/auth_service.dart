@@ -94,4 +94,9 @@ abstract class AuthService {
   ///
   /// Returns [UserProfilePB] if the user has signed in, otherwise returns [FlowyError].
   Future<FlowyResult<UserProfilePB, FlowyError>> getUser();
+
+  /// Refreshes the access token using the refresh token.
+  ///
+  /// Returns [GotrueTokenResponsePB] with new tokens, otherwise returns [FlowyError].
+  Future<FlowyResult<GotrueTokenResponsePB, FlowyError>> refreshToken();
 }
