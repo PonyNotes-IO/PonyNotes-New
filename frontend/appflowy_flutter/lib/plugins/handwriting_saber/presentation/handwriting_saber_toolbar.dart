@@ -1314,6 +1314,22 @@ class HandwritingSaberToolbar extends StatelessWidget {
       ),
     );
     
+    // ✅ 字号选项配置（显示名称 -> 实际值）
+    // 注意：flutter_quill 的 getFontSize 只接受纯数字字符串，不能带 px 后缀
+    const fontSizeItems = <String, String>{
+      '12': '12',
+      '14': '14',
+      '16': '16',
+      '18': '18',
+      '20': '20',
+      '24': '24',
+      '28': '28',
+      '32': '32',
+      '36': '36',
+      '48': '48',
+      '清除': '0', // 清除字号格式
+    };
+    
     // ✅ 当有活动的 Quill 结构时显示工具栏（可能来自文本框或全页面富文本编辑）
     return Collapsible(
       axis: CollapsibleAxis.vertical,
@@ -1338,11 +1354,17 @@ class HandwritingSaberToolbar extends StatelessWidget {
                     base: quill.QuillToolbarBaseButtonOptions(
                       iconTheme: iconTheme,
                     ),
+                    // ✅ 配置字号选择器
+                    fontSize: quill.QuillToolbarFontSizeButtonOptions(
+                      items: fontSizeItems,
+                      initialValue: '字号',
+                      defaultDisplayText: '字号',
+                    ),
                   ),
                   multiRowsDisplay: true,
                   showUndo: false,
                   showRedo: false,
-                  showFontSize: false,
+                  showFontSize: true, // ✅ 启用字号选择器
                   showFontFamily: false,
                   showClearFormat: true,
                   showBoldButton: true,

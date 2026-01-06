@@ -257,34 +257,131 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     Emitter<ShareTabState> emit,
   ) async {
     emit(
-      state.copyWith(),
+      state.copyWith(
+        errorMessage: '',
+        updateAccessLevelResult: null,
+      ),
     );
 
-    final result = await repository.sharePageWithUser(
-      pageId: pageId,
+    final updated = await _updateWorkspaceMemberRole(
+      email: event.email,
       accessLevel: event.accessLevel,
-      emails: [event.email],
     );
 
-    await result.fold(
-      (_) async {
-        final users = await _getSharedUsers();
-        emit(
-          state.copyWith(
-            updateAccessLevelResult: FlowySuccess(null),
-            users: users,
+    if (updated) {
+      final users = await _getSharedUsers();
+      emit(
+        state.copyWith(
+          updateAccessLevelResult: FlowySuccess(null),
+          users: users,
+        ),
+      );
+    } else {
+      emit(
+        state.copyWith(
+          errorMessage: '更新权限失败',
+          isLoading: false,
+          updateAccessLevelResult: FlowyFailure(
+            FlowyError()..msg = '更新权限失败',
           ),
-        );
-      },
-      (error) async {
-        emit(
-          state.copyWith(
-            errorMessage: error.msg,
-            isLoading: false,
-          ),
-        );
-      },
-    );
+        ),
+      );
+    }
+  }
+
+  /// 调用工作空间成员权限接口：PUT /api/workspace/{workspace_id}/member
+  /// 将 accessLevel 映射为 role（Owner/Member），更新成员权限
+  Future<bool> _updateWorkspaceMemberRole({
+    required String email,
+    required ShareAccessLevel accessLevel,
+  }) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+
+      if (baseUrl.isEmpty) {
+        Log.error('Base URL is empty');
+        return false;
+      }
+
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold(
+        (user) => user,
+        (error) {
+          Log.error('Failed to get user profile: $error');
+          return null;
+        },
+      );
+
+      if (userProfile == null) {
+        Log.error('User profile is null');
+        return false;
+      }
+
+      final rawToken = userProfile.token;
+      if (rawToken.isEmpty) {
+        Log.error('Auth token is empty');
+        return false;
+      }
+
+      // 提取 access_token（可能是 JSON 格式）
+      final accessToken = _extractAccessToken(rawToken);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.error('Failed to extract access_token from token');
+        return false;
+      }
+
+      // accessLevel 映射到 role：fullAccess -> Owner，其它 -> Member
+      final role = accessLevel == ShareAccessLevel.fullAccess ? 'Owner' : 'Member';
+
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/workspace/$workspaceId/member',
+      );
+
+      Log.info('Updating workspace member role: $uri, email=$email, role=$role');
+
+      final response = await http
+          .put(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $accessToken',
+            },
+            body: jsonEncode({
+              'email': email,
+              'role': role,
+            }),
+          )
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              throw Exception('Request timeout');
+            },
+          );
+
+      if (response.statusCode == 200) {
+        // 尝试解析 code 字段（如果有）
+        if (response.body.isNotEmpty) {
+          try {
+            final body = jsonDecode(response.body) as Map<String, dynamic>;
+            final code = body['code'] as int?;
+            if (code != null && code != 0) {
+              Log.error('Update member role failed, code: $code, body: ${response.body}');
+              return false;
+            }
+          } catch (_) {
+            // 如果不是 JSON，忽略
+          }
+        }
+        return true;
+      } else {
+        Log.error('Update member role failed: HTTP ${response.statusCode}, body: ${response.body}');
+        return false;
+      }
+    } catch (e, stackTrace) {
+      Log.error('Exception in _updateWorkspaceMemberRole: $e', e, stackTrace);
+      return false;
+    }
   }
 
   void _onUpdateGeneralAccess(

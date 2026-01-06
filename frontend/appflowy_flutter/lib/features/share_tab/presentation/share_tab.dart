@@ -543,7 +543,7 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
         final currentSharedUser = currentUser == null
             ? null
             : allUsers.firstWhereOrNull(
-                (user) => user.email == currentUser.email,
+                (user) => user.name == currentUser.name,
               );
 
         return Dialog(

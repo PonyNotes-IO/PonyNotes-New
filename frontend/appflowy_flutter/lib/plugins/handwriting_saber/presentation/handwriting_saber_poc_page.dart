@@ -1763,6 +1763,27 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       textBox.textStyle = textBox.getHeadingStyle(_currentToolNotifier.value.color);
     }
     
+    // ✅ 关键修复：根据文本框类型和 lineHeight 计算字体大小，并显式设置到 Quill Document
+    final double lineHeight = _coreInfo.lineHeight.toDouble();
+    double fontSize;
+    switch (textBoxType) {
+      case saber_text.TextBoxType.heading1:
+        fontSize = lineHeight * 1.15;
+        break;
+      case saber_text.TextBoxType.heading2:
+        fontSize = lineHeight * 1.0;
+        break;
+      case saber_text.TextBoxType.heading3:
+        fontSize = lineHeight * 0.9;
+        break;
+      case saber_text.TextBoxType.paragraph:
+      case saber_text.TextBoxType.normal:
+        fontSize = lineHeight * 0.7;
+        break;
+    }
+    // ✅ 显式设置 Quill Document 的字体大小属性，确保编辑和渲染时一致
+    textBox.quillContent.ensureFontSize(fontSize);
+    
     // ✅ 添加到页面并进入编辑模式（使用EditorPageNotifier避免全局setState）
     debugPrint('🦋[HandwritingSaber] _createTextBox: adding textBox id=${textBox.id} to page, position=${textBox.position}, size=${textBox.size}');
     
@@ -1837,6 +1858,28 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       textBox.quillContent.clear();
       textBox.quillContent.insertText(textBox.text);
     }
+    
+    // ✅ 关键修复：确保 Quill Document 中显式设置字体大小属性
+    // 根据文本框类型和 lineHeight 计算字体大小
+    final double lineHeight = _coreInfo.lineHeight.toDouble();
+    double fontSize;
+    switch (textBox.textBoxType) {
+      case saber_text.TextBoxType.heading1:
+        fontSize = lineHeight * 1.15;
+        break;
+      case saber_text.TextBoxType.heading2:
+        fontSize = lineHeight * 1.0;
+        break;
+      case saber_text.TextBoxType.heading3:
+        fontSize = lineHeight * 0.9;
+        break;
+      case saber_text.TextBoxType.paragraph:
+      case saber_text.TextBoxType.normal:
+        fontSize = lineHeight * 0.7;
+        break;
+    }
+    // ✅ 显式设置 Quill Document 的字体大小属性，确保编辑和渲染时一致
+    textBox.quillContent.ensureFontSize(fontSize);
     
     // ✅ 进入编辑模式（使用ValueNotifier，不触发全局setState）
     _editingTextBoxIdNotifier.value = textBox.id;
@@ -1913,20 +1956,38 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     final double textBoxWidth = textBox.size.width * scale;
     
     // ✅ 单行输入框，使用固定高度（根据字体大小和缩放计算）
-    final textStyle = textBox.textStyle ?? const TextStyle(
-      fontSize: 16,
+    // ✅ 关键修复：根据文本框类型和 lineHeight 计算字体大小，与 QuillEditor 保持一致
+    final double lineHeight = _coreInfo.lineHeight.toDouble();
+    double fontSize;
+    switch (textBox.textBoxType) {
+      case saber_text.TextBoxType.heading1:
+        fontSize = lineHeight * 1.15; // 与 QuillEditor 的 displayLarge 一致
+        break;
+      case saber_text.TextBoxType.heading2:
+        fontSize = lineHeight * 1.0; // 与 QuillEditor 的 displayMedium 一致
+        break;
+      case saber_text.TextBoxType.heading3:
+        fontSize = lineHeight * 0.9; // 与 QuillEditor 的 displaySmall 一致
+        break;
+      case saber_text.TextBoxType.paragraph:
+      case saber_text.TextBoxType.normal:
+        fontSize = lineHeight * 0.7; // 与 QuillEditor 的 bodyLarge 一致
+        break;
+    }
+    
+    // ✅ 使用 textBox.textStyle 的颜色和其他属性，但覆盖字体大小
+    final textStyle = (textBox.textStyle ?? const TextStyle(
       color: Colors.black,
-    );
-    final double fontSize = textStyle.fontSize ?? 16;
+    )).copyWith(fontSize: fontSize);
+    
     final double scaledFontSize = fontSize * scale;
     // 单行输入框高度：字体大小 + 上下padding
     final double singleLineHeight = scaledFontSize + 8.0; // 上下各4px padding
     
-    // ✅ 确保 Quill 内容已初始化（如果为空则从 text 字段初始化）
-    if (textBox.quillContent.plainText.trim().isEmpty && textBox.text.isNotEmpty) {
-      textBox.quillContent.clear();
-      textBox.quillContent.insertText(textBox.text);
-    }
+    // ✅ 注意：不要在 build 阶段调用会修改 QuillController 状态的方法
+    // 字体大小应该在 _createTextBox 或 _editTextBox 中设置
+    // 在 build 阶段调用 ensureFontSize 会触发 notifyListeners
+    // 导致 "setState() or markNeedsBuild() called during build" 错误
     
     // ✅ 监听 Quill 内容变化，同步到 TextBox 并动态调整宽度
     textBox.quillContent.controller.changes.listen((event) {

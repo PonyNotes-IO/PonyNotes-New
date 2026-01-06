@@ -28,7 +28,6 @@ enum PluginType {
   folder,
   notebook,
   aiWelcome,
-  handwritingNative,
   handwritingSaber,
 }
 

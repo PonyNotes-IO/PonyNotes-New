@@ -50,7 +50,7 @@ class SharedUserWidget extends StatelessWidget {
     BuildContext context,
   ) {
     final theme = AppFlowyTheme.of(context);
-    final isCurrentUser = user.email == currentUser.email;
+    final isCurrentUser = user.name == currentUser.name;
 
     return Row(
       mainAxisSize: MainAxisSize.min,

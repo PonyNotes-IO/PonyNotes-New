@@ -11,7 +11,6 @@ import 'package:appflowy/plugins/database/grid/presentation/mobile_grid_page.dar
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/plugins/document/document.dart';
 import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
-import 'package:appflowy/plugins/handwriting_native/handwriting_native.dart';
 import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
@@ -153,8 +152,8 @@ extension ViewExtension on ViewPB {
           initialRowId: rowId,
         );
       case ViewLayoutPB.Document:
-        // 检查是否是 handwriting_saber / handwriting_native 类型
-        // 优先从 extra 字段解析，如果没有，再从 meta 中读取 view_type
+        // 检查是否是 handwriting_saber 类型
+        // 优先从 extra 字段解析
         String? viewType;
 
         if (extra.isNotEmpty) {
@@ -164,9 +163,7 @@ extension ViewExtension on ViewPB {
               viewType = ext['view_type'] as String?;
             }
           } catch (e) {
-            // 解析失败，忽略 extra，继续尝试从 meta 中读取
-            // 注意：旧版本中可能会从 meta 字段读取 view_type，但目前 ViewPB
-            // 不再暴露 meta 映射字段，因此这里暂不做额外处理。
+            // 解析失败，忽略 extra
           }
         }
 
@@ -174,11 +171,6 @@ extension ViewExtension on ViewPB {
           return HandwritingSaberPlugin(
             view: this,
             pluginType: PluginType.handwritingSaber,
-          );
-        } else if (viewType == 'handwriting_native') {
-          return HandwritingNativePlugin(
-            view: this,
-            pluginType: PluginType.handwritingNative,
           );
         }
         // 普通的 Document 视图，返回 DocumentPlugin
