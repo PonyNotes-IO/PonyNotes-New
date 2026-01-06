@@ -4,6 +4,7 @@ import '../editor/page.dart';
 import '../tools/tool.dart';
 import '../../components/canvas/image/pdf_editor_image.dart';
 import '../../components/canvas/webview/webview_editor_element.dart';
+import '../editor/text_box.dart' as saber_text;
 
 /// ✅ 选择结果（存储选中的对象）
 class SelectResult {
@@ -13,15 +14,17 @@ class SelectResult {
     required this.images,
     required this.webViews,
     required this.selectionPath,
+    List<saber_text.TextBox>? textBoxes,
     this.selectMode = SelectMode.click,
     this.selectionStartPoint,
     this.selectionEndPoint,
-  });
+  }) : textBoxes = textBoxes ?? [];
 
   int pageIndex; // 页面索引
   List<Stroke> strokes; // 选中的笔迹列表（可修改）
   List<PdfEditorImage> images; // 选中的图片列表（可修改）
   List<WebViewEditorElement> webViews; // 选中的WebView列表（可修改）
+  List<saber_text.TextBox> textBoxes = []; // ✅ 选中的文本框列表（可修改）
   Path selectionPath; // 选择区域的路径（用于套索模式）
   
   /// ✅ 新增：选择模式
@@ -33,7 +36,7 @@ class SelectResult {
   /// ✅ 新增：选择终点（用于矩形框选）
   Offset? selectionEndPoint;
 
-  bool get isEmpty => strokes.isEmpty && images.isEmpty && webViews.isEmpty;
+  bool get isEmpty => strokes.isEmpty && images.isEmpty && webViews.isEmpty && textBoxes.isEmpty;
   
   /// ✅ 获取矩形选择框（用于矩形框选模式）
   Rect? getSelectionRect() {
@@ -65,6 +68,11 @@ class SelectResult {
     // 移动所有选中的WebView
     for (final webView in webViews) {
       webView.dstRect = webView.dstRect.shift(offset);
+    }
+
+    // ✅ 移动所有选中的文本框
+    for (final textBox in textBoxes) {
+      textBox.move(offset);
     }
 
     // 移动选择路径
@@ -104,6 +112,15 @@ class SelectResult {
     // 从WebView中获取边界
     for (final webView in webViews) {
       final rect = webView.dstRect;
+      minX = minX < rect.left ? minX : rect.left;
+      minY = minY < rect.top ? minY : rect.top;
+      maxX = maxX > rect.right ? maxX : rect.right;
+      maxY = maxY > rect.bottom ? maxY : rect.bottom;
+    }
+
+    // ✅ 从文本框中获取边界
+    for (final textBox in textBoxes) {
+      final rect = textBox.rect;
       minX = minX < rect.left ? minX : rect.left;
       minY = minY < rect.top ? minY : rect.top;
       maxX = maxX > rect.right ? maxX : rect.right;

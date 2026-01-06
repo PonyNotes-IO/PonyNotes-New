@@ -202,3 +202,6 @@ class SvgEditorImage extends EditorImage {
 
 
 
+
+
+
