@@ -126,6 +126,7 @@ dependencies:
   perfect_freehand: ^2.5.1
   pdf: ^3.11.1
   syncfusion_flutter_pdf: ^27.2.5
+  pdf_text: ^0.5.0  # ✅ PDF文本提取，支持获取文本位置信息
   pdfx: 2.6.0
   pdfrx: ^1.0.103  # ✅ 保持兼容版本，在现有API基础上优化性能
   percent_indicator: 4.2.3

@@ -78,6 +78,62 @@ class QuillStruct {
     );
   }
   
+  /// ✅ 设置字体大小（显式设置 Quill Document 的 size 属性）
+  void setFontSize(double fontSize) {
+    final selection = controller.selection;
+    // Quill 使用字符串格式，如 "18px"
+    final sizeValue = '${fontSize.toInt()}px';
+    if (selection.isValid) {
+      // 格式化当前选中的文本，设置字体大小
+      controller.formatText(
+        selection.start,
+        selection.end - selection.start,
+        SizeAttribute(sizeValue),
+      );
+    } else {
+      // 如果没有选中文本，格式化整个文档
+      final document = controller.document;
+      if (document.length > 0) {
+        controller.formatText(
+          0,
+          document.length - 1,
+          SizeAttribute(sizeValue),
+        );
+      }
+    }
+  }
+  
+  /// ✅ 确保整个文档使用指定的字体大小
+  /// 如果没有 size 属性，为整个文档设置字体大小
+  void ensureFontSize(double fontSize) {
+    final document = controller.document;
+    if (document.length == 0) return;
+    
+    // 检查文档中是否已经有 size 属性
+    bool hasSizeAttribute = false;
+    for (final node in document.root.children) {
+      final delta = node.toDelta();
+      for (final op in delta.toList()) {
+        if (op.attributes != null && op.attributes!['size'] != null) {
+          hasSizeAttribute = true;
+          break;
+        }
+      }
+      if (hasSizeAttribute) break;
+    }
+    
+    // 如果没有 size 属性，为整个文档设置字体大小
+    // Quill 使用字符串格式，如 "18px"
+    if (!hasSizeAttribute) {
+      final sizeValue = '${fontSize.toInt()}px';
+      controller.formatText(
+        0,
+        document.length - 1,
+        SizeAttribute(sizeValue),
+      );
+    }
+  }
+  
   /// ✅ 将 Quill Document 转换为 TextSpan（用于在 Canvas 上绘制）
   TextSpan toTextSpan({TextStyle? baseStyle}) {
     final document = controller.document;
@@ -101,7 +157,9 @@ class QuillStruct {
         final text = op.data as String;
         final attributes = op.attributes;
         
-        // 构建文本样式
+        // ✅ 构建文本样式：优先使用 baseStyle，确保字体大小一致
+        // 关键修复：如果没有显式的 size 属性，使用 baseStyle 的字体大小
+        // 这样确保编辑时和渲染时使用相同的字体大小
         TextStyle style = defaultBaseStyle;
         
         if (attributes != null) {

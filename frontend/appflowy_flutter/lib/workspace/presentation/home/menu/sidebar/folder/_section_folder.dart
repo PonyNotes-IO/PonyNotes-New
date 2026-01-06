@@ -147,22 +147,17 @@ class _SectionFolderState extends State<SectionFolder> {
     if (parentViewId == null) return;
 
     // 视图默认名称
-    // 普通 Document 使用通用的默认名称；手写笔记（原生）单独使用"未命名手写笔记"；手写笔记（Saber）使用"未命名手记"
+    // 普通 Document 使用通用的默认名称；手写笔记（Saber）使用"未命名手记"
     final String viewName;
-    if (pluginBuilder.pluginType == PluginType.handwritingNative) {
-      viewName = '未命名手写笔记';
-    } else if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+    if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
       viewName = '未命名手记';
     } else {
       viewName = pluginBuilder.layoutType?.defaultName ?? '';
     }
 
     try {
-      // 为 handwriting_native 类型准备 extra 参数
+      // 准备 extra 参数
       Map<String, String> ext = {};
-      if (pluginBuilder.pluginType == PluginType.handwritingNative) {
-        ext['view_type'] = 'handwriting_native';
-      }
       
       // 使用ViewBackendService创建指定类型的视图
       final result = await ViewBackendService.createView(
@@ -229,7 +224,6 @@ class _SectionFolderState extends State<SectionFolder> {
               viewIcon: EmojiIconData.emoji('📓'),
             );
           }
-          // 注意：handwriting_native 的 extra 字段已经在创建时通过 ext 参数设置了，不需要再次更新
           
           // 不需要手动刷新，系统会自动更新侧边栏
         },

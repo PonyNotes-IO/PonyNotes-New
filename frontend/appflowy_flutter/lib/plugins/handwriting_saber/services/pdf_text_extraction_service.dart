@@ -176,6 +176,17 @@ class PdfTextExtractionService {
     required Rect pdfRect,
     required Size pageSize,
   }) async {
+    // 将画布坐标转换为PDF页面坐标
+    final pdfSelectionRect = _canvasToPdfCoordinates(
+      canvasRect: canvasRect,
+      pdfRect: pdfRect,
+      pageSize: pageSize,
+    );
+
+    LogUtils.debug('🦋[PDF文本提取] 选择区域: canvasRect=$canvasRect, pdfRect=$pdfRect, pageSize=$pageSize');
+    LogUtils.debug('🦋[PDF文本提取] PDF页面坐标选择区域: $pdfSelectionRect (left=${pdfSelectionRect.left}, top=${pdfSelectionRect.top}, width=${pdfSelectionRect.width}, height=${pdfSelectionRect.height})');
+
+    // ✅ 使用Syncfusion提取文本，然后尝试按区域筛选
     PdfDocument? document;
     try {
       document = PdfDocument(inputBytes: pdfBytes);
@@ -185,43 +196,127 @@ class PdfTextExtractionService {
         return '';
       }
 
-      // 将画布坐标转换为PDF页面坐标
-      final pdfSelectionRect = _canvasToPdfCoordinates(
-        canvasRect: canvasRect,
-        pdfRect: pdfRect,
-        pageSize: pageSize,
-      );
-
-      // 使用PdfTextExtractor提取文本
       final extractor = PdfTextExtractor(document);
-      
-      // 获取页面对象
-      final page = document.pages[pageIndex];
-      final pageWidth = page.size.width;
-      final pageHeight = page.size.height;
-
-      // 提取全部文本（Syncfusion不支持按区域提取，我们需要手动筛选）
       final allText = extractor.extractText();
       
-      // 尝试提取文本及其位置信息
-      // 注意：Syncfusion的PdfTextExtractor可能不提供位置信息
-      // 这里我们使用一个简化的方法：提取全部文本，然后根据页面索引筛选
-      // 如果只有一页，直接返回全部文本
+      // ✅ 如果文本为空，直接返回
+      if (allText.trim().isEmpty) {
+        LogUtils.debug('🦋[PDF文本提取] 提取的文本为空');
+        return '';
+      }
+      
+      // ✅ 如果只有一页，尝试按区域筛选文本
       if (document.pages.count == 1) {
-        return allText.trim();
+        return _filterTextByRegion(allText, pdfSelectionRect, pageSize);
       }
 
-      // 多页情况：由于Syncfusion的限制，我们无法精确提取区域文本
-      // 这里返回全部文本作为降级方案
-      // TODO: 使用其他PDF库（如pdf_text）来获取文本位置信息，然后按区域筛选
-      LogUtils.debug('多页PDF，无法精确提取区域文本，返回全部文本');
-      return allText.trim();
+      // ✅ 多页情况：Syncfusion不支持单页提取，我们需要估算当前页面的文本
+      // 这是一个简化的方法：假设每页文本量大致相等，提取对应页面的文本
+      final lines = allText.split('\n');
+      
+      // ✅ 如果没有文本行，返回空
+      if (lines.isEmpty) {
+        LogUtils.debug('🦋[PDF文本提取] 多页PDF，没有文本行');
+        return '';
+      }
+      
+      final estimatedLinesPerPage = (lines.length / document.pages.count).ceil();
+      final startLine = (pageIndex * estimatedLinesPerPage).clamp(0, lines.length);
+      final endLine = (startLine + estimatedLinesPerPage).clamp(0, lines.length);
+      
+      // ✅ 如果起止行相同，返回空
+      if (startLine >= endLine) {
+        LogUtils.debug('🦋[PDF文本提取] 多页PDF，当前页面没有文本');
+        return '';
+      }
+      
+      final pageText = lines.sublist(startLine, endLine).join('\n');
+      
+      LogUtils.debug('🦋[PDF文本提取] 多页PDF，估算当前页面文本: ${endLine - startLine}行');
+      
+      // ✅ 对当前页面的文本按区域筛选
+      return _filterTextByRegion(pageText, pdfSelectionRect, pageSize);
+      
     } catch (e) {
       LogUtils.error('按区域提取PDF文本失败: $e');
       return '';
     } finally {
       document?.dispose();
     }
+  }
+
+  /// 根据选择区域筛选文本（启发式方法）
+  /// 由于Syncfusion不提供文本位置信息，我们使用一个简化的方法：
+  /// 根据选择区域的Y坐标范围，估算应该包含哪些文本行
+  static String _filterTextByRegion(String text, Rect selectionRect, Size pageSize) {
+    if (text.trim().isEmpty) {
+      return '';
+    }
+
+    // ✅ 如果选择区域覆盖了整个页面的大部分区域，返回全部文本
+    final selectionAreaRatio = (selectionRect.width * selectionRect.height) / (pageSize.width * pageSize.height);
+    
+    if (selectionAreaRatio > 0.8) {
+      LogUtils.debug('🦋[PDF文本提取] 选择区域覆盖了${(selectionAreaRatio * 100).toStringAsFixed(1)}%的页面，返回全部文本');
+      return _sanitizeTextForClipboard(text);
+    }
+
+    // ✅ 按Y坐标筛选文本行
+    final lines = text.split('\n');
+    final selectedLines = <String>[];
+    
+    // 计算选择区域在页面中的相对位置（0.0到1.0）
+    final selectionTopRatio = selectionRect.top / pageSize.height;
+    final selectionBottomRatio = (selectionRect.top + selectionRect.height) / pageSize.height;
+    
+    // 假设文本行均匀分布在页面上
+    for (int i = 0; i < lines.length; i++) {
+      final lineTopRatio = i / lines.length;
+      final lineBottomRatio = (i + 1) / lines.length;
+      
+      // 如果文本行与选择区域有重叠，则包含该行
+      if (lineBottomRatio >= selectionTopRatio && lineTopRatio <= selectionBottomRatio) {
+        selectedLines.add(lines[i]);
+      }
+    }
+    
+    final selectedText = selectedLines.join('\n');
+    
+    if (selectedText.trim().isEmpty) {
+      // 如果按行筛选没有结果，返回全部文本（降级方案）
+      LogUtils.debug('🦋[PDF文本提取] 按行筛选没有结果，返回全部文本');
+      return _sanitizeTextForClipboard(text);
+    }
+    
+    LogUtils.debug('🦋[PDF文本提取] 按区域筛选结果: ${selectedLines.length}行，${selectedText.length}个字符');
+    return _sanitizeTextForClipboard(selectedText);
+  }
+
+  /// ✅ 清理文本，确保可以安全粘贴到 Quill 编辑器
+  /// 主要解决：Quill 编辑器在处理特殊字符时可能触发断言错误
+  static String _sanitizeTextForClipboard(String text) {
+    if (text.isEmpty) {
+      return '';
+    }
+
+    // ✅ 统一换行符为 \n
+    String sanitized = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    
+    // ✅ 移除 NULL 字符和其他控制字符（保留换行符和制表符）
+    sanitized = sanitized.replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]'), '');
+    
+    // ✅ 移除零宽字符（这些字符可能导致 Quill 解析问题）
+    sanitized = sanitized.replaceAll(RegExp(r'[\u200B-\u200D\uFEFF\u2060]'), '');
+    
+    // ✅ 移除首尾空白字符
+    sanitized = sanitized.trim();
+    
+    // ✅ 如果文本为空，返回空字符串
+    if (sanitized.isEmpty) {
+      return '';
+    }
+    
+    return sanitized;
   }
 
   /// 从文件路径按矩形区域提取文本

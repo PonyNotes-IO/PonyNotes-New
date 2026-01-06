@@ -1193,6 +1193,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
 
   /// ✅ 绘制文本框
   void _drawTextBox(Canvas canvas, saber_text.TextBox textBox, double scale, double offsetX, double offsetY, String? editingTextBoxId) {
+    // ✅ 关键修复：Canvas 已经通过 canvas.scale(scale) 进行了整体缩放
+    // 所以字体大小应该使用页面坐标（未缩放），而不是屏幕坐标（已缩放）
     canvas.save();
     canvas.translate(offsetX, offsetY);
     canvas.scale(scale);
