@@ -16,9 +16,37 @@ class QuillStruct {
   /// 焦点节点
   final FocusNode focusNode;
 
+  /// ✅ 创建安全的 QuillController 配置
+  /// 禁用富文本粘贴，只允许纯文本粘贴，避免断言错误
+  static QuillControllerConfig _createSafeConfig() {
+    return QuillControllerConfig(
+      clipboardConfig: QuillClipboardConfig(
+        // ✅ 禁用富文本粘贴，避免格式转换导致的断言错误
+        enableExternalRichPaste: false,
+        // ✅ 自定义纯文本粘贴处理，清理特殊字符
+        onPlainTextPaste: (plainText) async {
+          // 清理可能导致问题的字符
+          String sanitized = plainText
+            .replaceAll('\r\n', '\n')
+            .replaceAll('\r', '\n')
+            .replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]'), '')
+            .replaceAll(RegExp(r'[\u200B-\u200D\uFEFF\u2060]'), '')
+            .replaceAll(RegExp(r'[\uD800-\uDFFF]'), '');
+          // 移除末尾换行符（可能导致行末格式应用问题）
+          while (sanitized.endsWith('\n')) {
+            sanitized = sanitized.substring(0, sanitized.length - 1);
+          }
+          return sanitized.isEmpty ? null : sanitized;
+        },
+      ),
+    );
+  }
+
   /// 创建默认的 QuillStruct 实例
   factory QuillStruct.createDefault() {
-    final controller = QuillController.basic();
+    final controller = QuillController.basic(
+      config: _createSafeConfig(),
+    );
     final focusNode = FocusNode();
     return QuillStruct(
       controller: controller,
@@ -32,6 +60,7 @@ class QuillStruct {
       final controller = QuillController(
         document: Document.fromJson(json['document'] ?? []),
         selection: const TextSelection.collapsed(offset: 0),
+        config: _createSafeConfig(),
       );
       final focusNode = FocusNode();
       return QuillStruct(
@@ -79,10 +108,15 @@ class QuillStruct {
   }
   
   /// ✅ 设置字体大小（显式设置 Quill Document 的 size 属性）
+  /// 注意：flutter_quill 的 getFontSize 函数只支持以下格式：
+  /// - 'small', 'normal', 'large', 'huge' 字符串
+  /// - 纯数字字符串如 "18"（不能带 px 后缀！）
+  /// - double 或 int 类型
   void setFontSize(double fontSize) {
     final selection = controller.selection;
-    // Quill 使用字符串格式，如 "18px"
-    final sizeValue = '${fontSize.toInt()}px';
+    // ✅ 修复：使用纯数字字符串，不要带 px 后缀
+    // flutter_quill 的 getFontSize 无法解析 "18px" 格式
+    final sizeValue = fontSize.toStringAsFixed(0);
     if (selection.isValid) {
       // 格式化当前选中的文本，设置字体大小
       controller.formatText(
@@ -123,9 +157,10 @@ class QuillStruct {
     }
     
     // 如果没有 size 属性，为整个文档设置字体大小
-    // Quill 使用字符串格式，如 "18px"
+    // ✅ 修复：使用纯数字字符串，不要带 px 后缀
+    // flutter_quill 的 getFontSize 无法解析 "18px" 格式
     if (!hasSizeAttribute) {
-      final sizeValue = '${fontSize.toInt()}px';
+      final sizeValue = fontSize.toStringAsFixed(0);
       controller.formatText(
         0,
         document.length - 1,

@@ -19,6 +19,9 @@ class PdfTextExtractionResult {
 
 /// PDF文本提取服务
 /// 用于从PDF文档中提取文本内容，支持单页和多页提取
+/// 
+/// ✅ 重要改进：使用 extractTextLines 获取精确的文本行位置信息
+/// 这样可以准确地判断哪些文本行在用户选择的区域内
 class PdfTextExtractionService {
   /// 提取单个PDF页面的文本
   /// [pdfBytes] PDF文件的字节数据
@@ -37,41 +40,25 @@ class PdfTextExtractionService {
         return '';
       }
 
-      // Syncfusion的PdfTextExtractor不支持单页提取
-      // 我们使用一个更简单的方法：提取全部文本，然后根据页面数量估算
-      // 注意：这是一个近似方法，对于精确的单页提取，可能需要其他库
+      // ✅ 使用 extractTextLines 提取指定页面的文本
       final extractor = PdfTextExtractor(document);
-      final allText = extractor.extractText();
+      final textLines = extractor.extractTextLines(
+        startPageIndex: pageIndex,
+        endPageIndex: pageIndex,
+      );
       
-      // 如果只有一页，直接返回
-      if (document.pages.count == 1) {
-        return allText.trim();
+      if (textLines.isEmpty) {
+        return '';
       }
       
-      // 多页情况：这是一个简化实现
-      // 实际应用中，可能需要使用其他库或方法来精确提取单页文本
-      // 当前实现返回全部文本（作为降级方案）
-      return allText.trim();
+      // 合并所有文本行
+      final texts = textLines.map((line) => line.text).toList();
+      return texts.join('\n').trim();
     } catch (e) {
       LogUtils.error('提取PDF页面文本失败: $e');
       return '';
     } finally {
       document?.dispose();
-    }
-  }
-
-  /// 从PDF文档提取指定页面的文本（使用页面对象）
-  /// 注意：Syncfusion的API限制，这是一个简化实现
-  static String _extractTextFromPage(PdfDocument document, int pageIndex) {
-    try {
-      // 使用PdfTextExtractor提取全部文本
-      // 由于Syncfusion不支持精确的单页提取，这里返回全部文本
-      final extractor = PdfTextExtractor(document);
-      final allText = extractor.extractText();
-      return allText.trim();
-    } catch (e) {
-      LogUtils.error('从PDF页面提取文本失败: $e');
-      return '';
     }
   }
 
@@ -104,12 +91,17 @@ class PdfTextExtractionService {
       final document = PdfDocument(inputBytes: pdfBytes);
       try {
         final pageCount = document.pages.count;
+        final extractor = PdfTextExtractor(document);
         
         // 逐页提取文本
         for (int i = 0; i < pageCount; i++) {
-          final text = _extractTextFromPage(document, i);
-          if (text.isNotEmpty) {
-            result[i] = text;
+          final textLines = extractor.extractTextLines(
+            startPageIndex: i,
+            endPageIndex: i,
+          );
+          if (textLines.isNotEmpty) {
+            final texts = textLines.map((line) => line.text).toList();
+            result[i] = texts.join('\n').trim();
           }
         }
       } finally {
@@ -161,13 +153,14 @@ class PdfTextExtractionService {
     }
   }
 
-  /// 从PDF页面按矩形区域提取文本
+  /// ✅ 从PDF页面按矩形区域提取文本（使用精确的文本行位置）
+  /// 
   /// [pdfBytes] PDF文件的字节数据
   /// [pageIndex] 页面索引（从0开始）
-  /// [selectionRect] 选择区域（相对于PDF页面的坐标，单位：点）
-  /// [pageSize] PDF页面的实际尺寸（单位：点）
   /// [canvasRect] 选择区域在画布上的坐标
   /// [pdfRect] PDF在画布上的显示区域
+  /// [pageSize] PDF页面的原始尺寸（单位：点）
+  /// 
   /// 返回提取的文本，如果提取失败则返回空字符串
   static Future<String> extractTextFromRegion({
     required Uint8List pdfBytes,
@@ -176,17 +169,6 @@ class PdfTextExtractionService {
     required Rect pdfRect,
     required Size pageSize,
   }) async {
-    // 将画布坐标转换为PDF页面坐标
-    final pdfSelectionRect = _canvasToPdfCoordinates(
-      canvasRect: canvasRect,
-      pdfRect: pdfRect,
-      pageSize: pageSize,
-    );
-
-    LogUtils.debug('🦋[PDF文本提取] 选择区域: canvasRect=$canvasRect, pdfRect=$pdfRect, pageSize=$pageSize');
-    LogUtils.debug('🦋[PDF文本提取] PDF页面坐标选择区域: $pdfSelectionRect (left=${pdfSelectionRect.left}, top=${pdfSelectionRect.top}, width=${pdfSelectionRect.width}, height=${pdfSelectionRect.height})');
-
-    // ✅ 使用Syncfusion提取文本，然后尝试按区域筛选
     PdfDocument? document;
     try {
       document = PdfDocument(inputBytes: pdfBytes);
@@ -196,100 +178,100 @@ class PdfTextExtractionService {
         return '';
       }
 
+      // ✅ 使用 extractTextLines 获取精确的文本行位置信息
       final extractor = PdfTextExtractor(document);
-      final allText = extractor.extractText();
+      final textLines = extractor.extractTextLines(
+        startPageIndex: pageIndex,
+        endPageIndex: pageIndex,
+      );
       
-      // ✅ 如果文本为空，直接返回
-      if (allText.trim().isEmpty) {
-        LogUtils.debug('🦋[PDF文本提取] 提取的文本为空');
+      if (textLines.isEmpty) {
+        LogUtils.debug('🦋[PDF文本提取] 页面 $pageIndex 没有文本行');
         return '';
-      }
-      
-      // ✅ 如果只有一页，尝试按区域筛选文本
-      if (document.pages.count == 1) {
-        return _filterTextByRegion(allText, pdfSelectionRect, pageSize);
       }
 
-      // ✅ 多页情况：Syncfusion不支持单页提取，我们需要估算当前页面的文本
-      // 这是一个简化的方法：假设每页文本量大致相等，提取对应页面的文本
-      final lines = allText.split('\n');
+      // ✅ 将画布选择区域转换为PDF页面坐标
+      final pdfSelectionRect = _canvasToPdfCoordinates(
+        canvasRect: canvasRect,
+        pdfRect: pdfRect,
+        pageSize: pageSize,
+      );
+
+      LogUtils.debug('🦋[PDF文本提取] ========== 开始提取 ==========');
+      LogUtils.debug('🦋[PDF文本提取] 画布选择区域: $canvasRect');
+      LogUtils.debug('🦋[PDF文本提取] PDF显示区域: $pdfRect');
+      LogUtils.debug('🦋[PDF文本提取] PDF页面尺寸: $pageSize');
+      LogUtils.debug('🦋[PDF文本提取] PDF坐标选择区域: $pdfSelectionRect');
+      LogUtils.debug('🦋[PDF文本提取] 总文本行数: ${textLines.length}');
+
+      // ✅ 根据选择区域筛选文本行
+      final selectedTexts = <String>[];
       
-      // ✅ 如果没有文本行，返回空
-      if (lines.isEmpty) {
-        LogUtils.debug('🦋[PDF文本提取] 多页PDF，没有文本行');
+      for (int i = 0; i < textLines.length; i++) {
+        final line = textLines[i];
+        final lineBounds = line.bounds;
+        
+        // ✅ 检查文本行是否与选择区域有重叠
+        // 注意：PDF坐标系是左下角为原点，Y轴向上
+        // 但 Syncfusion 的 TextLine.bounds 已经转换为左上角原点
+        if (_rectsOverlap(pdfSelectionRect, lineBounds)) {
+          selectedTexts.add(line.text);
+          LogUtils.debug('🦋[PDF文本提取] ✓ 行 $i 被选中: bounds=$lineBounds, text="${line.text.substring(0, line.text.length.clamp(0, 30))}..."');
+        }
+      }
+
+      if (selectedTexts.isEmpty) {
+        LogUtils.debug('🦋[PDF文本提取] 选择区域内没有文本，尝试扩大搜索范围');
+        
+        // ✅ 尝试扩大选择区域（增加10%的容差）
+        final expandedRect = Rect.fromLTRB(
+          pdfSelectionRect.left - pageSize.width * 0.05,
+          pdfSelectionRect.top - pageSize.height * 0.05,
+          pdfSelectionRect.right + pageSize.width * 0.05,
+          pdfSelectionRect.bottom + pageSize.height * 0.05,
+        );
+        
+        for (int i = 0; i < textLines.length; i++) {
+          final line = textLines[i];
+          if (_rectsOverlap(expandedRect, line.bounds)) {
+            selectedTexts.add(line.text);
+            LogUtils.debug('🦋[PDF文本提取] ✓ (扩大范围) 行 $i 被选中: "${line.text.substring(0, line.text.length.clamp(0, 30))}..."');
+          }
+        }
+      }
+
+      if (selectedTexts.isEmpty) {
+        LogUtils.debug('🦋[PDF文本提取] 仍然没有找到文本，打印所有文本行位置用于调试');
+        for (int i = 0; i < textLines.length && i < 10; i++) {
+          final line = textLines[i];
+          LogUtils.debug('🦋[PDF文本提取] 行 $i: bounds=${line.bounds}, text="${line.text.substring(0, line.text.length.clamp(0, 50))}..."');
+        }
         return '';
       }
+
+      final result = _sanitizeTextForClipboard(selectedTexts.join('\n'));
+      LogUtils.debug('🦋[PDF文本提取] 提取完成: ${selectedTexts.length} 行, ${result.length} 字符');
+      return result;
       
-      final estimatedLinesPerPage = (lines.length / document.pages.count).ceil();
-      final startLine = (pageIndex * estimatedLinesPerPage).clamp(0, lines.length);
-      final endLine = (startLine + estimatedLinesPerPage).clamp(0, lines.length);
-      
-      // ✅ 如果起止行相同，返回空
-      if (startLine >= endLine) {
-        LogUtils.debug('🦋[PDF文本提取] 多页PDF，当前页面没有文本');
-        return '';
-      }
-      
-      final pageText = lines.sublist(startLine, endLine).join('\n');
-      
-      LogUtils.debug('🦋[PDF文本提取] 多页PDF，估算当前页面文本: ${endLine - startLine}行');
-      
-      // ✅ 对当前页面的文本按区域筛选
-      return _filterTextByRegion(pageText, pdfSelectionRect, pageSize);
-      
-    } catch (e) {
+    } catch (e, stackTrace) {
       LogUtils.error('按区域提取PDF文本失败: $e');
+      LogUtils.error('堆栈: $stackTrace');
       return '';
     } finally {
       document?.dispose();
     }
   }
 
-  /// 根据选择区域筛选文本（启发式方法）
-  /// 由于Syncfusion不提供文本位置信息，我们使用一个简化的方法：
-  /// 根据选择区域的Y坐标范围，估算应该包含哪些文本行
-  static String _filterTextByRegion(String text, Rect selectionRect, Size pageSize) {
-    if (text.trim().isEmpty) {
-      return '';
+  /// ✅ 检查两个矩形是否有重叠
+  static bool _rectsOverlap(Rect rect1, Rect rect2) {
+    // 如果一个矩形在另一个矩形的上方、下方、左侧或右侧，则不重叠
+    if (rect1.right < rect2.left || rect2.right < rect1.left) {
+      return false;
     }
-
-    // ✅ 如果选择区域覆盖了整个页面的大部分区域，返回全部文本
-    final selectionAreaRatio = (selectionRect.width * selectionRect.height) / (pageSize.width * pageSize.height);
-    
-    if (selectionAreaRatio > 0.8) {
-      LogUtils.debug('🦋[PDF文本提取] 选择区域覆盖了${(selectionAreaRatio * 100).toStringAsFixed(1)}%的页面，返回全部文本');
-      return _sanitizeTextForClipboard(text);
+    if (rect1.bottom < rect2.top || rect2.bottom < rect1.top) {
+      return false;
     }
-
-    // ✅ 按Y坐标筛选文本行
-    final lines = text.split('\n');
-    final selectedLines = <String>[];
-    
-    // 计算选择区域在页面中的相对位置（0.0到1.0）
-    final selectionTopRatio = selectionRect.top / pageSize.height;
-    final selectionBottomRatio = (selectionRect.top + selectionRect.height) / pageSize.height;
-    
-    // 假设文本行均匀分布在页面上
-    for (int i = 0; i < lines.length; i++) {
-      final lineTopRatio = i / lines.length;
-      final lineBottomRatio = (i + 1) / lines.length;
-      
-      // 如果文本行与选择区域有重叠，则包含该行
-      if (lineBottomRatio >= selectionTopRatio && lineTopRatio <= selectionBottomRatio) {
-        selectedLines.add(lines[i]);
-      }
-    }
-    
-    final selectedText = selectedLines.join('\n');
-    
-    if (selectedText.trim().isEmpty) {
-      // 如果按行筛选没有结果，返回全部文本（降级方案）
-      LogUtils.debug('🦋[PDF文本提取] 按行筛选没有结果，返回全部文本');
-      return _sanitizeTextForClipboard(text);
-    }
-    
-    LogUtils.debug('🦋[PDF文本提取] 按区域筛选结果: ${selectedLines.length}行，${selectedText.length}个字符');
-    return _sanitizeTextForClipboard(selectedText);
+    return true;
   }
 
   /// ✅ 清理文本，确保可以安全粘贴到 Quill 编辑器
@@ -308,8 +290,17 @@ class PdfTextExtractionService {
     // ✅ 移除零宽字符（这些字符可能导致 Quill 解析问题）
     sanitized = sanitized.replaceAll(RegExp(r'[\u200B-\u200D\uFEFF\u2060]'), '');
     
+    // ✅ 移除代理对中的孤立字符（可能导致 Quill 断言错误）
+    // 这些是 UTF-16 代理对的一部分，单独出现时是无效的
+    sanitized = sanitized.replaceAll(RegExp(r'[\uD800-\uDFFF]'), '');
+    
     // ✅ 移除首尾空白字符
     sanitized = sanitized.trim();
+    
+    // ✅ 确保文本不以换行符结尾（可能导致 Quill 断言错误）
+    while (sanitized.endsWith('\n')) {
+      sanitized = sanitized.substring(0, sanitized.length - 1);
+    }
     
     // ✅ 如果文本为空，返回空字符串
     if (sanitized.isEmpty) {
@@ -348,7 +339,10 @@ class PdfTextExtractionService {
     }
   }
 
-  /// 将画布坐标转换为PDF页面坐标
+  /// ✅ 将画布坐标转换为PDF页面坐标
+  /// 
+  /// 画布坐标系：左上角为原点，Y轴向下
+  /// PDF坐标系：Syncfusion 的 TextLine.bounds 已经是左上角原点，Y轴向下
   static Rect _canvasToPdfCoordinates({
     required Rect canvasRect,
     required Rect pdfRect,
@@ -373,9 +367,8 @@ class PdfTextExtractionService {
     return Rect.fromLTWH(
       pdfLeft.clamp(0.0, pageSize.width),
       pdfTop.clamp(0.0, pageSize.height),
-      pdfWidth.clamp(0.0, pageSize.width - pdfLeft),
-      pdfHeight.clamp(0.0, pageSize.height - pdfTop),
+      pdfWidth.clamp(0.0, pageSize.width - pdfLeft.clamp(0.0, pageSize.width)),
+      pdfHeight.clamp(0.0, pageSize.height - pdfTop.clamp(0.0, pageSize.height)),
     );
   }
 }
-

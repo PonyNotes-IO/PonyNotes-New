@@ -1984,15 +1984,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // 单行输入框高度：字体大小 + 上下padding
     final double singleLineHeight = scaledFontSize + 8.0; // 上下各4px padding
     
-    // ✅ 确保 Quill 内容已初始化（如果为空则从 text 字段初始化）
-    if (textBox.quillContent.plainText.trim().isEmpty && textBox.text.isNotEmpty) {
-      textBox.quillContent.clear();
-      textBox.quillContent.insertText(textBox.text);
-    }
-    
-    // ✅ 关键修复：确保 Quill Document 中显式设置字体大小属性
-    // 这样渲染时就能正确读取字体大小，与编辑时保持一致
-    textBox.quillContent.ensureFontSize(fontSize);
+    // ✅ 注意：不要在 build 阶段调用会修改 QuillController 状态的方法
+    // 字体大小应该在 _createTextBox 或 _editTextBox 中设置
+    // 在 build 阶段调用 ensureFontSize 会触发 notifyListeners
+    // 导致 "setState() or markNeedsBuild() called during build" 错误
     
     // ✅ 监听 Quill 内容变化，同步到 TextBox 并动态调整宽度
     textBox.quillContent.controller.changes.listen((event) {
