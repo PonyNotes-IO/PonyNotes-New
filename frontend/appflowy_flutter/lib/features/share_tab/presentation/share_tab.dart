@@ -535,16 +535,16 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
         final currentUser = state.currentUser;
         final users = state.users;
 
-        // 构建完整的用户列表，确保拥有者始终在最前面
-        final List<SharedUser> allUsers = buildUsersListWithOwner(
-          users: users,
-          currentUser: currentUser,
-        );
+        // 构建完整的用户列表：
+        // 接口返回的顺序即为展示顺序，约定第一条为拥有者，其余为被邀请者
+        final List<SharedUser> allUsers = users;
 
-        // 从完整列表中查找当前用户（包括拥有者）
-        final currentSharedUser = allUsers.firstWhereOrNull(
-          (user) => user.email == currentUser?.email,
-        );
+        // 从完整列表中查找当前登录用户（可能是拥有者，也可能是被邀请者）
+        final currentSharedUser = currentUser == null
+            ? null
+            : allUsers.firstWhereOrNull(
+                (user) => user.email == currentUser.email,
+              );
 
         return Dialog(
           insetPadding: const EdgeInsets.all(24),

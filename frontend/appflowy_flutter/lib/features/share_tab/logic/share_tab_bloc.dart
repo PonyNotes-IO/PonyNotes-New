@@ -157,24 +157,25 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       ),
     );
 
-    final result = await repository.getSharedUsersInPage(
-      pageId: pageId,
-    );
-
-    result.fold(
-      (users) => emit(
+    // 直接复用 _getSharedUsers 获取分享用户列表
+    try {
+      final users = await _getSharedUsers();
+      emit(
         state.copyWith(
           users: users,
           initialResult: FlowySuccess(null),
         ),
-      ),
-      (error) => emit(
+      );
+    } catch (e) {
+      emit(
         state.copyWith(
-          errorMessage: error.msg,
-          initialResult: FlowyFailure(error),
+          errorMessage: e.toString(),
+          initialResult: FlowyFailure(
+            FlowyError()..msg = e.toString(),
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   Future<void> _onShare(
@@ -395,13 +396,138 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
   }
 
   Future<SharedUsers> _getSharedUsers() async {
-    final shareResult = await repository.getSharedUsersInPage(
-      pageId: pageId,
-    );
-    return shareResult.fold(
-      (users) => users,
-      (error) => state.users,
-    );
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+
+      if (baseUrl.isEmpty) {
+        Log.error('Base URL is empty');
+        return state.users;
+      }
+
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold(
+            (user) => user,
+            (error) {
+          Log.error('Failed to get user profile: $error');
+          return null;
+        },
+      );
+
+      if (userProfile == null) {
+        Log.error('User profile is null');
+        return state.users;
+      }
+
+      final rawToken = userProfile.token;
+      if (rawToken.isEmpty) {
+        Log.error('Auth token is empty');
+        return state.users;
+      }
+
+      // 提取 access_token（可能是 JSON 格式）
+      final accessToken = _extractAccessToken(rawToken);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.error('Failed to extract access_token from token');
+        return state.users;
+      }
+
+      // 构建 API URL: GET /api/workspace/{workspace_id}/member
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/workspace/$workspaceId/member',
+      );
+
+      Log.info('Fetching workspace members: $uri');
+
+      // 发送 GET 请求
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      Log.info('Get workspace members response: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        try {
+          final responseBody = jsonDecode(response.body) as Map<String, dynamic>;
+
+          // 检查 code 字段，0 表示成功
+          final code = responseBody['code'] as int?;
+          if (code != null && code != 0) {
+            Log.error('API returned error code: $code');
+            return state.users;
+          }
+
+          // 解析 data 数组
+          final data = responseBody['data'] as List<dynamic>?;
+          if (data == null) {
+            Log.error('Response data is null');
+            return state.users;
+          }
+
+          // 将 API 返回的成员列表转换为 SharedUsers
+          final users = data.map((member) {
+            final memberMap = member as Map<String, dynamic>;
+            final email = memberMap['email'] as String? ?? '';
+            final name = memberMap['name'] as String? ?? email;
+            final roleStr = memberMap['role'] as String? ?? 'Member';
+            final avatarUrl = memberMap['avatar_url'] as String?;
+
+            // 将 API 返回的 role 字符串转换为 ShareRole 枚举
+            ShareRole role;
+            switch (roleStr.toLowerCase()) {
+              case 'owner':
+                role = ShareRole.owner;
+                break;
+              case 'member':
+                role = ShareRole.member;
+                break;
+              case 'guest':
+                role = ShareRole.guest;
+                break;
+              default:
+                role = ShareRole.member;
+            }
+
+            // API 响应中没有 accessLevel，根据 role 设置默认值
+            // Owner 默认 fullAccess，Member 默认 readOnly
+            final accessLevel = role == ShareRole.owner
+                ? ShareAccessLevel.fullAccess
+                : ShareAccessLevel.readOnly;
+
+            return SharedUser(
+              email: email,
+              name: name,
+              role: role,
+              accessLevel: accessLevel,
+              avatarUrl: avatarUrl?.isNotEmpty == true ? avatarUrl : null,
+              userId: null, // API 响应中没有 userId
+            );
+          }).toList();
+
+          Log.info('Successfully fetched ${users.length} workspace members');
+
+          return users;
+        } catch (e, stackTrace) {
+          Log.error('Failed to parse response: $e', e, stackTrace);
+          return state.users;
+        }
+      } else {
+        Log.error('Failed to get workspace members: HTTP ${response.statusCode}');
+        return state.users;
+      }
+    } catch (e, stackTrace) {
+      Log.error('Exception in _getSharedUsers: $e', e, stackTrace);
+      return state.users;
+    }
   }
 
   void _onClearState(

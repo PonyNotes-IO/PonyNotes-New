@@ -6,8 +6,10 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_actions.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_icon.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_setting.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/members/workspace_member_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
@@ -463,8 +465,31 @@ class _CreateWorkspaceButton extends StatelessWidget {
     try {
       final workspaceBloc = context.read<UserWorkspaceBloc>();
       final userProfile = workspaceBloc.state.userProfile;
+      final isCloudSyncEnabled = workspaceBloc.state.isCloudSyncEnabled;
       
-      Log.info('Showing create workspace dialog for user: ${userProfile.email}, auth type: ${userProfile.userAuthType}');
+      Log.info('Showing create workspace dialog for user: ${userProfile.email}, auth type: ${userProfile.userAuthType}, isCloudSyncEnabled: $isCloudSyncEnabled');
+      
+      // 检查云同步状态：如果云同步关闭，不能创建工作区
+      if (!isCloudSyncEnabled) {
+        Log.warn('云同步已关闭，不能创建工作区');
+        // 显示提示对话框，引导用户开启云同步
+        if (!context.mounted) return;
+        await showConfirmDialog(
+          context: context,
+          title: LocaleKeys.workspace_create.tr(),
+          description: '云同步已关闭，无法创建工作区。请先开启云同步功能。',
+          confirmLabel: '前往设置',
+          onConfirm: (_) {
+            // 导航到设置页面
+            showSettingsDialog(
+              context,
+              userWorkspaceBloc: workspaceBloc,
+              initPage: SettingsPage.accountManagement,
+            );
+          },
+        );
+        return;
+      }
       
       final dialog = CreateWorkspaceDialog(
         title: LocaleKeys.workspace_create.tr(),

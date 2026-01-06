@@ -233,6 +233,27 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     final isCloudSyncEnabled = state.isCloudSyncEnabled;
     Log.info('[UserWorkspaceBloc] 创建工作区: name=${event.name}, workspaceType=${event.workspaceType}, isCloudSyncEnabled=$isCloudSyncEnabled');
 
+    // 如果云同步关闭，不能创建工作区
+    if (!isCloudSyncEnabled) {
+      Log.warn('[UserWorkspaceBloc] 云同步已关闭，不能创建工作区');
+      final errorResult = FlowyResult.failure(
+        FlowyError(
+          code: ErrorCode.Internal,
+          msg: '云同步已关闭，无法创建工作区。请先开启云同步功能。',
+        ),
+      );
+      emit(
+        state.copyWith(
+          actionResult: WorkspaceActionResult(
+            actionType: WorkspaceActionType.create,
+            isLoading: false,
+            result: errorResult.map((_) {}),
+          ),
+        ),
+      );
+      return;
+    }
+
     // 始终创建 ServerW 类型的工作区（服务类型），与用户需求一致
     // 云同步开关只控制是否启用 sync 功能，不影响工作区类型
     final workspaceType = WorkspaceTypePB.ServerW;
