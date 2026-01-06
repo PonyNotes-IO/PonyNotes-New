@@ -549,6 +549,26 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     
     // ✅ 点选模式：先尝试点击选择单个对象（快速点击，不拖拽）
     if (selectMode == SelectMode.click) {
+      // ✅ 优先检查文本框（文本框在上层）
+      final clickedTextBox = _findTextBoxAtPosition(position, pageIdx);
+      if (clickedTextBox != null) {
+        // 点击选中了单个文本框
+        setState(() {
+          _selectResult = SelectResult(
+            pageIndex: pageIdx,
+            strokes: [],
+            images: [],
+            webViews: [],
+            textBoxes: [clickedTextBox],
+            selectionPath: Path(), // 点击选择不需要路径
+            selectMode: selectMode,
+          );
+          _isSelecting = false;
+          _selectStartPosition = position;
+        });
+        return;
+      }
+      
       final clickedStroke = _findStrokeAtPosition(position, pageIdx);
       if (clickedStroke != null) {
         // 点击选中了单个笔迹
@@ -558,6 +578,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             strokes: [clickedStroke],
             images: [],
             webViews: [],
+            textBoxes: [],
             selectionPath: Path(), // 点击选择不需要路径
             selectMode: selectMode,
           );
@@ -577,6 +598,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         strokes: [],
         images: [],
         webViews: [],
+        textBoxes: [],
         selectionPath: selectMode == SelectMode.lasso 
             ? (Path()..moveTo(position.dx, position.dy))
             : Path(),
@@ -751,6 +773,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // 检查是否在某个选中的图片内
     for (final image in selectResult.images) {
       if (image.dstRect != null && image.dstRect!.contains(point)) {
+        return true;
+      }
+    }
+    
+    // ✅ 检查是否在某个选中的文本框内
+    for (final textBox in selectResult.textBoxes) {
+      if (textBox.rect.contains(point)) {
         return true;
       }
     }
@@ -1315,12 +1344,21 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   
   /// ✅ 更新选择
   void _updateSelection(Offset position) {
-    if (_selectResult == null || _selectStartPosition == null) {
+    if (_selectResult == null) {
       return;
     }
     
     // ✅ 如果已经完成选择（点击选择或拖拽选择完成），则移动选中的对象
     if (!_isSelecting && _selectResult!.pageIndex == (_currentPageIndex ?? 0) && !_selectResult!.isEmpty) {
+      // ✅ 修复移动偏移问题：如果 _selectStartPosition 为 null 或距离太远，说明是框选结束后的第一次移动
+      // 应该重置为当前鼠标位置，避免瞬间偏移
+      if (_selectStartPosition == null || 
+          (_selectStartPosition != null && (position - _selectStartPosition!).distance > 100)) {
+        // 框选结束后的第一次移动，重置起始位置为当前鼠标位置
+        _selectStartPosition = position;
+        return; // 第一次移动不执行实际移动，只重置起始位置
+      }
+      
       final offset = position - _selectStartPosition!;
       if (offset.distance > 1.0) { // 只有移动距离大于1像素才移动
         _selectResult!.move(offset);
@@ -1389,6 +1427,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         _detectObjectsInSelection(_selectResult!);
         final int targetPageIndex = _selectResult!.pageIndex;
         _isSelecting = false;
+        // ✅ 修复移动偏移问题：框选结束后，重置 _selectStartPosition 为 null
+        // 这样在第一次移动时，会重置为当前鼠标位置，避免瞬间偏移
+        _selectStartPosition = null;
         if (targetPageIndex < _pageNotifiers.length) {
           _pageNotifiers[targetPageIndex].updatePage(_coreInfo.pages[targetPageIndex]);
         }
@@ -1431,6 +1472,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     final page = _coreInfo.pages[pageIndex];
     final deletedStrokes = List<Stroke>.from(_selectResult!.strokes);
     final deletedImages = List<PdfEditorImage>.from(_selectResult!.images);
+    final deletedTextBoxes = List<saber_text.TextBox>.from(_selectResult!.textBoxes); // ✅ 删除的文本框列表
     
     // 删除笔迹
     for (final stroke in deletedStrokes) {
@@ -1447,8 +1489,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       }
     }
     
-    // 如果背景图片被删除，创建新的页面对象
-    if (newBackgroundImage != page.backgroundImage) {
+    // ✅ 删除文本框
+    for (final textBox in deletedTextBoxes) {
+      page.textBoxes.remove(textBox);
+      // 释放文本框资源
+      textBox.dispose();
+    }
+    
+    // 如果背景图片被删除或文本框被删除，创建新的页面对象
+    if (newBackgroundImage != page.backgroundImage || deletedTextBoxes.isNotEmpty) {
       final updatedPage = EditorPage(
         size: page.size,
         strokes: page.strokes,
@@ -1466,6 +1515,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _history.recordChange(EditorHistoryItem.delete(
       pageIndex: pageIndex,
       deletedStrokes: deletedStrokes,
+      deletedTextBoxes: deletedTextBoxes, // ✅ 记录删除的文本框
     ));
     _updateUndoRedoState();
     
@@ -1713,6 +1763,27 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       textBox.textStyle = textBox.getHeadingStyle(_currentToolNotifier.value.color);
     }
     
+    // ✅ 关键修复：根据文本框类型和 lineHeight 计算字体大小，并显式设置到 Quill Document
+    final double lineHeight = _coreInfo.lineHeight.toDouble();
+    double fontSize;
+    switch (textBoxType) {
+      case saber_text.TextBoxType.heading1:
+        fontSize = lineHeight * 1.15;
+        break;
+      case saber_text.TextBoxType.heading2:
+        fontSize = lineHeight * 1.0;
+        break;
+      case saber_text.TextBoxType.heading3:
+        fontSize = lineHeight * 0.9;
+        break;
+      case saber_text.TextBoxType.paragraph:
+      case saber_text.TextBoxType.normal:
+        fontSize = lineHeight * 0.7;
+        break;
+    }
+    // ✅ 显式设置 Quill Document 的字体大小属性，确保编辑和渲染时一致
+    textBox.quillContent.ensureFontSize(fontSize);
+    
     // ✅ 添加到页面并进入编辑模式（使用EditorPageNotifier避免全局setState）
     debugPrint('🦋[HandwritingSaber] _createTextBox: adding textBox id=${textBox.id} to page, position=${textBox.position}, size=${textBox.size}');
     
@@ -1787,6 +1858,28 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       textBox.quillContent.clear();
       textBox.quillContent.insertText(textBox.text);
     }
+    
+    // ✅ 关键修复：确保 Quill Document 中显式设置字体大小属性
+    // 根据文本框类型和 lineHeight 计算字体大小
+    final double lineHeight = _coreInfo.lineHeight.toDouble();
+    double fontSize;
+    switch (textBox.textBoxType) {
+      case saber_text.TextBoxType.heading1:
+        fontSize = lineHeight * 1.15;
+        break;
+      case saber_text.TextBoxType.heading2:
+        fontSize = lineHeight * 1.0;
+        break;
+      case saber_text.TextBoxType.heading3:
+        fontSize = lineHeight * 0.9;
+        break;
+      case saber_text.TextBoxType.paragraph:
+      case saber_text.TextBoxType.normal:
+        fontSize = lineHeight * 0.7;
+        break;
+    }
+    // ✅ 显式设置 Quill Document 的字体大小属性，确保编辑和渲染时一致
+    textBox.quillContent.ensureFontSize(fontSize);
     
     // ✅ 进入编辑模式（使用ValueNotifier，不触发全局setState）
     _editingTextBoxIdNotifier.value = textBox.id;
@@ -1863,11 +1956,30 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     final double textBoxWidth = textBox.size.width * scale;
     
     // ✅ 单行输入框，使用固定高度（根据字体大小和缩放计算）
-    final textStyle = textBox.textStyle ?? const TextStyle(
-      fontSize: 16,
+    // ✅ 关键修复：根据文本框类型和 lineHeight 计算字体大小，与 QuillEditor 保持一致
+    final double lineHeight = _coreInfo.lineHeight.toDouble();
+    double fontSize;
+    switch (textBox.textBoxType) {
+      case saber_text.TextBoxType.heading1:
+        fontSize = lineHeight * 1.15; // 与 QuillEditor 的 displayLarge 一致
+        break;
+      case saber_text.TextBoxType.heading2:
+        fontSize = lineHeight * 1.0; // 与 QuillEditor 的 displayMedium 一致
+        break;
+      case saber_text.TextBoxType.heading3:
+        fontSize = lineHeight * 0.9; // 与 QuillEditor 的 displaySmall 一致
+        break;
+      case saber_text.TextBoxType.paragraph:
+      case saber_text.TextBoxType.normal:
+        fontSize = lineHeight * 0.7; // 与 QuillEditor 的 bodyLarge 一致
+        break;
+    }
+    
+    // ✅ 使用 textBox.textStyle 的颜色和其他属性，但覆盖字体大小
+    final textStyle = (textBox.textStyle ?? const TextStyle(
       color: Colors.black,
-    );
-    final double fontSize = textStyle.fontSize ?? 16;
+    )).copyWith(fontSize: fontSize);
+    
     final double scaledFontSize = fontSize * scale;
     // 单行输入框高度：字体大小 + 上下padding
     final double singleLineHeight = scaledFontSize + 8.0; // 上下各4px padding
@@ -1877,6 +1989,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       textBox.quillContent.clear();
       textBox.quillContent.insertText(textBox.text);
     }
+    
+    // ✅ 关键修复：确保 Quill Document 中显式设置字体大小属性
+    // 这样渲染时就能正确读取字体大小，与编辑时保持一致
+    textBox.quillContent.ensureFontSize(fontSize);
     
     // ✅ 监听 Quill 内容变化，同步到 TextBox 并动态调整宽度
     textBox.quillContent.controller.changes.listen((event) {
@@ -1989,6 +2105,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     final page = _coreInfo.pages[pageIndex];
     final selectedStrokes = <Stroke>[];
     final selectedImages = <PdfEditorImage>[];
+    final selectedTextBoxes = <saber_text.TextBox>[]; // ✅ 选中的文本框列表
     
     // ✅ 根据选择模式使用不同的检测方法
     if (selectResult.selectMode == SelectMode.rectangle) {
@@ -2035,6 +2152,28 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           }
         }
       }
+      
+      // ✅ 检测文本框
+      for (final textBox in page.textBoxes) {
+        final rect = textBox.rect;
+        // 检查文本框的四个角是否在选择区域内
+        int cornersInside = 0;
+        final corners = [
+          Offset(rect.left, rect.top),
+          Offset(rect.right, rect.top),
+          Offset(rect.right, rect.bottom),
+          Offset(rect.left, rect.bottom),
+        ];
+        for (final corner in corners) {
+          if (selectionRect.contains(corner)) {
+            cornersInside++;
+          }
+        }
+        // 如果至少3个角在选择区域内，则认为被选中
+        if (cornersInside >= 3) {
+          selectedTextBoxes.add(textBox);
+        }
+      }
     } else if (selectResult.selectMode == SelectMode.lasso) {
       // ✅ 套索选择模式
       final selectionPath = selectResult.selectionPath;
@@ -2078,6 +2217,28 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           }
         }
       }
+      
+      // ✅ 检测文本框
+      for (final textBox in page.textBoxes) {
+        final rect = textBox.rect;
+        // 检查文本框的四个角是否在选择区域内
+        int cornersInside = 0;
+        final corners = [
+          Offset(rect.left, rect.top),
+          Offset(rect.right, rect.top),
+          Offset(rect.right, rect.bottom),
+          Offset(rect.left, rect.bottom),
+        ];
+        for (final corner in corners) {
+          if (selectionPath.contains(corner)) {
+            cornersInside++;
+          }
+        }
+        // 如果至少3个角在选择区域内，则认为被选中
+        if (cornersInside >= 3) {
+          selectedTextBoxes.add(textBox);
+        }
+      }
     }
     
     setState(() {
@@ -2085,6 +2246,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       selectResult.strokes.addAll(selectedStrokes);
       selectResult.images.clear();
       selectResult.images.addAll(selectedImages);
+      selectResult.textBoxes.clear();
+      selectResult.textBoxes.addAll(selectedTextBoxes); // ✅ 添加选中的文本框
     });
   }
 
@@ -2277,6 +2440,32 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           }
         }
         break;
+      case EditorHistoryItemType.delete:
+        // ✅ 撤销删除：恢复被删除的对象
+        final page = _coreInfo.pages[item.pageIndex];
+        bool pageUpdated = false;
+        
+        // 恢复被删除的笔迹
+        if (item.deletedStrokes != null) {
+          for (final stroke in item.deletedStrokes!) {
+            page.strokes.add(stroke);
+          }
+          pageUpdated = true;
+        }
+        
+        // ✅ 恢复被删除的文本框
+        if (item.deletedTextBoxes != null) {
+          for (final textBox in item.deletedTextBoxes!) {
+            page.textBoxes.add(textBox);
+          }
+          pageUpdated = true;
+        }
+        
+        // 更新页面 notifier
+        if (pageUpdated && item.pageIndex < _pageNotifiers.length) {
+          _pageNotifiers[item.pageIndex].updatePage(page);
+        }
+        break;
       default:
         break;
     }
@@ -2315,6 +2504,33 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           if (item.pageIndex < _pageNotifiers.length) {
             _pageNotifiers[item.pageIndex].updatePage(_coreInfo.pages[item.pageIndex]);
           }
+        }
+        break;
+      case EditorHistoryItemType.delete:
+        // ✅ 恢复删除：重新删除对象
+        final page = _coreInfo.pages[item.pageIndex];
+        bool pageUpdated = false;
+        
+        // 重新删除笔迹
+        if (item.deletedStrokes != null) {
+          for (final stroke in item.deletedStrokes!) {
+            page.strokes.remove(stroke);
+          }
+          pageUpdated = true;
+        }
+        
+        // ✅ 重新删除文本框
+        if (item.deletedTextBoxes != null) {
+          for (final textBox in item.deletedTextBoxes!) {
+            page.textBoxes.remove(textBox);
+            textBox.dispose();
+          }
+          pageUpdated = true;
+        }
+        
+        // 更新页面 notifier
+        if (pageUpdated && item.pageIndex < _pageNotifiers.length) {
+          _pageNotifiers[item.pageIndex].updatePage(page);
         }
         break;
       default:
@@ -2532,21 +2748,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             }
           }
           
-          // ✅ 如果是选择工具，检查是否点击在空白区域或文本框
+          // ✅ 如果是选择工具，检查是否点击在空白区域
           if (_currentToolNotifier.value.toolId == ToolId.select) {
             debugPrint('🦋[HandwritingSaber] 选择工具点击，position=$pagePos');
             final clickedStroke = _findStrokeAtPosition(pagePos, pageIndex);
             final clickedTextBox = _findTextBoxAtPosition(pagePos, pageIndex);
             debugPrint('🦋[HandwritingSaber] clickedStroke=${clickedStroke != null}, clickedTextBox=${clickedTextBox != null}, clickedTextBoxId=${clickedTextBox?.id}');
             
-            // ✅ 修复：选择工具点击文本框时，不应该编辑文本框
-            // 用户需要使用文本框工具才能编辑文本框
-            if (clickedTextBox != null) {
-              debugPrint('🦋[HandwritingSaber] 选择工具点击文本框，但选择工具不支持文本框选择，忽略此操作');
-              // ✅ 忽略对文本框的点击，只有文本框工具才能操作文本框
-              return;
-            }
-            
+            // ✅ 修复：如果点击在空白区域且没有选中对象，取消选择
+            // 文本框的选择由 _startSelection 处理，这里不阻止
             if (clickedStroke == null && clickedTextBox == null &&
                 (_selectResult == null || !_isPointInSelection(pagePos, _selectResult!))) {
               // ✅ 点击在空白区域，取消选择

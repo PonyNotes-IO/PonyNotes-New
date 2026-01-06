@@ -1193,6 +1193,8 @@ class _SaberCoreCanvasPainter extends CustomPainter {
 
   /// ✅ 绘制文本框
   void _drawTextBox(Canvas canvas, saber_text.TextBox textBox, double scale, double offsetX, double offsetY, String? editingTextBoxId) {
+    // ✅ 关键修复：Canvas 已经通过 canvas.scale(scale) 进行了整体缩放
+    // 所以字体大小应该使用页面坐标（未缩放），而不是屏幕坐标（已缩放）
     canvas.save();
     canvas.translate(offsetX, offsetY);
     canvas.scale(scale);
@@ -1225,10 +1227,30 @@ class _SaberCoreCanvasPainter extends CustomPainter {
     // ✅ 绘制文本（优先使用 Quill 富文本，如果为空则使用纯文本）
     final plainTextContent = textBox.quillContent.plainText.trim();
     if (plainTextContent.isNotEmpty || textBox.text.isNotEmpty) {
-      final baseTextStyle = textBox.textStyle ?? const TextStyle(
-        fontSize: 16,
+      // ✅ 修复字体大小不一致问题：根据文本框类型和 lineHeight 计算正确的字体大小
+      // 这与 QuillEditor 使用的字体大小保持一致（HandwritingSaberQuillStyles）
+      final double lineHeight = coreInfo.lineHeight.toDouble();
+      double fontSize;
+      switch (textBox.textBoxType) {
+        case saber_text.TextBoxType.heading1:
+          fontSize = lineHeight * 1.15; // 与 QuillEditor 的 displayLarge 一致
+          break;
+        case saber_text.TextBoxType.heading2:
+          fontSize = lineHeight * 1.0; // 与 QuillEditor 的 displayMedium 一致
+          break;
+        case saber_text.TextBoxType.heading3:
+          fontSize = lineHeight * 0.9; // 与 QuillEditor 的 displaySmall 一致
+          break;
+        case saber_text.TextBoxType.paragraph:
+        case saber_text.TextBoxType.normal:
+          fontSize = lineHeight * 0.7; // 与 QuillEditor 的 bodyLarge 一致
+          break;
+      }
+      
+      // ✅ 使用 textBox.textStyle 的颜色和其他属性，但覆盖字体大小
+      final baseTextStyle = (textBox.textStyle ?? const TextStyle(
         color: Colors.black,
-      );
+      )).copyWith(fontSize: fontSize);
       
       // ✅ 优先使用 Quill 富文本内容
       final TextSpan textSpan;
