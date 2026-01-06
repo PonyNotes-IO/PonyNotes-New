@@ -260,22 +260,28 @@ class QuillStruct {
               final sizeValue = attributes['size'];
               double? fontSize;
               if (sizeValue is String) {
-                // Quill 使用字符串如 "18px" 或相对大小如 "small", "large"
-                if (sizeValue.endsWith('px')) {
-                  fontSize = double.tryParse(sizeValue.replaceAll('px', ''));
-                } else {
-                  // 相对大小映射
-                  final sizeMap = {
-                    'small': 12.0,
-                    'large': 20.0,
-                    'huge': 24.0,
-                  };
-                  fontSize = sizeMap[sizeValue];
+                // ✅ 优先尝试解析纯数字字符串（如 "18"）
+                fontSize = double.tryParse(sizeValue);
+                
+                // 如果不是纯数字，尝试其他格式
+                if (fontSize == null) {
+                  // 带 px 后缀的格式（如 "18px"）
+                  if (sizeValue.endsWith('px')) {
+                    fontSize = double.tryParse(sizeValue.replaceAll('px', ''));
+                  } else {
+                    // 相对大小映射（如 "small", "large", "huge"）
+                    final sizeMap = {
+                      'small': 12.0,
+                      'large': 20.0,
+                      'huge': 24.0,
+                    };
+                    fontSize = sizeMap[sizeValue];
+                  }
                 }
               } else if (sizeValue is num) {
                 fontSize = sizeValue.toDouble();
               }
-              if (fontSize != null) {
+              if (fontSize != null && fontSize > 0) {
                 style = style.copyWith(fontSize: fontSize);
               }
             } catch (e) {
