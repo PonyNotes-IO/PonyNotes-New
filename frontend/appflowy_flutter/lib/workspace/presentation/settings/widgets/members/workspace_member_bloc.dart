@@ -4,10 +4,13 @@ import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/shared/af_role_pb_extension.dart';
 import 'package:appflowy/shared/af_user_profile_extension.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/members/invitation/member_http_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
@@ -98,11 +101,64 @@ class WorkspaceMemberBloc
 
     final result =
         await _userBackendService.getWorkspaceMembers(currentWorkspaceId);
-    final members = result.fold<List<WorkspaceMemberPB>>(
-      (s) => s.items,
-      (e) => [],
+    List<WorkspaceMemberPB> members = [];
+    AFRolePB myRole = AFRolePB.Guest;
+
+    await result.fold(
+      (s) async {
+        members = s.items;
+        myRole = _getMyRole(members);
+      },
+      (e) async {
+        // Log and surface error via actionResult
+        Log.warn('Failed to get workspace members: ${e.msg}');
+
+        final errMsg = (e.msg ?? '').toLowerCase();
+        // If backend indicates Data Sync is disabled, surface a dedicated state for UI guidance.
+        if (errMsg.contains('data sync') || errMsg.contains('enable data sync')) {
+          Log.info('[WorkspaceMemberBloc] Data sync is disabled; emitting state to prompt user to enable it');
+          emit(
+            state.copyWith(
+              members: const [],
+              myRole: AFRolePB.Guest,
+              isLoading: false,
+              actionResult: WorkspaceMemberActionResult(
+                actionType: WorkspaceMemberActionType.get,
+                result: FlowyResult.failure(
+                  FlowyError.create()
+                    ..code = ErrorCode.Internal
+                    ..msg = 'Data Sync is disabled',
+                ),
+              ),
+            ),
+          );
+          return;
+        }
+
+        // If token-related error, try to fetch user profile (may refresh session) then retry once.
+        if (errMsg.contains('expired') ||
+            errMsg.contains('token') ||
+            errMsg.contains('expiredsignature') ||
+            errMsg.contains('unauthorized')) {
+          Log.info('[WorkspaceMemberBloc] Detected auth token issue, attempting to refresh profile and retry members fetch');
+          try {
+            await UserEventGetUserProfile().send();
+            final retry = await _userBackendService.getWorkspaceMembers(currentWorkspaceId);
+            retry.fold(
+              (s2) {
+                members = s2.items;
+                myRole = _getMyRole(members);
+              },
+              (e2) {
+                Log.warn('[WorkspaceMemberBloc] Retry fetching members failed: ${e2.msg}');
+              },
+            );
+          } catch (err, st) {
+            Log.error('[WorkspaceMemberBloc] Exception when retrying members fetch: $err', err, st);
+          }
+        }
+      },
     );
-    final myRole = _getMyRole(members);
 
     if (myRole.isOwner) {
       unawaited(_fetchWorkspaceSubscriptionInfo());
@@ -131,6 +187,45 @@ class WorkspaceMemberBloc
     }
 
     final result = await _userBackendService.getWorkspaceMembers(workspaceId);
+
+    // Check if the error is related to token expiration
+    final isTokenError = result.fold(
+      (s) => false,
+      (e) => _isTokenExpirationError(e),
+    );
+
+    if (isTokenError) {
+      Log.info('Detected token expiration error, attempting to refresh token');
+      // Try to refresh the token
+      final authService = getIt<AuthService>();
+      final refreshResult = await authService.refreshToken();
+
+      if (refreshResult.isSuccess) {
+        Log.info('Token refresh successful, retrying get workspace members');
+        // Retry the operation with refreshed token
+        final retryResult = await _userBackendService.getWorkspaceMembers(workspaceId);
+        final members = retryResult.fold<List<WorkspaceMemberPB>>(
+          (s) => s.items,
+          (e) => [],
+        );
+        final myRole = _getMyRole(members);
+        emit(
+          state.copyWith(
+            members: members,
+            myRole: myRole,
+            actionResult: WorkspaceMemberActionResult(
+              actionType: WorkspaceMemberActionType.get,
+              result: retryResult,
+            ),
+          ),
+        );
+        return;
+      } else {
+        Log.error('Token refresh failed: ${refreshResult.getFailure().msg}');
+        // Fall through to original error handling
+      }
+    }
+
     final members = result.fold<List<WorkspaceMemberPB>>(
       (s) => s.items,
       (e) => [],
@@ -146,6 +241,20 @@ class WorkspaceMemberBloc
         ),
       ),
     );
+  }
+
+  /// Check if an error is related to token expiration
+  bool _isTokenExpirationError(FlowyError error) {
+    final msg = error.msg.toLowerCase();
+    final code = error.code;
+
+    // Check for common token expiration indicators
+    return code == ErrorCode.UserUnauthorized ||
+           msg.contains('expired') ||
+           msg.contains('token') ||
+           msg.contains('unauthorized') ||
+           msg.contains('invalid') ||
+           msg.contains('signature');
   }
 
   Future<void> _onAddWorkspaceMember(
@@ -416,7 +525,9 @@ class WorkspaceMemberBloc
         )
         ?.role;
     if (role == null) {
-      Log.error('Failed to get my role');
+      // Don't emit an error-level log when role is missing (e.g. data sync disabled).
+      // Fallback to Guest silently to avoid noisy error logs on initial load.
+      Log.info('My role not found locally; defaulting to Guest');
       return AFRolePB.Guest;
     }
     return role;
@@ -544,11 +655,28 @@ class WorkspaceMemberState with _$WorkspaceMemberState {
     @Default(AFRolePB.Guest) AFRolePB myRole,
     @Default(null) WorkspaceMemberActionResult? actionResult,
     @Default(true) bool isLoading,
+    // dataSyncRequired removed from factory; provide computed getter instead.
     @Default(null) WorkspaceSubscriptionInfoPB? subscriptionInfo,
     @Default(null) String? inviteLink,
   }) = _WorkspaceMemberState;
 
   factory WorkspaceMemberState.initial() => const WorkspaceMemberState();
+
+  /// Whether the current state indicates Data Sync is required (backend disabled).
+  bool get dataSyncRequired {
+    final ar = actionResult;
+    if (ar == null) return false;
+    try {
+      if (ar.result.isFailure) {
+        final f = ar.result.getFailure();
+        final msg = (f.msg ?? '').toLowerCase();
+        return msg.contains('data sync') || msg.contains('enable data sync') || msg.contains('datasync');
+      }
+    } catch (_) {
+      // ignore
+    }
+    return false;
+  }
 
   @override
   int get hashCode => runtimeType.hashCode;

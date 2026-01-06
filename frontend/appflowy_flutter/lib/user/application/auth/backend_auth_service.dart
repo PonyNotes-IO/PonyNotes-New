@@ -114,4 +114,15 @@ class BackendAuthService implements AuthService {
   }) async {
     return UserBackendService.signInWithPasscode(email, passcode);
   }
+
+  @override
+  Future<FlowyResult<GotrueTokenResponsePB, FlowyError>> refreshToken() async {
+    // BackendAuthService doesn't handle refresh token directly.
+    // This should be implemented in concrete auth services that have access to HTTP clients.
+    return FlowyResult.failure(
+      FlowyError.create()
+        ..code = ErrorCode.Internal
+        ..msg = "Refresh token not supported in backend auth service",
+    );
+  }
 }

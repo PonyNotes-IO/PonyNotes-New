@@ -156,9 +156,9 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
       title: '仅工作空间所有者可以创建团队协作区',
       description: '仅允许工作空间所有者创建团队协作区',
       actions: [
-        Toggle(
-          value: _onlyOwnerCanCreateTeamWorkspace,
-          onChanged: (value) {
+            Toggle(
+              value: _onlyOwnerCanCreateTeamWorkspace,
+              onChanged: (value) {
             // value == true means turning on (limit to owners)
             // value == false means turning off (allow all members)
             final message = value
@@ -173,9 +173,9 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
                 _updateWorkspaceSetting(value);
               },
             );
-          },
-        ),
-      ],
+              },
+            ),
+          ],
       children: const [],
     );
   }
@@ -299,10 +299,10 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
           Expanded(
             flex: 2,
             child: FlowyText(
-              '更新时间',
-              fontSize: 12,
-              color: Theme.of(context).hintColor,
-              fontWeight: FontWeight.w500,
+                  '更新时间',
+                  fontSize: 12,
+                  color: Theme.of(context).hintColor,
+                  fontWeight: FontWeight.w500,
             ),
           ),
         ],

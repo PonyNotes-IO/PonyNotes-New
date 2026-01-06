@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -7,8 +9,9 @@ import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/password/password_http_service.dart';
 import 'package:appflowy/user/application/wechat/wechat_login_service.dart';
 import 'package:appflowy/user/application/douyin/douyin_login_service.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
-import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/auth.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
@@ -254,6 +257,30 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
               getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
                 gotrueTokenResponse,
               );
+              // Ensure server-side user profile is pulled immediately so other listeners/blocs receive the update.
+              unawaited(
+                UserEventGetUserProfile().send().then((profileResult) {
+                  if (!isClosed) {
+                    profileResult.fold(
+                      (userProfile) {
+                        Log.info('[SignInBloc] Pulled user profile after sign-in: ${userProfile.email}');
+                        // Update state with fetched profile if still needed
+                        if (state.successOrFail == null || state.successOrFail!.isFailure) {
+                          emit(state.copyWith(
+                            isSubmitting: false,
+                            successOrFail: FlowyResult.success(userProfile),
+                          ));
+                        }
+                      },
+                      (err) {
+                        Log.warn('[SignInBloc] Failed to pull user profile after sign-in: ${err.msg}');
+                      },
+                    );
+                  }
+                }).catchError((e, s) {
+                  Log.warn('[SignInBloc] UserEventGetUserProfile attempt failed: $e');
+                })
+              );
               return state.copyWith(
                 isSubmitting: false,
               );
@@ -283,6 +310,30 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
           (gotrueTokenResponse) {
             getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
               gotrueTokenResponse,
+            );
+            // Try to pull server-side user profile so listeners get updated promptly.
+            unawaited(
+              UserEventGetUserProfile().send().then((profileResult) {
+                if (!isClosed) {
+                  profileResult.fold(
+                    (userProfile) {
+                      Log.info('[SignInBloc] Pulled user profile after email sign-in: ${userProfile.email}');
+                      // Update state with fetched profile if still needed
+                      if (state.successOrFail == null || state.successOrFail!.isFailure) {
+                        emit(state.copyWith(
+                          isSubmitting: false,
+                          successOrFail: FlowyResult.success(userProfile),
+                        ));
+                      }
+                    },
+                    (err) {
+                      Log.warn('[SignInBloc] Failed to pull user profile after email sign-in: ${err.msg}');
+                    },
+                  );
+                }
+              }).catchError((e, s) {
+                Log.warn('[SignInBloc] UserEventGetUserProfile attempt failed: $e');
+              })
             );
             return state.copyWith(
               isSubmitting: false,
@@ -421,6 +472,23 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
           );
         }
 
+        // 首先尝试通过 UserEventGetUserProfile 来触发服务端的 profile sync（若后端可用）
+        try {
+          final profileResult = await UserEventGetUserProfile().send();
+          final maybeProfile = profileResult.fold<UserProfilePB?>(
+            (p) => p,
+            (err) => null,
+          );
+          if (maybeProfile != null) {
+            return state.copyWith(
+              isSubmitting: false,
+              successOrFail: FlowyResult.success(maybeProfile),
+            );
+          }
+        } catch (e) {
+          Log.warn('[SignInBloc] UserEventGetUserProfile attempt failed: $e');
+        }
+
         // 兜底：直接获取用户信息并返回成功状态，确保不会卡在验证码页
         final profileResult = await authService.getUser();
         return profileResult.fold(
@@ -433,7 +501,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
         (error) {
             Log.error('🟣 [SignInBloc] 兜底获取用户信息失败: ${error.msg}');
             return _stateFromCode(error);
-          },
+          }
         );
       },
       (error) async {
@@ -489,7 +557,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
     // 判断是手机号还是邮箱
     final bool isPhone = _isValidPhone(email);
-    final bool isEmail = _isValidEmail(email);
     
     // 根据类型传递正确的参数
     final result = await passwordService?.forgotPassword(
@@ -718,6 +785,21 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
               gotrueTokenResponse,
             );
+            // Try to pull server-side user profile so listeners/blocs receive update quickly.
+            unawaited(
+              UserEventGetUserProfile().send().then((profileResult) {
+                profileResult.fold(
+                  (userProfile) {
+                    Log.info('[SignInBloc] Pulled user profile after WeChat sign-in: ${userProfile.email}');
+                  },
+                  (err) {
+                    Log.warn('[SignInBloc] Failed to pull user profile after WeChat sign-in: ${err.msg}');
+                  },
+                );
+              }).catchError((e) {
+                Log.warn('[SignInBloc] Exception when pulling profile after WeChat sign-in: $e');
+              })
+            );
 
             // 判定是否需要绑定手机号
             String phone = '';
@@ -814,6 +896,21 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 
             getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
               gotrueTokenResponse,
+            );
+            // Try to pull server-side user profile so listeners/blocs receive update quickly.
+            unawaited(
+              UserEventGetUserProfile().send().then((profileResult) {
+                profileResult.fold(
+                  (userProfile) {
+                    Log.info('[SignInBloc] Pulled user profile after DouYin sign-in: ${userProfile.email}');
+                  },
+                  (err) {
+                    Log.warn('[SignInBloc] Failed to pull user profile after DouYin sign-in: ${err.msg}');
+                  },
+                );
+              }).catchError((e) {
+                Log.warn('[SignInBloc] Exception when pulling profile after DouYin sign-in: $e');
+              })
             );
 
             // 判定是否需要绑定手机号

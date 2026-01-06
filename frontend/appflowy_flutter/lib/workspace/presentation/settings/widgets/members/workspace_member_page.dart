@@ -19,6 +19,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 
 class WorkspaceMembersPage extends StatelessWidget {
   const WorkspaceMembersPage({
@@ -39,26 +41,163 @@ class WorkspaceMembersPage extends StatelessWidget {
       child: BlocConsumer<WorkspaceMemberBloc, WorkspaceMemberState>(
         listener: _showResultDialog,
         builder: (context, state) {
+          if (state.dataSyncRequired) {
+            return SettingsBody(
+              title: '人员管理',
+              autoSeparate: false,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 48.0),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        FlowyText(
+                          '当前云同步未启用。请启用云同步以使用人员管理功能。',
+                          fontSize: 16,
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                          textAlign: TextAlign.center,
+                        ),
+                        const VSpace(20),
+                        OutlinedRoundedButton(
+                          text: '启用数据同步',
+                          onTap: () async {
+                            try {
+                              final uwState = context.read<UserWorkspaceBloc>().state;
+                              bool isNonFreeMember = false;
+                              final sub = uwState.currentSubscription?.subscription;
+                              if (sub != null && (sub.planCode?.isNotEmpty ?? false)) {
+                                final planCode = sub.planCode!.toLowerCase();
+                                if (planCode != 'free' && planCode != 'freeplan') {
+                                  final end = uwState.currentSubscription?.subscription?.endDate;
+                                  if (end == null || end.isAfter(DateTime.now())) {
+                                    isNonFreeMember = true;
+                                  }
+                                }
+                              } else if (uwState.workspaceSubscriptionInfo != null) {
+                                isNonFreeMember =
+                                    uwState.workspaceSubscriptionInfo!.plan != WorkspacePlanPB.FreePlan;
+                              }
+
+                              if (!isNonFreeMember) {
+                                showToastNotification(
+                                  type: ToastificationType.error,
+                                  message: '云同步为会员专享，请先开通会员后启用。',
+                                );
+                                return;
+                              }
+
+                              context.read<UserWorkspaceBloc>().add(
+                                    UserWorkspaceEvent.updateCloudSyncEnabled(
+                                      enabled: true,
+                                    ),
+                                  );
+                              showToastNotification(
+                                message: '已请求启用数据同步，请稍候重试。',
+                              );
+                            } catch (e) {
+                              Log.error('Failed to request enable sync: $e');
+                              showToastNotification(
+                                type: ToastificationType.error,
+                                message: '无法启用数据同步，请联系管理员。',
+                              );
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }
           return SettingsBody(
             title: '人员管理',
             // Enable it when the backend support admin panel
             // descriptionBuilder: _buildDescription,
             autoSeparate: false,
             children: [
-              if (state.myRole.canInvite) ...[
-                const InviteMemberByLink(),
-                const SettingsCategorySpacer(),
-                const InviteMemberByEmail(),
-                const SettingsCategorySpacer(
-                  bottomSpacing: 0,
+              // Show loading indicator when fetching
+              if (state.isLoading) ...[
+                const SizedBox(
+                  height: 200,
+                  child: Center(child: CircularProgressIndicator()),
                 ),
+              ] else ...[
+                // Invite section (owners/admins)
+                if (state.myRole.canInvite) ...[
+                  const InviteMemberByLink(),
+                  const SettingsCategorySpacer(),
+                  const InviteMemberByEmail(),
+                  const SettingsCategorySpacer(
+                    bottomSpacing: 0,
+                  ),
+                ],
+
+                // Members list or friendly placeholder when empty
+                if (state.members.isNotEmpty)
+                  _MemberList(
+                    members: state.members,
+                    userProfile: userProfile,
+                    myRole: state.myRole,
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 20),
+                        FlowyText(
+                          '无法加载成员或当前没有成员。',
+                          fontSize: 14,
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                        const VSpace(12),
+                        Wrap(
+                          spacing: 12,
+                          children: [
+                            OutlinedRoundedButton(
+                              text: '重试',
+                              onTap: () {
+                                context
+                                    .read<WorkspaceMemberBloc>()
+                                    .add(const WorkspaceMemberEvent.getInviteCode());
+                                context
+                                    .read<WorkspaceMemberBloc>()
+                                    .add(const WorkspaceMemberEvent.getWorkspaceMembers());
+                              },
+                            ),
+                            // "去设置" removed per UX: guide user to enable cloud sync directly.
+                            OutlinedRoundedButton(
+                              text: '启用数据同步',
+                              onTap: () async {
+                                try {
+                                  // Request enabling cloud sync via UserWorkspaceBloc
+                                  context.read<UserWorkspaceBloc>().add(
+                                        UserWorkspaceEvent.updateCloudSyncEnabled(
+                                          enabled: true,
+                                        ),
+                                      );
+                                  showToastNotification(
+                                    message: '已请求启用数据同步，请等待后台生效后重试。',
+                                  );
+                                } catch (e) {
+                                  Log.error('Request to enable cloud sync failed: $e');
+                                  showToastNotification(
+                                    type: ToastificationType.error,
+                                    message: '无法启用数据同步，请在服务器端检查配置或联系管理员。',
+                                  );
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
               ],
-              if (state.members.isNotEmpty)
-                _MemberList(
-                  members: state.members,
-                  userProfile: userProfile,
-                  myRole: state.myRole,
-                ),
             ],
           );
         },
