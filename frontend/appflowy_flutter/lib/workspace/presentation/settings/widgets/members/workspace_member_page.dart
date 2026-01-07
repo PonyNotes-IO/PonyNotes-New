@@ -126,21 +126,21 @@ class WorkspaceMembersPage extends StatelessWidget {
                 ),
               ] else ...[
                 // Invite section (owners/admins)
-                if (state.myRole.canInvite) ...[
-                  const InviteMemberByLink(),
-                  const SettingsCategorySpacer(),
-                  const InviteMemberByEmail(),
-                  const SettingsCategorySpacer(
-                    bottomSpacing: 0,
-                  ),
-                ],
+              if (state.myRole.canInvite) ...[
+                const InviteMemberByLink(),
+                const SettingsCategorySpacer(),
+                const InviteMemberByEmail(),
+                const SettingsCategorySpacer(
+                  bottomSpacing: 0,
+                ),
+              ],
 
                 // Members list or friendly placeholder when empty
-                if (state.members.isNotEmpty)
-                  _MemberList(
-                    members: state.members,
-                    userProfile: userProfile,
-                    myRole: state.myRole,
+              if (state.members.isNotEmpty)
+                _MemberList(
+                  members: state.members,
+                  userProfile: userProfile,
+                  myRole: state.myRole,
                   )
                 else
                   Padding(
@@ -381,22 +381,12 @@ class WorkspaceMembersPage extends StatelessWidget {
         (f) {
           Log.error('invite workspace member failed: $f');
           final message = f.code == ErrorCode.WorkspaceMemberLimitExceeded
-              ? LocaleKeys.settings_appearance_members_inviteFailedMemberLimit
-                  .tr()
-              : LocaleKeys.settings_appearance_members_failedToInviteMember
-                  .tr();
-          showConfirmDialog(
+              ? LocaleKeys.settings_appearance_members_inviteFailedMemberLimit.tr()
+              : LocaleKeys.settings_appearance_members_failedToInviteMember.tr();
+          // Show a plain dialog without forcing upgrade action.
+          showDialog(
             context: context,
-            title: LocaleKeys
-                .settings_appearance_members_inviteFailedDialogTitle
-                .tr(),
-            description: message,
-            confirmLabel: LocaleKeys
-                .settings_appearance_members_memberLimitExceededUpgrade
-                .tr(),
-            onConfirm: (_) => context
-                .read<WorkspaceMemberBloc>()
-                .add(const WorkspaceMemberEvent.upgradePlan()),
+            builder: (context) => NavigatorOkCancelDialog(message: message),
           );
         },
       );

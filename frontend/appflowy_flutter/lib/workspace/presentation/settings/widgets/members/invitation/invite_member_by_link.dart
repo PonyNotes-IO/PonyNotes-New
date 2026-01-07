@@ -40,41 +40,7 @@ class _InviteMemberByLinkState extends State<InviteMemberByLink> {
     final subscriptionInfo = state.subscriptionInfo;
     final inviteLink = state.inviteLink;
 
-    if (inviteLink == null && subscriptionInfo != null) {
-      int memberLimit = 0;
-      String upgradeToPlan = '';
-
-      switch (subscriptionInfo.plan) {
-        case WorkspacePlanPB.FreePlan:
-          break;
-        case WorkspacePlanPB.StudentPlan:
-          memberLimit = 2;
-          upgradeToPlan = '标准版';
-          break;
-        case WorkspacePlanPB.StandardPlan:
-          memberLimit = 5;
-          upgradeToPlan = '团队版';
-          break;
-        case WorkspacePlanPB.TeamPlan:
-          memberLimit = 10;
-          break;
-      }
-
-      if (memberLimit > 0 && state.members.length >= memberLimit) {
-        await showConfirmDialog(
-          context: context,
-          title: LocaleKeys.settings_appearance_members_inviteFailedDialogTitle.tr(),
-          description: upgradeToPlan.isNotEmpty
-              ? '已达到当前计划的成员数量上限（$memberLimit人），请升级到$upgradeToPlan解锁更多成员'
-              : LocaleKeys.settings_appearance_members_inviteFailedMemberLimit.tr(),
-          confirmLabel: LocaleKeys.upgradePlanModal_actionButton.tr(),
-          onConfirm: (_) => context
-              .read<WorkspaceMemberBloc>()
-              .add(const WorkspaceMemberEvent.upgradePlan()),
-        );
-        return;
-      }
-    }
+    // Allow generating invite links for all plans — no upgrade restriction.
 
     if (inviteLink != null) {
       await showConfirmDialog(
@@ -112,41 +78,7 @@ class _InviteMemberByLinkState extends State<InviteMemberByLink> {
     final subscriptionInfo = state.subscriptionInfo;
     final inviteLink = state.inviteLink;
 
-    if (inviteLink == null && subscriptionInfo != null) {
-      int memberLimit = 0;
-      String upgradeToPlan = '';
-
-      switch (subscriptionInfo.plan) {
-        case WorkspacePlanPB.FreePlan:
-          break;
-        case WorkspacePlanPB.StudentPlan:
-          memberLimit = 2;
-          upgradeToPlan = '标准版';
-          break;
-        case WorkspacePlanPB.StandardPlan:
-          memberLimit = 5;
-          upgradeToPlan = '团队版';
-          break;
-        case WorkspacePlanPB.TeamPlan:
-          memberLimit = 10;
-          break;
-      }
-
-      if (memberLimit > 0 && state.members.length >= memberLimit) {
-        await showConfirmDialog(
-          context: context,
-          title: LocaleKeys.settings_appearance_members_inviteFailedDialogTitle.tr(),
-          description: upgradeToPlan.isNotEmpty
-              ? '已达到当前计划的成员数量上限（$memberLimit人），请升级到$upgradeToPlan解锁更多成员'
-              : LocaleKeys.settings_appearance_members_inviteFailedMemberLimit.tr(),
-          confirmLabel: LocaleKeys.upgradePlanModal_actionButton.tr(),
-          onConfirm: (_) => context
-              .read<WorkspaceMemberBloc>()
-              .add(const WorkspaceMemberEvent.upgradePlan()),
-        );
-        return;
-      }
-    }
+    // No per-plan member limit enforced here — always allow generating a link.
 
     // dispatch generate event (this will create or reset link on server)
     context.read<WorkspaceMemberBloc>().add(const WorkspaceMemberEvent.generateInviteLink());
@@ -396,23 +328,7 @@ class _CopyLinkButtonState extends State<_CopyLinkButton> {
         final subscriptionInfo = state.subscriptionInfo;
         // check the current workspace member count, if it exceed the limit, show a upgrade dialog.
         // prevent hard code here, because the member count may exceed the limit after the invite link is generated.
-        if (subscriptionInfo?.plan == WorkspacePlanPB.FreePlan &&
-            state.members.length >= 2) {
-          await showConfirmDialog(
-            context: context,
-            title: LocaleKeys
-                .settings_appearance_members_inviteFailedDialogTitle
-                .tr(),
-            description: LocaleKeys
-                .settings_appearance_members_inviteFailedMemberLimit
-                .tr(),
-            confirmLabel: LocaleKeys.upgradePlanModal_actionButton.tr(),
-            onConfirm: (_) => context
-                .read<WorkspaceMemberBloc>()
-                .add(const WorkspaceMemberEvent.upgradePlan()),
-          );
-          return;
-        }
+        // Allow copying invite link for all plans — no upgrade restriction.
 
         final link = state.inviteLink;
         if (link != null) {
