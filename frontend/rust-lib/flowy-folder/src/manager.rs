@@ -53,6 +53,7 @@ use flowy_folder_pub::sql::workspace_shared_view_sql::{
 use flowy_sqlite::DBConnection;
 use flowy_sqlite::kv::KVStorePreferences;
 use flowy_user_pub::entities::{Role, UserWorkspace};
+use flowy_user_pub::sql::select_workspace_setting;
 use futures::future;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -590,6 +591,34 @@ impl FolderManager {
     notify_workspace_update: bool,
   ) -> FlowyResult<(View, Option<EncodedCollab>)> {
     let workspace_id = self.user.workspace_id()?;
+    // Backend enforcement: if workspace setting requires owner-only creation for team spaces,
+    // and this creation request is for a space (is_space flag in params.extra), block non-owners.
+    // We try best-effort to read workspace settings from local DB; failures fall back to allowing creation.
+    if let Ok(user_id) = self.user.user_id() {
+      if let Ok(mut conn) = self.user.sqlite_connection(user_id) {
+        if let Ok(ws_setting) = select_workspace_setting(&mut conn, &workspace_id.to_string()) {
+          if ws_setting.only_owner_can_create_team_workspace {
+            // Detect space creation by checking params.extra JSON for is_space flag.
+            let mut is_space_creation = false;
+            if let Some(extra_json) = &params.extra {
+              if extra_json.contains("\"is_space\":true") || extra_json.contains("\"is_space\": true") {
+                is_space_creation = true;
+              }
+            }
+            if is_space_creation {
+              if let Ok(uw) = self.user.get_active_user_workspace() {
+                if uw.role != Some(Role::Owner) {
+                  return Err(FlowyError::new(
+                    ErrorCode::NotEnoughPermissions,
+                    "Only workspace owner can create team workspace",
+                  ));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     let view_layout: ViewLayout = params.layout.clone().into();
     // Use special handler selection for Folder and Notebook types
     let handler = self.get_handler_for_layout_pb(&params.layout)?;
