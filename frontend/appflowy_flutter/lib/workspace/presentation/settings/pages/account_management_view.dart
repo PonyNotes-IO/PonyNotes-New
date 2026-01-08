@@ -10,6 +10,8 @@ import 'package:get_it/get_it.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart'
+    show UserWorkspaceBloc, UserWorkspaceEvent;
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
@@ -834,9 +836,31 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     }
 
     // 订阅成功后刷新设置页的订阅信息（存储用量等）
+    // 支付成功后，刷新 UserWorkspaceBloc 的订阅信息，以便自动开启云同步
     if (context.mounted) {
-      context.read<SettingsDialogBloc>().add(const SettingsDialogEvent.initial());
-    }
+        try {
+          context.read<SettingsDialogBloc>().add(const SettingsDialogEvent.initial());
+          final workspaceBloc = context.read<UserWorkspaceBloc?>();
+          if (workspaceBloc != null) {
+            Log.info('[AccountManagementView] 支付成功，刷新 UserWorkspaceBloc 订阅信息');
+            // 刷新云同步
+            final workspaceBloc = context.read<UserWorkspaceBloc>();
+            workspaceBloc.add(
+              UserWorkspaceEvent.updateCloudSyncEnabled(enabled: true),
+            );
+            // 刷新会员订阅信息（包含使用量）
+            workspaceBloc.add(
+              UserWorkspaceEvent.fetchCurrentSubscription(),
+            );
+          } else {
+            Log.warn('[AccountManagementView] 无法获取 UserWorkspaceBloc，跳过刷新订阅信息');
+          }
+        } catch (e, stackTrace) {
+          Log.error('[AccountManagementView] 刷新 UserWorkspaceBloc 订阅信息失败: $e', e, stackTrace);
+        }
+      }
+
+
 
     // 1. 根据当前平台获取可用支付方式（macOS: Apple Pay; Windows: 微信/支付宝）
     final methods = PaymentPlatformSupport.getAvailableMethods();
