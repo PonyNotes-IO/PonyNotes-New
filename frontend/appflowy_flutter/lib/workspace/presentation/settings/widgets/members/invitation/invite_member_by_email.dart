@@ -313,6 +313,14 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                             // Dispatch invite events for all selected users
                             for (final u in selectedUsers) {
                               final identifier = u.email;
+                              // Validate email format before inviting
+                              if (!isEmail(identifier)) {
+                                showToastNotification(
+                                  type: ToastificationType.error,
+                                  message: '用户 ${u.name} 的邮箱格式无效，无法邀请',
+                                );
+                                continue;
+                              }
                               context.read<WorkspaceMemberBloc>().add(
                                     WorkspaceMemberEvent.inviteWorkspaceMemberByEmail(
                                       identifier,
@@ -347,27 +355,4 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
     return digits.length >= 6 && digits.length <= 15;
   }
 
-  void _inviteMemberFromDialog(String contact, BuildContext dialogContext, [AFRolePB? role]) {
-    final value = contact.trim();
-
-    final isEmailAddr = isEmail(value);
-    final isPhone = _isPhoneNumber(value);
-
-    if (!isEmailAddr && !isPhone) {
-      showToastNotification(
-        type: ToastificationType.error,
-        message: '请输入有效的邮箱或手机号',
-      );
-      return;
-    }
-
-    // The backend expects the identifier (email or phone). Use the raw input.
-    context
-        .read<WorkspaceMemberBloc>()
-        .add(WorkspaceMemberEvent.inviteWorkspaceMemberByEmail(value, role ?? AFRolePB.Member));
-    // close the dialog after dispatch
-    try {
-      Navigator.of(dialogContext).pop();
-    } catch (_) {}
-  }
 }

@@ -98,8 +98,9 @@ run_task = { name = [
 dependencies = ["set-app-version"]
 script = [
   """
+    set -x
     cd rust-lib/
-    cargo build --profile ${CARGO_PROFILE} --package=dart-ffi --target ${RUST_COMPILE_TARGET} --features "${FLUTTER_DESKTOP_FEATURES}"
+    cargo build -vv --profile ${CARGO_PROFILE} --package=dart-ffi --target ${RUST_COMPILE_TARGET} --features "${FLUTTER_DESKTOP_FEATURES}"
     cd ../
   """,
 ]
@@ -109,8 +110,9 @@ script_runner = "@shell"
 dependencies = ["set-app-version"]
 script = [
   """
+    set -x
     cd rust-lib/
-    cargo build --profile ${CARGO_PROFILE} --package=dart-ffi --target ${RUST_COMPILE_TARGET} --features "${FLUTTER_DESKTOP_FEATURES}"
+    cargo build -vv --profile ${CARGO_PROFILE} --package=dart-ffi --target ${RUST_COMPILE_TARGET} --features "${FLUTTER_DESKTOP_FEATURES}"
     cd ../
   """,
 ]

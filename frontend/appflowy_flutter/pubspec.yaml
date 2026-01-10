@@ -340,10 +340,10 @@ flutter:
 
     # The following assets will be excluded in release.
     # BEGIN: EXCLUDE_IN_RELEASE
-    - assets/test/workspaces/
-    - assets/test/images/
-    - assets/template/
-    - assets/test/workspaces/markdowns/
-    - assets/test/workspaces/database/
+##    - assets/test/workspaces/
+##    - assets/test/images/
+##    - assets/template/
+##    - assets/test/workspaces/markdowns/
+##    - assets/test/workspaces/database/
     # END: EXCLUDE_IN_RELEASE
     - lib/plugins/template/templates_data.json

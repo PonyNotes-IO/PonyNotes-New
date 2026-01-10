@@ -26,6 +26,13 @@ import 'share_with_user_repository.dart';
 
 class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
   RustShareWithUserRepositoryImpl();
+
+  bool isValidEmailFormat(String email) {
+    if (email.isEmpty) return false;
+    // Basic email regex pattern
+    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+    return emailRegex.hasMatch(email);
+  }
   
   ShareRole _convertRoleToShareRole(user.AFRolePB role) {
     switch (role) {
@@ -351,8 +358,14 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
           final userId = (userMap['uuid'] ?? '').toString();
           final userUserId = userId.isNotEmpty ? userId : null;
 
-          // Use email as primary identifier, fallback to phone if email is empty
-          final userEmail = email.isNotEmpty ? email : (phone ?? '');
+          // Only use email if it's a valid email format, never fallback to phone for invitation
+          final userEmail = email;
+
+          // Skip users without valid email
+          if (userEmail.isEmpty || !isValidEmailFormat(userEmail)) {
+            Log.warn('Skipping user $name - invalid or missing email: $userEmail');
+            return null;
+          }
 
           return SharedUser(
             email: userEmail,
@@ -362,7 +375,7 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
             avatarUrl: null,
             userId: userUserId,
           );
-        }).toList();
+        }).where((user) => user != null).cast<SharedUser>().toList();
 
         Log.info('Found ${sharedUsers.length} users for query: $query');
         LogUtils.info(jsonData);
