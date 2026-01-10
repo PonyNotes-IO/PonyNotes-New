@@ -38,7 +38,7 @@ Future<void> _setAuthenticatorType(AuthenticatorType ty) async {
   }
 }
 
-const String kAppflowyCloudUrl = "https://beta.appflowy.cloud";
+const String kAppflowyCloudUrl = "https://xiaomabiji.com";
 
 /// Retrieves the currently set cloud type.
 ///
@@ -184,23 +184,25 @@ class AppFlowyCloudSharedEnv {
   static Future<AppFlowyCloudSharedEnv> fromEnv() async {
     // Always use the cloud settings from the .env file.
     // Environment is determined at compile time, not runtime.
-    final authenticatorType = AuthenticatorType.fromValue(Env.authenticatorType);
-    
+    final authenticatorType =
+        AuthenticatorType.fromValue(Env.authenticatorType);
+
     // For appflowyCloudDevelop type, use configurationFromUri to handle port configuration
-    final appflowyCloudConfig = authenticatorType == AuthenticatorType.appflowyCloudDevelop
-        ? await configurationFromUri(
-            Uri.parse(Env.afCloudUrl),
-            Env.afCloudUrl,
-            authenticatorType,
-            Env.baseWebDomain,
-          )
-        : AppFlowyCloudConfiguration(
-            base_url: Env.afCloudUrl,
-            ws_base_url: await _getAppFlowyCloudWSUrl(Env.afCloudUrl),
-            gotrue_url: await _getAppFlowyCloudGotrueUrl(Env.afCloudUrl),
-            enable_sync_trace: false,
-            base_web_domain: Env.baseWebDomain,
-          );
+    final appflowyCloudConfig =
+        authenticatorType == AuthenticatorType.appflowyCloudDevelop
+            ? await configurationFromUri(
+                Uri.parse(Env.afCloudUrl),
+                Env.afCloudUrl,
+                authenticatorType,
+                Env.baseWebDomain,
+              )
+            : AppFlowyCloudConfiguration(
+                base_url: Env.afCloudUrl,
+                ws_base_url: await _getAppFlowyCloudWSUrl(Env.afCloudUrl),
+                gotrue_url: await _getAppFlowyCloudGotrueUrl(Env.afCloudUrl),
+                enable_sync_trace: false,
+                base_web_domain: Env.baseWebDomain,
+              );
 
     return AppFlowyCloudSharedEnv(
       authenticatorType: authenticatorType,
@@ -275,8 +277,8 @@ Future<String> getAppFlowyCloudUrl() async {
 /// Gets the AppFlowy Share Domain from environment configuration.
 /// This is now determined at compile time from the .env file.
 Future<String> getAppFlowyShareDomain() async {
-  return Env.baseWebDomain.isNotEmpty 
-      ? Env.baseWebDomain 
+  return Env.baseWebDomain.isNotEmpty
+      ? Env.baseWebDomain
       : ShareConstants.defaultBaseWebDomain;
 }
 
@@ -315,5 +317,8 @@ Future<String> _getAppFlowyCloudWSUrl(String baseURL) async {
 }
 
 Future<String> _getAppFlowyCloudGotrueUrl(String baseURL) async {
+  if (baseURL.contains("api.xiaomabiji.com")) {
+    return "https://gotrue.xiaomabiji.com";
+  }
   return "$baseURL/gotrue";
 }
