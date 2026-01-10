@@ -1,6 +1,4 @@
 import 'package:scaled_app/scaled_app.dart';
-import 'package:flutter/services.dart';
-import 'package:appflowy_backend/log.dart';
 
 import 'startup/startup.dart';
 
@@ -8,25 +6,10 @@ Future<void> main() async {
   ScaledWidgetsFlutterBinding.ensureInitialized(
     scaleFactor: (_) => 1.0,
   );
-  // 全局键盘事件诊断：打印 RawKeyEvent 与 HardwareKeyboard 当前按下集合
-  // 目的：记录 keydown/keyup 的时序，帮助定位重复 KeyDown 的来源
-  try {
-    RawKeyboard.instance.addListener((event) {
-      try {
-        final now = DateTime.now().toIso8601String();
-        final phys = event.physicalKey.debugName;
-        final logical = event.logicalKey.debugName;
-        final pressed = HardwareKeyboard.instance.physicalKeysPressed;
-        // 诊断信息已被禁用（删除以减少日志噪声）
-      } catch (e, st) {
-        // 防止诊断代码抛异常影响启动
-        Log.error('[RAW_KEY_LOG] diagnostic error: $e', st);
-      }
-    });
-  } catch (e) {
-    // 在极少数环境 RawKeyboard 未就绪，记录并继续
-    Log.error('[RAW_KEY_LOG] attach failed: $e');
-  }
+
+  // 注意：已移除RawKeyboard诊断代码
+  // RawKeyboard API已被Flutter弃用，与新的HardwareKeyboard系统冲突
+  // 会导致键盘事件状态不同步，出现"KeyDownEvent but key already pressed"错误
 
   await runAppFlowy();
 }
