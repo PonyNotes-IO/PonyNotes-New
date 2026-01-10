@@ -12,6 +12,7 @@ class SharedUser {
     required this.accessLevel,
     this.avatarUrl,
     this.userId,
+    this.phone,
   });
 
   final String email;
@@ -33,6 +34,9 @@ class SharedUser {
   /// The user ID (member_user_id) for collaboration API.
   final String? userId;
 
+  /// The phone number of the user.
+  final String? phone;
+
   SharedUser copyWith({
     String? email,
     String? name,
@@ -40,6 +44,7 @@ class SharedUser {
     ShareAccessLevel? accessLevel,
     String? avatarUrl,
     String? userId,
+    String? phone,
   }) {
     return SharedUser(
       email: email ?? this.email,
@@ -48,6 +53,7 @@ class SharedUser {
       accessLevel: accessLevel ?? this.accessLevel,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       userId: userId ?? this.userId,
+      phone: phone ?? this.phone,
     );
   }
 }

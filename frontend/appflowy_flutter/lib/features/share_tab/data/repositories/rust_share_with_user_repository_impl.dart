@@ -358,22 +358,14 @@ class RustShareWithUserRepositoryImpl extends ShareWithUserRepository {
           final userId = (userMap['uuid'] ?? '').toString();
           final userUserId = userId.isNotEmpty ? userId : null;
 
-          // Only use email if it's a valid email format, never fallback to phone for invitation
-          final userEmail = email;
-
-          // Skip users without valid email
-          if (userEmail.isEmpty || !isValidEmailFormat(userEmail)) {
-            Log.warn('Skipping user $name - invalid or missing email: $userEmail');
-            return null;
-          }
-
           return SharedUser(
-            email: userEmail,
+            email: email,
             name: name,
             role: ShareRole.guest, // Default role for searched users
             accessLevel: ShareAccessLevel.readOnly, // Default access level
             avatarUrl: null,
             userId: userUserId,
+            phone: phone,
           );
         }).where((user) => user != null).cast<SharedUser>().toList();
 

@@ -719,6 +719,7 @@ class _UserSearchFieldState extends State<_UserSearchField> {
   final _layerLink = LayerLink();
   Timer? _debounceTimer;
   OverlayEntry? _overlayEntry;
+  bool _isCreatingOverlay = false; // 防止重复创建 overlay
 
   @override
   void initState() {
@@ -730,16 +731,30 @@ class _UserSearchFieldState extends State<_UserSearchField> {
   @override
   void didUpdateWidget(_UserSearchField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 当搜索结果更新时，重新构建 overlay
+    // 当搜索结果更新时，重新创建 overlay 以确保显示最新结果
     if (!mounted) {
       return;
     }
     
+    // 只有当搜索结果真正变化时才更新 overlay
     if (oldWidget.availableUsers != widget.availableUsers) {
       try {
         final hasText = widget.controller.text.trim().isNotEmpty;
         if (hasText && _focusNode.hasFocus && mounted) {
-          _showOverlay();
+          // 移除旧的 overlay 并重新创建，确保显示最新的搜索结果
+          if (_overlayEntry != null) {
+            // 先移除旧的 overlay
+            _removeOverlay();
+            // 在下一帧重新创建，确保使用最新的 widget.availableUsers
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && !_isCreatingOverlay) {
+                _createOverlay();
+              }
+            });
+          } else {
+            // 如果 overlay 不存在，创建新的
+            _showOverlay();
+          }
         }
       } catch (e) {
         // Controller 可能已被销毁，忽略
@@ -794,27 +809,33 @@ class _UserSearchFieldState extends State<_UserSearchField> {
       }
       _overlayEntry = null;
     }
+    _isCreatingOverlay = false; // 重置创建标志
   }
 
   void _showOverlay() {
-    // 移除旧的 overlay，以便使用最新的数据重新创建
-    _removeOverlay();
-
-    if (!mounted) {
+    // 如果 overlay 已存在，使用 markNeedsBuild 更新内容（避免闪烁）
+    if (_overlayEntry != null) {
+      _overlayEntry!.markNeedsBuild();
       return;
     }
 
-    // 在创建 overlay 之前捕获必要的数据
-    final theme = AppFlowyTheme.of(context);
-    final controller = widget.controller;
-    final availableUsers = widget.availableUsers;
-    final existingUsers = widget.existingUsers;
-    final onUserSelected = widget.onUserSelected;
-    
+    // 防止重复创建
+    if (_isCreatingOverlay) {
+      return;
+    }
+
+    _createOverlay();
+  }
+
+  void _createOverlay() {
+    if (!mounted || _isCreatingOverlay) {
+      return;
+    }
+
     // 检查输入框是否有内容
     String searchText;
     try {
-      searchText = controller.text.trim();
+      searchText = widget.controller.text.trim();
     } catch (e) {
       // Controller 可能已被销毁
       return;
@@ -824,12 +845,22 @@ class _UserSearchFieldState extends State<_UserSearchField> {
       return;
     }
 
+    _isCreatingOverlay = true;
+
+    // 创建新的 overlay entry，builder 中使用最新的 widget 数据
     _overlayEntry = OverlayEntry(
       builder: (overlayContext) {
         // 检查 widget 是否仍然有效
         if (!mounted) {
           return const SizedBox.shrink();
         }
+        
+        // 使用最新的 widget 数据，确保每次 builder 执行时都获取最新数据
+        final theme = AppFlowyTheme.of(context);
+        final controller = widget.controller;
+        final availableUsers = widget.availableUsers; // 使用最新的 widget 数据
+        final existingUsers = widget.existingUsers; // 使用最新的 widget 数据
+        final onUserSelected = widget.onUserSelected;
         
         // 再次检查输入框内容（可能已改变）
         String currentText;
@@ -843,11 +874,15 @@ class _UserSearchFieldState extends State<_UserSearchField> {
           return const SizedBox.shrink();
         }
         
-        // 过滤用户列表
-        final existingEmails = existingUsers.map((u) => u.email).toSet();
+        // 过滤用户列表 - 使用最新的数据
+        // 注意：这里使用 name 来过滤，因为用户修改了代码使用 name 而不是 email
+        final existingNames = existingUsers.map((u) => u.name).toSet();
         final filteredUsers = availableUsers
-            .where((user) => !existingEmails.contains(user.email))
+            .where((user) => !existingNames.contains(user.name))
             .toList();
+        
+        // 添加调试日志，确保数据正确
+        LogUtils.info('Overlay builder: searchText=$currentText, availableUsers=${availableUsers.length}, filteredUsers=${filteredUsers.length}');
         
         // 计算弹框宽度：对话框最大宽度 500，减去左右 padding (20*2)，等于输入框宽度
         final screenWidth = MediaQuery.of(overlayContext).size.width;
@@ -955,10 +990,14 @@ class _UserSearchFieldState extends State<_UserSearchField> {
       try {
         final overlay = Overlay.of(context, rootOverlay: false);
         overlay.insert(_overlayEntry!);
+        _isCreatingOverlay = false; // 创建完成，重置标志
       } catch (e) {
         // Context 可能无效，清理 overlay entry
         _overlayEntry = null;
+        _isCreatingOverlay = false;
       }
+    } else {
+      _isCreatingOverlay = false;
     }
   }
 
@@ -991,10 +1030,17 @@ class _UserSearchFieldState extends State<_UserSearchField> {
           return;
         }
         try {
+          // 先调用搜索接口（立即触发搜索）
           widget.onSearch(searchQuery);
-          // 搜索请求发送后，显示 overlay（即使结果还没返回，也会显示等待状态）
+          // 搜索请求发送后，确保 overlay 显示
+          // 注意：新的搜索结果返回后，didUpdateWidget 会重新创建 overlay 显示最新结果
           if (mounted && _focusNode.hasFocus) {
-            _showOverlay();
+            // 如果 overlay 不存在，创建新的（显示当前搜索结果或等待状态）
+            if (_overlayEntry == null) {
+              _showOverlay();
+            }
+            // 如果 overlay 已存在，暂时不更新（等待搜索结果返回后通过 didUpdateWidget 更新）
+            // 这样可以避免显示旧的搜索结果
           }
         } catch (e) {
           // Controller may have been disposed, ignore
@@ -1059,7 +1105,13 @@ class _UserSearchFieldState extends State<_UserSearchField> {
       try {
         final text = widget.controller.text.trim();
         if (text.isNotEmpty && mounted) {
-          _showOverlay();
+          // 如果 overlay 已存在，使用 markNeedsBuild 更新（避免闪烁）
+          if (_overlayEntry != null) {
+            _overlayEntry!.markNeedsBuild();
+          } else {
+            // 如果 overlay 不存在，创建新的
+            _showOverlay();
+          }
         }
       } catch (e) {
         // Controller may have been disposed, ignore
