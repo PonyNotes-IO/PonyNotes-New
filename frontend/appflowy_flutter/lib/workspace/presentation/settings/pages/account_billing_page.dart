@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../../features/workspace/logic/workspace_bloc.dart';
 import '../../../application/settings/settings_dialog_bloc.dart';
 import '../shared/settings_body.dart';
 import '../widgets/email_binding_dialog.dart';
@@ -731,7 +732,27 @@ class _BillingPageState extends State<BillingPage> {
 
       // 购买成功后刷新设置页订阅信息（含存储用量）
       if (context.mounted) {
-        context.read<SettingsDialogBloc>().add(const SettingsDialogEvent.initial());
+        // 支付成功后，刷新 UserWorkspaceBloc 的订阅信息，以便自动开启云同步
+        try {
+          context.read<SettingsDialogBloc>().add(const SettingsDialogEvent.initial());
+          final workspaceBloc = context.read<UserWorkspaceBloc?>();
+          if (workspaceBloc != null) {
+            Log.info('[AccountManagementView] 支付成功，刷新 UserWorkspaceBloc 订阅信息');
+            // 刷新云同步
+            final workspaceBloc = context.read<UserWorkspaceBloc>();
+            workspaceBloc.add(
+              UserWorkspaceEvent.updateCloudSyncEnabled(enabled: true),
+            );
+            // 刷新会员订阅信息（包含使用量）
+            workspaceBloc.add(
+              UserWorkspaceEvent.fetchCurrentSubscription(),
+            );
+          } else {
+            Log.warn('[AccountManagementView] 无法获取 UserWorkspaceBloc，跳过刷新订阅信息');
+          }
+        } catch (e, stackTrace) {
+          Log.error('[AccountManagementView] 刷新 UserWorkspaceBloc 订阅信息失败: $e', e, stackTrace);
+        }
       }
 
       scaffoldMessenger.showSnackBar(

@@ -147,7 +147,7 @@ use flowy_user_pub::cloud::{AFWorkspaceSettings, AFWorkspaceSettingsChange};
 use flowy_user_pub::entities::{
   AuthType, Role, WorkspaceInvitation, WorkspaceMember, WorkspaceType,
 };
-use lib_infra::validator_fn::required_not_empty_str;
+use lib_infra::validator_fn::{email_or_phone, required_not_empty_str};
 
 #[derive(ProtoBuf, Default, Clone)]
 pub struct WorkspaceMemberPB {
@@ -192,7 +192,7 @@ pub struct WorkspaceMemberInvitationPB {
   pub workspace_id: String,
 
   #[pb(index = 2)]
-  #[validate(email)]
+  #[validate(custom(function = "email_or_phone"))]
   pub invitee_email: String,
 
   #[pb(index = 3)]

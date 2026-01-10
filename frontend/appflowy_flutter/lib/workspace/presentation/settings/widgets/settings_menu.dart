@@ -244,7 +244,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
       return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
     }
 
-    return '剩余流量${fmt(remainingGb)}/${fmt(totalGb)}';
+    return '剩余空间${fmt(remainingGb)}/${fmt(totalGb)}';
   }
 
   Widget _buildUserInfoCard(BuildContext context) {

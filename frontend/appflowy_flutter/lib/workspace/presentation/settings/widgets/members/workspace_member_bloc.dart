@@ -113,14 +113,22 @@ class WorkspaceMemberBloc
         // Log and surface error via actionResult
         Log.warn('Failed to get workspace members: ${e.msg}');
 
-        final errMsg = (e.msg ?? '').toLowerCase();
+        final errMsg = e.msg.toLowerCase();
         // If backend indicates Data Sync is disabled, surface a dedicated state for UI guidance.
         if (errMsg.contains('data sync') || errMsg.contains('enable data sync')) {
           Log.info('[WorkspaceMemberBloc] Data sync is disabled; emitting state to prompt user to enable it');
+
+          // 当云同步关闭时，后端无法返回成员列表，此时无法精确判断角色。
+          // 这里尽量根据已知信息推断当前用户是否为工作区创建人：
+          // 1. 如果构造时传入了 workspace 且其 role 为 Owner，则认为当前用户是创建人。
+          // 2. 否则保持为 Guest，仅显示「退出工作区」等受限操作。
+          final fallbackRole =
+              workspace?.role == AFRolePB.Owner ? AFRolePB.Owner : AFRolePB.Guest;
+
           emit(
             state.copyWith(
               members: const [],
-              myRole: AFRolePB.Guest,
+              myRole: fallbackRole,
               isLoading: false,
               actionResult: WorkspaceMemberActionResult(
                 actionType: WorkspaceMemberActionType.get,
@@ -669,7 +677,7 @@ class WorkspaceMemberState with _$WorkspaceMemberState {
     try {
       if (ar.result.isFailure) {
         final f = ar.result.getFailure();
-        final msg = (f.msg ?? '').toLowerCase();
+        final msg = f.msg.toLowerCase();
         return msg.contains('data sync') || msg.contains('enable data sync') || msg.contains('datasync');
       }
     } catch (_) {

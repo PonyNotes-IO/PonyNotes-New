@@ -25,9 +25,10 @@ import 'package:appflowy/workspace/presentation/widgets/edit_panel/panel_animati
 import 'package:appflowy/workspace/presentation/widgets/float_bubble/question_bubble.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
-    show UserProfilePB, UserWorkspacePB, WorkspaceTypePB;
+    show UserProfilePB, UserWorkspacePB;
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
 import 'package:flowy_infra_ui/style_widget/container.dart';
@@ -186,12 +187,17 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                       repository: RustWorkspaceRepositoryImpl(
                         userId: userProfile.id,
                       ),
-                    )..add(UserWorkspaceEvent.initialize()),
+                    )
+                      ..add(UserWorkspaceEvent.initialize())
+                      ..add(UserWorkspaceEvent.fetchWorkspaces()),
                     child: BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
                       listenWhen: (previous, current) =>
                           previous.currentWorkspace != current.currentWorkspace ||
                           previous.workspaces.length != current.workspaces.length ||
-                          _workspacesChanged(previous.workspaces, current.workspaces),
+                          _workspacesChanged(previous.workspaces, current.workspaces) ||
+                          (previous.actionResult?.actionType == WorkspaceActionType.create &&
+                              current.actionResult?.actionType == WorkspaceActionType.create &&
+                              previous.actionResult?.isLoading != current.actionResult?.isLoading),
                       listener: (context, state) {
                         if (!context.mounted) return;
                         final workspaceBloc =
@@ -206,14 +212,14 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                         _checkAndHandleWorkspaceRemoved(context, state);
                       },
                       child: _WorkspaceLifecycleRefresher(
-                        child: HomeHotKeys(
-                          userProfile: userProfile,
-                          child: FlowyContainer(
-                            Theme.of(context).colorScheme.surface,
-                            child: _buildBody(
-                              context,
-                              userProfile,
-                              workspaceLatest,
+                      child: HomeHotKeys(
+                        userProfile: userProfile,
+                        child: FlowyContainer(
+                          Theme.of(context).colorScheme.surface,
+                          child: _buildBody(
+                            context,
+                            userProfile,
+                            workspaceLatest,
                             ),
                           ),
                         ),
@@ -414,21 +420,6 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
   ) {
     final currentWorkspace = state.currentWorkspace;
     final workspaces = state.workspaces;
-    // 如果没有工作区，创建新工作区
-    if (workspaces.isEmpty) {
-      Log.info('No workspaces found, creating a new workspace');
-      final workspaceBloc = context.read<UserWorkspaceBloc?>();
-      if (workspaceBloc != null) {
-        // 创建默认工作区
-        workspaceBloc.add(
-          UserWorkspaceEvent.createWorkspace(
-            name: '我的工作区',
-            workspaceType: WorkspaceTypePB.ServerW,
-          ),
-        );
-      }
-      return;
-    }
 
     // 如果当前工作区不在列表中，说明被移除了
     if (currentWorkspace != null) {
@@ -439,19 +430,41 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
       if (!isCurrentWorkspaceInList && !_hasShownRemovedDialog) {
         _hasShownRemovedDialog = true;
         Log.info(
-          'Current workspace ${currentWorkspace.workspaceId} not found in list, switching to first workspace',
+          'Current workspace ${currentWorkspace.workspaceId} not found in list, checking if it was created by current user',
         );
 
-        // 切换到第一个工作区
-        final firstWorkspace = workspaces.first;
+        // 检查当前工作区是否是登录用户创建的
+        // 如果当前工作区的 role 是 Owner，说明是登录用户创建的
+        final isCreatedByCurrentUser = currentWorkspace.role == AFRolePB.Owner;
+        
         final workspaceBloc = context.read<UserWorkspaceBloc?>();
         if (workspaceBloc != null) {
-          workspaceBloc.add(
-            UserWorkspaceEvent.openWorkspace(
-              workspaceId: firstWorkspace.workspaceId,
-              workspaceType: firstWorkspace.workspaceType,
-            ),
-          );
+          UserWorkspacePB? targetWorkspace;
+          
+          if (isCreatedByCurrentUser) {
+            // 如果是登录用户创建的工作区被移除，切换到第一个工作区
+            targetWorkspace = workspaces.firstOrNull;
+            Log.info('Workspace was created by current user, switching to first available workspace');
+          } else {
+            // 如果当前工作区非登录用户创建被移除后，切换到登录用户自己创建的工作区
+            // 查找登录用户创建的工作区（role 为 Owner 的工作区）
+            targetWorkspace = workspaces.firstWhereOrNull(
+              (w) => w.role == AFRolePB.Owner,
+            );
+            
+            // 如果找不到登录用户创建的工作区，则切换到第一个工作区
+            targetWorkspace ??= workspaces.firstOrNull;
+            Log.info('Workspace was not created by current user, switching to user\'s own workspace or first available');
+          }
+          
+          if (targetWorkspace != null) {
+            workspaceBloc.add(
+              UserWorkspaceEvent.openWorkspace(
+                workspaceId: targetWorkspace.workspaceId,
+                workspaceType: targetWorkspace.workspaceType,
+              ),
+            );
+          }
         }
 
         // 显示提示对话框
@@ -473,7 +486,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
   }
 }
 
-/// 监听应用生命周期，在应用回到前台时刷新工作区列表。
+/// 监听应用生命周期和页面可见性，在首页可见时刷新工作区列表。
 /// 放在 `UserWorkspaceBloc` 的子树中，确保能拿到正确的 Bloc。
 class _WorkspaceLifecycleRefresher extends StatefulWidget {
   const _WorkspaceLifecycleRefresher({required this.child});
@@ -487,10 +500,32 @@ class _WorkspaceLifecycleRefresher extends StatefulWidget {
 
 class _WorkspaceLifecycleRefresherState
     extends State<_WorkspaceLifecycleRefresher> with WidgetsBindingObserver {
+  DateTime? _lastRefreshTime;
+  static const _refreshDebounceDuration = Duration(seconds: 2);
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 每次首页可见时刷新工作区列表（使用防抖避免过于频繁）
+    if (mounted) {
+      final now = DateTime.now();
+      if (_lastRefreshTime == null ||
+          now.difference(_lastRefreshTime!) > _refreshDebounceDuration) {
+        _lastRefreshTime = now;
+        // 延迟一小段时间，确保 Bloc 已经初始化
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _refreshWorkspaceList();
+          }
+        });
+      }
+    }
   }
 
   @override
@@ -502,18 +537,24 @@ class _WorkspaceLifecycleRefresherState
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // 此处的 context 在 UserWorkspaceBloc 的子树中，可以安全读取 Bloc
-      final workspaceBloc = context.read<UserWorkspaceBloc?>();
-      if (workspaceBloc != null) {
-        LogUtils.info(
-          'WorkspaceLifecycleRefresher: app resumed, fetchWorkspaces',
-        );
-        workspaceBloc.add(UserWorkspaceEvent.fetchWorkspaces());
-      } else {
-        LogUtils.info(
-          'WorkspaceLifecycleRefresher: UserWorkspaceBloc is null on resume',
-        );
-      }
+      // 应用恢复时刷新工作区列表
+      _lastRefreshTime = DateTime.now();
+      _refreshWorkspaceList();
+    }
+  }
+
+  void _refreshWorkspaceList() {
+    // 此处的 context 在 UserWorkspaceBloc 的子树中，可以安全读取 Bloc
+    final workspaceBloc = context.read<UserWorkspaceBloc?>();
+    if (workspaceBloc != null) {
+      LogUtils.info(
+        'WorkspaceLifecycleRefresher: page visible, fetchWorkspaces',
+      );
+      workspaceBloc.add(UserWorkspaceEvent.fetchWorkspaces());
+    } else {
+      LogUtils.info(
+        'WorkspaceLifecycleRefresher: UserWorkspaceBloc is null',
+      );
     }
   }
 
