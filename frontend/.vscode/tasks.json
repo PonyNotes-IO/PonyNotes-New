@@ -600,9 +600,10 @@
         "command": "cargo make --profile \"development-linux-$(uname -m)\" appflowy-core-dev"
       },
       "osx": {
-        // Flutter原生arm64模式，需要arm64架构的库
-        // 如果Flutter报错需要x86_64，可改为development-mac-x86_64
-        "command": "cargo make --profile development-mac-arm64 appflowy-core-dev"
+        // 自动检测设备架构和Flutter运行模式，选择正确的构建配置
+        // - Apple Silicon + Flutter原生arm64 → development-mac-arm64
+        // - Intel Mac 或 Flutter Rosetta模式 → development-mac-x86_64
+        "command": "sh ./scripts/build_appflowy_core_auto_ci.sh"
       },
       "group": "build",
       "options": {
