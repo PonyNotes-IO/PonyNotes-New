@@ -1,4 +1,5 @@
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 
 sealed class UserWorkspaceEvent {
@@ -95,6 +96,11 @@ sealed class UserWorkspaceEvent {
     required bool enabled,
   }) =>
       WorkspaceEventUpdateCloudSyncEnabled(enabled: enabled);
+
+  factory UserWorkspaceEvent.updateFolderSyncState({
+    required FolderSyncStatePB syncState,
+  }) =>
+      WorkspaceEventUpdateFolderSyncState(syncState: syncState);
 }
 
 /// Initializes the workspace bloc.
@@ -238,4 +244,13 @@ class WorkspaceEventUpdateCloudSyncEnabled extends UserWorkspaceEvent {
   });
 
   final bool enabled;
+}
+
+/// Updates folder sync state.
+class WorkspaceEventUpdateFolderSyncState extends UserWorkspaceEvent {
+  WorkspaceEventUpdateFolderSyncState({
+    required this.syncState,
+  });
+
+  final FolderSyncStatePB syncState;
 }

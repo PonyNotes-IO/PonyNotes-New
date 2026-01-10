@@ -1,10 +1,13 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/cloud_sync_settings_panel.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -61,6 +64,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
               currentSubscription: currentSubscription,
               isCloudSyncEnabled: isCloudSyncEnabled,
             ),
+            folderSyncState: workspaceState.folderSyncState,
+            isCloudSyncEnabled: isCloudSyncEnabled,
           );
         },
       );
@@ -75,6 +80,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
           currentSubscription: null,
           isCloudSyncEnabled: false,
         ),
+        folderSyncState: null,
+        isCloudSyncEnabled: false,
       );
     }
   }
@@ -280,22 +287,121 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
 
   Widget _buildCloudSyncIcon(
     BuildContext context,
-    VoidCallback onTap,
-  ) {
-    return SizedBox.square(
-      key: _buttonKey, // 添加key用于获取位置
-      dimension: 28.0,
-      child: FlowyButton(
-        useIntrinsicWidth: true,
-        margin: EdgeInsets.zero,
-        text: FlowySvg(
-          FlowySvgs.cloud_sync_m,
-          color: widget.isHover
-              ? Theme.of(context).colorScheme.onSurface
-              : null,
-          opacity: 0.7,
+    VoidCallback onTap, {
+    required FolderSyncStatePB? folderSyncState,
+    required bool isCloudSyncEnabled,
+  }) {
+    // 如果云同步未启用，只显示默认图标
+    if (!isCloudSyncEnabled) {
+      return SizedBox.square(
+        key: _buttonKey,
+        dimension: 28.0,
+        child: FlowyButton(
+          useIntrinsicWidth: true,
+          margin: EdgeInsets.zero,
+          text: FlowySvg(
+            FlowySvgs.cloud_sync_m,
+            color: widget.isHover
+                ? Theme.of(context).colorScheme.onSurface
+                : null,
+            opacity: 0.7,
+          ),
+          onTap: onTap,
         ),
-        onTap: onTap,
+      );
+    }
+
+    // 根据同步状态选择图标和样式
+    FlowySvgData iconData;
+    Color iconColor;
+    Color labelColor;
+    String labelText;
+
+    // 根据同步状态选择图标
+    if (folderSyncState == null) {
+      // 状态未知，使用默认图标
+      iconData = FlowySvgs.cloud_sync_m;
+      iconColor = Colors.grey;
+      labelColor = Colors.grey;
+      labelText = LocaleKeys.newSettings_syncState_syncing.tr();
+    } else if (folderSyncState.isSyncing) {
+      // 同步中，使用同步中图标（红色）
+      iconData = FlowySvgs.cloud_syncing_m;
+      iconColor = Colors.red;
+      labelColor = Colors.red;
+      labelText = LocaleKeys.newSettings_syncState_syncing.tr();
+    } else if (folderSyncState.isFinish) {
+      // 已同步，使用同步完成图标（绿色）
+      iconData = FlowySvgs.cloud_sync_finish_m;
+      iconColor = Colors.green;
+      labelColor = Colors.green;
+      labelText = LocaleKeys.newSettings_syncState_synced.tr();
+    } else {
+      // 其他状态，使用默认图标
+      iconData = FlowySvgs.cloud_sync_m;
+      iconColor = Colors.grey;
+      labelColor = Colors.grey;
+      labelText = LocaleKeys.newSettings_syncState_syncing.tr();
+    }
+
+    return SizedBox.square(
+      key: _buttonKey,
+      dimension: 28.0,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          FlowyButton(
+            useIntrinsicWidth: true,
+            margin: EdgeInsets.zero,
+            text: FlowySvg(
+              iconData,
+              color: widget.isHover
+                  ? Theme.of(context).colorScheme.onSurface
+                  : iconColor,
+              opacity: widget.isHover ? 0.7 : 1.0,
+            ),
+            onTap: onTap,
+          ),
+          // 右上角文字标签
+          Positioned(
+            top: -6.0,
+            right: -6.0,
+            child: Container(
+              constraints: const BoxConstraints(
+                maxWidth: 40.0,
+                minWidth: 20.0,
+                maxHeight: 14.0,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 3.0, vertical: 1.0),
+              decoration: BoxDecoration(
+                color: labelColor,
+                borderRadius: BorderRadius.circular(7.0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 2.0,
+                    offset: const Offset(0, 1.0),
+                  ),
+                ],
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.center,
+                child: Text(
+                  labelText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8.0,
+                    fontWeight: FontWeight.w600,
+                    height: 1.0,
+                  ),
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1085,25 +1085,22 @@ class _UserSearchFieldState extends State<_UserSearchField> {
 
   Widget _buildEmptyState(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    return Padding(
-      padding: EdgeInsets.all(theme.spacing.l),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FlowySvg(
-              FlowySvgs.search_icon_m,
-              color: theme.iconColorScheme.tertiary,
-              size: const Size.square(24),
-            ),
-            VSpace(theme.spacing.s),
-            FlowyText.regular(
-              '搜索结果为空',
-              color: theme.textColorScheme.secondary,
-              fontSize: 14,
-            ),
-          ],
-        ),
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FlowySvg(
+            FlowySvgs.search_icon_m,
+            color: theme.iconColorScheme.tertiary,
+            size: const Size.square(24),
+          ),
+          VSpace(theme.spacing.s),
+          FlowyText.regular(
+            '搜索结果为空',
+            color: theme.textColorScheme.secondary,
+            fontSize: 14,
+          ),
+        ],
       ),
     );
   }

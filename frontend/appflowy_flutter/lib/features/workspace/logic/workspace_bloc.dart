@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/workspace/data/repositories/workspace_repository.dart';
+import 'package:appflowy/features/workspace/logic/folder_sync_state_listener.dart';
 import 'package:appflowy/features/workspace/logic/workspace_event.dart';
 import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -66,16 +67,19 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     on<WorkspaceEventFetchCurrentSubscription>(_onFetchCurrentSubscription);
     on<WorkspaceEventUpdateCurrentSubscription>(_onUpdateCurrentSubscription);
     on<WorkspaceEventUpdateCloudSyncEnabled>(_onUpdateCloudSyncEnabled);
+    on<WorkspaceEventUpdateFolderSyncState>(_onUpdateFolderSyncState);
   }
 
   final String? initialWorkspaceId;
   final WorkspaceRepository repository;
   final UserProfilePB userProfile;
   final UserListener _listener;
+  FolderSyncStateListener? _folderSyncStateListener;
 
   @override
   Future<void> close() {
     _listener.stop();
+    _folderSyncStateListener?.stop();
     return super.close();
   }
 
@@ -526,6 +530,9 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         Log.info(
           'open workspace success: ${event.workspaceId}, current workspace: ${currentWorkspace?.toProto3Json()}',
         );
+        
+        // 启动文件夹同步状态监听器
+        _startFolderSyncStateListener(event.workspaceId);
         
         // 工作空间打开成功后，延迟 2 秒再请求会员信息，确保页面已完全加载
         Log.info('[UserWorkspaceBloc] 工作空间打开成功，延迟 2 秒后请求会员信息');
@@ -1400,6 +1407,32 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     } catch (e, stackTrace) {
       Log.error('[UserWorkspaceBloc] 无法保存到 Rust 层 enable_sync: $e', e, stackTrace);
     }
+  }
+
+  /// 启动文件夹同步状态监听器
+  void _startFolderSyncStateListener(String workspaceId) {
+    // 停止之前的监听器
+    _folderSyncStateListener?.stop();
+    
+    // 创建新的监听器
+    _folderSyncStateListener = FolderSyncStateListener(workspaceId: workspaceId);
+    _folderSyncStateListener!.start(
+      didReceiveSyncState: (syncState) {
+        if (!isClosed) {
+          add(WorkspaceEventUpdateFolderSyncState(syncState: syncState));
+        }
+      },
+    );
+    Log.info('[UserWorkspaceBloc] 已启动文件夹同步状态监听器: workspaceId=$workspaceId');
+  }
+
+  /// 更新文件夹同步状态
+  Future<void> _onUpdateFolderSyncState(
+    WorkspaceEventUpdateFolderSyncState event,
+    Emitter<UserWorkspaceState> emit,
+  ) async {
+    emit(state.copyWith(folderSyncState: event.syncState));
+    Log.info('[UserWorkspaceBloc] 文件夹同步状态更新: isSyncing=${event.syncState.isSyncing}, isFinish=${event.syncState.isFinish}');
   }
 
   String? _extractAccessToken(String? rawToken) {
