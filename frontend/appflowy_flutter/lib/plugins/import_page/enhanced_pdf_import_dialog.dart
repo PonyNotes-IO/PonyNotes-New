@@ -60,6 +60,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       child: Container(
         width: dialogWidth,
         height: dialogHeight,
+        color: Colors.white,
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
