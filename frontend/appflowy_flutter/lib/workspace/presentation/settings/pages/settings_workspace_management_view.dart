@@ -1,4 +1,5 @@
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -7,7 +8,6 @@ import 'package:appflowy/workspace/presentation/settings/shared/settings_categor
 import 'package:appflowy/workspace/presentation/settings/shared/settings_category_spacer.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
-import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/create_space_popup.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -17,7 +17,8 @@ import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_menu.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+ 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 
@@ -256,6 +257,7 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
               return _SpaceRow(
                 space: space,
                 userProfile: widget.userProfile,
+                workspaceId: widget.workspace.workspaceId,
               );
             }).toList(),
           ],
@@ -299,11 +301,16 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
           Expanded(
             flex: 2,
             child: FlowyText(
-                  '更新时间',
-                  fontSize: 12,
-                  color: Theme.of(context).hintColor,
-                  fontWeight: FontWeight.w500,
+              '更新时间',
+              fontSize: 12,
+              color: Theme.of(context).hintColor,
+              fontWeight: FontWeight.w500,
             ),
+          ),
+          // 管理 列 header已经移除，但保留一个空占位以保证列宽对齐
+          Expanded(
+            flex: 2,
+            child: const SizedBox.shrink(),
           ),
         ],
       ),
@@ -351,8 +358,8 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
             final owner = members.items.firstWhereOrNull(
               (member) => member.role == AFRolePB.Owner,
             );
-            _ownerName = owner?.name.isNotEmpty == true
-                ? owner!.name
+            _ownerName = (owner != null && owner.name.isNotEmpty)
+                ? owner.name
                 : owner?.email ?? '未知';
             _isLoading = false;
           });
@@ -504,6 +511,16 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
           ),
           Expanded(
             flex: 2,
+            child: SizedBox(
+              height: 28,
+              child: FlowyButton(
+                text: Center(child: FlowyText.regular('管理', fontSize: 12)),
+                onTap: () => _openManageDialog(context),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
             child: FlowyText(
               updateTime,
               fontSize: 14,
@@ -513,16 +530,116 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
       ),
     );
   }
+
+  Future<void> _openManageDialog(BuildContext context) async {
+    // load workspace members
+    final userService = UserBackendService(userId: widget.userProfile.id);
+    List<WorkspaceMemberPB> members = [];
+    try {
+      final res = await userService.getWorkspaceMembers(widget.workspace.workspaceId);
+      res.fold((s) {
+        members = s.items;
+      }, (e) {
+        Log.error('Failed to load workspace members for manage dialog: $e');
+      });
+    } catch (e) {
+      Log.error('Exception loading members for manage dialog: $e');
+    }
+
+    // Initially select all members as allowed (placeholder until backend ACL exists)
+    final Map<String, bool> selected = {
+      for (final m in members) m.email: true,
+    };
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: SizedBox(
+            width: 640,
+            height: 480,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      FlowyText('管理团队协作区访问权限', fontSize: 16, fontWeight: FontWeight.w600),
+                      SizedBox(
+                        width: 72,
+                        child: FlowyButton(
+                          text: const FlowyText.regular('关闭'),
+                          onTap: () => Navigator.of(ctx).pop(),
+                          margin: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const VSpace(12),
+                  const Divider(),
+                  const VSpace(12),
+                  Expanded(
+                    child: members.isEmpty
+                        ? Center(child: FlowyText('无法加载成员或无成员', fontSize: 14))
+                        : ListView(
+                            children: members.map((m) {
+                              final email = m.email;
+                              return CheckboxListTile(
+                                title: Text(m.name.isNotEmpty ? m.name : email),
+                                subtitle: Text(email),
+                                value: selected[email] ?? false,
+                                onChanged: (v) {
+                                  if (v == null) return;
+                                  selected[email] = v;
+                                  // trigger rebuild of dialog
+                                  (ctx as Element).markNeedsBuild();
+                                },
+                              );
+                            }).toList(),
+                          ),
+                  ),
+                  const VSpace(12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedRoundedButton(
+                        text: '取消',
+                        onTap: () => Navigator.of(ctx).pop(),
+                      ),
+                      const HSpace(12),
+                      AFFilledTextButton.primary(
+                        text: '保存',
+                        onTap: () {
+                          // TODO: call backend to save ACL for this team
+                          Navigator.of(ctx).pop();
+                          showToastNotification(message: '已保存（示例，仅前端）');
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _SpaceRow extends StatefulWidget {
   const _SpaceRow({
     required this.space,
     required this.userProfile,
+    required this.workspaceId,
   });
 
   final ViewPB space;
   final UserProfilePB userProfile;
+  final String workspaceId;
 
   @override
   State<_SpaceRow> createState() => _SpaceRowState();
@@ -694,8 +811,116 @@ class _SpaceRowState extends State<_SpaceRow> {
               fontSize: 14,
             ),
           ),
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 28,
+              child: FlowyButton(
+                text: FlowySvg(FlowySvgs.three_dots_s),
+                onTap: () => _openSpaceManageDialog(context),
+              ),
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Future<void> _openSpaceManageDialog(BuildContext context) async {
+    // Load workspace members
+    final userService = UserBackendService(userId: widget.userProfile.id);
+    List<WorkspaceMemberPB> members = [];
+    try {
+      final res = await userService.getWorkspaceMembers(widget.workspaceId);
+      res.fold((s) {
+        members = s.items;
+      }, (e) {
+        Log.error('Failed to load workspace members for manage dialog: $e');
+      });
+    } catch (e) {
+      Log.error('Exception loading members for manage dialog: $e');
+    }
+
+    // Placeholder: load ACL for this space (not yet implemented in backend)
+    // For now, default selection = true for those with email (can be adjusted later)
+    final Map<String, bool> selected = {
+      for (final m in members) m.email: true,
+    };
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: SizedBox(
+            width: 640,
+            height: 480,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      FlowyText('管理协作区 "${widget.space.name}" 访问权限', fontSize: 16, fontWeight: FontWeight.w600),
+                      SizedBox(
+                        width: 72,
+                        child: FlowyButton(
+                          text: const FlowyText.regular('关闭'),
+                          onTap: () => Navigator.of(ctx).pop(),
+                          margin: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const VSpace(12),
+                  const Divider(),
+                  const VSpace(12),
+                  Expanded(
+                    child: members.isEmpty
+                        ? Center(child: FlowyText('无法加载成员或无成员', fontSize: 14))
+                        : ListView(
+                            children: members.map((m) {
+                              final email = m.email;
+                              return CheckboxListTile(
+                                title: Text(m.name.isNotEmpty ? m.name : email),
+                                subtitle: Text(email),
+                                value: selected[email] ?? false,
+                                onChanged: (v) {
+                                  if (v == null) return;
+                                  selected[email] = v;
+                                  (ctx as Element).markNeedsBuild();
+                                },
+                              );
+                            }).toList(),
+                          ),
+                  ),
+                  const VSpace(12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedRoundedButton(
+                        text: '取消',
+                        onTap: () => Navigator.of(ctx).pop(),
+                      ),
+                      const HSpace(12),
+                      AFFilledTextButton.primary(
+                        text: '保存',
+                        onTap: () {
+                          // TODO: call backend to save ACL for this space (widget.space.id)
+                          Navigator.of(ctx).pop();
+                          showToastNotification(message: '已保存（示例，仅前端）');
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
