@@ -19,8 +19,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
+import 'package:collection/collection.dart';
 
 class WorkspaceMembersPage extends StatelessWidget {
   const WorkspaceMembersPage({
@@ -512,21 +513,31 @@ class _MemberListHeader extends StatelessWidget {
           ),
         ),
         Expanded(
-          flex: 3,
+          flex: 2,
           child: Text(
-            LocaleKeys.settings_accountPage_email_title.tr(),
+            '群组',
             style: theme.textStyle.body.standard(
               color: theme.textColorScheme.secondary,
             ),
           ),
         ),
+        Expanded(
+          flex: 3,
+          child: Text(
+            '团队协作区',
+            style: theme.textStyle.body.standard(
+              color: theme.textColorScheme.secondary,
+            ),
+          ),
+        ),
+        // email column removed per design
         const HSpace(28.0),
       ],
     );
   }
 }
 
-class _MemberItem extends StatelessWidget {
+class _MemberItem extends StatefulWidget {
   const _MemberItem({
     required this.member,
     required this.myRole,
@@ -538,8 +549,69 @@ class _MemberItem extends StatelessWidget {
   final UserProfilePB userProfile;
 
   @override
+  State<_MemberItem> createState() => _MemberItemState();
+}
+
+class _MemberItemState extends State<_MemberItem> {
+  String? _contact;
+  bool _loadingContact = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Prefer email if available; otherwise try to load phone asynchronously.
+    if (widget.member.email.isNotEmpty) {
+      _contact = widget.member.email;
+    } else {
+      _loadContactFallback();
+    }
+  }
+
+  Future<void> _loadContactFallback() async {
+    setState(() {
+      _loadingContact = true;
+    });
+    try {
+      final repo = RustShareWithUserRepositoryImpl();
+      // Try searching by name first; the backend search may return phone in results.
+      final nameQuery = widget.member.name;
+      final res = await repo.searchUsers(query: nameQuery);
+      res.fold((users) {
+        // Pick first user whose email or phone matches/exists
+        final match = users.firstWhereOrNull((u) => (u.email.isNotEmpty) || (u.phone?.isNotEmpty ?? false));
+        if (match != null) {
+          final contact = (match.email.isNotEmpty) ? match.email : (match.phone ?? '');
+          setState(() {
+            _contact = contact;
+          });
+        } else {
+          setState(() {
+            _contact = '';
+          });
+        }
+      }, (err) {
+        setState(() {
+          _contact = '';
+        });
+      });
+    } catch (_) {
+      setState(() {
+        _contact = '';
+      });
+    } finally {
+      setState(() {
+        _loadingContact = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final member = widget.member;
+    final myRole = widget.myRole;
+    final userProfile = widget.userProfile;
     final theme = AppFlowyTheme.of(context);
+
     return Row(
       children: [
         Expanded(
@@ -565,7 +637,8 @@ class _MemberItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      _formatJoinedDate(member.joinedAt.toInt()),
+                      // Show contact (email preferred, otherwise loaded phone). Empty string if not available.
+                      _contact ?? (_loadingContact ? '...' : ''),
                       style: theme.textStyle.caption.standard(
                         color: theme.textColorScheme.secondary,
                       ),
@@ -592,20 +665,31 @@ class _MemberItem extends StatelessWidget {
                   member: member,
                 ),
         ),
+        // 群组 列（placeholder，目前 backend 未提供 group 字段）
         Expanded(
-          flex: 3,
-          child: FlowyTooltip(
-            message: member.email,
-            child: Text(
-              member.email,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textStyle.body.standard(
-                color: theme.textColorScheme.primary,
-              ),
+          flex: 2,
+          child: Text(
+            '—',
+            style: theme.textStyle.body.standard(
+              color: theme.textColorScheme.primary,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
+        // 团队协作区 列（placeholder）
+        Expanded(
+          flex: 3,
+          child: Text(
+            '—',
+            style: theme.textStyle.body.standard(
+              color: theme.textColorScheme.primary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        // email column removed per design; keep member.email available for internal logic (e.g., delete check)
         myRole.canDelete &&
                 member.email != userProfile.email // can't delete self
             ? _MemberMoreActionList(member: member)
@@ -614,10 +698,7 @@ class _MemberItem extends StatelessWidget {
     );
   }
 
-  String _formatJoinedDate(int joinedAt) {
-    final date = DateTime.fromMillisecondsSinceEpoch(joinedAt * 1000);
-    return 'Joined on ${DateFormat('MMM d, y').format(date)}';
-  }
+ 
 }
 
 enum _MemberMoreAction {
