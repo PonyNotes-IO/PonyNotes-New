@@ -699,13 +699,18 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                     borderRadius: BorderRadius.circular(8.0),
                     color: const Color(0xFFFBE8FB),
                     border: Border.all(
-                      width: 0.5,
+                      width: 1,
                       color: const Color(0x19171717),
                     ),
                   ),
-                  child: Image(
-                    image: AssetImage('assets/images/app_icon_m.jpg'),
-                    fit: BoxFit.contain,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      'assets/images/app_icon_m.jpg',
+                      width: 25,
+                      height: 25,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
                 const HSpace(6),
