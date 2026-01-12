@@ -79,13 +79,14 @@ class AIWelcomePluginPage extends StatefulWidget {
 
 class _AIWelcomePluginPageState extends State<AIWelcomePluginPage> {
   /// 处理来自AIWelcomePage的消息发送
-  void _handleMessageSent(String message, AIModel? selectedModel, List<ChatImage>? images) async {
+  void _handleMessageSent(String message, AIModel? selectedModel, List<ChatImage>? images, bool enableDeepThinking) async {
     if (message.isEmpty) return;
     
     Log.info('🔄 AI欢迎页: 处理消息发送');
     Log.info('   - 消息: $message');
     Log.info('   - 模型: ${selectedModel?.name} (${selectedModel?.id})');
     Log.info('   - 图片数: ${images?.length ?? 0}');
+    Log.info('   - 深度思考: ${enableDeepThinking ? "开启" : "关闭"}');
     
     try {
       // 1. 获取当前workspace ID
@@ -103,6 +104,7 @@ class _AIWelcomePluginPageState extends State<AIWelcomePluginPage> {
         parentViewId: workspaceId,
         initialMessage: message,
         selectedModelId: selectedModel?.id,
+        enableDeepThinking: enableDeepThinking,
       );
 
       if (view == null) {

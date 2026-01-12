@@ -20,7 +20,8 @@ class AIInputArea extends StatefulWidget {
   });
 
   /// 发送消息的回调（使用AIModel系统）
-  final Function(String message, AIModel? model, List<ChatImage>? images)? onMessageSent;
+  /// 参数：message - 消息内容, model - 选择的模型, images - 图片列表, enableDeepThinking - 是否启用深度思考
+  final Function(String message, AIModel? model, List<ChatImage>? images, bool enableDeepThinking)? onMessageSent;
   
   /// 点击聊天记录按钮的回调（若提供，则在工具栏显示图标按钮）
   final VoidCallback? onChatHistoryTap;
@@ -47,6 +48,10 @@ class _AIInputAreaState extends State<AIInputArea> {
   // 图片选择相关状态
   final List<ChatImage> _selectedImages = [];
   final ChatImageService _imageService = ChatImageService.instance;
+  
+  // 功能开关状态
+  bool _isDeepThinkingEnabled = false;  // 深度思考开关
+  bool _isWebSearchEnabled = false;     // 全网搜索开关
 
   @override
   void initState() {
@@ -124,14 +129,15 @@ class _AIInputAreaState extends State<AIInputArea> {
     debugPrint('   - 消息: $text');
     debugPrint('   - 模型: ${_selectedModel?.name} (${_selectedModel?.id})');
     debugPrint('   - 图片数: ${_selectedImages.length}');
+    debugPrint('   - 深度思考: ${_isDeepThinkingEnabled ? "开启" : "关闭"}');
 
     // 清空输入框和图片
     _textController.clear();
     final images = List<ChatImage>.from(_selectedImages);
     _selectedImages.clear();
     
-    // 调用回调，使用AIModel系统
-    widget.onMessageSent?.call(text, _selectedModel, images.isNotEmpty ? images : null);
+    // 调用回调，使用AIModel系统，传递深度思考状态
+    widget.onMessageSent?.call(text, _selectedModel, images.isNotEmpty ? images : null, _isDeepThinkingEnabled);
     
     // 发送后收起键盘
     FocusScope.of(context).unfocus();
@@ -210,7 +216,7 @@ class _AIInputAreaState extends State<AIInputArea> {
                   _buildDeepThinkingButton(),
                   // 全网搜索按钮（tool_2，与图片上传交换位置后移到这里）
                   const SizedBox(width: 22),
-                  _buildToolButton('assets/images/icons/tool_2.png', '全网搜索'),
+                  _buildWebSearchButton(),
                   // 图片上传按钮（与全网搜索交换位置后移到这里）
                   const SizedBox(width: 22),
                   _buildImagePickerButton(),
@@ -453,6 +459,56 @@ class _AIInputAreaState extends State<AIInputArea> {
     });
   }
 
+  /// 构建全网搜索按钮
+  Widget _buildWebSearchButton() {
+    final isEnabled = _isWebSearchEnabled;
+    final iconColor = isEnabled
+        ? Theme.of(context).colorScheme.primary
+        : AIWelcomeTheme.secondaryTextColor(context);
+    
+    return FlowyTooltip(
+      message: '全网搜索',
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _isWebSearchEnabled = !_isWebSearchEnabled;
+          });
+          debugPrint('🌐 全网搜索按钮: ${_isWebSearchEnabled ? "开启" : "关闭"}');
+        },
+        child: Container(
+          width: AIWelcomeTheme.iconSize,
+          height: AIWelcomeTheme.iconSize,
+          child: ColorFiltered(
+            colorFilter: ColorFilter.mode(
+              iconColor,
+              BlendMode.srcIn,
+            ),
+            child: Image.asset(
+              'assets/images/icons/tool_2.png',
+              width: AIWelcomeTheme.iconSize * 0.8,
+              height: AIWelcomeTheme.iconSize * 0.8,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: AIWelcomeTheme.iconSize,
+                  height: AIWelcomeTheme.iconSize,
+                  decoration: BoxDecoration(
+                    color: AIWelcomeTheme.containerColor(context),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Icon(
+                    Icons.language,
+                    size: AIWelcomeTheme.iconSize * 0.6,
+                    color: iconColor,
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// 构建工具按钮
   Widget _buildToolButton(String imageUrl, String tooltip) {
     return FlowyTooltip(
@@ -522,12 +578,19 @@ class _AIInputAreaState extends State<AIInputArea> {
 
   /// 构建深度思考按钮
   Widget _buildDeepThinkingButton() {
+    final isEnabled = _isDeepThinkingEnabled;
+    final iconColor = isEnabled
+        ? Theme.of(context).colorScheme.primary
+        : AIWelcomeTheme.secondaryTextColor(context);
+    
     return FlowyTooltip(
       message: '深度思考',
       child: GestureDetector(
         onTap: () {
-          // TODO: 实现深度思考功能
-          debugPrint('🔍 深度思考按钮被点击');
+          setState(() {
+            _isDeepThinkingEnabled = !_isDeepThinkingEnabled;
+          });
+          debugPrint('🔍 深度思考按钮: ${_isDeepThinkingEnabled ? "开启" : "关闭"}');
         },
         child: Container(
           width: AIWelcomeTheme.iconSize,
@@ -539,7 +602,7 @@ class _AIInputAreaState extends State<AIInputArea> {
           child: Icon(
             Icons.auto_awesome,
             size: AIWelcomeTheme.iconSize,
-            color: AIWelcomeTheme.secondaryTextColor(context),
+            color: iconColor,
           ),
         ),
       ),

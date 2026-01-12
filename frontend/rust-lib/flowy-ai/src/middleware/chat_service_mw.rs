@@ -216,7 +216,9 @@ impl ChatCloudService for ChatServiceMiddleware {
       }
       
       // 调用新的 AI 会话接口
-      let stream = stream_ai_session(base_url, &content, Some(model_id), token).await?;
+      // TODO: 从view的extra字段或配置中读取深度思考状态
+      let enable_thinking = false; // 暂时设为false，后续可以从view的extra字段读取
+      let stream = stream_ai_session(base_url, &content, Some(model_id), token, enable_thinking).await?;
       
       // 将 AISessionStreamValue 转换为 QuestionStreamValue
       let converted_stream = stream.map(|result| {
