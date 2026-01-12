@@ -17,6 +17,7 @@ import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:appflowy/shared/af_role_pb_extension.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
  
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
@@ -652,7 +653,7 @@ class _SpaceRowState extends State<_SpaceRow> {
   @override
   void initState() {
     super.initState();
-    _selectedPermission = widget.space.spacePermission ?? SpacePermission.publicToAll;
+    _selectedPermission = widget.space.spacePermission;
   }
 
   String _permissionLabel(SpacePermission p) {
@@ -783,7 +784,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                             } catch (e) {
                               // revert on error
                               setState(() {
-                                _selectedPermission = widget.space.spacePermission ?? SpacePermission.publicToAll;
+                                _selectedPermission = widget.space.spacePermission;
                               });
                               Log.error('Failed to update space permission: $e');
                               showToastNotification(message: '更新失败，请重试', type: ToastificationType.error);
@@ -829,11 +830,11 @@ class _SpaceRowState extends State<_SpaceRow> {
   Future<void> _openSpaceManageDialog(BuildContext context) async {
     // Load workspace members
     final userService = UserBackendService(userId: widget.userProfile.id);
-    List<WorkspaceMemberPB> members = [];
+    List<WorkspaceMemberPB> allMembers = [];
     try {
       final res = await userService.getWorkspaceMembers(widget.workspaceId);
       res.fold((s) {
-        members = s.items;
+        allMembers = s.items;
       }, (e) {
         Log.error('Failed to load workspace members for manage dialog: $e');
       });
@@ -841,29 +842,58 @@ class _SpaceRowState extends State<_SpaceRow> {
       Log.error('Exception loading members for manage dialog: $e');
     }
 
-    // Placeholder: load ACL for this space (not yet implemented in backend)
-    // For now, default selection = true for those with email (can be adjusted later)
-    final Map<String, bool> selected = {
-      for (final m in members) m.email: true,
-    };
+    // Load team ACL for this space
+    TeamACLPB? teamAcl;
+    try {
+      final aclRes = await userService.getTeamACL(widget.space.id);
+      aclRes.fold((acl) {
+        teamAcl = acl;
+      }, (e) {
+        Log.error('Failed to load team ACL for manage dialog: $e');
+      });
+    } catch (e) {
+      Log.error('Exception loading team ACL for manage dialog: $e');
+    }
+
+    // Filter members to only show authorized ones (in ACL whitelist)
+    List<WorkspaceMemberPB> members = [];
+    if (teamAcl != null) {
+      final allowedUserIds = teamAcl!.allowUserIds.toSet();
+      final allowedEmails = teamAcl!.allowEmails.toSet();
+      members = allMembers.where((member) {
+        return allowedEmails.contains(member.email);
+      }).toList();
+    } else {
+      // If no ACL loaded, show no members (or all as fallback)
+      members = [];
+    }
 
     await showDialog(
       context: context,
       builder: (ctx) {
+        final TextEditingController _searchController = TextEditingController();
         return Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: SizedBox(
-            width: 640,
-            height: 480,
+            width: 760,
+            height: 560,
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Header row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      FlowyText('管理协作区 "${widget.space.name}" 访问权限', fontSize: 16, fontWeight: FontWeight.w600),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          FlowyText('协作区：${widget.space.name}', fontSize: 16, fontWeight: FontWeight.w600),
+                          const VSpace(6),
+                          FlowyText('管理该协作区的访问权限', fontSize: 12, color: Theme.of(ctx).hintColor),
+                        ],
+                      ),
                       SizedBox(
                         width: 72,
                         child: FlowyButton(
@@ -877,23 +907,144 @@ class _SpaceRowState extends State<_SpaceRow> {
                   const VSpace(12),
                   const Divider(),
                   const VSpace(12),
+                  // Search + add member row
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: '搜索成员',
+                            prefixIcon: const Icon(Icons.search, size: 18),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onChanged: (_) {
+                            (ctx as Element).markNeedsBuild();
+                          },
+                        ),
+                      ),
+                      const HSpace(12),
+                      SizedBox(
+                        width: 140,
+                        height: 36,
+                        child: FlowyButton(
+                          text: const FlowyText.regular('添加成员', fontSize: 12),
+                          onTap: () {
+                            // open existing invite dialog or reuse add member flow - placeholder
+                            showToastNotification(message: '添加成员（示例）');
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const VSpace(12),
+                  // Members list header row
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6.0),
+                    child: Row(
+                      children: [
+                        Expanded(flex: 4, child: FlowyText('名称', fontSize: 12, color: Theme.of(ctx).hintColor)),
+                        Expanded(flex: 3, child: FlowyText('角色', fontSize: 12, color: Theme.of(ctx).hintColor)),
+                        Expanded(flex: 3, child: FlowyText('操作', fontSize: 12, color: Theme.of(ctx).hintColor)),
+                      ],
+                    ),
+                  ),
+                  const Divider(),
+                  const VSpace(8),
+                  // Members list
                   Expanded(
                     child: members.isEmpty
                         ? Center(child: FlowyText('无法加载成员或无成员', fontSize: 14))
-                        : ListView(
-                            children: members.map((m) {
+                        : ListView.builder(
+                            itemCount: members.length,
+                            itemBuilder: (i, idx) {
+                              final m = members[idx];
                               final email = m.email;
-                              return CheckboxListTile(
-                                title: Text(m.name.isNotEmpty ? m.name : email),
-                                subtitle: Text(email),
-                                value: selected[email] ?? false,
-                                onChanged: (v) {
-                                  if (v == null) return;
-                                  selected[email] = v;
-                                  (ctx as Element).markNeedsBuild();
-                                },
+                              // filter by search
+                              final q = _searchController.text.trim().toLowerCase();
+                              if (q.isNotEmpty && !(m.name.toLowerCase().contains(q) || email.toLowerCase().contains(q))) {
+                                return const SizedBox.shrink();
+                              }
+                              // Role options mapping
+                              AFRolePB currentRole = m.role;
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 4,
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 18,
+                                            backgroundColor: Colors.grey.shade800,
+                                            child: Text(
+                                              m.name.isNotEmpty ? m.name[0] : email.isNotEmpty ? email[0] : '?',
+                                              style: const TextStyle(color: Colors.white),
+                                            ),
+                                          ),
+                                          const HSpace(12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    FlowyText(m.name.isNotEmpty ? m.name : email, fontSize: 14, fontWeight: FontWeight.w500),
+                                                    const HSpace(6),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: Theme.of(ctx).cardColor,
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: FlowyText(
+                                                        m.role == AFRolePB.Owner ? '工作空间所有者' : '工作空间成员',
+                                                        fontSize: 12,
+                                                        color: Theme.of(ctx).hintColor,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const VSpace(2),
+                                                FlowyText(email, fontSize: 12, color: Theme.of(ctx).hintColor),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: FlowyText(m.role.description, fontSize: 14),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: DropdownButton<AFRolePB>(
+                                          value: currentRole,
+                                          items: [
+                                            DropdownMenuItem(value: AFRolePB.Owner, child: Text('团队协作区所有者')),
+                                            DropdownMenuItem(value: AFRolePB.Member, child: Text('团队协作区成员')),
+                                          ],
+                                          onChanged: (v) {
+                                            if (v == null) return;
+                                            // optimistic update locally (no backend yet)
+                                            setState(() {
+                                              // mutate members list locally for UI feedback
+                                              members[idx].role = v;
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               );
-                            }).toList(),
+                            },
                           ),
                   ),
                   const VSpace(12),
@@ -907,10 +1058,27 @@ class _SpaceRowState extends State<_SpaceRow> {
                       const HSpace(12),
                       AFFilledTextButton.primary(
                         text: '保存',
-                        onTap: () {
-                          // TODO: call backend to save ACL for this space (widget.space.id)
-                          Navigator.of(ctx).pop();
-                          showToastNotification(message: '已保存（示例，仅前端）');
+                        onTap: () async {
+                          // Build new ACL from current members list
+                          final newAcl = TeamACLPB(
+                            teamId: widget.space.id,
+                            allowUserIds: [], // WorkspaceMemberPB doesn't have id field, use emails only
+                            allowEmails: members.map((m) => m.email).toList(),
+                          );
+
+                          try {
+                            final saveRes = await userService.updateTeamACL(newAcl);
+                            saveRes.fold((_) {
+                              Navigator.of(ctx).pop();
+                              showToastNotification(message: '团队协作区权限已保存');
+                            }, (e) {
+                              Log.error('Failed to save team ACL: $e');
+                              showToastNotification(message: '保存失败：$e');
+                            });
+                          } catch (e) {
+                            Log.error('Exception saving team ACL: $e');
+                            showToastNotification(message: '保存失败：$e');
+                          }
                         },
                       ),
                     ],

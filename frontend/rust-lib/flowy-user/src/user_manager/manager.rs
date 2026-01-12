@@ -920,6 +920,7 @@ fn collab_migration_list() -> Vec<Box<dyn UserDataMigration>> {
     Box::new(WorkspaceTrashMapToSectionMigration),
     Box::new(CollabDocKeyWithWorkspaceIdMigration),
     Box::new(AnonUserWorkspaceTableMigration),
+    Box::new(crate::migrations::add_team_acl_tables::AddTeamAclTablesMigration),
   ]
 }
 

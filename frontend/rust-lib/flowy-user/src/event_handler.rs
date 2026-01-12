@@ -7,6 +7,7 @@ use crate::services::data_import::prepare_import;
 use crate::user_manager::UserManager;
 use flowy_error::{ErrorCode, FlowyError, FlowyResult};
 use flowy_sqlite::kv::KVStorePreferences;
+use flowy_sqlite::RunQueryDsl;
 use flowy_user_pub::entities::*;
 use flowy_user_pub::sql::UserWorkspaceChangeset;
 use lib_dispatch::prelude::*;
@@ -633,6 +634,123 @@ pub async fn get_workspace_members_handler(
     .map(WorkspaceMemberPB::from)
     .collect();
   data_result_ok(RepeatedWorkspaceMemberPB { items: members })
+}
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub async fn get_teams_handler(
+  params: AFPluginData<UserWorkspaceIdPB>,
+  manager: AFPluginState<Weak<UserManager>>,
+) -> DataResult<RepeatedTeamPB, FlowyError> {
+  let params = params.try_into_inner()?;
+  let mgr = upgrade_manager(manager)?;
+  let uid = mgr.user_id()?;
+  let mut conn = mgr.db_connection(uid)?;
+  use diesel::sql_types::{BigInt, Nullable, Text};
+  #[derive(QueryableByName)]
+  struct TeamRow {
+    #[sql_type = "Text"]
+    pub team_id: String,
+    #[sql_type = "Text"]
+    pub workspace_id: String,
+    #[sql_type = "Text"]
+    pub name: String,
+    #[sql_type = "Nullable<Text>"]
+    pub description: Option<String>,
+    #[sql_type = "Nullable<BigInt>"]
+    pub created_at: Option<i64>,
+    #[sql_type = "Nullable<BigInt>"]
+    pub updated_at: Option<i64>,
+  }
+
+  let workspace_id_esc = params.workspace_id.replace('\'', "''");
+  let query = format!(
+    "SELECT team_id, workspace_id, name, description, created_at, updated_at FROM teams WHERE workspace_id = '{}'",
+    workspace_id_esc
+  );
+  let rows: Vec<TeamRow> = diesel::sql_query(query).load(&mut conn).unwrap_or_default();
+  let items = rows
+    .into_iter()
+    .map(|r| TeamPB {
+      team_id: r.team_id,
+      workspace_id: r.workspace_id,
+      name: r.name,
+      description: r.description,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    })
+    .collect();
+  data_result_ok(RepeatedTeamPB { items })
+}
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub async fn get_team_acl_handler(
+  params: AFPluginData<TeamIdPB>,
+  manager: AFPluginState<Weak<UserManager>>,
+) -> DataResult<TeamACLPB, FlowyError> {
+  let params = params.try_into_inner()?;
+  let team_id = params.team_id;
+
+  // Try to read from local sqlite if possible
+  let mgr = upgrade_manager(manager)?;
+  let uid = mgr.user_id()?;
+  let mut conn = mgr.db_connection(uid)?;
+  // Query team_acls table
+  use diesel::sql_types::{BigInt, Nullable, Text};
+  #[derive(QueryableByName)]
+  struct TeamAclRow {
+    #[sql_type = "Nullable<BigInt>"]
+    pub user_id: Option<i64>,
+    #[sql_type = "Nullable<Text>"]
+    pub email: Option<String>,
+  }
+
+  let query = format!("SELECT user_id, email FROM team_acls WHERE team_id = '{}'", team_id.replace('\'', "''"));
+  let rows: Vec<TeamAclRow> = diesel::sql_query(query).load(&mut conn).unwrap_or_default();
+  let mut allow_user_ids = Vec::new();
+  let mut allow_emails = Vec::new();
+  for r in rows {
+    if let Some(uidv) = r.user_id {
+      allow_user_ids.push(uidv);
+    }
+    if let Some(em) = r.email {
+      allow_emails.push(em);
+    }
+  }
+  let acl = TeamACLPB {
+    team_id,
+    allow_user_ids,
+    allow_emails,
+  };
+  data_result_ok(acl)
+}
+
+#[tracing::instrument(level = "debug", skip(data, manager), err)]
+pub async fn update_team_acl_handler(
+  data: AFPluginData<UpdateTeamACLPB>,
+  manager: AFPluginState<Weak<UserManager>>,
+) -> Result<(), FlowyError> {
+  let payload = data.try_into_inner()?;
+  let mgr = upgrade_manager(manager)?;
+  let uid = mgr.user_id()?;
+  let mut conn = mgr.db_connection(uid)?;
+
+  let team_id = payload.acl.team_id.replace('\'', "''");
+
+  // Simple approach: delete existing ACL rows for this team and insert new ones
+  let delete_sql = format!("DELETE FROM team_acls WHERE team_id = '{}'", team_id);
+  diesel::sql_query(delete_sql).execute(&mut conn)?;
+
+  for user_id in payload.acl.allow_user_ids {
+    let insert_sql = format!("INSERT INTO team_acls(team_id, user_id) VALUES ('{}', {})", team_id, user_id);
+    diesel::sql_query(insert_sql).execute(&mut conn)?;
+  }
+  for email in payload.acl.allow_emails {
+    let esc = email.replace('\'', "''");
+    let insert_sql = format!("INSERT INTO team_acls(team_id, email) VALUES ('{}', '{}')", team_id, esc);
+    diesel::sql_query(insert_sql).execute(&mut conn)?;
+  }
+
+  Ok(())
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]

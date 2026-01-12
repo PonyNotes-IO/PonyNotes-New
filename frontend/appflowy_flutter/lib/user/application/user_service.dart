@@ -608,4 +608,28 @@ class UserBackendService implements IUserBackendService {
   static Future<FlowyResult<void, FlowyError>> deleteCurrentAccount() {
     return UserEventDeleteAccount().send();
   }
+
+  /// Get all teams (协作区) for the current workspace
+  Future<FlowyResult<RepeatedTeamPB, FlowyError>> getTeams(
+    String workspaceId,
+  ) {
+    final data = UserWorkspaceIdPB.create()..workspaceId = workspaceId;
+    return UserEventGetTeams(data).send();
+  }
+
+  /// Get team ACL (access control list) for a specific team
+  Future<FlowyResult<TeamACLPB, FlowyError>> getTeamACL(
+    String teamId,
+  ) {
+    final data = TeamIdPB.create()..teamId = teamId;
+    return UserEventGetTeamACL(data).send();
+  }
+
+  /// Update team ACL (access control list) for a specific team
+  Future<FlowyResult<void, FlowyError>> updateTeamACL(
+    TeamACLPB acl,
+  ) {
+    final data = UpdateTeamACLPB.create()..acl = acl;
+    return UserEventUpdateTeamACL(data).send();
+  }
 }
