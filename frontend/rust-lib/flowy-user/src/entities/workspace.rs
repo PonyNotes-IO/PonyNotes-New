@@ -185,6 +185,60 @@ pub struct RepeatedWorkspaceMemberPB {
   pub items: Vec<WorkspaceMemberPB>,
 }
 
+// Team (协作区) definitions
+#[derive(ProtoBuf, Default, Clone)]
+pub struct TeamPB {
+  #[pb(index = 1)]
+  pub team_id: String,
+
+  #[pb(index = 2)]
+  pub workspace_id: String,
+
+  #[pb(index = 3)]
+  pub name: String,
+
+  #[pb(index = 4, one_of)]
+  pub description: Option<String>,
+
+  #[pb(index = 5, one_of)]
+  pub created_at: Option<i64>,
+
+  #[pb(index = 6, one_of)]
+  pub updated_at: Option<i64>,
+}
+
+#[derive(ProtoBuf, Default, Clone)]
+pub struct RepeatedTeamPB {
+  #[pb(index = 1)]
+  pub items: Vec<TeamPB>,
+}
+
+// Team ACL: explicit whitelist supporting both user ids and emails
+#[derive(ProtoBuf, Default, Clone)]
+pub struct TeamACLPB {
+  #[pb(index = 1)]
+  pub team_id: String,
+
+  #[pb(index = 2)]
+  pub allow_user_ids: Vec<i64>,
+
+  #[pb(index = 3)]
+  pub allow_emails: Vec<String>,
+}
+
+#[derive(ProtoBuf, Default, Clone, Validate)]
+pub struct UpdateTeamACLPB {
+  #[pb(index = 1)]
+  pub acl: TeamACLPB,
+}
+
+#[derive(ProtoBuf, Default, Clone, Validate)]
+pub struct TeamIdPB {
+  #[pb(index = 1)]
+  #[validate(custom(function = "required_not_empty_str"))]
+  pub team_id: String,
+}
+
 #[derive(ProtoBuf, Default, Clone, Validate)]
 pub struct WorkspaceMemberInvitationPB {
   #[pb(index = 1)]

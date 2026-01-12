@@ -9,6 +9,7 @@ pub mod session_migration;
 mod util;
 pub mod workspace_and_favorite_v1;
 pub mod workspace_trash_v1;
+pub mod add_team_acl_tables;
 
 #[derive(Clone, Debug)]
 pub struct AnonUser {
