@@ -389,10 +389,14 @@ class _SettingsMenuState extends State<SettingsMenu> {
       width: size,
       height: size,
       alignment: Alignment.center,
-      child: FlowySvg(
-        FlowySvgs.pony_notes_logo_xl,
-        size: Size(size * 0.6, size * 0.6),
-        blendMode: null,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.asset(
+          'assets/images/about_logo.png',
+          width: 80,
+          height: 80,
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }

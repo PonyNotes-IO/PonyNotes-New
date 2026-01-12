@@ -703,13 +703,9 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                       color: const Color(0x19171717),
                     ),
                   ),
-                  child: const Center(
-                    child: Image(
-                      image: AssetImage('assets/images/app_icon_m.jpg'),
-                      width: 16,
-                      height: 16,
-                      fit: BoxFit.contain,
-                    ),
+                  child: Image(
+                    image: AssetImage('assets/images/app_icon_m.jpg'),
+                    fit: BoxFit.contain,
                   ),
                 ),
                 const HSpace(6),

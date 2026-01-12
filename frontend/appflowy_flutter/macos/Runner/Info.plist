@@ -22,7 +22,9 @@
 			<string>zh</string>
 		</array>
 		<key>CFBundleName</key>
-		<string>$(PRODUCT_NAME)</string>
+		<string>PonyNotes</string>
+		<key>CFBundleDisplayName</key>
+		<string>PonyNotes</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
