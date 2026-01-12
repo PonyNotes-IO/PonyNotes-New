@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
+import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
 import '../ai_welcome_theme.dart';
 import '../../services/image_service.dart';
 import '../../models/chat_image.dart';
@@ -204,14 +205,18 @@ class _AIInputAreaState extends State<AIInputArea> {
                     const SizedBox(width: 22),
                     _buildHistoryButton(),
                   ],
+                  // 深度思考按钮（最左边）
+                  const SizedBox(width: 22),
+                  _buildDeepThinkingButton(),
+                  // 全网搜索按钮（tool_2，与图片上传交换位置后移到这里）
+                  const SizedBox(width: 22),
+                  _buildToolButton('assets/images/icons/tool_2.png', '全网搜索'),
+                  // 图片上传按钮（与全网搜索交换位置后移到这里）
                   const SizedBox(width: 22),
                   _buildImagePickerButton(),
-                  const SizedBox(width: 22),
-                  _buildToolButton('assets/images/icons/tool_2.png'),
+                  // 附件上传按钮（tool_3）
                   const SizedBox(width: 20),
-                  _buildToolButton('assets/images/icons/tool_3.png'),
-                  const SizedBox(width: 20),
-                  _buildToolButton('assets/images/icons/tool_4.png'),
+                  _buildToolButton('assets/images/icons/tool_3.png', '附件上传'),
                   const SizedBox(width: 21),
                   // 分隔线（对应 block_5）
                   Container(
@@ -449,33 +454,36 @@ class _AIInputAreaState extends State<AIInputArea> {
   }
 
   /// 构建工具按钮
-  Widget _buildToolButton(String imageUrl) {
-    return GestureDetector(
-      onTap: () {
-        // TODO: 实现具体的工具功能
-      },
-      child: Container(
-        width: AIWelcomeTheme.iconSize,
-        height: AIWelcomeTheme.iconSize,
-        child: Image.asset(
-          imageUrl,
-          width: AIWelcomeTheme.iconSize * 0.8,
-          height: AIWelcomeTheme.iconSize * 0.8,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              width: AIWelcomeTheme.iconSize,
-              height: AIWelcomeTheme.iconSize,
-              decoration: BoxDecoration(
-                color: AIWelcomeTheme.containerColor(context),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Icon(
-                Icons.image_not_supported,
-                size: AIWelcomeTheme.iconSize * 0.6,
-                color: AIWelcomeTheme.secondaryTextColor(context),
-              ),
-            );
-          },
+  Widget _buildToolButton(String imageUrl, String tooltip) {
+    return FlowyTooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: () {
+          // TODO: 实现具体的工具功能
+        },
+        child: Container(
+          width: AIWelcomeTheme.iconSize,
+          height: AIWelcomeTheme.iconSize,
+          child: Image.asset(
+            imageUrl,
+            width: AIWelcomeTheme.iconSize * 0.8,
+            height: AIWelcomeTheme.iconSize * 0.8,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: AIWelcomeTheme.iconSize,
+                height: AIWelcomeTheme.iconSize,
+                decoration: BoxDecoration(
+                  color: AIWelcomeTheme.containerColor(context),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Icon(
+                  Icons.image_not_supported,
+                  size: AIWelcomeTheme.iconSize * 0.6,
+                  color: AIWelcomeTheme.secondaryTextColor(context),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -512,50 +520,79 @@ class _AIInputAreaState extends State<AIInputArea> {
     );
   }
 
+  /// 构建深度思考按钮
+  Widget _buildDeepThinkingButton() {
+    return FlowyTooltip(
+      message: '深度思考',
+      child: GestureDetector(
+        onTap: () {
+          // TODO: 实现深度思考功能
+          debugPrint('🔍 深度思考按钮被点击');
+        },
+        child: Container(
+          width: AIWelcomeTheme.iconSize,
+          height: AIWelcomeTheme.iconSize,
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Icon(
+            Icons.auto_awesome,
+            size: AIWelcomeTheme.iconSize,
+            color: AIWelcomeTheme.secondaryTextColor(context),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// 构建图片选择按钮
   Widget _buildImagePickerButton() {
-    return GestureDetector(
-      onTap: _selectImage,
-      child: Container(
-        width: AIWelcomeTheme.iconSize,
-        height: AIWelcomeTheme.iconSize,
-        decoration: BoxDecoration(
-          color: _selectedImages.isNotEmpty ? AIWelcomeTheme.selectedItemColor(context) : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Stack(
-          children: [
-            Center(
-              child: Icon(
-                Icons.image,
-                size: AIWelcomeTheme.iconSize,
-                color: _selectedImages.isNotEmpty ? AIWelcomeTheme.selectedItemTextColor(context) : AIWelcomeTheme.secondaryTextColor(context),
+    return FlowyTooltip(
+      message: '上传图片',
+      child: GestureDetector(
+        onTap: _selectImage,
+        child: Container(
+          width: AIWelcomeTheme.iconSize,
+          height: AIWelcomeTheme.iconSize,
+          decoration: BoxDecoration(
+            color: _selectedImages.isNotEmpty ? AIWelcomeTheme.selectedItemColor(context) : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Icon(
+                  Icons.image,
+                  size: AIWelcomeTheme.iconSize,
+                  color: _selectedImages.isNotEmpty ? AIWelcomeTheme.selectedItemTextColor(context) : AIWelcomeTheme.secondaryTextColor(context),
+                ),
               ),
-            ),
-            if (_selectedImages.isNotEmpty)
-              Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  width: 16,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${_selectedImages.length}',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimary,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+              if (_selectedImages.isNotEmpty)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${_selectedImages.length}',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onPrimary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
