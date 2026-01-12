@@ -1,5 +1,5 @@
 {
-  "appName": "AppFlowy",
+  "appName": "PonyNotes",
   "defaultUsername": "我",
   "welcomeText": "歡迎使用 @:appName",
   "welcomeTo": "歡迎來到",
@@ -37,7 +37,7 @@
     "loginStartWithAnonymous": "繼續匿名對話",
     "continueAnonymousUser": "繼續匿名對話",
     "continueWithLocalModel": "繼續使用本地模型",
-    "switchToAppFlowyCloud": "AppFlowy 雲端",
+    "switchToAppFlowyCloud": "PonyNotes 雲端",
     "anonymousMode": "匿名模式",
     "buttonText": "登入",
     "signingInText": "正在登入...",
@@ -107,7 +107,7 @@
     "verifying": "正在驗證…",
     "continueWithPassword": "繼續使用密碼",
     "youAreInLocalMode": "您目前處於本地模式。",
-    "loginToAppFlowyCloud": "登入 AppFlowy Cloud"
+    "loginToAppFlowyCloud": "登入 PonyNotes Cloud"
   },
   "workspace": {
     "chooseWorkspace": "選擇你的工作區",
@@ -156,14 +156,14 @@
     "csv": "CSV",
     "copyLink": "複製連結",
     "publishToTheWeb": "發佈到網頁",
-    "publishToTheWebHint": "使用 AppFlowy 建立網站",
+    "publishToTheWebHint": "使用 PonyNotes 建立網站",
     "publish": "發佈",
     "unPublish": "取消發佈",
     "visitSite": "前往網站",
     "exportAsTab": "匯出為",
     "publishTab": "發佈",
     "shareTab": "分享",
-    "publishOnAppFlowy": "在 AppFlowy 上發布",
+    "publishOnAppFlowy": "在 PonyNotes 上發布",
     "shareTabTitle": "邀請協作",
     "shareTabDescription": "方便與任何人協作",
     "copyLinkSuccess": "連結已複製到剪貼簿",
@@ -889,7 +889,7 @@
       "menuLabel": "AI 設定",
       "keys": {
         "enableAISearchTitle": "AI 搜尋",
-        "aiSettingsDescription": "選擇用於支援 AppFlowy AI 的偏好模型。現在包含 GPT-4o、GPT-o3-mini、DeepSeek R1、Claude 3.5 Sonnet，以及在 Ollama 中可用的模型",
+        "aiSettingsDescription": "選擇用於支援 PonyNotes AI 的偏好模型。現在包含 GPT-4o、GPT-o3-mini、DeepSeek R1、Claude 3.5 Sonnet，以及在 Ollama 中可用的模型",
         "loginToEnableAIFeature": "AI 功能僅在您使用 @:appName Cloud 登入後才能啟用。如果您沒有 @:appName 帳戶，請前往「我的帳戶」註冊。",
         "llmModel": "語言模型",
         "globalLLMModel": "全域語言模型",

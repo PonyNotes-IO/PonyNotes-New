@@ -360,10 +360,10 @@ End of functions from https://github.com/client9/shlib
 ------------------------------------------------------------------------
 EOF
 
-PROJECT_NAME="AppFlowy"
-SHORTHAND_PROJECT_NAME="AppFlowy"
+PROJECT_NAME="PonyNotes"
+SHORTHAND_PROJECT_NAME="PonyNotes"
 OWNER=AppFlowy-IO
-REPO="AppFlowy"
+REPO="PonyNotes"
 BINARY=AppFlowy
 FORMAT=tar.gz
 OS=$(uname_os)
