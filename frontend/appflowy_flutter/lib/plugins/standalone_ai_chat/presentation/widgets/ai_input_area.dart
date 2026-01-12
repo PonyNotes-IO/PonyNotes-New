@@ -210,8 +210,6 @@ class _AIInputAreaState extends State<AIInputArea> {
                   _buildToolButton('assets/images/icons/tool_2.png'),
                   const SizedBox(width: 20),
                   _buildToolButton('assets/images/icons/tool_3.png'),
-                  const SizedBox(width: 20),
-                  _buildToolButton('assets/images/icons/tool_4.png'),
                   const SizedBox(width: 21),
                   // 分隔线（对应 block_5）
                   Container(
