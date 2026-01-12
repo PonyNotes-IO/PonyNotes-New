@@ -566,9 +566,9 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     final base = <Map<String, dynamic>>[
       {'label': '小马AI', 'icon': FlowySvgs.icon_rights_ai_xl},
       {'label': '小马日历', 'icon': FlowySvgs.icon_rights_calendar_xl},
-      {'label': '小马收藏夹', 'icon': FlowySvgs.icon_rights_collection_xl},
+      {'label': '小马收藏夹', 'icon': FlowySvgs.icon_rights_collect_xl},
       {'label': '云端同步', 'icon': FlowySvgs.icon_rights_cloud_xl},
-      {'label': _getStorageLabel(), 'icon': FlowySvgs.icon_rights_space_xl},
+      {'label': _getStorageLabel(), 'icon': FlowySvgs.icon_rights_storage_xl},
     ];
 
     return base;
@@ -730,8 +730,8 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                     const TextSpan(text: "确认 "),
                     TextSpan(
                       text: "《会员协议》",
-                      style: const TextStyle(
-                        color: Color(0xFFF89575),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       mouseCursor: SystemMouseCursors.click,
                       recognizer: TapGestureRecognizer()
@@ -748,8 +748,8 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                     ),
                     TextSpan(
                       text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
-                      style: const TextStyle(
-                        color: Color(0xFFF89575),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       mouseCursor: SystemMouseCursors.click,
                       recognizer: TapGestureRecognizer()

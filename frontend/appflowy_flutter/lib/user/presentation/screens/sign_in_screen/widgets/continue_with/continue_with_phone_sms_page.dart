@@ -290,7 +290,7 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
                 contentPadding: EdgeInsets.zero,
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(4),
-                  borderSide: const BorderSide(color: Color(0xFFF89575), width: 1.5),
+                  borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5),
                 ),
               ),
               onChanged: (value) {
@@ -359,8 +359,8 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
                 children: [
                   TextSpan(
                     text: '$_countdown',
-                    style: const TextStyle(
-                      color: Color(0xFFF89575),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                   const TextSpan(
@@ -374,59 +374,69 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
             ),
           )
         else
-          GestureDetector(
-            onTap: _resendCode,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF89575),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                '重新获取验证码',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+          Builder(
+            builder: (context) {
+              final primaryColor = Theme.of(context).colorScheme.primary;
+              return GestureDetector(
+                onTap: _resendCode,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: primaryColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    '重新获取验证码',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
       ],
     );
   }
 
   Widget _buildNextButton() {
-    return SizedBox(
-      width: 418,
-      height: 52,
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _validateAndSubmit,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFF89575),
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-          elevation: 0,
-        ),
-        child: _isLoading
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : const Text(
-                '下一步',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w500,
-                ),
+    return Builder(
+      builder: (context) {
+        final primaryColor = Theme.of(context).colorScheme.primary;
+        return SizedBox(
+          width: 418,
+          height: 52,
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _validateAndSubmit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
               ),
-      ),
+              elevation: 0,
+            ),
+            child: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Text(
+                    '下一步',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+          ),
+        );
+      },
     );
   }
 

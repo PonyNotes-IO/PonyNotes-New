@@ -458,7 +458,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
                     borderSide: BorderSide(
-                      color: const Color(0xFFF89575),
+                      color: Theme.of(context).colorScheme.primary,
                       width: 1.5,
                     ),
                   ),
@@ -502,7 +502,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
 
   Widget _buildResendSection() {
     final theme = AppFlowyTheme.of(context);
-    final primaryColor = const Color(0xFFF89575);
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -565,7 +565,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
   }
 
   Widget _buildNextButton() {
-    final primaryColor = const Color(0xFFF89575);
+    final primaryColor = Theme.of(context).colorScheme.primary;
     return SizedBox(
       width: 418,
       height: 52,

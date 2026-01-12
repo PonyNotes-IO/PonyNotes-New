@@ -322,27 +322,32 @@ class _SettingsMenuState extends State<SettingsMenu> {
                                 ),
                               ),
                               const HSpace(8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0x1CF89575),
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(
-                                    color: const Color(0xFFF89879),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  planName,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFFF89879),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
+                              Builder(
+                                builder: (context) {
+                                  final primaryColor = Theme.of(context).colorScheme.primary;
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: primaryColor.withOpacity(0.11),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: primaryColor,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      planName,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: primaryColor,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ],
                           ),
@@ -405,26 +410,35 @@ class _SettingsMenuState extends State<SettingsMenu> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF89575),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Center(
-          child: FittedBox(
-            child: FlowyText(
-              label,
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+    return Builder(
+      builder: (context) {
+        final primaryColor = Theme
+            .of(context)
+            .colorScheme
+            .primary;
+        return GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            decoration: BoxDecoration(
+              color: primaryColor,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Center(
+              child: FittedBox(
+                child: FlowyText(
+                  label,
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-    );
+        );
+      }
+      );
+
   }
 
   Widget _buildValidityPeriod(

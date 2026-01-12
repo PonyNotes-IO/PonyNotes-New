@@ -317,7 +317,7 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                     child: ElevatedButton(
                       onPressed: state.isSubmitting ? null : _handlePasswordLogin,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF89575),
+                        backgroundColor: Theme.of(context).colorScheme.primary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
