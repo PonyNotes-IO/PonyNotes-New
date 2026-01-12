@@ -181,24 +181,29 @@ class _ContinueWithEmailAndPasswordState
                       _signInWithPhone(context, cleanPhone);
                     }
                   },
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF89575),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Text(
-                _isLoading
-                    ? "登录中..."
-                    : "登录/注册",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+            child: Builder(
+              builder: (context) {
+                final primaryColor = Theme.of(context).colorScheme.primary;
+                return Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: primaryColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text(
+                    _isLoading
+                        ? "登录中..."
+                        : "登录/注册",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           VSpace(20),
@@ -212,24 +217,29 @@ class _ContinueWithEmailAndPasswordState
                     _agreed = !_agreed;
                   });
                 },
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: _agreed ? const Color(0xFFF89575) : const Color(0xFF979797),
-                      width: 2,
-                    ),
-                    color: _agreed ? const Color(0xFFF89575) : Colors.transparent,
-                  ),
-                  child: _agreed
-                      ? Icon(
-                          Icons.check,
-                          size: 12,
-                          color: Colors.white,
-                        )
-                      : null,
+                child: Builder(
+                  builder: (context) {
+                    final primaryColor = Theme.of(context).colorScheme.primary;
+                    return Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _agreed ? primaryColor : const Color(0xFF979797),
+                          width: 2,
+                        ),
+                        color: _agreed ? primaryColor : Colors.transparent,
+                      ),
+                      child: _agreed
+                          ? Icon(
+                              Icons.check,
+                              size: 12,
+                              color: Colors.white,
+                            )
+                          : null,
+                    );
+                  },
                 ),
               ),
               const HSpace(4.0),
@@ -252,14 +262,19 @@ class _ContinueWithEmailAndPasswordState
                         onTap: () {
                           _navigateToUserAgreement(context);
                         },
-                        child: Text(
-                          "《用户协议》",
-                          style: TextStyle(
-                            color: const Color(0xFFF89575),
-                            fontSize: 16,
-                            fontFamily: 'PingFangSC-Regular',
-                            decoration: TextDecoration.underline,
-                          ),
+                        child: Builder(
+                          builder: (context) {
+                            final primaryColor = Theme.of(context).colorScheme.primary;
+                            return Text(
+                              "《用户协议》",
+                              style: TextStyle(
+                                color: primaryColor,
+                                fontSize: 16,
+                                fontFamily: 'PingFangSC-Regular',
+                                decoration: TextDecoration.underline,
+                              ),
+                            );
+                          },
                         ),
                       ),
                       Text(
@@ -274,14 +289,19 @@ class _ContinueWithEmailAndPasswordState
                         onTap: () {
                           _navigateToPrivacyPolicy(context);
                         },
-                        child: Text(
-                          "《隐私政策》",
-                          style: TextStyle(
-                            color: const Color(0xFFF89575),
-                            fontSize: 16,
-                            fontFamily: 'PingFangSC-Regular',
-                            decoration: TextDecoration.underline,
-                          ),
+                        child: Builder(
+                          builder: (context) {
+                            final primaryColor = Theme.of(context).colorScheme.primary;
+                            return Text(
+                              "《隐私政策》",
+                              style: TextStyle(
+                                color: primaryColor,
+                                fontSize: 16,
+                                fontFamily: 'PingFangSC-Regular',
+                                decoration: TextDecoration.underline,
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ],

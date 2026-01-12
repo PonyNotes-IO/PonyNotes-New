@@ -657,7 +657,7 @@ class _NewEventPageState extends State<NewEventPage> {
                         });
                       },
                       style: const ToggleStyle.mobile(),
-                      activeBackgroundColor: Color(0xFFF89575),
+                      activeBackgroundColor: Theme.of(context).colorScheme.primary,
                       padding: EdgeInsets.zero,
                     ),
                     onTap: () {

@@ -12,15 +12,15 @@ class ColorSchemeConstants {
   static const lightShader3 = Color(0xFF828282);
   static const lightShader5 = Color(0xFFe0e0e0);
   static const lightShader6 = Color(0xFFf2f2f2);
-  static const lightMain1 = Color(0xFFF89575);
+  static const lightMain1 = Color(0xFFFF3800);
   static const lightTint9 = Color(0xFFFFE8E1);
   static const darkShader1 = Color(0xFF131720);
   static const darkShader2 = Color(0xFF1A202C);
   static const darkShader3 = Color(0xFF363D49);
   static const darkShader5 = Color(0xFFBBC3CD);
   static const darkShader6 = Color(0xFFF2F2F2);
-  static const darkMain1 = Color(0xFFF89575);
-  static const darkMain2 = Color(0xFFF89575);
+  static const darkMain1 = Color(0xFFFF3800);
+  static const darkMain2 = Color(0xFFFF3800);
   static const darkInput = Color(0xFF282E3A);
   static const lightBorderColor = Color(0xFFEDEDEE);
   static const darkBorderColor = Color(0xFF3A3F49);
@@ -56,7 +56,7 @@ class DefaultColorScheme extends FlowyColorScheme {
           tint8: const Color(0xFFdeFFf1),
           tint9: ColorSchemeConstants.lightTint9,
           main1: ColorSchemeConstants.lightMain1,
-          main2: const Color(0xFFE67E5A),
+          main2: const Color(0xFFE63200),
           shadow: const Color.fromRGBO(0, 0, 0, 0.15),
           sidebarBg: ColorSchemeConstants.lightBg1,
           divider: ColorSchemeConstants.lightShader6,
@@ -113,9 +113,9 @@ class DefaultColorScheme extends FlowyColorScheme {
           tint6: const Color(0x4DA4C824),
           tint7: const Color(0x4D23CA2E),
           tint8: const Color(0x4D19CCAC),
-          tint9: const Color(0x4DF89575),
+          tint9: const Color(0x4DFF3800),
           main1: ColorSchemeConstants.darkMain2,
-          main2: const Color(0xFFE67E5A),
+          main2: const Color(0xFFE63200),
           shadow: const Color(0xFF0F131C),
           sidebarBg: const Color(0xFF232B38),
           divider: ColorSchemeConstants.darkShader3,
