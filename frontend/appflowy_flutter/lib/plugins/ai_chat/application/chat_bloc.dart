@@ -465,6 +465,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       },
       latestMessageCallback: (list) {
         if (!isClosed) {
+          // 【修复消息重复】必须先调用processReceivedMessage建立ID映射
+          for (final pb in list.messages) {
+            _messageHandler.processReceivedMessage(pb);
+          }
           final messages =
               list.messages.map(_messageHandler.createTextMessage).toList();
           add(ChatEvent.didLoadLatestMessages(messages));
@@ -472,6 +476,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       },
       prevMessageCallback: (list) {
         if (!isClosed) {
+          // 【修复消息重复】必须先调用processReceivedMessage建立ID映射
+          for (final pb in list.messages) {
+            _messageHandler.processReceivedMessage(pb);
+          }
           final messages =
               list.messages.map(_messageHandler.createTextMessage).toList();
           add(ChatEvent.didLoadPreviousMessages(messages, list.hasMore));
