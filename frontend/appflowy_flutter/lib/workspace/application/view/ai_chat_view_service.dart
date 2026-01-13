@@ -53,11 +53,13 @@ class AIChatViewService {
       // 3. 创建Chat类型的View
       // 注意：AppFlowy的createView的ext参数可能不支持直接存储到extra字段
       // 我们可能需要在创建后再更新extra字段
+      // AI会话是用户的个人隐私数据，应该创建在私有空间
       final result = await ViewBackendService.createView(
         layoutType: ViewLayoutPB.Chat,
         parentViewId: parentViewId,
         name: chatName,
         openAfterCreate: true,
+        section: ViewSectionPB.Private,  // 指定为私有空间
       );
 
       return result.fold(

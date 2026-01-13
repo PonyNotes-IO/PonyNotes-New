@@ -218,11 +218,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Log.info('   - 接收到消息数: ${messages.length}');
     Log.info('   - 当前controller中消息数: ${chatController.messages.length}');
     Log.info('   - initialMessage: $initialMessage');
-    Log.info('   - Stack trace: ${StackTrace.current}');
     
+    // 【修复消息重复】去重：只插入不存在的消息
+    int insertedCount = 0;
     for (final message in messages) {
-      await chatController.insert(message, index: 0);
+      // 检查消息是否已存在
+      final exists = chatController.messages.any((m) => m.id == message.id);
+      if (!exists) {
+        await chatController.insert(message, index: 0);
+        insertedCount++;
+      } else {
+        Log.info('⚠️  ChatBloc: 跳过重复消息 id=${message.id}');
+      }
     }
+    Log.info('   - 实际插入消息数: $insertedCount');
+    Log.info('   - 插入后controller消息总数: ${chatController.messages.length}');
 
     // Check if emit is still valid after async operations
     if (emit.isDone) {
