@@ -23,7 +23,7 @@ class AIWelcomePage extends StatelessWidget {
     this.onChatHistoryTap,
   });
 
-  final Function(String message, AIModel? model, List<ChatImage>? images) onMessageSent;
+  final Function(String message, AIModel? model, List<ChatImage>? images, bool enableDeepThinking) onMessageSent;
   
   /// 点击聊天记录按钮的回调
   final VoidCallback? onChatHistoryTap;

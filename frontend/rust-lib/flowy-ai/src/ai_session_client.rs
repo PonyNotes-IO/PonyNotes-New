@@ -93,12 +93,13 @@ pub async fn stream_ai_session(
   message: &str,
   preferred_model: Option<String>,
   token: Option<String>,
+  enable_thinking: bool,
 ) -> Result<AISessionStream, FlowyError> {
   use reqwest::Client;
   use std::time::Duration;
 
   let url = format!("{}/api/ai/chat/session", base_url);
-  trace!("[AISession] 调用新接口: {}, model: {:?}", url, preferred_model);
+  trace!("[AISession] 调用新接口: {}, model: {:?}, enable_thinking: {}", url, preferred_model, enable_thinking);
 
   let client = Client::new();
   let mut body = serde_json::json!({
@@ -107,6 +108,10 @@ pub async fn stream_ai_session(
 
   if let Some(model) = preferred_model {
     body["preferred_model"] = serde_json::Value::String(model);
+  }
+  
+  if enable_thinking {
+    body["enable_thinking"] = serde_json::Value::Bool(true);
   }
 
   let mut request = client

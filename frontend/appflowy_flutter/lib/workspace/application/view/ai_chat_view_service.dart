@@ -14,10 +14,12 @@ class AIChatViewService {
   /// [parentViewId] 父视图ID（通常是workspace ID）
   /// [initialMessage] 初始消息（可选）
   /// [selectedModelId] 选定的模型ID（可选）
+  /// [enableDeepThinking] 是否启用深度思考（可选）
   static Future<ViewPB?> createAndOpenAIChat({
     required String parentViewId,
     String? initialMessage,
     String? selectedModelId,
+    bool enableDeepThinking = false,
   }) async {
     try {
       // 1. 生成Chat名称
@@ -36,6 +38,9 @@ class AIChatViewService {
       }
       if (initialMessage != null && initialMessage.isNotEmpty) {
         extraData['initial_message'] = initialMessage;
+      }
+      if (enableDeepThinking) {
+        extraData['enable_deep_thinking'] = 'true';
       }
 
       // 将额外数据转换为JSON字符串
