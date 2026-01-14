@@ -46,7 +46,8 @@ class SidebarTopMenu extends StatelessWidget {
   }
 
   Widget _buildLogoIcon(BuildContext context) {
-    if (Platform.isMacOS) {
+    // hide logo on Windows (we show native traffic light buttons on macOS)
+    if (Platform.isWindows) {
       return const SizedBox.shrink();
     }
 
@@ -65,6 +66,7 @@ class SidebarTopMenu extends StatelessWidget {
   }
 
   Widget _buildCollapseMenuButton(BuildContext context) {
+    if (Platform.isWindows) return const SizedBox.shrink();
     final settingState = context.read<HomeSettingBloc?>()?.state;
     final isNotificationPanelCollapsed =
         settingState?.isNotificationPanelCollapsed ?? true;

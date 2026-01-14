@@ -6,6 +6,7 @@ import 'package:appflowy/workspace/application/settings/notifications/notificati
 import 'package:appflowy/workspace/presentation/notifications/number_red_dot.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/reminder.pb.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -92,8 +93,8 @@ class _NotificationButtonState extends State<NotificationButton> {
                 onTap: () {
                   // 显示通知面板而不是折叠
                   context.read<HomeSettingBloc>().add(
-                    HomeSettingEvent.collapseNotificationPanel(),
-                  );
+                        HomeSettingEvent.collapseNotificationPanel(),
+                      );
                 },
               ),
             ),

@@ -3,6 +3,7 @@ import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:flutter/material.dart';
 
 class SidebarUploadButton extends StatefulWidget {
@@ -65,13 +66,12 @@ class _SidebarUploadButtonState extends State<SidebarUploadButton> {
         margin: EdgeInsets.zero,
         text: FlowySvg(
           FlowySvgs.upload_m,
-          color: widget.isHover
-              ? Theme.of(context).colorScheme.onSurface
-              : null,
+          color:
+              widget.isHover ? Theme.of(context).colorScheme.onSurface : null,
           opacity: 0.7,
         ),
         onTap: onTap,
       ),
     );
   }
-} 
+}

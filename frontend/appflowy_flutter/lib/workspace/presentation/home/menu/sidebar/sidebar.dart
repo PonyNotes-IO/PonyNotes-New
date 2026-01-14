@@ -46,6 +46,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 
 Loading? _duplicateSpaceLoading;
 
@@ -142,13 +144,15 @@ class HomeSideBar extends StatelessWidget {
                 BlocListener<SidebarSectionsBloc, SidebarSectionsState>(
                   listenWhen: (p, c) =>
                       p.lastCreatedRootView?.id != c.lastCreatedRootView?.id,
-                listener: (context, state) {
+                  listener: (context, state) {
                     final view = state.lastCreatedRootView;
                     if (view != null) {
                       if (view.id.isEmpty) {
-                        Log.error('Sidebar: lastCreatedRootView.id is empty, aborting openPlugin');
+                        Log.error(
+                            'Sidebar: lastCreatedRootView.id is empty, aborting openPlugin');
                         // Open a blank page as a safe fallback to avoid passing empty id downstream.
-                        context.read<TabsBloc>().add(TabsEvent.openPlugin(plugin: BlankPagePlugin()));
+                        context.read<TabsBloc>().add(
+                            TabsEvent.openPlugin(plugin: BlankPagePlugin()));
                       } else {
                         context.read<TabsBloc>().openPlugin(view);
                       }
@@ -167,7 +171,9 @@ class HomeSideBar extends StatelessWidget {
                           .read<TabsBloc>()
                           .add(TabsEvent.openPlugin(plugin: BlankPagePlugin()));
                     } else {
-                      context.read<TabsBloc>().openPlugin(state.lastCreatedPage!);
+                      context
+                          .read<TabsBloc>()
+                          .openPlugin(state.lastCreatedPage!);
                     }
 
                     if (state.isDuplicatingSpace) {
@@ -198,7 +204,7 @@ class HomeSideBar extends StatelessWidget {
                             ),
                           );
                     }
-                    
+
                     final actionType = state.actionResult?.actionType;
 
                     if (actionType == WorkspaceActionType.create ||
@@ -358,17 +364,20 @@ class _SidebarState extends State<_Sidebar> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // top menu
-            Padding(
-              padding: menuHorizontalInset,
-              child: SidebarTopMenu(
-                isSidebarOnHover: _isHovered,
+            // top menu (hide on Windows)
+            if (!Platform.isWindows)
+              Padding(
+                padding: menuHorizontalInset,
+                child: SidebarTopMenu(
+                  isSidebarOnHover: _isHovered,
+                ),
               ),
-            ),
             // PonyNotes custom header
             Container(
-                height: HomeSizes.workspaceSectionHeight,
-                padding: menuHorizontalInset - const EdgeInsets.only(right: 6),
+              height: Platform.isWindows
+                  ? HomeSizes.workspaceSectionHeight + 8
+                  : HomeSizes.workspaceSectionHeight,
+              padding: menuHorizontalInset - const EdgeInsets.only(right: 6),
               child: _PonyNotesHeader(userProfile: widget.userProfile),
             ),
             if (FeatureFlag.search.isOn) ...[
@@ -379,7 +388,6 @@ class _SidebarState extends State<_Sidebar> {
                 child: const _SidebarSearchButton(),
               ),
             ],
-
 
             // scrollable document list
             const VSpace(12.0),
@@ -446,7 +454,7 @@ class _SidebarState extends State<_Sidebar> {
     final shouldShowFolder = !containsSpace ||
         spaceState.spaces.isEmpty ||
         !workspaceState.isCollabWorkspaceOn;
-    
+
     // Log.debug( // PonyNotes: 关闭非白板日志
     //   'Sidebar render decision: containsSpace=$containsSpace, '
     //   'spaces.length=${spaceState.spaces.length}, '
@@ -565,7 +573,6 @@ class _SidebarState extends State<_Sidebar> {
       setState(() {});
     }
   }
-
 
   void _onScrollChanged() {
     setState(() => _isScrolling = true);
@@ -689,6 +696,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
               color: Colors.transparent,
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const HSpace(4),
                 // 使用小马emoji作为图标
@@ -732,14 +740,56 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                   ],
                 ),
                 const Spacer(), // 推送按钮到右边
-                // 云同步按钮
-                const SidebarCloudSyncButton(),
+                // 云同步按钮 (fill header height)
+                SizedBox(
+                  height: Platform.isWindows
+                      ? HomeSizes.workspaceSectionHeight + 8
+                      : HomeSizes.workspaceSectionHeight,
+                  child: Center(child: const SidebarCloudSyncButton()),
+                ),
                 const HSpace(8.0),
                 // 上传按钮
-                const SidebarUploadButton(),
+                SizedBox(
+                  height: Platform.isWindows
+                      ? HomeSizes.workspaceSectionHeight + 8
+                      : HomeSizes.workspaceSectionHeight,
+                  child: Center(child: const SidebarUploadButton()),
+                ),
                 const HSpace(8.0),
                 // 消息按钮
-                NotificationButton(key: ValueKey(widget.userProfile.id)),
+                SizedBox(
+                  height: Platform.isWindows
+                      ? HomeSizes.workspaceSectionHeight + 8
+                      : HomeSizes.workspaceSectionHeight,
+                  child: Center(
+                      child: NotificationButton(
+                          key: ValueKey(widget.userProfile.id))),
+                ),
+                // 在 Windows 上将收起按钮放在通知右侧
+                if (Platform.isWindows) ...[
+                  const HSpace(8.0),
+                  SizedBox(
+                    height: Platform.isWindows
+                        ? HomeSizes.workspaceSectionHeight + 8
+                        : HomeSizes.workspaceSectionHeight,
+                    child: Center(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: () =>
+                            context.read<HomeSettingBloc>().collapseMenu(),
+                        child: SizedBox(
+                          width: 24,
+                          child: FlowySvg(
+                            FlowySvgs.double_back_arrow_m,
+                            color: AppFlowyTheme.of(context)
+                                .iconColorScheme
+                                .secondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 const HSpace(10.0),
               ],
             ),
