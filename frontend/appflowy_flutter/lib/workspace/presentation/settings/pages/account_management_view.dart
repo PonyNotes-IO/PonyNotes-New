@@ -52,6 +52,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
       create: (context) => AccountManagementBloc(
         workspaceId: widget.workspaceId,
         userProfile: widget.userProfile,
+        currentSubscription: widget.currentSubscription,
       )..add(const AccountManagementEvent.initial()),
       child: BlocConsumer<AccountManagementBloc, AccountManagementState>(
         listener: (context, state) {

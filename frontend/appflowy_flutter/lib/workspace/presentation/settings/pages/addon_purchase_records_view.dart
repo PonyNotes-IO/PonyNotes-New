@@ -46,7 +46,7 @@ class _AddonPurchaseRecordsViewState extends State<AddonPurchaseRecordsView> {
               OutlinedRoundedButton(
                 text: '返回',
                 onTap: () =>
-                    widget.changeSelectedPage(SettingsPage.billingPage),
+                    widget.changeSelectedPage(SettingsPage.accountManagement),
               ),
               Expanded(
                 child: Center(

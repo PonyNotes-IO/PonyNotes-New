@@ -38,7 +38,6 @@ enum SettingsPage {
   ai,
   cloud,
   featureFlags,
-  billingPage,
   addonPurchaseRecords,
 }
 

@@ -46,7 +46,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'pages/setting_ai_view/local_settings_ai_view.dart';
 import 'widgets/setting_cloud.dart';
-import 'pages/account_billing_page.dart';
 import 'pages/addon_purchase_records_view.dart';
 import 'package:appflowy/env/env.dart';
 
@@ -274,10 +273,6 @@ class SettingsDialog extends StatelessWidget {
         );
       case SettingsPage.featureFlags:
         return const FeatureFlagsPage();
-      case SettingsPage.billingPage:
-        return BillingPage(
-          userProfile: user,
-        );
         // return const SizedBox.shrink();
     }
   }

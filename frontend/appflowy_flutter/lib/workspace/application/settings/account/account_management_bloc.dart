@@ -7,6 +7,7 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart'
     show PaymentMethod, PaymentPlatformSupport, PaymentUtil;
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -188,6 +189,7 @@ class AccountManagementBloc
   AccountManagementBloc({
     required this.workspaceId,
     required this.userProfile,
+    required this.currentSubscription,
   }) : super(const AccountManagementState.initial()) {
     on<AccountManagementEvent>((event, emit) async {
       await event.when(
@@ -210,6 +212,7 @@ class AccountManagementBloc
 
   final String workspaceId;
   final UserProfilePB userProfile;
+  final CurrentSubscription? currentSubscription;
 
   String? _extractAccessToken(String? rawToken) {
     if (rawToken == null || rawToken.isEmpty) {
@@ -247,197 +250,84 @@ class AccountManagementBloc
 
   Future<void> _initial(Emitter<AccountManagementState> emit) async {
     emit(const AccountManagementState.loading());
-    add(const AccountManagementEvent.loadSubscriptionInfo());
+    // 1. 先获取当前会员信息，确保后续接口都能拿到最新的订阅计划
+    await _loadSubscriptionInfo(emit);
+
+    // 2. 再去拉会员计划列表和空间补充包列表
     add(const AccountManagementEvent.loadSubscriptionPlans());
     add(const AccountManagementEvent.loadAddons());
   }
 
   Future<void> _loadSubscriptionInfo(
       Emitter<AccountManagementState> emit) async {
-    final result =
-        await UserBackendService.getWorkspaceSubscriptionInfo(workspaceId);
+    // 使用从SettingsDialogBloc传入的currentSubscription
+    final planCode = currentSubscription?.subscription?.planCode ?? 'free_local';
+    final mappedPlan = _mapPlanCodeToPb(planCode);
+    final currentPlan = mappedPlan ?? WorkspacePlanPB.FreePlan;
 
-    result.fold(
-      (info) {
-        WorkspacePlanPB? selectedPlan;
-        if (info.plan == WorkspacePlanPB.FreePlan) {
-          selectedPlan = WorkspacePlanPB.StudentPlan;
-        } else {
-          selectedPlan = info.plan;
-        }
+    WorkspacePlanPB? selectedPlan;
+    if (currentPlan == WorkspacePlanPB.FreePlan) {
+      selectedPlan = WorkspacePlanPB.StudentPlan;
+    } else {
+      selectedPlan = currentPlan;
+    }
 
-        state.maybeWhen(
-          orElse: () {
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: info,
-                planConfigs: const {},
-                addons: const [],
-                selectedPlan: selectedPlan,
-                selectedDuration: PurchaseDurationOption.monthly,
-                selectedTab: MembershipTab.upgrade,
-                selectedAddonIndex: 0,
-                agreedProtocols: false,
-                isLoadingSubscription: false,
-                isLoadingPlans: true,
-                isLoadingAddons: true,
-              ),
-            );
-          },
-          ready: (
-            subscriptionInfo,
-            planConfigs,
-            addons,
-            currentSelectedPlan,
-            selectedDuration,
-            selectedTab,
-            selectedAddonIndex,
-            agreedProtocols,
-            isLoadingSubscription,
-            isLoadingPlans,
-            isLoadingAddons,
-            isProcessingPayment,
-            error,
-            paymentResult,
-          ) {
-            final finalSelectedPlan = currentSelectedPlan ?? selectedPlan;
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: info,
-                planConfigs: planConfigs,
-                addons: addons,
-                selectedPlan: finalSelectedPlan,
-                selectedDuration: selectedDuration,
-                selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
-                agreedProtocols: agreedProtocols,
-                isLoadingSubscription: false,
-                isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: isLoadingAddons,
-                isProcessingPayment: isProcessingPayment,
-                error: error,
-                paymentResult: paymentResult,
-              ),
-            );
-          },
+    // 创建一个基于currentSubscription的WorkspaceSubscriptionInfoPB
+    final info = WorkspaceSubscriptionInfoPB()..plan = currentPlan;
+
+    state.maybeWhen(
+      orElse: () {
+        emit(
+          AccountManagementState.ready(
+            subscriptionInfo: info,
+            planConfigs: const {},
+            addons: const [],
+            selectedPlan: selectedPlan,
+            selectedDuration: PurchaseDurationOption.monthly,
+            selectedTab: MembershipTab.upgrade,
+            selectedAddonIndex: 0,
+            agreedProtocols: false,
+            isLoadingSubscription: false,
+            isLoadingPlans: true,
+            isLoadingAddons: true,
+          ),
         );
       },
-      (error) {
-        // 检查是否是 404 错误（记录未找到），这通常表示用户没有订阅，属于正常情况
-        final isNotFound = error.code == ErrorCode.RecordNotFound ||
-            error.msg.contains('404') ||
-            error.msg.contains('Not Found') ||
-            error.msg.contains('not found');
-        
-        if (isNotFound) {
-          Log.info('订阅信息未找到（404），视为无订阅状态，继续加载其他数据');
-          // 404 错误表示没有订阅，这是正常情况，不应该作为错误处理
-          // 创建一个默认的免费计划订阅信息
-          final defaultInfo = WorkspaceSubscriptionInfoPB()
-            ..plan = WorkspacePlanPB.FreePlan;
-          
-          state.maybeWhen(
-            orElse: () {
-              emit(
-                AccountManagementState.ready(
-                  subscriptionInfo: defaultInfo,
-                  planConfigs: const {},
-                  addons: const [],
-                  selectedPlan: WorkspacePlanPB.StudentPlan,
-                  selectedDuration: PurchaseDurationOption.monthly,
-                  selectedTab: MembershipTab.upgrade,
-                  selectedAddonIndex: 0,
-                  agreedProtocols: false,
-                  isLoadingSubscription: false,
-                  isLoadingPlans: true,
-                  isLoadingAddons: true,
-                ),
-              );
-            },
-            ready: (
-              subscriptionInfo,
-              planConfigs,
-              addons,
-              selectedPlan,
-              selectedDuration,
-              selectedTab,
-              selectedAddonIndex,
-              agreedProtocols,
-              isLoadingSubscription,
-              isLoadingPlans,
-              isLoadingAddons,
-              isProcessingPayment,
-              error,
-              paymentResult,
-            ) {
-              emit(
-                AccountManagementState.ready(
-                  subscriptionInfo: defaultInfo,
-                  planConfigs: planConfigs,
-                  addons: addons,
-                  selectedPlan: selectedPlan ?? WorkspacePlanPB.StudentPlan,
-                  selectedDuration: selectedDuration,
-                  selectedTab: selectedTab,
-                  selectedAddonIndex: selectedAddonIndex,
-                  agreedProtocols: agreedProtocols,
-                  isLoadingSubscription: false,
-                  isLoadingPlans: isLoadingPlans,
-                  isLoadingAddons: isLoadingAddons,
-                  isProcessingPayment: isProcessingPayment,
-                  error: error,
-                  paymentResult: paymentResult,
-                ),
-              );
-            },
-          );
-        } else {
-          // 其他错误才作为真正的错误处理
-          Log.error('Failed to load subscription info: ${error.msg}');
-          state.maybeWhen(
-            orElse: () {
-              emit(
-                AccountManagementState.error(
-                  error: FlowyError()..msg = error.msg,
-                ),
-              );
-            },
-            ready: (
-              subscriptionInfo,
-              planConfigs,
-              addons,
-              selectedPlan,
-              selectedDuration,
-              selectedTab,
-              selectedAddonIndex,
-              agreedProtocols,
-              isLoadingSubscription,
-              isLoadingPlans,
-              isLoadingAddons,
-              isProcessingPayment,
-              error,
-              paymentResult,
-            ) {
-              emit(
-                AccountManagementState.ready(
-                  subscriptionInfo: subscriptionInfo,
-                  planConfigs: planConfigs,
-                  addons: addons,
-                  selectedPlan: selectedPlan,
-                  selectedDuration: selectedDuration,
-                  selectedTab: selectedTab,
-                  selectedAddonIndex: selectedAddonIndex,
-                  agreedProtocols: agreedProtocols,
-                  isLoadingSubscription: false,
-                  isLoadingPlans: isLoadingPlans,
-                  isLoadingAddons: isLoadingAddons,
-                  isProcessingPayment: isProcessingPayment,
-                  error: error,
-                  paymentResult: paymentResult,
-                ),
-              );
-            },
-          );
-        }
+      ready: (
+        subscriptionInfo,
+        planConfigs,
+        addons,
+        currentSelectedPlan,
+        selectedDuration,
+        selectedTab,
+        selectedAddonIndex,
+        agreedProtocols,
+        isLoadingSubscription,
+        isLoadingPlans,
+        isLoadingAddons,
+        isProcessingPayment,
+        error,
+        paymentResult,
+      ) {
+        final finalSelectedPlan = currentSelectedPlan ?? selectedPlan;
+        emit(
+          AccountManagementState.ready(
+            subscriptionInfo: info,
+            planConfigs: planConfigs,
+            addons: addons,
+            selectedPlan: finalSelectedPlan,
+            selectedDuration: selectedDuration,
+            selectedTab: selectedTab,
+            selectedAddonIndex: selectedAddonIndex,
+            agreedProtocols: agreedProtocols,
+            isLoadingSubscription: false,
+            isLoadingPlans: isLoadingPlans,
+            isLoadingAddons: isLoadingAddons,
+            isProcessingPayment: isProcessingPayment,
+            error: error,
+            paymentResult: paymentResult,
+          ),
+        );
       },
     );
   }
@@ -1293,6 +1183,20 @@ class AccountManagementBloc
         error,
         paymentResult,
       ) {
+        // 切换 Tab 时按需刷新对应的数据列表
+        if (tab == MembershipTab.upgrade) {
+          add(const AccountManagementEvent.loadSubscriptionPlans());
+        } else if (tab == MembershipTab.addon) {
+          // 先确保已经拿到当前会员信息，再拉取空间补充包列表
+          if (subscriptionInfo == null) {
+            add(const AccountManagementEvent.loadSubscriptionInfo());
+          }
+          add(const AccountManagementEvent.loadAddons());
+        }
+
+        // 切换 Tab 时重置“同意协议”开关和支付状态，避免误操作
+        final resetAgreedProtocols = false;
+
         emit(
           AccountManagementState.ready(
             subscriptionInfo: subscriptionInfo,
@@ -1302,11 +1206,11 @@ class AccountManagementBloc
             selectedDuration: selectedDuration,
             selectedTab: tab,
             selectedAddonIndex: selectedAddonIndex,
-            agreedProtocols: agreedProtocols,
+            agreedProtocols: resetAgreedProtocols,
             isLoadingSubscription: isLoadingSubscription,
             isLoadingPlans: isLoadingPlans,
             isLoadingAddons: isLoadingAddons,
-            isProcessingPayment: isProcessingPayment,
+            isProcessingPayment: false,
             error: error,
             paymentResult: paymentResult,
           ),
