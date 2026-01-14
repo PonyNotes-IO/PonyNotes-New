@@ -35,7 +35,7 @@ class SidebarTopMenu extends StatelessWidget {
         child: MoveWindowDetector(
           child: Row(
             children: [
-              _buildLogoIcon(context),
+              // _buildLogoIcon(context),
               const Spacer(),
               _buildCollapseMenuButton(context),
             ],
@@ -45,25 +45,25 @@ class SidebarTopMenu extends StatelessWidget {
     );
   }
 
-  Widget _buildLogoIcon(BuildContext context) {
-    // hide logo on Windows (we show native traffic light buttons on macOS)
-    if (Platform.isWindows) {
-      return const SizedBox.shrink();
-    }
-
-    final svgData = Theme.of(context).brightness == Brightness.dark
-        ? FlowySvgs.app_logo_with_text_dark_xl
-        : FlowySvgs.app_logo_with_text_light_xl;
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 12.0, left: 8),
-      child: FlowySvg(
-        svgData,
-        size: const Size(92, 17),
-        blendMode: null,
-      ),
-    );
-  }
+  // Widget _buildLogoIcon(BuildContext context) {
+  //   // hide logo on Windows (we show native traffic light buttons on macOS)
+  //   if (Platform.isWindows) {
+  //     return const SizedBox.shrink();
+  //   }
+  //
+  //   final svgData = Theme.of(context).brightness == Brightness.dark
+  //       ? FlowySvgs.app_logo_with_text_dark_xl
+  //       : FlowySvgs.app_logo_with_text_light_xl;
+  //
+  //   return Padding(
+  //     padding: const EdgeInsets.only(top: 12.0, left: 8),
+  //     child: FlowySvg(
+  //       svgData,
+  //       size: const Size(92, 17),
+  //       blendMode: null,
+  //     ),
+  //   );
+  // }
 
   Widget _buildCollapseMenuButton(BuildContext context) {
     if (Platform.isWindows) return const SizedBox.shrink();
