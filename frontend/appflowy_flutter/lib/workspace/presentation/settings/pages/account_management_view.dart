@@ -154,10 +154,19 @@ class _AccountManagementViewState extends State<AccountManagementView> {
             Expanded(
               child: SettingsBody(
                 title: "我的账户",
-                headerTrailingBuilder: (_) => OutlinedRoundedButton(
+                headerTrailingBuilder: (_) =>
+                selectedTab == MembershipTab.upgrade ?
+                    OutlinedRoundedButton(
                   text: '充值记录',
                   onTap: () =>
                       widget.changeSelectedPage(SettingsPage.rechargeRecords),
+                ) : OutlinedRoundedButton(
+                  text: '购买记录',
+                  onTap: () => context.read<SettingsDialogBloc>().add(
+                    const SettingsDialogEvent.setSelectedPage(
+                      SettingsPage.addonPurchaseRecords,
+                    ),
+                  ),
                 ),
                 children: [
                   _buildTabSwitcher(
