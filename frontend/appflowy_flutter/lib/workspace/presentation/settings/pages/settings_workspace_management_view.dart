@@ -19,10 +19,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:appflowy/shared/af_role_pb_extension.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
- 
-import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart' hide AFRolePB;
-import 'package:appflowy/workspace/application/view/view_ext.dart';
 
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
+    hide AFRolePB;
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 
 class SettingsWorkspaceManagementView extends StatefulWidget {
   const SettingsWorkspaceManagementView({
@@ -35,10 +35,12 @@ class SettingsWorkspaceManagementView extends StatefulWidget {
   final UserWorkspacePB workspace;
 
   @override
-  State<SettingsWorkspaceManagementView> createState() => _SettingsWorkspaceManagementViewState();
+  State<SettingsWorkspaceManagementView> createState() =>
+      _SettingsWorkspaceManagementViewState();
 }
 
-class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManagementView> {
+class _SettingsWorkspaceManagementViewState
+    extends State<SettingsWorkspaceManagementView> {
   bool _onlyOwnerCanCreateTeamWorkspace = true;
   bool _isLoading = true;
 
@@ -55,14 +57,16 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
 
   Future<void> _loadWorkspaceSettings() async {
     try {
-      final payload = UserWorkspaceIdPB(workspaceId: widget.workspace.workspaceId);
+      final payload =
+          UserWorkspaceIdPB(workspaceId: widget.workspace.workspaceId);
       final result = await UserEventGetWorkspaceSetting(payload).send();
 
       if (mounted) {
         result.fold(
           (settings) {
             setState(() {
-              _onlyOwnerCanCreateTeamWorkspace = settings.onlyOwnerCanCreateTeamWorkspace;
+              _onlyOwnerCanCreateTeamWorkspace =
+                  settings.onlyOwnerCanCreateTeamWorkspace;
               _isLoading = false;
             });
           },
@@ -134,7 +138,8 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
     return SettingsBody(
       title: '空间管理',
       description: '管理您的工作空间设置和配置',
-      autoSeparate: false, // control separators manually to avoid duplicate dividers
+      autoSeparate:
+          false, // control separators manually to avoid duplicate dividers
       children: [
         // 创建团队协作区权限设置
         _buildCreatePermissionSection(),
@@ -158,14 +163,13 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
       title: '仅工作空间所有者可以创建团队协作区',
       description: '仅允许工作空间所有者创建团队协作区',
       actions: [
-            Toggle(
-              value: _onlyOwnerCanCreateTeamWorkspace,
-              onChanged: (value) {
+        Toggle(
+          value: _onlyOwnerCanCreateTeamWorkspace,
+          onChanged: (value) {
             // value == true means turning on (limit to owners)
             // value == false means turning off (allow all members)
-            final message = value
-                ? '限定此工作空间只有工作空间所有者可以创建团队协作区？'
-                : '允许此工作空间的所有成员创建团队协作区？';
+            final message =
+                value ? '限定此工作空间只有工作空间所有者可以创建团队协作区？' : '允许此工作空间的所有成员创建团队协作区？';
 
             showSimpleConfirmDialog(
               context: context,
@@ -175,9 +179,9 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
                 _updateWorkspaceSetting(value);
               },
             );
-              },
-            ),
-          ],
+          },
+        ),
+      ],
       children: const [],
     );
   }
@@ -273,7 +277,7 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 5,
             child: FlowyText(
               '名称',
               fontSize: 12,
@@ -282,7 +286,7 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: FlowyText(
               '所有者',
               fontSize: 12,
@@ -291,7 +295,7 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: FlowyText(
               '访问权限',
               fontSize: 12,
@@ -300,7 +304,7 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 3,
             child: FlowyText(
               '更新时间',
               fontSize: 12,
@@ -308,7 +312,7 @@ class _SettingsWorkspaceManagementViewState extends State<SettingsWorkspaceManag
               fontWeight: FontWeight.w500,
             ),
           ),
-          // 管理 列 header已经移除，但保留一个空占位以保证列宽对齐
+          // 管理 列 header保持占位以保证列宽对齐（省略号位于该列）
           Expanded(
             flex: 2,
             child: const SizedBox.shrink(),
@@ -390,7 +394,8 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
     }
     try {
       // Int64 时间戳通常是秒，需要转换为毫秒
-      final date = DateTime.fromMillisecondsSinceEpoch(timestamp.toInt() * 1000);
+      final date =
+          DateTime.fromMillisecondsSinceEpoch(timestamp.toInt() * 1000);
       final now = DateTime.now();
       final difference = now.difference(date);
 
@@ -510,22 +515,32 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
               fontSize: 14,
             ),
           ),
+          // 将更新时间与管理按钮放在同一列内以减小二者间距，最后一列保留占位用于对齐表头
           Expanded(
             flex: 2,
-            child: SizedBox(
-              height: 28,
-              child: FlowyButton(
-                text: Center(child: FlowyText.regular('管理', fontSize: 12)),
-                onTap: () => _openManageDialog(context),
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                FlowyText(
+                  updateTime,
+                  fontSize: 14,
+                ),
+                const HSpace(8),
+                SizedBox(
+                  width: 36,
+                  height: 28,
+                  child: FlowyButton(
+                    text: Center(child: FlowyText.regular('管理', fontSize: 12)),
+                    onTap: () => _openManageDialog(context),
+                    margin: EdgeInsets.zero,
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
             flex: 2,
-            child: FlowyText(
-              updateTime,
-              fontSize: 14,
-            ),
+            child: const SizedBox.shrink(),
           ),
         ],
       ),
@@ -537,7 +552,8 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
     final userService = UserBackendService(userId: widget.userProfile.id);
     List<WorkspaceMemberPB> members = [];
     try {
-      final res = await userService.getWorkspaceMembers(widget.workspace.workspaceId);
+      final res =
+          await userService.getWorkspaceMembers(widget.workspace.workspaceId);
       res.fold((s) {
         members = s.items;
       }, (e) {
@@ -556,7 +572,8 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
       context: context,
       builder: (ctx) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: SizedBox(
             width: 640,
             height: 480,
@@ -568,7 +585,8 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      FlowyText('管理团队协作区访问权限', fontSize: 16, fontWeight: FontWeight.w600),
+                      FlowyText('管理团队协作区访问权限',
+                          fontSize: 16, fontWeight: FontWeight.w600),
                       SizedBox(
                         width: 72,
                         child: FlowyButton(
@@ -696,7 +714,7 @@ class _SpaceRowState extends State<_SpaceRow> {
       child: Row(
         children: [
           Expanded(
-            flex: 3,
+            flex: 5,
             child: Row(
               children: [
                 Container(
@@ -733,14 +751,16 @@ class _SpaceRowState extends State<_SpaceRow> {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: FlowyText(
-              widget.userProfile.name.isNotEmpty ? widget.userProfile.name : widget.userProfile.email,
+              widget.userProfile.name.isNotEmpty
+                  ? widget.userProfile.name
+                  : widget.userProfile.email,
               fontSize: 14,
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 4,
             child: Row(
               children: [
                 DropdownButtonHideUnderline(
@@ -751,15 +771,21 @@ class _SpaceRowState extends State<_SpaceRow> {
                     items: [
                       DropdownMenuItem(
                         value: SpacePermission.publicToAll,
-                        child: FlowyText(_permissionLabel(SpacePermission.publicToAll), fontSize: 14),
+                        child: FlowyText(
+                            _permissionLabel(SpacePermission.publicToAll),
+                            fontSize: 14),
                       ),
                       DropdownMenuItem(
                         value: SpacePermission.closed,
-                        child: FlowyText(_permissionLabel(SpacePermission.closed), fontSize: 14),
+                        child: FlowyText(
+                            _permissionLabel(SpacePermission.closed),
+                            fontSize: 14),
                       ),
                       DropdownMenuItem(
                         value: SpacePermission.private,
-                        child: FlowyText(_permissionLabel(SpacePermission.private), fontSize: 14),
+                        child: FlowyText(
+                            _permissionLabel(SpacePermission.private),
+                            fontSize: 14),
                       ),
                     ],
                     onChanged: _isUpdating
@@ -779,15 +805,20 @@ class _SpaceRowState extends State<_SpaceRow> {
                                     ),
                                   );
                               // optimistic UI; small delay to improve UX
-                              await Future.delayed(const Duration(milliseconds: 200));
+                              await Future.delayed(
+                                  const Duration(milliseconds: 200));
                               showToastNotification(message: '权限已更新');
                             } catch (e) {
                               // revert on error
                               setState(() {
-                                _selectedPermission = widget.space.spacePermission;
+                                _selectedPermission =
+                                    widget.space.spacePermission;
                               });
-                              Log.error('Failed to update space permission: $e');
-                              showToastNotification(message: '更新失败，请重试', type: ToastificationType.error);
+                              Log.error(
+                                  'Failed to update space permission: $e');
+                              showToastNotification(
+                                  message: '更新失败，请重试',
+                                  type: ToastificationType.error);
                             } finally {
                               if (mounted) {
                                 setState(() {
@@ -800,13 +831,16 @@ class _SpaceRowState extends State<_SpaceRow> {
                 ),
                 if (_isUpdating) ...[
                   const HSpace(8),
-                  const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
                 ],
               ],
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 3,
             child: FlowyText(
               updateTime,
               fontSize: 14,
@@ -814,11 +848,16 @@ class _SpaceRowState extends State<_SpaceRow> {
           ),
           Expanded(
             flex: 2,
-            child: SizedBox(
-              height: 28,
-              child: FlowyButton(
-                text: FlowySvg(FlowySvgs.three_dots_s),
-                onTap: () => _openSpaceManageDialog(context),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: SizedBox.square(
+                dimension: 28.0,
+                child: FlowyButton(
+                  useIntrinsicWidth: true,
+                  margin: EdgeInsets.zero,
+                  text: Center(child: FlowySvg(FlowySvgs.three_dots_s)),
+                  onTap: () => _openSpaceManageDialog(context),
+                ),
               ),
             ),
           ),
@@ -858,7 +897,6 @@ class _SpaceRowState extends State<_SpaceRow> {
     // Filter members to only show authorized ones (in ACL whitelist)
     List<WorkspaceMemberPB> members = [];
     if (teamAcl != null) {
-      final allowedUserIds = teamAcl!.allowUserIds.toSet();
       final allowedEmails = teamAcl!.allowEmails.toSet();
       members = allMembers.where((member) {
         return allowedEmails.contains(member.email);
@@ -873,7 +911,8 @@ class _SpaceRowState extends State<_SpaceRow> {
       builder: (ctx) {
         final TextEditingController _searchController = TextEditingController();
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: SizedBox(
             width: 760,
             height: 560,
@@ -889,9 +928,11 @@ class _SpaceRowState extends State<_SpaceRow> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          FlowyText('协作区：${widget.space.name}', fontSize: 16, fontWeight: FontWeight.w600),
+                          FlowyText('协作区：${widget.space.name}',
+                              fontSize: 16, fontWeight: FontWeight.w600),
                           const VSpace(6),
-                          FlowyText('管理该协作区的访问权限', fontSize: 12, color: Theme.of(ctx).hintColor),
+                          FlowyText('管理该协作区的访问权限',
+                              fontSize: 12, color: Theme.of(ctx).hintColor),
                         ],
                       ),
                       SizedBox(
@@ -917,8 +958,10 @@ class _SpaceRowState extends State<_SpaceRow> {
                             hintText: '搜索成员',
                             prefixIcon: const Icon(Icons.search, size: 18),
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(
+                                vertical: 12, horizontal: 12),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8)),
                           ),
                           onChanged: (_) {
                             (ctx as Element).markNeedsBuild();
@@ -945,9 +988,18 @@ class _SpaceRowState extends State<_SpaceRow> {
                     padding: const EdgeInsets.symmetric(vertical: 6.0),
                     child: Row(
                       children: [
-                        Expanded(flex: 4, child: FlowyText('名称', fontSize: 12, color: Theme.of(ctx).hintColor)),
-                        Expanded(flex: 3, child: FlowyText('角色', fontSize: 12, color: Theme.of(ctx).hintColor)),
-                        Expanded(flex: 3, child: FlowyText('操作', fontSize: 12, color: Theme.of(ctx).hintColor)),
+                        Expanded(
+                            flex: 4,
+                            child: FlowyText('名称',
+                                fontSize: 12, color: Theme.of(ctx).hintColor)),
+                        Expanded(
+                            flex: 3,
+                            child: FlowyText('角色',
+                                fontSize: 12, color: Theme.of(ctx).hintColor)),
+                        Expanded(
+                            flex: 3,
+                            child: FlowyText('操作',
+                                fontSize: 12, color: Theme.of(ctx).hintColor)),
                       ],
                     ),
                   ),
@@ -963,14 +1015,18 @@ class _SpaceRowState extends State<_SpaceRow> {
                               final m = members[idx];
                               final email = m.email;
                               // filter by search
-                              final q = _searchController.text.trim().toLowerCase();
-                              if (q.isNotEmpty && !(m.name.toLowerCase().contains(q) || email.toLowerCase().contains(q))) {
+                              final q =
+                                  _searchController.text.trim().toLowerCase();
+                              if (q.isNotEmpty &&
+                                  !(m.name.toLowerCase().contains(q) ||
+                                      email.toLowerCase().contains(q))) {
                                 return const SizedBox.shrink();
                               }
                               // Role options mapping
                               AFRolePB currentRole = m.role;
                               return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 8.0),
                                 child: Row(
                                   children: [
                                     Expanded(
@@ -979,37 +1035,62 @@ class _SpaceRowState extends State<_SpaceRow> {
                                         children: [
                                           CircleAvatar(
                                             radius: 18,
-                                            backgroundColor: Colors.grey.shade800,
+                                            backgroundColor:
+                                                Colors.grey.shade800,
                                             child: Text(
-                                              m.name.isNotEmpty ? m.name[0] : email.isNotEmpty ? email[0] : '?',
-                                              style: const TextStyle(color: Colors.white),
+                                              m.name.isNotEmpty
+                                                  ? m.name[0]
+                                                  : email.isNotEmpty
+                                                      ? email[0]
+                                                      : '?',
+                                              style: const TextStyle(
+                                                  color: Colors.white),
                                             ),
                                           ),
                                           const HSpace(12),
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Row(
                                                   children: [
-                                                    FlowyText(m.name.isNotEmpty ? m.name : email, fontSize: 14, fontWeight: FontWeight.w500),
+                                                    FlowyText(
+                                                        m.name.isNotEmpty
+                                                            ? m.name
+                                                            : email,
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w500),
                                                     const HSpace(6),
                                                     Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 4),
                                                       decoration: BoxDecoration(
-                                                        color: Theme.of(ctx).cardColor,
-                                                        borderRadius: BorderRadius.circular(8),
+                                                        color: Theme.of(ctx)
+                                                            .cardColor,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8),
                                                       ),
                                                       child: FlowyText(
-                                                        m.role == AFRolePB.Owner ? '工作空间所有者' : '工作空间成员',
+                                                        m.role == AFRolePB.Owner
+                                                            ? '工作空间所有者'
+                                                            : '工作空间成员',
                                                         fontSize: 12,
-                                                        color: Theme.of(ctx).hintColor,
+                                                        color: Theme.of(ctx)
+                                                            .hintColor,
                                                       ),
                                                     ),
                                                   ],
                                                 ),
                                                 const VSpace(2),
-                                                FlowyText(email, fontSize: 12, color: Theme.of(ctx).hintColor),
+                                                FlowyText(email,
+                                                    fontSize: 12,
+                                                    color: Theme.of(ctx)
+                                                        .hintColor),
                                               ],
                                             ),
                                           ),
@@ -1018,7 +1099,8 @@ class _SpaceRowState extends State<_SpaceRow> {
                                     ),
                                     Expanded(
                                       flex: 3,
-                                      child: FlowyText(m.role.description, fontSize: 14),
+                                      child: FlowyText(m.role.description,
+                                          fontSize: 14),
                                     ),
                                     Expanded(
                                       flex: 3,
@@ -1027,8 +1109,12 @@ class _SpaceRowState extends State<_SpaceRow> {
                                         child: DropdownButton<AFRolePB>(
                                           value: currentRole,
                                           items: [
-                                            DropdownMenuItem(value: AFRolePB.Owner, child: Text('团队协作区所有者')),
-                                            DropdownMenuItem(value: AFRolePB.Member, child: Text('团队协作区成员')),
+                                            DropdownMenuItem(
+                                                value: AFRolePB.Owner,
+                                                child: Text('团队协作区所有者')),
+                                            DropdownMenuItem(
+                                                value: AFRolePB.Member,
+                                                child: Text('团队协作区成员')),
                                           ],
                                           onChanged: (v) {
                                             if (v == null) return;
@@ -1067,7 +1153,8 @@ class _SpaceRowState extends State<_SpaceRow> {
                           );
 
                           try {
-                            final saveRes = await userService.updateTeamACL(newAcl);
+                            final saveRes =
+                                await userService.updateTeamACL(newAcl);
                             saveRes.fold((_) {
                               Navigator.of(ctx).pop();
                               showToastNotification(message: '团队协作区权限已保存');
