@@ -1046,7 +1046,10 @@
       "monthlyInterval": "每月",
       "monthlyPriceInfo": "每座位每月計費",
       "annualInterval": "每年",
-      "annualPriceInfo": "每座位按年計費"
+      "annualPriceInfo": "每座位按年計費",
+      "membershipUpgrades":"会员升级",
+      "storageAddon": "空间补充包",
+      "storageSpace": "存储空间"
     },
     "comparePlanDialog": {
       "title": "比較並選擇方案",

@@ -1,4 +1,3 @@
-import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -143,7 +142,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
             _buildUserInfoCard(context),
             const VSpace(16),
             SettingsMenuElement(
-              page: SettingsPage.accountManagement,
+              page: SettingsPage.member,
               selectedPage: widget.currentPage,
               label: "我的账户",
               trailingText: storageUsage,
@@ -217,6 +216,14 @@ class _SettingsMenuState extends State<SettingsMenu> {
               page: SettingsPage.aboutXiaoma,
               selectedPage: widget.currentPage,
               label: LocaleKeys.legal_aboutXiaoma.tr(),
+              changeSelectedPage: widget.changeSelectedPage,
+            ),
+            
+            // 会员升级入口
+            SettingsMenuElement(
+              page: SettingsPage.accountManagement,
+              selectedPage: widget.currentPage,
+              label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
               changeSelectedPage: widget.changeSelectedPage,
             ),
           ],
@@ -360,26 +367,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
                           start: summary?.startDate, end: summary?.endDate)
                     else
                       SizedBox(height: 24),
-                    const VSpace(12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildUserInfoButton(
-                            label: '空间补充包',
-                            onTap: () =>
-                                widget.changeSelectedPage(SettingsPage.billingPage),
-                          ),
-                        ),
-                        const HSpace(12),
-                        Expanded(
-                          child: _buildUserInfoButton(
-                            label: '会员升级',
-                            onTap: () =>
-                                widget.changeSelectedPage(SettingsPage.accountManagement),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
@@ -406,40 +393,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
     );
   }
 
-  Widget _buildUserInfoButton({
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Builder(
-      builder: (context) {
-        final primaryColor = Theme
-            .of(context)
-            .colorScheme
-            .primary;
-        return GestureDetector(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            decoration: BoxDecoration(
-              color: primaryColor,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Center(
-              child: FittedBox(
-                child: FlowyText(
-                  label,
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-      );
-
-  }
 
   Widget _buildValidityPeriod(
     BuildContext context, {

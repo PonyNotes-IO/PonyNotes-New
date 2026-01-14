@@ -1,17 +1,12 @@
-import 'dart:convert';
-
-import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
-import 'package:appflowy/user/application/user_service.dart';
-import 'package:get_it/get_it.dart';
 import 'package:appflowy/util/validator.dart';
-import 'package:appflowy/workspace/application/payment/payment_util.dart';
-import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart'
     show UserWorkspaceBloc, UserWorkspaceEvent;
+import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/settings/account/account_management_bloc.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
@@ -22,7 +17,6 @@ import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:intl/intl.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -30,12 +24,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../generated/locale_keys.g.dart';
 import '../../../../user/presentation/screens/legal_document_screen.dart';
-import 'package:http/http.dart' as http;
-
-enum PurchaseDurationOption {
-  monthly,
-  yearly,
-}
 
 class AccountManagementView extends StatefulWidget {
   const AccountManagementView({
@@ -58,323 +46,539 @@ class AccountManagementView extends StatefulWidget {
 }
 
 class _AccountManagementViewState extends State<AccountManagementView> {
-  WorkspaceSubscriptionInfoPB? _subscriptionInfo;
-  bool _isLoadingSubscription = true;
-  bool _isLoadingPlans = true;
-  WorkspacePlanPB? _selectedPlan;
-  PurchaseDurationOption _selectedDuration = PurchaseDurationOption.monthly;
-  bool _agreedProtocols = false;
-  Map<WorkspacePlanPB, _RemotePlan> _planConfigs = {};
-
   @override
-  void initState() {
-    super.initState();
-    _loadSubscriptionInfo();
-    _loadSubscriptionPlans();
-  }
-
-  bool get _isLoading => _isLoadingSubscription || _isLoadingPlans;
-
-  Future<void> _loadSubscriptionInfo() async {
-    setState(() {
-      _isLoadingSubscription = true;
-    });
-
-    final result = await UserBackendService.getWorkspaceSubscriptionInfo(widget.workspaceId);
-
-    result.fold(
-      (info) {
-        if (mounted) {
-          setState(() {
-            _subscriptionInfo = info;
-            // 如果当前是免费版或者无版本信息，默认选中学生版
-            // 如果不是免费版，就选中当前已经购买的版本
-            if (info.plan == WorkspacePlanPB.FreePlan) {
-              _selectedPlan = WorkspacePlanPB.StudentPlan;
-            } else {
-              _selectedPlan = info.plan;
-            }
-            _isLoadingSubscription = false;
-          });
-        }
-      },
-      (error) {
-        Log.error('Failed to load subscription info: ${error.msg}');
-        if (mounted) {
-          setState(() {
-            // 加载失败时，如果没有选中计划，默认选中学生版
-            _selectedPlan ??= WorkspacePlanPB.StudentPlan;
-            _isLoadingSubscription = false;
-          });
-        }
-      },
+  Widget build(BuildContext context) {
+    return BlocProvider<AccountManagementBloc>(
+      create: (context) => AccountManagementBloc(
+        workspaceId: widget.workspaceId,
+        userProfile: widget.userProfile,
+      )..add(const AccountManagementEvent.initial()),
+      child: BlocConsumer<AccountManagementBloc, AccountManagementState>(
+        listener: (context, state) {
+          // 处理错误提示
+          state.maybeWhen(
+            orElse: () {},
+            ready: (
+              subscriptionInfo,
+              planConfigs,
+              addons,
+              selectedPlan,
+              selectedDuration,
+              selectedTab,
+              selectedAddonIndex,
+        agreedProtocols,
+              isLoadingSubscription,
+              isLoadingPlans,
+              isLoadingAddons,
+              isProcessingPayment,
+              error,
+              paymentResult,
+            ) {
+              if (error != null && error.isNotEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(error),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+              if (paymentResult != null && paymentResult.isNotEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(paymentResult),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+                // 支付成功后刷新订阅信息
+                if (paymentResult.contains('成功')) {
+                  context.read<SettingsDialogBloc>().add(
+                        const SettingsDialogEvent.initial(),
+                      );
+                  try {
+                    final workspaceBloc = context.read<UserWorkspaceBloc?>();
+                    if (workspaceBloc != null) {
+                      workspaceBloc.add(
+                        UserWorkspaceEvent.updateCloudSyncEnabled(
+                            enabled: true),
+                      );
+                      workspaceBloc.add(
+                        UserWorkspaceEvent.fetchCurrentSubscription(),
+                      );
+                    }
+                  } catch (e) {
+                    Log.warn('无法刷新 UserWorkspaceBloc: $e');
+                  }
+                }
+              }
+            },
+          );
+        },
+        builder: (context, state) {
+          return _buildContent(context, state);
+        },
+      ),
     );
   }
 
-  Future<void> _loadSubscriptionPlans() async {
-    setState(() {
-      _isLoadingPlans = true;
-    });
-
-    try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-      if (baseUrl.isEmpty) {
-        Log.warn('订阅计划接口 baseUrl 为空，跳过远程加载');
-        setState(() {
-          _isLoadingPlans = false;
-        });
-        return;
-      }
-
-      final rawToken = widget.userProfile.token;
-      final accessToken = _extractAccessToken(rawToken);
-      if (accessToken == null || accessToken.isEmpty) {
-        Log.warn('订阅计划接口无法获取 access_token，使用本地默认配置');
-        setState(() {
-          _isLoadingPlans = false;
-        });
-        return;
-      }
-
-      final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/plans');
-      final response = await http.get(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode != 200) {
-        Log.warn('订阅计划接口返回非 200: ${response.statusCode}, body: ${response.body}');
-        setState(() {
-          _isLoadingPlans = false;
-        });
-        return;
-      }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final code = decoded['code'] as int? ?? -1;
-      if (code != 0) {
-        final message = decoded['message'] as String? ?? 'unknown error';
-        Log.warn('订阅计划接口返回错误 code=$code, message=$message');
-        setState(() {
-          _isLoadingPlans = false;
-        });
-        return;
-      }
-
-      final data = decoded['data'];
-      if (data is! List) {
-        Log.warn('订阅计划接口 data 非数组，使用本地默认配置');
-        setState(() {
-          _isLoadingPlans = false;
-        });
-        return;
-      }
-
-      final Map<WorkspacePlanPB, _RemotePlan> configs = {};
-      for (final item in data) {
-        if (item is! Map<String, dynamic>) continue;
-        final codeStr = item['plan_code'] as String? ?? '';
-        final mappedPlan = _mapPlanCodeToPb(codeStr);
-        if (mappedPlan == null) continue;
-        configs[mappedPlan] = _RemotePlan.fromJson(item);
-      }
-
-      if (mounted) {
-        setState(() {
-          _planConfigs = configs;
-          _isLoadingPlans = false;
-        });
-      }
-    } catch (e, stackTrace) {
-      Log.error('订阅计划接口请求异常: $e', e, stackTrace);
-      if (mounted) {
-        setState(() {
-          _isLoadingPlans = false;
-        });
-      }
-    }
-  }
-
-  // 根据订阅计划返回对应的配置
-  Map<String, dynamic> _getPlanConfig(WorkspacePlanPB? plan) {
-    if (plan == null) return {};
-    final remote = _planConfigs[plan];
-    if (remote != null) {
-      final monthly = remote.monthlyPriceYuan ?? 0.0;
-      final yearly = remote.yearlyPriceYuan ?? monthly * 12;
-      return {
-        'title': remote.planNameCn.isNotEmpty ? remote.planNameCn : remote.planName,
-        'price': '¥${_formatCurrency(monthly)}/月',
-        'tag': remote.planNameCn,
-        'monthlyPrice': monthly,
-        'yearlyPrice': yearly,
-      };
-    }
-    switch (plan) {
-      case WorkspacePlanPB.FreePlan:
-        return {};
-      case WorkspacePlanPB.StudentPlan:
-        return {};
-      case WorkspacePlanPB.StandardPlan:
-        return {};
-      case WorkspacePlanPB.TeamPlan:
-        return {};
-      default:
-        return {};
-    }
-  }
-
-  WorkspacePlanPB? get _effectivePlan {
-    // 过滤掉免费版，只考虑其他计划
-    final availablePlans = _planConfigs.keys
-        .where((plan) => plan != WorkspacePlanPB.FreePlan)
-        .toList();
-    if (availablePlans.isEmpty) return null;
-
-    if (_selectedPlan != null && 
-        _selectedPlan != WorkspacePlanPB.FreePlan &&
-        _planConfigs.containsKey(_selectedPlan)) {
-      return _selectedPlan;
-    }
-    if (_subscriptionInfo != null &&
-        _subscriptionInfo!.plan != WorkspacePlanPB.FreePlan &&
-        _planConfigs.containsKey(_subscriptionInfo!.plan)) {
-      return _subscriptionInfo!.plan;
-    }
-    return availablePlans.first;
-  }
-
-  double _getDurationPrice(PurchaseDurationOption option) {
-    final config = _getPlanConfig(_effectivePlan);
-    final key = option == PurchaseDurationOption.monthly
-        ? 'monthlyPrice'
-        : 'yearlyPrice';
-    final value = config[key] as double?;
-    if (value != null) {
-      return value;
-    }
-    final monthly = (config['monthlyPrice'] as double?) ?? 0.0;
-    return option == PurchaseDurationOption.monthly ? monthly : monthly * 12;
-  }
-
-  String _formatCurrency(double value) {
-    if (value == value.truncateToDouble()) {
-      return value.toInt().toString();
-    }
-    return value.toStringAsFixed(2);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildContent(BuildContext context, AccountManagementState state) {
     final theme = AppFlowyTheme.of(context);
-    final hasPlans = _planConfigs.isNotEmpty;
 
-    return Column(
-      children: [
-        Expanded(
-          child: SettingsBody(
-            title: "我的账户",
-            headerTrailingBuilder: (_) => OutlinedRoundedButton(
-              text: '充值记录',
-              onTap: () => widget.changeSelectedPage(SettingsPage.rechargeRecords),
-            ),
-            children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return state.maybeWhen(
+      initial: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error) => Center(
+        child: Text('加载失败: ${error?.msg ?? '未知错误'}'),
+      ),
+      ready: (
+        subscriptionInfo,
+        planConfigs,
+        addons,
+        selectedPlan,
+        selectedDuration,
+        selectedTab,
+        selectedAddonIndex,
+        agreedProtocols,
+        isLoadingSubscription,
+        isLoadingPlans,
+        isLoadingAddons,
+        isProcessingPayment,
+        error,
+        paymentResult,
+      ) {
+        final hasPlans = planConfigs.isNotEmpty;
+        final isLoading = isLoadingSubscription || isLoadingPlans;
+
+        return Column(
           children: [
-            if (_isLoading)
-                    const Center(child: CircularProgressIndicator())
-                  else if (!hasPlans) ...[
-                    const SizedBox(height: 20),
-                    const Center(child: Text('暂无可用的会员计划')),
-                    const SizedBox(height: 24),
-                  ] else ...[
-                      _buildPlanCards(context),
-                      const VSpace(24),
-                      _buildBenefitSection(context),
-                      const VSpace(24),
-                      _buildPurchaseDurationSection(context),
-                      const VSpace(32),
-                    ],
-              _buildFeatureItem(context, '文档光标颜色', '购买', showArrow: true),
-              _buildFeatureItem(
-                context,
-                'AI使用次数',
-                _buildAiUsageSubtitle(),
-                showArrow: true,
-              ),
-              GestureDetector(
-                onTap: () => widget.changeSelectedPage(SettingsPage.userProfile),
-                child: _buildFeatureItem(context, '个人资料', '', showArrow: true),
-              ),
-              GestureDetector(
-                onTap: () => _showPhoneVerificationDialog(context),
-                child: _buildFeatureItem(context, '绑定手机', '修改', showButton: true, buttonText: '修改'),
-              ),
-              GestureDetector(
-                onTap: () => _showEmailVerificationDialog(context),
-                child: _buildFeatureItem(context, '邮箱', '修改', showButton: true, buttonText: '修改'),
-              ),
+            Expanded(
+              child: SettingsBody(
+                title: "我的账户",
+                headerTrailingBuilder: (_) => OutlinedRoundedButton(
+                  text: '充值记录',
+                  onTap: () =>
+                      widget.changeSelectedPage(SettingsPage.rechargeRecords),
+                ),
+                children: [
+                  _buildTabSwitcher(
+                    context,
+                    selectedTab,
+                    (tab) => context.read<AccountManagementBloc>().add(
+                          AccountManagementEvent.switchTab(tab),
+                        ),
+                  ),
+                  if (selectedTab == MembershipTab.upgrade)
+                    _buildUpgradeContent(
+                      context,
+                      state,
+                      hasPlans,
+                      isLoading,
+                      selectedPlan,
+                      selectedDuration,
+                      agreedProtocols,
+                      isProcessingPayment,
+                    )
+                  else
+                    _buildAddonContent(
+                      context,
+                      state,
+                      addons,
+                      isLoadingAddons,
+                      selectedAddonIndex,
+                      agreedProtocols,
+                      isProcessingPayment,
+                    ),
                 ],
               ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-          child: GestureDetector(
-                onTap: () async {
-                  // 重置 SignInBloc 状态（如果可用）
-                  try {
-                    final signInBloc = getIt<SignInBloc>();
-                    if (!signInBloc.isClosed) {
-                      signInBloc.add(const SignInEvent.reset());
+            ),
+            if (selectedTab == MembershipTab.upgrade)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+                child: GestureDetector(
+                  onTap: () async {
+                    // 重置 SignInBloc 状态（如果可用）
+                    try {
+                      final signInBloc = getIt<SignInBloc>();
+                      if (!signInBloc.isClosed) {
+                        signInBloc.add(const SignInEvent.reset());
+                      }
+                    } catch (e) {
+                      // SignInBloc 不可用，忽略
                     }
-                  } catch (e) {
-                    // SignInBloc 不可用，忽略
-                  }
-                  await getIt<AuthService>().signOut();
-                  await runAppFlowy();
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: const Color(0xFFFF6B47),
-                      width: 1,
+                    await getIt<AuthService>().signOut();
+                    await runAppFlowy();
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 1,
+                      ),
+                      borderRadius: BorderRadius.circular(theme.spacing.s),
                     ),
-                    borderRadius: BorderRadius.circular(theme.spacing.s),
-                  ),
-                  child: const Center(
-                    child: FlowyText(
-                      '退出登录',
-                      fontSize: 16,
-                      color: Color(0xFFFF6B47),
+                    child: Center(
+                      child: FlowyText(
+                        '退出登录',
+                        fontSize: 16,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                   ),
                 ),
               ),
+          ],
+        );
+      },
+      orElse: () => const Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  // 所有业务逻辑已移至 AccountManagementBloc
+  Widget _buildTabSwitcher(
+    BuildContext context,
+    MembershipTab selectedTab,
+    void Function(MembershipTab) onTabChanged,
+  ) {
+    final theme = AppFlowyTheme.of(context);
+    final bool isUpgrade = selectedTab == MembershipTab.upgrade;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? theme.surfaceColorScheme.layer02
+            : theme.borderColorScheme.primary,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildTabItem(
+            context: context,
+            label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
+            selected: isUpgrade,
+            onTap: () => onTabChanged(MembershipTab.upgrade),
           ),
+          _buildTabItem(
+            context: context,
+            label: LocaleKeys.settings_billingPage_storageAddon.tr(),
+            selected: !isUpgrade,
+            onTap: () => onTabChanged(MembershipTab.addon),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabItem({
+    required BuildContext context,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final theme = AppFlowyTheme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: selected
+                  ? Theme.of(context).colorScheme.primary
+                  : theme.textColorScheme.secondary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUpgradeContent(
+    BuildContext context,
+    AccountManagementState state,
+    bool hasPlans,
+    bool isLoading,
+    WorkspacePlanPB? selectedPlan,
+    PurchaseDurationOption selectedDuration,
+    bool agreedProtocols,
+    bool isProcessingPayment,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (!hasPlans) ...[
+          const SizedBox(height: 20),
+          const Center(child: Text('暂无可用的会员计划')),
+          const SizedBox(height: 24),
+        ] else ...[
+          _buildUpgradePlanCards(context, state, selectedPlan),
+          const VSpace(24),
+          _buildBenefitIcons(context),
+          const VSpace(24),
+          _buildPurchaseDurationSection(
+            context,
+            state,
+            selectedDuration,
+            agreedProtocols,
+            isProcessingPayment,
+          ),
+        ],
+        const VSpace(24),
+        _buildCommonInfoList(context),
       ],
     );
   }
 
-  Widget _buildPlanCards(BuildContext context) {
+  Widget _buildAddonContent(
+    BuildContext context,
+    AccountManagementState state,
+    List<AddonPlan> addons,
+    bool isLoadingAddons,
+    int selectedAddonIndex,
+    bool agreedProtocols,
+    bool isProcessingPayment,
+  ) {
     final theme = AppFlowyTheme.of(context);
-    // final currentPlan = _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
-    final selectedPlan = _effectivePlan;
-    // 过滤掉免费版，只展示其他三项（学生版、标准版、团队版）
-    final plans = _planConfigs.entries
+    final hasAddons = addons.isNotEmpty;
+    final storageAddons = addons.where((e) => e.isStorage).toList();
+    final tokenAddons = addons.where((e) => e.isAiToken).toList();
+    final selectedAddon = hasAddons
+        ? addons[selectedAddonIndex.clamp(0, addons.length - 1)]
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isLoadingAddons)
+          const Center(child: CircularProgressIndicator())
+        else if (!hasAddons) ...[
+          const SizedBox(height: 12),
+          const Center(child: Text('暂无可用的补充包')),
+          const SizedBox(height: 12),
+        ] else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildAddonGrid(
+                context,
+                state,
+                storageAddons,
+                '云存储空间',
+                theme,
+                selectedAddonIndex,
+              ),
+              const VSpace(16),
+              _buildAddonGrid(
+                context,
+                state,
+                tokenAddons,
+                '小马AI对话',
+                theme,
+                selectedAddonIndex,
+              ),
+            ],
+          ),
+        const VSpace(16),
+        if (hasAddons && selectedAddon != null)
+          _buildAgreementActionRow(
+            context: context,
+            agreedProtocols: agreedProtocols,
+            isProcessing: isProcessingPayment,
+            buttonText: '确认协议并扩充',
+            onToggleAgreed: (value) => context.read<AccountManagementBloc>().add(
+                  AccountManagementEvent.setAgreedProtocols(value),
+                ),
+            onPressed: () => context.read<AccountManagementBloc>().add(
+                  const AccountManagementEvent.handleAddonPay(),
+                ),
+            prefixText: '升级前请确认 ',
+          ),
+        const VSpace(24),
+        _buildCommonInfoList(context),
+      ],
+    );
+  }
+
+  Widget _buildAgreementActionRow({
+    required BuildContext context,
+    required bool agreedProtocols,
+    required bool isProcessing,
+    required String buttonText,
+    required void Function(bool) onToggleAgreed,
+    required VoidCallback onPressed,
+    required String prefixText,
+  }) {
+    final enabled = agreedProtocols && !isProcessing;
+
+    return Row(
+      children: [
+        Opacity(
+          opacity: enabled ? 1 : 0.5,
+          child: GestureDetector(
+            onTap: enabled ? onPressed : null,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: isProcessing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : Text(
+                      buttonText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+        const Spacer(),
+        Checkbox(
+          value: agreedProtocols,
+          onChanged: (value) => onToggleAgreed(value ?? false),
+          activeColor: Theme.of(context).colorScheme.primary,
+        ),
+        RichText(
+          text: TextSpan(
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF999999),
+            ),
+            children: [
+              TextSpan(text: prefixText),
+              TextSpan(
+                text: "《会员协议》",
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                mouseCursor: SystemMouseCursors.click,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => LegalDocumentScreen(
+                          title: LocaleKeys.sidebar_appName.tr() +
+                              LocaleKeys.legal_userAgreement.tr(),
+                          content: LocaleKeys.legal_userAgreementContent.tr(),
+                        ),
+                      ),
+                    );
+                  },
+              ),
+              TextSpan(
+                text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                mouseCursor: SystemMouseCursors.click,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => LegalDocumentScreen(
+                          title: LocaleKeys.legal_privacyPolicy.tr(),
+                          content: LocaleKeys.legal_privacyPolicyContent.tr(),
+                        ),
+                      ),
+                    );
+                  },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCommonInfoList(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildFeatureItem(
+          context,
+          LocaleKeys.settings_billingPage_storageSpace.tr(),
+          _buildStorageUsageSubtitle(),
+          showArrow: true,
+        ),
+        _buildFeatureItem(
+          context,
+          'AI使用次数',
+          _buildAiUsageSubtitle(),
+          showArrow: true,
+        ),
+        GestureDetector(
+          onTap: () => widget.changeSelectedPage(SettingsPage.userProfile),
+          child: _buildFeatureItem(context, '个人资料', '', showArrow: true),
+        ),
+        GestureDetector(
+          onTap: () => _showPhoneVerificationDialog(context),
+          child: _buildFeatureItem(context, '绑定手机', '修改',
+              showButton: true, buttonText: '修改'),
+        ),
+        GestureDetector(
+          onTap: () => _showEmailVerificationDialog(context),
+          child: _buildFeatureItem(context, '邮箱', '修改',
+              showButton: true, buttonText: '修改'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUpgradePlanCards(
+    BuildContext context,
+    AccountManagementState state,
+    WorkspacePlanPB? selectedPlan,
+  ) {
+    final theme = AppFlowyTheme.of(context);
+    final planConfigs = state.maybeWhen(
+      orElse: () => <WorkspacePlanPB, RemotePlan>{},
+      ready: (
+        subscriptionInfo,
+        planConfigs,
+        addons,
+        selectedPlan,
+        selectedDuration,
+        selectedTab,
+        selectedAddonIndex,
+        agreedProtocols,
+        isLoadingSubscription,
+        isLoadingPlans,
+        isLoadingAddons,
+        isProcessingPayment,
+        error,
+        paymentResult,
+      ) =>
+          planConfigs,
+    );
+
+    final plans = planConfigs.entries
         .where((e) => e.value.isActive && e.key != WorkspacePlanPB.FreePlan)
         .map((e) => e.key)
         .toList();
 
-    if (selectedPlan == null || plans.isEmpty) {
+    final effectivePlan = state.effectivePlan;
+    if (effectivePlan == null || plans.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -383,108 +587,93 @@ class _AccountManagementViewState extends State<AccountManagementView> {
         final spacing = theme.spacing.m;
         final maxWidth =
             constraints.maxWidth.isFinite ? constraints.maxWidth : 960.0;
-
-        // 根据可用宽度动态计算每行展示多少个卡片，避免尺寸溢出或过小
-        const double minCardWidth = 80;
+        const double minCardWidth = 180;
         int crossAxisCount = (maxWidth / (minCardWidth + spacing)).floor();
-        crossAxisCount = crossAxisCount.clamp(1, plans.length + 1);
+        crossAxisCount = crossAxisCount.clamp(1, plans.length);
 
-        final cardWidth = (maxWidth - spacing * (crossAxisCount - 1)) /
-            crossAxisCount;
+        final cardWidth = (maxWidth - spacing * (crossAxisCount - 1)) / 4;
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
           children: plans.map((plan) {
-        final config = _getPlanConfig(plan);
-            // 当前版本暂未显示“当前套餐”标识，后续如需可使用 isCurrent 高亮
-            // final isCurrent = plan == currentPlan;
-            final isSelected = plan == selectedPlan;
+            final config = state.getPlanConfig(plan);
+            final isSelected = plan == effectivePlan;
             return GestureDetector(
               onTap: () {
-                setState(() {
-                  _selectedPlan = plan;
-                });
+                context.read<AccountManagementBloc>().add(
+                      AccountManagementEvent.selectPlan(plan),
+                    );
               },
               child: Container(
                 width: cardWidth,
                 decoration: BoxDecoration(
                   color: isSelected
                       ? (Theme.of(context).brightness == Brightness.light
-                          ? theme.surfaceColorScheme.layer01
+                          ? const Color(0xFFFFF7F2)
                           : theme.surfaceColorScheme.layer02)
                       : theme.surfaceColorScheme.layer01,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSelected
-                        ? const Color(0xFFFF6B47)
+                        ? Theme.of(context).colorScheme.primary
                         : theme.borderColorScheme.primary,
                     width: isSelected ? 1.6 : 1.0,
                   ),
                 ),
-                child: Stack(
-                  children: [
-                    // 左下角应用 Logo 水印
-                    Positioned.fill(
-                      child: Align(
-                        alignment: Alignment.bottomLeft,
-                        child: Opacity(
-                          opacity: 0.12,
-                          child: FlowySvg(
-                              FlowySvgs.pony_notes_logo_xl,
-                              size: const Size(56, 56),
-                              blendMode: isSelected ? null : BlendMode.srcATop,
-                          ),
-                        ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FlowyText(
+                        config['title'] as String,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: theme.textColorScheme.primary,
                       ),
-                    ),
-                    // 右下角选中角标
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(8),
-                          bottomRight: Radius.circular(6),
-                        ),
-                        child: Container(
-                          width: 32,
-                          height: 20,
-                          color: isSelected
-                              ? const Color(0xFFFF6B47)
-                              : Colors.transparent,
-                          child: isSelected
-                              ? const Icon(
-                                  Icons.check,
-                                  size: 14,
-                                  color: Colors.white,
-                                )
-                              : null,
-                        ),
+                      const VSpace(6),
+                      Builder(
+                        builder: (context) {
+                          final raw = (config['price'] as String?) ?? '';
+                          final text = raw.trim();
+                          final hasYuan = text.startsWith('¥');
+                          final symbol = hasYuan ? '¥' : '';
+                          final amount = hasYuan ? text.substring(1) : text;
+
+                          return Text.rich(
+                            TextSpan(
+                              children: [
+                                if (symbol.isNotEmpty)
+                                  TextSpan(
+                                    text: symbol,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.textColorScheme.primary,
+                                    ),
+                                  ),
+                                TextSpan(
+                                  text: amount,
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                    color: theme.textColorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                    // 中间标题 + 价格
-                    Center(
-                      child: Column(
-                        children: [
-                          VSpace(16),
-                          FlowyText(
-                            config['title'] as String,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: theme.textColorScheme.primary,
-                          ),
-                          const VSpace(4),
-                          FlowyText(
-                            config['price'] as String,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: theme.textColorScheme.primary,
-                          ),
-                          VSpace(16),
-                        ],
+                      const VSpace(6),
+                      FlowyText(
+                        config['tag']?.toString() ?? '',
+                        fontSize: 12,
+                        color: theme.textColorScheme.secondary,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
@@ -494,113 +683,187 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     );
   }
 
-  Widget _buildBenefitSection(BuildContext context) {
+  Widget _buildBenefitIcons(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final benefits = _buildBenefitsForSelectedPlan();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FlowyText(
-          '获赠权益',
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: theme.textColorScheme.primary,
-        ),
-        const VSpace(16),
-        Row(
-          children: [
-            for (int i = 0; i < benefits.length; i++) ...[
-              Expanded(
-          child: Container(
-            margin: EdgeInsets.only(
-                    right: i == benefits.length - 1 ? 0 : theme.spacing.s,
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      FlowySvg(
-                        benefits[i]['icon'] as FlowySvgData,
-                        size: const Size(48, 48),
-                        blendMode: null,
-                ),
-                const VSpace(8),
-                FlowyText(
-                        benefits[i]['label'] as String,
-                  fontSize: 14,
-                        color: theme.textColorScheme.primary,
-                ),
-              ],
-            ),
-          ),
-              ),
-            ],
-          ],
-        ),
-      ],
-    );
-  }
-
-  List<Map<String, dynamic>> _buildBenefitsForSelectedPlan() {
-    final plan = _effectivePlan;
-    final config = plan != null ? _planConfigs[plan] : null;
-
-    // 根据 cloudStorageGb 动态生成空间大小标签
-    String _getStorageLabel() {
-      final storageGb = config?.cloudStorageGb;
-      if (storageGb == null || storageGb == -1) {
-        return '无空间';
-      } else if (storageGb == 0) {
-        return '无限制空间';
-      } else if (storageGb >= 1000) {
-        // 大于等于1000GB，显示为TB
-        final tb = (storageGb / 1000).toStringAsFixed(1);
-        return '${tb}T空间';
-      } else {
-        return '${storageGb}GB空间';
-      }
-    }
-
-    // 基础权益
-    final base = <Map<String, dynamic>>[
+    final benefits = [
       {'label': '小马AI', 'icon': FlowySvgs.icon_rights_ai_xl},
       {'label': '小马日历', 'icon': FlowySvgs.icon_rights_calendar_xl},
       {'label': '小马收藏夹', 'icon': FlowySvgs.icon_rights_collect_xl},
       {'label': '云端同步', 'icon': FlowySvgs.icon_rights_cloud_xl},
-      {'label': _getStorageLabel(), 'icon': FlowySvgs.icon_rights_storage_xl},
+      {'label': '100T空间', 'icon': FlowySvgs.icon_rights_storage_xl},
     ];
 
-    return base;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: benefits.map((b) {
+        return Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDarkMode ? Colors.white : null,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: FlowySvg(
+                    b['icon'] as FlowySvgData,
+                    size: const Size(40, 40),
+                    blendMode: null,
+                  ),
+                ),
+              ),
+              const VSpace(8),
+              FlowyText(
+                b['label'] as String,
+                fontSize: 13,
+                color: theme.textColorScheme.secondary,
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
   }
 
-  Widget _buildInfoChip({
-    required String label,
-    required String value,
-    required AppFlowyThemeData theme,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-      decoration: BoxDecoration(
-        color: theme.surfaceColorScheme.layer02,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          FlowyText(
-            label,
-            fontSize: 12,
-            color: theme.textColorScheme.secondary,
+  Widget _buildAddonGrid(
+    BuildContext context,
+    AccountManagementState state,
+    List<AddonPlan> plans,
+    String title,
+    AppFlowyThemeData theme,
+    int selectedAddonIndex,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FlowyText(
+          title,
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: theme.textColorScheme.primary,
+        ),
+        const VSpace(12),
+        if (plans.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                '暂无可用的$title',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: theme.textColorScheme.tertiary,
+                ),
+              ),
+            ),
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final spacing = theme.spacing.m;
+              final maxWidth =
+                  constraints.maxWidth.isFinite ? constraints.maxWidth : 960.0;
+              const double minCardWidth = 180;
+              int crossAxisCount =
+                  (maxWidth / (minCardWidth + spacing)).floor();
+              crossAxisCount = crossAxisCount.clamp(1, plans.length);
+
+              final cardWidth =
+                  (maxWidth - spacing * (crossAxisCount - 1)) / crossAxisCount;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: List.generate(plans.length, (index) {
+                  final plan = plans[index];
+                  final allAddons = state.maybeWhen(
+                    orElse: () => <AddonPlan>[],
+                    ready: (
+                      subscriptionInfo,
+                      planConfigs,
+                      addons,
+                      selectedPlan,
+                      selectedDuration,
+                      selectedTab,
+                      selectedAddonIndex,
+                      agreedProtocols,
+                      isLoadingSubscription,
+                      isLoadingPlans,
+                      isLoadingAddons,
+                      isProcessingPayment,
+                      error,
+                      paymentResult,
+                    ) =>
+                        addons,
+                  );
+                  final realIndex = allAddons.indexOf(plan);
+                  final isSelected = selectedAddonIndex == realIndex;
+                  return GestureDetector(
+                    onTap: () {
+                      if (realIndex >= 0) {
+                        context.read<AccountManagementBloc>().add(
+                              AccountManagementEvent.selectAddon(realIndex),
+                            );
+                      }
+                    },
+                    child: Container(
+                      width: cardWidth,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? (Theme.of(context).brightness == Brightness.light
+                                ? const Color(0xFFFFF7F2)
+                                : theme.surfaceColorScheme.layer02)
+                            : theme.surfaceColorScheme.layer01,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : theme.borderColorScheme.primary,
+                          width: isSelected ? 1.6 : 1.0,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 16, horizontal: 16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FlowyText(
+                              plan.name,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: theme.textColorScheme.primary,
+                              textAlign: TextAlign.center,
+                            ),
+                            const VSpace(8),
+                            FlowyText(
+                              plan.isStorage
+                                  ? plan.storageLabel
+                                  : plan.tokensLabel,
+                              fontSize: 14,
+                              color: theme.textColorScheme.secondary,
+                              textAlign: TextAlign.center,
+                            ),
+                            const VSpace(8),
+                            FlowyText(
+                              '¥${plan.priceYuanStr}',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              );
+            },
           ),
-          const SizedBox(width: 6),
-          FlowyText(
-            value,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: theme.textColorScheme.primary,
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -613,26 +876,49 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     return '本月剩余$remaining次';
   }
 
-  Widget _buildPurchaseDurationSection(BuildContext context) {
-    if (_effectivePlan == null) {
+  String _buildStorageUsageSubtitle() {
+    final usage = widget.currentSubscription?.usage;
+    final usedGb = usage?.storageUsedGb;
+    final totalGb = usage?.storageTotalGb;
+    if (usedGb == null || totalGb == null) {
+      return '';
+    }
+
+    String fmt(double gb) {
+      if (gb < 1) {
+        final mb = gb * 1024;
+        return '${mb.toStringAsFixed(0)}M';
+      }
+      return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
+    }
+
+    // 按“已用/总量”展示（与“我的账户”右侧展示保持一致的简洁风格）
+    return '${fmt(usedGb)}/${fmt(totalGb)}';
+  }
+
+  Widget _buildPurchaseDurationSection(
+    BuildContext context,
+    AccountManagementState state,
+    PurchaseDurationOption selectedDuration,
+    bool agreedProtocols,
+    bool isProcessingPayment,
+  ) {
+    final effectivePlan = state.effectivePlan;
+    if (effectivePlan == null) {
       return const SizedBox.shrink();
     }
     final theme = AppFlowyTheme.of(context);
-    final monthlyPrice = _getDurationPrice(PurchaseDurationOption.monthly);
-    final yearlyPrice = _getDurationPrice(PurchaseDurationOption.yearly);
-    final selectedPrice = _selectedDuration == PurchaseDurationOption.monthly
-        ? monthlyPrice
-        : yearlyPrice;
-
+    final monthlyPrice = state.getDurationPrice(PurchaseDurationOption.monthly);
+    final yearlyPrice = state.getDurationPrice(PurchaseDurationOption.yearly);
     final options = [
       {
         'type': PurchaseDurationOption.monthly,
-        'title': '包月30天',
+        'title': '30天',
         'price': monthlyPrice,
       },
       {
         'type': PurchaseDurationOption.yearly,
-        'title': '包年365天',
+        'title': '365天',
         'price': yearlyPrice,
       },
     ];
@@ -650,13 +936,13 @@ class _AccountManagementViewState extends State<AccountManagementView> {
         Row(
           children: options.map((option) {
             final type = option['type'] as PurchaseDurationOption;
-            final isSelected = type == _selectedDuration;
+            final isSelected = type == selectedDuration;
             final price = option['price'] as double;
             return GestureDetector(
               onTap: () {
-                setState(() {
-                  _selectedDuration = type;
-                });
+                context.read<AccountManagementBloc>().add(
+                      AccountManagementEvent.selectDuration(type),
+                    );
               },
               child: Container(
                 margin: EdgeInsets.only(
@@ -675,7 +961,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isSelected
-                        ? const Color(0xFFFF6B47)
+                        ? Theme.of(context).colorScheme.primary
                         : theme.borderColorScheme.primary,
                     width: 1.4,
                   ),
@@ -687,19 +973,51 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                       style: TextStyle(
                         fontSize: 14,
                         color: isSelected
-                            ? const Color(0xFFFF6B47)
+                            ? Theme.of(context).colorScheme.primary
                             : theme.textColorScheme.secondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      '${_formatCurrency(price)}元',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: theme.textColorScheme.primary,
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final amount = price == price.truncateToDouble()
+                            ? price.toInt().toString()
+                            : price.toStringAsFixed(2);
+                        final suffix = type == PurchaseDurationOption.monthly
+                            ? '/月'
+                            : '/年';
+                        return Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '¥',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.textColorScheme.primary,
+                                ),
+                              ),
+                              TextSpan(
+                                text: amount,
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.textColorScheme.primary,
+                                ),
+                              ),
+                              TextSpan(
+                                text: suffix,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.textColorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -710,24 +1028,60 @@ class _AccountManagementViewState extends State<AccountManagementView> {
         const VSpace(16),
         Row(
           children: [
-            Checkbox(
-              value: _agreedProtocols,
-              onChanged: (value) {
-                setState(() {
-                  _agreedProtocols = value ?? false;
-                });
-              },
-              activeColor: const Color(0xFFFF6B47),
+            Opacity(
+              opacity: (agreedProtocols && !isProcessingPayment) ? 1 : 0.5,
+              child: GestureDetector(
+                onTap: (agreedProtocols && !isProcessingPayment)
+                    ? () => context.read<AccountManagementBloc>().add(
+                  const AccountManagementEvent.handleUpgradePay(),
+                )
+                    : null,
+                child: Container(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: isProcessingPayment
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor:
+                      AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                      : const Text(
+                    '确认协议开通',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
             ),
-            Expanded(
-              child: RichText(
+            Spacer(),
+            Checkbox(
+              value: agreedProtocols,
+              onChanged: (value) {
+                context.read<AccountManagementBloc>().add(
+                      AccountManagementEvent.setAgreedProtocols(value ?? false),
+                    );
+              },
+              activeColor: Theme.of(context).colorScheme.primary,
+            ),
+            RichText(
                 text: TextSpan(
                   style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF999999),
                   ),
                   children: [
-                    const TextSpan(text: "确认 "),
+                    const TextSpan(text: "升级前请确认 "),
                     TextSpan(
                       text: "《会员协议》",
                       style: TextStyle(
@@ -739,8 +1093,10 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => LegalDocumentScreen(
-                                title: LocaleKeys.sidebar_appName.tr() + LocaleKeys.legal_userAgreement.tr(),
-                                content: LocaleKeys.legal_userAgreementContent.tr(),
+                                title: LocaleKeys.sidebar_appName.tr() +
+                                    LocaleKeys.legal_userAgreement.tr(),
+                                content:
+                                    LocaleKeys.legal_userAgreementContent.tr(),
                               ),
                             ),
                           );
@@ -758,7 +1114,8 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                             MaterialPageRoute(
                               builder: (context) => LegalDocumentScreen(
                                 title: LocaleKeys.legal_privacyPolicy.tr(),
-                                content: LocaleKeys.legal_privacyPolicyContent.tr(),
+                                content:
+                                    LocaleKeys.legal_privacyPolicyContent.tr(),
                               ),
                             ),
                           );
@@ -766,198 +1123,14 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                     ),
                   ],
                 ),
-              ),
-            ),
+              )
           ],
-        ),
-        const VSpace(8),
-        Align(
-          alignment: Alignment.centerRight,
-          child: Opacity(
-            opacity: _agreedProtocols ? 1 : 0.5,
-            child: GestureDetector(
-              onTap: _agreedProtocols
-                  ? () => _handleUpgradePay(context, selectedPrice)
-                  : null,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B47),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '¥${_formatCurrency(selectedPrice)} 确认协议开通',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+        )
       ],
     );
   }
 
-  /// 升级按钮点击后的支付逻辑
-  ///
-  /// 当前阶段按照需求，传递「空订单号和金额」给支付工具类：
-  /// - amount: 0
-  /// - orderId: ''
-  /// 后续会在这里对接后端下单接口，使用真实的订单号与金额。
-  Future<void> _handleUpgradePay(BuildContext context, double selectedPrice) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final planConfig = _getPlanConfig(_effectivePlan);
-    final remotePlan = _effectivePlan != null ? _planConfigs[_effectivePlan!] : null;
-    final planId = remotePlan?.id;
-    if (planId == null) {
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text('无法获取计划ID，暂无法订阅'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    // 0. 先创建/更新订阅
-    final subscribed = await _createOrUpdateSubscription(
-      planId: planId,
-      billingType: _selectedDuration == PurchaseDurationOption.monthly
-          ? 'monthly'
-          : 'yearly',
-      scaffoldMessenger: scaffoldMessenger,
-    );
-    if (!subscribed) {
-      return;
-    }
-
-    // 订阅成功后刷新设置页的订阅信息（存储用量等）
-    // 支付成功后，刷新 UserWorkspaceBloc 的订阅信息，以便自动开启云同步
-    if (context.mounted) {
-        try {
-          context.read<SettingsDialogBloc>().add(const SettingsDialogEvent.initial());
-          final workspaceBloc = context.read<UserWorkspaceBloc?>();
-          if (workspaceBloc != null) {
-            Log.info('[AccountManagementView] 支付成功，刷新 UserWorkspaceBloc 订阅信息');
-            // 刷新云同步
-            final workspaceBloc = context.read<UserWorkspaceBloc>();
-            workspaceBloc.add(
-              UserWorkspaceEvent.updateCloudSyncEnabled(enabled: true),
-            );
-            // 刷新会员订阅信息（包含使用量）
-            workspaceBloc.add(
-              UserWorkspaceEvent.fetchCurrentSubscription(),
-            );
-          } else {
-            Log.warn('[AccountManagementView] 无法获取 UserWorkspaceBloc，跳过刷新订阅信息');
-          }
-        } catch (e, stackTrace) {
-          Log.error('[AccountManagementView] 刷新 UserWorkspaceBloc 订阅信息失败: $e', e, stackTrace);
-        }
-      }
-
-
-
-    // 1. 根据当前平台获取可用支付方式（macOS: Apple Pay; Windows: 微信/支付宝）
-    final methods = PaymentPlatformSupport.getAvailableMethods();
-    if (methods.isEmpty) {
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text('当前平台暂不支持支付功能'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    // 暂时默认选择第一个可用支付方式，后续可增加 UI 让用户选择
-    final method = methods.first;
-
-    // 2. 先调用后端创建支付订单接口
-    final paymentType = switch (method) {
-      PaymentMethod.applePay => PaymentType.applePay,
-      PaymentMethod.wechatPay => PaymentType.wechatPay,
-      PaymentMethod.alipay => PaymentType.alipay,
-    };
-
-    // 示例：amount 使用「元」金额，后端如需「分」可在服务器换算
-    final createRequest = PaymentCreateRequest(
-      amount: selectedPrice,
-      paymentType: paymentType,
-      productName: planConfig['title'] as String? ?? '会员订阅',
-      // 这里暂时使用 workspaceId 作为 openId，后续如果有专门的 openId 可替换
-      openId: widget.workspaceId,
-      // 回调地址先占位，后端可按需要使用
-      url: '',
-      userInfo: <String, dynamic>{
-        'userId': widget.userProfile.id.toString(),
-        'name': widget.userProfile.name,
-        'email': widget.userProfile.email,
-      },
-    );
-
-    final orderResult = await PaymentApi.createPaymentOrder(createRequest);
-
-    if (orderResult.isFailure) {
-      final error = orderResult.fold((_) => null, (e) => e);
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text(error?.msg ?? '创建支付订单失败'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    final order = orderResult.fold(
-      (order) => order,
-      (_) => null,
-    );
-    if (order == null) {
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text('创建支付订单失败'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    // 3. 调用统一支付工具类（传递真实订单号和金额）
-    final result = await PaymentUtil.pay(
-      method: method,
-      amount: (order.amount * 100).round(), // 转为整型，示例：单位分
-      currency: 'CNY',
-      orderId: order.orderId,
-      extra: <String, dynamic>{
-        'plan': planConfig['title'],
-        'duration': _selectedDuration == PurchaseDurationOption.monthly ? 'monthly' : 'yearly',
-        'displayPrice': selectedPrice,
-        'order': order.raw,
-      },
-    );
-
-    // 4. 根据支付结果提示用户
-    if (result.success) {
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text(result.message.isNotEmpty ? result.message : '支付成功'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    } else {
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text(result.message.isNotEmpty ? result.message : '支付失败'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
+  // 业务逻辑已移至 AccountManagementBloc
 
   Widget _buildFeatureItem(
     BuildContext context,
@@ -968,7 +1141,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     String buttonText = '',
   }) {
     final theme = AppFlowyTheme.of(context);
-    
+
     return Container(
       padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
       child: Row(
@@ -1007,19 +1180,20 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     // 从 SettingsDialogBloc 获取最新的用户资料，而不是使用 widget.userProfile
     final settingsBloc = context.read<SettingsDialogBloc>();
     final latestUserProfile = settingsBloc.state.userProfile;
-    
+
     // 调试：打印用户资料信息
-    Log.info('用户资料 - email: ${latestUserProfile.email}, name: ${latestUserProfile.name}');
-    
+    Log.info(
+        '用户资料 - email: ${latestUserProfile.email}, name: ${latestUserProfile.name}');
+
     // 从用户资料中获取手机号
     // 优先使用 phone 字段，如果没有则检查 email 字段
     String phoneNumber = '';
-    
+
     if (latestUserProfile.hasPhone() && latestUserProfile.phone.isNotEmpty) {
       // 优先使用 phone 字段
       phoneNumber = latestUserProfile.phone;
       Log.info('从用户资料的 phone 字段获取到手机号: $phoneNumber');
-    } else if (latestUserProfile.email.isNotEmpty && 
+    } else if (latestUserProfile.email.isNotEmpty &&
         !latestUserProfile.email.contains('@') &&
         Validator.isValidPhone(latestUserProfile.email)) {
       // 兼容旧数据：检查 email 字段是否包含手机号
@@ -1031,10 +1205,10 @@ class _AccountManagementViewState extends State<AccountManagementView> {
       _showPhoneInputDialog(context);
       return;
     }
-    
+
     // 保存外层的 context，避免在对话框关闭后访问失效的 context
     final outerContext = context;
-        
+
     showDialog(
       context: context,
       builder: (dialogContext) => IdentityVerificationDialog(
@@ -1050,7 +1224,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
 
   void _showPhoneInputDialog(BuildContext context) {
     final phoneController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1087,7 +1261,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                 );
                 return;
               }
-              
+
               // 验证手机号格式
               if (!Validator.isValidPhone(phone)) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -1098,7 +1272,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                 );
                 return;
               }
-              
+
               Navigator.of(context).pop();
               showDialog(
                 context: context,
@@ -1126,7 +1300,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     // 保存 ScaffoldMessenger 和 SettingsDialogBloc 的引用，避免在对话框关闭后访问 context
     final scaffoldMessenger = ScaffoldMessenger.of(context);
     final settingsBloc = context.read<SettingsDialogBloc>();
-    
+
     showDialog(
       context: context,
       builder: (dialogContext) => PhoneChangeDialog(
@@ -1138,7 +1312,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
               duration: Duration(seconds: 2),
             ),
           );
-          
+
           // 刷新用户资料（Rust 后端会同步从云端刷新）
           Log.info('📱 开始刷新用户资料...');
           final result = await UserBackendService.getCurrentUserProfile();
@@ -1147,11 +1321,12 @@ class _AccountManagementViewState extends State<AccountManagementView> {
               Log.info('✅ 刷新后的用户资料:');
               Log.info('   - name: ${newProfile.name}');
               Log.info('   - email: ${newProfile.email}');
-              final hasPhone = newProfile.hasPhone() && newProfile.phone.isNotEmpty;
+              final hasPhone =
+                  newProfile.hasPhone() && newProfile.phone.isNotEmpty;
               final phoneValue = hasPhone ? newProfile.phone : '(null)';
               Log.info('   - phone: $phoneValue');
               Log.info('   - phone.isEmpty: ${!hasPhone}');
-              
+
               if (!hasPhone) {
                 Log.error('⚠️ 警告：刷新后的用户资料中 phone 字段为空！');
                 Log.error('   这可能是因为：');
@@ -1162,7 +1337,7 @@ class _AccountManagementViewState extends State<AccountManagementView> {
               } else {
                 Log.info('✅ phone 字段正常: ${newProfile.phone}');
               }
-              
+
               // 通知 SettingsDialogBloc 更新用户资料
               settingsBloc.add(
                 SettingsDialogEvent.didReceiveUserProfile(newProfile),
@@ -1194,218 +1369,5 @@ class _AccountManagementViewState extends State<AccountManagementView> {
     );
   }
 
-  Future<bool> _createOrUpdateSubscription({
-    required int planId,
-    required String billingType,
-    required ScaffoldMessengerState scaffoldMessenger,
-  }) async {
-    try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-      if (baseUrl.isEmpty) {
-        Log.warn('订阅接口 baseUrl 为空');
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('无法创建订阅：服务地址为空'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        return false;
-      }
-
-      final accessToken = _extractAccessToken(widget.userProfile.token);
-      if (accessToken == null || accessToken.isEmpty) {
-        Log.warn('订阅接口缺少 access_token');
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('无法创建订阅：未登录或 token 失效'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-        return false;
-      }
-
-      final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/subscribe');
-      final body = jsonEncode({
-        'plan_id': planId,
-        'billing_type': billingType,
-      });
-
-      final response = await http.post(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-        body: body,
-      );
-
-      if (response.statusCode != 200) {
-        Log.warn('创建订阅失败: ${response.statusCode}, body: ${response.body}');
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text('创建订阅失败：HTTP ${response.statusCode}'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        return false;
-      }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final code = decoded['code'] as int? ?? -1;
-      if (code != 0) {
-        final msg = decoded['message'] as String? ?? '创建订阅失败';
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        return false;
-      }
-
-      Log.info('订阅创建/更新成功: ${decoded['data']}');
-      return true;
-    } catch (e, stackTrace) {
-      Log.error('创建订阅异常: $e', e, stackTrace);
-      scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text('创建订阅异常'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return false;
-    }
-  }
-
-  String? _extractAccessToken(String? rawToken) {
-    if (rawToken == null || rawToken.isEmpty) {
-      return null;
-    }
-    try {
-      final decoded = jsonDecode(rawToken);
-      if (decoded is Map<String, dynamic>) {
-        final accessToken = decoded['access_token'] as String?;
-        if (accessToken != null && accessToken.isNotEmpty) {
-          return accessToken;
-        }
-      }
-    } catch (_) {
-      // 不是 JSON，直接返回
-      return rawToken;
-    }
-    return null;
-  }
-
-  WorkspacePlanPB? _mapPlanCodeToPb(String code) {
-    switch (code) {
-      case 'free_local':
-        return WorkspacePlanPB.FreePlan;
-      case 'student':
-        return WorkspacePlanPB.StudentPlan;
-      case 'standard':
-        return WorkspacePlanPB.StandardPlan;
-      case 'team':
-        return WorkspacePlanPB.TeamPlan;
-      default:
-        return null;
-    }
-  }
-}
-
-class _RemotePlan {
-  const _RemotePlan({
-    required this.id,
-    required this.planCode,
-    required this.planName,
-    required this.planNameCn,
-    required this.monthlyPriceYuan,
-    required this.yearlyPriceYuan,
-    required this.cloudStorageGb,
-    required this.hasInbox,
-    required this.hasMultiDeviceSync,
-    required this.hasApiSupport,
-    required this.versionHistoryDays,
-    required this.aiChatCountPerMonth,
-    required this.aiImageGenerationPerMonth,
-    required this.hasShareLink,
-    required this.hasPublish,
-    required this.workspaceMemberLimit,
-    required this.collaborativeWorkspaceLimit,
-    required this.pagePermissionGuestEditors,
-    required this.hasSpaceMemberManagement,
-    required this.hasSpaceMemberGrouping,
-    required this.isActive,
-  });
-
-  final int? id;
-  final String planCode;
-  final String planName;
-  final String planNameCn;
-  final double? monthlyPriceYuan;
-  final double? yearlyPriceYuan;
-  final int? cloudStorageGb;
-  final bool hasInbox;
-  final bool hasMultiDeviceSync;
-  final bool hasApiSupport;
-  final int? versionHistoryDays;
-  final int? aiChatCountPerMonth;
-  final int? aiImageGenerationPerMonth;
-  final bool hasShareLink;
-  final bool hasPublish;
-  final int? workspaceMemberLimit;
-  final int? collaborativeWorkspaceLimit;
-  final int? pagePermissionGuestEditors;
-  final bool hasSpaceMemberManagement;
-  final bool hasSpaceMemberGrouping;
-  final bool isActive;
-
-  factory _RemotePlan.fromJson(Map<String, dynamic> json) {
-    double? _parseDouble(dynamic value) {
-      if (value == null) return null;
-      if (value is num) return value.toDouble();
-      final str = value.toString();
-      return double.tryParse(str);
-    }
-    int? _parseInt(dynamic v) {
-      if (v == null) return null;
-      if (v is num) return v.toInt();
-      return int.tryParse(v.toString());
-    }
-
-    return _RemotePlan(
-      id: _parseInt(json['id']),
-      planCode: json['plan_code'] as String? ?? '',
-      planName: json['plan_name'] as String? ?? '',
-      planNameCn: json['plan_name_cn'] as String? ?? '',
-      monthlyPriceYuan: _parseDouble(json['monthly_price_yuan']),
-      yearlyPriceYuan: _parseDouble(json['yearly_price_yuan']),
-      cloudStorageGb: _parseInt(json['cloud_storage_gb']),
-      hasInbox: json['has_inbox'] as bool? ?? false,
-      hasMultiDeviceSync: json['has_multi_device_sync'] as bool? ?? false,
-      hasApiSupport: json['has_api_support'] as bool? ?? false,
-      versionHistoryDays: _parseInt(json['version_history_days']),
-      aiChatCountPerMonth: _parseInt(json['ai_chat_count_per_month']),
-      aiImageGenerationPerMonth: _parseInt(json['ai_image_generation_per_month']),
-      hasShareLink: json['has_share_link'] as bool? ?? false,
-      hasPublish: json['has_publish'] as bool? ?? false,
-      workspaceMemberLimit: _parseInt(json['workspace_member_limit']),
-      collaborativeWorkspaceLimit: _parseInt(json['collaborative_workspace_limit']),
-      pagePermissionGuestEditors: _parseInt(json['page_permission_guest_editors']),
-      hasSpaceMemberManagement:
-          json['has_space_member_management'] as bool? ?? false,
-      hasSpaceMemberGrouping:
-          json['has_space_member_grouping'] as bool? ?? false,
-      isActive: json['is_active'] as bool? ?? true,
-    );
-  }
-
-  // 、、**字段说明：**
-  // - `cloud_storage_gb`: -1表示无，0表示无限制，正数表示具体GB数
-  // - `version_history_days`: -1表示无版本历史
-  // - `ai_chat_count_per_month`: -1表示无限制
-  // - `ai_image_generation_per_month`: -1表示无限制
-  // - `workspace_member_limit`: -1表示无限制
-  // - `collaborative_workspace_limit`: -1表示无限制，0表示仅限1个
-  // - `page_permission_guest_editors`: -1表示无，0表示仅查看，正数表示可编辑的访客数量
+// 所有业务逻辑已移至 AccountManagementBloc
 }

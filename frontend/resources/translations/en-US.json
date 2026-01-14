@@ -1077,7 +1077,10 @@
       "monthlyInterval": "Monthly",
       "monthlyPriceInfo": "per seat billed monthly",
       "annualInterval": "Annually",
-      "annualPriceInfo": "per seat billed annually"
+      "annualPriceInfo": "per seat billed annually",
+      "membershipUpgrades":"会员升级",
+      "storageAddon": "空间补充包",
+      "storageSpace": "存储空间"
     },
     "comparePlanDialog": {
       "title": "Compare & select plan",

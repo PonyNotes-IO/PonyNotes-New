@@ -1145,6 +1145,55 @@
         "textAlignRight": "右对齐文本",
         "codeBlockDeleteTwoSpaces": "删除代码块中行首的两个空格"
       }
+    },
+    "billingPage": {
+      "menuLabel": "账单",
+      "title": "账单",
+      "plan": {
+        "title": "Plan",
+        "freeLabel": "Free",
+        "proLabel": "Pro",
+        "planButtonLabel": "Change plan",
+        "billingPeriod": "Billing period",
+        "periodButtonLabel": "Edit period"
+      },
+      "paymentDetails": {
+        "title": "Payment details",
+        "methodLabel": "Payment method",
+        "methodButtonLabel": "Edit method"
+      },
+      "addons": {
+        "title": "Add-ons",
+        "addLabel": "Add",
+        "removeLabel": "Remove",
+        "renewLabel": "Renew",
+        "aiMax": {
+          "label": "AI Max",
+          "description": "Unlock unlimited AI and advanced models",
+          "activeDescription": "Next invoice due on {}",
+          "canceledDescription": "AI Max will be available until {}"
+        },
+        "aiOnDevice": {
+          "label": "AI On-device for Mac",
+          "description": "Unlock unlimited AI On-device on your device",
+          "activeDescription": "Next invoice due on {}",
+          "canceledDescription": "AI On-device for Mac will be available until {}"
+        },
+        "removeDialog": {
+          "title": "Remove {}",
+          "description": "Are you sure you want to remove {plan}? You will lose access to the features and benefits of {plan} immediately."
+        }
+      },
+      "currentPeriodBadge": "CURRENT",
+      "changePeriod": "Change period",
+      "planPeriod": "{} period",
+      "monthlyInterval": "Monthly",
+      "monthlyPriceInfo": "per seat billed monthly",
+      "annualInterval": "Annually",
+      "annualPriceInfo": "per seat billed annually",
+      "membershipUpgrades":"会员升级",
+      "storageAddon": "空间补充包",
+      "storageSpace": "存储空间"
     }
   },
   "grid": {
