@@ -843,26 +843,33 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                           children: [
                             FlowyText(
                               plan.name,
-                              fontSize: 18,
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: theme.textColorScheme.primary,
                               textAlign: TextAlign.center,
                             ),
                             const VSpace(8),
-                            FlowyText(
-                              plan.isStorage
-                                  ? plan.storageLabel
-                                  : plan.tokensLabel,
-                              fontSize: 14,
-                              color: theme.textColorScheme.secondary,
-                              textAlign: TextAlign.center,
-                            ),
-                            const VSpace(8),
-                            FlowyText(
-                              '¥${plan.priceYuanStr}',
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: Theme.of(context).colorScheme.primary,
+                            Text.rich(
+                              TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: "¥",
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.textColorScheme.primary,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: '${plan.priceYuanStr}',
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.textColorScheme.primary,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
