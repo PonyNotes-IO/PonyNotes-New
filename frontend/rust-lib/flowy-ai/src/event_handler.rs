@@ -35,6 +35,8 @@ pub(crate) async fn stream_chat_message_handler(
     format,
     prompt_id,
     model,
+    enable_thinking,
+    enable_web_search,
   } = data;
 
   let message_type = match message_type {
@@ -52,6 +54,8 @@ pub(crate) async fn stream_chat_message_handler(
     format,
     prompt_id,
     model: model.map(AIModel::from),
+    enable_thinking,
+    enable_web_search,
   };
 
   let ai_manager = upgrade_ai_manager(ai_manager)?;

@@ -15,11 +15,13 @@ class AIChatViewService {
   /// [initialMessage] 初始消息（可选）
   /// [selectedModelId] 选定的模型ID（可选）
   /// [enableDeepThinking] 是否启用深度思考（可选）
+  /// [enableWebSearch] 是否启用全网搜索（可选）
   static Future<ViewPB?> createAndOpenAIChat({
     required String parentViewId,
     String? initialMessage,
     String? selectedModelId,
     bool enableDeepThinking = false,
+    bool enableWebSearch = false,
   }) async {
     try {
       // 1. 生成Chat名称
@@ -41,6 +43,9 @@ class AIChatViewService {
       }
       if (enableDeepThinking) {
         extraData['enable_deep_thinking'] = 'true';
+      }
+      if (enableWebSearch) {
+        extraData['enable_web_search'] = 'true';
       }
 
       // 将额外数据转换为JSON字符串

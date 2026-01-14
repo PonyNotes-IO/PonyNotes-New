@@ -87,19 +87,44 @@ impl Stream for AISessionStream {
   }
 }
 
-/// 调用新的 AI 会话接口
+/// 调用新的 AI 会话接口（支持图片和文件）
 pub async fn stream_ai_session(
   base_url: &str,
   message: &str,
   preferred_model: Option<String>,
   token: Option<String>,
   enable_thinking: bool,
+  enable_web_search: bool,
+) -> Result<AISessionStream, FlowyError> {
+  stream_ai_session_with_attachments(
+    base_url,
+    message,
+    preferred_model,
+    token,
+    enable_thinking,
+    enable_web_search,
+    None,
+    None,
+  ).await
+}
+
+/// 调用新的 AI 会话接口（完整版本，支持图片和文件）
+pub async fn stream_ai_session_with_attachments(
+  base_url: &str,
+  message: &str,
+  preferred_model: Option<String>,
+  token: Option<String>,
+  enable_thinking: bool,
+  enable_web_search: bool,
+  images: Option<Vec<String>>,  // base64编码的图片
+  files: Option<Vec<serde_json::Value>>,  // 文件数据
 ) -> Result<AISessionStream, FlowyError> {
   use reqwest::Client;
   use std::time::Duration;
 
   let url = format!("{}/api/ai/chat/session", base_url);
-  trace!("[AISession] 调用新接口: {}, model: {:?}, enable_thinking: {}", url, preferred_model, enable_thinking);
+  trace!("[AISession] 调用新接口: {}, model: {:?}, enable_thinking: {}, enable_web_search: {}, has_images: {}, has_files: {}", 
+    url, preferred_model, enable_thinking, enable_web_search, images.is_some(), files.is_some());
 
   let client = Client::new();
   let mut body = serde_json::json!({
@@ -112,6 +137,28 @@ pub async fn stream_ai_session(
   
   if enable_thinking {
     body["enable_thinking"] = serde_json::Value::Bool(true);
+  }
+  
+  if enable_web_search {
+    body["enable_web_search"] = serde_json::Value::Bool(true);
+  }
+  
+  // 添加图片数据
+  if let Some(imgs) = images {
+    if !imgs.is_empty() {
+      body["has_images"] = serde_json::Value::Bool(true);
+      body["images"] = serde_json::Value::Array(
+        imgs.into_iter().map(serde_json::Value::String).collect()
+      );
+    }
+  }
+  
+  // 添加文件数据
+  if let Some(fs) = files {
+    if !fs.is_empty() {
+      body["has_files"] = serde_json::Value::Bool(true);
+      body["files"] = serde_json::Value::Array(fs);
+    }
   }
 
   let mut request = client

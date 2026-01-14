@@ -105,11 +105,28 @@ where
     format: ResponseFormat,
     ai_model: AIModel,
   ) -> Result<StreamAnswer, FlowyError> {
+    // 默认不启用深度思考和全网搜索
+    self.stream_answer_with_thinking(workspace_id, chat_id, question_id, format, ai_model, false, false).await
+  }
+
+  async fn stream_answer_with_thinking(
+    &self,
+    workspace_id: &Uuid,
+    chat_id: &Uuid,
+    question_id: i64,
+    format: ResponseFormat,
+    ai_model: AIModel,
+    enable_thinking: bool,
+    enable_web_search: bool,
+  ) -> Result<StreamAnswer, FlowyError> {
     trace!(
-      "[客户端] stream_answer: workspace_id={}, chat_id={}, question_id={}, format={:?}, model: {:?}",
-      workspace_id, chat_id, question_id, format, ai_model,
+      "[客户端] stream_answer_with_thinking: workspace_id={}, chat_id={}, question_id={}, format={:?}, model: {:?}, enable_thinking: {}",
+      workspace_id, chat_id, question_id, format, ai_model, enable_thinking,
     );
     let try_get_client = self.inner.try_get_client();
+    
+    // TODO: 后续需要修改 stream_answer_v3 方法支持 enable_thinking 参数
+    // 目前先忽略 enable_thinking 参数，直接调用现有API
     let result = try_get_client?
       .stream_answer_v3(
         workspace_id,

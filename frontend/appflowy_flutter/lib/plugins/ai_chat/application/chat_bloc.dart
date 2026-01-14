@@ -37,6 +37,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required this.userId,
     this.initialMessage,
     this.preferredModelId,
+    this.enableDeepThinking = false,
+    this.enableWebSearch = false,
   })  : chatController = InMemoryChatController(),
         listener = ChatMessageListener(chatId: chatId),
         super(ChatState.initial()) {
@@ -47,7 +49,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       chatController: chatController,
     );
 
-    _streamManager = ChatStreamManager(chatId);
+    _streamManager = ChatStreamManager(
+      chatId, 
+      enableDeepThinking: enableDeepThinking,
+      enableWebSearch: enableWebSearch,
+    );
     _settingsManager = ChatSettingsManager(chatId: chatId);
 
     _startListening();
@@ -75,6 +81,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       Log.info('ℹ️ ChatBloc: 检测到初始消息（将在加载消息后判断是否发送）');
       Log.info('   - 消息: $initialMessage');
       Log.info('   - 首选模型: $preferredModelId');
+      Log.info('   - 深度思考: ${enableDeepThinking ? "开启" : "关闭"}');
+      Log.info('   - 全网搜索: ${enableWebSearch ? "开启" : "关闭"}');
     } else {
       Log.info('ℹ️ ChatBloc: 没有初始消息');
     }
@@ -84,6 +92,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final String userId;
   final String? initialMessage;
   final String? preferredModelId;
+  final bool enableDeepThinking;
+  final bool enableWebSearch;
   String? _workspaceId;
   final ChatMessageListener listener;
   final ChatController chatController;

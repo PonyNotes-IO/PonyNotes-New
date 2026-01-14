@@ -150,6 +150,8 @@ impl Chat {
       question.message_id,
       format,
       preferred_ai_model,
+      params.enable_thinking,
+      params.enable_web_search,
     );
 
     let question_pb = ChatMessagePB::from(question);
@@ -188,6 +190,8 @@ impl Chat {
       question_id,
       format,
       ai_model,
+      false, // enable_thinking默认为false
+      false, // enable_web_search默认为false
     );
 
     Ok(())
@@ -203,6 +207,8 @@ impl Chat {
     question_id: i64,
     format: ResponseFormat,
     ai_model: AIModel,
+    enable_thinking: bool,
+    enable_web_search: bool,
   ) {
     let stop_stream = self.stop_stream.clone();
     let chat_id = self.chat_id;
@@ -210,7 +216,7 @@ impl Chat {
     tokio::spawn(async move {
       let mut answer_sink = IsolateSink::new(Isolate::new(answer_stream_port));
       match cloud_service
-        .stream_answer(&workspace_id, &chat_id, question_id, format, ai_model)
+        .stream_answer_with_thinking(&workspace_id, &chat_id, question_id, format, ai_model, enable_thinking, enable_web_search)
         .await
       {
         Ok(mut stream) => {
