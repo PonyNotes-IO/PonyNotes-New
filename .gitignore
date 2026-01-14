@@ -136,3 +136,21 @@ frontend/appflowy_flutter/packages/appflowy_backend/macos/libdart_ffi.a.arm64
 
 frontend/appflowy_flutter/packages/appflowy_backend/macos/libdart_ffi.a.orig
 frontend/appflowy_flutter/packages/appflowy_backend/macos/libdart_ffi.a.backup
+
+# 敏感信息和凭证（安全加固）
+常用/
+**/账号.txt
+**/密码.txt
+secrets/
+credentials/
+**/aliyun-*.json
+**/aliyun_*.txt
+**/aliyun_*.env
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+config/local.yml
+config/production.yml

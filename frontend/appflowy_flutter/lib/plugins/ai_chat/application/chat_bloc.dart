@@ -37,6 +37,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required this.userId,
     this.initialMessage,
     this.preferredModelId,
+    this.enableDeepThinking = false,
+    this.enableWebSearch = false,
   })  : chatController = InMemoryChatController(),
         listener = ChatMessageListener(chatId: chatId),
         super(ChatState.initial()) {
@@ -47,7 +49,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       chatController: chatController,
     );
 
-    _streamManager = ChatStreamManager(chatId);
+    _streamManager = ChatStreamManager(
+      chatId, 
+      enableDeepThinking: enableDeepThinking,
+      enableWebSearch: enableWebSearch,
+    );
     _settingsManager = ChatSettingsManager(chatId: chatId);
 
     _startListening();
@@ -75,6 +81,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       Log.info('ℹ️ ChatBloc: 检测到初始消息（将在加载消息后判断是否发送）');
       Log.info('   - 消息: $initialMessage');
       Log.info('   - 首选模型: $preferredModelId');
+      Log.info('   - 深度思考: ${enableDeepThinking ? "开启" : "关闭"}');
+      Log.info('   - 全网搜索: ${enableWebSearch ? "开启" : "关闭"}');
     } else {
       Log.info('ℹ️ ChatBloc: 没有初始消息');
     }
@@ -84,6 +92,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final String userId;
   final String? initialMessage;
   final String? preferredModelId;
+  final bool enableDeepThinking;
+  final bool enableWebSearch;
   String? _workspaceId;
   final ChatMessageListener listener;
   final ChatController chatController;
@@ -218,11 +228,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Log.info('   - 接收到消息数: ${messages.length}');
     Log.info('   - 当前controller中消息数: ${chatController.messages.length}');
     Log.info('   - initialMessage: $initialMessage');
-    Log.info('   - Stack trace: ${StackTrace.current}');
     
+    // 【修复消息重复】去重：只插入不存在的消息
+    int insertedCount = 0;
     for (final message in messages) {
-      await chatController.insert(message, index: 0);
+      // 检查消息是否已存在
+      final exists = chatController.messages.any((m) => m.id == message.id);
+      if (!exists) {
+        await chatController.insert(message, index: 0);
+        insertedCount++;
+      } else {
+        Log.info('⚠️  ChatBloc: 跳过重复消息 id=${message.id}');
+      }
     }
+    Log.info('   - 实际插入消息数: $insertedCount');
+    Log.info('   - 插入后controller消息总数: ${chatController.messages.length}');
 
     // Check if emit is still valid after async operations
     if (emit.isDone) {
@@ -455,6 +475,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       },
       latestMessageCallback: (list) {
         if (!isClosed) {
+          // 【修复消息重复】必须先调用processReceivedMessage建立ID映射
+          for (final pb in list.messages) {
+            _messageHandler.processReceivedMessage(pb);
+          }
           final messages =
               list.messages.map(_messageHandler.createTextMessage).toList();
           add(ChatEvent.didLoadLatestMessages(messages));
@@ -462,6 +486,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       },
       prevMessageCallback: (list) {
         if (!isClosed) {
+          // 【修复消息重复】必须先调用processReceivedMessage建立ID映射
+          for (final pb in list.messages) {
+            _messageHandler.processReceivedMessage(pb);
+          }
           final messages =
               list.messages.map(_messageHandler.createTextMessage).toList();
           add(ChatEvent.didLoadPreviousMessages(messages, list.hasMore));

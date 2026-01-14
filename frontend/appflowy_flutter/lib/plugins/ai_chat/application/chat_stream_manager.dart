@@ -11,8 +11,10 @@ import 'chat_message_stream.dart';
 
 /// Manages chat streaming operations
 class ChatStreamManager {
-  ChatStreamManager(this.chatId);
+  ChatStreamManager(this.chatId, {this.enableDeepThinking = false, this.enableWebSearch = false});
   final String chatId;
+  final bool enableDeepThinking;
+  final bool enableWebSearch;
 
   AnswerStream? answerStream;
   QuestionStream? questionStream;
@@ -45,6 +47,8 @@ class ChatStreamManager {
       messageType: ChatMessageTypePB.User,
       questionStreamPort: Int64(questionStream!.nativePort),
       answerStreamPort: Int64(answerStream!.nativePort),
+      enableThinking: enableDeepThinking,
+      enableWebSearch: enableWebSearch,
     );
 
     if (format != null) {

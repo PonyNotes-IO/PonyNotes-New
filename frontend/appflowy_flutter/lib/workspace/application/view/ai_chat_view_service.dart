@@ -15,11 +15,13 @@ class AIChatViewService {
   /// [initialMessage] 初始消息（可选）
   /// [selectedModelId] 选定的模型ID（可选）
   /// [enableDeepThinking] 是否启用深度思考（可选）
+  /// [enableWebSearch] 是否启用全网搜索（可选）
   static Future<ViewPB?> createAndOpenAIChat({
     required String parentViewId,
     String? initialMessage,
     String? selectedModelId,
     bool enableDeepThinking = false,
+    bool enableWebSearch = false,
   }) async {
     try {
       // 1. 生成Chat名称
@@ -42,6 +44,9 @@ class AIChatViewService {
       if (enableDeepThinking) {
         extraData['enable_deep_thinking'] = 'true';
       }
+      if (enableWebSearch) {
+        extraData['enable_web_search'] = 'true';
+      }
 
       // 将额外数据转换为JSON字符串
       String? extraJson;
@@ -53,11 +58,13 @@ class AIChatViewService {
       // 3. 创建Chat类型的View
       // 注意：AppFlowy的createView的ext参数可能不支持直接存储到extra字段
       // 我们可能需要在创建后再更新extra字段
+      // AI会话是用户的个人隐私数据，应该创建在私有空间
       final result = await ViewBackendService.createView(
         layoutType: ViewLayoutPB.Chat,
         parentViewId: parentViewId,
         name: chatName,
         openAfterCreate: true,
+        section: ViewSectionPB.Private,  // 指定为私有空间
       );
 
       return result.fold(

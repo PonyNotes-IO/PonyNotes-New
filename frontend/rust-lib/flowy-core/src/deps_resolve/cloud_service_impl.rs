@@ -752,6 +752,23 @@ impl ChatCloudService for ServerProvider {
       .await
   }
 
+  async fn stream_answer_with_thinking(
+    &self,
+    workspace_id: &Uuid,
+    chat_id: &Uuid,
+    question_id: i64,
+    format: ResponseFormat,
+    ai_model: AIModel,
+    enable_thinking: bool,
+    enable_web_search: bool,
+  ) -> Result<StreamAnswer, FlowyError> {
+    let server = self.get_server()?;
+    server
+      .chat_service()
+      .stream_answer_with_thinking(workspace_id, chat_id, question_id, format, ai_model, enable_thinking, enable_web_search)
+      .await
+  }
+
   async fn get_chat_messages(
     &self,
     workspace_id: &Uuid,

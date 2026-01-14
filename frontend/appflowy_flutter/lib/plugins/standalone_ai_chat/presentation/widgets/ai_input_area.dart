@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
 import '../ai_welcome_theme.dart';
@@ -20,8 +21,8 @@ class AIInputArea extends StatefulWidget {
   });
 
   /// 发送消息的回调（使用AIModel系统）
-  /// 参数：message - 消息内容, model - 选择的模型, images - 图片列表, enableDeepThinking - 是否启用深度思考
-  final Function(String message, AIModel? model, List<ChatImage>? images, bool enableDeepThinking)? onMessageSent;
+  /// 参数：message - 消息内容, model - 选择的模型, images - 图片列表, enableDeepThinking - 是否启用深度思考, enableWebSearch - 是否启用全网搜索
+  final Function(String message, AIModel? model, List<ChatImage>? images, bool enableDeepThinking, bool enableWebSearch)? onMessageSent;
   
   /// 点击聊天记录按钮的回调（若提供，则在工具栏显示图标按钮）
   final VoidCallback? onChatHistoryTap;
@@ -130,14 +131,15 @@ class _AIInputAreaState extends State<AIInputArea> {
     debugPrint('   - 模型: ${_selectedModel?.name} (${_selectedModel?.id})');
     debugPrint('   - 图片数: ${_selectedImages.length}');
     debugPrint('   - 深度思考: ${_isDeepThinkingEnabled ? "开启" : "关闭"}');
+    debugPrint('   - 全网搜索: ${_isWebSearchEnabled ? "开启" : "关闭"}');
 
     // 清空输入框和图片
     _textController.clear();
     final images = List<ChatImage>.from(_selectedImages);
     _selectedImages.clear();
     
-    // 调用回调，使用AIModel系统，传递深度思考状态
-    widget.onMessageSent?.call(text, _selectedModel, images.isNotEmpty ? images : null, _isDeepThinkingEnabled);
+    // 调用回调，使用AIModel系统，传递深度思考和全网搜索状态
+    widget.onMessageSent?.call(text, _selectedModel, images.isNotEmpty ? images : null, _isDeepThinkingEnabled, _isWebSearchEnabled);
     
     // 发送后收起键盘
     FocusScope.of(context).unfocus();
@@ -145,14 +147,29 @@ class _AIInputAreaState extends State<AIInputArea> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        // 点击其他区域时关闭下拉框
-        if (_isDropdownOpen) {
-          _closeDropdown();
+    return KeyboardListener(
+      focusNode: FocusNode(),
+      onKeyEvent: (KeyEvent event) {
+        // 监听粘贴快捷键 (Ctrl+V 或 Cmd+V)
+        if (event is KeyDownEvent) {
+          final isControlPressed = HardwareKeyboard.instance.isControlPressed || 
+                                   HardwareKeyboard.instance.isMetaPressed;
+          final isVPressed = event.logicalKey == LogicalKeyboardKey.keyV;
+          
+          if (isControlPressed && isVPressed) {
+            // 检测到粘贴快捷键，尝试从剪贴板粘贴图片
+            _pasteImageFromClipboard();
+          }
         }
       },
-      child: Container(
+      child: GestureDetector(
+        onTap: () {
+          // 点击其他区域时关闭下拉框
+          if (_isDropdownOpen) {
+            _closeDropdown();
+          }
+        },
+        child: Container(
         margin: widget.customMargin ?? AIWelcomeTheme.inputContainerPadding,
         width: widget.customWidth ?? AIWelcomeTheme.inputContainerWidth,
         constraints: BoxConstraints(
@@ -238,6 +255,7 @@ class _AIInputAreaState extends State<AIInputArea> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -431,13 +449,14 @@ class _AIInputAreaState extends State<AIInputArea> {
     _closeDropdown();
   }
 
-  /// 选择图片
+  /// 选择图片 - 直接打开文件选择器
   Future<void> _selectImage() async {
     if (_isDropdownOpen) {
       _closeDropdown();
     }
     
-    final image = await _imageService.showImagePickerDialog(context);
+    // 直接从文件系统选择图片，不显示选择对话框
+    final image = await _imageService.pickImageFromFile();
     if (image != null) {
       setState(() {
         _selectedImages.add(image);
@@ -449,6 +468,19 @@ class _AIInputAreaState extends State<AIInputArea> {
           _focusNode.requestFocus();
         }
       });
+    }
+  }
+
+  /// 从剪贴板粘贴图片
+  Future<void> _pasteImageFromClipboard() async {
+    final image = await _imageService.pasteImageFromClipboard();
+    if (image != null) {
+      setState(() {
+        _selectedImages.add(image);
+      });
+      debugPrint('📋 从剪贴板粘贴图片成功');
+    } else {
+      debugPrint('📋 剪贴板中没有图片');
     }
   }
 
@@ -759,3 +791,4 @@ class _AIInputAreaState extends State<AIInputArea> {
     );
   }
 }
+

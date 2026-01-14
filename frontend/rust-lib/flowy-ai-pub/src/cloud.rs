@@ -127,6 +127,17 @@ pub trait ChatCloudService: Send + Sync + 'static {
     ai_model: AIModel,
   ) -> Result<StreamAnswer, FlowyError>;
 
+  async fn stream_answer_with_thinking(
+    &self,
+    workspace_id: &Uuid,
+    chat_id: &Uuid,
+    question_id: i64,
+    format: ResponseFormat,
+    ai_model: AIModel,
+    enable_thinking: bool,
+    enable_web_search: bool,
+  ) -> Result<StreamAnswer, FlowyError>;
+
   async fn get_answer(
     &self,
     workspace_id: &Uuid,

@@ -60,6 +60,7 @@ impl EventIntegrationTest {
       format: None,
       prompt_id: None,
       model: None,
+      enable_thinking: false,
     };
 
     EventBuilder::new(self.clone())

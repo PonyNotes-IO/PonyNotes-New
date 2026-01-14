@@ -110,12 +110,27 @@ impl ChatCloudService for LocalChatServiceImpl {
 
   async fn stream_answer(
     &self,
-    _workspace_id: &Uuid,
+    workspace_id: &Uuid,
     chat_id: &Uuid,
     question_id: i64,
     format: ResponseFormat,
     ai_model: AIModel,
   ) -> Result<StreamAnswer, FlowyError> {
+    // 本地AI不支持深度思考模式和全网搜索，直接调用默认方法
+    self.stream_answer_with_thinking(workspace_id, chat_id, question_id, format, ai_model, false, false).await
+  }
+
+  async fn stream_answer_with_thinking(
+    &self,
+    _workspace_id: &Uuid,
+    chat_id: &Uuid,
+    question_id: i64,
+    format: ResponseFormat,
+    ai_model: AIModel,
+    _enable_thinking: bool,
+    _enable_web_search: bool,
+  ) -> Result<StreamAnswer, FlowyError> {
+    // 本地AI不支持深度思考模式和全网搜索，忽略这些参数
     if self.local_ai.is_ready().await {
       let content = self.get_message_content(question_id)?;
       self

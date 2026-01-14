@@ -105,7 +105,7 @@ class _HomePageState extends State<HomePage> {
 
   /// 处理来自AIInputArea的消息发送
   /// 改为创建原生AI Chat视图
-  void _handleMessageSent(String message, AIModel? selectedModel, List<ChatImage>? images, bool enableDeepThinking) async {
+  void _handleMessageSent(String message, AIModel? selectedModel, List<ChatImage>? images, bool enableDeepThinking, bool enableWebSearch) async {
     if (message.isEmpty) return;
     
     Log.info('🔄 主页: 处理消息发送');
@@ -113,6 +113,7 @@ class _HomePageState extends State<HomePage> {
     Log.info('   - 模型: ${selectedModel?.name} (${selectedModel?.id})');
     Log.info('   - 图片数: ${images?.length ?? 0}');
     Log.info('   - 深度思考: ${enableDeepThinking ? "开启" : "关闭"}');
+    Log.info('   - 全网搜索: ${enableWebSearch ? "开启" : "关闭"}');
     
     try {
       // 1. 获取当前workspace ID
@@ -131,6 +132,7 @@ class _HomePageState extends State<HomePage> {
         initialMessage: message,
         selectedModelId: selectedModel?.id,
         enableDeepThinking: enableDeepThinking,
+        enableWebSearch: enableWebSearch,
       );
 
       if (view == null) {

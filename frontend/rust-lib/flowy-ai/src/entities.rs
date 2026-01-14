@@ -76,6 +76,12 @@ pub struct StreamChatPayloadPB {
 
   #[pb(index = 8, one_of)]
   pub model: Option<AIModelPB>,
+
+  #[pb(index = 9)]
+  pub enable_thinking: bool,
+
+  #[pb(index = 10)]
+  pub enable_web_search: bool,
 }
 
 #[derive(Default, Debug)]
@@ -88,6 +94,8 @@ pub struct StreamMessageParams {
   pub format: Option<PredefinedFormatPB>,
   pub prompt_id: Option<String>,
   pub model: Option<AIModel>,
+  pub enable_thinking: bool,
+  pub enable_web_search: bool,
 }
 
 #[derive(Default, ProtoBuf, Validate, Clone, Debug)]

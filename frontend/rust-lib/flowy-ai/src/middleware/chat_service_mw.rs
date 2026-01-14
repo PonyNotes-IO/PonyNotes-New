@@ -130,13 +130,27 @@ impl ChatCloudService for ChatServiceMiddleware {
 
   async fn stream_answer(
     &self,
-    _workspace_id: &Uuid,
+    workspace_id: &Uuid,
     chat_id: &Uuid,
     question_id: i64,
     format: ResponseFormat,
     ai_model: AIModel,
   ) -> Result<StreamAnswer, FlowyError> {
-    info!("[Middleware] stream_answer use model: {:?}", ai_model);
+    // 默认不启用深度思考和全网搜索
+    self.stream_answer_with_thinking(workspace_id, chat_id, question_id, format, ai_model, false, false).await
+  }
+
+  async fn stream_answer_with_thinking(
+    &self,
+    _workspace_id: &Uuid,
+    chat_id: &Uuid,
+    question_id: i64,
+    format: ResponseFormat,
+    ai_model: AIModel,
+    enable_thinking: bool,
+    enable_web_search: bool,
+  ) -> Result<StreamAnswer, FlowyError> {
+    info!("[Middleware] stream_answer_with_thinking use model: {:?}, enable_thinking: {}, enable_web_search: {}", ai_model, enable_thinking, enable_web_search);
     if ai_model.is_local {
       if self.local_ai.is_ready().await {
         let content = self.get_message_content(question_id)?;
@@ -215,10 +229,9 @@ impl ChatCloudService for ChatServiceMiddleware {
         error!("[Middleware] 无法获取有效的 token，请求将失败");
       }
       
-      // 调用新的 AI 会话接口
-      // TODO: 从view的extra字段或配置中读取深度思考状态
-      let enable_thinking = false; // 暂时设为false，后续可以从view的extra字段读取
-      let stream = stream_ai_session(base_url, &content, Some(model_id), token, enable_thinking).await?;
+      // 调用新的 AI 会话接口，传递深度思考和全网搜索参数
+      info!("[Middleware] 调用 AI 会话接口，enable_thinking: {}, enable_web_search: {}", enable_thinking, enable_web_search);
+      let stream = stream_ai_session(base_url, &content, Some(model_id), token, enable_thinking, enable_web_search).await?;
       
       // 将 AISessionStreamValue 转换为 QuestionStreamValue
       let converted_stream = stream.map(|result| {
