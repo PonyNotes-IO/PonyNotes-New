@@ -9,6 +9,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -39,23 +40,25 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
           // 确保会员信息已加载
           final currentSubscription = workspaceState.currentSubscription;
           final subscriptionInfo = workspaceState.workspaceSubscriptionInfo;
-          final isCloudSyncEnabled = workspaceState.isCloudSyncEnabled; // 从 Bloc 状态中获取云同步开关状态
-          
+          final isCloudSyncEnabled =
+              workspaceState.isCloudSyncEnabled; // 从 Bloc 状态中获取云同步开关状态
+
           // 如果会员信息还没有加载，触发获取
           if (currentSubscription == null) {
             workspaceBloc.add(UserWorkspaceEvent.fetchCurrentSubscription());
           }
-          
+
           // 如果工作空间订阅信息还没有加载，触发获取
           if (subscriptionInfo == null) {
             final workspaceId = workspaceState.currentWorkspace?.workspaceId;
             if (workspaceId != null && workspaceId.isNotEmpty) {
               workspaceBloc.add(
-                UserWorkspaceEvent.fetchWorkspaceSubscriptionInfo(workspaceId: workspaceId),
+                UserWorkspaceEvent.fetchWorkspaceSubscriptionInfo(
+                    workspaceId: workspaceId),
               );
             }
           }
-          
+
           return _buildCloudSyncIcon(
             context,
             () => _showCloudSyncSettings(
@@ -93,20 +96,22 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     required bool isCloudSyncEnabled,
   }) async {
     // 获取按钮的位置信息
-    final RenderBox? renderBox = _buttonKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? renderBox =
+        _buttonKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
-    
+
     final Offset buttonPosition = renderBox.localToGlobal(Offset.zero);
     final Size buttonSize = renderBox.size;
-    
-    Log.info('[云同步] 显示弹框，会员信息状态: subscriptionInfo=${subscriptionInfo?.plan}, currentSubscription=${currentSubscription?.subscription?.planCode}');
-    
+
+    Log.info(
+        '[云同步] 显示弹框，会员信息状态: subscriptionInfo=${subscriptionInfo?.plan}, currentSubscription=${currentSubscription?.subscription?.planCode}');
+
     // 判断会员状态
     final membershipStatus = _determineMembershipStatus(
       subscriptionInfo,
       currentSubscription,
     );
-    
+
     Log.info('[云同步] 判断会员状态: $membershipStatus');
 
     if (!mounted) return;
@@ -127,18 +132,22 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
             bloc: workspaceBloc,
             builder: (builderContext, state) {
               // 获取最新的会员信息（优先使用状态中的最新数据）
-              final latestSubscriptionInfo = state.workspaceSubscriptionInfo ?? subscriptionInfo;
-              final latestCurrentSubscription = state.currentSubscription ?? currentSubscription;
-              final latestIsCloudSyncEnabled = state.isCloudSyncEnabled; // 从 Bloc 状态中获取最新的云同步开关状态
-              
+              final latestSubscriptionInfo =
+                  state.workspaceSubscriptionInfo ?? subscriptionInfo;
+              final latestCurrentSubscription =
+                  state.currentSubscription ?? currentSubscription;
+              final latestIsCloudSyncEnabled =
+                  state.isCloudSyncEnabled; // 从 Bloc 状态中获取最新的云同步开关状态
+
               // 重新判断会员状态（使用最新的数据）
               final latestMembershipStatus = _determineMembershipStatus(
                 latestSubscriptionInfo,
                 latestCurrentSubscription,
               );
-              
-              Log.info('[云同步弹框] 更新会员信息: subscriptionInfo=${latestSubscriptionInfo?.plan}, currentSubscription=${latestCurrentSubscription?.subscription?.planCode}, status=$latestMembershipStatus, isCloudSyncEnabled=$latestIsCloudSyncEnabled');
-              
+
+              Log.info(
+                  '[云同步弹框] 更新会员信息: subscriptionInfo=${latestSubscriptionInfo?.plan}, currentSubscription=${latestCurrentSubscription?.subscription?.planCode}, status=$latestMembershipStatus, isCloudSyncEnabled=$latestIsCloudSyncEnabled');
+
               return _buildDialogContent(
                 originalContext, // 使用原始 context，用于访问 UserWorkspaceBloc
                 dialogContext, // dialog context，用于关闭弹框
@@ -215,7 +224,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
                 // 打开设置对话框，并跳转到会员升级页面
                 try {
                   // 使用原始 context（不是 dialogContext）来打开设置对话框
-                  final userProfile = context.read<UserWorkspaceBloc>().state.userProfile;
+                  final userProfile =
+                      context.read<UserWorkspaceBloc>().state.userProfile;
                   final workspaceBloc = context.read<UserWorkspaceBloc>();
                   showSettingsDialog(
                     context,
@@ -242,15 +252,17 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     // 优先使用 currentSubscription 判断会员状态（更准确，包含使用量信息）
     final subscription = currentSubscription?.subscription;
     final usage = currentSubscription?.usage;
-    
+
     // 如果 currentSubscription 有数据，优先使用它判断
-    if (subscription != null && subscription.planCode != null && subscription.planCode!.isNotEmpty) {
+    if (subscription != null &&
+        subscription.planCode != null &&
+        subscription.planCode!.isNotEmpty) {
       // 检查计划代码是否为免费版
       final planCode = subscription.planCode!.toLowerCase();
       if (planCode == 'free' || planCode == 'freeplan') {
         return CloudSyncMembershipStatus.notSubscribed;
       }
-      
+
       // 检查是否已到期
       final endDate = subscription.endDate;
       if (endDate != null && endDate.isBefore(DateTime.now())) {
@@ -260,8 +272,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
       // 检查空间是否已满
       final storageUsedGb = usage?.storageUsedGb;
       final storageTotalGb = usage?.storageTotalGb;
-      if (storageUsedGb != null && 
-          storageTotalGb != null && 
+      if (storageUsedGb != null &&
+          storageTotalGb != null &&
           storageUsedGb >= storageTotalGb) {
         return CloudSyncMembershipStatus.storageFull;
       }
@@ -269,7 +281,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
       // 会员有效中
       return CloudSyncMembershipStatus.active;
     }
-    
+
     // 如果 currentSubscription 没有数据，使用 subscriptionInfo 判断（降级方案）
     if (subscriptionInfo != null) {
       if (subscriptionInfo.plan == WorkspacePlanPB.FreePlan) {
@@ -279,11 +291,10 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
       // 注意：subscriptionInfo 不包含到期时间和使用量信息，所以无法判断过期和空间满
       return CloudSyncMembershipStatus.active;
     }
-    
+
     // 两个数据源都没有，认为未开通会员
     return CloudSyncMembershipStatus.notSubscribed;
   }
-
 
   Widget _buildCloudSyncIcon(
     BuildContext context,
@@ -301,9 +312,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
           margin: EdgeInsets.zero,
           text: FlowySvg(
             FlowySvgs.cloud_sync_m,
-            color: widget.isHover
-                ? Theme.of(context).colorScheme.onSurface
-                : null,
+            color:
+                widget.isHover ? Theme.of(context).colorScheme.onSurface : null,
             opacity: 0.7,
           ),
           onTap: onTap,
@@ -372,7 +382,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
                 minWidth: 20.0,
                 maxHeight: 14.0,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 3.0, vertical: 1.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 3.0, vertical: 1.0),
               decoration: BoxDecoration(
                 color: labelColor,
                 borderRadius: BorderRadius.circular(7.0),
@@ -405,4 +416,4 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
       ),
     );
   }
-} 
+}
