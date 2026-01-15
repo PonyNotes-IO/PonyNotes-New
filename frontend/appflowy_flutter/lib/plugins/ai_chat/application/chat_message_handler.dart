@@ -29,6 +29,9 @@ class ChatMessageHandler {
 
   /// Maps real message IDs to temporary streaming message IDs
   final HashMap<String, String> _temporaryMessageIDMap = HashMap();
+  
+  /// 【修复消息重复】追踪已处理的消息ID，防止通过不同callback重复处理同一条消息
+  final Set<String> _processedMessageIds = {};
 
   /// Gets the effective message ID from the temporary map
   String getEffectiveMessageId(String messageId) {
@@ -158,19 +161,33 @@ class ChatMessageHandler {
   }
 
   /// Add a message to the temporary ID map when receiving from server
-  void processReceivedMessage(ChatMessagePB pb) {
+  /// Returns true if this is a new message that should be processed, false if it's a duplicate
+  bool processReceivedMessage(ChatMessagePB pb) {
+    final messageIdStr = pb.messageId.toString();
+    
     Log.info('📨 MessageHandler.processReceivedMessage 被调用');
-    Log.info('   - messageId: ${pb.messageId}');
+    Log.info('   - messageId: $messageIdStr');
     Log.info('   - authorType: ${pb.authorType}');
     Log.info('   - content: ${pb.content.substring(0, pb.content.length > 50 ? 50 : pb.content.length)}...');
+    
+    // 【关键修复】检查消息是否已经处理过
+    if (_processedMessageIds.contains(messageIdStr)) {
+      Log.info('✅ MessageHandler: 消息已处理过，跳过重复处理');
+      Log.info('   - 已处理消息ID集合: $_processedMessageIds');
+      return false; // 返回false表示应该跳过这条消息
+    }
+    
+    // 标记消息为已处理
+    _processedMessageIds.add(messageIdStr);
+    Log.info('   - 标记消息为已处理，当前已处理消息数: ${_processedMessageIds.length}');
     
     // 3 means message response from AI
     if (pb.authorType == 3 && answerStreamMessageId.isNotEmpty) {
       Log.info('   - 这是AI消息，建立ID映射');
-      Log.info('   - 真实ID: ${pb.messageId}');
+      Log.info('   - 真实ID: $messageIdStr');
       Log.info('   - 临时ID: $answerStreamMessageId');
       _temporaryMessageIDMap.putIfAbsent(
-        pb.messageId.toString(),
+        messageIdStr,
         () => answerStreamMessageId,
       );
       answerStreamMessageId = '';
@@ -180,10 +197,10 @@ class ChatMessageHandler {
     // 1 means message response from User
     if (pb.authorType == 1 && questionStreamMessageId.isNotEmpty) {
       Log.info('   - 这是用户消息，建立ID映射');
-      Log.info('   - 真实ID: ${pb.messageId}');
+      Log.info('   - 真实ID: $messageIdStr');
       Log.info('   - 临时ID: $questionStreamMessageId');
       _temporaryMessageIDMap.putIfAbsent(
-        pb.messageId.toString(),
+        messageIdStr,
         () => questionStreamMessageId,
       );
       questionStreamMessageId = '';
@@ -195,7 +212,9 @@ class ChatMessageHandler {
     }
     
     if (pb.authorType == 1 && questionStreamMessageId.isEmpty) {
-      Log.warn('⚠️ 用户消息但questionStreamMessageId为空！这可能导致消息重复');
+      Log.info('ℹ️  用户消息但questionStreamMessageId为空（可能是从服务器加载的历史消息）');
     }
+    
+    return true; // 返回true表示这是新消息，应该继续处理
   }
 }

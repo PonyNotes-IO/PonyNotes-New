@@ -476,22 +476,34 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       latestMessageCallback: (list) {
         if (!isClosed) {
           // 【修复消息重复】必须先调用processReceivedMessage建立ID映射
+          // 并过滤掉已处理过的消息（可能通过chatMessageCallback已经处理过了）
+          final List<ChatMessagePB> newMessages = [];
           for (final pb in list.messages) {
-            _messageHandler.processReceivedMessage(pb);
+            // processReceivedMessage返回true表示这是新消息，false表示已处理过
+            if (_messageHandler.processReceivedMessage(pb)) {
+              newMessages.add(pb);
+            }
           }
+          Log.info('📋 ChatBloc: latestMessageCallback 过滤后，新消息数: ${newMessages.length}/${list.messages.length}');
           final messages =
-              list.messages.map(_messageHandler.createTextMessage).toList();
+              newMessages.map(_messageHandler.createTextMessage).toList();
           add(ChatEvent.didLoadLatestMessages(messages));
         }
       },
       prevMessageCallback: (list) {
         if (!isClosed) {
           // 【修复消息重复】必须先调用processReceivedMessage建立ID映射
+          // 并过滤掉已处理过的消息
+          final List<ChatMessagePB> newMessages = [];
           for (final pb in list.messages) {
-            _messageHandler.processReceivedMessage(pb);
+            // processReceivedMessage返回true表示这是新消息，false表示已处理过
+            if (_messageHandler.processReceivedMessage(pb)) {
+              newMessages.add(pb);
+            }
           }
+          Log.info('📋 ChatBloc: prevMessageCallback 过滤后，新消息数: ${newMessages.length}/${list.messages.length}');
           final messages =
-              list.messages.map(_messageHandler.createTextMessage).toList();
+              newMessages.map(_messageHandler.createTextMessage).toList();
           add(ChatEvent.didLoadPreviousMessages(messages, list.hasMore));
         }
       },
