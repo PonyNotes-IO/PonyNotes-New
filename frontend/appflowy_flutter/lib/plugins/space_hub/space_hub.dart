@@ -53,11 +53,13 @@ class SpaceHubPlugin extends Plugin {
     required this.view,
   })  : notifier = ViewPluginNotifier(view: view),
         _viewInfoBloc = ViewInfoBloc(view: view)..add(const ViewInfoEvent.started()),
-        _pageAccessLevelBloc = PageAccessLevelBloc(view: view)..add(const PageAccessLevelEvent.initial());
+        _pageAccessLevelBloc = PageAccessLevelBloc(view: view)..add(const PageAccessLevelEvent.initial()),
+        _selectedViewNotifier = ValueNotifier<ViewPB?>(null);
 
   final ViewPB view;
   final ViewInfoBloc _viewInfoBloc;
   final PageAccessLevelBloc _pageAccessLevelBloc;
+  final ValueNotifier<ViewPB?> _selectedViewNotifier;
 
   @override
   final ViewPluginNotifier notifier;
@@ -67,6 +69,7 @@ class SpaceHubPlugin extends Plugin {
         bloc: _viewInfoBloc,
         pageAccessLevelBloc: _pageAccessLevelBloc,
         notifier: notifier,
+        selectedViewNotifier: _selectedViewNotifier,
       );
 
   @override
@@ -84,6 +87,7 @@ class SpaceHubPlugin extends Plugin {
   void dispose() {
     _viewInfoBloc.close();
     _pageAccessLevelBloc.close();
+    _selectedViewNotifier.dispose();
     notifier.dispose();
   }
 }
@@ -96,16 +100,51 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
     required this.bloc,
     required this.notifier,
     required this.pageAccessLevelBloc,
+    required this.selectedViewNotifier,
   });
 
   final ViewInfoBloc bloc;
   final ViewPluginNotifier notifier;
   final PageAccessLevelBloc pageAccessLevelBloc;
+  final ValueNotifier<ViewPB?> selectedViewNotifier;
 
   ViewPB get view => notifier.view;
 
   @override
   EdgeInsets get contentPadding => EdgeInsets.zero;
+
+  @override
+  Widget? get rightBarItem {
+    // 当有选中文档时，返回该文档的右侧工具栏
+    // 注意：ValueListenableBuilder 的 builder 不能返回 null，因此这里用 SizedBox.shrink 占位
+    return ValueListenableBuilder<ViewPB?>(
+      valueListenable: selectedViewNotifier,
+      builder: (context, selectedView, _) {
+        if (selectedView == null) {
+          return const SizedBox.shrink();
+        }
+
+        try {
+          final plugin = selectedView.plugin();
+          plugin.init();
+          final widgetBuilder = plugin.widgetBuilder;
+
+          // 如果文档插件实现了 NavigationItem，并且提供了 rightBarItem，则使用它
+          if (widgetBuilder is NavigationItem) {
+            final toolbar = widgetBuilder.rightBarItem;
+            if (toolbar != null) {
+              return toolbar;
+            }
+          }
+        } catch (e) {
+          debugPrint('[SpaceHub] Error getting rightBarItem for ${selectedView.name}: $e');
+        }
+
+        // 没有可用的工具栏时，返回一个空占位，避免报错
+        return const SizedBox.shrink();
+      },
+    );
+  }
 
   @override
   Widget buildWidget({
@@ -164,6 +203,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           providers: providers,
           child: _SpaceHubContent(
             spaceView: view,
+            selectedViewNotifier: selectedViewNotifier,
             onDeleted: (deletedView, index) =>
                 context.onDeleted?.call(deletedView, index),
           ),
@@ -188,9 +228,6 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
       ViewTabBarItem(view: notifier.view, shortForm: shortForm);
 
   @override
-  Widget? get rightBarItem => null; // 空间统一页面不需要右侧工具栏
-
-  @override
   List<NavigationItem> get navigationItems => [this];
 }
 
@@ -198,10 +235,12 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
 class _SpaceHubContent extends StatefulWidget {
   const _SpaceHubContent({
     required this.spaceView,
+    required this.selectedViewNotifier,
     required this.onDeleted,
   });
 
   final ViewPB spaceView;
+  final ValueNotifier<ViewPB?> selectedViewNotifier;
   final Function(ViewPB, int?)? onDeleted;
 
   @override
@@ -228,10 +267,13 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         debugPrint('[SpaceHub] _trySelectFirstDocument: currentSpace=${currentSpace?.id}, targetSpace=${widget.spaceView.id}');
         if (currentSpace?.id == widget.spaceView.id &&
             currentSpace!.childViews.isNotEmpty) {
-          debugPrint('[SpaceHub] Selecting first document: ${currentSpace.childViews.first.name}');
+          final firstView = currentSpace.childViews.first;
+          debugPrint('[SpaceHub] Selecting first document: ${firstView.name}');
           setState(() {
-            _selectedView = currentSpace.childViews.first;
+            _selectedView = firstView;
           });
+          // 更新共享的选中视图状态
+          widget.selectedViewNotifier.value = firstView;
         }
       } catch (e) {
         debugPrint('[SpaceHub] _trySelectFirstDocument error: $e');
@@ -264,6 +306,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             setState(() {
               _selectedView = view;
             });
+            // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+            widget.selectedViewNotifier.value = view;
           },
         ),
         // 分隔线
@@ -290,9 +334,12 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           final currentSpace = state.currentSpace;
           if (currentSpace?.id == widget.spaceView.id &&
               currentSpace!.childViews.isNotEmpty) {
+            final firstView = currentSpace.childViews.first;
             setState(() {
-              _selectedView = currentSpace.childViews.first;
+              _selectedView = firstView;
             });
+            // 更新共享的选中视图状态
+            widget.selectedViewNotifier.value = firstView;
           }
         },
         child: content,
@@ -386,18 +433,20 @@ class _SpaceDocumentList extends StatelessWidget {
     return SizedBox(
       width: 260,
       child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          border: Border(
-            right: BorderSide(color: Theme.of(context).dividerColor),
-          ),
-        ),
+        margin: EdgeInsets.symmetric(horizontal: 12),
+        // decoration: BoxDecoration(
+        //   color: Theme.of(context).colorScheme.surface,
+        //   border: Border(
+        //     right: BorderSide(color: Theme.of(context).dividerColor),
+        //   ),
+        // ),
         child: Column(
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // 头部：空间名称 + 新增文档按钮
             _buildHeader(context, spaceBloc),
+            VSpace(12),
             // 文档列表
             Expanded(
               child: spaceBloc != null
