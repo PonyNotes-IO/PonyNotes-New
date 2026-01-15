@@ -4,6 +4,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/folder/_section_folder.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ai_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_calendar_button.dart';
@@ -14,10 +15,8 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_publish_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_inbox_button.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_template_new_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
-import 'package:appflowy_backend/log.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -75,26 +74,33 @@ class SidebarFolder extends StatelessWidget {
             // public or private (只在协作工作空间显示)
             BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
               builder: (context, state) {
-                // only show public and private section if the workspace is collaborative and not local
+                // 是否协作工作区
                 final isCollaborativeWorkspace =
                     context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
 
-                // only show public and private section if the workspace is collaborative
+                // 使用 SpaceBloc 中的 getter，只展示「空间」类型视图
+                final spaceBloc = context.read<SpaceBloc>();
+                final privateSpaces = spaceBloc.privateSpaces;
+                final publicSpaces = spaceBloc.publicSpaces;
+
                 return Column(
                   children: isCollaborativeWorkspace
                       ? [
-                    // private
-                    PrivateSectionFolder(
-                      views: state.section.privateViews,
-                    ),
-                    // public
-                    PublicSectionFolder(views: state.section.publicViews),
-                  ]
+                          // 私有空间（仅 Space）
+                          PrivateSectionFolder(
+                            views: privateSpaces,
+                          ),
+                          // 协作区 / 公共空间（仅 Space）
+                          PublicSectionFolder(
+                            views: publicSpaces,
+                          ),
+                        ]
                       : [
-                  PersonalSectionFolder(
-                          views: state.section.publicViews,
-                        ),
-                  ], // 非协作工作空间不显示底部的个人空间（已移至上方）
+                          // 非协作工作区：个人空间仅使用公共空间中的 Space
+                          PersonalSectionFolder(
+                            views: publicSpaces,
+                          ),
+                        ],
                 );
               },
             ),

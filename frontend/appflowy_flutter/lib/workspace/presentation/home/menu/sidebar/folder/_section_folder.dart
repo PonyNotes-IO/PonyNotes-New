@@ -288,25 +288,20 @@ class _SectionFolderState extends State<SectionFolder> {
           isHovered: isHovered,
           enableRightClickContext: true,
           onSelected: (viewContext, view) {
-            // 如果是 Space 类型，只切换展开/收起，不打开页面
+            // 如果是 Space 类型，打开空间统一页面（SpaceHubPlugin）
             if (view.isSpace) {
-              // Space 类型的点击处理：切换展开/收起
               Log.info('[SECTION_FOLDER] Space clicked: ${view.name}');
               
-              // 使用 SpaceBloc 切换展开/收起状态
+              // 使用 SpaceBloc 打开空间（加载空间下的文档列表）
               final spaceBloc = context.read<SpaceBloc>();
-              final currentSpace = spaceBloc.state.currentSpace;
+              spaceBloc.add(SpaceEvent.open(space: view));
               
-              // 如果点击的是当前 Space，切换展开状态
-              if (currentSpace?.id == view.id) {
-                final isExpanded = spaceBloc.state.isExpanded;
-                spaceBloc.add(SpaceEvent.expand(view, !isExpanded));
+              // 打开空间统一页面插件
+              if (HardwareKeyboard.instance.isControlPressed) {
+                viewContext.read<TabsBloc>().openTab(view);
               } else {
-                // 如果点击的是其他 Space，先打开它，然后展开
-                spaceBloc.add(SpaceEvent.open(space: view));
+                viewContext.read<TabsBloc>().openPlugin(view);
               }
-              
-              // Space 类型不打开插件页面
               return;
             }
             

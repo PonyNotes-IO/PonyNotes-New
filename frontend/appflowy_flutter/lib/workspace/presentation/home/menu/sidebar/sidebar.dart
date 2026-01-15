@@ -49,6 +49,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 
+import '../../../../../startup/plugin/plugin.dart';
+
 Loading? _duplicateSpaceLoading;
 
 /// Home Sidebar is the left side bar of the home page.
@@ -165,6 +167,36 @@ class HomeSideBar extends StatelessWidget {
                       prev.isDuplicatingSpace != curr.isDuplicatingSpace,
                   listener: (context, state) {
                     final page = state.lastCreatedPage;
+                    final currentSpace = state.currentSpace;
+                    
+                    // 如果当前空间存在且是空间类型视图，并且 lastCreatedPage 是当前空间的子视图
+                    // 说明这是通过 SpaceEvent.open 设置的，此时不应该自动打开第一个文档
+                    // 因为空间统一页面（SpaceHubPlugin）已经在 _section_folder.dart 中通过 openPlugin(view) 打开了
+                    if (currentSpace != null && 
+                        currentSpace.isSpace && 
+                        page != null && 
+                        page.id.isNotEmpty &&
+                        currentSpace.childViews.any((v) => v.id == page.id)) {
+                      // 检查当前打开的插件是否是空间类型（SpaceHubPlugin 使用 PluginType.folder）
+                      final tabsBloc = context.read<TabsBloc>();
+                      final currentPageManager = tabsBloc.state.currentPageManager;
+                      final currentPlugin = currentPageManager.plugin;
+                      // SpaceHubPlugin 的 id 是空间的 id，pluginType 是 folder
+                      if (currentPlugin.id == currentSpace.id && 
+                          currentPlugin.pluginType == PluginType.folder) {
+                        // 当前打开的是空间统一页面，不自动打开第一个文档
+                        Log.info('[SIDEBAR] Space hub is open, skipping auto-open first document: ${page.name}');
+                        if (state.isDuplicatingSpace) {
+                          _duplicateSpaceLoading ??= Loading(context);
+                          _duplicateSpaceLoading?.start();
+                        } else if (_duplicateSpaceLoading != null) {
+                          _duplicateSpaceLoading?.stop();
+                          _duplicateSpaceLoading = null;
+                        }
+                        return;
+                      }
+                    }
+                    
                     if (page == null || page.id.isEmpty) {
                       // open the blank page
                       context

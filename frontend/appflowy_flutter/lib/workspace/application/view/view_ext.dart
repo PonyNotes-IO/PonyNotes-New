@@ -10,6 +10,7 @@ import 'package:appflowy/plugins/database/grid/presentation/grid_page.dart';
 import 'package:appflowy/plugins/database/grid/presentation/mobile_grid_page.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/plugins/document/document.dart';
+import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/plugins/whiteboard/whiteboard.dart';
 import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
@@ -140,6 +141,11 @@ extension ViewExtension on ViewPB {
   Plugin plugin({
     Map<String, dynamic> arguments = const {},
   }) {
+    // 如果是空间类型，返回 SpaceHubPlugin（空间统一页面）
+    if (isSpace) {
+      return SpaceHubPlugin(view: this);
+    }
+
     switch (layout) {
       case ViewLayoutPB.Board:
       case ViewLayoutPB.Calendar:

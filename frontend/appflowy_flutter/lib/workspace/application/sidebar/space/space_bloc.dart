@@ -594,6 +594,22 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
     return ([...publicSpaces, ...privateSpaces], publicViews, privateViews);
   }
 
+  /// 仅返回「空间」类型的私有空间列表（不包含普通文档等）
+  List<ViewPB> get privateSpaces =>
+      state.spaces
+          .where(
+            (e) => e.isSpace && e.spacePermission == SpacePermission.private,
+          )
+          .toList();
+
+  /// 仅返回「空间」类型的公共 / 协作空间列表（不包含普通文档等）
+  List<ViewPB> get publicSpaces =>
+      state.spaces
+          .where(
+            (e) => e.isSpace && e.spacePermission == SpacePermission.publicToAll,
+          )
+          .toList();
+
   Future<ViewPB?> _createSpace({
     required String name,
     required String icon,
