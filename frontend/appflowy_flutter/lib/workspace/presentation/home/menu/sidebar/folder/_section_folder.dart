@@ -279,7 +279,7 @@ class _SectionFolderState extends State<SectionFolder> {
         return ViewItem(
           key: ValueKey('${widget.spaceType.name} ${view.id}'),
           spaceType: widget.spaceType,
-          engagedInExpanding: true,
+          engagedInExpanding: !isSpace, // 空间类型不展开子集
           isFirstChild: view.id == widget.views.first.id,
           view: view,
           level: itemLevel, // 使用计算得出的缩进级别
@@ -287,6 +287,12 @@ class _SectionFolderState extends State<SectionFolder> {
           isFeedback: false,
           isHovered: isHovered,
           enableRightClickContext: true,
+          shouldRenderChildren: !isSpace, // 空间类型不渲染子视图
+          shouldLoadChildViews: !isSpace, // 空间类型不加载子视图
+          // 为空间类型提供自定义左侧图标，不显示展开/折叠图标
+          leftIconBuilder: isSpace
+              ? (context, view) => SizedBox(width: HomeSpaceViewSizes.leftPadding)
+              : null,
           onSelected: (viewContext, view) {
             // 如果是 Space 类型，打开空间统一页面（SpaceHubPlugin）
             if (view.isSpace) {
