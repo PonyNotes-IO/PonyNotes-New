@@ -44,7 +44,7 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
               onTap: () => _openInviteDialog(context),
             ),
             HSpace(theme.spacing.l),
-            Expanded(child: const SizedBox.shrink()),
+            const SizedBox.shrink(),
           ],
         ),
       ],

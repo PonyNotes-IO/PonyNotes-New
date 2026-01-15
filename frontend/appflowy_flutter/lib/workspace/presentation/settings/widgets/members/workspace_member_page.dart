@@ -23,7 +23,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
 import 'package:collection/collection.dart';
 
-class WorkspaceMembersPage extends StatelessWidget {
+class WorkspaceMembersPage extends StatefulWidget {
   const WorkspaceMembersPage({
     super.key,
     required this.userProfile,
@@ -34,9 +34,23 @@ class WorkspaceMembersPage extends StatelessWidget {
   final String workspaceId;
 
   @override
+  State<WorkspaceMembersPage> createState() => _WorkspaceMembersPageState();
+}
+
+class _WorkspaceMembersPageState extends State<WorkspaceMembersPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BlocProvider<WorkspaceMemberBloc>(
-      create: (context) => WorkspaceMemberBloc(userProfile: userProfile)
+      create: (context) => WorkspaceMemberBloc(userProfile: widget.userProfile)
         ..add(const WorkspaceMemberEvent.initial())
         ..add(const WorkspaceMemberEvent.getInviteCode()),
       child: BlocConsumer<WorkspaceMemberBloc, WorkspaceMemberState>(
@@ -65,20 +79,28 @@ class WorkspaceMembersPage extends StatelessWidget {
                           text: '启用数据同步',
                           onTap: () async {
                             try {
-                              final uwState = context.read<UserWorkspaceBloc>().state;
+                              final uwState =
+                                  context.read<UserWorkspaceBloc>().state;
                               bool isNonFreeMember = false;
-                              final sub = uwState.currentSubscription?.subscription;
-                              if (sub != null && (sub.planCode?.isNotEmpty ?? false)) {
+                              final sub =
+                                  uwState.currentSubscription?.subscription;
+                              if (sub != null &&
+                                  (sub.planCode?.isNotEmpty ?? false)) {
                                 final planCode = sub.planCode!.toLowerCase();
-                                if (planCode != 'free' && planCode != 'freeplan') {
-                                  final end = uwState.currentSubscription?.subscription?.endDate;
-                                  if (end == null || end.isAfter(DateTime.now())) {
+                                if (planCode != 'free' &&
+                                    planCode != 'freeplan') {
+                                  final end = uwState.currentSubscription
+                                      ?.subscription?.endDate;
+                                  if (end == null ||
+                                      end.isAfter(DateTime.now())) {
                                     isNonFreeMember = true;
                                   }
                                 }
-                              } else if (uwState.workspaceSubscriptionInfo != null) {
+                              } else if (uwState.workspaceSubscriptionInfo !=
+                                  null) {
                                 isNonFreeMember =
-                                    uwState.workspaceSubscriptionInfo!.plan != WorkspacePlanPB.FreePlan;
+                                    uwState.workspaceSubscriptionInfo!.plan !=
+                                        WorkspacePlanPB.FreePlan;
                               }
 
                               if (!isNonFreeMember) {
@@ -127,21 +149,74 @@ class WorkspaceMembersPage extends StatelessWidget {
                 ),
               ] else ...[
                 // Invite section (owners/admins)
-              if (state.myRole.canInvite) ...[
-                const InviteMemberByLink(),
-                const SettingsCategorySpacer(),
-                const InviteMemberByEmail(),
-                const SettingsCategorySpacer(
-                  bottomSpacing: 0,
-                ),
-              ],
+                if (state.myRole.canInvite) ...[
+                  // Invite link above; place the "添加成员" button and the search box on the same row.
+                  const InviteMemberByLink(),
+                  const SettingsCategorySpacer(),
+                  Row(
+                    children: [
+                      // "添加成员" button (renders from InviteMemberByEmail widget)
+                      const InviteMemberByEmail(),
+                      const Spacer(),
+                      SizedBox(
+                        width: 320,
+                        child: Theme(
+                          data: Theme.of(context)
+                              .copyWith(hoverColor: Colors.transparent),
+                          child: TextField(
+                            controller: _searchController,
+                            decoration: InputDecoration(
+                              hintText: '搜索姓名或联系方式',
+                              isDense: true,
+                              prefixIcon: const Icon(Icons.search, size: 20),
+                              suffixIcon: _searchQuery.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear, size: 20),
+                                      splashRadius: 20,
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() {
+                                          _searchQuery = '';
+                                        });
+                                      },
+                                    )
+                                  : null,
+                              filled: true,
+                              fillColor:
+                                  Theme.of(context).cardColor.withOpacity(0.03),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 12),
+                            ),
+                            onChanged: (v) {
+                              setState(() {
+                                _searchQuery = v.trim().toLowerCase();
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SettingsCategorySpacer(bottomSpacing: 0),
+                ],
 
                 // Members list or friendly placeholder when empty
-              if (state.members.isNotEmpty)
-                _MemberList(
-                  members: state.members,
-                  userProfile: userProfile,
-                  myRole: state.myRole,
+                if (state.members.isNotEmpty)
+                  _MemberList(
+                    members: (_searchQuery.isEmpty)
+                        ? state.members
+                        : state.members.where((m) {
+                            final q = _searchQuery;
+                            final name = (m.name ?? '').toLowerCase();
+                            final email = (m.email ?? '').toLowerCase();
+                            return name.contains(q) || email.contains(q);
+                          }).toList(),
+                    userProfile: widget.userProfile,
+                    myRole: state.myRole,
                   )
                 else
                   Padding(
@@ -162,12 +237,11 @@ class WorkspaceMembersPage extends StatelessWidget {
                             OutlinedRoundedButton(
                               text: '重试',
                               onTap: () {
-                                context
-                                    .read<WorkspaceMemberBloc>()
-                                    .add(const WorkspaceMemberEvent.getInviteCode());
-                                context
-                                    .read<WorkspaceMemberBloc>()
-                                    .add(const WorkspaceMemberEvent.getWorkspaceMembers());
+                                context.read<WorkspaceMemberBloc>().add(
+                                    const WorkspaceMemberEvent.getInviteCode());
+                                context.read<WorkspaceMemberBloc>().add(
+                                    const WorkspaceMemberEvent
+                                        .getWorkspaceMembers());
                               },
                             ),
                             // "去设置" removed per UX: guide user to enable cloud sync directly.
@@ -177,7 +251,8 @@ class WorkspaceMembersPage extends StatelessWidget {
                                 try {
                                   // Request enabling cloud sync via UserWorkspaceBloc
                                   context.read<UserWorkspaceBloc>().add(
-                                        UserWorkspaceEvent.updateCloudSyncEnabled(
+                                        UserWorkspaceEvent
+                                            .updateCloudSyncEnabled(
                                           enabled: true,
                                         ),
                                       );
@@ -185,7 +260,8 @@ class WorkspaceMembersPage extends StatelessWidget {
                                     message: '已请求启用数据同步，请等待后台生效后重试。',
                                   );
                                 } catch (e) {
-                                  Log.error('Request to enable cloud sync failed: $e');
+                                  Log.error(
+                                      'Request to enable cloud sync failed: $e');
                                   showToastNotification(
                                     type: ToastificationType.error,
                                     message: '无法启用数据同步，请在服务器端检查配置或联系管理员。',
@@ -382,8 +458,10 @@ class WorkspaceMembersPage extends StatelessWidget {
         (f) {
           Log.error('invite workspace member failed: $f');
           final message = f.code == ErrorCode.WorkspaceMemberLimitExceeded
-              ? LocaleKeys.settings_appearance_members_inviteFailedMemberLimit.tr()
-              : LocaleKeys.settings_appearance_members_failedToInviteMember.tr();
+              ? LocaleKeys.settings_appearance_members_inviteFailedMemberLimit
+                  .tr()
+              : LocaleKeys.settings_appearance_members_failedToInviteMember
+                  .tr();
           // Show a plain dialog without forcing upgrade action.
           showDialog(
             context: context,
@@ -578,9 +656,11 @@ class _MemberItemState extends State<_MemberItem> {
       final res = await repo.searchUsers(query: nameQuery);
       res.fold((users) {
         // Pick first user whose email or phone matches/exists
-        final match = users.firstWhereOrNull((u) => (u.email.isNotEmpty) || (u.phone?.isNotEmpty ?? false));
+        final match = users.firstWhereOrNull(
+            (u) => (u.email.isNotEmpty) || (u.phone?.isNotEmpty ?? false));
         if (match != null) {
-          final contact = (match.email.isNotEmpty) ? match.email : (match.phone ?? '');
+          final contact =
+              (match.email.isNotEmpty) ? match.email : (match.phone ?? '');
           setState(() {
             _contact = contact;
           });
@@ -697,8 +777,6 @@ class _MemberItemState extends State<_MemberItem> {
       ],
     );
   }
-
- 
 }
 
 enum _MemberMoreAction {
