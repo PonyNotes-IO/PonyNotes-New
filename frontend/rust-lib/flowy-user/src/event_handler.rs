@@ -837,6 +837,32 @@ pub async fn invite_workspace_member_handler(
   let param = param.try_into_inner()?;
   let manager = upgrade_manager(manager)?;
   let workspace_id = Uuid::from_str(&param.workspace_id)?;
+  // Server-side permission check: only workspace owner can invite members.
+  let uid = manager.user_id()?;
+  // get_workspace_member_info expects the requesting local uid and the workspace id
+  match manager.get_workspace_member_info(uid, &workspace_id).await {
+    Ok(current_member) => {
+      use flowy_user_pub::entities::Role;
+      if current_member.role != Role::Owner {
+        return Err(FlowyError::new(
+          ErrorCode::NotEnoughPermissions,
+          "仅工作空间所有者可以邀请成员",
+        ));
+      }
+    }
+    Err(e) => {
+      // If cannot determine membership, log and deny to be safe
+      tracing::error!(
+        "Failed to get current workspace member info for permission check: {:?}",
+        e
+      );
+      return Err(FlowyError::new(
+        ErrorCode::NotEnoughPermissions,
+        "无权限邀请成员",
+      ));
+    }
+  }
+
   manager
     .invite_member_to_workspace(workspace_id, param.invitee_email, param.role.into())
     .await?;
