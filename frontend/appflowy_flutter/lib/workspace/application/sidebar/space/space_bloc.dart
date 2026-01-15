@@ -14,6 +14,7 @@ import 'package:appflowy/workspace/application/workspace/prelude.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_sections_listener.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon_popup.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_request_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -108,6 +109,45 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             createNewPageByDefault,
             openAfterCreate,
           ) async {
+            // Check workspace setting: if only owners can create team workspace, verify current user is owner.
+            try {
+              final settingPayload =
+                  UserWorkspaceIdPB(workspaceId: workspaceId);
+              final settingRes =
+                  await UserEventGetWorkspaceSetting(settingPayload).send();
+              settingRes.fold((settings) async {
+                final onlyOwner = settings.onlyOwnerCanCreateTeamWorkspace;
+                if (onlyOwner) {
+                  try {
+                    final membersRes =
+                        await UserBackendService(userId: userProfile.id)
+                            .getWorkspaceMembers(workspaceId);
+                    membersRes.fold((members) async {
+                      final isOwner = members.items.any((m) =>
+                          m.role == AFRolePB.Owner &&
+                          m.email == userProfile.email);
+                      if (!isOwner) {
+                        showToastNotification(message: '仅工作空间所有者可以创建团队协作区');
+                        return;
+                      }
+                    }, (e) {
+                      // unable to fetch members - fall through and allow create attempt (backend will enforce)
+                      Log.error(
+                          'Failed to fetch workspace members to validate create permission: ${e.msg}');
+                    });
+                  } catch (e, st) {
+                    Log.error(
+                        'Exception when checking workspace members: $e\n$st');
+                  }
+                }
+              }, (err) {
+                // failed to get settings - allow create attempt, backend will enforce if necessary
+                Log.error('Failed to get workspace settings: ${err.msg}');
+              });
+            } catch (e, st) {
+              Log.error('Exception when checking workspace settings: $e\n$st');
+            }
+
             final space = await _createSpace(
               name: name,
               icon: icon,
@@ -282,7 +322,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                 );
               }
             }
-             afterOpen?.call();
+            afterOpen?.call();
           },
           expand: (space, isExpanded) async {
             await _setSpaceExpandStatus(space, isExpanded);
@@ -371,7 +411,8 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
             // call backend via SpaceRequestService
             try {
-              final success = await _spaceRequestService.sendJoinRequest(spaceId: spaceId, reason: reason);
+              final success = await _spaceRequestService.sendJoinRequest(
+                  spaceId: spaceId, reason: reason);
               if (success) {
                 showToastNotification(message: '已发送加入请求');
               } else {
@@ -389,13 +430,16 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
           },
           loadJoinRequests: (spaceId) async {
             try {
-              final list = await _spaceRequestService.loadJoinRequests(spaceId: spaceId);
-              final current = Map<String, List<Map<String, dynamic>>>.from(state.joinRequests);
+              final list =
+                  await _spaceRequestService.loadJoinRequests(spaceId: spaceId);
+              final current = Map<String, List<Map<String, dynamic>>>.from(
+                  state.joinRequests);
               current[spaceId] = list;
               emit(state.copyWith(joinRequests: current));
             } catch (e, st) {
               Log.error('loadJoinRequests exception: $e\n$st');
-              final current = Map<String, List<Map<String, dynamic>>>.from(state.joinRequests);
+              final current = Map<String, List<Map<String, dynamic>>>.from(
+                  state.joinRequests);
               current[spaceId] = current[spaceId] ?? [];
               emit(state.copyWith(joinRequests: current));
             }
@@ -406,13 +450,15 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               // need to find which space this request belongs to in local cache
               String? targetSpaceId;
               for (final entry in state.joinRequests.entries) {
-                if (entry.value.any((r) => (r['request_id'] ?? r['id'] ?? '') == requestId)) {
+                if (entry.value.any(
+                    (r) => (r['request_id'] ?? r['id'] ?? '') == requestId)) {
                   targetSpaceId = entry.key;
                   break;
                 }
               }
               if (targetSpaceId == null) {
-                Log.warn('handleJoinRequest: requestId not found locally: $requestId');
+                Log.warn(
+                    'handleJoinRequest: requestId not found locally: $requestId');
               }
 
               final ok = await _spaceRequestService.handleJoinRequest(
@@ -422,14 +468,17 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               );
               if (ok) {
                 // remove from local list
-                final current = Map<String, List<Map<String, dynamic>>>.from(state.joinRequests);
+                final current = Map<String, List<Map<String, dynamic>>>.from(
+                    state.joinRequests);
                 Map<String, dynamic>? matched;
                 for (final entry in current.entries) {
-                  entry.value.removeWhere((r) => (r['request_id'] ?? r['id'] ?? '') == requestId);
+                  entry.value.removeWhere(
+                      (r) => (r['request_id'] ?? r['id'] ?? '') == requestId);
                 }
                 // try to find requester email from previous state (best-effort)
                 for (final entry in state.joinRequests.entries) {
-                  final found = entry.value.firstWhereOrNull((r) => (r['request_id'] ?? r['id'] ?? '') == requestId);
+                  final found = entry.value.firstWhereOrNull(
+                      (r) => (r['request_id'] ?? r['id'] ?? '') == requestId);
                   if (found != null) {
                     matched = found;
                     break;
@@ -442,14 +491,20 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                 if (approve) {
                   // If backend did not auto-add, try to add workspace member by email if available
                   final requesterEmail = matched != null
-                      ? (matched['requester_email'] ?? matched['requester_email_address'] ?? matched['email'])
+                      ? (matched['requester_email'] ??
+                          matched['requester_email_address'] ??
+                          matched['email'])
                       : null;
                   if (requesterEmail is String && requesterEmail.isNotEmpty) {
-                    final addRes = await UserBackendService(userId: userProfile.id).addWorkspaceMember(workspaceId, requesterEmail);
+                    final addRes =
+                        await UserBackendService(userId: userProfile.id)
+                            .addWorkspaceMember(workspaceId, requesterEmail);
                     addRes.fold((_) {
-                      Log.info('Added workspace member: $requesterEmail after approval');
+                      Log.info(
+                          'Added workspace member: $requesterEmail after approval');
                     }, (err2) {
-                      Log.error('Failed to add workspace member after approval: ${err2.msg}');
+                      Log.error(
+                          'Failed to add workspace member after approval: ${err2.msg}');
                     });
                   }
 
@@ -468,9 +523,11 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
           cancelJoinRequest: (spaceId) async {
             // call backend to cancel the current user's join request for this space
             try {
-              final ok = await _spaceRequestService.cancelJoinRequest(spaceId: spaceId);
+              final ok = await _spaceRequestService.cancelJoinRequest(
+                  spaceId: spaceId);
               if (ok) {
-                final pending = Map<String, bool>.from(state.joinRequestPending);
+                final pending =
+                    Map<String, bool>.from(state.joinRequestPending);
                 pending.remove(spaceId);
                 emit(state.copyWith(joinRequestPending: pending));
                 showToastNotification(message: '已撤销加入请求');
@@ -628,7 +685,8 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
     this.userProfile = userProfile;
     this.workspaceId = workspaceId;
-    _spaceRequestService = SpaceRequestService(workspaceId: workspaceId, userId: userProfile.id);
+    _spaceRequestService =
+        SpaceRequestService(workspaceId: workspaceId, userId: userProfile.id);
   }
 
   Future<ViewPB?> _getLastOpenedSpace(List<ViewPB> spaces) async {
