@@ -147,20 +147,21 @@ class _AIInputAreaState extends State<AIInputArea> {
 
   @override
   Widget build(BuildContext context) {
-    return KeyboardListener(
-      focusNode: FocusNode(),
-      onKeyEvent: (KeyEvent event) {
-        // 监听粘贴快捷键 (Ctrl+V 或 Cmd+V)
+    return Focus(
+      onKeyEvent: (node, event) {
+        // 监听 Ctrl+V 或 Cmd+V 粘贴图片，但不拦截事件（让TextField也能处理）
         if (event is KeyDownEvent) {
           final isControlPressed = HardwareKeyboard.instance.isControlPressed || 
                                    HardwareKeyboard.instance.isMetaPressed;
           final isVPressed = event.logicalKey == LogicalKeyboardKey.keyV;
           
           if (isControlPressed && isVPressed) {
-            // 检测到粘贴快捷键，尝试从剪贴板粘贴图片
+            // 异步检查剪贴板是否有图片
             _pasteImageFromClipboard();
           }
         }
+        // 返回 KeyEventResult.ignored 让事件继续传递给TextField
+        return KeyEventResult.ignored;
       },
       child: GestureDetector(
         onTap: () {
