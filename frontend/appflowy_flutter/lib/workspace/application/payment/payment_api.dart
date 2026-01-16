@@ -263,9 +263,13 @@ class PaymentApi {
         final Map<String, dynamic> json =
             jsonDecode(response.body) as Map<String, dynamic>;
         final result = PaymentCreateResponse.fromJson(json);
-
         if (result.orderId.isEmpty) {
           Log.error('[PaymentApi] orderId is empty in response: $json');
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.FailedToParseQuery
+              ..msg = result.raw.toString(),
+          );
         }
 
         return FlowyResult.success(result);
