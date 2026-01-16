@@ -403,7 +403,7 @@ impl ModelSource for ServerAiSource {
 
 impl ServerAiSource {
   /// 从自定义API获取模型列表
-  /// API: http://8.152.101.166/api/ai/chat/models
+  /// API: https://api.xiaomabiji.com/api/ai/chat/models
   async fn fetch_models_from_custom_api() -> FlowyResult<Vec<AIModel>> {
     use reqwest::Client;
     use serde::Deserialize;
@@ -426,23 +426,32 @@ impl ServerAiSource {
       is_default: bool,
     }
     
-    let url = "http://8.152.101.166/api/ai/chat/models";
-    info!("[ModelSelect] 从自定义API获取模型列表: {}", url);
+    let url = "https://api.xiaomabiji.com/api/ai/chat/models";
+    error!("🔥🔥🔥 [ModelSelect] 准备从自定义API获取模型列表: {}", url);
     
-    let client = Client::new();
+    let client = Client::builder()
+      .danger_accept_invalid_certs(true)  // 接受自签名证书
+      .build()
+      .map_err(|e| {
+        error!("[ModelSelect] 创建HTTP客户端失败: {}", e);
+        FlowyError::new(ErrorCode::Internal, format!("创建HTTP客户端失败: {}", e))
+      })?;
+    
+    error!("🔥🔥🔥 [ModelSelect] 开始发送GET请求到: {}", url);
     let resp = client
-
-      .get(url)  // 按照文档要求使用GET方法
+      .get(url)
       .header("Content-Type", "application/json")
       .send()
       .await
       .map_err(|e| {
-        error!("[ModelSelect] 请求失败: {}", e);
+        error!("🔥🔥🔥 [ModelSelect] 请求失败: {}", e);
         FlowyError::new(ErrorCode::Internal, format!("HTTP请求失败: {}", e))
       })?;
     
+    let status = resp.status();
+    error!("🔥🔥🔥 [ModelSelect] 收到响应，状态码: {}", status);
+    
     if !resp.status().is_success() {
-      let status = resp.status();
       let error_text = resp.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
       error!("[ModelSelect] 服务器返回错误: {} - {}", status, error_text);
       return Err(FlowyError::new(

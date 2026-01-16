@@ -107,6 +107,7 @@ class _AIWelcomePluginPageState extends State<AIWelcomePluginPage> {
         selectedModelId: selectedModel?.id,
         enableDeepThinking: enableDeepThinking,
         enableWebSearch: enableWebSearch,
+        initialImages: images,  // 传递图片数据
       );
 
       if (view == null) {

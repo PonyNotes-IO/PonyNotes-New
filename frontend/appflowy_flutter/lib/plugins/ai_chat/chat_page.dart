@@ -32,12 +32,13 @@ class AIChatPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 从view.extra中读取初始消息、首选模型、深度思考和全网搜索开关
+    // 从view.extra中读取初始消息、首选模型、深度思考和全网搜索开关、初始图片
     final viewExtra = view.extra;
     String? initialMessage;
     String? preferredModelId;
     bool enableDeepThinking = false;
     bool enableWebSearch = false;
+    List<String>? initialImagePaths;
     
     if (viewExtra.isNotEmpty) {
       Log.info('🔍 AIChatPage: 解析view.extra...');
@@ -59,6 +60,15 @@ class AIChatPage extends StatelessWidget {
         final enableWebSearchStr = extraData['enable_web_search'] as String?;
         if (enableWebSearchStr == 'true') {
           enableWebSearch = true;
+        }
+        
+        // 读取初始图片路径列表
+        if (extraData.containsKey('initial_images')) {
+          final imagesList = extraData['initial_images'];
+          if (imagesList is List) {
+            initialImagePaths = imagesList.cast<String>();
+            Log.info('✅ AIChatPage: 找到 ${initialImagePaths!.length} 张初始图片');
+          }
         }
         
         if (initialMessage != null) {
@@ -92,6 +102,7 @@ class AIChatPage extends StatelessWidget {
               preferredModelId: preferredModelId,
               enableDeepThinking: enableDeepThinking,
               enableWebSearch: enableWebSearch,
+              initialImagePaths: initialImagePaths,  // 传递图片路径
             );
             // 异步获取 workspace ID 并刷新使用情况
             AIChatViewService.getCurrentWorkspaceId().then((workspaceId) {

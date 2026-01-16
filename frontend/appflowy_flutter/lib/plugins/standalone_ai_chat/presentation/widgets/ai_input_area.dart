@@ -148,6 +148,9 @@ class _AIInputAreaState extends State<AIInputArea> {
   @override
   Widget build(BuildContext context) {
     return Focus(
+      canRequestFocus: false, // 防止与TextField的焦点冲突
+      skipTraversal: true,    // 跳过焦点遍历
+      includeSemantics: false, // 不包含在语义树中
       onKeyEvent: (node, event) {
         // 监听 Ctrl+V 或 Cmd+V 粘贴图片，但不拦截事件（让TextField也能处理）
         if (event is KeyDownEvent) {

@@ -1,5 +1,6 @@
 use crate::local_ai::controller::LocalAIController;
-use flowy_ai_pub::persistence::select_message_content;
+use crate::ai_session_client::stream_ai_session_with_attachments;
+use flowy_ai_pub::persistence::{select_message_content, select_message};
 use std::collections::HashMap;
 
 use flowy_ai_pub::cloud::{
@@ -42,7 +43,7 @@ impl ChatServiceMiddleware {
   }
 
   /// 将模型显示名称映射到API所需的模型ID
-  /// 根据 http://8.152.101.166/api/ai/chat/models 返回的模型列表进行映射
+  /// 根据 https://api.xiaomabiji.com/api/ai/chat/models 返回的模型列表进行映射
   fn map_model_name_to_id(model_name: &str) -> String {
     match model_name {
       "DeepSeek" => "deepseek-chat".to_string(),
@@ -80,6 +81,52 @@ impl ChatServiceMiddleware {
       FlowyError::record_not_found().with_context(format!("Message not found: {}", message_id))
     })?;
     Ok(content)
+  }
+
+  /// 从消息metadata中提取图片和文件附件
+  fn get_message_attachments(
+    &self,
+    message_id: i64,
+  ) -> FlowyResult<(Option<Vec<String>>, Option<Vec<serde_json::Value>>)> {
+    let uid = self.user_service.user_id()?;
+    let conn = self.user_service.sqlite_connection(uid)?;
+    
+    // 读取完整消息（包含metadata）
+    let message = select_message(conn, message_id)?;
+    
+    if let Some(msg) = message {
+      // 解析metadata
+      let metadata: serde_json::Value = serde_json::from_str(&msg.metadata.as_ref().unwrap_or(&String::new()))
+        .unwrap_or(serde_json::Value::Null);
+      
+      let mut images = None;
+      let mut files = None;
+      
+      // 提取图片数组
+      if let Some(images_array) = metadata.get("images").and_then(|v| v.as_array()) {
+        let image_strings: Vec<String> = images_array
+          .iter()
+          .filter_map(|v| v.as_str().map(|s| s.to_string()))
+          .collect();
+        if !image_strings.is_empty() {
+          info!("[Middleware] 从metadata提取到 {} 张图片", image_strings.len());
+          images = Some(image_strings);
+        }
+      }
+      
+      // 提取文件数组
+      if let Some(files_array) = metadata.get("files").and_then(|v| v.as_array()) {
+        if !files_array.is_empty() {
+          info!("[Middleware] 从metadata提取到 {} 个文件", files_array.len());
+          files = Some(files_array.clone());
+        }
+      }
+      
+      Ok((images, files))
+    } else {
+      // 消息不存在，返回空
+      Ok((None, None))
+    }
   }
 }
 
@@ -169,12 +216,21 @@ impl ChatCloudService for ChatServiceMiddleware {
 
       info!("[Middleware] 使用新的 AI 会话接口");
       
-      // 从本地数据库获取问题内容
+      // 从本地数据库获取问题内容和metadata
       let content = self.get_message_content(question_id)?;
       trace!("[Middleware] 问题内容: {}", content);
       
+      // 读取消息metadata，提取图片数据
+      let (images, files) = self.get_message_attachments(question_id)?;
+      if images.is_some() {
+        info!("[Middleware] 检测到图片附件，数量: {}", images.as_ref().unwrap().len());
+      }
+      if files.is_some() {
+        info!("[Middleware] 检测到文件附件，数量: {}", files.as_ref().unwrap().len());
+      }
+      
       // 获取服务器地址（这里硬编码，后续可以从配置获取）
-      let base_url = "http://8.152.101.166";
+      let base_url = "https://api.xiaomabiji.com";
       
       // 将模型显示名称映射到API所需的模型ID
       let model_id = Self::map_model_name_to_id(&ai_model.name);
@@ -192,28 +248,38 @@ impl ChatCloudService for ChatServiceMiddleware {
               trace!("[Middleware] 获取到 token，长度: {}, 前10个字符: {}", token_str.len(), &token_str[..token_str.len().min(10)]);
               Some(token_str)
             } else {
-              error!("[Middleware] Token 格式不正确，不是 JWT token。前20个字符: {}", &token_str[..token_str.len().min(20)]);
+              error!("🔥🔥🔥 [Middleware] Token 格式不正确，不是 JWT token");
+              error!("🔥🔥🔥 [Middleware] Token长度: {}", token_str.len());
+              error!("🔥🔥🔥 [Middleware] Token前50个字符: {}", &token_str[..token_str.len().min(50)]);
+              
               // 如果 token 是 JSON 格式，尝试解析并提取 access_token
-              if token_str.trim_start().starts_with('{') {
-                info!("[Middleware] 检测到 JSON 格式 token，开始解析，长度: {}", token_str.len());
-                match serde_json::from_str::<serde_json::Value>(&token_str) {
+              let trimmed = token_str.trim();  // 使用trim()而不是trim_start()，去除前后空格
+              error!("🔥🔥🔥 [Middleware] trim后长度: {}", trimmed.len());
+              error!("🔥🔥🔥 [Middleware] trim后前50个字符: {}", &trimmed[..trimmed.len().min(50)]);
+              error!("🔥🔥🔥 [Middleware] 是否以{{开头: {}", trimmed.starts_with('{'));
+              
+              if trimmed.starts_with('{') {
+                error!("🔥🔥🔥 [Middleware] 检测到 JSON 格式 token，开始解析");
+                match serde_json::from_str::<serde_json::Value>(trimmed) {
                   Ok(json) => {
-                    info!("[Middleware] JSON 解析成功");
+                    error!("🔥🔥🔥 [Middleware] JSON 解析成功");
+                    error!("🔥🔥🔥 [Middleware] JSON keys: {:?}", json.as_object().map(|o| o.keys().collect::<Vec<_>>()));
                     if let Some(access_token) = json.get("access_token").and_then(|v| v.as_str()) {
-                      info!("[Middleware] 从 JSON 中提取 access_token 成功，长度: {}", access_token.len());
+                      error!("🔥🔥🔥 [Middleware] 从 JSON 中提取 access_token 成功，长度: {}", access_token.len());
+                      error!("🔥🔥🔥 [Middleware] access_token前20个字符: {}", &access_token[..access_token.len().min(20)]);
                       Some(access_token.to_string())
                     } else {
-                      error!("[Middleware] JSON 中没有找到 access_token 字段。JSON keys: {:?}", json.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+                      error!("🔥🔥🔥 [Middleware] JSON 中没有找到 access_token 字段");
                       None
                     }
                   },
                   Err(e) => {
-                    error!("[Middleware] Token 不是有效的 JSON，解析错误: {:?}", e);
+                    error!("🔥🔥🔥 [Middleware] JSON 解析失败: {:?}", e);
                     None
                   }
                 }
               } else {
-                error!("[Middleware] Token 不是 JSON 格式（不以 {{ 开头），实际开头字符: {:?}", token_str.chars().take(5).collect::<String>());
+                error!("🔥🔥🔥 [Middleware] Token 不是 JSON 格式（不以 {{ 开头）");
                 None
               }
             }
@@ -231,7 +297,24 @@ impl ChatCloudService for ChatServiceMiddleware {
       
       // 调用新的 AI 会话接口，传递深度思考和全网搜索参数
       info!("[Middleware] 调用 AI 会话接口，enable_thinking: {}, enable_web_search: {}", enable_thinking, enable_web_search);
-      let stream = stream_ai_session(base_url, &content, Some(model_id), token, enable_thinking, enable_web_search).await?;
+      
+      // 如果有图片或文件附件，使用带附件的版本
+      let stream = if images.is_some() || files.is_some() {
+        info!("[Middleware] 使用带附件的AI会话接口");
+        stream_ai_session_with_attachments(
+          base_url,
+          &content,
+          Some(model_id),
+          token,
+          enable_thinking,
+          enable_web_search,
+          images,
+          files,
+        ).await?
+      } else {
+        info!("[Middleware] 使用普通AI会话接口");
+        stream_ai_session(base_url, &content, Some(model_id), token, enable_thinking, enable_web_search).await?
+      };
       
       // 将 AISessionStreamValue 转换为 QuestionStreamValue
       let converted_stream = stream.map(|result| {
