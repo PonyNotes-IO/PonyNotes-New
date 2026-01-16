@@ -21,6 +21,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';  // 添加这行，用于KeyDownEvent和HardwareKeyboard
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:window_manager/window_manager.dart';
@@ -305,7 +306,29 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
       child: BlocBuilder<SignInBloc, SignInState>(
       builder: (context, state) {
         final theme = AppFlowyTheme.of(context);
-        return Scaffold(
+        return Focus(
+          canRequestFocus: false,  // 不请求焦点，避免与输入框冲突
+          skipTraversal: true,      // 跳过焦点遍历
+          includeSemantics: false,  // 不包含在语义树中
+          onKeyEvent: (node, event) {
+            // 防护代码：检测并忽略重复的KeyDown事件
+            // 这可以解决Flutter键盘状态管理的bug
+            if (event is KeyDownEvent) {
+              try {
+                final physicalKey = event.physicalKey;
+                final isAlreadyPressed = HardwareKeyboard.instance.physicalKeysPressed.contains(physicalKey);
+                
+                if (isAlreadyPressed) {
+                  // 这是重复的KeyDown事件，忽略它
+                  return KeyEventResult.ignored;
+                }
+              } catch (e) {
+                // 如果检查失败，保守地忽略
+              }
+            }
+            return KeyEventResult.ignored;
+          },
+          child: Scaffold(
           appBar: _buildAppBar(),
             backgroundColor: theme.surfaceColorScheme.layer01,
             body: Container(
@@ -378,7 +401,8 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 ),
               ),
             ),
-          );
+          ),  // Scaffold结束
+          );  // Focus结束
         },
       ),
     );
