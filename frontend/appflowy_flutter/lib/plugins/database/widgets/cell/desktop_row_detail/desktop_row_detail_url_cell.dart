@@ -60,29 +60,50 @@ class _LinkTextFieldState extends State<LinkTextField> {
   @override
   void initState() {
     super.initState();
-    HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
+    _updateLinkClickableState();
+    // 使用 Focus 的 onKeyEvent 而不是全局键盘处理器，避免键盘状态不同步
+    widget.focusNode.addListener(_onFocusChange);
   }
 
   @override
   void dispose() {
-    HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
+    widget.focusNode.removeListener(_onFocusChange);
     super.dispose();
   }
 
-  bool _handleGlobalKeyEvent(KeyEvent event) {
+  void _onFocusChange() {
+    if (widget.focusNode.hasFocus) {
+      _updateLinkClickableState();
+    } else {
+      if (isLinkClickable) {
+        setState(() => isLinkClickable = false);
+      }
+    }
+  }
+
+  void _updateLinkClickableState() {
     final keyboard = HardwareKeyboard.instance;
-    final canOpenLink = event is KeyDownEvent &&
-        (keyboard.isControlPressed || keyboard.isMetaPressed);
+    final canOpenLink = keyboard.isControlPressed || keyboard.isMetaPressed;
     if (canOpenLink != isLinkClickable) {
       setState(() => isLinkClickable = canOpenLink);
     }
+  }
 
-    return false;
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    // 只在有焦点时更新状态
+    if (widget.focusNode.hasFocus && event is KeyDownEvent) {
+      _updateLinkClickableState();
+    }
+    // 返回 ignored 让事件继续传播，不拦截输入
+    return KeyEventResult.ignored;
   }
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return Focus(
+      focusNode: widget.focusNode,
+      onKeyEvent: _handleKeyEvent,
+      child: TextField(
       mouseCursor:
           isLinkClickable ? SystemMouseCursors.click : SystemMouseCursors.text,
       controller: widget.controller,
@@ -109,6 +130,6 @@ class _LinkTextFieldState extends State<LinkTextField> {
             ),
         isDense: true,
       ),
-    );
+    ));
   }
 }
