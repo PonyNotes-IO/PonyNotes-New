@@ -115,4 +115,9 @@ class AppFlowyCloudMockAuthService implements AuthService {
   }) async {
     throw UnimplementedError();
   }
+
+  @override
+  Future<FlowyResult<GotrueTokenResponsePB, FlowyError>> refreshToken() {
+    return _appFlowyAuthService.refreshToken();
+  }
 }

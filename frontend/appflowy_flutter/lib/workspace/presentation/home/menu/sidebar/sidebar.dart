@@ -164,28 +164,57 @@ class HomeSideBar extends StatelessWidget {
                 BlocListener<SpaceBloc, SpaceState>(
                   listenWhen: (prev, curr) =>
                       prev.lastCreatedPage?.id != curr.lastCreatedPage?.id ||
-                      prev.isDuplicatingSpace != curr.isDuplicatingSpace,
+                      prev.isDuplicatingSpace != curr.isDuplicatingSpace ||
+                      (prev.currentSpace?.id != curr.currentSpace?.id && curr.currentSpace?.isSpace == true),
                   listener: (context, state) {
                     final page = state.lastCreatedPage;
                     final currentSpace = state.currentSpace;
                     
-                    // 如果当前空间存在且是空间类型视图，并且 lastCreatedPage 是当前空间的子视图
-                    // 说明这是通过 SpaceEvent.open 设置的，此时不应该自动打开第一个文档
-                    // 因为空间统一页面（SpaceHubPlugin）已经在 _section_folder.dart 中通过 openPlugin(view) 打开了
-                    if (currentSpace != null && 
-                        currentSpace.isSpace && 
-                        page != null && 
-                        page.id.isNotEmpty &&
-                        currentSpace.childViews.any((v) => v.id == page.id)) {
-                      // 检查当前打开的插件是否是空间类型（SpaceHubPlugin 使用 PluginType.folder）
+                    // 如果当前空间存在且是空间类型视图
+                    if (currentSpace != null && currentSpace.isSpace) {
+                      // 检查当前打开的插件是否是空间统一页面（SpaceHubPlugin）
                       final tabsBloc = context.read<TabsBloc>();
                       final currentPageManager = tabsBloc.state.currentPageManager;
                       final currentPlugin = currentPageManager.plugin;
+                      
                       // SpaceHubPlugin 的 id 是空间的 id，pluginType 是 folder
                       if (currentPlugin.id == currentSpace.id && 
                           currentPlugin.pluginType == PluginType.folder) {
-                        // 当前打开的是空间统一页面，不自动打开第一个文档
-                        Log.info('[SIDEBAR] Space hub is open, skipping auto-open first document: ${page.name}');
+                        // 当前已经打开了空间统一页面，不需要做任何操作
+                        Log.info('[SIDEBAR] Space hub is already open, skipping auto-open');
+                        if (state.isDuplicatingSpace) {
+                          _duplicateSpaceLoading ??= Loading(context);
+                          _duplicateSpaceLoading?.start();
+                        } else if (_duplicateSpaceLoading != null) {
+                          _duplicateSpaceLoading?.stop();
+                          _duplicateSpaceLoading = null;
+                        }
+                        return;
+                      }
+                      
+                      // 如果当前没有打开空间统一页面，且 lastCreatedPage 是空间的子视图
+                      // 说明这是通过 SpaceEvent.open 设置的，应该打开空间统一页面而不是文档
+                      if (page != null && 
+                          page.id.isNotEmpty &&
+                          currentSpace.childViews.any((v) => v.id == page.id)) {
+                        // 打开空间统一页面
+                        Log.info('[SIDEBAR] Opening space hub for space: ${currentSpace.name}');
+                        context.read<TabsBloc>().openPlugin(currentSpace);
+                        if (state.isDuplicatingSpace) {
+                          _duplicateSpaceLoading ??= Loading(context);
+                          _duplicateSpaceLoading?.start();
+                        } else if (_duplicateSpaceLoading != null) {
+                          _duplicateSpaceLoading?.stop();
+                          _duplicateSpaceLoading = null;
+                        }
+                        return;
+                      }
+                      
+                      // 如果空间刚被设置为 currentSpace，但没有 lastCreatedPage
+                      // 说明是工作区切换后自动加载的空间，应该打开空间统一页面
+                      if (page == null || page.id.isEmpty) {
+                        Log.info('[SIDEBAR] Opening space hub after workspace switch: ${currentSpace.name}');
+                        context.read<TabsBloc>().openPlugin(currentSpace);
                         if (state.isDuplicatingSpace) {
                           _duplicateSpaceLoading ??= Loading(context);
                           _duplicateSpaceLoading?.start();
@@ -197,6 +226,7 @@ class HomeSideBar extends StatelessWidget {
                       }
                     }
                     
+                    // 非空间类型或普通文档的处理
                     if (page == null || page.id.isEmpty) {
                       // open the blank page
                       context

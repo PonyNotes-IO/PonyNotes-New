@@ -306,20 +306,31 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
 
             // don't open the page automatically on mobile
             if (UniversalPlatform.isDesktop) {
-              // open the first page by default
-              if (currentSpace.childViews.isNotEmpty) {
-                final firstPage = currentSpace.childViews.first;
+              // 如果是空间类型，不设置 lastCreatedPage，让 sidebar 打开空间统一页面
+              // 如果是普通文件夹，则打开第一个文档
+              if (currentSpace.isSpace) {
+                // 空间类型：不设置 lastCreatedPage，由 sidebar 的 BlocListener 打开空间统一页面
                 emit(
                   state.copyWith(
-                    lastCreatedPage: firstPage,
+                    lastCreatedPage: ViewPB(),  // 空 ViewPB，表示不自动打开文档
                   ),
                 );
               } else {
-                emit(
-                  state.copyWith(
-                    lastCreatedPage: ViewPB(),
-                  ),
-                );
+                // 普通文件夹：打开第一个文档
+                if (currentSpace.childViews.isNotEmpty) {
+                  final firstPage = currentSpace.childViews.first;
+                  emit(
+                    state.copyWith(
+                      lastCreatedPage: firstPage,
+                    ),
+                  );
+                } else {
+                  emit(
+                    state.copyWith(
+                      lastCreatedPage: ViewPB(),
+                    ),
+                  );
+                }
               }
             }
             afterOpen?.call();

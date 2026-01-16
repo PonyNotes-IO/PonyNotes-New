@@ -129,12 +129,10 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           plugin.init();
           final widgetBuilder = plugin.widgetBuilder;
 
-          // 如果文档插件实现了 NavigationItem，并且提供了 rightBarItem，则使用它
-          if (widgetBuilder is NavigationItem) {
-            final toolbar = widgetBuilder.rightBarItem;
-            if (toolbar != null) {
-              return toolbar;
-            }
+          // PluginWidgetBuilder 已经 mixin 了 NavigationItem，直接访问 rightBarItem
+          final toolbar = widgetBuilder.rightBarItem;
+          if (toolbar != null) {
+            return toolbar;
           }
         } catch (e) {
           debugPrint('[SpaceHub] Error getting rightBarItem for ${selectedView.name}: $e');
@@ -256,6 +254,21 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     debugPrint('[SpaceHub] _SpaceHubContentState initState, spaceView: ${widget.spaceView.name} (${widget.spaceView.id})');
     // 尝试从 SpaceBloc 获取当前空间的第一个文档作为默认选中
     _trySelectFirstDocument();
+  }
+
+  @override
+  void didUpdateWidget(_SpaceHubContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 如果空间切换了，重置选中文档状态
+    if (oldWidget.spaceView.id != widget.spaceView.id) {
+      debugPrint('[SpaceHub] Space changed from ${oldWidget.spaceView.name} to ${widget.spaceView.name}, resetting selected view');
+      setState(() {
+        _selectedView = null;
+      });
+      widget.selectedViewNotifier.value = null;
+      // 重新尝试选中新空间的第一个文档
+      _trySelectFirstDocument();
+    }
   }
 
   void _trySelectFirstDocument() {
