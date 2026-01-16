@@ -55,7 +55,7 @@ class AIModelService {
       // 从环境变量或配置获取API地址
       const apiBaseUrl = String.fromEnvironment(
         'API_BASE_URL',
-        defaultValue: 'http://8.152.101.166',
+        defaultValue: 'https://api.xiaomabiji.com',
       );
       
       debugPrint('🔍 正在从 $apiBaseUrl 获取AI模型列表...');

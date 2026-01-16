@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_animation_list_widget.dart';
@@ -39,6 +41,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     this.preferredModelId,
     this.enableDeepThinking = false,
     this.enableWebSearch = false,
+    this.initialImagePaths,
   })  : chatController = InMemoryChatController(),
         listener = ChatMessageListener(chatId: chatId),
         super(ChatState.initial()) {
@@ -83,6 +86,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       Log.info('   - 首选模型: $preferredModelId');
       Log.info('   - 深度思考: ${enableDeepThinking ? "开启" : "关闭"}');
       Log.info('   - 全网搜索: ${enableWebSearch ? "开启" : "关闭"}');
+      Log.info('   - 图片数量: ${initialImagePaths?.length ?? 0}');
     } else {
       Log.info('ℹ️ ChatBloc: 没有初始消息');
     }
@@ -94,6 +98,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final String? preferredModelId;
   final bool enableDeepThinking;
   final bool enableWebSearch;
+  final List<String>? initialImagePaths;
   String? _workspaceId;
   final ChatMessageListener listener;
   final ChatController chatController;
@@ -304,10 +309,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             
             if (!isClosed) {
               Log.info('📤 ChatBloc: 自动发送初始消息');
+              
+              // 准备metadata（包含图片）
+              final metadata = <String, dynamic>{};
+              
+              // 处理初始图片
+              if (initialImagePaths != null && initialImagePaths!.isNotEmpty) {
+                Log.info('📸 ChatBloc: 准备发送 ${initialImagePaths!.length} 张图片');
+                final imageBase64List = await _convertImagesToBase64(initialImagePaths!);
+                if (imageBase64List.isNotEmpty) {
+                  metadata['images'] = imageBase64List;
+                  metadata['has_images'] = true;
+                  Log.info('✅ ChatBloc: 已添加 ${imageBase64List.length} 张图片到metadata');
+                }
+              }
+              
               add(
                 ChatEvent.sendMessage(
                   message: initialMessage!,
-                  metadata: const {},
+                  metadata: metadata,
                 ),
               );
             } else {
@@ -1000,6 +1020,29 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       },
       (err) => Log.error("Failed to regenerate answer: ${err.msg}"),
     );
+  }
+
+  /// 将图片文件路径列表转换为base64列表
+  Future<List<String>> _convertImagesToBase64(List<String> imagePaths) async {
+    final base64List = <String>[];
+    
+    for (final path in imagePaths) {
+      try {
+        final file = File(path);
+        if (await file.exists()) {
+          final bytes = await file.readAsBytes();
+          final base64 = base64Encode(bytes);
+          base64List.add(base64);
+          Log.info('✅ ChatBloc: 图片转换为base64成功 - $path (${bytes.length} bytes)');
+        } else {
+          Log.warn('⚠️  ChatBloc: 图片文件不存在 - $path');
+        }
+      } catch (e) {
+        Log.error('❌ ChatBloc: 图片转换失败 - $path: $e');
+      }
+    }
+    
+    return base64List;
   }
 }
 

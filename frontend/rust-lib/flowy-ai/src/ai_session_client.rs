@@ -123,10 +123,17 @@ pub async fn stream_ai_session_with_attachments(
   use std::time::Duration;
 
   let url = format!("{}/api/ai/chat/session", base_url);
-  trace!("[AISession] 调用新接口: {}, model: {:?}, enable_thinking: {}, enable_web_search: {}, has_images: {}, has_files: {}", 
-    url, preferred_model, enable_thinking, enable_web_search, images.is_some(), files.is_some());
+  error!("🔥🔥🔥 [AISession] 准备调用新接口: {}", url);
+  error!("🔥🔥🔥 [AISession] 参数 - model: {:?}, enable_thinking: {}, enable_web_search: {}, has_images: {}, has_files: {}", 
+    preferred_model, enable_thinking, enable_web_search, images.is_some(), files.is_some());
 
-  let client = Client::new();
+  let client = Client::builder()
+    .danger_accept_invalid_certs(true)  // 接受自签名证书
+    .build()
+    .map_err(|e| {
+      error!("[AISession] 创建HTTP客户端失败: {}", e);
+      FlowyError::new(ErrorCode::Internal, format!("创建HTTP客户端失败: {}", e))
+    })?;
   let mut body = serde_json::json!({
     "message": message,
   });
@@ -179,14 +186,18 @@ pub async fn stream_ai_session_with_attachments(
     error!("[AISession] 未提供 token，请求可能失败");
   }
 
+  error!("🔥🔥🔥 [AISession] 开始发送POST请求到: {}", url);
   let resp = request
     .send()
     .await
     .map_err(|e| {
-      error!("[AISession] 请求失败: {}", e);
+      error!("🔥🔥🔥 [AISession] 请求失败: {}", e);
       FlowyError::new(ErrorCode::Internal, format!("HTTP请求失败: {}", e))
     })?;
 
+  let status = resp.status();
+  error!("🔥🔥🔥 [AISession] 收到响应，状态码: {}", status);
+  
   if !resp.status().is_success() {
     let status = resp.status();
     let error_text =
