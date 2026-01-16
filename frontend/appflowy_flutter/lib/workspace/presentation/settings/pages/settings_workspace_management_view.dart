@@ -167,9 +167,9 @@ class _SettingsWorkspaceManagementViewState
       title: '仅工作空间所有者可以创建团队协作区',
       description: '仅允许工作空间所有者创建团队协作区',
       actions: [
-        Toggle(
-          value: _onlyOwnerCanCreateTeamWorkspace,
-          onChanged: (value) {
+            Toggle(
+              value: _onlyOwnerCanCreateTeamWorkspace,
+              onChanged: (value) {
             // value == true means turning on (limit to owners)
             // value == false means turning off (allow all members)
             final message =
@@ -183,9 +183,9 @@ class _SettingsWorkspaceManagementViewState
                 _updateWorkspaceSetting(value);
               },
             );
-          },
-        ),
-      ],
+              },
+            ),
+          ],
       children: const [],
     );
   }
@@ -310,10 +310,10 @@ class _SettingsWorkspaceManagementViewState
           Expanded(
             flex: 3,
             child: FlowyText(
-              '更新时间',
-              fontSize: 12,
-              color: Theme.of(context).hintColor,
-              fontWeight: FontWeight.w500,
+                  '更新时间',
+                  fontSize: 12,
+                  color: Theme.of(context).hintColor,
+                  fontWeight: FontWeight.w500,
             ),
           ),
           // 管理 列 header保持占位以保证列宽对齐（省略号位于该列）
@@ -526,9 +526,9 @@ class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 FlowyText(
-                  updateTime,
-                  fontSize: 14,
-                ),
+              updateTime,
+              fontSize: 14,
+            ),
                 const HSpace(8),
                 SizedBox(
                   width: 36,
@@ -671,11 +671,43 @@ class _SpaceRow extends StatefulWidget {
 class _SpaceRowState extends State<_SpaceRow> {
   late SpacePermission _selectedPermission;
   bool _isUpdating = false;
+  bool _isVisible = true;
 
   @override
   void initState() {
     super.initState();
     _selectedPermission = widget.space.spacePermission;
+    _checkVisibility();
+  }
+
+  Future<void> _checkVisibility() async {
+    // For private spaces, only show if current user is in team ACL allowEmails
+    try {
+      if (widget.space.spacePermission == SpacePermission.private) {
+        final userService = UserBackendService(userId: widget.userProfile.id);
+        final res = await userService.getTeamACL(widget.space.id);
+        res.fold((acl) {
+          final allowed = acl.allowEmails.contains(widget.userProfile.email) ||
+              acl.allowUserIds.contains(widget.userProfile.id.toInt());
+          setState(() {
+            _isVisible = allowed;
+          });
+        }, (err) {
+          // if cannot fetch ACL, default to hidden for privacy
+          setState(() {
+            _isVisible = false;
+          });
+        });
+      } else {
+        setState(() {
+          _isVisible = true;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isVisible = false;
+      });
+    }
   }
 
   String _permissionLabel(SpacePermission p) {
@@ -698,6 +730,7 @@ class _SpaceRowState extends State<_SpaceRow> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isVisible) return const SizedBox.shrink();
     final name = widget.space.name;
     final createdAt = _normalizeCreateTime(widget.space.createTime);
 

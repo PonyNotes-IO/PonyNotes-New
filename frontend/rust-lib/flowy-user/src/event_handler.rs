@@ -870,6 +870,179 @@ pub async fn invite_workspace_member_handler(
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
+pub async fn create_join_request_handler(
+  data: AFPluginData<CreateJoinRequestPB>,
+  manager: AFPluginState<Weak<UserManager>>,
+) -> DataResult<JoinRequestPB, FlowyError> {
+  let payload = data.try_into_inner()?;
+  let mgr = upgrade_manager(manager)?;
+  let uid = mgr.user_id()?;
+  let mut conn = mgr.db_connection(uid)?;
+
+  let workspace_id = payload.workspace_id.replace('\'', "''");
+  let space_id = payload.space_id.replace('\'', "''");
+  let reason = payload.reason.replace('\'', "''");
+  let now = chrono::Utc::now().timestamp();
+
+  let insert_sql = format!("INSERT INTO join_requests(workspace_id, space_id, requester_id, reason, status, created_at, updated_at) VALUES ('{}', '{}', {}, '{}', 'pending', {}, {})", workspace_id, space_id, payload.requester_id, reason, now, now);
+  diesel::sql_query(insert_sql).execute(&mut conn)?;
+
+  // select last inserted row
+  #[derive(QueryableByName)]
+  struct JR {
+    #[sql_type = "diesel::sql_types::BigInt"]
+    id: i64,
+    #[sql_type = "diesel::sql_types::Text"]
+    workspace_id: String,
+    #[sql_type = "diesel::sql_types::Text"]
+    space_id: String,
+    #[sql_type = "diesel::sql_types::BigInt"]
+    requester_id: i64,
+    #[sql_type = "diesel::sql_types::Text"]
+    reason: String,
+    #[sql_type = "diesel::sql_types::Text"]
+    status: String,
+    #[sql_type = "diesel::sql_types::BigInt"]
+    created_at: i64,
+    #[sql_type = "diesel::sql_types::BigInt"]
+    updated_at: i64,
+  }
+
+  let qr = "SELECT id, workspace_id, space_id, requester_id, reason, status, created_at, updated_at FROM join_requests WHERE rowid = last_insert_rowid()";
+  let rows: Vec<JR> = diesel::sql_query(qr).load(&mut conn).unwrap_or_default();
+  if let Some(r) = rows.into_iter().next() {
+    let pb = JoinRequestPB {
+      id: r.id,
+      workspace_id: r.workspace_id,
+      space_id: r.space_id,
+      requester_id: r.requester_id,
+      reason: r.reason,
+      status: r.status,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    };
+    data_result_ok(pb)
+  } else {
+    Err(FlowyError::new(ErrorCode::Internal, "Failed to create join request"))
+  }
+}
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub async fn list_join_requests_handler(
+  data: AFPluginData<QueryWorkspacePB>,
+  manager: AFPluginState<Weak<UserManager>>,
+) -> DataResult<RepeatedJoinRequestPB, FlowyError> {
+  let params = data.try_into_inner()?;
+  let mgr = upgrade_manager(manager)?;
+  let uid = mgr.user_id()?;
+  let mut conn = mgr.db_connection(uid)?;
+
+  let workspace_id = params.workspace_id.replace('\'', "''");
+  let query = format!("SELECT id, workspace_id, space_id, requester_id, reason, status, created_at, updated_at FROM join_requests WHERE workspace_id = '{}'", workspace_id);
+  #[derive(QueryableByName)]
+  struct JR2 {
+    #[sql_type = "diesel::sql_types::BigInt"]
+    id: i64,
+    #[sql_type = "diesel::sql_types::Text"]
+    workspace_id: String,
+    #[sql_type = "diesel::sql_types::Text"]
+    space_id: String,
+    #[sql_type = "diesel::sql_types::BigInt"]
+    requester_id: i64,
+    #[sql_type = "diesel::sql_types::Text"]
+    reason: String,
+    #[sql_type = "diesel::sql_types::Text"]
+    status: String,
+    #[sql_type = "diesel::sql_types::BigInt"]
+    created_at: i64,
+    #[sql_type = "diesel::sql_types::BigInt"]
+    updated_at: i64,
+  }
+  let rows: Vec<JR2> = diesel::sql_query(query).load(&mut conn).unwrap_or_default();
+  let items = rows.into_iter().map(|r| JoinRequestPB {
+    id: r.id,
+    workspace_id: r.workspace_id,
+    space_id: r.space_id,
+    requester_id: r.requester_id,
+    reason: r.reason,
+    status: r.status,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  }).collect();
+  data_result_ok(RepeatedJoinRequestPB { items })
+}
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub async fn handle_join_request_handler(
+  data: AFPluginData<HandleJoinRequestPB>,
+  manager: AFPluginState<Weak<UserManager>>,
+) -> Result<(), FlowyError> {
+  let params = data.try_into_inner()?;
+  let mgr = upgrade_manager(manager)?;
+  let uid = mgr.user_id()?;
+  // only workspace owner can approve/reject
+  let member = mgr.get_workspace_member_info(uid, &Uuid::from_str(&params.workspace_id)?).await?;
+  if member.role != Role::Owner {
+    return Err(FlowyError::new(ErrorCode::NotEnoughPermissions, "仅工作空间所有者可以审批加入请求"));
+  }
+
+  let mut conn = mgr.db_connection(uid)?;
+  let status = if params.approve { "approved" } else { "rejected" };
+  let now = chrono::Utc::now().timestamp();
+  let update_sql = format!("UPDATE join_requests SET status = '{}', updated_at = {} WHERE id = {}", status, now, params.request_id);
+  diesel::sql_query(update_sql).execute(&mut conn)?;
+
+  if params.approve {
+    // add member to workspace by requester_id
+    // fetch requester email from local profile
+    #[derive(QueryableByName)]
+    struct RequesterRow {
+      #[sql_type = "diesel::sql_types::BigInt"]
+      requester_id: i64,
+    }
+
+    let query = format!("SELECT requester_id FROM join_requests WHERE id = {}", params.request_id);
+    let rows: Vec<RequesterRow> = diesel::sql_query(query).load(&mut conn).unwrap_or_default();
+    if let Some(r) = rows.into_iter().next() {
+      let rid = r.requester_id;
+      if let Ok(profile) = mgr.get_user_profile_from_disk(rid, &params.workspace_id).await {
+        let _ = mgr
+          .invite_member_to_workspace(Uuid::from_str(&params.workspace_id)?, profile.email, Role::Member)
+          .await;
+      }
+    }
+  }
+
+  Ok(())
+}
+
+#[tracing::instrument(level = "debug", skip_all, err)]
+pub async fn cancel_join_request_handler(
+  data: AFPluginData<CancelJoinRequestPB>,
+  manager: AFPluginState<Weak<UserManager>>,
+) -> Result<(), FlowyError> {
+  let params = data.try_into_inner()?;
+  let mgr = upgrade_manager(manager)?;
+  let uid = mgr.user_id()?;
+  let mut conn = mgr.db_connection(uid)?;
+  // only requester can cancel
+  #[derive(QueryableByName)]
+  struct RequesterRow2 {
+    #[sql_type = "diesel::sql_types::BigInt"]
+    requester_id: i64,
+  }
+  let query = format!("SELECT requester_id FROM join_requests WHERE id = {}", params.request_id);
+  let rows: Vec<RequesterRow2> = diesel::sql_query(query).load(&mut conn).unwrap_or_default();
+  let row = rows.into_iter().next().map(|r| r.requester_id);
+  if row != Some(uid) {
+    return Err(FlowyError::new(ErrorCode::NotEnoughPermissions, "只有请求者可以撤销加入请求"));
+  }
+  let delete_sql = format!("DELETE FROM join_requests WHERE id = {}", params.request_id);
+  diesel::sql_query(delete_sql).execute(&mut conn)?;
+  Ok(())
+}
+
+#[tracing::instrument(level = "debug", skip_all, err)]
 pub async fn list_workspace_invitations_handler(
   manager: AFPluginState<Weak<UserManager>>,
 ) -> DataResult<RepeatedWorkspaceInvitationPB, FlowyError> {
