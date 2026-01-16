@@ -171,6 +171,8 @@ dependencies:
   ffi: ^2.1.0
   # webview_flutter: ^4.10.0  # 已替换为 flutter_inappwebview (支持 Windows)
   flutter_inappwebview: ^6.0.0
+  in_app_purchase: ^3.2.3
+  decimal: ^2.3.0
 
 dev_dependencies:
   # Introduce talker to log the bloc events, and only log the events in the development mode

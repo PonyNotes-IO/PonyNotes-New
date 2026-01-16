@@ -14,6 +14,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:bloc/bloc.dart';
+import 'package:decimal/decimal.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:equatable/equatable.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -1219,6 +1220,7 @@ class AccountManagementBloc
     );
   }
 
+  ///订阅会员，支付成功后调用
   Future<void> _createOrUpdateSubscription(
     int planId,
     String billingType,
@@ -1623,8 +1625,8 @@ class AccountManagementBloc
           ),
         );
 
-        // 先创建/更新订阅
-        await _createOrUpdateSubscription(planId, billingType, emit);
+        // // 先创建/更新订阅
+        // await _createOrUpdateSubscription(planId, billingType, emit);
 
         // 检查更新后的状态
         final checkState = state;
@@ -1721,27 +1723,62 @@ class AccountManagementBloc
           return;
         }
 
-        final method = methods.first;
-        final paymentType = switch (method) {
-          PaymentMethod.applePay => PaymentType.applePay,
-          PaymentMethod.wechatPay => PaymentType.wechatPay,
-          PaymentMethod.alipay => PaymentType.alipay,
-        };
-
+        // todo 选择支付方式（默认支付宝）
+        // final method = methods.first;
+        // final paymentType = switch (method) {
+        //   PaymentMethod.applePay => PaymentType.applePay,
+        //   PaymentMethod.wechatPay => PaymentType.wechatPay,
+        //   PaymentMethod.alipay => PaymentType.alipay,
+        // };
+        final method = PaymentMethod.alipay;
+        final paymentType = PaymentMethod.alipay.name;
         // 创建支付订单
+        // 将 userInfo 转换为 JSON 字符串（接口要求 String 类型）
+        final userInfoJson = jsonEncode({
+          'userId': userProfile.id.toString(),
+          'name': userProfile.name,
+          'email': userProfile.email,
+        });
+
+        // 根据选中的标签页设置参数
+        // 如果是会员升级（upgrade），设置 planId，addonId 为 null
+        // 如果是空间补充包（addon），设置 addonId，planId 为 null
+        String? planIdValue;
+        String? addonIdValue;
+        
+        if (selectedTab == MembershipTab.upgrade) {
+          // 会员升级：设置 planId（planId 在前面已经检查过不为 null）
+          planIdValue = '$planId';
+          addonIdValue = null;
+        } else if (selectedTab == MembershipTab.addon) {
+          // 空间补充包：设置 addonId
+          planIdValue = null;
+          if (selectedAddonIndex >= 0 && 
+              selectedAddonIndex < addons.length && 
+              addons[selectedAddonIndex].id != null) {
+            addonIdValue = '${addons[selectedAddonIndex].id}';
+          } else {
+            addonIdValue = null;
+          }
+        } else {
+          // 默认情况：会员升级
+          planIdValue = '$planId';
+          addonIdValue = null;
+        }
+
         final createRequest = PaymentCreateRequest(
-          amount: selectedPrice,
-          paymentType: paymentType,
-          productName: planConfig.planNameCn.isNotEmpty
-              ? planConfig.planNameCn
-              : planConfig.planName,
-          openId: workspaceId,
-          url: '',
-          userInfo: <String, dynamic>{
-            'userId': userProfile.id.toString(),
-            'name': userProfile.name,
-            'email': userProfile.email,
-          },
+            amount: Decimal.parse(selectedPrice.toString()).toString(),
+            paymentType: paymentType,
+            userInfo: userInfoJson, // 必传：JSON 字符串格式
+            productName: planConfig.planNameCn.isNotEmpty
+                ? planConfig.planNameCn
+                : planConfig.planName, // 可选
+            openid: paymentType == PaymentMethod.wechatPay.name
+                ? workspaceId
+                : null, // 可选：微信支付场景必传
+            planId: planIdValue, // 会员升级时设置
+            addonId: addonIdValue, // 空间补充包时设置
+            billingType: billingType
         );
 
         final orderResult = await PaymentApi.createPaymentOrder(createRequest);
@@ -1794,6 +1831,7 @@ class AccountManagementBloc
           );
           return;
         }
+
 
         // 调用支付工具类
         final result = await PaymentUtil.pay(

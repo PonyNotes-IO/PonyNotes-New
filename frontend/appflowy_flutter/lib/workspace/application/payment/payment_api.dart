@@ -17,32 +17,79 @@ class PaymentType {
 }
 
 /// 创建支付订单入参
+/// 根据接口文档：/api/payment/create
 class PaymentCreateRequest {
-  final double amount;
+  /// 支付金额（精确到分/元，按业务金额单位定义）- 必传
+  final String amount;
+  
+  /// 支付类型（如微信/支付宝/银行卡等，传参值按业务枚举定义）- 必传
   final String paymentType;
-  final String productName;
-  final String openId;
-  final String url;
-  final Map<String, dynamic> userInfo;
+  
+  /// 用户信息（JSON/自定义格式，存储用户标识/账号等核心信息）- 必传
+  /// 注意：接口要求为 String 类型（JSON 字符串格式）
+  final String userInfo;
+  
+  /// 产品名称（支付对应的商品/服务名称）- 可选
+  final String? productName;
+  
+  /// 方案ID（套餐/定价方案唯一标识）- 可选
+  final String? planId;
+  
+  /// 计费类型（如按次/包月/包年等，传参值按业务枚举定义）- 可选
+  final String? billingType;
+  
+  /// 附加项ID（增值服务/附加功能唯一标识）- 可选
+  final String? addonId;
+  
+  /// 微信开放ID（微信支付场景必传，非微信支付可空）- 可选
+  /// 注意：接口字段名为 openid（小写d）
+  final String? openid;
+  
+  /// 回调/跳转URL（支付成功/失败后的页面/接口地址）- 可选
+  final String? url;
 
   const PaymentCreateRequest({
     required this.amount,
     required this.paymentType,
-    required this.productName,
-    required this.openId,
-    required this.url,
     required this.userInfo,
+    this.productName,
+    this.planId,
+    this.billingType,
+    this.addonId,
+    this.openid,
+    this.url,
   });
 
   Map<String, dynamic> toJson() {
-    return <String, dynamic>{
+    final json = <String, dynamic>{
+      // 必传参数：确保 amount 始终存在
+      // 注意：保持为数字类型，后端 BigDecimal 可以接收数字
       'amount': amount,
       'paymentType': paymentType,
-      'productName': productName,
-      'openId': openId,
-      'url': url,
-      'userInfo': userInfo,
+      'userInfo': userInfo, // 已经是 JSON 字符串格式
     };
+    
+    // 只添加非空的可选参数
+    if (productName != null && productName!.isNotEmpty) {
+      json['productName'] = productName;
+    }
+    if (planId != null && planId!.isNotEmpty) {
+      json['planId'] = planId;
+    }
+    if (billingType != null && billingType!.isNotEmpty) {
+      json['billingType'] = billingType;
+    }
+    if (addonId != null && addonId!.isNotEmpty) {
+      json['addonId'] = addonId;
+    }
+    if (openid != null && openid!.isNotEmpty) {
+      json['openid'] = openid; // 注意：字段名是小写 openid
+    }
+    if (url != null && url!.isNotEmpty) {
+      json['url'] = url;
+    }
+    
+    return json;
   }
 }
 
@@ -79,15 +126,23 @@ class PaymentCreateResponse {
 class PaymentApi {
   /// 调用后端 `/api/payment/create` 创建支付订单
   ///
-  /// 根据你提供的截图，请求参数结构为：
-  /// {
-  ///   amount: data.amount,
-  ///   paymentType: data.paymentType,
-  ///   productName: data.productName,
-  ///   openId: data.openId,
-  ///   url: data.url,
-  ///   userInfo: data.userInfo,
-  /// }
+  /// 接口文档：
+  /// - 请求方式：POST
+  /// - 接口地址：/api/payment/create
+  /// - 返回格式：JSON (AjaxResult 统一响应格式)
+  ///
+  /// 必传参数：
+  /// - amount: 支付金额（BigDecimal，精确到分/元）
+  /// - paymentType: 支付类型（String，如微信/支付宝/银行卡等）
+  /// - userInfo: 用户信息（String，JSON/自定义格式）
+  ///
+  /// 可选参数：
+  /// - productName: 产品名称（String）
+  /// - planId: 方案ID（String）
+  /// - billingType: 计费类型（String，如按次/包月/包年等）
+  /// - addonId: 附加项ID（String）
+  /// - openid: 微信开放ID（String，微信支付场景必传）
+  /// - url: 回调/跳转URL（String）
   static Future<FlowyResult<PaymentCreateResponse, FlowyError>>
       createPaymentOrder(
     PaymentCreateRequest request,
@@ -100,7 +155,8 @@ class PaymentApi {
         (error) => throw error,
       );
 
-      final baseUrl = cloudConfig.serverUrl;
+      // final baseUrl = cloudConfig.serverUrl;
+      final baseUrl = "https://www.xiaomabiji.com/prod-api";
 
       // 2. 获取当前用户 Profile（包含 token）
       final userProfileResult = await UserBackendService.getCurrentUserProfile();
@@ -124,14 +180,72 @@ class PaymentApi {
 
       final payload = request.toJson();
       Log.info('[PaymentApi] Request payload: ${jsonEncode(payload)}');
+      Log.info('[PaymentApi] Amount value: ${payload['amount']}, type: ${payload['amount'].runtimeType}');
 
+      // 确保 payload 中包含所有必传字段
+      if (!payload.containsKey('amount') || payload['amount'] == null) {
+        Log.error('[PaymentApi] Amount is missing in payload!');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Amount is required but missing in request payload',
+        );
+      }
+
+      // 根据错误信息，后端期望的是 request parameter（@RequestParam）
+      // 这意味着参数应该在查询参数或表单数据中，而不是 JSON body
+      // 对于 BigDecimal，Spring Boot 通常接收字符串格式的数字
+      
+      // 将 amount 转换为字符串格式（BigDecimal 在后端通常接收字符串）
+      final formData = <String, String>{};
+      
+      // 处理 amount：转换为字符串，保留两位小数
+      final amountValue = payload['amount'];
+      if (amountValue is num) {
+        formData['amount'] = amountValue.toStringAsFixed(2);
+      } else {
+        formData['amount'] = amountValue.toString();
+      }
+      
+      // 处理 paymentType
+      formData['paymentType'] = payload['paymentType'] as String;
+      
+      // 处理 userInfo（已经是 JSON 字符串）
+      formData['userInfo'] = payload['userInfo'] as String;
+      
+      // 处理可选参数
+      if (payload['productName'] != null && (payload['productName'] as String).isNotEmpty) {
+        formData['productName'] = payload['productName'] as String;
+      }
+      if (payload['planId'] != null && (payload['planId'] as String).isNotEmpty) {
+        formData['planId'] = payload['planId'] as String;
+      }
+      if (payload['billingType'] != null && (payload['billingType'] as String).isNotEmpty) {
+        formData['billingType'] = payload['billingType'] as String;
+      }
+      if (payload['addonId'] != null && (payload['addonId'] as String).isNotEmpty) {
+        formData['addonId'] = payload['addonId'] as String;
+      }
+      if (payload['openid'] != null && (payload['openid'] as String).isNotEmpty) {
+        formData['openid'] = payload['openid'] as String;
+      }
+      if (payload['url'] != null && (payload['url'] as String).isNotEmpty) {
+        formData['url'] = payload['url'] as String;
+      }
+
+      Log.info('[PaymentApi] Form data: $formData');
+      Log.info('[PaymentApi] Amount (form): ${formData['amount']}');
+
+      // 使用表单格式发送（application/x-www-form-urlencoded）
       final response = await http.post(
         uri,
         headers: <String, String>{
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode(payload),
+        body: formData.entries
+            .map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+            .join('&'),
       );
 
       Log.info('[PaymentApi] Response status: ${response.statusCode}');

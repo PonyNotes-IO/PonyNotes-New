@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/services.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
 
 /// 支付方式枚举
 enum PaymentMethod {
@@ -68,14 +70,19 @@ class PaymentPlatformSupport {
 
 /// 支付工具类
 ///
-/// 当前先打通整体调用流程，具体平台 SDK 接入通过 MethodChannel
-/// 在各平台原生侧实现：
-/// - Apple Pay（macOS）：startApplePay
+/// Apple Pay 使用 in_app_purchase 包处理（App Store 内购）
+/// 其他支付方式通过 MethodChannel 在各平台原生侧实现：
 /// - 微信支付：startWeChatPay
 /// - 支付宝支付：startAlipayPay
 class PaymentUtil {
   static const MethodChannel _channel =
       MethodChannel('com.ponynotes.payment/channel');
+  
+  // In-App Purchase 实例
+  static final InAppPurchase _inAppPurchase = InAppPurchase.instance;
+  
+  // 购买结果监听器（用于处理异步购买结果）
+  static StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
 
   /// 根据指定支付方式发起支付
   ///
@@ -115,43 +122,129 @@ class PaymentUtil {
     }
   }
 
-  /// Apple Pay 支付（macOS）
+  /// Apple Pay 支付（macOS/iOS）- 使用 in_app_purchase 处理 App Store 内购
   static Future<PaymentResult> _payWithApplePay({
     required int amount,
     required String currency,
     required String orderId,
     Map<String, dynamic>? extra,
   }) async {
-    if (!Platform.isMacOS) {
-      return PaymentResult.failure(message: '当前平台不支持 Apple Pay');
+    if (!Platform.isMacOS && !Platform.isIOS) {
+      return PaymentResult.failure(message: '当前平台不支持 App Store 内购');
     }
 
     try {
-      final result = await _channel.invokeMapMethod<String, dynamic>(
-        'startApplePay',
-        <String, dynamic>{
-          'amount': amount,
-          'currency': currency,
-          'orderId': orderId,
-          'extra': extra ?? <String, dynamic>{},
-        },
+      // 检查是否可用
+      final bool available = await _inAppPurchase.isAvailable();
+      if (!available) {
+        return PaymentResult.failure(message: 'App Store 内购不可用');
+      }
+
+      // 从 extra 中获取产品 ID（productId）
+      // 如果没有提供，尝试从 orderId 或其他字段中获取
+      final String? productId = extra?['productId'] as String?;
+      if (productId == null || productId.isEmpty) {
+        Log.error('Apple Pay: 缺少 productId，无法发起内购');
+        return PaymentResult.failure(message: '缺少产品 ID');
+      }
+
+      Log.info('Apple Pay: 开始购买产品，productId: $productId, orderId: $orderId');
+
+      // 设置购买结果监听器（如果还没有设置）
+      if (_purchaseSubscription == null) {
+        _purchaseSubscription = _inAppPurchase.purchaseStream.listen(
+          (List<PurchaseDetails> purchaseDetailsList) {
+            _handlePurchaseUpdates(purchaseDetailsList);
+          },
+          onDone: () {
+            Log.info('Apple Pay: 购买流已关闭');
+            _purchaseSubscription?.cancel();
+            _purchaseSubscription = null;
+          },
+          onError: (error) {
+            Log.error('Apple Pay: 购买流错误: $error');
+          },
+        );
+      }
+
+      // 获取产品详情
+      final ProductDetailsResponse productDetailResponse =
+          await _inAppPurchase.queryProductDetails({productId});
+
+      if (productDetailResponse.error != null) {
+        Log.error('Apple Pay: 查询产品失败: ${productDetailResponse.error}');
+        return PaymentResult.failure(
+          message: '查询产品失败: ${productDetailResponse.error?.message ?? '未知错误'}',
+        );
+      }
+
+      if (productDetailResponse.productDetails.isEmpty) {
+        Log.error('Apple Pay: 未找到产品: $productId');
+        return PaymentResult.failure(message: '未找到产品: $productId');
+      }
+
+      final ProductDetails productDetails = productDetailResponse.productDetails.first;
+
+      // 创建购买参数
+      final PurchaseParam purchaseParam = PurchaseParam(
+        productDetails: productDetails,
       );
 
-      final success = result?['success'] == true;
-      final message = (result?['message'] as String?) ?? '';
-      final paidOrderId = result?['orderId'] as String?;
+      // 发起购买（根据产品类型选择合适的方法）
+      // 如果是订阅类产品，使用 buyNonConsumable 或 buyConsumable
+      // 如果是订阅，应该使用 buyNonConsumable（非消耗性产品）
+      final bool purchaseInitiated = await _inAppPurchase.buyNonConsumable(
+        purchaseParam: purchaseParam,
+      );
 
-      return success
-          ? PaymentResult.success(
-              message: message.isEmpty ? '支付成功' : message,
-              orderId: paidOrderId ?? orderId,
-            )
-          : PaymentResult.failure(
-              message: message.isEmpty ? '支付失败' : message,
-            );
+      if (!purchaseInitiated) {
+        Log.error('Apple Pay: 购买请求失败');
+        return PaymentResult.failure(message: '购买请求失败');
+      }
+
+      Log.info('Apple Pay: 购买请求已发起，等待用户确认');
+      
+      // 由于 in_app_purchase 的购买结果是异步的，需要通过 Stream 监听
+      // 这里先返回成功，表示购买流程已启动
+      // 实际的购买结果会在 _handlePurchaseUpdates 中处理
+      return PaymentResult.success(
+        message: '购买请求已发起，请完成支付',
+        orderId: orderId,
+      );
     } catch (e, s) {
       Log.error('Apple Pay 支付异常: $e\n$s');
-      return PaymentResult.failure(message: 'Apple Pay 支付异常');
+      return PaymentResult.failure(message: 'Apple Pay 支付异常: $e');
+    }
+  }
+
+  /// 处理购买更新（购买结果回调）
+  static void _handlePurchaseUpdates(List<PurchaseDetails> purchaseDetailsList) {
+    for (final PurchaseDetails purchaseDetails in purchaseDetailsList) {
+      Log.info('Apple Pay: 收到购买更新，productId: ${purchaseDetails.productID}, status: ${purchaseDetails.status}');
+
+      if (purchaseDetails.status == PurchaseStatus.pending) {
+        Log.info('Apple Pay: 购买进行中...');
+        // 可以在这里显示加载状态
+      } else if (purchaseDetails.status == PurchaseStatus.purchased ||
+          purchaseDetails.status == PurchaseStatus.restored) {
+        Log.info('Apple Pay: 购买成功');
+        // 验证收据（应该在后端验证）
+        // 这里只是标记为已完成，实际验证应该在后端进行
+        if (purchaseDetails.pendingCompletePurchase) {
+          _inAppPurchase.completePurchase(purchaseDetails);
+        }
+      } else if (purchaseDetails.status == PurchaseStatus.error) {
+        Log.error('Apple Pay: 购买失败: ${purchaseDetails.error}');
+        // 处理错误
+        if (purchaseDetails.pendingCompletePurchase) {
+          _inAppPurchase.completePurchase(purchaseDetails);
+        }
+      } else if (purchaseDetails.status == PurchaseStatus.canceled) {
+        Log.info('Apple Pay: 用户取消了购买');
+        if (purchaseDetails.pendingCompletePurchase) {
+          _inAppPurchase.completePurchase(purchaseDetails);
+        }
+      }
     }
   }
 
@@ -202,7 +295,10 @@ class PaymentUtil {
     required String orderId,
     Map<String, dynamic>? extra,
   }) async {
+
     if (!Platform.isWindows) {
+
+
       return PaymentResult.failure(message: '当前平台不支持支付宝支付');
     }
 
