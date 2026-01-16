@@ -1832,22 +1832,21 @@ class AccountManagementBloc
           return;
         }
 
-
-        // 调用支付工具类
-        final result = await PaymentUtil.pay(
-          method: method,
-          amount: (order.amount * 100).round(),
-          currency: 'CNY',
-          orderId: order.orderId,
-          extra: <String, dynamic>{
-            'plan': planConfig.planNameCn.isNotEmpty
-                ? planConfig.planNameCn
-                : planConfig.planName,
-            'duration': billingType,
-            'displayPrice': selectedPrice,
-            'order': order.raw,
-          },
-        );
+        // 如果有支付 URL，保存订单信息到 state，由 UI 层显示支付弹框
+        // 将订单信息编码到 paymentResult 中（格式：PAYMENT_URL:payUrl|orderNo:xxx|expireTime:xxx）
+        String paymentResultMessage;
+        if (order.hasPayUrl) {
+          final parts = <String>['PAYMENT_URL:${order.payUrl}'];
+          if (order.orderNo.isNotEmpty) {
+            parts.add('orderNo:${order.orderNo}');
+          }
+          if (order.expireTime != null && order.expireTime!.isNotEmpty) {
+            parts.add('expireTime:${order.expireTime}');
+          }
+          paymentResultMessage = parts.join('|');
+        } else {
+          paymentResultMessage = '订单创建成功，订单号: ${order.orderNo}';
+        }
 
         emit(
           AccountManagementState.ready(
@@ -1864,9 +1863,7 @@ class AccountManagementBloc
             isLoadingAddons: isLoadingAddons,
             isProcessingPayment: false,
             error: null,
-            paymentResult: result.success
-                ? '支付成功'
-                : (result.message.isNotEmpty ? result.message : '支付失败'),
+            paymentResult: paymentResultMessage,
           ),
         );
       },

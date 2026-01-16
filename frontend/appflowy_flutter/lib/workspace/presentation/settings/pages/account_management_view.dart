@@ -8,6 +8,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart'
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/settings/account/account_management_bloc.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy/workspace/application/payment/payment_webview_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/email_binding_dialog.dart';
@@ -84,30 +85,81 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                 );
               }
               if (paymentResult != null && paymentResult.isNotEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(paymentResult),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-                // 支付成功后刷新订阅信息
-                if (paymentResult.contains('成功')) {
-                  context.read<SettingsDialogBloc>().add(
-                        const SettingsDialogEvent.initial(),
-                      );
-                  try {
-                    final workspaceBloc = context.read<UserWorkspaceBloc?>();
-                    if (workspaceBloc != null) {
-                      workspaceBloc.add(
-                        UserWorkspaceEvent.updateCloudSyncEnabled(
-                            enabled: true),
-                      );
-                      workspaceBloc.add(
-                        UserWorkspaceEvent.fetchCurrentSubscription(),
-                      );
+                // 检查是否是支付 URL（需要显示支付弹框）
+                if (paymentResult.startsWith('PAYMENT_URL:')) {
+                  // 解析支付信息
+                  final parts = paymentResult.split('|');
+                  String? payUrl;
+                  String? orderNo;
+                  String? expireTime;
+                  
+                  for (final part in parts) {
+                    if (part.startsWith('PAYMENT_URL:')) {
+                      payUrl = part.substring('PAYMENT_URL:'.length);
+                    } else if (part.startsWith('orderNo:')) {
+                      orderNo = part.substring('orderNo:'.length);
+                    } else if (part.startsWith('expireTime:')) {
+                      expireTime = part.substring('expireTime:'.length);
                     }
-                  } catch (e) {
-                    Log.warn('无法刷新 UserWorkspaceBloc: $e');
+                  }
+                  
+                  if (payUrl != null && payUrl.isNotEmpty) {
+                    // 显示支付弹框
+                    showPaymentWebViewDialog(
+                      context,
+                      payUrl: payUrl,
+                      orderNo: orderNo,
+                      expireTime: expireTime,
+                    ).then((paymentSuccess) {
+                      // 支付完成后刷新订阅信息
+                      if (paymentSuccess == true) {
+                        context.read<SettingsDialogBloc>().add(
+                              const SettingsDialogEvent.initial(),
+                            );
+                        try {
+                          final workspaceBloc = context.read<UserWorkspaceBloc?>();
+                          if (workspaceBloc != null) {
+                            workspaceBloc.add(
+                              UserWorkspaceEvent.updateCloudSyncEnabled(
+                                  enabled: true),
+                            );
+                            workspaceBloc.add(
+                              UserWorkspaceEvent.fetchCurrentSubscription(),
+                            );
+                          }
+                        } catch (e) {
+                          Log.warn('无法刷新 UserWorkspaceBloc: $e');
+                        }
+                      }
+                    });
+                  }
+                } else {
+                  // 普通消息提示
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(paymentResult),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                  // 支付成功后刷新订阅信息
+                  if (paymentResult.contains('成功')) {
+                    context.read<SettingsDialogBloc>().add(
+                          const SettingsDialogEvent.initial(),
+                        );
+                    try {
+                      final workspaceBloc = context.read<UserWorkspaceBloc?>();
+                      if (workspaceBloc != null) {
+                        workspaceBloc.add(
+                          UserWorkspaceEvent.updateCloudSyncEnabled(
+                              enabled: true),
+                        );
+                        workspaceBloc.add(
+                          UserWorkspaceEvent.fetchCurrentSubscription(),
+                        );
+                      }
+                    } catch (e) {
+                      Log.warn('无法刷新 UserWorkspaceBloc: $e');
+                    }
                   }
                 }
               }

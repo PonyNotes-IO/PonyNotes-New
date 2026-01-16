@@ -93,31 +93,116 @@ class PaymentCreateRequest {
   }
 }
 
-/// 创建支付订单返回结果（根据后端返回结构可以再扩展）
-class PaymentCreateResponse {
-  final String orderId;
-  final double amount;
-  final Map<String, dynamic> raw;
+/// 支付订单数据（data 字段内容）
+class PaymentOrderData {
+  /// 订单号
+  final String orderNo;
 
-  const PaymentCreateResponse({
-    required this.orderId,
-    required this.amount,
-    required this.raw,
+  /// 二维码URL（可能为 null）
+  final String? qrCodeUrl;
+
+  /// 过期时间
+  final String? expireTime;
+
+  /// 支付URL（HTML form 或 URL）
+  final String? payUrl;
+
+  /// 支付类型
+  final String? payType;
+
+  const PaymentOrderData({
+    required this.orderNo,
+    this.qrCodeUrl,
+    this.expireTime,
+    this.payUrl,
+    this.payType,
   });
 
+  factory PaymentOrderData.fromJson(Map<String, dynamic> json) {
+    return PaymentOrderData(
+      orderNo: (json['orderNo'] ?? json['orderId'] ?? json['id'] ?? '').toString(),
+      qrCodeUrl: json['qrCodeUrl'] as String?,
+      expireTime: json['expireTime'] as String?,
+      payUrl: json['payUrl'] as String?,
+      payType: json['payType'] as String?,
+    );
+  }
+
+  /// 兼容旧版本的 orderId（使用 orderNo）
+  String get orderId => orderNo;
+
+  /// 检查是否有支付URL（HTML form 或 URL）
+  bool get hasPayUrl => payUrl != null && payUrl!.isNotEmpty;
+
+  /// 检查是否是 HTML form 格式
+  bool get isHtmlForm => hasPayUrl && payUrl!.contains('<form');
+}
+
+/// 创建支付订单返回结果
+/// 根据后端返回结构：{msg: "操作成功", code: 200, data: {orderNo, qrCodeUrl, expireTime, payUrl, payType}}
+class PaymentCreateResponse {
+  /// 响应消息
+  final String msg;
+
+  /// 响应码
+  final int code;
+
+  /// 订单数据
+  final PaymentOrderData? data;
+
+  const PaymentCreateResponse({
+    required this.msg,
+    required this.code,
+    this.data,
+  });
+
+  /// 是否成功
+  bool get isSuccess => code == 200 && data != null;
+
+  /// 兼容旧版本的 orderId（使用 data.orderNo）
+  String get orderId => data?.orderNo ?? '';
+
+  /// 兼容旧版本的 orderNo
+  String get orderNo => data?.orderNo ?? '';
+
+  /// 兼容旧版本的 amount（从 data 中提取，如果存在）
+  double get amount {
+    // 如果 data 中有 amount 字段，使用它
+    // 否则返回 0.0
+    return 0.0;
+  }
+
+  /// 兼容旧版本的 payUrl
+  String? get payUrl => data?.payUrl;
+
+  /// 兼容旧版本的 qrCodeUrl
+  String? get qrCodeUrl => data?.qrCodeUrl;
+
+  /// 兼容旧版本的 expireTime
+  String? get expireTime => data?.expireTime;
+
+  /// 兼容旧版本的 payType
+  String? get payType => data?.payType;
+
+  /// 兼容旧版本的 hasPayUrl
+  bool get hasPayUrl => data?.hasPayUrl ?? false;
+
+  /// 兼容旧版本的 isHtmlForm
+  bool get isHtmlForm => data?.isHtmlForm ?? false;
+
   factory PaymentCreateResponse.fromJson(Map<String, dynamic> json) {
-    final data = json['data'] is Map<String, dynamic>
-        ? json['data'] as Map<String, dynamic>
-        : json;
-    final orderId = (data['orderId'] ?? data['id'] ?? '').toString();
-    final amountValue = (data['amount'] is num)
-        ? (data['amount'] as num).toDouble()
-        : 0.0;
+    final msg = (json['msg'] as String?) ?? '操作成功';
+    final code = (json['code'] as int?) ?? 200;
+
+    PaymentOrderData? orderData;
+    if (json['data'] is Map<String, dynamic>) {
+      orderData = PaymentOrderData.fromJson(json['data'] as Map<String, dynamic>);
+    }
 
     return PaymentCreateResponse(
-      orderId: orderId,
-      amount: amountValue,
-      raw: data,
+      msg: msg,
+      code: code,
+      data: orderData,
     );
   }
 }
@@ -156,7 +241,7 @@ class PaymentApi {
       );
 
       // final baseUrl = cloudConfig.serverUrl;
-      final baseUrl = "https://www.xiaomabiji.com/prod-api";
+      final baseUrl = "https://www.xiaomabiji.com";
 
       // 2. 获取当前用户 Profile（包含 token）
       final userProfileResult = await UserBackendService.getCurrentUserProfile();
@@ -175,7 +260,7 @@ class PaymentApi {
         );
       }
 
-      final uri = Uri.parse('$baseUrl/api/payment/create');
+      final uri = Uri.parse('$baseUrl/prod-api/api/payment/create');
       Log.info('[PaymentApi] Calling $uri');
 
       final payload = request.toJson();
@@ -262,16 +347,41 @@ class PaymentApi {
 
         final Map<String, dynamic> json =
             jsonDecode(response.body) as Map<String, dynamic>;
+        
+        // 解析响应
         final result = PaymentCreateResponse.fromJson(json);
-        if (result.orderId.isEmpty) {
-          Log.error('[PaymentApi] orderId is empty in response: $json');
+        
+        // 检查响应是否成功
+        if (!result.isSuccess) {
+          Log.error('[PaymentApi] Create payment order failed: code=${result.code}, msg=${result.msg}');
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.Internal
+              ..msg = result.msg,
+          );
+        }
+        
+        // 检查订单数据是否存在
+        if (result.data == null) {
+          Log.error('[PaymentApi] Order data is null in response: $json');
           return FlowyResult.failure(
             FlowyError()
               ..code = ErrorCode.FailedToParseQuery
-              ..msg = result.raw.toString(),
+              ..msg = '订单数据为空',
+          );
+        }
+        
+        // 检查订单号
+        if (result.orderNo.isEmpty) {
+          Log.error('[PaymentApi] orderNo is empty in response: $json');
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.FailedToParseQuery
+              ..msg = '订单号为空',
           );
         }
 
+        Log.info('[PaymentApi] Payment order created successfully: orderNo=${result.orderNo}, hasPayUrl=${result.hasPayUrl}');
         return FlowyResult.success(result);
       } else {
         final errorMsg = response.body.isNotEmpty
