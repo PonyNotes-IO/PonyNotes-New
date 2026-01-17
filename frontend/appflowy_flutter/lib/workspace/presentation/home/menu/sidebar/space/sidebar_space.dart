@@ -19,7 +19,6 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_publish_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_template_new_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_inbox_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart'
     hide AFRolePB;
@@ -69,9 +68,6 @@ class SidebarSpace extends StatelessWidget {
             // calendar button
             const VSpace(4.0),
             const SidebarCalendarButton(),
-            // inbox button
-            const VSpace(4.0),
-            const SidebarInboxButton(),
             // favorite button
             const VSpace(4.0),
             const SidebarFavoriteButton(),

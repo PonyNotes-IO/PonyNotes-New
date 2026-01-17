@@ -14,7 +14,6 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_share_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_publish_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_inbox_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -51,9 +50,6 @@ class SidebarFolder extends StatelessWidget {
             // calendar button
             const VSpace(sectionPadding),
             const SidebarCalendarButton(),
-            // inbox button
-            const VSpace(sectionPadding),
-            const SidebarInboxButton(),
             // favorite
             const VSpace(sectionPadding),
             const SidebarFavoriteButton(),
