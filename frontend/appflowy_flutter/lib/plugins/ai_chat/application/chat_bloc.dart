@@ -287,57 +287,39 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       skipAIChatWelcomePage = true;
       Log.info('✅ ChatBloc: 已设置跳过欢迎页标志');
       
-      // 等待模型设置完成后再发送消息
-      Future.delayed(
-        const Duration(milliseconds: 500),
-        () async {
-          if (!isClosed) {
-            // 等待模型设置完成（最多等待3秒）
-            if (!_modelSettingCompleted) {
-              Log.info('⏳ ChatBloc: 等待模型设置完成...');
-              try {
-                await _modelSettingCompleter.future.timeout(
-                  const Duration(seconds: 3),
-                  onTimeout: () {
-                    Log.warn('⚠️ ChatBloc: 模型设置超时，继续发送消息');
-                  },
-                );
-              } catch (e) {
-                Log.warn('⚠️ ChatBloc: 等待模型设置时出错: $e');
-              }
-            }
+      // 【修复】立即发送消息,不要延迟等待模型设置
+      // 因为延迟期间可能会有第二次调用导致任务被取消
+      Log.info('📤 ChatBloc: 立即发送初始消息(不等待模型设置)');
+      
+      // 准备metadata（包含图片）
+      final metadata = <String, dynamic>{};
+      
+      // 处理初始图片
+      if (initialImagePaths != null && initialImagePaths!.isNotEmpty) {
+        Log.info('📸 ChatBloc: 准备发送 ${initialImagePaths!.length} 张图片');
+        _convertImagesToBase64(initialImagePaths!).then((imageBase64List) {
+          if (imageBase64List.isNotEmpty && !isClosed) {
+            metadata['images'] = imageBase64List;
+            metadata['has_images'] = true;
+            Log.info('✅ ChatBloc: 已添加 ${imageBase64List.length} 张图片到metadata');
             
-            if (!isClosed) {
-              Log.info('📤 ChatBloc: 自动发送初始消息');
-              
-              // 准备metadata（包含图片）
-              final metadata = <String, dynamic>{};
-              
-              // 处理初始图片
-              if (initialImagePaths != null && initialImagePaths!.isNotEmpty) {
-                Log.info('📸 ChatBloc: 准备发送 ${initialImagePaths!.length} 张图片');
-                final imageBase64List = await _convertImagesToBase64(initialImagePaths!);
-                if (imageBase64List.isNotEmpty) {
-                  metadata['images'] = imageBase64List;
-                  metadata['has_images'] = true;
-                  Log.info('✅ ChatBloc: 已添加 ${imageBase64List.length} 张图片到metadata');
-                }
-              }
-              
-              add(
-                ChatEvent.sendMessage(
-                  message: initialMessage!,
-                  metadata: metadata,
-                ),
-              );
-            } else {
-              Log.warn('⚠️ ChatBloc: bloc已关闭，无法发送初始消息');
-            }
-          } else {
-            Log.warn('⚠️ ChatBloc: bloc已关闭，无法发送初始消息');
+            add(
+              ChatEvent.sendMessage(
+                message: initialMessage!,
+                metadata: metadata,
+              ),
+            );
           }
-        },
-      );
+        });
+      } else {
+        // 没有图片,直接发送
+        add(
+          ChatEvent.sendMessage(
+            message: initialMessage!,
+            metadata: metadata,
+          ),
+        );
+      }
     } else if (initialMessage != null && 
                initialMessage!.isNotEmpty && 
                chatController.messages.isNotEmpty) {

@@ -50,12 +50,21 @@ impl ChatServiceMiddleware {
       "通义千问 Turbo" => "qwen-turbo".to_string(),
       "通义千问 Max" => "qwen-max".to_string(),
       "豆包" => "doubao".to_string(),
+      "Auto" => {
+        // "Auto"表示自动选择，使用默认模型
+        info!("[Middleware] 模型名称为Auto，使用默认模型deepseek-chat");
+        "deepseek-chat".to_string()
+      },
       // 如果名称不匹配，尝试转换为小写并添加连字符
       _ => {
         // 尝试通过名称推断ID
-        if model_name.to_lowercase().contains("deepseek") {
+        let lower_name = model_name.to_lowercase();
+        if lower_name == "auto" {
+          info!("[Middleware] 模型名称为auto（小写），使用默认模型deepseek-chat");
           "deepseek-chat".to_string()
-        } else if model_name.contains("通义") || model_name.to_lowercase().contains("qwen") {
+        } else if lower_name.contains("deepseek") {
+          "deepseek-chat".to_string()
+        } else if model_name.contains("通义") || lower_name.contains("qwen") {
           if model_name.contains("Turbo") || model_name.contains("turbo") {
             "qwen-turbo".to_string()
           } else if model_name.contains("Max") || model_name.contains("max") {
@@ -63,12 +72,12 @@ impl ChatServiceMiddleware {
           } else {
             "qwen-turbo".to_string() // 默认使用turbo
           }
-        } else if model_name.contains("豆包") || model_name.to_lowercase().contains("doubao") {
+        } else if model_name.contains("豆包") || lower_name.contains("doubao") {
           "doubao".to_string()
         } else {
-          // 如果完全不匹配，返回原始名称，让后端使用默认模型
-          warn!("[Middleware] 未知的模型名称: {}, 使用默认模型", model_name);
-          model_name.to_string()
+          // 如果完全不匹配，使用默认模型而不是返回原始名称
+          warn!("[Middleware] 未知的模型名称: {}, 使用默认模型deepseek-chat", model_name);
+          "deepseek-chat".to_string()
         }
       }
     }
@@ -248,39 +257,37 @@ impl ChatCloudService for ChatServiceMiddleware {
               trace!("[Middleware] 获取到 token，长度: {}, 前10个字符: {}", token_str.len(), &token_str[..token_str.len().min(10)]);
               Some(token_str)
             } else {
-              error!("🔥🔥🔥 [Middleware] Token 格式不正确，不是 JWT token");
-              error!("🔥🔥🔥 [Middleware] Token长度: {}", token_str.len());
-              error!("🔥🔥🔥 [Middleware] Token前50个字符: {}", &token_str[..token_str.len().min(50)]);
+              // Token 不是以 "eyJ" 开头，可能是 JSON 格式
+              let trimmed = token_str.trim();
               
               // 如果 token 是 JSON 格式，尝试解析并提取 access_token
-              let trimmed = token_str.trim();  // 使用trim()而不是trim_start()，去除前后空格
-              error!("🔥🔥🔥 [Middleware] trim后长度: {}", trimmed.len());
-              error!("🔥🔥🔥 [Middleware] trim后前50个字符: {}", &trimmed[..trimmed.len().min(50)]);
-              error!("🔥🔥🔥 [Middleware] 是否以{{开头: {}", trimmed.starts_with('{'));
-              
               if trimmed.starts_with('{') {
-                error!("🔥🔥🔥 [Middleware] 检测到 JSON 格式 token，开始解析");
+                info!("[Middleware] 检测到 JSON 格式 token，开始解析");
                 match serde_json::from_str::<serde_json::Value>(trimmed) {
                   Ok(json) => {
-                    error!("🔥🔥🔥 [Middleware] JSON 解析成功");
-                    error!("🔥🔥🔥 [Middleware] JSON keys: {:?}", json.as_object().map(|o| o.keys().collect::<Vec<_>>()));
                     if let Some(access_token) = json.get("access_token").and_then(|v| v.as_str()) {
-                      error!("🔥🔥🔥 [Middleware] 从 JSON 中提取 access_token 成功，长度: {}", access_token.len());
-                      error!("🔥🔥🔥 [Middleware] access_token前20个字符: {}", &access_token[..access_token.len().min(20)]);
-                      Some(access_token.to_string())
+                      info!("[Middleware] 从 JSON 中提取 access_token 成功，长度: {}", access_token.len());
+                      // 验证提取的 token 是否是有效的 JWT
+                      if access_token.starts_with("eyJ") {
+                        Some(access_token.to_string())
+                      } else {
+                        error!("[Middleware] 提取的 access_token 不是有效的 JWT token");
+                        None
+                      }
                     } else {
-                      error!("🔥🔥🔥 [Middleware] JSON 中没有找到 access_token 字段");
+                      error!("[Middleware] JSON 中没有找到 access_token 字段");
                       None
                     }
                   },
                   Err(e) => {
-                    error!("🔥🔥🔥 [Middleware] JSON 解析失败: {:?}", e);
+                    error!("[Middleware] JSON 解析失败: {:?}", e);
                     None
                   }
                 }
               } else {
-                error!("🔥🔥🔥 [Middleware] Token 不是 JSON 格式（不以 {{ 开头）");
-                None
+                // 既不是 JWT 也不是 JSON，直接使用（可能是其他格式的 token）
+                warn!("[Middleware] Token 格式异常，但尝试直接使用");
+                Some(token_str)
               }
             }
           },

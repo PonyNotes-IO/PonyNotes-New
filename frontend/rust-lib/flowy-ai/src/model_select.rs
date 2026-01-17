@@ -427,36 +427,67 @@ impl ServerAiSource {
     }
     
     let url = "https://api.xiaomabiji.com/api/ai/chat/models";
-    error!("🔥🔥🔥 [ModelSelect] 准备从自定义API获取模型列表: {}", url);
+    info!("[ModelSelect] 准备从自定义API获取模型列表: {}", url);
     
     let client = Client::builder()
       .danger_accept_invalid_certs(true)  // 接受自签名证书
+      .user_agent("AppFlowyClient/0.9.9")  // 添加User-Agent
+      .timeout(std::time::Duration::from_secs(30))  // 添加超时
       .build()
       .map_err(|e| {
         error!("[ModelSelect] 创建HTTP客户端失败: {}", e);
         FlowyError::new(ErrorCode::Internal, format!("创建HTTP客户端失败: {}", e))
       })?;
     
-    error!("🔥🔥🔥 [ModelSelect] 开始发送GET请求到: {}", url);
-    let resp = client
+    info!("[ModelSelect] 开始发送GET请求到: {}", url);
+    
+    let request = client
       .get(url)
-      .header("Content-Type", "application/json")
+      .header("Content-Type", "application/json");
+      
+    info!("[ModelSelect] 请求headers构建完成");
+    
+    let resp = request
       .send()
       .await
       .map_err(|e| {
-        error!("🔥🔥🔥 [ModelSelect] 请求失败: {}", e);
+        error!("[ModelSelect] 请求失败: {}", e);
+        error!("[ModelSelect] 错误详情: {:?}", e);
+        // 检查是否是连接问题
+        if e.is_connect() {
+          error!("[ModelSelect] 连接错误 - 可能是网络问题或服务器不可达");
+        } else if e.is_timeout() {
+          error!("[ModelSelect] 请求超时");
+        } else if e.is_request() {
+          error!("[ModelSelect] 请求构建错误");
+        }
         FlowyError::new(ErrorCode::Internal, format!("HTTP请求失败: {}", e))
       })?;
     
     let status = resp.status();
-    error!("🔥🔥🔥 [ModelSelect] 收到响应，状态码: {}", status);
+    let response_url = resp.url().clone();
+    info!("[ModelSelect] 收到响应");
+    info!("[ModelSelect]   - 状态码: {}", status);
+    info!("[ModelSelect]   - 实际请求URL: {}", response_url);
     
     if !resp.status().is_success() {
       let error_text = resp.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
       error!("[ModelSelect] 服务器返回错误: {} - {}", status, error_text);
+      error!("[ModelSelect] 请求的URL: {}", response_url);
+      error!("[ModelSelect] 请求URL长度: {}, 响应URL长度: {}", url.len(), response_url.as_str().len());
+      
+      // 如果是404错误，提供更详细的诊断信息
+      if status == 404 {
+        error!("[ModelSelect] 404错误 - 可能的原因:");
+        error!("[ModelSelect]   1. Nginx路由配置问题");
+        error!("[ModelSelect]   2. 后端服务未正确启动");
+        error!("[ModelSelect]   3. 路由注册顺序问题");
+        error!("[ModelSelect]   4. URL路径不正确");
+      }
+      
       return Err(FlowyError::new(
         ErrorCode::Internal,
-        format!("服务器返回错误: {}", status),
+        format!("服务器返回错误: {} - {}", status, error_text),
       ));
     }
     
