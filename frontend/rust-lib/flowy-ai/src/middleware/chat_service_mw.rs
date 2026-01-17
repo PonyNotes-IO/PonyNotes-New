@@ -252,41 +252,71 @@ impl ChatCloudService for ChatServiceMiddleware {
         let token_result = flowy_user_pub::sql::select_user_token(uid, &mut conn);
         match token_result {
           Ok(token_str) => {
+            // 打印原始token信息用于调试
+            let token_preview = if token_str.len() > 30 {
+              format!("{}...", &token_str[..30])
+            } else {
+              token_str.clone()
+            };
+            info!("[Middleware] 原始token信息 - 长度: {}, 前30个字符: {}", token_str.len(), token_preview);
+            
             // 检查 token 格式：JWT token 应该以 "eyJ" 开头（Base64 编码的 JSON）
             if token_str.starts_with("eyJ") {
-              trace!("[Middleware] 获取到 token，长度: {}, 前10个字符: {}", token_str.len(), &token_str[..token_str.len().min(10)]);
+              info!("[Middleware] Token 是有效的 JWT 格式，直接使用");
               Some(token_str)
             } else {
               // Token 不是以 "eyJ" 开头，可能是 JSON 格式
               let trimmed = token_str.trim();
+              info!("[Middleware] Token 不是 JWT 格式，检查是否为 JSON 格式");
               
               // 如果 token 是 JSON 格式，尝试解析并提取 access_token
               if trimmed.starts_with('{') {
                 info!("[Middleware] 检测到 JSON 格式 token，开始解析");
                 match serde_json::from_str::<serde_json::Value>(trimmed) {
                   Ok(json) => {
+                    info!("[Middleware] JSON 解析成功，查找 access_token 字段");
                     if let Some(access_token) = json.get("access_token").and_then(|v| v.as_str()) {
                       info!("[Middleware] 从 JSON 中提取 access_token 成功，长度: {}", access_token.len());
                       // 验证提取的 token 是否是有效的 JWT
                       if access_token.starts_with("eyJ") {
+                        info!("[Middleware] access_token 是有效的 JWT 格式");
                         Some(access_token.to_string())
                       } else {
-                        error!("[Middleware] 提取的 access_token 不是有效的 JWT token");
+                        error!("[Middleware] 提取的 access_token 不是有效的 JWT token，前20字符: {}", 
+                          if access_token.len() > 20 { &access_token[..20] } else { access_token });
                         None
                       }
                     } else {
-                      error!("[Middleware] JSON 中没有找到 access_token 字段");
-                      None
+                      // 尝试查找其他可能的字段名
+                      if let Some(token_val) = json.get("token").and_then(|v| v.as_str()) {
+                        info!("[Middleware] 从 JSON 'token' 字段中提取成功，长度: {}", token_val.len());
+                        if token_val.starts_with("eyJ") {
+                          Some(token_val.to_string())
+                        } else {
+                          error!("[Middleware] 'token' 字段不是有效的 JWT token");
+                          None
+                        }
+                      } else {
+                        error!("[Middleware] JSON 中没有找到 access_token 或 token 字段，可用字段: {:?}", 
+                          json.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+                        None
+                      }
                     }
                   },
                   Err(e) => {
-                    error!("[Middleware] JSON 解析失败: {:?}", e);
+                    error!("[Middleware] JSON 解析失败: {:?}, 原始token前50字符: {}", e, 
+                      if trimmed.len() > 50 { &trimmed[..50] } else { trimmed });
                     None
                   }
                 }
               } else {
-                // 既不是 JWT 也不是 JSON，直接使用（可能是其他格式的 token）
-                warn!("[Middleware] Token 格式异常，但尝试直接使用");
+                // 既不是 JWT 也不是 JSON，打印详细信息并尝试直接使用
+                error!("[Middleware] Token 格式异常 - 不是JWT(不以eyJ开头)，也不是JSON(不以{{开头)");
+                error!("[Middleware] Token 首字符: '{}', ASCII: {}", 
+                  trimmed.chars().next().unwrap_or('?'), 
+                  trimmed.bytes().next().unwrap_or(0));
+                // 尝试直接使用，可能是其他有效格式
+                warn!("[Middleware] 尝试直接使用原始 token");
                 Some(token_str)
               }
             }

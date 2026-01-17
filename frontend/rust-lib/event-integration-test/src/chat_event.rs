@@ -61,6 +61,7 @@ impl EventIntegrationTest {
       prompt_id: None,
       model: None,
       enable_thinking: false,
+      enable_web_search: false,
     };
 
     EventBuilder::new(self.clone())
