@@ -23,6 +23,11 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/ai_chat_usage_indicator.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/workspace/presentation/widgets/user_avatar.dart';
+import 'package:appflowy/shared/appflowy_network_image.dart';
+import 'package:appflowy/util/string_extension.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:string_validator/string_validator.dart';
 
 class HomePagePluginBuilder extends PluginBuilder {
   @override
@@ -249,8 +254,6 @@ class _HomePageState extends State<HomePage> {
                       customToolbarWidth: constraints.maxWidth -
                           40, // 工具栏宽度 = 容器宽度 - 左右边距(40)
                     ),
-                    const SizedBox(height: 8),
-                    const _HomeAIUsageIndicator(),
                   ],
                 );
               },
@@ -386,23 +389,16 @@ class _HomePageState extends State<HomePage> {
           );
         }
 
-        return SizedBox(
-          height: 132,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: validRecentViews.length + 1, // +1 for the "添加笔记本" card
-            itemBuilder: (context, index) {
-              if (index == validRecentViews.length) {
-                // 最后一个位置显示"添加笔记本"卡片
-                return _buildAddNotebookCard();
-              }
-              
-              final recentView = validRecentViews[index];
-              return _buildRecentViewCard(recentView.item);
-            },
-          ),
-        );
+        return _buildRecentSectionWithArrows(validRecentViews);
       },
+    );
+  }
+
+  Widget _buildRecentSectionWithArrows(List<SectionViewPB> validRecentViews) {
+    return _RecentSectionWithArrows(
+      recentViews: validRecentViews,
+      buildCard: _buildRecentViewCard,
+      buildAddCard: _buildAddNotebookCard,
     );
   }
 
@@ -493,7 +489,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 构建最近访问项目的卡片
-  Widget _buildRecentViewCard(ViewPB view) {
+  Widget _buildRecentViewCard(SectionViewPB sectionView) {
+    final view = sectionView.item;
+    final timestamp = sectionView.timestamp;
+    
     return Container(
       width: 132,
       height: 132,
@@ -503,67 +502,92 @@ class _HomePageState extends State<HomePage> {
         child: Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(10.0),
+            borderRadius: BorderRadius.circular(12.0),
             border: Border.all(
-              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+              color: const Color(0xFFE9E9E9),
               width: 1,
             ),
           ),
           child: Stack(
             children: [
-              // 顶部灰色区域
+              // 顶部彩色区域
               Positioned(
                 top: 1,
                 left: 1,
                 right: 1,
                 child: Container(
-                  height: 65,
+                  height: 37,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: const Color(0xFFE97418).withValues(alpha: 0.05),
                     borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(9),
-                      topRight: Radius.circular(9),
+                      topLeft: Radius.circular(11),
+                      topRight: Radius.circular(11),
                     ),
                   ),
                   child: Center(
                     child: Container(
-                      width: 44,
-                      height: 44,
+                      width: 20,
+                      height: 20,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFF8D69).withValues(alpha: 0.1),
+                        color: const Color(0xFFE97418).withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                       child: const Icon(
-                         Icons.description,
-                         size: 24,
-                         color: Color(0xFFFF8D69),
-                       ),
+                      child: const Icon(
+                        Icons.description,
+                        size: 14,
+                        color: Color(0xFFE97418),
+                      ),
                     ),
                   ),
                 ),
               ),
               
-              // 底部名称区域
+              // 底部名称和时间区域
               Positioned(
                 bottom: 0,
                 left: 0,
                 right: 0,
                 child: Container(
-                  height: 66,
-                  padding: const EdgeInsets.all(8.0),
+                  height: 94,
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      // 标题
                       Text(
                         view.name,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: Theme.of(context).colorScheme.onSurface,
+                          color: Color(0xFF333333),
                         ),
-                        textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                      // 时间和头像
+                      Row(
+                        children: [
+                          // 时间图标
+                          const Icon(
+                            Icons.access_time,
+                            size: 15,
+                            color: Color(0xFF999999),
+                          ),
+                          const SizedBox(width: 4),
+                          // 时间文本
+                          Text(
+                            _formatTimeAgo(timestamp),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF999999),
+                            ),
+                          ),
+                          const Spacer(),
+                          // 用户头像
+                          _buildUserAvatar(view),
+                        ],
                       ),
                     ],
                   ),
@@ -572,6 +596,81 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// 格式化时间显示
+  String _formatTimeAgo(fixnum.Int64 timestamp) {
+    if (timestamp.toInt() == 0) {
+      return '未知';
+    }
+    
+    final now = DateTime.now();
+    final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp.toInt() * 1000);
+    final difference = now.difference(dateTime);
+    
+    if (difference.inMinutes < 1) {
+      return '刚刚';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}分钟前';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}小时前';
+    } else if (difference.inDays == 1) {
+      return '1天前';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}天前';
+    } else {
+      // 超过7天显示具体日期
+      final month = dateTime.month;
+      final day = dateTime.day;
+      return '$month月$day号';
+    }
+  }
+
+  /// 构建用户头像
+  Widget _buildUserAvatar(ViewPB view) {
+    final userProfile = widget.userProfile;
+    if (userProfile == null) {
+      return const SizedBox.shrink();
+    }
+    
+    // 检查是否是当前用户创建的视图
+    final isCurrentUser = view.hasCreatedBy() && 
+        view.createdBy == userProfile.id;
+    
+    if (!isCurrentUser) {
+      return const SizedBox.shrink();
+    }
+    
+    final iconUrl = userProfile.iconUrl;
+    if (iconUrl.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    
+    // 检查是否是URL
+    if (isURL(iconUrl)) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: SizedBox(
+          width: 15,
+          height: 15,
+          child: FlowyNetworkImage(
+            url: iconUrl,
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
+    }
+    
+    // 如果是emoji或其他，使用UserAvatar组件
+    return SizedBox(
+      width: 15,
+      height: 15,
+      child: UserAvatar(
+        iconUrl: iconUrl,
+        name: userProfile.name,
+        size: AFAvatarSize.xs,
       ),
     );
   }
@@ -649,6 +748,149 @@ class _HomePageState extends State<HomePage> {
         );
       }
     }
+  }
+}
+
+/// 带左右滑动箭头的最近访问区域
+class _RecentSectionWithArrows extends StatefulWidget {
+  const _RecentSectionWithArrows({
+    required this.recentViews,
+    required this.buildCard,
+    required this.buildAddCard,
+  });
+
+  final List<SectionViewPB> recentViews;
+  final Widget Function(SectionViewPB) buildCard;
+  final Widget Function() buildAddCard;
+
+  @override
+  State<_RecentSectionWithArrows> createState() => _RecentSectionWithArrowsState();
+}
+
+class _RecentSectionWithArrowsState extends State<_RecentSectionWithArrows> {
+  late final ScrollController _scrollController;
+  bool _showLeftArrow = false;
+  bool _showRightArrow = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_updateArrowVisibility);
+    // 延迟检查，确保ListView已构建
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateArrowVisibility();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_updateArrowVisibility);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _updateArrowVisibility() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    
+    final newShowLeft = _scrollController.offset > 10;
+    final newShowRight = _scrollController.offset <
+        _scrollController.position.maxScrollExtent - 10;
+    
+    if (newShowLeft != _showLeftArrow || newShowRight != _showRightArrow) {
+      setState(() {
+        _showLeftArrow = newShowLeft;
+        _showRightArrow = newShowRight;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        SizedBox(
+          height: 132,
+          child: ListView.builder(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            itemCount: widget.recentViews.length + 1,
+            itemBuilder: (context, index) {
+              if (index == widget.recentViews.length) {
+                return widget.buildAddCard();
+              }
+              return widget.buildCard(widget.recentViews[index]);
+            },
+          ),
+        ),
+        // 左箭头
+        if (_showLeftArrow)
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Theme.of(context).colorScheme.surface,
+                    Theme.of(context).colorScheme.surface.withOpacity(0),
+                  ],
+                ),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.chevron_left, size: 24),
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                onPressed: () {
+                  _scrollController.animateTo(
+                    _scrollController.offset - 150,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                },
+              ),
+            ),
+          ),
+        // 右箭头
+        if (_showRightArrow)
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerRight,
+                  end: Alignment.centerLeft,
+                  colors: [
+                    Theme.of(context).colorScheme.surface,
+                    Theme.of(context).colorScheme.surface.withOpacity(0),
+                  ],
+                ),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.chevron_right, size: 24),
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                onPressed: () {
+                  _scrollController.animateTo(
+                    _scrollController.offset + 150,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 

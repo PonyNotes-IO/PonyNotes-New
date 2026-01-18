@@ -104,14 +104,32 @@ class ChatMessageHandler {
     final now = DateTime.now();
     questionStreamMessageId = timestamp().toString();
 
+    // 构建 metadata，包含图片和文件附件数据
+    final metadata = <String, dynamic>{
+      "$QuestionStream": stream,
+      "chatId": chatId,
+    };
+    
+    // 复制 sentMetadata 中的附件相关字段
+    if (sentMetadata != null) {
+      // 文件列表
+      if (sentMetadata[messageChatFileListKey] != null) {
+        metadata[messageChatFileListKey] = sentMetadata[messageChatFileListKey];
+      }
+      // 图片数据（base64编码）- 用于发送到服务器
+      if (sentMetadata['images'] != null) {
+        metadata['images'] = sentMetadata['images'];
+        Log.info('📸 MessageHandler: 将 ${(sentMetadata['images'] as List).length} 张图片添加到消息metadata');
+      }
+      // 图片标志
+      if (sentMetadata['has_images'] != null) {
+        metadata['has_images'] = sentMetadata['has_images'];
+      }
+    }
+
     return TextMessage(
       author: User(id: userId),
-      metadata: {
-        "$QuestionStream": stream,
-        "chatId": chatId,
-        if (sentMetadata != null)
-          messageChatFileListKey: sentMetadata[messageChatFileListKey],
-      },
+      metadata: metadata,
       id: questionStreamMessageId,
       createdAt: now,
       text: '',
