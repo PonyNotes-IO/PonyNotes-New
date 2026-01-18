@@ -209,9 +209,9 @@ class AccountManagementBloc
         handleUpgradePay: () async => _handleUpgradePay(emit),
         handleAddonPay: () async => _handleAddonPay(emit),
         // 临时注释：等待 freezed 重新生成后取消注释
-        // startPaymentPolling: (orderNo) async => _startPaymentPolling(orderNo, emit),
-        // stopPaymentPolling: () async => _stopPaymentPolling(emit),
-        // checkPaymentStatus: () async => _checkPaymentStatus(emit),
+        startPaymentPolling: (orderNo) async => _startPaymentPolling(orderNo, emit),
+        stopPaymentPolling: () async => _stopPaymentPolling(emit),
+        checkPaymentStatus: () async => _checkPaymentStatus(emit),
       );
     });
   }
@@ -1793,6 +1793,15 @@ class AccountManagementBloc
 
         if (orderResult.isFailure) {
           final error = orderResult.fold((_) => null, (e) => e);
+          String errorMessage = error?.msg ?? '创建支付订单失败';
+          
+          // 处理验签错误，提供更友好的提示
+          if (errorMessage.contains('invalid-signature') || 
+              errorMessage.contains('验签出错') ||
+              errorMessage.contains('签名')) {
+            errorMessage = '支付系统配置异常，请联系客服或稍后重试';
+          }
+          
           emit(
             AccountManagementState.ready(
               subscriptionInfo: subscriptionInfo,
@@ -1807,7 +1816,7 @@ class AccountManagementBloc
               isLoadingPlans: isLoadingPlans,
               isLoadingAddons: isLoadingAddons,
               isProcessingPayment: false,
-              error: error?.msg ?? '创建支付订单失败',
+              error: errorMessage,
               paymentResult: paymentResult,
             ),
           );
@@ -2280,12 +2289,12 @@ class AccountManagementEvent with _$AccountManagementEvent {
   const factory AccountManagementEvent.handleUpgradePay() = _HandleUpgradePay;
   const factory AccountManagementEvent.handleAddonPay() = _HandleAddonPay;
   // 临时注释：等待 freezed 重新生成后取消注释
-  // const factory AccountManagementEvent.startPaymentPolling(String orderNo) =
-  //     _StartPaymentPolling;
-  // const factory AccountManagementEvent.stopPaymentPolling() =
-  //     _StopPaymentPolling;
-  // const factory AccountManagementEvent.checkPaymentStatus() =
-  //     _CheckPaymentStatus;
+  const factory AccountManagementEvent.startPaymentPolling(String orderNo) =
+      _StartPaymentPolling;
+  const factory AccountManagementEvent.stopPaymentPolling() =
+      _StopPaymentPolling;
+  const factory AccountManagementEvent.checkPaymentStatus() =
+      _CheckPaymentStatus;
 }
 
 @freezed

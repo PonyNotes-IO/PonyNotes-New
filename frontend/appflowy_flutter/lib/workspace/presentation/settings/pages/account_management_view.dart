@@ -9,6 +9,7 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/settings/account/account_management_bloc.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/payment_status_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/email_binding_dialog.dart';
@@ -138,7 +139,20 @@ class _AccountManagementViewState extends State<AccountManagementView>
                   if (payUrl != null && payUrl.isNotEmpty) {
                     // 使用浏览器打开支付链接
                     PaymentUtil.webPay(payUrl);
-                    // 注意：支付结果轮询已在 Bloc 的 _handleUpgradePay 中自动启动
+                    
+                    // 显示支付结果查询弹框
+                    if (orderNo != null && orderNo.isNotEmpty) {
+                      showPaymentStatusDialog(
+                        context,
+                        orderNo: orderNo,
+                        onPaymentSuccess: () {
+                          // 支付成功后的处理已在弹框内部完成
+                        },
+                        onClose: () {
+                          // 用户手动关闭弹框
+                        },
+                      );
+                    }
                   }
                 } else {
                   // 普通消息提示
