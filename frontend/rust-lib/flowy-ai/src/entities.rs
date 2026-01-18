@@ -82,6 +82,14 @@ pub struct StreamChatPayloadPB {
 
   #[pb(index = 10)]
   pub enable_web_search: bool,
+
+  /// 图片列表（base64编码），用于多模态AI模型
+  #[pb(index = 11)]
+  pub images: Vec<String>,
+
+  /// 是否包含图片
+  #[pb(index = 12)]
+  pub has_images: bool,
 }
 
 #[derive(Default, Debug)]
@@ -96,6 +104,10 @@ pub struct StreamMessageParams {
   pub model: Option<AIModel>,
   pub enable_thinking: bool,
   pub enable_web_search: bool,
+  /// 图片列表（base64编码），用于多模态AI模型
+  pub images: Vec<String>,
+  /// 是否包含图片
+  pub has_images: bool,
 }
 
 #[derive(Default, ProtoBuf, Validate, Clone, Debug)]

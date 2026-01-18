@@ -551,7 +551,8 @@ class WorkspaceMemberBloc
       currentWorkspace.fold((s) {
         _workspaceId.value = s.id;
       }, (e) {
-        assert(false, 'Failed to read current workspace: $e');
+        // 注意：不使用 assert，因为在某些情况下（如数据同步禁用时）这可能会失败
+        // 这不应该导致程序崩溃
         Log.error('Failed to read current workspace: $e');
       });
     }

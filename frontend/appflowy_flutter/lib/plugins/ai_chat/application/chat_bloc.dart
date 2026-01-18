@@ -927,8 +927,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     add(ChatEvent.receiveMessage(questionStreamMessage));
 
+    // 从 metadata 中提取图片数据
+    List<String>? images;
+    bool hasImages = false;
+    if (metadata != null) {
+      final imagesData = metadata['images'];
+      final hasImagesData = metadata['has_images'];
+      if (imagesData is List && imagesData.isNotEmpty) {
+        images = imagesData.cast<String>();
+        hasImages = true;
+        Log.info('📸 ChatBloc._startStreamingMessage: 提取到 ${images.length} 张图片，准备发送到Rust层');
+      }
+      if (hasImagesData == true) {
+        hasImages = true;
+      }
+    }
+
     // Send stream request (model is already set via _setPreferredModel)
-    await _streamManager.sendStreamRequest(message, format, promptId).fold(
+    // 【关键修复】传递图片数据到 Rust 层
+    await _streamManager.sendStreamRequest(
+      message, 
+      format, 
+      promptId,
+      images: images,
+      hasImages: hasImages,
+    ).fold(
       (question) {
         if (!isClosed) {
           // Create and add answer stream message
