@@ -48,6 +48,43 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
   bool _isClosed = false;
 
   @override
+  void dispose() {
+    // 弹框关闭时，停止支付结果轮询
+    if (!_isClosed && mounted) {
+      try {
+        final bloc = context.read<AccountManagementBloc>();
+        if (!bloc.isClosed) {
+          bloc.add(const AccountManagementEvent.stopPaymentPolling());
+        }
+      } catch (e) {
+        // 如果无法访问 Bloc，忽略错误
+      }
+    }
+    super.dispose();
+  }
+
+  void _handleClose() {
+    if (!_isClosed && mounted) {
+      _isClosed = true;
+      
+      // 停止支付结果轮询
+      try {
+        final bloc = context.read<AccountManagementBloc>();
+        if (!bloc.isClosed) {
+          bloc.add(const AccountManagementEvent.stopPaymentPolling());
+        }
+      } catch (e) {
+        // 如果无法访问 Bloc，忽略错误
+      }
+      
+      // 调用关闭回调
+      widget.onClose?.call();
+      // 关闭弹框
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
 
@@ -84,6 +121,17 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
             if (paymentResult != null && paymentResult.contains('支付成功')) {
               if (!_isClosed && mounted) {
                 _isClosed = true;
+                
+                // 停止支付结果轮询（支付成功，不再需要轮询）
+                try {
+                  final bloc = context.read<AccountManagementBloc>();
+                  if (!bloc.isClosed) {
+                    bloc.add(const AccountManagementEvent.stopPaymentPolling());
+                  }
+                } catch (e) {
+                  // 如果无法访问 Bloc，忽略错误
+                }
+                
                 // 调用成功回调（在外部处理刷新逻辑）
                 widget.onPaymentSuccess?.call();
                 // 关闭弹框
@@ -95,6 +143,7 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
                         paymentResult.contains('invalid-signature') ||
                         paymentResult.contains('验签出错'))) {
               // 支付失败、过期或验签错误，不自动关闭，让用户手动关闭
+              // 注意：这里不停止轮询，因为用户可能还想重试
             }
           },
         );
@@ -129,13 +178,7 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
                       color: theme.textColorScheme.secondary,
                       size: 20,
                     ),
-                    onPressed: () {
-                      if (!_isClosed && mounted) {
-                        _isClosed = true;
-                        widget.onClose?.call();
-                        Navigator.of(context).pop();
-                      }
-                    },
+                    onPressed: _handleClose,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -197,13 +240,7 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (!_isClosed && mounted) {
-                      _isClosed = true;
-                      widget.onClose?.call();
-                      Navigator.of(context).pop();
-                    }
-                  },
+                  onPressed: _handleClose,
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
