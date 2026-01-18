@@ -287,39 +287,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       skipAIChatWelcomePage = true;
       Log.info('✅ ChatBloc: 已设置跳过欢迎页标志');
       
-      // 【修复】立即发送消息,不要延迟等待模型设置
-      // 因为延迟期间可能会有第二次调用导致任务被取消
-      Log.info('📤 ChatBloc: 立即发送初始消息(不等待模型设置)');
+      // 【关键修复】等待模型设置完成后再发送消息
+      // 这确保了用户选择的多模态模型（如豆包）能正确生效
+      Log.info('📤 ChatBloc: 等待模型设置完成...');
       
-      // 准备metadata（包含图片）
-      final metadata = <String, dynamic>{};
-      
-      // 处理初始图片
-      if (initialImagePaths != null && initialImagePaths!.isNotEmpty) {
-        Log.info('📸 ChatBloc: 准备发送 ${initialImagePaths!.length} 张图片');
-        _convertImagesToBase64(initialImagePaths!).then((imageBase64List) {
-          if (imageBase64List.isNotEmpty && !isClosed) {
-            metadata['images'] = imageBase64List;
-            metadata['has_images'] = true;
-            Log.info('✅ ChatBloc: 已添加 ${imageBase64List.length} 张图片到metadata');
-            
-            add(
-              ChatEvent.sendMessage(
-                message: initialMessage!,
-                metadata: metadata,
-              ),
-            );
-          }
-        });
-      } else {
-        // 没有图片,直接发送
-        add(
-          ChatEvent.sendMessage(
-            message: initialMessage!,
-            metadata: metadata,
-          ),
-        );
-      }
+      // 使用 Future.delayed 配合 async/await 确保模型设置完成
+      _sendInitialMessageAfterModelSet();
     } else if (initialMessage != null && 
                initialMessage!.isNotEmpty && 
                chatController.messages.isNotEmpty) {
@@ -827,6 +800,48 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (!_modelSettingCompleter.isCompleted) {
         _modelSettingCompleter.complete();
       }
+    }
+  }
+
+  /// 等待模型设置完成后发送初始消息
+  /// 这是解决多模态模型（如豆包）选择后调用错误的关键修复
+  Future<void> _sendInitialMessageAfterModelSet() async {
+    try {
+      // 等待模型设置完成，最多等待3秒
+      await _modelSettingCompleter.future.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          Log.warn('⚠️ ChatBloc: 等待模型设置超时，继续发送消息');
+        },
+      );
+      
+      Log.info('✅ ChatBloc: 模型设置完成，开始发送初始消息');
+      
+      // 准备metadata（包含图片）
+      final metadata = <String, dynamic>{};
+      
+      // 处理初始图片
+      if (initialImagePaths != null && initialImagePaths!.isNotEmpty) {
+        Log.info('📸 ChatBloc: 准备发送 ${initialImagePaths!.length} 张图片');
+        final imageBase64List = await _convertImagesToBase64(initialImagePaths!);
+        if (imageBase64List.isNotEmpty && !isClosed) {
+          metadata['images'] = imageBase64List;
+          metadata['has_images'] = true;
+          Log.info('✅ ChatBloc: 已添加 ${imageBase64List.length} 张图片到metadata');
+        }
+      }
+      
+      // 发送消息
+      if (!isClosed) {
+        add(
+          ChatEvent.sendMessage(
+            message: initialMessage!,
+            metadata: metadata,
+          ),
+        );
+      }
+    } catch (e) {
+      Log.error('❌ ChatBloc: 发送初始消息失败: $e');
     }
   }
 

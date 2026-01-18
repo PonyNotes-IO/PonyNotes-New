@@ -185,91 +185,97 @@ class _AIInputAreaState extends State<AIInputArea> {
             _closeDropdown();
           }
         },
-        child: Container(
-        margin: widget.customMargin ?? AIWelcomeTheme.inputContainerPadding,
-        width: widget.customWidth ?? AIWelcomeTheme.inputContainerWidth,
-        constraints: BoxConstraints(
-          minHeight: AIWelcomeTheme.inputContainerHeight,
-          maxHeight: AIWelcomeTheme.inputContainerHeight, // 附件列表在下方，不影响输入框高度
-        ),
-        decoration: AIWelcomeTheme.inputContainerDecoration(context),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 输入文本区域（对应 text-wrapper_5）
-            Expanded(
-              child: Container(
-                margin: AIWelcomeTheme.inputTextPadding,
-                constraints: const BoxConstraints(
-                  minHeight: 60, // 确保输入框有最小高度
-                ),
-                child: TextField(
-                  controller: _textController,
-                  focusNode: _focusNode,
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  style: AIWelcomeTheme.placeholderStyle(context).copyWith(
-                    color: AIWelcomeTheme.primaryTextColor(context),
-                  ),
-                  decoration: InputDecoration(
-                    hintText: '在小马笔记可以问或找到每一件事…',
-                    hintStyle: AIWelcomeTheme.placeholderStyle(context),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  onSubmitted: (_) => _sendMessage(),
-                ),
-              ),
-            ),
-            // 工具栏区域（对应 group_2）
+            // 附件预览区域（放在输入框上方，不在容器内部）
+            if (_attachments.isNotEmpty) _buildAttachmentPreviewArea(),
+            // 主输入容器
             Container(
-              margin: widget.customToolbarPadding ?? AIWelcomeTheme.toolbarPadding,
-              width: widget.customToolbarWidth ?? AIWelcomeTheme.toolbarWidth,
-              height: AIWelcomeTheme.toolbarHeight,
-              child: Row(
+              margin: widget.customMargin ?? AIWelcomeTheme.inputContainerPadding,
+              width: widget.customWidth ?? AIWelcomeTheme.inputContainerWidth,
+              constraints: BoxConstraints(
+                minHeight: AIWelcomeTheme.inputContainerHeight,
+                maxHeight: AIWelcomeTheme.inputContainerHeight,
+              ),
+              decoration: AIWelcomeTheme.inputContainerDecoration(context),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 模型选择下拉框（对应 block_4）
-                  _buildModelSelector(),
-                  // 深度思考按钮（移到模型选择器右侧，相邻）
-                  const SizedBox(width: 10),
-                  _buildDeepThinkingButton(),
-                  // 联网搜索按钮（移到深度思考按钮右侧）
-                  const SizedBox(width: 10),
-                  _buildWebSearchButton(),
-                  const Spacer(),
-                  // 功能图标按钮组
-                  
-                  // 聊天记录图标按钮（仅图标）
-                  if (widget.onChatHistoryTap != null) ...[
-                    const SizedBox(width: 22),
-                    _buildHistoryButton(),
-                  ],
-                  // AI使用次数显示（放在附件按钮左边）
-                  _buildAIUsageIndicator(),
-                  const SizedBox(width: 10),
-                  // 合并后的附件上传按钮（包含图片和附件上传功能）
-                  const SizedBox(width: 12),
-                  _buildAttachmentButton(),
-                  const SizedBox(width: 21),
-                  // 分隔线（对应 block_5）
-                  Container(
-                    width: 1,
-                    height: 20,
-                    decoration: AIWelcomeTheme.dividerDecoration(context),
+                  // 输入文本区域（对应 text-wrapper_5）
+                  Expanded(
+                    child: Container(
+                      margin: AIWelcomeTheme.inputTextPadding,
+                      constraints: const BoxConstraints(
+                        minHeight: 60, // 确保输入框有最小高度
+                      ),
+                      child: TextField(
+                        controller: _textController,
+                        focusNode: _focusNode,
+                        maxLines: null,
+                        expands: true,
+                        textAlignVertical: TextAlignVertical.top,
+                        style: AIWelcomeTheme.placeholderStyle(context).copyWith(
+                          color: AIWelcomeTheme.primaryTextColor(context),
+                        ),
+                        decoration: InputDecoration(
+                          hintText: '在小马笔记可以问或找到每一件事…',
+                          hintStyle: AIWelcomeTheme.placeholderStyle(context),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
+                    ),
                   ),
-                  const SizedBox(width: 21),
-                  // 发送按钮（对应 label_9）
-                  _buildSendButton(),
+                  // 工具栏区域（对应 group_2）
+                  Container(
+                    margin: widget.customToolbarPadding ?? AIWelcomeTheme.toolbarPadding,
+                    width: widget.customToolbarWidth ?? AIWelcomeTheme.toolbarWidth,
+                    height: AIWelcomeTheme.toolbarHeight,
+                    child: Row(
+                      children: [
+                        // 模型选择下拉框（对应 block_4）
+                        _buildModelSelector(),
+                        // 深度思考按钮（移到模型选择器右侧，相邻）
+                        const SizedBox(width: 10),
+                        _buildDeepThinkingButton(),
+                        // 联网搜索按钮（移到深度思考按钮右侧）
+                        const SizedBox(width: 10),
+                        _buildWebSearchButton(),
+                        const Spacer(),
+                        // 功能图标按钮组
+                        
+                        // 聊天记录图标按钮（仅图标）
+                        if (widget.onChatHistoryTap != null) ...[
+                          const SizedBox(width: 22),
+                          _buildHistoryButton(),
+                        ],
+                        // AI使用次数显示（放在附件按钮左边）
+                        _buildAIUsageIndicator(),
+                        const SizedBox(width: 10),
+                        // 合并后的附件上传按钮（包含图片和附件上传功能）
+                        const SizedBox(width: 12),
+                        _buildAttachmentButton(),
+                        const SizedBox(width: 21),
+                        // 分隔线（对应 block_5）
+                        Container(
+                          width: 1,
+                          height: 20,
+                          decoration: AIWelcomeTheme.dividerDecoration(context),
+                        ),
+                        const SizedBox(width: 21),
+                        // 发送按钮（对应 label_9）
+                        _buildSendButton(),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-            // 附件列表显示区域（放在工具栏下方）
-            if (_attachments.isNotEmpty) _buildAttachmentPreviewArea(),
           ],
         ),
-      ),
       ),
     );
   }
