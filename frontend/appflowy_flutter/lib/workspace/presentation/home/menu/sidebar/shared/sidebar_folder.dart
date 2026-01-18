@@ -111,13 +111,7 @@ class SidebarFolder extends StatelessWidget {
             // 模板
             // const VSpace(4.0),
             // const SidebarTemplateNewButton(),
-            // 回收站
-            const VSpace(sectionPadding),
-            const SidebarTrashItem(),
-            // 设置
-            const VSpace(sectionPadding),
-            const SidebarSettingsButton(),
-            const VSpace(200),
+            // NOTE: Trash and Settings moved to sidebar bottom area to keep them fixed.
           ],
         );
       },

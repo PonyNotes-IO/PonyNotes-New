@@ -34,6 +34,8 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sideba
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/sidebar_upload_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/footer/sidebar_upgrade_application_button.dart';
 import 'package:appflowy/workspace/presentation/notifications/widgets/notification_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
 import 'package:appflowy/shared/version_checker/version_checker.dart';
 import 'package:appflowy/startup/tasks/device_info_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -473,6 +475,18 @@ class _SidebarState extends State<_Sidebar> {
             _buildUpgradeApplicationButton(menuHorizontalInset),
 
             const VSpace(14),
+            // Fixed bottom actions (trash, settings) - keep outside the scrollable area
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  SidebarTrashItem(),
+                  VSpace(6),
+                  SidebarSettingsButton(),
+                ],
+              ),
+            ),
           ],
         ),
       ),
