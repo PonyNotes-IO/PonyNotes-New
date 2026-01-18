@@ -210,7 +210,7 @@ class AccountManagementBloc
         handleAddonPay: () async => _handleAddonPay(emit),
         // 临时注释：等待 freezed 重新生成后取消注释
         startPaymentPolling: (orderNo) async => _startPaymentPolling(orderNo, emit),
-        stopPaymentPolling: () async => _stopPaymentPolling(emit),
+        stopPaymentPolling: () async => _stopPaymentPolling(),
         checkPaymentStatus: () async => _checkPaymentStatus(emit),
       );
     });
@@ -1886,7 +1886,7 @@ class AccountManagementBloc
         
         // 启动支付结果轮询
         if (order.orderNo.isNotEmpty) {
-          _startPaymentPolling(order.orderNo, emit);
+          await _startPaymentPolling(order.orderNo, emit);
         }
       },
     );
@@ -2134,6 +2134,9 @@ class AccountManagementBloc
   }
 
   /// 启动支付结果轮询
+  /// 
+  /// 注意：Timer 回调中不能直接使用 emit，因为原始事件处理器可能已经完成
+  /// 改为使用 add 触发 checkPaymentStatus 事件
   Future<void> _startPaymentPolling(
     String orderNo,
     Emitter<AccountManagementState> emit,
@@ -2143,14 +2146,16 @@ class AccountManagementBloc
     _paymentPollingTimer = null;
     _currentPollingOrderNo = orderNo;
 
-    // 立即查询一次
-    _checkPaymentStatus(emit);
+    // 立即查询一次（在当前事件处理器中，可以安全使用 emit）
+    await _checkPaymentStatus(emit);
 
     // 每 3 秒轮询一次
+    // 注意：Timer 回调中使用 add 触发新事件，而不是直接调用带 emit 的方法
     _paymentPollingTimer = Timer.periodic(
       const Duration(seconds: 3),
       (_) {
-        _checkPaymentStatus(emit);
+        // 使用 add 触发新事件，这样 emit 会在新的事件处理器中调用
+        add(const AccountManagementEvent.checkPaymentStatus());
       },
     );
 
@@ -2158,7 +2163,7 @@ class AccountManagementBloc
   }
 
   /// 停止支付结果轮询
-  Future<void> _stopPaymentPolling(Emitter<AccountManagementState> emit) async {
+  void _stopPaymentPolling() {
     _paymentPollingTimer?.cancel();
     _paymentPollingTimer = null;
     _currentPollingOrderNo = null;
@@ -2167,10 +2172,18 @@ class AccountManagementBloc
   }
 
   /// 检查支付状态
+  /// 
+  /// 此方法会在事件处理器中被调用，emit 是有效的
   Future<void> _checkPaymentStatus(Emitter<AccountManagementState> emit) async {
     if (_currentPollingOrderNo == null || _currentPollingOrderNo!.isEmpty) {
       // 没有订单号，停止轮询
-      _stopPaymentPolling(emit);
+      _stopPaymentPolling();
+      return;
+    }
+
+    // 检查 emit 是否已完成（防止异步操作后 emit 失效）
+    if (emit.isDone) {
+      Log.warn('[AccountManagementBloc] emit.isDone, skipping payment status check');
       return;
     }
 
@@ -2194,57 +2207,67 @@ class AccountManagementBloc
       ) async {
         final statusResult = await PaymentApi.queryPaymentStatus(_currentPollingOrderNo!);
         
+        // 再次检查 emit 是否有效
+        if (emit.isDone) {
+          Log.warn('[AccountManagementBloc] emit.isDone after query, skipping emit');
+          return;
+        }
+        
         statusResult.fold(
           (status) {
             Log.info('[AccountManagementBloc] Payment status: $status');
             
             // 如果支付成功或失败，停止轮询并刷新订阅信息
             if (status == 'paid' || status == 'success') {
-              _stopPaymentPolling(emit);
+              _stopPaymentPolling();
               
               // 刷新订阅信息
               add(const AccountManagementEvent.loadSubscriptionInfo());
               
-              // 通知 UI 刷新
-              emit(
-                AccountManagementState.ready(
-                  subscriptionInfo: subscriptionInfo,
-                  planConfigs: planConfigs,
-                  addons: addons,
-                  selectedPlan: selectedPlan,
-                  selectedDuration: selectedDuration,
-                  selectedTab: selectedTab,
-                  selectedAddonIndex: selectedAddonIndex,
-                  agreedProtocols: agreedProtocols,
-                  isLoadingSubscription: isLoadingSubscription,
-                  isLoadingPlans: isLoadingPlans,
-                  isLoadingAddons: isLoadingAddons,
-                  isProcessingPayment: false,
-                  error: null,
-                  paymentResult: '支付成功',
-                ),
-              );
+              // 通知 UI 刷新（检查 emit 是否有效）
+              if (!emit.isDone) {
+                emit(
+                  AccountManagementState.ready(
+                    subscriptionInfo: subscriptionInfo,
+                    planConfigs: planConfigs,
+                    addons: addons,
+                    selectedPlan: selectedPlan,
+                    selectedDuration: selectedDuration,
+                    selectedTab: selectedTab,
+                    selectedAddonIndex: selectedAddonIndex,
+                    agreedProtocols: agreedProtocols,
+                    isLoadingSubscription: isLoadingSubscription,
+                    isLoadingPlans: isLoadingPlans,
+                    isLoadingAddons: isLoadingAddons,
+                    isProcessingPayment: false,
+                    error: null,
+                    paymentResult: '支付成功',
+                  ),
+                );
+              }
             } else if (status == 'failed' || status == 'expired' || status == 'canceled') {
-              _stopPaymentPolling(emit);
+              _stopPaymentPolling();
               
-              emit(
-                AccountManagementState.ready(
-                  subscriptionInfo: subscriptionInfo,
-                  planConfigs: planConfigs,
-                  addons: addons,
-                  selectedPlan: selectedPlan,
-                  selectedDuration: selectedDuration,
-                  selectedTab: selectedTab,
-                  selectedAddonIndex: selectedAddonIndex,
-                  agreedProtocols: agreedProtocols,
-                  isLoadingSubscription: isLoadingSubscription,
-                  isLoadingPlans: isLoadingPlans,
-                  isLoadingAddons: isLoadingAddons,
-                  isProcessingPayment: false,
-                  error: status == 'expired' ? '订单已过期' : '支付失败',
-                  paymentResult: paymentResult,
-                ),
-              );
+              if (!emit.isDone) {
+                emit(
+                  AccountManagementState.ready(
+                    subscriptionInfo: subscriptionInfo,
+                    planConfigs: planConfigs,
+                    addons: addons,
+                    selectedPlan: selectedPlan,
+                    selectedDuration: selectedDuration,
+                    selectedTab: selectedTab,
+                    selectedAddonIndex: selectedAddonIndex,
+                    agreedProtocols: agreedProtocols,
+                    isLoadingSubscription: isLoadingSubscription,
+                    isLoadingPlans: isLoadingPlans,
+                    isLoadingAddons: isLoadingAddons,
+                    isProcessingPayment: false,
+                    error: status == 'expired' ? '订单已过期' : '支付失败',
+                    paymentResult: paymentResult,
+                  ),
+                );
+              }
             }
             // pending 状态继续轮询
           },

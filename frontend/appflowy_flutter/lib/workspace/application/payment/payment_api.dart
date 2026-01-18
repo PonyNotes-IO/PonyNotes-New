@@ -16,6 +16,21 @@ class PaymentType {
   static const String alipay = 'ALIPAY';
 }
 
+/// 支付开发测试模式配置
+/// 
+/// 开启此开关后，将跳过真实支付流程，直接模拟支付成功
+/// 并调用后端接口更新用户会员权益
+/// 
+/// 警告：仅用于开发测试，生产环境必须设为 false！
+class PaymentDevConfig {
+  /// 是否启用开发测试模式（跳过真实支付）
+  /// 设置为 true 后，点击"确认协议开通"将直接模拟支付成功
+  static const bool enableTestMode = true;
+  
+  /// 模拟支付成功的延迟时间（毫秒），用于模拟支付查询轮询效果
+  static const int mockPaymentDelayMs = 1500;
+}
+
 /// 创建支付订单入参
 /// 根据接口文档：/api/payment/create
 class PaymentCreateRequest {
@@ -209,6 +224,40 @@ class PaymentCreateResponse {
 
 /// 支付相关云端 API 调用
 class PaymentApi {
+  /// 存储测试模式下的模拟订单信息（用于关联 planId 和 billingType）
+  static final Map<String, Map<String, String>> _mockOrderInfo = {};
+  
+  /// 从原始 token 中提取 access_token
+  /// 
+  /// userProfile.token 可能是以下格式之一：
+  /// 1. JSON 字符串: {"access_token": "xxx", "refresh_token": "yyy", ...}
+  /// 2. 纯 JWT token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+  /// 
+  /// 此方法会尝试解析 JSON，如果是 JSON 格式则提取 access_token，
+  /// 否则直接返回原始 token
+  static String? _extractAccessToken(String? rawToken) {
+    if (rawToken == null || rawToken.isEmpty) {
+      return null;
+    }
+    try {
+      // 尝试解析为 JSON
+      final decoded = jsonDecode(rawToken);
+      if (decoded is Map<String, dynamic>) {
+        // 从 JSON 中提取 access_token
+        final accessToken = decoded['access_token'] as String?;
+        if (accessToken != null && accessToken.isNotEmpty) {
+          Log.info('[PaymentApi] 从 JSON 中提取 access_token 成功');
+          return accessToken;
+        }
+      }
+    } catch (_) {
+      // 不是 JSON，可能是纯 JWT token，直接返回
+      Log.info('[PaymentApi] token 不是 JSON 格式，直接使用原始 token');
+      return rawToken;
+    }
+    return null;
+  }
+  
   /// 调用后端 `/api/payment/create` 创建支付订单
   ///
   /// 接口文档：
@@ -232,6 +281,41 @@ class PaymentApi {
       createPaymentOrder(
     PaymentCreateRequest request,
   ) async {
+    // ==================== 开发测试模式 ====================
+    // 跳过真实支付，生成模拟订单号
+    if (PaymentDevConfig.enableTestMode) {
+      Log.info('[PaymentApi] ⚠️ 开发测试模式已启用，跳过真实支付！');
+      
+      // 生成模拟订单号
+      final mockOrderNo = 'test_${DateTime.now().millisecondsSinceEpoch}_${request.planId ?? 'plan'}';
+      
+      // 保存订单信息，用于后续更新会员权益
+      _mockOrderInfo[mockOrderNo] = {
+        'planId': request.planId ?? '',
+        'billingType': request.billingType ?? 'monthly',
+        'addonId': request.addonId ?? '',
+        'amount': request.amount,
+      };
+      
+      Log.info('[PaymentApi] 创建模拟订单: $mockOrderNo');
+      Log.info('[PaymentApi] 订单信息: planId=${request.planId}, billingType=${request.billingType}');
+      
+      // 返回模拟的订单创建成功响应（不带 payUrl，这样不会弹出支付页面）
+      final mockResponse = PaymentCreateResponse(
+        msg: '操作成功（测试模式）',
+        code: 200,
+        data: PaymentOrderData(
+          orderNo: mockOrderNo,
+          expireTime: null,
+          payUrl: null, // 不设置 payUrl，避免打开浏览器
+          payType: 'TEST',
+        ),
+      );
+      
+      return FlowyResult.success(mockResponse);
+    }
+    // ==================== 开发测试模式结束 ====================
+    
     try {
       // 1. 获取当前云端配置（拿到 serverUrl）
       final cloudConfigResult = await UserEventGetCloudConfig().send();
@@ -411,6 +495,49 @@ class PaymentApi {
   static Future<FlowyResult<String, FlowyError>> queryPaymentStatus(
     String orderNo,
   ) async {
+    // ==================== 开发测试模式 ====================
+    // 直接返回支付成功，并调用后端接口更新会员权益
+    if (PaymentDevConfig.enableTestMode && orderNo.startsWith('test_')) {
+      Log.info('[PaymentApi] ⚠️ 开发测试模式：模拟支付成功 orderNo=$orderNo');
+      
+      // 添加一点延迟，模拟真实支付场景
+      await Future.delayed(Duration(milliseconds: PaymentDevConfig.mockPaymentDelayMs));
+      
+      // 获取之前保存的订单信息
+      final orderInfo = _mockOrderInfo[orderNo];
+      if (orderInfo != null) {
+        final planId = orderInfo['planId'] ?? '';
+        final billingType = orderInfo['billingType'] ?? 'monthly';
+        final addonId = orderInfo['addonId'] ?? '';
+        
+        // 根据订单类型调用不同的后端接口更新会员权益
+        if (planId.isNotEmpty) {
+          // 会员升级
+          Log.info('[PaymentApi] 测试模式：调用后端更新会员订阅 planId=$planId, billingType=$billingType');
+          final subscribeResult = await _updateSubscriptionInTestMode(planId, billingType);
+          if (subscribeResult.isFailure) {
+            final error = subscribeResult.fold((_) => null, (e) => e);
+            Log.error('[PaymentApi] 测试模式：更新会员订阅失败 ${error?.msg}');
+            // 即使更新失败，也返回支付成功，让用户可以重新刷新
+          }
+        } else if (addonId.isNotEmpty) {
+          // 空间补充包
+          Log.info('[PaymentApi] 测试模式：调用后端购买补充包 addonId=$addonId');
+          final purchaseResult = await _purchaseAddonInTestMode(addonId);
+          if (purchaseResult.isFailure) {
+            final error = purchaseResult.fold((_) => null, (e) => e);
+            Log.error('[PaymentApi] 测试模式：购买补充包失败 ${error?.msg}');
+          }
+        }
+        
+        // 清理订单信息
+        _mockOrderInfo.remove(orderNo);
+      }
+      
+      return FlowyResult.success('paid');
+    }
+    // ==================== 开发测试模式结束 ====================
+    
     try {
       // 1. 获取当前云端配置（拿到 serverUrl）
       final cloudConfigResult = await UserEventGetCloudConfig().send();
@@ -508,7 +635,187 @@ class PaymentApi {
       );
     }
   }
+
+  /// 测试模式：调用后端接口更新会员订阅
+  /// 
+  /// [planId] 套餐 ID
+  /// [billingType] 计费类型：monthly 或 yearly
+  static Future<FlowyResult<void, FlowyError>> _updateSubscriptionInTestMode(
+    String planId,
+    String billingType,
+  ) async {
+    try {
+      // 获取云端配置
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+
+      final baseUrl = cloudConfig.serverUrl;
+      if (baseUrl.isEmpty) {
+        Log.error('[PaymentApi] 测试模式：serverUrl 为空');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Server URL is empty',
+        );
+      }
+
+      // 获取当前用户 Profile（包含 token）
+      final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      final UserProfilePB userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+
+      // 从 userProfile.token 中提取真正的 access_token
+      // userProfile.token 可能是 JSON 格式 {"access_token": "xxx", ...}
+      final accessToken = _extractAccessToken(userProfile.token);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.error('[PaymentApi] 测试模式：无法提取 access_token');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Failed to extract access token',
+        );
+      }
+
+      // 调用后端的 subscribe 接口
+      // POST /api/subscription/subscribe
+      // Body: { "plan_id": 2, "billing_type": "monthly" }
+      final uri = Uri.parse('$baseUrl/api/subscription/subscribe');
+      Log.info('[PaymentApi] 测试模式：调用 $uri');
+
+      final requestBody = jsonEncode({
+        'plan_id': int.tryParse(planId) ?? 1,
+        'billing_type': billingType,
+      });
+      Log.info('[PaymentApi] 测试模式：请求体 $requestBody');
+
+      final response = await http.post(
+        uri,
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: requestBody,
+      );
+
+      Log.info('[PaymentApi] 测试模式：响应状态 ${response.statusCode}');
+      Log.info('[PaymentApi] 测试模式：响应内容 ${response.body}');
+
+      if (response.statusCode == 200) {
+        Log.info('[PaymentApi] 测试模式：会员订阅更新成功！');
+        return FlowyResult.success(null);
+      } else {
+        final errorMsg = response.body.isNotEmpty
+            ? response.body
+            : 'Failed to update subscription (HTTP ${response.statusCode})';
+        Log.error('[PaymentApi] 测试模式：更新会员订阅失败 $errorMsg');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e, s) {
+      Log.error('[PaymentApi] 测试模式：更新会员订阅异常 $e\n$s');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Failed to update subscription: $e',
+      );
+    }
+  }
+
+  /// 测试模式：调用后端接口购买补充包
+  /// 
+  /// [addonId] 补充包 ID
+  static Future<FlowyResult<void, FlowyError>> _purchaseAddonInTestMode(
+    String addonId,
+  ) async {
+    try {
+      // 获取云端配置
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+
+      final baseUrl = cloudConfig.serverUrl;
+      if (baseUrl.isEmpty) {
+        Log.error('[PaymentApi] 测试模式：serverUrl 为空');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Server URL is empty',
+        );
+      }
+
+      // 获取当前用户 Profile（包含 token）
+      final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      final UserProfilePB userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+
+      // 从 userProfile.token 中提取真正的 access_token
+      final accessToken = _extractAccessToken(userProfile.token);
+      if (accessToken == null || accessToken.isEmpty) {
+        Log.error('[PaymentApi] 测试模式：无法提取 access_token');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Failed to extract access token',
+        );
+      }
+
+      // 调用后端的 purchase addon 接口
+      // POST /api/subscription/addon/purchase
+      // Body: { "addon_id": 1, "quantity": 1 }
+      final uri = Uri.parse('$baseUrl/api/subscription/addon/purchase');
+      Log.info('[PaymentApi] 测试模式：调用 $uri');
+
+      final requestBody = jsonEncode({
+        'addon_id': int.tryParse(addonId) ?? 1,
+        'quantity': 1,
+      });
+      Log.info('[PaymentApi] 测试模式：请求体 $requestBody');
+
+      final response = await http.post(
+        uri,
+        headers: <String, String>{
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: requestBody,
+      );
+
+      Log.info('[PaymentApi] 测试模式：响应状态 ${response.statusCode}');
+      Log.info('[PaymentApi] 测试模式：响应内容 ${response.body}');
+
+      if (response.statusCode == 200) {
+        Log.info('[PaymentApi] 测试模式：购买补充包成功！');
+        return FlowyResult.success(null);
+      } else {
+        final errorMsg = response.body.isNotEmpty
+            ? response.body
+            : 'Failed to purchase addon (HTTP ${response.statusCode})';
+        Log.error('[PaymentApi] 测试模式：购买补充包失败 $errorMsg');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e, s) {
+      Log.error('[PaymentApi] 测试模式：购买补充包异常 $e\n$s');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Failed to purchase addon: $e',
+      );
+    }
+  }
 }
-
-
-
