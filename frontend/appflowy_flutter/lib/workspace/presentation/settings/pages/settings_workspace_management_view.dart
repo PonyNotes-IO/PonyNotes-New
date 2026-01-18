@@ -904,43 +904,18 @@ class _SpaceRowState extends State<_SpaceRow> {
   }
 
   Future<void> _openSpaceManageDialog(BuildContext context) async {
-    // Load workspace members
+    // Load members who have joined this collab (space) via new API
     final userService = UserBackendService(userId: widget.userProfile.id);
-    List<WorkspaceMemberPB> allMembers = [];
+    List<dynamic> members = [];
     try {
-      final res = await userService.getWorkspaceMembers(widget.workspaceId);
-      res.fold((s) {
-        allMembers = s.items;
+      final res = await userService.getCollabMembers(widget.workspaceId, widget.space.id);
+      res.fold((list) {
+        members = list;
       }, (e) {
-        Log.error('Failed to load workspace members for manage dialog: $e');
+        Log.error('Failed to load collab members for manage dialog: $e');
       });
     } catch (e) {
-      Log.error('Exception loading members for manage dialog: $e');
-    }
-
-    // Load team ACL for this space
-    TeamACLPB? teamAcl;
-    try {
-      final aclRes = await userService.getTeamACL(widget.space.id);
-      aclRes.fold((acl) {
-        teamAcl = acl;
-      }, (e) {
-        Log.error('Failed to load team ACL for manage dialog: $e');
-      });
-    } catch (e) {
-      Log.error('Exception loading team ACL for manage dialog: $e');
-    }
-
-    // Filter members to only show authorized ones (in ACL whitelist)
-    List<WorkspaceMemberPB> members = [];
-    if (teamAcl != null) {
-      final allowedEmails = teamAcl!.allowEmails.toSet();
-      members = allMembers.where((member) {
-        return allowedEmails.contains(member.email);
-      }).toList();
-    } else {
-      // If no ACL loaded, show no members (or all as fallback)
-      members = [];
+      Log.error('Exception loading collab members for manage dialog: $e');
     }
 
     await showDialog(
@@ -1353,41 +1328,34 @@ class _SpaceRowState extends State<_SpaceRow> {
                                                                     dialogSelectedRole);
                                                         inviteRes.fold(
                                                             (_) async {
-                                                          // On success, also add to team ACL allowEmails
+                                                          // On success, try to append invitee email to team ACL (best-effort)
                                                           try {
-                                                            final current =
-                                                                teamAcl;
-                                                            final List<String>
-                                                                existing =
-                                                                current?.allowEmails
-                                                                        .toList() ??
-                                                                    [];
-                                                            if (!existing
-                                                                .contains(
-                                                                    u.email)) {
+                                                            TeamACLPB? current;
+                                                            final aclRes = await userService.getTeamACL(widget.space.id);
+                                                            aclRes.fold((acl) {
+                                                              current = acl;
+                                                            }, (e) {
+                                                              current = null;
+                                                            });
+                                                            final List<String> existing =
+                                                                current?.allowEmails.toList() ?? [];
+                                                            if (!existing.contains(u.email)) {
                                                               final newAcl = TeamACLPB(
-                                                                  teamId: widget
-                                                                      .space.id,
+                                                                  teamId: widget.space.id,
                                                                   allowUserIds: [],
                                                                   allowEmails: [
                                                                     ...existing,
                                                                     u.email
                                                                   ]);
-                                                              final saveRes =
-                                                                  await userService
-                                                                      .updateTeamACL(
-                                                                          newAcl);
+                                                              final saveRes = await userService.updateTeamACL(newAcl);
                                                               saveRes.fold((_) {
-                                                                teamAcl =
-                                                                    newAcl;
+                                                                // noop
                                                               }, (e) {
-                                                                Log.error(
-                                                                    'Failed to update team ACL after invite: $e');
+                                                                Log.error('Failed to update team ACL after invite: $e');
                                                               });
                                                             }
                                                           } catch (e) {
-                                                            Log.error(
-                                                                'Exception updating team ACL after invite: $e');
+                                                            Log.error('Exception updating team ACL after invite: $e');
                                                           }
                                                         }, (err) {
                                                           allOk = false;
@@ -1407,14 +1375,16 @@ class _SpaceRowState extends State<_SpaceRow> {
                                                         try {
                                                           final updated =
                                                               await userService
-                                                                  .getWorkspaceMembers(
+                                                                  .getCollabMembers(
                                                                       widget
-                                                                          .workspaceId);
+                                                                          .workspaceId,
+                                                                      widget.space.id);
                                                           updated.fold((s) {
-                                                            members = s.items;
-                                                            (ctx as Element)
-                                                                .markNeedsBuild();
-                                                          }, (e) {});
+                                                            members = s;
+                                                            (ctx as Element).markNeedsBuild();
+                                                          }, (e) {
+                                                            Log.error('Failed to refresh collab members after invite: $e');
+                                                          });
                                                         } catch (_) {}
                                                         Navigator.of(dctx2)
                                                             .pop();
@@ -1461,7 +1431,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                   ),
                   const Divider(),
                   const VSpace(8),
-                  // Members list
+                  // Members list (show members who have joined this collab)
                   Expanded(
                     child: members.isEmpty
                         ? Center(child: FlowyText('无法加载成员或无成员', fontSize: 14))
@@ -1469,7 +1439,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                             itemCount: members.length,
                             itemBuilder: (i, idx) {
                               final m = members[idx];
-                              final email = m.email;
+                              final email = (m.email ?? '').toString();
                               // filter by search
                               final q =
                                   _searchController.text.trim().toLowerCase();
@@ -1478,8 +1448,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                                       email.toLowerCase().contains(q))) {
                                 return const SizedBox.shrink();
                               }
-                              // Role options mapping
-                              AFRolePB currentRole = m.role;
+                              final bool isOwner = (m.permissionId ?? 0) == 4;
                               return Padding(
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 8.0),
@@ -1532,9 +1501,9 @@ class _SpaceRowState extends State<_SpaceRow> {
                                                                 .circular(8),
                                                       ),
                                                       child: FlowyText(
-                                                        m.role == AFRolePB.Owner
-                                                            ? '工作空间所有者'
-                                                            : '工作空间成员',
+                                                        isOwner
+                                                            ? '团队协作区所有者'
+                                                            : '团队协作区成员',
                                                         fontSize: 12,
                                                         color: Theme.of(ctx)
                                                             .hintColor,
@@ -1555,32 +1524,15 @@ class _SpaceRowState extends State<_SpaceRow> {
                                     ),
                                     Expanded(
                                       flex: 3,
-                                      child: FlowyText(m.role.description,
+                                      child: FlowyText(
+                                          isOwner ? '所有者' : '成员',
                                           fontSize: 14),
                                     ),
                                     Expanded(
                                       flex: 3,
                                       child: Align(
                                         alignment: Alignment.centerRight,
-                                        child: DropdownButton<AFRolePB>(
-                                          value: currentRole,
-                                          items: [
-                                            DropdownMenuItem(
-                                                value: AFRolePB.Owner,
-                                                child: Text('团队协作区所有者')),
-                                            DropdownMenuItem(
-                                                value: AFRolePB.Member,
-                                                child: Text('团队协作区成员')),
-                                          ],
-                                          onChanged: (v) {
-                                            if (v == null) return;
-                                            // optimistic update locally (no backend yet)
-                                            setState(() {
-                                              // mutate members list locally for UI feedback
-                                              members[idx].role = v;
-                                            });
-                                          },
-                                        ),
+                                        child: const SizedBox.shrink(),
                                       ),
                                     ),
                                   ],
@@ -1605,7 +1557,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                           final newAcl = TeamACLPB(
                             teamId: widget.space.id,
                             allowUserIds: [], // WorkspaceMemberPB doesn't have id field, use emails only
-                            allowEmails: members.map((m) => m.email).toList(),
+                            allowEmails: members.where((m) => (m.email ?? '').toString().isNotEmpty).map((m) => m.email as String).toList(),
                           );
 
                           try {

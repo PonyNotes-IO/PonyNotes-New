@@ -25,6 +25,24 @@ abstract class IUserBackendService {
   );
 }
 
+/// Lightweight DTO for collab member returned by cloud API
+class CollabMember {
+  CollabMember({
+    required this.uid,
+    required this.name,
+    this.email,
+    this.avatarUrl,
+    required this.permissionId,
+  });
+
+  final int uid;
+  final String name;
+  final String? email;
+  final String? avatarUrl;
+  final int permissionId;
+}
+
+
 const _baseBetaUrl = 'https://beta.appflowy.com';
 const _baseProdUrl = 'https://appflowy.com';
 
@@ -469,6 +487,91 @@ class UserBackendService implements IUserBackendService {
       ..email = email
       ..role = role;
     return UserEventUpdateWorkspaceMember(data).send();
+  }
+
+  /// Get members who have joined a collab (space)
+  Future<FlowyResult<List<CollabMember>, FlowyError>> getCollabMembers(
+    String workspaceId,
+    String objectId,
+  ) async {
+    try {
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) {
+          Log.error('[UserBackendService] Failed to get cloud config: $error');
+          throw error;
+        },
+      );
+
+      final baseUrl = cloudConfig.serverUrl;
+      if (baseUrl.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL',
+        );
+      }
+
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final rawToken = userResult.fold(
+        (user) => user.token,
+        (error) {
+          Log.error('[UserBackendService] Failed to get user profile: $error');
+          return '';
+        },
+      );
+      final token = _normalizeToken(rawToken);
+      if (token.isEmpty) {
+        Log.error('[UserBackendService] Access token is empty!');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing access token. Please login first.',
+        );
+      }
+
+      final uri = Uri.parse('$baseUrl/api/workspace/$workspaceId/collab/$objectId/members');
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final body = response.body;
+        final List<dynamic> parsed = body.isNotEmpty ? jsonDecode(body) as List<dynamic> : [];
+        final members = parsed.map((e) {
+          final map = e as Map<String, dynamic>;
+          return CollabMember(
+            uid: map['uid'] as int,
+            name: (map['name'] as String?) ?? '',
+            email: map['email'] as String?,
+            avatarUrl: map['avatar_url'] as String?,
+            permissionId: (map['permission_id'] as num).toInt(),
+          );
+        }).toList();
+        return FlowyResult.success(members);
+      } else {
+        final errorMsg = response.body.isNotEmpty ? response.body : 'HTTP ${response.statusCode}';
+        Log.error('[UserBackendService] getCollabMembers failed: $errorMsg');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e, st) {
+      Log.error('[UserBackendService] Exception getCollabMembers: $e');
+      Log.error('[UserBackendService] Stack: $st');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Failed to get collab members: $e',
+      );
+    }
   }
 
   Future<FlowyResult<void, FlowyError>> leaveWorkspace(
