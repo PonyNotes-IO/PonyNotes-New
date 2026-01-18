@@ -403,6 +403,111 @@ class PaymentApi {
       );
     }
   }
+
+  /// 查询支付订单状态
+  /// 
+  /// [orderNo] 订单号
+  /// 返回订单状态：pending（待支付）、paid（已支付）、failed（失败）、expired（已过期）
+  static Future<FlowyResult<String, FlowyError>> queryPaymentStatus(
+    String orderNo,
+  ) async {
+    try {
+      // 1. 获取当前云端配置（拿到 serverUrl）
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+
+      final baseUrl = "https://www.xiaomabiji.com";
+
+      // 2. 获取当前用户 Profile（包含 token）
+      final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      final UserProfilePB userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+
+      final token = userProfile.token;
+
+      if (baseUrl.isEmpty || token.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL or auth token',
+        );
+      }
+
+      final uri = Uri.parse('$baseUrl/prod-api/api/payment/query?orderNo=$orderNo');
+      Log.info('[PaymentApi] Querying payment status: $uri');
+
+      final response = await http.get(
+        uri,
+        headers: <String, String>{
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      Log.info('[PaymentApi] Query response status: ${response.statusCode}');
+      Log.info('[PaymentApi] Query response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        if (response.body.isEmpty) {
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.Internal
+              ..msg = 'Empty response body from /api/payment/query',
+          );
+        }
+
+        final Map<String, dynamic> json =
+            jsonDecode(response.body) as Map<String, dynamic>;
+        
+        final code = json['code'] as int? ?? 200;
+        if (code != 200) {
+          final msg = json['msg'] as String? ?? '查询失败';
+          Log.error('[PaymentApi] Query payment status failed: code=$code, msg=$msg');
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.Internal
+              ..msg = msg,
+          );
+        }
+
+        // 解析订单状态
+        final data = json['data'] as Map<String, dynamic>?;
+        if (data == null) {
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.FailedToParseQuery
+              ..msg = '订单数据为空',
+          );
+        }
+
+        // 订单状态字段可能是 status 或 orderStatus
+        final status = (data['status'] ?? data['orderStatus'] ?? 'pending').toString().toLowerCase();
+        Log.info('[PaymentApi] Payment status: $status');
+        return FlowyResult.success(status);
+      } else {
+        final errorMsg = response.body.isNotEmpty
+            ? response.body
+            : 'Failed to query payment status (HTTP ${response.statusCode})';
+        Log.error('[PaymentApi] Query payment status failed: $errorMsg');
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e, s) {
+      Log.error('[PaymentApi] Exception when querying payment status: $e\n$s');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Failed to query payment status: $e',
+      );
+    }
+  }
 }
 
 
