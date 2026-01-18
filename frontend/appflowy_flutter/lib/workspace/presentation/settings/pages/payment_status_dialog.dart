@@ -3,9 +3,6 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/workspace/application/settings/account/account_management_bloc.dart';
-import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
-import 'package:appflowy/features/workspace/logic/workspace_bloc.dart'
-    show UserWorkspaceBloc, UserWorkspaceEvent;
 
 /// 显示支付结果查询弹框
 /// 
@@ -87,9 +84,7 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
             if (paymentResult != null && paymentResult.contains('支付成功')) {
               if (!_isClosed && mounted) {
                 _isClosed = true;
-                // 刷新订阅信息
-                _refreshSubscriptionInfo(context);
-                // 调用成功回调
+                // 调用成功回调（在外部处理刷新逻辑）
                 widget.onPaymentSuccess?.call();
                 // 关闭弹框
                 Navigator.of(context).pop();
@@ -375,25 +370,4 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
     );
   }
 
-  void _refreshSubscriptionInfo(BuildContext context) {
-    try {
-      // 刷新 SettingsDialogBloc
-      context.read<SettingsDialogBloc>().add(
-            const SettingsDialogEvent.initial(),
-          );
-      
-      // 刷新 UserWorkspaceBloc
-      final workspaceBloc = context.read<UserWorkspaceBloc?>();
-      if (workspaceBloc != null) {
-        workspaceBloc.add(
-          UserWorkspaceEvent.updateCloudSyncEnabled(enabled: true),
-        );
-        workspaceBloc.add(
-          UserWorkspaceEvent.fetchCurrentSubscription(),
-        );
-      }
-    } catch (e) {
-      Log.warn('刷新订阅信息失败: $e');
-    }
-  }
 }

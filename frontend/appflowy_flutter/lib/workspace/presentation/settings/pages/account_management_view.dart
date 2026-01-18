@@ -72,12 +72,74 @@ class _AccountManagementViewState extends State<AccountManagementView>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // 当应用进入后台时停止轮询，回到前台时恢复轮询
-    final bloc = context.read<AccountManagementBloc>();
-    // 应用生命周期变化时的处理
-    // 注意：轮询状态由 Bloc 内部管理，应用进入后台时会自动停止
-    // 回到前台时，如果 paymentResult 中有订单号，可以手动触发轮询
-    // 这里暂时不处理，因为轮询逻辑在 Bloc 内部管理
+    
+    // 检查 widget 是否已挂载，避免在 build 之前访问 context
+    if (!mounted) {
+      return;
+    }
+    
+    // 延迟执行，确保 build 方法已经执行，BlocProvider 已经创建
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      
+      // 检查 BlocProvider 是否已经创建
+      // 使用 try-catch 安全地检查，如果不存在就不处理
+      AccountManagementBloc? bloc;
+      try {
+        bloc = context.read<AccountManagementBloc>();
+      } catch (e) {
+        // BlocProvider 还未创建（build 方法还没执行），忽略此次生命周期事件
+        return;
+      }
+      
+      if (bloc == null || bloc.isClosed) {
+        return;
+      }
+      
+      // 当应用进入后台时停止轮询，回到前台时恢复轮询
+      if (state == AppLifecycleState.paused ||
+          state == AppLifecycleState.inactive) {
+        bloc.add(const AccountManagementEvent.stopPaymentPolling());
+      } else if (state == AppLifecycleState.resumed) {
+        // 检查当前状态，如果有订单号则恢复轮询
+        final currentState = bloc.state;
+        currentState.maybeWhen(
+          orElse: () {},
+          ready: (
+            subscriptionInfo,
+            planConfigs,
+            addons,
+            selectedPlan,
+            selectedDuration,
+            selectedTab,
+            selectedAddonIndex,
+            agreedProtocols,
+            isLoadingSubscription,
+            isLoadingPlans,
+            isLoadingAddons,
+            isProcessingPayment,
+            error,
+            paymentResult,
+          ) {
+            // 如果 paymentResult 中有订单号，恢复轮询
+            if (paymentResult != null && paymentResult.contains('orderNo:')) {
+              final parts = paymentResult.split('|');
+              for (final part in parts) {
+                if (part.startsWith('orderNo:')) {
+                  final orderNo = part.substring('orderNo:'.length);
+                  if (orderNo.isNotEmpty) {
+                    bloc?.add(AccountManagementEvent.startPaymentPolling(orderNo));
+                    break;
+                  }
+                }
+              }
+            }
+          },
+        );
+      }
+    });
   }
 
   @override
@@ -146,10 +208,27 @@ class _AccountManagementViewState extends State<AccountManagementView>
                         context,
                         orderNo: orderNo,
                         onPaymentSuccess: () {
-                          // 支付成功后的处理已在弹框内部完成
+                          // 支付成功后刷新订阅信息
+                          context.read<SettingsDialogBloc>().add(
+                                const SettingsDialogEvent.initial(),
+                              );
+                          try {
+                            final workspaceBloc = context.read<UserWorkspaceBloc?>();
+                            if (workspaceBloc != null) {
+                              workspaceBloc.add(
+                                UserWorkspaceEvent.updateCloudSyncEnabled(
+                                    enabled: true),
+                              );
+                              workspaceBloc.add(
+                                UserWorkspaceEvent.fetchCurrentSubscription(),
+                              );
+                            }
+                          } catch (e) {
+                            Log.warn('无法刷新 UserWorkspaceBloc: $e');
+                          }
                         },
                         onClose: () {
-                          // 用户手动关闭弹框
+                          // 用户手动关闭弹框，不做特殊处理
                         },
                       );
                     }
