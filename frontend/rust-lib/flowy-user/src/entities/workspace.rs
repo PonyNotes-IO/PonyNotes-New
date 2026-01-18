@@ -310,6 +310,76 @@ pub struct AddWorkspaceMemberPB {
   pub email: String,
 }
 
+// Join request PBs
+#[derive(ProtoBuf, Default, Clone, Validate)]
+pub struct CreateJoinRequestPB {
+  #[pb(index = 1)]
+  #[validate(custom(function = "required_not_empty_str"))]
+  pub workspace_id: String,
+
+  #[pb(index = 2)]
+  #[validate(custom(function = "required_not_empty_str"))]
+  pub space_id: String,
+
+  #[pb(index = 3)]
+  pub requester_id: i64,
+
+  #[pb(index = 4)]
+  pub reason: String,
+}
+
+#[derive(ProtoBuf, Default, Clone)]
+pub struct JoinRequestPB {
+  #[pb(index = 1)]
+  pub id: i64,
+  #[pb(index = 2)]
+  pub workspace_id: String,
+  #[pb(index = 3)]
+  pub space_id: String,
+  #[pb(index = 4)]
+  pub requester_id: i64,
+  #[pb(index = 5)]
+  pub reason: String,
+  #[pb(index = 6)]
+  pub status: String,
+  #[pb(index = 7)]
+  pub created_at: i64,
+  #[pb(index = 8)]
+  pub updated_at: i64,
+}
+
+#[derive(ProtoBuf, Default, Clone)]
+pub struct RepeatedJoinRequestPB {
+  #[pb(index = 1)]
+  pub items: Vec<JoinRequestPB>,
+}
+
+#[derive(ProtoBuf, Default, Clone, Validate)]
+pub struct HandleJoinRequestPB {
+  #[pb(index = 1)]
+  #[validate(custom(function = "required_not_empty_str"))]
+  pub workspace_id: String,
+  #[pb(index = 2)]
+  #[validate(custom(function = "required_not_empty_str"))]
+  pub space_id: String,
+  #[pb(index = 3)]
+  pub request_id: i64,
+  #[pb(index = 4)]
+  pub approve: bool,
+}
+
+#[derive(ProtoBuf, Default, Clone, Validate)]
+pub struct CancelJoinRequestPB {
+  #[pb(index = 1)]
+  #[validate(custom(function = "required_not_empty_str"))]
+  pub workspace_id: String,
+  #[pb(index = 2)]
+  #[validate(custom(function = "required_not_empty_str"))]
+  pub space_id: String,
+  #[pb(index = 3)]
+  pub request_id: i64,
+}
+
 #[derive(ProtoBuf, Default, Clone, Validate)]
 pub struct QueryWorkspacePB {
   #[pb(index = 1)]

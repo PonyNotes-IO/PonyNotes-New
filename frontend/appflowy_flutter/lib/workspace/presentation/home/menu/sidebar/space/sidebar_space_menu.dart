@@ -13,6 +13,8 @@ import 'package:flowy_infra_ui/widget/buttons/primary_button.dart';
 import 'package:flowy_infra_ui/widget/buttons/secondary_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy_backend/log.dart';
 
 class SidebarSpaceMenu extends StatelessWidget {
   const SidebarSpaceMenu({
@@ -117,9 +119,13 @@ class _SidebarSpaceMenuItemState extends State<SidebarSpaceMenuItem> {
                     ? Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withOpacity(0.12),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: FlowyText.regular('已申请', fontSize: 12),
@@ -127,7 +133,9 @@ class _SidebarSpaceMenuItemState extends State<SidebarSpaceMenuItem> {
                           const HSpace(6.0),
                           GestureDetector(
                             onTap: () {
-                              context.read<SpaceBloc>().add(SpaceEvent.cancelJoinRequest(spaceId: space.id));
+                              context.read<SpaceBloc>().add(
+                                  SpaceEvent.cancelJoinRequest(
+                                      spaceId: space.id));
                             },
                             child: const FlowySvg(FlowySvgs.close_s),
                           ),
@@ -186,12 +194,14 @@ class _SidebarSpaceMenuItemState extends State<SidebarSpaceMenuItem> {
     }
   }
 
-  void _showJoinDialog(BuildContext context, ViewPB space, {required bool isRequest}) {
+  void _showJoinDialog(BuildContext context, ViewPB space,
+      {required bool isRequest}) {
     showDialog(
       context: context,
       builder: (_) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -200,9 +210,7 @@ class _SidebarSpaceMenuItemState extends State<SidebarSpaceMenuItem> {
                 FlowyText.medium(isRequest ? '申请加入' : '加入空间', fontSize: 16),
                 const VSpace(12),
                 FlowyText.regular(
-                  isRequest
-                      ? '此空间为封闭式，提交加入请求后需要管理员审批。'
-                      : '确定要加入此开放式协作区吗？',
+                  isRequest ? '此空间为封闭式，提交加入请求后需要管理员审批。' : '确定要加入此开放式协作区吗？',
                   fontSize: 14,
                 ),
                 const VSpace(16),
@@ -216,10 +224,41 @@ class _SidebarSpaceMenuItemState extends State<SidebarSpaceMenuItem> {
                     const HSpace(12),
                     PrimaryTextButton(
                       LocaleKeys.button_ok.tr(),
-                      onPressed: () {
-                        // TODO: call backend join / request API
-                        showToastNotification(message: isRequest ? '已发送加入请求' : '已加入空间（模拟）');
+                      onPressed: () async {
                         Navigator.of(context).pop();
+                        final spaceBloc = context.read<SpaceBloc>();
+                        if (isRequest) {
+                          // send join request (requires backend approval)
+                          spaceBloc.add(
+                              SpaceEvent.sendJoinRequest(spaceId: space.id));
+                        } else {
+                          // public space: try to add current user to workspace members (self-join)
+                          try {
+                            final profileRes = await UserBackendService
+                                .getCurrentUserProfile();
+                            final user = profileRes.fold((p) => p, (e) => null);
+                            if (user == null || user.email.isEmpty) {
+                              showToastNotification(message: '无法获取当前用户信息，加入失败');
+                              return;
+                            }
+                            final addRes = await UserBackendService(userId: user.id)
+                                .addWorkspaceMember(context.read<SpaceBloc>().workspaceId, user.email);
+                            addRes.fold((_) {
+                              showToastNotification(message: '已加入空间');
+                              // refresh spaces/members
+                              spaceBloc.add(
+                                  const SpaceEvent.didReceiveSpaceUpdate());
+                            }, (err) {
+                              showDialog(
+                                  context: context,
+                                  builder: (_) => NavigatorOkCancelDialog(
+                                      message: err.msg ?? '加入失败'));
+                            });
+                          } catch (e, st) {
+                            Log.error('Join public space failed: $e\n$st');
+                            showToastNotification(message: '加入失败');
+                          }
+                        }
                       },
                     ),
                   ],

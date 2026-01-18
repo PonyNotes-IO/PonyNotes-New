@@ -71,6 +71,10 @@ pub fn init(user_manager: Weak<UserManager>) -> AFPlugin {
     .event(UserEvent::InviteWorkspaceMember, invite_workspace_member_handler)
     .event(UserEvent::ListWorkspaceInvitations, list_workspace_invitations_handler)
     .event(UserEvent::AcceptWorkspaceInvitation, accept_workspace_invitations_handler)
+    .event(UserEvent::CreateJoinRequest, create_join_request_handler)
+    .event(UserEvent::ListJoinRequests, list_join_requests_handler)
+    .event(UserEvent::HandleJoinRequest, handle_join_request_handler)
+    .event(UserEvent::CancelJoinRequest, cancel_join_request_handler)
     // Billing
     .event(UserEvent::SubscribeWorkspace, subscribe_workspace_handler)
     .event(UserEvent::GetWorkspaceSubscriptionInfo, get_workspace_subscription_info_handler)
@@ -218,6 +222,14 @@ pub enum UserEvent {
 
   #[event(input = "UpdateTeamACLPB")]
   UpdateTeamACL = 122,
+  #[event(input = "CreateJoinRequestPB", output = "JoinRequestPB")]
+  CreateJoinRequest = 130,
+  #[event(input = "QueryWorkspacePB", output = "RepeatedJoinRequestPB")]
+  ListJoinRequests = 131,
+  #[event(input = "HandleJoinRequestPB")]
+  HandleJoinRequest = 132,
+  #[event(input = "CancelJoinRequestPB")]
+  CancelJoinRequest = 133,
 
   #[event(input = "ImportAppFlowyDataPB")]
   ImportAppFlowyDataFolder = 41,

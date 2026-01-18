@@ -123,12 +123,14 @@ pub async fn stream_ai_session_with_attachments(
   use std::time::Duration;
 
   let url = format!("{}/api/ai/chat/session", base_url);
-  error!("🔥🔥🔥 [AISession] 准备调用新接口: {}", url);
-  error!("🔥🔥🔥 [AISession] 参数 - model: {:?}, enable_thinking: {}, enable_web_search: {}, has_images: {}, has_files: {}", 
+  info!("[AISession] 准备调用AI会话接口: {}", url);
+  info!("[AISession] 参数 - model: {:?}, enable_thinking: {}, enable_web_search: {}, has_images: {}, has_files: {}", 
     preferred_model, enable_thinking, enable_web_search, images.is_some(), files.is_some());
 
   let client = Client::builder()
     .danger_accept_invalid_certs(true)  // 接受自签名证书
+    .user_agent("AppFlowyClient/0.9.9")  // 添加User-Agent
+    .timeout(Duration::from_secs(60))  // 超时时间
     .build()
     .map_err(|e| {
       error!("[AISession] 创建HTTP客户端失败: {}", e);
@@ -181,28 +183,41 @@ pub async fn stream_ai_session_with_attachments(
       token.clone()
     };
     request = request.header("Authorization", format!("Bearer {}", token));
-    trace!("[AISession] 添加 Authorization header，token 预览: {}", token_preview);
+    info!("[AISession] 已添加 Authorization header，token长度: {}", token.len());
+    trace!("[AISession] Token 预览: {}", token_preview);
   } else {
-    error!("[AISession] 未提供 token，请求可能失败");
+    error!("[AISession] 未提供 token，请求将失败");
   }
 
-  error!("🔥🔥🔥 [AISession] 开始发送POST请求到: {}", url);
+  info!("[AISession] 开始发送POST请求到: {}", url);
   let resp = request
     .send()
     .await
     .map_err(|e| {
-      error!("🔥🔥🔥 [AISession] 请求失败: {}", e);
+      error!("[AISession] 请求失败: {}", e);
+      error!("[AISession] 错误详情: {:?}", e);
+      if e.is_connect() {
+        error!("[AISession] 连接错误 - 网络问题或服务器不可达");
+      } else if e.is_timeout() {
+        error!("[AISession] 请求超时");
+      }
       FlowyError::new(ErrorCode::Internal, format!("HTTP请求失败: {}", e))
     })?;
 
   let status = resp.status();
-  error!("🔥🔥🔥 [AISession] 收到响应，状态码: {}", status);
+  let response_url = resp.url().clone();
+  info!("[AISession] 收到响应");
+  info!("[AISession]   - 状态码: {}", status);
+  info!("[AISession]   - 实际请求URL: {}", response_url);
+  info!("[AISession]   - 响应头: {:?}", resp.headers());
   
   if !resp.status().is_success() {
     let status = resp.status();
     let error_text =
       resp.text().await.unwrap_or_else(|_| "无法读取错误信息".to_string());
     error!("[AISession] 服务器返回错误: {} - {}", status, error_text);
+    error!("[AISession] 请求URL: {}", url);
+    error!("[AISession] 实际响应URL: {}", response_url);
 
     // 解析后端返回的 JSON 错误结构（如果可能）
     let parsed_json = serde_json::from_str::<serde_json::Value>(&error_text).ok();

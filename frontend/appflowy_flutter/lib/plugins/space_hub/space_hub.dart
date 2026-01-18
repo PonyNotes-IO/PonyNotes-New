@@ -18,6 +18,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -368,8 +369,21 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       final plugin = view.plugin();
       // 确保插件已初始化
       plugin.init();
+      
+      // 获取 userProfile - AI Chat 等插件需要用户信息
+      UserProfilePB? userProfile;
+      try {
+        final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+        userProfile = userWorkspaceBloc.state.userProfile;
+      } catch (e) {
+        debugPrint('[SpaceHub] Failed to get userProfile: $e');
+      }
+      
       return plugin.widgetBuilder.buildWidget(
-        context: PluginContext(onDeleted: widget.onDeleted),
+        context: PluginContext(
+          onDeleted: widget.onDeleted,
+          userProfile: userProfile,  // 传入用户配置
+        ),
         shrinkWrap: false,
       );
     } catch (e, stackTrace) {
