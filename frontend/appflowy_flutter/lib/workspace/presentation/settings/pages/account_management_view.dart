@@ -8,7 +8,8 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart'
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/settings/account/account_management_bloc.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
-import 'package:appflowy/workspace/application/payment/payment_webview_dialog.dart';
+import 'package:appflowy/workspace/application/payment/payment_util.dart';
+import 'package:appflowy/workspace/presentation/settings/pages/payment_status_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/email_binding_dialog.dart';
@@ -46,7 +47,101 @@ class AccountManagementView extends StatefulWidget {
   State<AccountManagementView> createState() => _AccountManagementViewState();
 }
 
-class _AccountManagementViewState extends State<AccountManagementView> {
+class _AccountManagementViewState extends State<AccountManagementView>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    // 停止支付轮询（通过 Bloc 的 close 方法会自动停止）
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 当页面可见时，检查是否需要启动轮询
+    // 注意：轮询状态由 Bloc 内部管理，这里不需要额外处理
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // 检查 widget 是否已挂载，避免在 build 之前访问 context
+    if (!mounted) {
+      return;
+    }
+    
+    // 延迟执行，确保 build 方法已经执行，BlocProvider 已经创建
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      
+      // 检查 BlocProvider 是否已经创建
+      // 使用 try-catch 安全地检查，如果不存在就不处理
+      AccountManagementBloc? bloc;
+      try {
+        bloc = context.read<AccountManagementBloc>();
+      } catch (e) {
+        // BlocProvider 还未创建（build 方法还没执行），忽略此次生命周期事件
+        return;
+      }
+      
+      if (bloc == null || bloc.isClosed) {
+        return;
+      }
+      
+      // 当应用进入后台时停止轮询，回到前台时恢复轮询
+      if (state == AppLifecycleState.paused ||
+          state == AppLifecycleState.inactive) {
+        bloc.add(const AccountManagementEvent.stopPaymentPolling());
+      } else if (state == AppLifecycleState.resumed) {
+        // 检查当前状态，如果有订单号则恢复轮询
+        final currentState = bloc.state;
+        currentState.maybeWhen(
+          orElse: () {},
+          ready: (
+            subscriptionInfo,
+            planConfigs,
+            addons,
+            selectedPlan,
+            selectedDuration,
+            selectedTab,
+            selectedAddonIndex,
+            agreedProtocols,
+            isLoadingSubscription,
+            isLoadingPlans,
+            isLoadingAddons,
+            isProcessingPayment,
+            error,
+            paymentResult,
+          ) {
+            // 如果 paymentResult 中有订单号，恢复轮询
+            if (paymentResult != null && paymentResult.contains('orderNo:')) {
+              final parts = paymentResult.split('|');
+              for (final part in parts) {
+                if (part.startsWith('orderNo:')) {
+                  final orderNo = part.substring('orderNo:'.length);
+                  if (orderNo.isNotEmpty) {
+                    bloc?.add(AccountManagementEvent.startPaymentPolling(orderNo));
+                    break;
+                  }
+                }
+              }
+            }
+          },
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider<AccountManagementBloc>(
@@ -104,34 +199,39 @@ class _AccountManagementViewState extends State<AccountManagementView> {
                   }
                   
                   if (payUrl != null && payUrl.isNotEmpty) {
-                    // 显示支付弹框
-                    showPaymentWebViewDialog(
-                      context,
-                      payUrl: payUrl,
-                      orderNo: orderNo,
-                      expireTime: expireTime,
-                    ).then((paymentSuccess) {
-                      // 支付完成后刷新订阅信息
-                      if (paymentSuccess == true) {
-                        context.read<SettingsDialogBloc>().add(
-                              const SettingsDialogEvent.initial(),
-                            );
-                        try {
-                          final workspaceBloc = context.read<UserWorkspaceBloc?>();
-                          if (workspaceBloc != null) {
-                            workspaceBloc.add(
-                              UserWorkspaceEvent.updateCloudSyncEnabled(
-                                  enabled: true),
-                            );
-                            workspaceBloc.add(
-                              UserWorkspaceEvent.fetchCurrentSubscription(),
-                            );
+                    // 使用浏览器打开支付链接
+                    PaymentUtil.webPay(payUrl);
+                    
+                    // 显示支付结果查询弹框
+                    if (orderNo != null && orderNo.isNotEmpty) {
+                      showPaymentStatusDialog(
+                        context,
+                        orderNo: orderNo,
+                        onPaymentSuccess: () {
+                          // 支付成功后刷新订阅信息
+                          context.read<SettingsDialogBloc>().add(
+                                const SettingsDialogEvent.initial(),
+                              );
+                          try {
+                            final workspaceBloc = context.read<UserWorkspaceBloc?>();
+                            if (workspaceBloc != null) {
+                              workspaceBloc.add(
+                                UserWorkspaceEvent.updateCloudSyncEnabled(
+                                    enabled: true),
+                              );
+                              workspaceBloc.add(
+                                UserWorkspaceEvent.fetchCurrentSubscription(),
+                              );
+                            }
+                          } catch (e) {
+                            Log.warn('无法刷新 UserWorkspaceBloc: $e');
                           }
-                        } catch (e) {
-                          Log.warn('无法刷新 UserWorkspaceBloc: $e');
-                        }
-                      }
-                    });
+                        },
+                        onClose: () {
+                          // 用户手动关闭弹框，不做特殊处理
+                        },
+                      );
+                    }
                   }
                 } else {
                   // 普通消息提示

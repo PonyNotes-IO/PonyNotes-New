@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/env/cloud_env.dart';
@@ -6,7 +7,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart'
-    show PaymentMethod, PaymentPlatformSupport, PaymentUtil;
+    show PaymentMethod, PaymentPlatformSupport;
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
@@ -207,6 +208,10 @@ class AccountManagementBloc
             _createOrUpdateSubscription(planId, billingType, emit),
         handleUpgradePay: () async => _handleUpgradePay(emit),
         handleAddonPay: () async => _handleAddonPay(emit),
+        // 临时注释：等待 freezed 重新生成后取消注释
+        startPaymentPolling: (orderNo) async => _startPaymentPolling(orderNo, emit),
+        stopPaymentPolling: () async => _stopPaymentPolling(),
+        checkPaymentStatus: () async => _checkPaymentStatus(emit),
       );
     });
   }
@@ -214,6 +219,9 @@ class AccountManagementBloc
   final String workspaceId;
   final UserProfilePB userProfile;
   final CurrentSubscription? currentSubscription;
+  
+  Timer? _paymentPollingTimer;
+  String? _currentPollingOrderNo; // 当前正在轮询的订单号
 
   String? _extractAccessToken(String? rawToken) {
     if (rawToken == null || rawToken.isEmpty) {
@@ -1785,6 +1793,15 @@ class AccountManagementBloc
 
         if (orderResult.isFailure) {
           final error = orderResult.fold((_) => null, (e) => e);
+          String errorMessage = error?.msg ?? '创建支付订单失败';
+          
+          // 处理验签错误，提供更友好的提示
+          if (errorMessage.contains('invalid-signature') || 
+              errorMessage.contains('验签出错') ||
+              errorMessage.contains('签名')) {
+            errorMessage = '支付系统配置异常，请联系客服或稍后重试';
+          }
+          
           emit(
             AccountManagementState.ready(
               subscriptionInfo: subscriptionInfo,
@@ -1799,7 +1816,7 @@ class AccountManagementBloc
               isLoadingPlans: isLoadingPlans,
               isLoadingAddons: isLoadingAddons,
               isProcessingPayment: false,
-              error: error?.msg ?? '创建支付订单失败',
+              error: errorMessage,
               paymentResult: paymentResult,
             ),
           );
@@ -1866,6 +1883,11 @@ class AccountManagementBloc
             paymentResult: paymentResultMessage,
           ),
         );
+        
+        // 启动支付结果轮询
+        if (order.orderNo.isNotEmpty) {
+          await _startPaymentPolling(order.orderNo, emit);
+        }
       },
     );
   }
@@ -2110,6 +2132,160 @@ class AccountManagementBloc
       },
     );
   }
+
+  /// 启动支付结果轮询
+  /// 
+  /// 注意：Timer 回调中不能直接使用 emit，因为原始事件处理器可能已经完成
+  /// 改为使用 add 触发 checkPaymentStatus 事件
+  Future<void> _startPaymentPolling(
+    String orderNo,
+    Emitter<AccountManagementState> emit,
+  ) async {
+    // 停止之前的轮询
+    _paymentPollingTimer?.cancel();
+    _paymentPollingTimer = null;
+    _currentPollingOrderNo = orderNo;
+
+    // 立即查询一次（在当前事件处理器中，可以安全使用 emit）
+    await _checkPaymentStatus(emit);
+
+    // 每 3 秒轮询一次
+    // 注意：Timer 回调中使用 add 触发新事件，而不是直接调用带 emit 的方法
+    _paymentPollingTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) {
+        // 使用 add 触发新事件，这样 emit 会在新的事件处理器中调用
+        add(const AccountManagementEvent.checkPaymentStatus());
+      },
+    );
+
+    Log.info('[AccountManagementBloc] Started payment polling for order: $orderNo');
+  }
+
+  /// 停止支付结果轮询
+  void _stopPaymentPolling() {
+    _paymentPollingTimer?.cancel();
+    _paymentPollingTimer = null;
+    _currentPollingOrderNo = null;
+
+    Log.info('[AccountManagementBloc] Stopped payment polling');
+  }
+
+  /// 检查支付状态
+  /// 
+  /// 此方法会在事件处理器中被调用，emit 是有效的
+  Future<void> _checkPaymentStatus(Emitter<AccountManagementState> emit) async {
+    if (_currentPollingOrderNo == null || _currentPollingOrderNo!.isEmpty) {
+      // 没有订单号，停止轮询
+      _stopPaymentPolling();
+      return;
+    }
+
+    // 检查 emit 是否已完成（防止异步操作后 emit 失效）
+    if (emit.isDone) {
+      Log.warn('[AccountManagementBloc] emit.isDone, skipping payment status check');
+      return;
+    }
+
+    await state.maybeWhen(
+      orElse: () async {},
+      ready: (
+        subscriptionInfo,
+        planConfigs,
+        addons,
+        selectedPlan,
+        selectedDuration,
+        selectedTab,
+        selectedAddonIndex,
+        agreedProtocols,
+        isLoadingSubscription,
+        isLoadingPlans,
+        isLoadingAddons,
+        isProcessingPayment,
+        error,
+        paymentResult,
+      ) async {
+        final statusResult = await PaymentApi.queryPaymentStatus(_currentPollingOrderNo!);
+        
+        // 再次检查 emit 是否有效
+        if (emit.isDone) {
+          Log.warn('[AccountManagementBloc] emit.isDone after query, skipping emit');
+          return;
+        }
+        
+        statusResult.fold(
+          (status) {
+            Log.info('[AccountManagementBloc] Payment status: $status');
+            
+            // 如果支付成功或失败，停止轮询并刷新订阅信息
+            if (status == 'paid' || status == 'success') {
+              _stopPaymentPolling();
+              
+              // 刷新订阅信息
+              add(const AccountManagementEvent.loadSubscriptionInfo());
+              
+              // 通知 UI 刷新（检查 emit 是否有效）
+              if (!emit.isDone) {
+                emit(
+                  AccountManagementState.ready(
+                    subscriptionInfo: subscriptionInfo,
+                    planConfigs: planConfigs,
+                    addons: addons,
+                    selectedPlan: selectedPlan,
+                    selectedDuration: selectedDuration,
+                    selectedTab: selectedTab,
+                    selectedAddonIndex: selectedAddonIndex,
+                    agreedProtocols: agreedProtocols,
+                    isLoadingSubscription: isLoadingSubscription,
+                    isLoadingPlans: isLoadingPlans,
+                    isLoadingAddons: isLoadingAddons,
+                    isProcessingPayment: false,
+                    error: null,
+                    paymentResult: '支付成功',
+                  ),
+                );
+              }
+            } else if (status == 'failed' || status == 'expired' || status == 'canceled') {
+              _stopPaymentPolling();
+              
+              if (!emit.isDone) {
+                emit(
+                  AccountManagementState.ready(
+                    subscriptionInfo: subscriptionInfo,
+                    planConfigs: planConfigs,
+                    addons: addons,
+                    selectedPlan: selectedPlan,
+                    selectedDuration: selectedDuration,
+                    selectedTab: selectedTab,
+                    selectedAddonIndex: selectedAddonIndex,
+                    agreedProtocols: agreedProtocols,
+                    isLoadingSubscription: isLoadingSubscription,
+                    isLoadingPlans: isLoadingPlans,
+                    isLoadingAddons: isLoadingAddons,
+                    isProcessingPayment: false,
+                    error: status == 'expired' ? '订单已过期' : '支付失败',
+                    paymentResult: paymentResult,
+                  ),
+                );
+              }
+            }
+            // pending 状态继续轮询
+          },
+          (error) {
+            Log.error('[AccountManagementBloc] Failed to query payment status: ${error.msg}');
+            // 查询失败不影响轮询，继续等待
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Future<void> close() {
+    _paymentPollingTimer?.cancel();
+    _paymentPollingTimer = null;
+    return super.close();
+  }
 }
 
 @freezed
@@ -2135,6 +2311,13 @@ class AccountManagementEvent with _$AccountManagementEvent {
   ) = _CreateOrUpdateSubscription;
   const factory AccountManagementEvent.handleUpgradePay() = _HandleUpgradePay;
   const factory AccountManagementEvent.handleAddonPay() = _HandleAddonPay;
+  // 临时注释：等待 freezed 重新生成后取消注释
+  const factory AccountManagementEvent.startPaymentPolling(String orderNo) =
+      _StartPaymentPolling;
+  const factory AccountManagementEvent.stopPaymentPolling() =
+      _StopPaymentPolling;
+  const factory AccountManagementEvent.checkPaymentStatus() =
+      _CheckPaymentStatus;
 }
 
 @freezed

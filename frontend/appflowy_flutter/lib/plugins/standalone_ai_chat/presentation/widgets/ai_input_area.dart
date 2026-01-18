@@ -3,6 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
+import 'package:appflowy/plugins/ai_chat/presentation/chat_page/ai_chat_usage_indicator.dart';
+import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_result/appflowy_result.dart';
+import 'package:fixnum/fixnum.dart' as fixnum;
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:file_picker/file_picker.dart';
 import '../ai_welcome_theme.dart';
 import '../../services/image_service.dart';
 import '../../models/chat_image.dart';
@@ -49,6 +58,9 @@ class _AIInputAreaState extends State<AIInputArea> {
   // 图片选择相关状态
   final List<ChatImage> _selectedImages = [];
   final ChatImageService _imageService = ChatImageService.instance;
+  
+  // 附件列表（包含图片和文件）
+  final List<_AttachmentItem> _attachments = [];
   
   // 功能开关状态
   bool _isDeepThinkingEnabled = false;  // 深度思考开关
@@ -178,17 +190,13 @@ class _AIInputAreaState extends State<AIInputArea> {
         width: widget.customWidth ?? AIWelcomeTheme.inputContainerWidth,
         constraints: BoxConstraints(
           minHeight: AIWelcomeTheme.inputContainerHeight,
-          maxHeight: _selectedImages.isNotEmpty ? 
-            AIWelcomeTheme.inputContainerHeight + (_selectedImages.length <= 3 ? 80 : 140) : // 根据图片数量动态调整
-            AIWelcomeTheme.inputContainerHeight,
+          maxHeight: AIWelcomeTheme.inputContainerHeight, // 附件列表在下方，不影响输入框高度
         ),
         decoration: AIWelcomeTheme.inputContainerDecoration(context),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 选中图片预览区域
-            if (_selectedImages.isNotEmpty) _buildImagePreviewArea(),
             // 输入文本区域（对应 text-wrapper_5）
             Expanded(
               child: Container(
@@ -224,6 +232,12 @@ class _AIInputAreaState extends State<AIInputArea> {
                 children: [
                   // 模型选择下拉框（对应 block_4）
                   _buildModelSelector(),
+                  // 深度思考按钮（移到模型选择器右侧，相邻）
+                  const SizedBox(width: 10),
+                  _buildDeepThinkingButton(),
+                  // 联网搜索按钮（移到深度思考按钮右侧）
+                  const SizedBox(width: 10),
+                  _buildWebSearchButton(),
                   const Spacer(),
                   // 功能图标按钮组
                   
@@ -232,18 +246,12 @@ class _AIInputAreaState extends State<AIInputArea> {
                     const SizedBox(width: 22),
                     _buildHistoryButton(),
                   ],
-                  // 深度思考按钮（最左边）
-                  const SizedBox(width: 22),
-                  _buildDeepThinkingButton(),
-                  // 全网搜索按钮（tool_2，与图片上传交换位置后移到这里）
-                  const SizedBox(width: 22),
-                  _buildWebSearchButton(),
-                  // 图片上传按钮（与全网搜索交换位置后移到这里）
-                  const SizedBox(width: 22),
-                  _buildImagePickerButton(),
-                  // 附件上传按钮（tool_3）
-                  const SizedBox(width: 20),
-                  _buildToolButton('assets/images/icons/tool_3.png', '附件上传'),
+                  // AI使用次数显示（放在附件按钮左边）
+                  _buildAIUsageIndicator(),
+                  const SizedBox(width: 10),
+                  // 合并后的附件上传按钮（包含图片和附件上传功能）
+                  const SizedBox(width: 12),
+                  _buildAttachmentButton(),
                   const SizedBox(width: 21),
                   // 分隔线（对应 block_5）
                   Container(
@@ -257,6 +265,8 @@ class _AIInputAreaState extends State<AIInputArea> {
                 ],
               ),
             ),
+            // 附件列表显示区域（放在工具栏下方）
+            if (_attachments.isNotEmpty) _buildAttachmentPreviewArea(),
           ],
         ),
       ),
@@ -290,16 +300,28 @@ class _AIInputAreaState extends State<AIInputArea> {
       key: _selectorKey, // 添加GlobalKey
       onTap: _toggleDropdown,
       child: Container(
-        width: 130,
-        height: AIWelcomeTheme.toolbarButtonSize,
-        decoration: AIWelcomeTheme.modelSelectorDecoration(context),
+        width: 102,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: const Color(0xFFE94618), // rgba(233, 70, 24, 1)
+            width: 1,
+          ),
+        ),
         child: Row(
           children: [
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                _selectedModel?.name ?? '选择模型',
-                style: AIWelcomeTheme.modelSelectorStyle(context),
+                _selectedModel?.name ?? 'DeepSeek',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFFE94618), // rgba(233, 70, 24, 1)
+                  fontFamily: 'PingFangSC-Medium',
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -308,13 +330,13 @@ class _AIInputAreaState extends State<AIInputArea> {
               angle: _isDropdownOpen ? 3.14159 : 0, // 180度旋转
               child: Image.asset(
                 'assets/images/icons/dropdown_arrow.png',
-                width: 12,
-                height: 12,
+                width: 9,
+                height: 7,
                 errorBuilder: (context, error, stackTrace) {
-                  return Icon(
+                  return const Icon(
                     Icons.arrow_drop_down,
-                    size: 12,
-                    color: AIWelcomeTheme.secondaryTextColor(context),
+                    size: 7,
+                    color: Color(0xFFE94618),
                   );
                 },
               ),
@@ -498,46 +520,39 @@ class _AIInputAreaState extends State<AIInputArea> {
   /// 构建全网搜索按钮
   Widget _buildWebSearchButton() {
     final isEnabled = _isWebSearchEnabled;
-    final iconColor = isEnabled
-        ? Theme.of(context).colorScheme.primary
-        : AIWelcomeTheme.secondaryTextColor(context);
+    final borderColor = isEnabled
+        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
+        : const Color(0xFFCDCDCD); // rgba(205, 205, 205, 1)
+    final textColor = isEnabled
+        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
+        : const Color(0xFF636363); // rgba(99, 99, 99, 1)
     
-    return FlowyTooltip(
-      message: '全网搜索',
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _isWebSearchEnabled = !_isWebSearchEnabled;
-          });
-          debugPrint('🌐 全网搜索按钮: ${_isWebSearchEnabled ? "开启" : "关闭"}');
-        },
-        child: Container(
-          width: AIWelcomeTheme.iconSize,
-          height: AIWelcomeTheme.iconSize,
-          child: ColorFiltered(
-            colorFilter: ColorFilter.mode(
-              iconColor,
-              BlendMode.srcIn,
-            ),
-            child: Image.asset(
-              'assets/images/icons/tool_2.png',
-              width: AIWelcomeTheme.iconSize * 0.8,
-              height: AIWelcomeTheme.iconSize * 0.8,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  width: AIWelcomeTheme.iconSize,
-                  height: AIWelcomeTheme.iconSize,
-                  decoration: BoxDecoration(
-                    color: AIWelcomeTheme.containerColor(context),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Icon(
-                    Icons.language,
-                    size: AIWelcomeTheme.iconSize * 0.6,
-                    color: iconColor,
-                  ),
-                );
-              },
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isWebSearchEnabled = !_isWebSearchEnabled;
+        });
+        debugPrint('🌐 联网搜索按钮: ${_isWebSearchEnabled ? "开启" : "关闭"}');
+      },
+      child: Container(
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: borderColor,
+            width: 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            '联网搜索',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: textColor,
+              fontFamily: 'PingFangSC-Medium',
             ),
           ),
         ),
@@ -545,40 +560,486 @@ class _AIInputAreaState extends State<AIInputArea> {
     );
   }
 
-  /// 构建工具按钮
-  Widget _buildToolButton(String imageUrl, String tooltip) {
+  /// 构建合并后的附件上传按钮（包含图片和附件上传功能）
+  Widget _buildAttachmentButton() {
+    final hasAttachments = _attachments.isNotEmpty;
+    
     return FlowyTooltip(
-      message: tooltip,
+      message: '上传附件（支持图片和文件）',
       child: GestureDetector(
-        onTap: () {
-          // TODO: 实现具体的工具功能
-        },
+        onTap: _handleAttachmentTap,
         child: Container(
           width: AIWelcomeTheme.iconSize,
           height: AIWelcomeTheme.iconSize,
-          child: Image.asset(
-            imageUrl,
-            width: AIWelcomeTheme.iconSize * 0.8,
-            height: AIWelcomeTheme.iconSize * 0.8,
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                width: AIWelcomeTheme.iconSize,
-                height: AIWelcomeTheme.iconSize,
-                decoration: BoxDecoration(
-                  color: AIWelcomeTheme.containerColor(context),
-                  borderRadius: BorderRadius.circular(4),
+          decoration: BoxDecoration(
+            color: hasAttachments ? AIWelcomeTheme.selectedItemColor(context) : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Image.asset(
+                  'assets/images/icons/tool_3.png',
+                  width: AIWelcomeTheme.iconSize * 0.8,
+                  height: AIWelcomeTheme.iconSize * 0.8,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(
+                      Icons.attach_file,
+                      size: AIWelcomeTheme.iconSize * 0.8,
+                      color: hasAttachments 
+                          ? AIWelcomeTheme.selectedItemTextColor(context) 
+                          : AIWelcomeTheme.secondaryTextColor(context),
+                    );
+                  },
                 ),
-                child: Icon(
-                  Icons.image_not_supported,
-                  size: AIWelcomeTheme.iconSize * 0.6,
-                  color: AIWelcomeTheme.secondaryTextColor(context),
+              ),
+              if (hasAttachments)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${_attachments.length}',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onPrimary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              );
-            },
+            ],
           ),
         ),
       ),
     );
+  }
+
+  /// 处理附件按钮点击事件（支持图片和文件上传）
+  /// 直接打开系统文件浏览器，不显示类型选择对话框
+  Future<void> _handleAttachmentTap() async {
+    if (_isDropdownOpen) {
+      _closeDropdown();
+    }
+    
+    try {
+      // 直接打开系统文件浏览器，支持所有文件类型
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: FileType.any, // 支持所有文件类型
+        withData: false, // 大文件不直接加载到内存
+      );
+      
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+      
+      // 支持的图片扩展名
+      const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff'];
+      
+      // 处理选中的文件
+      final List<_AttachmentItem> newAttachments = [];
+      final List<ChatImage> newImages = [];
+      
+      for (final pickedFile in result.files) {
+        final filePath = pickedFile.path;
+        if (filePath == null || filePath.isEmpty) continue;
+        
+        final file = File(filePath);
+        if (!file.existsSync()) continue;
+        
+        final extension = pickedFile.extension?.toLowerCase() ?? '';
+        final isImage = imageExtensions.contains(extension);
+        final fileSize = file.lengthSync();
+        
+        if (isImage) {
+          // 如果是图片，创建ChatImage对象并添加到图片列表
+          try {
+            final image = await ChatImage.fromFile(file);
+            newImages.add(image);
+            newAttachments.add(_AttachmentItem(
+              type: _AttachmentType.image,
+              name: pickedFile.name,
+              size: fileSize,
+              image: image,
+              file: file,
+              uploadStatus: _UploadStatus.success,
+            ));
+          } catch (e) {
+            debugPrint('创建图片对象失败: $e');
+            // 如果创建图片对象失败，作为普通文件处理
+            newAttachments.add(_AttachmentItem(
+              type: _AttachmentType.file,
+              name: pickedFile.name,
+              size: fileSize,
+              image: null,
+              file: file,
+              uploadStatus: _UploadStatus.success,
+            ));
+          }
+        } else {
+          // 普通文件
+          newAttachments.add(_AttachmentItem(
+            type: _AttachmentType.file,
+            name: pickedFile.name,
+            size: fileSize,
+            image: null,
+            file: file,
+            uploadStatus: _UploadStatus.success,
+          ));
+        }
+      }
+      
+      // 批量更新状态
+      if (mounted && (newImages.isNotEmpty || newAttachments.isNotEmpty)) {
+        setState(() {
+          _selectedImages.addAll(newImages);
+          _attachments.addAll(newAttachments);
+        });
+      }
+      
+      // 选择后自动聚焦到输入框
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          _focusNode.requestFocus();
+        }
+      });
+    } catch (e) {
+      debugPrint('文件选择失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('文件选择失败: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+  
+  /// 构建AI使用次数显示
+  Widget _buildAIUsageIndicator() {
+    return FutureBuilder<FlowyResult<WorkspaceUsagePB?, FlowyError>>(
+      future: _loadUsage(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+        
+        final result = snapshot.data!;
+        return result.fold(
+          (usage) {
+            if (usage == null) {
+              return const SizedBox.shrink();
+            }
+            
+            // 如果无限制，不显示
+            if (usage.aiResponsesUnlimited) {
+              return const SizedBox.shrink();
+            }
+            
+            final used = usage.aiResponsesCount.toInt();
+            final total = usage.aiResponsesCountLimit.toInt();
+            
+            // 检测未订阅状态：total == -1 表示用户未订阅
+            if (total == -1) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '未订阅，不可用',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              );
+            }
+            
+            final remaining = total - used;
+            
+            // 验证数据有效性
+            if (total == 0) {
+              return const SizedBox.shrink();
+            }
+            
+            // 根据剩余次数选择颜色
+            final textColor = _getUsageTextColor(remaining);
+            
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                _getUsageDisplayText(used, total, remaining),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: textColor,
+                ),
+              ),
+            );
+          },
+          (error) {
+            return const SizedBox.shrink();
+          },
+        );
+      },
+    );
+  }
+  
+  /// 加载使用情况
+  Future<FlowyResult<WorkspaceUsagePB?, FlowyError>> _loadUsage() async {
+    try {
+      final workspaceBloc = context.read<UserWorkspaceBloc>();
+      final workspaceId = workspaceBloc.state.currentWorkspace?.workspaceId;
+      if (workspaceId == null || workspaceId.isEmpty) {
+        return FlowyResult.success(null);
+      }
+      
+      final service = WorkspaceService(
+        workspaceId: workspaceId,
+        userId: fixnum.Int64.ZERO,
+      );
+      
+      return service.getWorkspaceUsage();
+    } catch (e) {
+      return FlowyResult.failure(FlowyError(msg: e.toString()));
+    }
+  }
+  
+  String _getUsageDisplayText(int used, int total, int remaining) {
+    if (remaining <= 0) {
+      return '$used/$total 0次可用';
+    }
+    return '$used/$total $remaining次可用';
+  }
+  
+  Color _getUsageTextColor(int remaining) {
+    if (remaining <= 0) {
+      return Colors.red;
+    } else if (remaining <= 5) {
+      return Colors.orange.shade700;
+    } else {
+      return Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+    }
+  }
+  
+  /// 构建附件预览区域（包含图片和文件）
+  /// 显示在工具栏下方
+  Widget _buildAttachmentPreviewArea() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+            width: 1,
+          ),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: _attachments.map((attachment) => _buildAttachmentItem(attachment)).toList(),
+        ),
+      ),
+    );
+  }
+  
+  /// 构建单个附件项
+  /// 使用小图标，紧凑布局，文件名过长时用...显示
+  Widget _buildAttachmentItem(_AttachmentItem attachment) {
+    // 获取文件扩展名用于显示文件类型
+    final extension = attachment.name.split('.').last.toLowerCase();
+    final fileType = _getFileTypeDisplay(extension);
+    
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: attachment.uploadStatus == _UploadStatus.failed
+              ? Colors.red
+              : Theme.of(context).colorScheme.outline.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 小图标
+          Icon(
+            attachment.type == _AttachmentType.image
+                ? Icons.image
+                : _getFileIcon(extension),
+            size: 16,
+            color: attachment.type == _AttachmentType.image
+                ? Colors.red
+                : Colors.blue,
+          ),
+          const SizedBox(width: 6),
+          // 文件名和大小
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 文件名（限制宽度，过长用...显示）
+              SizedBox(
+                width: 120, // 限制最大宽度
+                child: Text(
+                  attachment.name,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF333333),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 2),
+              // 文件类型和大小
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    fileType,
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                  if (attachment.size != null) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatFileSize(attachment.size!),
+                      style: TextStyle(
+                        fontSize: 9,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              // 上传失败提示
+              if (attachment.uploadStatus == _UploadStatus.failed)
+                const Text(
+                  '上传失败',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: Colors.red,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 4),
+          // 删除按钮
+          GestureDetector(
+            onTap: () => _removeAttachment(attachment),
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.close,
+                size: 12,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  /// 根据文件扩展名获取文件类型显示文本
+  String _getFileTypeDisplay(String extension) {
+    switch (extension.toLowerCase()) {
+      case 'pdf':
+        return 'PDF';
+      case 'doc':
+      case 'docx':
+        return 'DOC';
+      case 'xls':
+      case 'xlsx':
+        return 'XLS';
+      case 'ppt':
+      case 'pptx':
+        return 'PPT';
+      case 'txt':
+        return 'TXT';
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'bmp':
+      case 'webp':
+        return '图片';
+      default:
+        return extension.toUpperCase();
+    }
+  }
+  
+  /// 根据文件扩展名获取文件图标
+  IconData _getFileIcon(String extension) {
+    switch (extension.toLowerCase()) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'doc':
+      case 'docx':
+        return Icons.description;
+      case 'xls':
+      case 'xlsx':
+        return Icons.table_chart;
+      case 'ppt':
+      case 'pptx':
+        return Icons.slideshow;
+      case 'txt':
+        return Icons.text_snippet;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+  
+  /// 格式化文件大小
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) {
+      return '$bytes B';
+    } else if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(2)} KB';
+    } else {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+    }
+  }
+  
+  /// 移除附件
+  void _removeAttachment(_AttachmentItem attachment) {
+    setState(() {
+      _attachments.remove(attachment);
+      // 如果是图片，也从图片列表中移除
+      if (attachment.type == _AttachmentType.image && attachment.image != null) {
+        _selectedImages.remove(attachment.image);
+      }
+    });
   }
 
   /// 构建发送按钮
@@ -615,30 +1076,40 @@ class _AIInputAreaState extends State<AIInputArea> {
   /// 构建深度思考按钮
   Widget _buildDeepThinkingButton() {
     final isEnabled = _isDeepThinkingEnabled;
-    final iconColor = isEnabled
-        ? Theme.of(context).colorScheme.primary
-        : AIWelcomeTheme.secondaryTextColor(context);
+    final borderColor = isEnabled
+        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
+        : const Color(0xFFCDCDCD); // rgba(205, 205, 205, 1)
+    final textColor = isEnabled
+        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
+        : const Color(0xFF636363); // rgba(99, 99, 99, 1)
     
-    return FlowyTooltip(
-      message: '深度思考',
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _isDeepThinkingEnabled = !_isDeepThinkingEnabled;
-          });
-          debugPrint('🔍 深度思考按钮: ${_isDeepThinkingEnabled ? "开启" : "关闭"}');
-        },
-        child: Container(
-          width: AIWelcomeTheme.iconSize,
-          height: AIWelcomeTheme.iconSize,
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(4),
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isDeepThinkingEnabled = !_isDeepThinkingEnabled;
+        });
+        debugPrint('🔍 深度思考按钮: ${_isDeepThinkingEnabled ? "开启" : "关闭"}');
+      },
+      child: Container(
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: borderColor,
+            width: 1,
           ),
-          child: Icon(
-            Icons.auto_awesome,
-            size: AIWelcomeTheme.iconSize,
-            color: iconColor,
+        ),
+        child: Center(
+          child: Text(
+            '深度思考',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: textColor,
+              fontFamily: 'PingFangSC-Medium',
+            ),
           ),
         ),
       ),
@@ -794,5 +1265,37 @@ class _AIInputAreaState extends State<AIInputArea> {
       ),
     );
   }
+}
+
+/// 附件类型枚举
+enum _AttachmentType {
+  image, // 图片
+  file,  // 文件
+}
+
+/// 上传状态枚举
+enum _UploadStatus {
+  success, // 成功
+  failed,  // 失败
+  // uploading, // 上传中（预留，未来使用）
+}
+
+/// 附件项数据模型
+class _AttachmentItem {
+  final _AttachmentType type;
+  final String name;
+  final int? size; // 文件大小（字节）
+  final ChatImage? image; // 如果是图片
+  final File? file; // 如果是文件
+  final _UploadStatus uploadStatus;
+  
+  _AttachmentItem({
+    required this.type,
+    required this.name,
+    this.size,
+    this.image,
+    this.file,
+    required this.uploadStatus,
+  });
 }
 

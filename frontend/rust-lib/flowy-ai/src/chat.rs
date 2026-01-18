@@ -139,8 +139,45 @@ impl Chat {
       .send(StreamMessage::MessageId(question.message_id).to_string())
       .await;
 
-    // Save message to disk
-    notify_message(&self.chat_id, question.clone())?;
+    // 【关键修复】如果有图片数据，将其添加到消息的 metadata 中
+    // 这样 Rust 中间件层可以从数据库读取到图片数据
+    let mut question_with_images = question.clone();
+    if params.has_images && !params.images.is_empty() {
+      tracing::info!(
+        "[Chat] 将 {} 张图片添加到消息 metadata，message_id={}",
+        params.images.len(),
+        question_with_images.message_id
+      );
+      
+      // 更新消息的 metadata，添加图片信息
+      // ChatMessage.metadata 是 serde_json::Value 类型
+      let mut metadata = question_with_images.metadata.clone();
+      if let Some(obj) = metadata.as_object_mut() {
+        obj.insert("images".to_string(), serde_json::json!(params.images));
+        obj.insert("has_images".to_string(), serde_json::json!(true));
+      } else {
+        // metadata 不是对象，创建新的
+        metadata = serde_json::json!({
+          "images": params.images,
+          "has_images": true,
+        });
+      }
+      question_with_images.metadata = metadata;
+      
+      // 【重要】将带图片的消息保存到本地数据库
+      // 中间件会从数据库读取消息的 metadata 来获取图片数据
+      let conn = self.user_service.sqlite_connection(uid)?;
+      let record = ChatMessageTable::from_message(self.chat_id.to_string(), question_with_images.clone(), false);
+      tracing::info!(
+        "[Chat] 保存带图片的消息到本地数据库，message_id={}, metadata_len={}",
+        record.message_id,
+        record.metadata.as_ref().map(|m| m.len()).unwrap_or(0)
+      );
+      upsert_chat_messages(conn, &[record])?;
+    }
+
+    // Save message to disk（包含图片 metadata）
+    notify_message(&self.chat_id, question_with_images)?;
     let format = params.format.clone().map(Into::into).unwrap_or_default();
     self.stream_response(
       params.answer_stream_port,

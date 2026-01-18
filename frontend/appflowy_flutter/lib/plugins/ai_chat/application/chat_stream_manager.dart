@@ -39,8 +39,10 @@ class ChatStreamManager {
   StreamChatPayloadPB buildStreamPayload(
     String message,
     PredefinedFormat? format,
-    String? promptId,
-  ) {
+    String? promptId, {
+    List<String>? images,
+    bool hasImages = false,
+  }) {
     final payload = StreamChatPayloadPB(
       chatId: chatId,
       message: message,
@@ -49,6 +51,7 @@ class ChatStreamManager {
       answerStreamPort: Int64(answerStream!.nativePort),
       enableThinking: enableDeepThinking,
       enableWebSearch: enableWebSearch,
+      hasImages: hasImages,
     );
 
     if (format != null) {
@@ -57,6 +60,11 @@ class ChatStreamManager {
 
     if (promptId != null) {
       payload.promptId = promptId;
+    }
+
+    // 添加图片数据
+    if (images != null && images.isNotEmpty) {
+      payload.images.addAll(images);
     }
 
     // Note: Model selection is handled via AIEventUpdateSelectedModel
@@ -69,9 +77,17 @@ class ChatStreamManager {
   Future<FlowyResult<ChatMessagePB, FlowyError>> sendStreamRequest(
     String message,
     PredefinedFormat? format,
-    String? promptId,
-  ) async {
-    final payload = buildStreamPayload(message, format, promptId);
+    String? promptId, {
+    List<String>? images,
+    bool hasImages = false,
+  }) async {
+    final payload = buildStreamPayload(
+      message,
+      format,
+      promptId,
+      images: images,
+      hasImages: hasImages,
+    );
     return AIEventStreamMessage(payload).send();
   }
 
