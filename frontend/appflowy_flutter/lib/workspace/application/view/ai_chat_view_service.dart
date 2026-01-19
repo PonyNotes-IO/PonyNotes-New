@@ -88,56 +88,74 @@ class AIChatViewService {
       }
 
       // 5. 在"我的AI会话"子空间下创建Chat类型的View
+      // 注意：设置 openAfterCreate: false，因为我们需要先更新extra字段再打开
       final result = await ViewBackendService.createView(
         layoutType: ViewLayoutPB.Chat,
         parentViewId: aiChatSpaceId,  // 使用AI会话子空间作为父视图
         name: chatName,
-        openAfterCreate: true,
+        openAfterCreate: false,  // 先不打开，等更新extra后再打开
         section: ViewSectionPB.Private,  // 指定为私有空间
       );
 
-      return result.fold(
-        (view) async {
-          Log.info('✅ 成功创建AI Chat视图');
-          Log.info('   - 视图ID: ${view.id}');
-          Log.info('   - 视图名称: ${view.name}');
-          Log.info('   - 父视图ID: $aiChatSpaceId');
-          
-          // 6. 如果有额外数据，更新view的extra字段
-          if (extraJson != null) {
-            Log.info('🔄 更新视图的extra字段...');
-            await ViewBackendService.updateView(
-              viewId: view.id,
-              extra: extraJson,
-            );
-            Log.info('✅ extra字段更新成功');
-          }
-          
-          // 7. 创建AIChatPagePlugin并打开
-          try {
-            final plugin = view.plugin();
-            Log.info('✅ 创建插件成功，正在打开标签页...');
-            
-            getIt<TabsBloc>().add(
-              TabsEvent.openPlugin(
-                plugin: plugin,
-                view: view,
-              ),
-            );
-            
-            Log.info('✅ AI Chat标签页已打开');
-          } catch (pluginError) {
-            Log.error('❌ 创建或打开插件失败: $pluginError');
-          }
-          
-          return view;
-        },
-        (error) {
-          Log.error('❌ 创建AI Chat视图失败: ${error.msg}');
-          Log.error('   - 错误代码: ${error.code}');
-          return null;
-        },
-      );
+      // 【修复】使用 isSuccess/isFailure 替代 fold，避免 async 回调不等待的问题
+      if (result.isFailure) {
+        final error = result.getFailure();
+        Log.error('❌ 创建AI Chat视图失败: ${error.msg}');
+        Log.error('   - 错误代码: ${error.code}');
+        return null;
+      }
+      
+      final view = result.toNullable()!;
+      Log.info('✅ 成功创建AI Chat视图');
+      Log.info('   - 视图ID: ${view.id}');
+      Log.info('   - 视图名称: ${view.name}');
+      Log.info('   - 父视图ID: $aiChatSpaceId');
+      
+      // 6. 如果有额外数据，更新view的extra字段
+      if (extraJson != null) {
+        Log.info('🔄 更新视图的extra字段...');
+        final updateResult = await ViewBackendService.updateView(
+          viewId: view.id,
+          extra: extraJson,
+        );
+        if (updateResult.isSuccess) {
+          Log.info('✅ extra字段更新成功');
+        } else {
+          Log.error('❌ extra字段更新失败: ${updateResult.getFailure().msg}');
+        }
+      }
+      
+      // 7. 重新获取视图数据（包含更新后的extra字段）
+      ViewPB updatedView = view;
+      if (extraJson != null) {
+        Log.info('🔄 重新获取视图数据以包含更新后的extra...');
+        final getViewResult = await ViewBackendService.getView(view.id);
+        if (getViewResult.isSuccess) {
+          updatedView = getViewResult.toNullable()!;
+          Log.info('✅ 重新获取视图成功，extra: ${updatedView.extra}');
+        } else {
+          Log.warn('⚠️  重新获取视图失败，使用原视图: ${getViewResult.getFailure().msg}');
+        }
+      }
+      
+      // 8. 创建AIChatPagePlugin并打开（使用更新后的视图）
+      try {
+        final plugin = updatedView.plugin();
+        Log.info('✅ 创建插件成功，正在打开标签页...');
+        
+        getIt<TabsBloc>().add(
+          TabsEvent.openPlugin(
+            plugin: plugin,
+            view: updatedView,  // 使用更新后的视图
+          ),
+        );
+        
+        Log.info('✅ AI Chat标签页已打开');
+      } catch (pluginError) {
+        Log.error('❌ 创建或打开插件失败: $pluginError');
+      }
+      
+      return updatedView;
     } catch (e, stackTrace) {
       Log.error('❌ 创建AI Chat视图异常: $e', e, stackTrace);
       return null;
