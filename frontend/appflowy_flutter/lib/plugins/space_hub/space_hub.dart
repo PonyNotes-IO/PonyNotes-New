@@ -560,10 +560,12 @@ class _SpaceDocumentList extends StatelessWidget {
     return BlocListener<SpaceBloc, SpaceState>(
       bloc: spaceBloc,
       listenWhen: (prev, curr) {
-        // 监听初始化完成，或者当前空间变化
+        // 监听初始化完成，或者当前空间变化，或者子视图列表变化
         final initialized = !prev.isInitialized && curr.isInitialized;
         final spaceChanged = prev.currentSpace?.id != curr.currentSpace?.id;
-        return initialized || spaceChanged;
+        final childViewsChanged = prev.currentSpace?.childViews.length != curr.currentSpace?.childViews.length ||
+            prev.currentSpace?.childViews.map((v) => v.id).join(',') != curr.currentSpace?.childViews.map((v) => v.id).join(',');
+        return initialized || spaceChanged || childViewsChanged;
       },
       listener: (context, state) {
         // 当 SpaceBloc 初始化完成后，如果当前空间不是目标空间，则打开目标空间

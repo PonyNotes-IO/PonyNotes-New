@@ -799,6 +799,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         viewId: widget.view.id,
         name: newName,
       );
+      // 重命名后刷新 SpaceBloc 列表
+      _refreshSpaceBlocIfNeeded(context);
     }
     setState(() {
       isRenaming = false;
@@ -969,26 +971,89 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     viewBloc.add(const ViewEvent.setIsExpanded(true));
   }
 
+  /// 刷新 SpaceBloc 的列表（如果存在）
+  /// 用于在删除、重命名、复制等操作后更新空间文档列表
+  void _refreshSpaceBlocIfNeeded(BuildContext context) {
+    try {
+      // 尝试从外层 context 获取 SpaceBloc
+      SpaceBloc? spaceBloc;
+      
+      // 方法1: 尝试从当前 context 读取（可能是外层提供的）
+      try {
+        spaceBloc = context.read<SpaceBloc>();
+      } catch (_) {
+        // 方法2: 通过 Navigator 获取根 context
+        try {
+          final navigator = Navigator.of(context, rootNavigator: false);
+          final rootContext = navigator.context;
+          spaceBloc = rootContext.read<SpaceBloc>();
+        } catch (_) {
+          // 根 context 也没有 SpaceBloc，忽略
+        }
+      }
+      
+      if (spaceBloc != null && !spaceBloc.isClosed) {
+        spaceBloc.add(const SpaceEvent.didReceiveSpaceUpdate());
+      }
+    } catch (_) {
+      // SpaceBloc 不存在，忽略
+    }
+  }
+
   // ··· more action button
   Widget _buildViewMoreActionButton(
     BuildContext context,
     PopoverController controller,
     Widget Function(PopoverController) buildChild,
   ) {
-    return BlocProvider(
-      create: (context) => SpaceBloc(
-        userProfile: context.read<SpaceBloc>().userProfile,
-        workspaceId: context.read<SpaceBloc>().workspaceId,
-      )..add(const SpaceEvent.initial(openFirstPage: false)),
-      child: ViewMoreActionPopover(
-        view: widget.view,
-        controller: controller,
-        isExpanded: widget.isExpanded,
-        spaceType: widget.spaceType,
-        onEditing: (value) =>
-            context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
-        buildChild: buildChild,
-        onAction: (action, data) async {
+    // 尝试获取外层的 SpaceBloc，如果不存在则创建新的
+    SpaceBloc? outerSpaceBloc;
+    try {
+      outerSpaceBloc = context.read<SpaceBloc>();
+    } catch (_) {
+      // 外层没有 SpaceBloc，需要创建新的
+      try {
+        final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+        final userProfile = userWorkspaceBloc.state.userProfile;
+        final workspaceId = userWorkspaceBloc.state.currentWorkspace?.workspaceId ?? '';
+        if (workspaceId.isNotEmpty) {
+          outerSpaceBloc = SpaceBloc(
+            userProfile: userProfile,
+            workspaceId: workspaceId,
+          )..add(const SpaceEvent.initial(openFirstPage: false));
+        }
+      } catch (_) {
+        // 无法创建 SpaceBloc
+      }
+    }
+    
+    Widget child = BlocListener<ViewBloc, ViewState>(
+        listener: (context, state) {
+          // 监听删除成功状态，刷新 SpaceBloc
+          if (state.isDeleted) {
+            _refreshSpaceBlocIfNeeded(context);
+          }
+          // 监听视图更新（重命名、复制等），刷新 SpaceBloc
+          // 使用 fold 检查操作是否成功
+          state.successOrFailure.fold(
+            (success) {
+              // 操作成功，刷新列表
+              _refreshSpaceBlocIfNeeded(context);
+            },
+            (error) {
+              // 操作失败，不刷新
+            },
+          );
+        },
+        child: ViewMoreActionPopover(
+          view: widget.view,
+          controller: controller,
+          isExpanded: widget.isExpanded,
+          spaceType: widget.spaceType,
+          onEditing: (value) =>
+              context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
+          buildChild: buildChild,
+          onAction: (action, data) async {
           switch (action) {
             case ViewMoreActionType.favorite:
             case ViewMoreActionType.unFavorite:
@@ -1012,12 +1077,15 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                               name: name,
                             ),
                           );
+                      // 重命名后刷新列表
+                      _refreshSpaceBlocIfNeeded(context);
                     }
                   },
                 );
               } else {
                 // 非 Space 类型使用内联编辑
                 _startRenaming();
+                // 重命名后刷新列表（内联编辑完成后会触发 ViewBloc 更新）
               }
               break;
             case ViewMoreActionType.leaveWorkspace:
@@ -1042,6 +1110,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                   context.read<SpaceBloc>().add(
                         SpaceEvent.delete(widget.view),
                       );
+                  // 删除空间后刷新列表
+                  _refreshSpaceBlocIfNeeded(context);
                 }
               } else {
                 // get if current page contains published child views
@@ -1052,11 +1122,14 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                     context: context,
                     name: widget.view.name,
                     description: LocaleKeys.publish_containsPublishedPage.tr(),
-                    onConfirm: () =>
-                        context.read<ViewBloc>().add(const ViewEvent.delete()),
+                    onConfirm: () {
+                      context.read<ViewBloc>().add(const ViewEvent.delete());
+                      // 删除后刷新列表（通过 BlocListener 监听删除成功）
+                    },
                   );
                 } else if (context.mounted) {
                   context.read<ViewBloc>().add(const ViewEvent.delete());
+                  // 删除后刷新列表（通过 BlocListener 监听删除成功）
                 }
               }
               break;
@@ -1067,13 +1140,17 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                   context.read<SpaceBloc>().add(
                         SpaceEvent.duplicate(space: widget.view),
                       );
+                  // 复制后刷新列表
+                  _refreshSpaceBlocIfNeeded(context);
                 }
               } else {
                 context.read<ViewBloc>().add(const ViewEvent.duplicate());
+                // 复制后刷新列表（通过 BlocListener 监听成功）
               }
               break;
             case ViewMoreActionType.duplicateToMySpace:
               context.read<ViewBloc>().add(const ViewEvent.duplicateToMySpace());
+              // 复制后刷新列表（通过 BlocListener 监听成功）
               break;
             case ViewMoreActionType.openInNewTab:
               context.read<TabsBloc>().openTab(widget.view);
@@ -1098,6 +1175,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                               iconColor: iconsData.color,
                             ),
                           );
+                      // 更新图标后刷新列表
+                      _refreshSpaceBlocIfNeeded(context);
                     }
                   } on FormatException catch (e) {
                     Log.warn('ViewItem changeIcon error: $e');
@@ -1108,6 +1187,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                               icon: '',
                             ),
                           );
+                      // 更新图标后刷新列表
+                      _refreshSpaceBlocIfNeeded(context);
                     }
                   }
                 }
@@ -1116,6 +1197,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                   view: widget.view,
                   viewIcon: data.data,
                 );
+                // 更新图标后刷新列表
+                _refreshSpaceBlocIfNeeded(context);
               }
               break;
             case ViewMoreActionType.manageSpace:
@@ -1151,12 +1234,25 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                 widget.view,
                 target.id,
               );
+              // 移动后刷新列表
+              _refreshSpaceBlocIfNeeded(context);
+              break;
             default:
               throw UnsupportedError('$action is not supported');
           }
         },
       ),
     );
+    
+    // 如果有外层的 SpaceBloc，使用 BlocProvider.value 传递；否则直接返回
+    if (outerSpaceBloc != null) {
+      return BlocProvider<SpaceBloc>.value(
+        value: outerSpaceBloc,
+        child: child,
+      );
+    } else {
+      return child;
+    }
   }
 }
 
