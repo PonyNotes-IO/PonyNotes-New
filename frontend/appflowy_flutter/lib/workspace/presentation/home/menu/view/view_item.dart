@@ -1028,17 +1028,33 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     }
     
     Widget child = BlocListener<ViewBloc, ViewState>(
+        listenWhen: (prev, curr) {
+          // 只在删除状态变化或操作成功时触发
+          return prev.isDeleted != curr.isDeleted || 
+                 (prev.successOrFailure.isFailure && curr.successOrFailure.isSuccess);
+        },
         listener: (context, state) {
           // 监听删除成功状态，刷新 SpaceBloc
           if (state.isDeleted) {
-            _refreshSpaceBlocIfNeeded(context);
+            // 延迟一下，确保后端删除操作完成
+            // 增加延迟时间，确保最后一条文档删除后也能刷新
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (context.mounted) {
+                _refreshSpaceBlocIfNeeded(context);
+              }
+            });
           }
           // 监听视图更新（重命名、复制等），刷新 SpaceBloc
           // 使用 fold 检查操作是否成功
           state.successOrFailure.fold(
             (success) {
               // 操作成功，刷新列表
-              _refreshSpaceBlocIfNeeded(context);
+              // 延迟一下，确保后端操作完成
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (context.mounted) {
+                  _refreshSpaceBlocIfNeeded(context);
+                }
+              });
             },
             (error) {
               // 操作失败，不刷新
@@ -1114,6 +1130,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                   _refreshSpaceBlocIfNeeded(context);
                 }
               } else {
+                // 保存父视图ID，用于删除后刷新
+                final parentViewId = widget.view.parentViewId;
                 // get if current page contains published child views
                 final (containPublishedPage, _) =
                     await ViewBackendService.containPublishedPage(widget.view);
@@ -1124,12 +1142,23 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                     description: LocaleKeys.publish_containsPublishedPage.tr(),
                     onConfirm: () {
                       context.read<ViewBloc>().add(const ViewEvent.delete());
-                      // 删除后刷新列表（通过 BlocListener 监听删除成功）
+                      // 删除后立即刷新列表（不等待监听，确保最后一条也能刷新）
+                      Future.delayed(const Duration(milliseconds: 500), () {
+                        if (context.mounted) {
+                          _refreshSpaceBlocIfNeeded(context);
+                        }
+                      });
                     },
                   );
                 } else if (context.mounted) {
                   context.read<ViewBloc>().add(const ViewEvent.delete());
-                  // 删除后刷新列表（通过 BlocListener 监听删除成功）
+                  // 删除后立即刷新列表（不等待监听，确保最后一条也能刷新）
+                  // 增加延迟时间，确保后端删除操作完成
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (context.mounted) {
+                      _refreshSpaceBlocIfNeeded(context);
+                    }
+                  });
                 }
               }
               break;

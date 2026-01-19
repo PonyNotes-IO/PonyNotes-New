@@ -310,12 +310,89 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             Log.info('[SpaceBloc] Starting ViewListener for space: ${space.name} (${space.id})');
             _currentSpaceListener?.start(
               onViewChildViewsUpdated: (update) {
-                Log.info('[SpaceBloc] Received child views update for space: ${space.id}, deleteCount=${update.deleteChildViews.length}, createCount=${update.createChildViews.length}');
+                Log.info('[SpaceBloc] Received child views update for space: ${space.id}, deleteCount=${update.deleteChildViews.length}, createCount=${update.createChildViews.length}, updateCount=${update.updateChildViews.length}');
                 if (!isClosed) {
-                  add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                  // 延迟触发刷新，确保后端操作完成（特别是删除最后一条文档的情况）
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    if (!isClosed) {
+                      add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                    }
+                  });
                 } else {
                   Log.warn('[SpaceBloc] Bloc is closed, ignoring child views update');
                 }
+              },
+              onViewDeleted: (result) {
+                // 监听视图删除事件，作为备用刷新机制
+                result.fold(
+                  (deletedView) {
+                    Log.info('[SpaceBloc] Received view deleted notification: ${deletedView.id}, parentViewId: ${deletedView.parentViewId}');
+                    // 检查删除的视图是否是当前空间的子视图
+                    // 方法1: 通过 parentViewId 判断（更可靠）
+                    final currentState = state;
+                    final currentSpaceId = currentState.currentSpace?.id;
+                    if (currentSpaceId != null && currentSpaceId == space.id) {
+                      // 如果删除的视图的父视图ID是当前空间，或者删除的视图在当前空间的子视图列表中
+                      final isChildByParent = deletedView.parentViewId == currentSpaceId;
+                      final isChildInList = currentState.currentSpace?.childViews
+                          .any((v) => v.id == deletedView.id) ?? false;
+                      
+                      if ((isChildByParent || isChildInList) && !isClosed) {
+                        Log.info('[SpaceBloc] Deleted view is a child of current space (isChildByParent=$isChildByParent, isChildInList=$isChildInList), triggering refresh');
+                        // 增加延迟时间，确保后端删除操作完成，特别是最后一条文档
+                        Future.delayed(const Duration(milliseconds: 500), () {
+                          if (!isClosed) {
+                            add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                          }
+                        });
+                      } else {
+                        Log.info('[SpaceBloc] Deleted view is not a child of current space, ignoring');
+                      }
+                    }
+                  },
+                  (error) {
+                    Log.error('[SpaceBloc] View deleted notification error: $error');
+                  },
+                );
+              },
+              onViewRestored: (result) {
+                // 监听视图恢复事件
+                result.fold(
+                  (restoredView) {
+                    Log.info('[SpaceBloc] Received view restored notification: ${restoredView.id}, parentViewId: ${restoredView.parentViewId}');
+                    // 检查恢复的视图是否是当前空间的子视图
+                    final currentState = state;
+                    final currentSpaceId = currentState.currentSpace?.id;
+                    
+                    if (currentSpaceId != null && currentSpaceId == space.id && !isClosed) {
+                      // 方法1: 通过 parentViewId 判断（恢复后可能已经更新）
+                      final isChildByParent = restoredView.parentViewId == currentSpaceId;
+                      // 方法2: 检查恢复的视图是否在当前空间的子视图列表中（恢复前可能还在列表中）
+                      final isChildInList = currentState.currentSpace?.childViews
+                          .any((v) => v.id == restoredView.id) ?? false;
+                      
+                      // 如果恢复的视图属于当前空间，或者当前空间ID匹配，都应该刷新
+                      // 因为恢复操作可能会将视图恢复到原来的位置
+                      // 即使 parentViewId 为空或不在列表中，也可能需要刷新（恢复操作可能还在进行中）
+                      if (isChildByParent || isChildInList || restoredView.parentViewId.isEmpty) {
+                        Log.info('[SpaceBloc] Restored view belongs to current space (isChildByParent=$isChildByParent, isChildInList=$isChildInList, parentViewIdEmpty=${restoredView.parentViewId.isEmpty}), triggering refresh');
+                        // 增加延迟时间，确保后端恢复操作完成
+                        Future.delayed(const Duration(milliseconds: 800), () {
+                          if (!isClosed) {
+                            add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                          }
+                        });
+                      } else {
+                        Log.info('[SpaceBloc] Restored view does not belong to current space (parentViewId=${restoredView.parentViewId}, currentSpaceId=$currentSpaceId), ignoring');
+                      }
+                    } else {
+                      Log.info('[SpaceBloc] Current space is null or does not match (currentSpaceId=$currentSpaceId, spaceId=${space.id}), ignoring restore notification');
+                    }
+                  },
+                  (error) {
+                    Log.error('[SpaceBloc] View restored notification error: $error');
+                  },
+                );
               },
             );
 

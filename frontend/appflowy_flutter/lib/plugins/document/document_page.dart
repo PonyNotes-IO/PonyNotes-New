@@ -18,6 +18,7 @@ import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
@@ -298,14 +299,82 @@ class _DocumentPageState extends State<DocumentPage>
   }
 
   Widget buildBanner(BuildContext context) {
-    return DocumentBanner(
-      viewName: widget.view.nameOrDefault,
-      onRestore: () =>
-          context.read<DocumentBloc>().add(const DocumentEvent.restorePage()),
-      onDelete: () => context
-          .read<DocumentBloc>()
-          .add(const DocumentEvent.deletePermanently()),
+    return BlocListener<DocumentBloc, DocumentState>(
+      listenWhen: (prev, curr) {
+        // 监听恢复成功：从删除状态变为非删除状态
+        // 或者监听彻底删除：forceClose 变为 true
+        return (prev.isDeleted && !curr.isDeleted) || 
+               (!prev.forceClose && curr.forceClose);
+      },
+      listener: (context, state) {
+        // 恢复成功或彻底删除后，刷新 SpaceBloc 列表
+        // 由于 listenWhen 已经过滤了状态变化，这里直接处理
+        // 增加延迟时间，确保后端恢复操作完成（恢复可能需要更长时间）
+        if (!state.isDeleted) {
+          // 恢复操作：延迟更长时间，确保后端恢复操作完成
+          // 使用更长的延迟，确保恢复操作完全完成
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (context.mounted) {
+              _refreshSpaceBlocIfNeeded(context);
+            }
+          });
+        } else if (state.forceClose) {
+          // 彻底删除操作
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (context.mounted) {
+              _refreshSpaceBlocIfNeeded(context);
+            }
+          });
+        }
+      },
+      child: DocumentBanner(
+        viewName: widget.view.nameOrDefault,
+        onRestore: () {
+          // 点击恢复按钮时，先触发恢复操作
+          context.read<DocumentBloc>().add(const DocumentEvent.restorePage());
+          // 同时立即触发刷新（作为备用机制，不等待状态变化）
+          // 延迟一下，确保后端恢复操作完成
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (context.mounted) {
+              _refreshSpaceBlocIfNeeded(context);
+            }
+          });
+        },
+        onDelete: () => context
+            .read<DocumentBloc>()
+            .add(const DocumentEvent.deletePermanently()),
+      ),
     );
+  }
+
+  /// 刷新 SpaceBloc 的列表（如果存在）
+  /// 用于在恢复、删除等操作后更新空间文档列表
+  void _refreshSpaceBlocIfNeeded(BuildContext context) {
+    try {
+      // 尝试从外层 context 获取 SpaceBloc
+      SpaceBloc? spaceBloc;
+      
+      // 方法1: 尝试从当前 context 读取（可能是外层提供的）
+      try {
+        spaceBloc = context.read<SpaceBloc>();
+      } catch (_) {
+        // 方法2: 通过 Navigator 获取根 context
+        try {
+          final navigator = Navigator.of(context, rootNavigator: false);
+          final rootContext = navigator.context;
+          spaceBloc = rootContext.read<SpaceBloc>();
+        } catch (_) {
+          // 根 context 也没有 SpaceBloc，忽略
+        }
+      }
+      
+      if (spaceBloc != null && !spaceBloc.isClosed) {
+        // 触发子视图更新事件，刷新列表
+        spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+      }
+    } catch (_) {
+      // SpaceBloc 不存在，忽略
+    }
   }
 
   Widget buildCoverAndIcon(BuildContext context, DocumentState state) {
