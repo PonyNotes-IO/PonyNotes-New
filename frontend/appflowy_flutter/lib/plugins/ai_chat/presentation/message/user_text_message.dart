@@ -33,6 +33,7 @@ class ChatUserMessageWidget extends StatelessWidget {
       child: ChatUserMessageBubble(
         message: message,
         files: _getFiles(),
+        images: _getImages(),
         child: BlocBuilder<ChatUserMessageBloc, ChatUserMessageState>(
           builder: (context, state) {
             return Opacity(
@@ -61,6 +62,19 @@ class ChatUserMessageWidget extends StatelessWidget {
     final chatFileList =
         message.metadata![messageChatFileListKey] as List<ChatFile>?;
     return chatFileList ?? [];
+  }
+
+  /// 获取消息中的图片数据（base64编码）
+  List<String> _getImages() {
+    if (message.metadata == null) {
+      return const [];
+    }
+
+    final imagesData = message.metadata!['images'];
+    if (imagesData is List && imagesData.isNotEmpty) {
+      return imagesData.cast<String>();
+    }
+    return const [];
   }
 }
 

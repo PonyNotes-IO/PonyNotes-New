@@ -48,13 +48,34 @@ class ChatMessageHandler {
   Message createTextMessage(ChatMessagePB message) {
     String messageId = message.messageId.toString();
     String originalMessageId = messageId;
+    
+    // 用于保存从临时消息中复制的图片数据
+    List<String>? preservedImages;
+    bool? preservedHasImages;
 
     /// If the message id is in the temporary map, we will use the previous fake message id
     if (_temporaryMessageIDMap.containsKey(messageId)) {
-      messageId = _temporaryMessageIDMap[messageId]!;
+      final mappedId = _temporaryMessageIDMap[messageId]!;
       Log.info('🔄 MessageHandler.createTextMessage: 使用映射ID');
       Log.info('   - 真实ID: $originalMessageId');
-      Log.info('   - 映射ID: $messageId');
+      Log.info('   - 映射ID: $mappedId');
+      
+      // 【关键修复】从临时消息中复制图片数据
+      final existingMessage = chatController.messages.firstWhereOrNull(
+        (m) => m.id == mappedId,
+      );
+      if (existingMessage != null && existingMessage.metadata != null) {
+        final existingMeta = existingMessage.metadata!;
+        if (existingMeta['images'] != null) {
+          preservedImages = (existingMeta['images'] as List).cast<String>();
+          Log.info('📸 MessageHandler: 从临时消息复制 ${preservedImages.length} 张图片');
+        }
+        if (existingMeta['has_images'] != null) {
+          preservedHasImages = existingMeta['has_images'] as bool;
+        }
+      }
+      
+      messageId = mappedId;
     } else {
       Log.info('ℹ️ MessageHandler.createTextMessage: 未找到映射');
       Log.info('   - 消息ID: $messageId');
@@ -62,14 +83,24 @@ class ChatMessageHandler {
     }
     final metadata = message.metadata == 'null' ? '[]' : message.metadata;
 
+    // 构建最终的 metadata，保留图片数据
+    final finalMetadata = <String, dynamic>{
+      messageRefSourceJsonStringKey: metadata,
+    };
+    
+    // 如果有保留的图片数据，添加到 metadata 中
+    if (preservedImages != null && preservedImages.isNotEmpty) {
+      finalMetadata['images'] = preservedImages;
+      finalMetadata['has_images'] = preservedHasImages ?? true;
+      Log.info('📸 MessageHandler: 图片数据已保留到最终消息');
+    }
+
     return TextMessage(
       author: User(id: message.authorId),
       id: messageId,
       text: message.content,
       createdAt: message.createdAt.toDateTime(),
-      metadata: {
-        messageRefSourceJsonStringKey: metadata,
-      },
+      metadata: finalMetadata,
     );
   }
 

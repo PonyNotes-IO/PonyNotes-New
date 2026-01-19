@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_entity.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_member_bloc.dart';
@@ -16,11 +19,13 @@ class ChatUserMessageBubble extends StatelessWidget {
     required this.message,
     required this.child,
     this.files = const [],
+    this.images = const [],
   });
 
   final Message message;
   final Widget child;
   final List<ChatFile> files;
+  final List<String> images; // base64编码的图片列表
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +39,15 @@ class ChatUserMessageBubble extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // 显示图片缩略图
+          if (images.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.only(right: 32),
+              child: _MessageImageList(images: images),
+            ),
+            const VSpace(6),
+          ],
+          // 显示文件列表
           if (files.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.only(right: 32),
@@ -146,6 +160,130 @@ class _MessageFile extends StatelessWidget {
                   file.fileName,
                   fontSize: 12,
                   maxLines: 6,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 图片缩略图列表组件
+class _MessageImageList extends StatelessWidget {
+  const _MessageImageList({required this.images});
+
+  final List<String> images;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.end,
+      spacing: 8,
+      runSpacing: 8,
+      children: images.map((image) => _MessageImage(imageBase64: image)).toList(),
+    );
+  }
+}
+
+/// 单个图片缩略图组件
+class _MessageImage extends StatelessWidget {
+  const _MessageImage({required this.imageBase64});
+
+  final String imageBase64;
+
+  @override
+  Widget build(BuildContext context) {
+    // 尝试解码base64图片
+    Uint8List? imageBytes;
+    try {
+      imageBytes = base64Decode(imageBase64);
+    } catch (e) {
+      // 解码失败，显示占位图标
+      imageBytes = null;
+    }
+
+    return GestureDetector(
+      onTap: () {
+        // 点击查看大图
+        if (imageBytes != null) {
+          _showFullImage(context, imageBytes);
+        }
+      },
+      child: Container(
+        constraints: const BoxConstraints(
+          maxWidth: 120,
+          maxHeight: 120,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: imageBytes != null
+            ? Image.memory(
+                imageBytes,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildPlaceholder(context);
+                },
+              )
+            : _buildPlaceholder(context),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder(BuildContext context) {
+    return Container(
+      width: 80,
+      height: 80,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Icon(
+        Icons.image_not_supported_outlined,
+        color: Theme.of(context).hintColor,
+        size: 32,
+      ),
+    );
+  }
+
+  void _showFullImage(BuildContext context, Uint8List imageBytes) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(
+                  imageBytes,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
               ),
             ),
