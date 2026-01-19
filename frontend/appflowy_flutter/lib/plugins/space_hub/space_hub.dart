@@ -20,6 +20,7 @@ import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/resizable_divider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -248,6 +249,15 @@ class _SpaceHubContent extends StatefulWidget {
 
 class _SpaceHubContentState extends State<_SpaceHubContent> {
   ViewPB? _selectedView;
+  
+  /// 左侧文档列表的宽度
+  double _leftPanelWidth = 260.0;
+  
+  /// 左侧面板最小宽度
+  static const double _minLeftWidth = 200.0;
+  
+  /// 左侧面板最大宽度
+  static const double _maxLeftWidth = 450.0;
 
   @override
   void initState() {
@@ -312,20 +322,32 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 左侧：空间文档列表
-        _SpaceDocumentList(
-          spaceView: widget.spaceView,
-          selectedView: _selectedView,
-          onViewSelected: (view) {
-            debugPrint('[SpaceHub] View selected: ${view.name} (${view.id})');
+        SizedBox(
+          width: _leftPanelWidth,
+          child: _SpaceDocumentList(
+            spaceView: widget.spaceView,
+            selectedView: _selectedView,
+            onViewSelected: (view) {
+              debugPrint('[SpaceHub] View selected: ${view.name} (${view.id})');
+              setState(() {
+                _selectedView = view;
+              });
+              // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+              widget.selectedViewNotifier.value = view;
+            },
+          ),
+        ),
+        // 可拖动分隔线 - 增强对比度并支持拖动调整大小
+        ResizableDivider(
+          initialLeftWidth: _leftPanelWidth,
+          minLeftWidth: _minLeftWidth,
+          maxLeftWidth: _maxLeftWidth,
+          onResize: (newWidth) {
             setState(() {
-              _selectedView = view;
+              _leftPanelWidth = newWidth;
             });
-            // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-            widget.selectedViewNotifier.value = view;
           },
         ),
-        // 分隔线
-        const VerticalDivider(width: 1),
         // 右侧：选中文档详情
         Expanded(
           child: _selectedView != null
@@ -457,31 +479,22 @@ class _SpaceDocumentList extends StatelessWidget {
     // 调试信息
     debugPrint('[SpaceHub] _SpaceDocumentList building, spaceBloc: ${spaceBloc != null}, spaceView: ${spaceView.name} (${spaceView.id})');
 
-    return SizedBox(
-      width: 260,
-      child: Container(
-        margin: EdgeInsets.symmetric(horizontal: 12),
-        // decoration: BoxDecoration(
-        //   color: Theme.of(context).colorScheme.surface,
-        //   border: Border(
-        //     right: BorderSide(color: Theme.of(context).dividerColor),
-        //   ),
-        // ),
-        child: Column(
-          mainAxisSize: MainAxisSize.max,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 头部：空间名称 + 新增文档按钮
-            _buildHeader(context, spaceBloc),
-            VSpace(12),
-            // 文档列表
-            Expanded(
-              child: spaceBloc != null
-                  ? _buildListFromSpaceBloc(context, spaceBloc)
-                  : _buildListFromBackend(context),
-            ),
-          ],
-        ),
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 头部：空间名称 + 新增文档按钮
+          _buildHeader(context, spaceBloc),
+          VSpace(12),
+          // 文档列表
+          Expanded(
+            child: spaceBloc != null
+                ? _buildListFromSpaceBloc(context, spaceBloc)
+                : _buildListFromBackend(context),
+          ),
+        ],
       ),
     );
   }

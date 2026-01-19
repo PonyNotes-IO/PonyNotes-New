@@ -42,6 +42,10 @@ class ChatStreamManager {
     String? promptId, {
     List<String>? images,
     bool hasImages = false,
+    // PonyNotes: 可选的深度思考覆盖（为null时使用默认设置）
+    bool? enableDeepThinkingOverride,
+    // PonyNotes: 可选的联网搜索覆盖（为null时使用默认设置）
+    bool? enableWebSearchOverride,
   }) {
     final payload = StreamChatPayloadPB(
       chatId: chatId,
@@ -49,8 +53,9 @@ class ChatStreamManager {
       messageType: ChatMessageTypePB.User,
       questionStreamPort: Int64(questionStream!.nativePort),
       answerStreamPort: Int64(answerStream!.nativePort),
-      enableThinking: enableDeepThinking,
-      enableWebSearch: enableWebSearch,
+      // PonyNotes: 使用覆盖参数或默认设置
+      enableThinking: enableDeepThinkingOverride ?? enableDeepThinking,
+      enableWebSearch: enableWebSearchOverride ?? enableWebSearch,
       hasImages: hasImages,
     );
 
@@ -80,6 +85,10 @@ class ChatStreamManager {
     String? promptId, {
     List<String>? images,
     bool hasImages = false,
+    // PonyNotes: 可选的深度思考覆盖（为null时使用默认设置）
+    bool? enableDeepThinkingOverride,
+    // PonyNotes: 可选的联网搜索覆盖（为null时使用默认设置）
+    bool? enableWebSearchOverride,
   }) async {
     final payload = buildStreamPayload(
       message,
@@ -87,6 +96,8 @@ class ChatStreamManager {
       promptId,
       images: images,
       hasImages: hasImages,
+      enableDeepThinkingOverride: enableDeepThinkingOverride,
+      enableWebSearchOverride: enableWebSearchOverride,
     );
     return AIEventStreamMessage(payload).send();
   }
