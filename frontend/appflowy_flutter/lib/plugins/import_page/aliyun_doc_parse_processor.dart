@@ -24,9 +24,9 @@ class CancellationToken {
 /// 阿里云文档解析处理器
 /// 使用阿里云文档解析API进行文件解析
 class AliyunDocParseProcessor {
-  static const String apiBaseUrl = 'https://www.xiaomabiji.com/prod-api';
-  static const String parseEndpoint = '/tool/docParse/parse';
-  static const String parseStatusEndpoint = '/tool/docParse/content';
+  static const String apiBaseUrl = 'https://www.xiaomabiji.com';
+  static const String parseEndpoint = '/prod-api/tool/docParse/parse';
+  static const String parseStatusEndpoint = '/prod-api/tool/docParse/content';
   static const Duration taskPollInterval = Duration(seconds: 2);
   static const int maxTaskPollAttempts = 60;
   

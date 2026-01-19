@@ -25,7 +25,7 @@ class PaymentType {
 class PaymentDevConfig {
   /// 是否启用开发测试模式（跳过真实支付）
   /// 设置为 true 后，点击"确认协议开通"将直接模拟支付成功
-  static const bool enableTestMode = true;
+  static const bool enableTestMode = false;
   
   /// 模拟支付成功的延迟时间（毫秒），用于模拟支付查询轮询效果
   static const int mockPaymentDelayMs = 1500;
@@ -315,28 +315,34 @@ class PaymentApi {
       return FlowyResult.success(mockResponse);
     }
     // ==================== 开发测试模式结束 ====================
-    
+
+    //旧版h5支付逻辑不通，不支持 -- todo 后期接入其他支付再使用
+    return createOrder(request);
+  }
+
+  static Future<FlowyResult<PaymentCreateResponse, FlowyError>> createOrder
+      (PaymentCreateRequest request) async{
     try {
       // 1. 获取当前云端配置（拿到 serverUrl）
       final cloudConfigResult = await UserEventGetCloudConfig().send();
       final cloudConfig = cloudConfigResult.fold(
-        (config) => config,
-        (error) => throw error,
+            (config) => config,
+            (error) => throw error,
       );
 
       // final baseUrl = cloudConfig.serverUrl;
       final baseUrl = "https://www.xiaomabiji.com";
 
       // 2. 获取当前用户 Profile（包含 token）
-      final userProfileResult = await UserBackendService.getCurrentUserProfile();
-      final UserProfilePB userProfile = userProfileResult.fold(
-        (profile) => profile,
-        (error) => throw error,
-      );
+      // final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      // final UserProfilePB userProfile = userProfileResult.fold(
+      //   (profile) => profile,
+      //   (error) => throw error,
+      // );
+      //
+      // final token = userProfile.token;
 
-      final token = userProfile.token;
-
-      if (baseUrl.isEmpty || token.isEmpty) {
+      if (baseUrl.isEmpty) {
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
@@ -364,10 +370,10 @@ class PaymentApi {
       // 根据错误信息，后端期望的是 request parameter（@RequestParam）
       // 这意味着参数应该在查询参数或表单数据中，而不是 JSON body
       // 对于 BigDecimal，Spring Boot 通常接收字符串格式的数字
-      
+
       // 将 amount 转换为字符串格式（BigDecimal 在后端通常接收字符串）
       final formData = <String, String>{};
-      
+
       // 处理 amount：转换为字符串，保留两位小数
       final amountValue = payload['amount'];
       if (amountValue is num) {
@@ -375,13 +381,13 @@ class PaymentApi {
       } else {
         formData['amount'] = amountValue.toString();
       }
-      
+
       // 处理 paymentType
       formData['paymentType'] = payload['paymentType'] as String;
-      
+
       // 处理 userInfo（已经是 JSON 字符串）
       formData['userInfo'] = payload['userInfo'] as String;
-      
+
       // 处理可选参数
       if (payload['productName'] != null && (payload['productName'] as String).isNotEmpty) {
         formData['productName'] = payload['productName'] as String;
@@ -410,7 +416,7 @@ class PaymentApi {
         uri,
         headers: <String, String>{
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': 'Bearer $token',
+          // 'Authorization': 'Bearer $token',
         },
         body: formData.entries
             .map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
@@ -430,11 +436,11 @@ class PaymentApi {
         }
 
         final Map<String, dynamic> json =
-            jsonDecode(response.body) as Map<String, dynamic>;
-        
+        jsonDecode(response.body) as Map<String, dynamic>;
+
         // 解析响应
         final result = PaymentCreateResponse.fromJson(json);
-        
+
         // 检查响应是否成功
         if (!result.isSuccess) {
           Log.error('[PaymentApi] Create payment order failed: code=${result.code}, msg=${result.msg}');
@@ -444,7 +450,7 @@ class PaymentApi {
               ..msg = result.msg,
           );
         }
-        
+
         // 检查订单数据是否存在
         if (result.data == null) {
           Log.error('[PaymentApi] Order data is null in response: $json');
@@ -454,7 +460,7 @@ class PaymentApi {
               ..msg = '订单数据为空',
           );
         }
-        
+
         // 检查订单号
         if (result.orderNo.isEmpty) {
           Log.error('[PaymentApi] orderNo is empty in response: $json');
@@ -565,7 +571,7 @@ class PaymentApi {
         );
       }
 
-      final uri = Uri.parse('$baseUrl/prod-api/api/payment/query?orderNo=$orderNo');
+      final uri = Uri.parse('$baseUrl/prod-api/api/payment/status/orderNo=$orderNo');
       Log.info('[PaymentApi] Querying payment status: $uri');
 
       final response = await http.get(

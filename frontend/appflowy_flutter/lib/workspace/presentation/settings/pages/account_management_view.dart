@@ -69,6 +69,39 @@ class _AccountManagementViewState extends State<AccountManagementView>
     // 注意：轮询状态由 Bloc 内部管理，这里不需要额外处理
   }
 
+  /// 刷新订阅信息（全局刷新）
+  void _refreshSubscriptionInfo(BuildContext context) {
+    // 刷新 SettingsDialogBloc
+    context.read<SettingsDialogBloc>().add(
+          const SettingsDialogEvent.initial(),
+        );
+    
+    // 刷新 UserWorkspaceBloc
+    try {
+      final workspaceBloc = context.read<UserWorkspaceBloc?>();
+      if (workspaceBloc != null) {
+        workspaceBloc.add(
+          UserWorkspaceEvent.updateCloudSyncEnabled(enabled: true),
+        );
+        workspaceBloc.add(
+          UserWorkspaceEvent.fetchCurrentSubscription(),
+        );
+      }
+    } catch (e) {
+      Log.warn('无法刷新 UserWorkspaceBloc: $e');
+    }
+    
+    // 刷新 AccountManagementBloc 的订阅信息
+    try {
+      final accountBloc = context.read<AccountManagementBloc>();
+      if (!accountBloc.isClosed) {
+        accountBloc.add(const AccountManagementEvent.loadSubscriptionInfo());
+      }
+    } catch (e) {
+      Log.warn('无法刷新 AccountManagementBloc: $e');
+    }
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
@@ -188,49 +221,52 @@ class _AccountManagementViewState extends State<AccountManagementView>
                   String? orderNo;
                   String? expireTime;
                   
-                  for (final part in parts) {
-                    if (part.startsWith('PAYMENT_URL:')) {
-                      payUrl = part.substring('PAYMENT_URL:'.length);
-                    } else if (part.startsWith('orderNo:')) {
-                      orderNo = part.substring('orderNo:'.length);
-                    } else if (part.startsWith('expireTime:')) {
-                      expireTime = part.substring('expireTime:'.length);
+                  // 检查是否是浏览器打开标记
+                  if (paymentResult == 'BROWSER_OPENED') {
+                    // 显示支付提示弹框（不启动轮询）
+                    showPaymentStatusDialog(
+                      context,
+                      orderNo: '', // 没有订单号，使用空字符串
+                      onPaymentSuccess: () {
+                        // 支付成功后刷新订阅信息
+                        _refreshSubscriptionInfo(context);
+                      },
+                      onClose: () {
+                        // 用户点击关闭按钮后执行全局刷新订阅信息接口
+                        _refreshSubscriptionInfo(context);
+                      },
+                    );
+                  } else {
+                    // 原有的支付结果处理逻辑（保留兼容性）
+                    for (final part in parts) {
+                      if (part.startsWith('PAYMENT_URL:')) {
+                        payUrl = part.substring('PAYMENT_URL:'.length);
+                      } else if (part.startsWith('orderNo:')) {
+                        orderNo = part.substring('orderNo:'.length);
+                      } else if (part.startsWith('expireTime:')) {
+                        expireTime = part.substring('expireTime:'.length);
+                      }
                     }
-                  }
-                  
-                  if (payUrl != null && payUrl.isNotEmpty) {
-                    // 使用浏览器打开支付链接
-                    PaymentUtil.webPay(payUrl);
                     
-                    // 显示支付结果查询弹框
-                    if (orderNo != null && orderNo.isNotEmpty) {
-                      showPaymentStatusDialog(
-                        context,
-                        orderNo: orderNo,
-                        onPaymentSuccess: () {
-                          // 支付成功后刷新订阅信息
-                          context.read<SettingsDialogBloc>().add(
-                                const SettingsDialogEvent.initial(),
-                              );
-                          try {
-                            final workspaceBloc = context.read<UserWorkspaceBloc?>();
-                            if (workspaceBloc != null) {
-                              workspaceBloc.add(
-                                UserWorkspaceEvent.updateCloudSyncEnabled(
-                                    enabled: true),
-                              );
-                              workspaceBloc.add(
-                                UserWorkspaceEvent.fetchCurrentSubscription(),
-                              );
-                            }
-                          } catch (e) {
-                            Log.warn('无法刷新 UserWorkspaceBloc: $e');
-                          }
-                        },
-                        onClose: () {
-                          // 用户手动关闭弹框，不做特殊处理
-                        },
-                      );
+                    if (payUrl != null && payUrl.isNotEmpty) {
+                      // 使用浏览器打开支付链接
+                      PaymentUtil.webPay(payUrl);
+                      
+                      // 显示支付结果查询弹框
+                      if (orderNo != null && orderNo.isNotEmpty) {
+                        showPaymentStatusDialog(
+                          context,
+                          orderNo: orderNo,
+                          onPaymentSuccess: () {
+                            // 支付成功后刷新订阅信息
+                            _refreshSubscriptionInfo(context);
+                          },
+                          onClose: () {
+                            // 用户手动关闭弹框，执行刷新
+                            _refreshSubscriptionInfo(context);
+                          },
+                        );
+                      }
                     }
                   }
                 } else {
@@ -243,23 +279,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
                   );
                   // 支付成功后刷新订阅信息
                   if (paymentResult.contains('成功')) {
-                    context.read<SettingsDialogBloc>().add(
-                          const SettingsDialogEvent.initial(),
-                        );
-                    try {
-                      final workspaceBloc = context.read<UserWorkspaceBloc?>();
-                      if (workspaceBloc != null) {
-                        workspaceBloc.add(
-                          UserWorkspaceEvent.updateCloudSyncEnabled(
-                              enabled: true),
-                        );
-                        workspaceBloc.add(
-                          UserWorkspaceEvent.fetchCurrentSubscription(),
-                        );
-                      }
-                    } catch (e) {
-                      Log.warn('无法刷新 UserWorkspaceBloc: $e');
-                    }
+                    _refreshSubscriptionInfo(context);
                   }
                 }
               }

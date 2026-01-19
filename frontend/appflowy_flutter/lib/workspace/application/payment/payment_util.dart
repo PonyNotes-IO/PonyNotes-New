@@ -339,61 +339,68 @@ class PaymentUtil {
   /// 如果是 HTML form，会写入临时文件并通过浏览器打开
   static Future<void> webPay(String payUrl) async {
     try {
-      final isHtmlForm = payUrl.contains('<form') || payUrl.contains('<FORM');
-      
-      if (isHtmlForm) {
-        // 解码 HTML 实体
-        String html = payUrl
-            .replaceAll('&amp;', '&')
-            .replaceAll('&quot;', '"')
-            .replaceAll('&lt;', '<')
-            .replaceAll('&gt;', '>')
-            .replaceAll('&#39;', "'")
-            .replaceAll('&#x27;', "'")
-            .replaceAll('&#x2F;', '/');
-
-        // 兼容 action=" `URL` "
-        html = html.replaceAll('action=" `', 'action="').replaceAll('`"', '"');
-
-        // 包装成完整 HTML（保证 <script> 能执行）
-        if (!html.contains('<!DOCTYPE') && !html.toLowerCase().contains('<html')) {
-          html = '''<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>支付页面</title>
-</head>
-<body>
-$html
-</body>
-</html>''';
-        }
-
-        // 写入临时文件
-        final tmpDir = await getTemporaryDirectory();
-        final fileName = 'alipay_pay_${DateTime.now().millisecondsSinceEpoch}.html';
-        final filePath = '${tmpDir.path}/$fileName';
-        await File(filePath).writeAsString(html, flush: true);
+//       final isHtmlForm = payUrl.contains('<form') || payUrl.contains('<FORM');
+//
+//       if (isHtmlForm) {
+//         // 解码 HTML 实体
+//         String html = payUrl
+//             .replaceAll('&amp;', '&')
+//             .replaceAll('&quot;', '"')
+//             .replaceAll('&lt;', '<')
+//             .replaceAll('&gt;', '>')
+//             .replaceAll('&#39;', "'")
+//             .replaceAll('&#x27;', "'")
+//             .replaceAll('&#x2F;', '/');
+//
+//         // 兼容 action=" `URL` "
+//         html = html.replaceAll('action=" `', 'action="').replaceAll('`"', '"');
+//
+//         // 包装成完整 HTML（保证 <script> 能执行）
+//         if (!html.contains('<!DOCTYPE') && !html.toLowerCase().contains('<html')) {
+//           html = '''<!DOCTYPE html>
+// <html>
+// <head>
+//   <meta charset="UTF-8">
+//   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+//   <title>支付页面</title>
+// </head>
+// <body>
+// $html
+// </body>
+// </html>''';
+//         }
+//
+//         // 写入临时文件
+//         final tmpDir = await getTemporaryDirectory();
+//         final fileName = 'alipay_pay_${DateTime.now().millisecondsSinceEpoch}.html';
+//         final filePath = '${tmpDir.path}/$fileName';
+//         await File(filePath).writeAsString(html, flush: true);
 
         // 通过浏览器打开本地文件
-        final uri = Uri.file(filePath);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-          Log.info('[PaymentUtil] Opened payment form in browser: $filePath');
-        } else {
-          Log.error('[PaymentUtil] Cannot launch file URL: $filePath');
-        }
-      } else {
-        // 直接打开 URL
-        final uri = Uri.parse(payUrl);
+      //   final uri = Uri.file(filePath);
+      //   if (await canLaunchUrl(uri)) {
+      //     await launchUrl(uri, mode: LaunchMode.externalApplication);
+      //     Log.info('[PaymentUtil] Opened payment form in browser: $filePath');
+      //   } else {
+      //     Log.error('[PaymentUtil] Cannot launch file URL: $filePath');
+      //   }
+      // } else {
+      //   // 直接打开 URL
+      //   final uri = Uri.parse(payUrl);
+      //   if (await canLaunchUrl(uri)) {
+      //     await launchUrl(uri, mode: LaunchMode.externalApplication);
+      //     Log.info('[PaymentUtil] Opened payment URL in browser: $payUrl');
+      //   } else {
+      //     Log.error('[PaymentUtil] Cannot launch URL: $payUrl');
+      //   }
+      // }
+      final uri = Uri.parse(payUrl);
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
           Log.info('[PaymentUtil] Opened payment URL in browser: $payUrl');
         } else {
           Log.error('[PaymentUtil] Cannot launch URL: $payUrl');
         }
-      }
     } catch (e, s) {
       Log.error('[PaymentUtil] Failed to open payment in browser: $e\n$s');
     }

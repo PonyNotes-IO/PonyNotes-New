@@ -7,8 +7,9 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/payment/payment_api.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart'
-    show PaymentMethod, PaymentPlatformSupport;
+    show PaymentMethod, PaymentPlatformSupport, PaymentUtil;
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -107,14 +108,19 @@ class RemotePlan {
       hasApiSupport: json['has_api_support'] as bool? ?? false,
       versionHistoryDays: _parseInt(json['version_history_days']),
       aiChatCountPerMonth: _parseInt(json['ai_chat_count_per_month']),
-      aiImageGenerationPerMonth: _parseInt(json['ai_image_generation_per_month']),
+      aiImageGenerationPerMonth:
+          _parseInt(json['ai_image_generation_per_month']),
       hasShareLink: json['has_share_link'] as bool? ?? false,
       hasPublish: json['has_publish'] as bool? ?? false,
       workspaceMemberLimit: _parseInt(json['workspace_member_limit']),
-      collaborativeWorkspaceLimit: _parseInt(json['collaborative_workspace_limit']),
-      pagePermissionGuestEditors: _parseInt(json['page_permission_guest_editors']),
-      hasSpaceMemberManagement: json['has_space_member_management'] as bool? ?? false,
-      hasSpaceMemberGrouping: json['has_space_member_grouping'] as bool? ?? false,
+      collaborativeWorkspaceLimit:
+          _parseInt(json['collaborative_workspace_limit']),
+      pagePermissionGuestEditors:
+          _parseInt(json['page_permission_guest_editors']),
+      hasSpaceMemberManagement:
+          json['has_space_member_management'] as bool? ?? false,
+      hasSpaceMemberGrouping:
+          json['has_space_member_grouping'] as bool? ?? false,
       isActive: json['is_active'] as bool? ?? true,
     );
   }
@@ -143,11 +149,15 @@ class AddonPlan {
     required this.isActive,
   });
 
-  String get priceYuanStr => priceYuan == null ? '0' : priceYuan!.toStringAsFixed(2);
+  String get priceYuanStr =>
+      priceYuan == null ? '0' : priceYuan!.toStringAsFixed(2);
+
   bool get isStorage => addonType == 'storage';
+
   bool get isAiToken => addonType == 'ai_token';
 
-  String get storageLabel => storageGb == null ? '存储空间 --' : '存储空间 ${storageGb}G';
+  String get storageLabel =>
+      storageGb == null ? '存储空间 --' : '存储空间 ${storageGb}G';
 
   String get tokensLabel {
     if (aiChatCount == null && aiImageCount == null) return 'AI Token --';
@@ -209,7 +219,8 @@ class AccountManagementBloc
         handleUpgradePay: () async => _handleUpgradePay(emit),
         handleAddonPay: () async => _handleAddonPay(emit),
         // 临时注释：等待 freezed 重新生成后取消注释
-        startPaymentPolling: (orderNo) async => _startPaymentPolling(orderNo, emit),
+        startPaymentPolling: (orderNo) async =>
+            _startPaymentPolling(orderNo, emit),
         stopPaymentPolling: () async => _stopPaymentPolling(),
         checkPaymentStatus: () async => _checkPaymentStatus(emit),
       );
@@ -219,7 +230,7 @@ class AccountManagementBloc
   final String workspaceId;
   final UserProfilePB userProfile;
   final CurrentSubscription? currentSubscription;
-  
+
   Timer? _paymentPollingTimer;
   String? _currentPollingOrderNo; // 当前正在轮询的订单号
 
@@ -270,7 +281,8 @@ class AccountManagementBloc
   Future<void> _loadSubscriptionInfo(
       Emitter<AccountManagementState> emit) async {
     // 使用从SettingsDialogBloc传入的currentSubscription
-    final planCode = currentSubscription?.subscription?.planCode ?? 'free_local';
+    final planCode =
+        currentSubscription?.subscription?.planCode ?? 'free_local';
     final mappedPlan = _mapPlanCodeToPb(planCode);
     final currentPlan = mappedPlan ?? WorkspacePlanPB.FreePlan;
 
@@ -443,7 +455,8 @@ class AccountManagementBloc
       );
 
       if (response.statusCode != 200) {
-        Log.warn('订阅计划接口返回非 200: ${response.statusCode}, body: ${response.body}');
+        Log.warn(
+            '订阅计划接口返回非 200: ${response.statusCode}, body: ${response.body}');
         state.maybeWhen(
           orElse: () {},
           ready: (
@@ -766,7 +779,8 @@ class AccountManagementBloc
       );
 
       if (response.statusCode != 200) {
-        Log.warn('补充包接口返回非 200: ${response.statusCode}, body: ${response.body}');
+        Log.warn(
+            '补充包接口返回非 200: ${response.statusCode}, body: ${response.body}');
         state.maybeWhen(
           orElse: () {},
           ready: (
@@ -926,7 +940,8 @@ class AccountManagementBloc
         ) {
           final planFromSubscription =
               subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
-          final filteredAddons = _filterAddonsByPlan(allAddons, planFromSubscription);
+          final filteredAddons =
+              _filterAddonsByPlan(allAddons, planFromSubscription);
 
           emit(
             AccountManagementState.ready(
@@ -954,25 +969,25 @@ class AccountManagementBloc
         orElse: () {},
         ready: (
           subscriptionInfo,
-            planConfigs,
-            addons,
-            selectedPlan,
-            selectedDuration,
-            selectedTab,
-            selectedAddonIndex,
-            agreedProtocols,
-            isLoadingSubscription,
-            isLoadingPlans,
-            isLoadingAddons,
-            isProcessingPayment,
-            error,
-            paymentResult,
-          ) {
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: subscriptionInfo,
-                planConfigs: planConfigs,
-                addons: const [],
+          planConfigs,
+          addons,
+          selectedPlan,
+          selectedDuration,
+          selectedTab,
+          selectedAddonIndex,
+          agreedProtocols,
+          isLoadingSubscription,
+          isLoadingPlans,
+          isLoadingAddons,
+          isProcessingPayment,
+          error,
+          paymentResult,
+        ) {
+          emit(
+            AccountManagementState.ready(
+              subscriptionInfo: subscriptionInfo,
+              planConfigs: planConfigs,
+              addons: const [],
               selectedPlan: selectedPlan,
               selectedDuration: selectedDuration,
               selectedTab: selectedTab,
@@ -1131,8 +1146,7 @@ class AccountManagementBloc
     );
   }
 
-  void _setAgreedProtocols(
-      bool agreed, Emitter<AccountManagementState> emit) {
+  void _setAgreedProtocols(bool agreed, Emitter<AccountManagementState> emit) {
     state.maybeWhen(
       orElse: () {},
       ready: (
@@ -1324,7 +1338,8 @@ class AccountManagementBloc
         return;
       }
 
-      final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/subscribe');
+      final uri =
+          Uri.parse(baseUrl).replace(path: '/api/subscription/subscribe');
       final body = jsonEncode({
         'plan_id': planId,
         'billing_type': billingType,
@@ -1509,31 +1524,110 @@ class AccountManagementBloc
     }
   }
 
-  Future<void> _handleUpgradePay(
-      Emitter<AccountManagementState> emit) async {
+  Future<void> _handleUpgradePay(Emitter<AccountManagementState> emit) async {
     await state.maybeWhen(
-      orElse: () async {},
-      ready: (
-        subscriptionInfo,
-        planConfigs,
-        addons,
-        selectedPlan,
-        selectedDuration,
-        selectedTab,
-        selectedAddonIndex,
-        agreedProtocols,
-        isLoadingSubscription,
-        isLoadingPlans,
-        isLoadingAddons,
-        isProcessingPayment,
-        error,
-        paymentResult,
-      ) async {
-        // 计算有效计划
-        final availablePlans = planConfigs.keys
-            .where((plan) => plan != WorkspacePlanPB.FreePlan)
-            .toList();
-        if (availablePlans.isEmpty) {
+        orElse: () async {},
+        ready: (
+          subscriptionInfo,
+          planConfigs,
+          addons,
+          selectedPlan,
+          selectedDuration,
+          selectedTab,
+          selectedAddonIndex,
+          agreedProtocols,
+          isLoadingSubscription,
+          isLoadingPlans,
+          isLoadingAddons,
+          isProcessingPayment,
+          error,
+          paymentResult,
+        ) async {
+          // 计算有效计划
+          final availablePlans = planConfigs.keys
+              .where((plan) => plan != WorkspacePlanPB.FreePlan)
+              .toList();
+          if (availablePlans.isEmpty) {
+            emit(
+              AccountManagementState.ready(
+                subscriptionInfo: subscriptionInfo,
+                planConfigs: planConfigs,
+                addons: addons,
+                selectedPlan: selectedPlan,
+                selectedDuration: selectedDuration,
+                selectedTab: selectedTab,
+                selectedAddonIndex: selectedAddonIndex,
+                agreedProtocols: agreedProtocols,
+                isLoadingSubscription: isLoadingSubscription,
+                isLoadingPlans: isLoadingPlans,
+                isLoadingAddons: isLoadingAddons,
+                isProcessingPayment: false,
+                error: '无法获取计划ID，暂无法订阅',
+                paymentResult: paymentResult,
+              ),
+            );
+            return;
+          }
+
+          final effectivePlan = (selectedPlan != null &&
+                  selectedPlan != WorkspacePlanPB.FreePlan &&
+                  planConfigs.containsKey(selectedPlan))
+              ? selectedPlan
+              : ((subscriptionInfo != null &&
+                      subscriptionInfo.plan != WorkspacePlanPB.FreePlan &&
+                      planConfigs.containsKey(subscriptionInfo.plan))
+                  ? subscriptionInfo.plan
+                  : availablePlans.first);
+
+          final planConfig = planConfigs[effectivePlan];
+          if (planConfig == null) {
+            emit(
+              AccountManagementState.ready(
+                subscriptionInfo: subscriptionInfo,
+                planConfigs: planConfigs,
+                addons: addons,
+                selectedPlan: selectedPlan,
+                selectedDuration: selectedDuration,
+                selectedTab: selectedTab,
+                selectedAddonIndex: selectedAddonIndex,
+                agreedProtocols: agreedProtocols,
+                isLoadingSubscription: isLoadingSubscription,
+                isLoadingPlans: isLoadingPlans,
+                isLoadingAddons: isLoadingAddons,
+                isProcessingPayment: false,
+                error: '无法获取计划配置',
+                paymentResult: paymentResult,
+              ),
+            );
+            return;
+          }
+          final planId = planConfig.id;
+          if (planId == null) {
+            emit(
+              AccountManagementState.ready(
+                subscriptionInfo: subscriptionInfo,
+                planConfigs: planConfigs,
+                addons: addons,
+                selectedPlan: selectedPlan,
+                selectedDuration: selectedDuration,
+                selectedTab: selectedTab,
+                selectedAddonIndex: selectedAddonIndex,
+                agreedProtocols: agreedProtocols,
+                isLoadingSubscription: isLoadingSubscription,
+                isLoadingPlans: isLoadingPlans,
+                isLoadingAddons: isLoadingAddons,
+                isProcessingPayment: false,
+                error: '无法获取计划ID，暂无法订阅',
+                paymentResult: paymentResult,
+              ),
+            );
+            return;
+          }
+
+          final billingType = selectedDuration == PurchaseDurationOption.monthly
+              ? 'monthly'
+              : 'yearly';
+
           emit(
             AccountManagementState.ready(
               subscriptionInfo: subscriptionInfo,
@@ -1547,118 +1641,192 @@ class AccountManagementBloc
               isLoadingSubscription: isLoadingSubscription,
               isLoadingPlans: isLoadingPlans,
               isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: '无法获取计划ID，暂无法订阅',
+              isProcessingPayment: true,
+              error: null,
               paymentResult: paymentResult,
             ),
           );
-          return;
-        }
 
-        final effectivePlan = (selectedPlan != null &&
-                selectedPlan != WorkspacePlanPB.FreePlan &&
-                planConfigs.containsKey(selectedPlan))
-            ? selectedPlan
-            : ((subscriptionInfo != null &&
-                    subscriptionInfo.plan != WorkspacePlanPB.FreePlan &&
-                    planConfigs.containsKey(subscriptionInfo.plan))
-                ? subscriptionInfo.plan
-                : availablePlans.first);
+          // // 先创建/更新订阅
+          // await _createOrUpdateSubscription(planId, billingType, emit);
 
-        final planConfig = planConfigs[effectivePlan];
-        if (planConfig == null) {
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: '无法获取计划配置',
-              paymentResult: paymentResult,
-            ),
+          // 检查更新后的状态
+          final checkState = state;
+          final checkError = checkState.maybeWhen(
+            orElse: () => '状态错误',
+            ready: (
+              _,
+              __,
+              ___,
+              ____,
+              _____,
+              ______,
+              _______,
+              ________,
+              _________,
+              __________,
+              ___________,
+              ____________,
+              error,
+              paymentResult,
+            ) =>
+                error,
           );
-          return;
-        }
-        final planId = planConfig.id;
-        if (planId == null) {
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: '无法获取计划ID，暂无法订阅',
-              paymentResult: paymentResult,
-            ),
+
+          if (checkError != null) {
+            state.maybeWhen(
+              orElse: () {},
+              ready: (
+                subscriptionInfo,
+                planConfigs,
+                addons,
+                selectedPlan,
+                selectedDuration,
+                selectedTab,
+                selectedAddonIndex,
+                agreedProtocols,
+                isLoadingSubscription,
+                isLoadingPlans,
+                isLoadingAddons,
+                isProcessingPayment,
+                error,
+                paymentResult,
+              ) {
+                emit(
+                  AccountManagementState.ready(
+                    subscriptionInfo: subscriptionInfo,
+                    planConfigs: planConfigs,
+                    addons: addons,
+                    selectedPlan: selectedPlan,
+                    selectedDuration: selectedDuration,
+                    selectedTab: selectedTab,
+                    selectedAddonIndex: selectedAddonIndex,
+                    agreedProtocols: agreedProtocols,
+                    isLoadingSubscription: isLoadingSubscription,
+                    isLoadingPlans: isLoadingPlans,
+                    isLoadingAddons: isLoadingAddons,
+                    isProcessingPayment: false,
+                    error: checkError,
+                    paymentResult: paymentResult,
+                  ),
+                );
+              },
+            );
+            return;
+          }
+
+          // 获取价格
+          final monthlyPrice = planConfig.monthlyPriceYuan ?? 0.0;
+          final yearlyPrice = planConfig.yearlyPriceYuan ?? monthlyPrice * 12;
+          final selectedPrice =
+              selectedDuration == PurchaseDurationOption.monthly
+                  ? monthlyPrice
+                  : yearlyPrice;
+
+          // 获取可用支付方式
+          final methods = PaymentPlatformSupport.getAvailableMethods();
+          if (methods.isEmpty) {
+            state.maybeWhen(
+              orElse: () {},
+              ready: (
+                subscriptionInfo,
+                planConfigs,
+                addons,
+                selectedPlan,
+                selectedDuration,
+                selectedTab,
+                selectedAddonIndex,
+                agreedProtocols,
+                isLoadingSubscription,
+                isLoadingPlans,
+                isLoadingAddons,
+                isProcessingPayment,
+                error,
+                paymentResult,
+              ) {
+                emit(
+                  AccountManagementState.ready(
+                    subscriptionInfo: subscriptionInfo,
+                    planConfigs: planConfigs,
+                    addons: addons,
+                    selectedPlan: selectedPlan,
+                    selectedDuration: selectedDuration,
+                    selectedTab: selectedTab,
+                    selectedAddonIndex: selectedAddonIndex,
+                    agreedProtocols: agreedProtocols,
+                    isLoadingSubscription: isLoadingSubscription,
+                    isLoadingPlans: isLoadingPlans,
+                    isLoadingAddons: isLoadingAddons,
+                    isProcessingPayment: false,
+                    error: '当前平台暂不支持支付功能',
+                    paymentResult: paymentResult,
+                  ),
+                );
+              },
+            );
+            return;
+          }
+
+          // todo 选择支付方式（默认支付宝）
+          // final method = methods.first;
+          // final paymentType = switch (method) {
+          //   PaymentMethod.applePay => PaymentType.applePay,
+          //   PaymentMethod.wechatPay => PaymentType.wechatPay,
+          //   PaymentMethod.alipay => PaymentType.alipay,
+          // };
+          final method = PaymentMethod.alipay;
+          final paymentType = PaymentMethod.alipay.name;
+          // 创建支付订单
+          // 将 userInfo 转换为 JSON 字符串（接口要求 String 类型）
+          // final userInfoJson = jsonEncode({
+          //   'userId': userProfile.id.toString(),
+          //   'name': userProfile.name,
+          //   'email': userProfile.email,
+          // });
+
+          // 根据选中的标签页设置参数
+          // 如果是会员升级（upgrade），设置 planId，addonId 为 null
+          // 如果是空间补充包（addon），设置 addonId，planId 为 null
+          String? planIdValue;
+          String? addonIdValue;
+
+          if (selectedTab == MembershipTab.upgrade) {
+            // 会员升级：设置 planId（planId 在前面已经检查过不为 null）
+            planIdValue = '$planId';
+            addonIdValue = null;
+          } else if (selectedTab == MembershipTab.addon) {
+            // 空间补充包：设置 addonId
+            planIdValue = null;
+            if (selectedAddonIndex >= 0 &&
+                selectedAddonIndex < addons.length &&
+                addons[selectedAddonIndex].id != null) {
+              addonIdValue = '${addons[selectedAddonIndex].id}';
+            } else {
+              addonIdValue = null;
+            }
+          } else {
+            // 默认情况：会员升级
+            planIdValue = '$planId';
+            addonIdValue = null;
+          }
+
+          // 1. 获取当前云端配置（拿到 serverUrl）
+          final cloudConfigResult = await UserEventGetCloudConfig().send();
+          final cloudConfig = cloudConfigResult.fold(
+                (config) => config,
+                (error) => throw error,
           );
-          return;
-        }
 
-        final billingType = selectedDuration == PurchaseDurationOption.monthly
-            ? 'monthly'
-            : 'yearly';
-
-        emit(
-          AccountManagementState.ready(
-            subscriptionInfo: subscriptionInfo,
-            planConfigs: planConfigs,
-            addons: addons,
-            selectedPlan: selectedPlan,
-            selectedDuration: selectedDuration,
-            selectedTab: selectedTab,
-            selectedAddonIndex: selectedAddonIndex,
-            agreedProtocols: agreedProtocols,
-            isLoadingSubscription: isLoadingSubscription,
-            isLoadingPlans: isLoadingPlans,
-            isLoadingAddons: isLoadingAddons,
-            isProcessingPayment: true,
-            error: null,
-            paymentResult: paymentResult,
-          ),
-        );
-
-        // // 先创建/更新订阅
-        // await _createOrUpdateSubscription(planId, billingType, emit);
-
-        // 检查更新后的状态
-        final checkState = state;
-        final checkError = checkState.maybeWhen(
-          orElse: () => '状态错误',
-          ready: (
-            _,
-            __,
-            ___,
-            ____,
-            _____,
-            ______,
-            _______,
-            ________,
-            _________,
-            __________,
-            ___________,
-            ____________,
-            error,
-            paymentResult,
-          ) => error,
-        );
-
-        if (checkError != null) {
+          // final baseUrl = cloudConfig.serverUrl;
+          final baseUrl = "https://www.xiaomabiji.com";
+          //#/price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
+          String payUrl =
+              "$baseUrl/#/price?planId=${planIdValue ?? ''}&addonId=${addonIdValue ?? ''}&billingType=${billingType ?? ''}";
+          // 使用浏览器打开支付链接
+          await PaymentUtil.webPay(payUrl);
+          
+          // 设置状态，触发显示弹框（不启动轮询）
+          // 注意：轮询接口逻辑保留，但不自动执行
           state.maybeWhen(
             orElse: () {},
             ready: (
@@ -1691,205 +1859,179 @@ class AccountManagementBloc
                   isLoadingPlans: isLoadingPlans,
                   isLoadingAddons: isLoadingAddons,
                   isProcessingPayment: false,
-                  error: checkError,
-                  paymentResult: paymentResult,
+                  error: error,
+                  paymentResult: 'BROWSER_OPENED', // 特殊标记，表示已打开浏览器
                 ),
               );
             },
           );
           return;
-        }
-
-        // 获取价格
-        final monthlyPrice = planConfig.monthlyPriceYuan ?? 0.0;
-        final yearlyPrice = planConfig.yearlyPriceYuan ?? monthlyPrice * 12;
-        final selectedPrice = selectedDuration == PurchaseDurationOption.monthly
-            ? monthlyPrice
-            : yearlyPrice;
-
-        // 获取可用支付方式
-        final methods = PaymentPlatformSupport.getAvailableMethods();
-        if (methods.isEmpty) {
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: '当前平台暂不支持支付功能',
-              paymentResult: paymentResult,
-            ),
-          );
-          return;
-        }
-
-        // todo 选择支付方式（默认支付宝）
-        // final method = methods.first;
-        // final paymentType = switch (method) {
-        //   PaymentMethod.applePay => PaymentType.applePay,
-        //   PaymentMethod.wechatPay => PaymentType.wechatPay,
-        //   PaymentMethod.alipay => PaymentType.alipay,
-        // };
-        final method = PaymentMethod.alipay;
-        final paymentType = PaymentMethod.alipay.name;
-        // 创建支付订单
-        // 将 userInfo 转换为 JSON 字符串（接口要求 String 类型）
-        final userInfoJson = jsonEncode({
-          'userId': userProfile.id.toString(),
-          'name': userProfile.name,
-          'email': userProfile.email,
+          // 创建支付订单 --- todo 后续需要根据实际情况进行调整
+          // await createPaymentOrder(
+          //   emit: emit,
+          //   selectedPrice: selectedPrice,
+          //   paymentType: paymentType,
+          //   workspaceId: workspaceId,
+          //   planIdValue: planIdValue,
+          //   addonIdValue: addonIdValue,
+          //   billingType: billingType,
+          //   subscriptionInfo: subscriptionInfo,
+          //   planConfigs: planConfigs,
+          //   addons: addons,
+          //   selectedPlan: selectedPlan,
+          //   selectedDuration: selectedDuration,
+          //   selectedTab: selectedTab,
+          //   selectedAddonIndex: selectedAddonIndex,
+          //   agreedProtocols: agreedProtocols,
+          //   isLoadingSubscription: isLoadingSubscription,
+          //   isLoadingPlans: isLoadingPlans,
+          //   isLoadingAddons: isLoadingAddons,
+          //   isProcessingPayment: isProcessingPayment,
+          //   error: error,
+          //   paymentResult: paymentResult,
+          // );
         });
+  }
 
-        // 根据选中的标签页设置参数
-        // 如果是会员升级（upgrade），设置 planId，addonId 为 null
-        // 如果是空间补充包（addon），设置 addonId，planId 为 null
-        String? planIdValue;
-        String? addonIdValue;
-        
-        if (selectedTab == MembershipTab.upgrade) {
-          // 会员升级：设置 planId（planId 在前面已经检查过不为 null）
-          planIdValue = '$planId';
-          addonIdValue = null;
-        } else if (selectedTab == MembershipTab.addon) {
-          // 空间补充包：设置 addonId
-          planIdValue = null;
-          if (selectedAddonIndex >= 0 && 
-              selectedAddonIndex < addons.length && 
-              addons[selectedAddonIndex].id != null) {
-            addonIdValue = '${addons[selectedAddonIndex].id}';
-          } else {
-            addonIdValue = null;
-          }
-        } else {
-          // 默认情况：会员升级
-          planIdValue = '$planId';
-          addonIdValue = null;
-        }
+  Future<void> createPaymentOrder(
+      {required Emitter<AccountManagementState> emit,
+      required double? selectedPrice,
+      required String paymentType,
+      String? workspaceId,
+      String? planIdValue,
+      String? addonIdValue,
+      String? billingType,
+      WorkspaceSubscriptionInfoPB? subscriptionInfo,
+        required Map<WorkspacePlanPB, RemotePlan> planConfigs,
+        required List<AddonPlan> addons,
+        WorkspacePlanPB? selectedPlan,
+        required PurchaseDurationOption selectedDuration,
+        required MembershipTab selectedTab,
+        required int selectedAddonIndex,
+        required bool agreedProtocols,
+        required bool isLoadingSubscription,
+        required bool isLoadingPlans,
+        required bool isLoadingAddons,
+        required bool isProcessingPayment,
+      String? error,
+      String? paymentResult}) async {
+    final createRequest = PaymentCreateRequest(
+        amount: Decimal.parse(selectedPrice.toString()).toString(),
+        paymentType: paymentType,
+        userInfo: userProfile.id.toString(),
+        // 必传：JSON 字符串格式
+        // productName: planConfig.planNameCn.isNotEmpty
+        //     ? planConfig.planNameCn
+        //     : planConfig.planName, // 可选
+        productName: "QR_CODE_OFFLINE",
+        openid:
+            paymentType == PaymentMethod.wechatPay.name ? workspaceId : null,
+        // 可选：微信支付场景必传
+        planId: planIdValue,
+        // 会员升级时设置
+        addonId: addonIdValue,
+        // 空间补充包时设置
+        billingType: billingType);
 
-        final createRequest = PaymentCreateRequest(
-            amount: Decimal.parse(selectedPrice.toString()).toString(),
-            paymentType: paymentType,
-            userInfo: userInfoJson, // 必传：JSON 字符串格式
-            productName: planConfig.planNameCn.isNotEmpty
-                ? planConfig.planNameCn
-                : planConfig.planName, // 可选
-            openid: paymentType == PaymentMethod.wechatPay.name
-                ? workspaceId
-                : null, // 可选：微信支付场景必传
-            planId: planIdValue, // 会员升级时设置
-            addonId: addonIdValue, // 空间补充包时设置
-            billingType: billingType
-        );
+    final orderResult = await PaymentApi.createPaymentOrder(createRequest);
 
-        final orderResult = await PaymentApi.createPaymentOrder(createRequest);
+    if (orderResult.isFailure) {
+      final error = orderResult.fold((_) => null, (e) => e);
+      String errorMessage = error?.msg ?? '创建支付订单失败';
 
-        if (orderResult.isFailure) {
-          final error = orderResult.fold((_) => null, (e) => e);
-          String errorMessage = error?.msg ?? '创建支付订单失败';
-          
-          // 处理验签错误，提供更友好的提示
-          if (errorMessage.contains('invalid-signature') || 
-              errorMessage.contains('验签出错') ||
-              errorMessage.contains('签名')) {
-            errorMessage = '支付系统配置异常，请联系客服或稍后重试';
-          }
-          
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: errorMessage,
-              paymentResult: paymentResult,
-            ),
-          );
-          return;
-        }
+      // 处理验签错误，提供更友好的提示
+      if (errorMessage.contains('invalid-signature') ||
+          errorMessage.contains('验签出错') ||
+          errorMessage.contains('签名')) {
+        errorMessage = '支付系统配置异常，请联系客服或稍后重试';
+      }
 
-        final order = orderResult.fold(
-          (order) => order,
-          (_) => null,
-        );
-        if (order == null) {
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: '创建支付订单失败',
-              paymentResult: paymentResult,
-            ),
-          );
-          return;
-        }
+      emit(
+        AccountManagementState.ready(
+          subscriptionInfo: subscriptionInfo,
+          planConfigs: planConfigs,
+          addons: addons,
+          selectedPlan: selectedPlan,
+          selectedDuration: selectedDuration,
+          selectedTab: selectedTab,
+          selectedAddonIndex: selectedAddonIndex,
+          agreedProtocols: agreedProtocols,
+          isLoadingSubscription: isLoadingSubscription,
+          isLoadingPlans: isLoadingPlans,
+          isLoadingAddons: isLoadingAddons,
+          isProcessingPayment: false,
+          error: errorMessage,
+          paymentResult: paymentResult,
+        ),
+      );
+      return;
+    }
 
-        // 如果有支付 URL，保存订单信息到 state，由 UI 层显示支付弹框
-        // 将订单信息编码到 paymentResult 中（格式：PAYMENT_URL:payUrl|orderNo:xxx|expireTime:xxx）
-        String paymentResultMessage;
-        if (order.hasPayUrl) {
-          final parts = <String>['PAYMENT_URL:${order.payUrl}'];
-          if (order.orderNo.isNotEmpty) {
-            parts.add('orderNo:${order.orderNo}');
-          }
-          if (order.expireTime != null && order.expireTime!.isNotEmpty) {
-            parts.add('expireTime:${order.expireTime}');
-          }
-          paymentResultMessage = parts.join('|');
-        } else {
-          paymentResultMessage = '订单创建成功，订单号: ${order.orderNo}';
-        }
-
-        emit(
-          AccountManagementState.ready(
-            subscriptionInfo: subscriptionInfo,
-            planConfigs: planConfigs,
-            addons: addons,
-            selectedPlan: selectedPlan,
-            selectedDuration: selectedDuration,
-            selectedTab: selectedTab,
-            selectedAddonIndex: selectedAddonIndex,
-            agreedProtocols: agreedProtocols,
-            isLoadingSubscription: isLoadingSubscription,
-            isLoadingPlans: isLoadingPlans,
-            isLoadingAddons: isLoadingAddons,
-            isProcessingPayment: false,
-            error: null,
-            paymentResult: paymentResultMessage,
-          ),
-        );
-        
-        // 启动支付结果轮询
-        if (order.orderNo.isNotEmpty) {
-          await _startPaymentPolling(order.orderNo, emit);
-        }
-      },
+    final order = orderResult.fold(
+      (order) => order,
+      (_) => null,
     );
+    if (order == null) {
+      emit(
+        AccountManagementState.ready(
+          subscriptionInfo: subscriptionInfo,
+          planConfigs: planConfigs,
+          addons: addons,
+          selectedPlan: selectedPlan,
+          selectedDuration: selectedDuration,
+          selectedTab: selectedTab,
+          selectedAddonIndex: selectedAddonIndex,
+          agreedProtocols: agreedProtocols,
+          isLoadingSubscription: isLoadingSubscription,
+          isLoadingPlans: isLoadingPlans,
+          isLoadingAddons: isLoadingAddons,
+          isProcessingPayment: false,
+          error: '创建支付订单失败',
+          paymentResult: paymentResult,
+        ),
+      );
+      return;
+    }
+
+    // 如果有支付 URL，保存订单信息到 state，由 UI 层显示支付弹框
+    // 将订单信息编码到 paymentResult 中（格式：PAYMENT_URL:payUrl|orderNo:xxx|expireTime:xxx）
+    String paymentResultMessage;
+    if (order.hasPayUrl) {
+      final parts = <String>['PAYMENT_URL:${order.payUrl}'];
+      if (order.orderNo.isNotEmpty) {
+        parts.add('orderNo:${order.orderNo}');
+      }
+      if (order.expireTime != null && order.expireTime!.isNotEmpty) {
+        parts.add('expireTime:${order.expireTime}');
+      }
+      paymentResultMessage = parts.join('|');
+    } else {
+      paymentResultMessage = '订单创建成功，订单号: ${order.orderNo}';
+    }
+
+    emit(
+      AccountManagementState.ready(
+        subscriptionInfo: subscriptionInfo,
+        planConfigs: planConfigs,
+        addons: addons,
+        selectedPlan: selectedPlan,
+        selectedDuration: selectedDuration,
+        selectedTab: selectedTab,
+        selectedAddonIndex: selectedAddonIndex,
+        agreedProtocols: agreedProtocols,
+        isLoadingSubscription: isLoadingSubscription,
+        isLoadingPlans: isLoadingPlans,
+        isLoadingAddons: isLoadingAddons,
+        isProcessingPayment: false,
+        error: null,
+        paymentResult: paymentResultMessage,
+      ),
+    );
+
+    // 启动支付结果轮询
+    if (order.orderNo.isNotEmpty) {
+      await _startPaymentPolling(order.orderNo, emit);
+    }
   }
 
   Future<void> _handleAddonPay(Emitter<AccountManagementState> emit) async {
@@ -2043,7 +2185,8 @@ class AccountManagementBloc
           );
 
           if (response.statusCode != 200) {
-            Log.warn('购买补充包接口返回非 200: ${response.statusCode}, body: ${response.body}');
+            Log.warn(
+                '购买补充包接口返回非 200: ${response.statusCode}, body: ${response.body}');
             emit(
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
@@ -2134,7 +2277,7 @@ class AccountManagementBloc
   }
 
   /// 启动支付结果轮询
-  /// 
+  ///
   /// 注意：Timer 回调中不能直接使用 emit，因为原始事件处理器可能已经完成
   /// 改为使用 add 触发 checkPaymentStatus 事件
   Future<void> _startPaymentPolling(
@@ -2159,7 +2302,8 @@ class AccountManagementBloc
       },
     );
 
-    Log.info('[AccountManagementBloc] Started payment polling for order: $orderNo');
+    Log.info(
+        '[AccountManagementBloc] Started payment polling for order: $orderNo');
   }
 
   /// 停止支付结果轮询
@@ -2172,7 +2316,7 @@ class AccountManagementBloc
   }
 
   /// 检查支付状态
-  /// 
+  ///
   /// 此方法会在事件处理器中被调用，emit 是有效的
   Future<void> _checkPaymentStatus(Emitter<AccountManagementState> emit) async {
     if (_currentPollingOrderNo == null || _currentPollingOrderNo!.isEmpty) {
@@ -2183,7 +2327,8 @@ class AccountManagementBloc
 
     // 检查 emit 是否已完成（防止异步操作后 emit 失效）
     if (emit.isDone) {
-      Log.warn('[AccountManagementBloc] emit.isDone, skipping payment status check');
+      Log.warn(
+          '[AccountManagementBloc] emit.isDone, skipping payment status check');
       return;
     }
 
@@ -2205,25 +2350,27 @@ class AccountManagementBloc
         error,
         paymentResult,
       ) async {
-        final statusResult = await PaymentApi.queryPaymentStatus(_currentPollingOrderNo!);
-        
+        final statusResult =
+            await PaymentApi.queryPaymentStatus(_currentPollingOrderNo!);
+
         // 再次检查 emit 是否有效
         if (emit.isDone) {
-          Log.warn('[AccountManagementBloc] emit.isDone after query, skipping emit');
+          Log.warn(
+              '[AccountManagementBloc] emit.isDone after query, skipping emit');
           return;
         }
-        
+
         statusResult.fold(
           (status) {
             Log.info('[AccountManagementBloc] Payment status: $status');
-            
+
             // 如果支付成功或失败，停止轮询并刷新订阅信息
             if (status == 'paid' || status == 'success') {
               _stopPaymentPolling();
-              
+
               // 刷新订阅信息
               add(const AccountManagementEvent.loadSubscriptionInfo());
-              
+
               // 通知 UI 刷新（检查 emit 是否有效）
               if (!emit.isDone) {
                 emit(
@@ -2245,9 +2392,11 @@ class AccountManagementBloc
                   ),
                 );
               }
-            } else if (status == 'failed' || status == 'expired' || status == 'canceled') {
+            } else if (status == 'failed' ||
+                status == 'expired' ||
+                status == 'canceled') {
               _stopPaymentPolling();
-              
+
               if (!emit.isDone) {
                 emit(
                   AccountManagementState.ready(
@@ -2272,7 +2421,8 @@ class AccountManagementBloc
             // pending 状态继续轮询
           },
           (error) {
-            Log.error('[AccountManagementBloc] Failed to query payment status: ${error.msg}');
+            Log.error(
+                '[AccountManagementBloc] Failed to query payment status: ${error.msg}');
             // 查询失败不影响轮询，继续等待
           },
         );
@@ -2291,31 +2441,45 @@ class AccountManagementBloc
 @freezed
 class AccountManagementEvent with _$AccountManagementEvent {
   const factory AccountManagementEvent.initial() = _Initial;
+
   const factory AccountManagementEvent.loadSubscriptionInfo() =
       _LoadSubscriptionInfo;
+
   const factory AccountManagementEvent.loadSubscriptionPlans() =
       _LoadSubscriptionPlans;
+
   const factory AccountManagementEvent.loadAddons() = _LoadAddons;
+
   const factory AccountManagementEvent.selectPlan(WorkspacePlanPB plan) =
       _SelectPlan;
+
   const factory AccountManagementEvent.selectDuration(
       PurchaseDurationOption duration) = _SelectDuration;
+
   const factory AccountManagementEvent.selectAddon(int index) = _SelectAddon;
+
   const factory AccountManagementEvent.setAgreedProtocols(bool agreed) =
       _SetAgreedProtocols;
+
   const factory AccountManagementEvent.switchTab(MembershipTab tab) =
       _SwitchTab;
+
   const factory AccountManagementEvent.createOrUpdateSubscription(
     int planId,
     String billingType,
   ) = _CreateOrUpdateSubscription;
+
   const factory AccountManagementEvent.handleUpgradePay() = _HandleUpgradePay;
+
   const factory AccountManagementEvent.handleAddonPay() = _HandleAddonPay;
+
   // 临时注释：等待 freezed 重新生成后取消注释
   const factory AccountManagementEvent.startPaymentPolling(String orderNo) =
       _StartPaymentPolling;
+
   const factory AccountManagementEvent.stopPaymentPolling() =
       _StopPaymentPolling;
+
   const factory AccountManagementEvent.checkPaymentStatus() =
       _CheckPaymentStatus;
 }
@@ -2338,7 +2502,7 @@ class AccountManagementState extends Equatable with _$AccountManagementState {
     required List<AddonPlan> addons,
     @Default(null) WorkspacePlanPB? selectedPlan,
     @Default(PurchaseDurationOption.monthly)
-        PurchaseDurationOption selectedDuration,
+    PurchaseDurationOption selectedDuration,
     @Default(MembershipTab.upgrade) MembershipTab selectedTab,
     @Default(0) int selectedAddonIndex,
     @Default(false) bool agreedProtocols,
@@ -2369,7 +2533,8 @@ class AccountManagementState extends Equatable with _$AccountManagementState {
           isProcessingPayment,
           error,
           paymentResult,
-        ) => [
+        ) =>
+            [
           subscriptionInfo,
           planConfigs,
           addons,
@@ -2407,7 +2572,8 @@ extension AccountManagementStateExtension on AccountManagementState {
         isProcessingPayment,
         error,
         paymentResult,
-      ) => isLoadingSubscription || isLoadingPlans || isLoadingAddons,
+      ) =>
+          isLoadingSubscription || isLoadingPlans || isLoadingAddons,
     );
   }
 
@@ -2480,10 +2646,14 @@ extension AccountManagementStateExtension on AccountManagementState {
             }
             return value.toStringAsFixed(2);
           }
+
           return {
-            'title': remote.planNameCn.isNotEmpty ? remote.planNameCn : remote.planName,
+            'title': remote.planNameCn.isNotEmpty
+                ? remote.planNameCn
+                : remote.planName,
             'price': '¥${formatCurrency(monthly)}',
-            'tag': "每月${remote.cloudStorageGb}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}",
+            'tag':
+                "每月${remote.cloudStorageGb}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}",
             'monthlyPrice': monthly,
             'yearlyPrice': yearly,
           };

@@ -185,18 +185,32 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
                 ],
               ),
               const SizedBox(height: 20),
-              // 订单号
-              Text(
-                '订单号：${widget.orderNo}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: theme.textColorScheme.secondary,
+              // 订单号（如果没有订单号，显示提示信息）
+              if (widget.orderNo.isNotEmpty)
+                Text(
+                  '订单号：${widget.orderNo}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: theme.textColorScheme.secondary,
+                  )),
+              if (widget.orderNo.isEmpty)
+                Text(
+                  '已跳转到浏览器进行支付',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: theme.textColorScheme.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
               const SizedBox(height: 16),
               // 查询状态
               BlocBuilder<AccountManagementBloc, AccountManagementState>(
                 builder: (context, state) {
+                  // 如果没有订单号，显示提示信息
+                  if (widget.orderNo.isEmpty) {
+                    return _buildBrowserOpenedStatus(theme);
+                  }
+                  
                   return state.maybeWhen(
                     orElse: () => _buildQueryingStatus(theme),
                     ready: (
@@ -350,6 +364,42 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
                 ),
               ],
             ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBrowserOpenedStatus(AppFlowyThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              color: Theme.of(context).colorScheme.primary,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '请在浏览器中完成支付',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: theme.textColorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          '支付完成后，请点击关闭按钮刷新订阅信息',
+          style: TextStyle(
+            fontSize: 12,
+            color: theme.textColorScheme.tertiary,
           ),
         ),
       ],
