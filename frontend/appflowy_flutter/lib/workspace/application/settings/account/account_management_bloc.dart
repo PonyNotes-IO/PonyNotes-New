@@ -1821,12 +1821,14 @@ class AccountManagementBloc
           final baseUrl = "https://www.xiaomabiji.com";
           //#/price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
           String payUrl =
-              "$baseUrl/#/price?planId=${planIdValue ?? ''}&addonId=${addonIdValue ?? ''}&billingType=${billingType ?? ''}";
+              "$baseUrl/#/price?planId=${planIdValue ?? ''}&addonId=${addonIdValue ?? ''}&billingType=$billingType";
           // 使用浏览器打开支付链接
           await PaymentUtil.webPay(payUrl);
           
           // 设置状态，触发显示弹框（不启动轮询）
           // 注意：轮询接口逻辑保留，但不自动执行
+          final promptToken =
+              'BROWSER_OPENED|ts=${DateTime.now().millisecondsSinceEpoch}';
           state.maybeWhen(
             orElse: () {},
             ready: (
@@ -1860,7 +1862,7 @@ class AccountManagementBloc
                   isLoadingAddons: isLoadingAddons,
                   isProcessingPayment: false,
                   error: error,
-                  paymentResult: 'BROWSER_OPENED', // 特殊标记，表示已打开浏览器
+                  paymentResult: promptToken, // 特殊标记（带时间戳，确保每次点击都触发）
                 ),
               );
             },
@@ -2101,53 +2103,28 @@ class AccountManagementBloc
           return;
         }
 
-        final accessToken = _extractAccessToken(userProfile.token);
-        if (accessToken == null || accessToken.isEmpty) {
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: '缺少访问凭证，无法购买补充包',
-              paymentResult: paymentResult,
-            ),
-          );
-          return;
-        }
+        // 空间补充包也走 H5 支付（跳转浏览器），不走接口直购逻辑
+        final billingType =
+            selectedDuration == PurchaseDurationOption.monthly ? 'monthly' : 'yearly';
 
-        final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-        final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-        if (baseUrl.isEmpty) {
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: '服务地址未配置，无法购买补充包',
-              paymentResult: paymentResult,
-            ),
-          );
-          return;
-        }
+        // 1. 获取当前云端配置（拿到 serverUrl）
+        final cloudConfigResult = await UserEventGetCloudConfig().send();
+        final cloudConfig = cloudConfigResult.fold(
+          (config) => config,
+          (error) => throw error,
+        );
 
+        // final baseUrl = cloudConfig.serverUrl;
+        final baseUrl = "https://www.xiaomabiji.com";
+
+        final payUrl =
+            "$baseUrl/#/price?planId=&addonId=$addonId&billingType=$billingType";
+
+        await PaymentUtil.webPay(payUrl);
+
+        // 触发前端弹框提示（不启动轮询）
+        final promptToken =
+            'BROWSER_OPENED|ts=${DateTime.now().millisecondsSinceEpoch}';
         emit(
           AccountManagementState.ready(
             subscriptionInfo: subscriptionInfo,
@@ -2161,117 +2138,12 @@ class AccountManagementBloc
             isLoadingSubscription: isLoadingSubscription,
             isLoadingPlans: isLoadingPlans,
             isLoadingAddons: isLoadingAddons,
-            isProcessingPayment: true,
+            isProcessingPayment: false,
             error: null,
-            paymentResult: paymentResult,
+            paymentResult: promptToken,
           ),
         );
-
-        final uri = Uri.parse(baseUrl).replace(
-          path: '/api/subscription/addons/purchase',
-        );
-
-        try {
-          final response = await http.post(
-            uri,
-            headers: {
-              'Authorization': 'Bearer $accessToken',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({
-              'addon_id': addonId,
-              'quantity': 1,
-            }),
-          );
-
-          if (response.statusCode != 200) {
-            Log.warn(
-                '购买补充包接口返回非 200: ${response.statusCode}, body: ${response.body}');
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: subscriptionInfo,
-                planConfigs: planConfigs,
-                addons: addons,
-                selectedPlan: selectedPlan,
-                selectedDuration: selectedDuration,
-                selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
-                agreedProtocols: agreedProtocols,
-                isLoadingSubscription: isLoadingSubscription,
-                isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: isLoadingAddons,
-                isProcessingPayment: false,
-                error: '购买失败：${response.statusCode}',
-                paymentResult: paymentResult,
-              ),
-            );
-            return;
-          }
-
-          final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-          final code = decoded['code'] as int? ?? -1;
-          final message = decoded['message']?.toString() ?? '';
-          if (code != 0) {
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: subscriptionInfo,
-                planConfigs: planConfigs,
-                addons: addons,
-                selectedPlan: selectedPlan,
-                selectedDuration: selectedDuration,
-                selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
-                agreedProtocols: agreedProtocols,
-                isLoadingSubscription: isLoadingSubscription,
-                isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: isLoadingAddons,
-                isProcessingPayment: false,
-                error: message.isNotEmpty ? message : '购买失败',
-                paymentResult: paymentResult,
-              ),
-            );
-            return;
-          }
-
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: null,
-              paymentResult: message.isNotEmpty ? message : '补充包购买成功',
-            ),
-          );
-        } catch (e, stackTrace) {
-          Log.error('购买补充包接口异常: $e', e, stackTrace);
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: '购买失败：$e',
-              paymentResult: paymentResult,
-            ),
-          );
-        }
+        return;
       },
     );
   }

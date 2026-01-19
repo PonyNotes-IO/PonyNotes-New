@@ -49,6 +49,21 @@ class AccountManagementView extends StatefulWidget {
 
 class _AccountManagementViewState extends State<AccountManagementView>
     with WidgetsBindingObserver {
+  String? _lastHandledPaymentResult;
+  bool _expectSubscribePaymentDialog = false;
+
+  void _resetPaymentPromptDedup() {
+    _lastHandledPaymentResult = null;
+  }
+
+  void _markExpectSubscribeDialog() {
+    _expectSubscribePaymentDialog = true;
+  }
+
+  void _clearExpectSubscribeDialog() {
+    _expectSubscribePaymentDialog = false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -119,7 +134,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
       
       // 检查 BlocProvider 是否已经创建
       // 使用 try-catch 安全地检查，如果不存在就不处理
-      AccountManagementBloc? bloc;
+      AccountManagementBloc bloc;
       try {
         bloc = context.read<AccountManagementBloc>();
       } catch (e) {
@@ -127,7 +142,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
         return;
       }
       
-      if (bloc == null || bloc.isClosed) {
+      if (bloc.isClosed) {
         return;
       }
       
@@ -163,7 +178,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
                 if (part.startsWith('orderNo:')) {
                   final orderNo = part.substring('orderNo:'.length);
                   if (orderNo.isNotEmpty) {
-                    bloc?.add(AccountManagementEvent.startPaymentPolling(orderNo));
+                    bloc.add(AccountManagementEvent.startPaymentPolling(orderNo));
                     break;
                   }
                 }
@@ -213,63 +228,77 @@ class _AccountManagementViewState extends State<AccountManagementView>
                 );
               }
               if (paymentResult != null && paymentResult.isNotEmpty) {
+                // 避免同一条 paymentResult 多次触发弹框/提示
+                if (_lastHandledPaymentResult == paymentResult) {
+                  return;
+                }
+
+                // 订阅按钮点击后已跳转浏览器：需要用弹框提示，不要走底部提示
+                if (paymentResult.startsWith('BROWSER_OPENED')) {
+                  // 只在“用户点击开通订阅按钮”后弹框；切换 tab 等状态刷新不弹
+                  if (!_expectSubscribePaymentDialog) {
+                    return;
+                  }
+                  _clearExpectSubscribeDialog();
+                  _lastHandledPaymentResult = paymentResult;
+                  showPaymentStatusDialog(
+                    context,
+                    orderNo: '',
+                    onClose: () {
+                      _resetPaymentPromptDedup();
+                      _refreshSubscriptionInfo(context);
+                    },
+                  );
+                  return;
+                }
+
                 // 检查是否是支付 URL（需要显示支付弹框）
                 if (paymentResult.startsWith('PAYMENT_URL:')) {
+                  // 同样：只在用户主动触发支付后才弹框
+                  if (!_expectSubscribePaymentDialog) {
+                    return;
+                  }
+                  _clearExpectSubscribeDialog();
                   // 解析支付信息
                   final parts = paymentResult.split('|');
                   String? payUrl;
                   String? orderNo;
                   String? expireTime;
                   
-                  // 检查是否是浏览器打开标记
-                  if (paymentResult == 'BROWSER_OPENED') {
-                    // 显示支付提示弹框（不启动轮询）
-                    showPaymentStatusDialog(
-                      context,
-                      orderNo: '', // 没有订单号，使用空字符串
-                      onPaymentSuccess: () {
-                        // 支付成功后刷新订阅信息
-                        _refreshSubscriptionInfo(context);
-                      },
-                      onClose: () {
-                        // 用户点击关闭按钮后执行全局刷新订阅信息接口
-                        _refreshSubscriptionInfo(context);
-                      },
-                    );
-                  } else {
-                    // 原有的支付结果处理逻辑（保留兼容性）
-                    for (final part in parts) {
-                      if (part.startsWith('PAYMENT_URL:')) {
-                        payUrl = part.substring('PAYMENT_URL:'.length);
-                      } else if (part.startsWith('orderNo:')) {
-                        orderNo = part.substring('orderNo:'.length);
-                      } else if (part.startsWith('expireTime:')) {
-                        expireTime = part.substring('expireTime:'.length);
-                      }
+                  // 原有的支付结果处理逻辑（保留兼容性）
+                  for (final part in parts) {
+                    if (part.startsWith('PAYMENT_URL:')) {
+                      payUrl = part.substring('PAYMENT_URL:'.length);
+                    } else if (part.startsWith('orderNo:')) {
+                      orderNo = part.substring('orderNo:'.length);
+                    } else if (part.startsWith('expireTime:')) {
+                      expireTime = part.substring('expireTime:'.length);
                     }
+                  }
+                  
+                  if (payUrl != null && payUrl.isNotEmpty) {
+                    _lastHandledPaymentResult = paymentResult;
+                    // 使用浏览器打开支付链接
+                    PaymentUtil.webPay(payUrl);
                     
-                    if (payUrl != null && payUrl.isNotEmpty) {
-                      // 使用浏览器打开支付链接
-                      PaymentUtil.webPay(payUrl);
-                      
-                      // 显示支付结果查询弹框
-                      if (orderNo != null && orderNo.isNotEmpty) {
-                        showPaymentStatusDialog(
-                          context,
-                          orderNo: orderNo,
-                          onPaymentSuccess: () {
-                            // 支付成功后刷新订阅信息
-                            _refreshSubscriptionInfo(context);
-                          },
-                          onClose: () {
-                            // 用户手动关闭弹框，执行刷新
-                            _refreshSubscriptionInfo(context);
-                          },
-                        );
-                      }
+                    // 显示支付结果查询弹框
+                    if (orderNo != null && orderNo.isNotEmpty) {
+                      showPaymentStatusDialog(
+                        context,
+                        orderNo: orderNo,
+                        onPaymentSuccess: () {
+                          _resetPaymentPromptDedup();
+                          _refreshSubscriptionInfo(context);
+                        },
+                        onClose: () {
+                          _resetPaymentPromptDedup();
+                          _refreshSubscriptionInfo(context);
+                        },
+                      );
                     }
                   }
                 } else {
+                  _lastHandledPaymentResult = paymentResult;
                   // 普通消息提示
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -581,9 +610,13 @@ class _AccountManagementViewState extends State<AccountManagementView>
             onToggleAgreed: (value) => context.read<AccountManagementBloc>().add(
                   AccountManagementEvent.setAgreedProtocols(value),
                 ),
-            onPressed: () => context.read<AccountManagementBloc>().add(
-                  const AccountManagementEvent.handleAddonPay(),
-                ),
+            onPressed: () {
+              // 空间补充包也走 H5 支付：仅在用户点击按钮时允许弹框
+              _markExpectSubscribeDialog();
+              context
+                  .read<AccountManagementBloc>()
+                  .add(const AccountManagementEvent.handleAddonPay());
+            },
             prefixText: '升级前请确认 ',
           ),
         const VSpace(24),
@@ -1221,9 +1254,13 @@ class _AccountManagementViewState extends State<AccountManagementView>
               opacity: (agreedProtocols && !isProcessingPayment) ? 1 : 0.5,
               child: GestureDetector(
                 onTap: (agreedProtocols && !isProcessingPayment)
-                    ? () => context.read<AccountManagementBloc>().add(
-                  const AccountManagementEvent.handleUpgradePay(),
-                )
+                    ? () {
+                        // 仅在用户点击“确认协议开通”时，允许后续弹出支付提示弹框
+                        _markExpectSubscribeDialog();
+                        context.read<AccountManagementBloc>().add(
+                              const AccountManagementEvent.handleUpgradePay(),
+                            );
+                      }
                     : null,
                 child: Container(
                   padding:

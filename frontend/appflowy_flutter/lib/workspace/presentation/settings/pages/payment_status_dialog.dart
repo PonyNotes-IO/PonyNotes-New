@@ -88,67 +88,8 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
 
-    return BlocListener<AccountManagementBloc, AccountManagementState>(
-      listener: (context, state) {
-        state.maybeWhen(
-          orElse: () {},
-          ready: (
-            subscriptionInfo,
-            planConfigs,
-            addons,
-            selectedPlan,
-            selectedDuration,
-            selectedTab,
-            selectedAddonIndex,
-            agreedProtocols,
-            isLoadingSubscription,
-            isLoadingPlans,
-            isLoadingAddons,
-            isProcessingPayment,
-            error,
-            paymentResult,
-          ) {
-            // 检查错误信息
-            if (error != null && error.isNotEmpty) {
-              // 有错误信息，显示错误状态，不自动关闭
-              // 特别处理验签错误
-              if (error.contains('invalid-signature') || error.contains('验签出错')) {
-                // 验签错误，提示用户联系客服或稍后重试
-              }
-            }
-            
-            // 检查支付结果
-            if (paymentResult != null && paymentResult.contains('支付成功')) {
-              if (!_isClosed && mounted) {
-                _isClosed = true;
-                
-                // 停止支付结果轮询（支付成功，不再需要轮询）
-                try {
-                  final bloc = context.read<AccountManagementBloc>();
-                  if (!bloc.isClosed) {
-                    bloc.add(const AccountManagementEvent.stopPaymentPolling());
-                  }
-                } catch (e) {
-                  // 如果无法访问 Bloc，忽略错误
-                }
-                
-                // 调用成功回调（在外部处理刷新逻辑）
-                widget.onPaymentSuccess?.call();
-                // 关闭弹框
-                Navigator.of(context).pop();
-              }
-            } else if (paymentResult != null && 
-                       (paymentResult.contains('支付失败') || 
-                        paymentResult.contains('订单已过期') ||
-                        paymentResult.contains('invalid-signature') ||
-                        paymentResult.contains('验签出错'))) {
-              // 支付失败、过期或验签错误，不自动关闭，让用户手动关闭
-              // 注意：这里不停止轮询，因为用户可能还想重试
-            }
-          },
-        );
-      },
-      child: Dialog(
+    // 仅作为“支付提示弹框”时（orderNo 为空），不做轮询/自动关闭，等待用户手动关闭
+    final dialogBody = Dialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12.0),
         ),
@@ -164,7 +105,7 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
                 children: [
                   Expanded(
                     child: Text(
-                      '支付结果查询',
+                      widget.orderNo.isEmpty ? '支付提示' : '支付结果查询',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -192,7 +133,8 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
                   style: TextStyle(
                     fontSize: 14,
                     color: theme.textColorScheme.secondary,
-                  )),
+                  ),
+                ),
               if (widget.orderNo.isEmpty)
                 Text(
                   '已跳转到浏览器进行支付',
@@ -261,14 +203,58 @@ class _PaymentStatusDialogState extends State<_PaymentStatusDialog> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('关闭'),
+                  child: Text(widget.orderNo.isEmpty ? '关闭并刷新' : '关闭'),
                 ),
               ),
             ],
           ),
         ),
-      ),
-    );
+      );
+
+    // 有订单号时，仍保留原先的监听逻辑（成功可自动关闭）
+    if (widget.orderNo.isNotEmpty) {
+      return BlocListener<AccountManagementBloc, AccountManagementState>(
+        listener: (context, state) {
+          state.maybeWhen(
+            orElse: () {},
+            ready: (
+              subscriptionInfo,
+              planConfigs,
+              addons,
+              selectedPlan,
+              selectedDuration,
+              selectedTab,
+              selectedAddonIndex,
+              agreedProtocols,
+              isLoadingSubscription,
+              isLoadingPlans,
+              isLoadingAddons,
+              isProcessingPayment,
+              error,
+              paymentResult,
+            ) {
+              if (paymentResult != null && paymentResult.contains('支付成功')) {
+                if (!_isClosed && mounted) {
+                  _isClosed = true;
+                  try {
+                    final bloc = context.read<AccountManagementBloc>();
+                    if (!bloc.isClosed) {
+                      bloc.add(const AccountManagementEvent.stopPaymentPolling());
+                    }
+                  } catch (_) {}
+                  widget.onPaymentSuccess?.call();
+                  Navigator.of(context).pop();
+                }
+              }
+            },
+          );
+        },
+        child: dialogBody,
+      );
+    }
+
+    // 无订单号：纯提示弹框
+    return dialogBody;
   }
 
   Widget _buildQueryingStatus(AppFlowyThemeData theme) {
