@@ -1,4 +1,6 @@
 import 'package:appflowy/ai/ai.dart';
+// PonyNotes: 添加AIPromptInputBloc导入以获取深度思考和联网搜索状态
+import 'package:appflowy/ai/service/ai_prompt_input_bloc.dart';
 import 'package:appflowy/plugins/ai_chat/application/ai_chat_prelude.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_bloc.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_input/mobile_chat_input.dart';
@@ -73,12 +75,13 @@ class _ChatFooterState extends State<ChatFooter> {
                                 );
                         },
                       ),
-                      BlocSelector<ChatBloc, ChatState, WorkspaceUsagePB?>(
-                        selector: (state) => state.usageInfo,
-                        builder: (context, usage) {
-                          return AIChatUsageIndicator(usage: usage);
-                        },
-                      ),
+                      // PonyNotes: 移除重复的使用次数显示，因为输入框内已经有了
+                      // BlocSelector<ChatBloc, ChatState, WorkspaceUsagePB?>(
+                      //   selector: (state) => state.usageInfo,
+                      //   builder: (context, usage) {
+                      //     return AIChatUsageIndicator(usage: usage);
+                      //   },
+                      // ),
                     ],
                   ),
                 ),
@@ -101,12 +104,20 @@ class _ChatFooterState extends State<ChatFooter> {
         chatBloc.add(const ChatEvent.stopStream());
       },
       onSubmitted: (text, format, metadata, promptId) {
+        // PonyNotes: 获取深度思考和联网搜索状态
+        final promptInputBloc = context.read<AIPromptInputBloc?>();
+        final enableDeepThinking = promptInputBloc?.state.enableDeepThinking;
+        final enableWebSearch = promptInputBloc?.state.enableWebSearch;
+        
         chatBloc.add(
           ChatEvent.sendMessage(
             message: text,
             format: format,
             metadata: metadata,
             promptId: promptId,
+            // PonyNotes: 传递深度思考和联网搜索状态
+            enableDeepThinking: enableDeepThinking,
+            enableWebSearch: enableWebSearch,
           ),
         );
       },

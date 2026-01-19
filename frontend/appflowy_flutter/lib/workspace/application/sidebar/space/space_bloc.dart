@@ -373,7 +373,28 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
           },
           didReceiveSpaceUpdate: () async {
             final (spaces, _, _) = await _getSpaces();
-            final currentSpace = await _getLastOpenedSpace(spaces);
+            var currentSpace = await _getLastOpenedSpace(spaces);
+
+            // 如果当前空间存在，重新加载它的子视图列表
+            // 这样在删除子视图后，列表会立即更新
+            if (currentSpace != null) {
+              final spaceToRefresh = currentSpace;
+              final childViewsResult = await ViewBackendService.getChildViews(
+                viewId: spaceToRefresh.id,
+              );
+              childViewsResult.fold(
+                (childViews) {
+                  spaceToRefresh.freeze();
+                  currentSpace = spaceToRefresh.rebuild((b) {
+                    b.childViews.clear();
+                    b.childViews.addAll(childViews);
+                  });
+                },
+                (_) {
+                  // 获取子视图失败时保持原样
+                },
+              );
+            }
 
             emit(
               state.copyWith(

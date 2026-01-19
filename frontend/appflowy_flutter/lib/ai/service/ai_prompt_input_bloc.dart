@@ -102,6 +102,22 @@ class AIPromptInputBloc extends Bloc<AIPromptInputEvent, AIPromptInputState> {
               ),
             );
           },
+          // PonyNotes: 深度思考开关处理
+          toggleDeepThinking: () {
+            emit(
+              state.copyWith(
+                enableDeepThinking: !state.enableDeepThinking,
+              ),
+            );
+          },
+          // PonyNotes: 联网搜索开关处理
+          toggleWebSearch: () {
+            emit(
+              state.copyWith(
+                enableWebSearch: !state.enableWebSearch,
+              ),
+            );
+          },
         );
       },
     );
@@ -159,6 +175,10 @@ class AIPromptInputEvent with _$AIPromptInputEvent {
   const factory AIPromptInputEvent.clearMetadata() = _ClearMetadata;
   const factory AIPromptInputEvent.updatePromptId(String promptId) =
       _UpdatePromptId;
+  // PonyNotes: 深度思考开关
+  const factory AIPromptInputEvent.toggleDeepThinking() = _ToggleDeepThinking;
+  // PonyNotes: 联网搜索开关
+  const factory AIPromptInputEvent.toggleWebSearch() = _ToggleWebSearch;
 }
 
 @freezed
@@ -170,6 +190,10 @@ class AIPromptInputState with _$AIPromptInputState {
     required PredefinedFormat? predefinedFormat,
     required List<ChatFile> attachedFiles,
     required List<ViewPB> mentionedPages,
+    // PonyNotes: 深度思考开关
+    required bool enableDeepThinking,
+    // PonyNotes: 联网搜索开关
+    required bool enableWebSearch,
   }) = _AIPromptInputState;
 
   factory AIPromptInputState.initial(PredefinedFormat? format) =>
@@ -186,5 +210,8 @@ class AIPromptInputState with _$AIPromptInputState {
         predefinedFormat: format,
         attachedFiles: [],
         mentionedPages: [],
+        // PonyNotes: 默认关闭深度思考和联网搜索
+        enableDeepThinking: false,
+        enableWebSearch: false,
       );
 }

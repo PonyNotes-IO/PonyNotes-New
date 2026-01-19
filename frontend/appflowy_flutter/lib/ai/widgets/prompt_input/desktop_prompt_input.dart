@@ -6,12 +6,20 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+// PonyNotes: 添加使用次数相关的protobuf导入
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+// PonyNotes: 添加使用次数相关导入
+import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_result/appflowy_result.dart';
+import 'package:fixnum/fixnum.dart' as fixnum;
 
 import 'browse_prompts_button.dart';
 
@@ -665,14 +673,25 @@ class _PromptBottomActions extends StatelessWidget {
           return Row(
             spacing: DesktopAIChatSizes.inputActionBarButtonSpacing,
             children: [
-              // PonyNotes: 精简底部工具栏，移除“浏览提示词”和来源选择，只保留必要功能
+              // PonyNotes: 精简底部工具栏，移除"浏览提示词"和来源选择，只保留必要功能
               if (showPredefinedFormatButton) _predefinedFormatButton(),
               _selectModelButton(context),
+              // PonyNotes: 添加深度思考按钮
+              const SizedBox(width: 10),
+              _buildDeepThinkingButton(context, state),
+              // PonyNotes: 添加联网搜索按钮
+              const SizedBox(width: 10),
+              _buildWebSearchButton(context, state),
 
               const Spacer(),
 
+              // PonyNotes: 添加使用次数显示
+              _buildAIUsageIndicator(context),
+              const SizedBox(width: 10),
               if (extraBottomActionButton != null) extraBottomActionButton!,
-              if (state.supportChatWithFile) _attachmentButton(context),
+              // PonyNotes: 始终显示附件上传按钮（支持图片和文件）
+              _buildAttachmentButton(context),
+              const SizedBox(width: 10),
               _sendButton(),
             ],
           );
@@ -746,5 +765,270 @@ class _PromptBottomActions extends StatelessWidget {
       onSendPressed: onSendPressed,
       onStopStreaming: onStopStreaming,
     );
+  }
+
+  /// PonyNotes: 构建附件上传按钮（支持图片和文件）
+  Widget _buildAttachmentButton(BuildContext context) {
+    return FlowyTooltip(
+      message: '上传附件（支持图片和文件）',
+      child: GestureDetector(
+        onTap: () async {
+          // 打开文件选择器，支持所有文件类型
+          final result = await getIt<FilePickerService>().pickFiles(
+            dialogTitle: '选择附件',
+            type: FileType.any, // 支持所有文件类型
+            allowMultiple: true,
+          );
+          
+          if (result == null || result.files.isEmpty) {
+            return;
+          }
+          
+          for (final file in result.files) {
+            if (file.path != null && context.mounted) {
+              context
+                  .read<AIPromptInputBloc>()
+                  .add(AIPromptInputEvent.attachFile(file.path!, file.name));
+            }
+          }
+        },
+        child: Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Icon(
+            Icons.attach_file,
+            size: 20,
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// PonyNotes: 构建深度思考按钮
+  Widget _buildDeepThinkingButton(BuildContext context, AIPromptInputState state) {
+    final isEnabled = state.enableDeepThinking;
+    final borderColor = isEnabled
+        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
+        : const Color(0xFFCDCDCD); // rgba(205, 205, 205, 1)
+    final textColor = isEnabled
+        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
+        : const Color(0xFF636363); // rgba(99, 99, 99, 1)
+    
+    return GestureDetector(
+      onTap: () {
+        context.read<AIPromptInputBloc>().add(const AIPromptInputEvent.toggleDeepThinking());
+      },
+      child: Container(
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: borderColor,
+            width: 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            '深度思考',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: textColor,
+              fontFamily: 'PingFangSC-Medium',
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// PonyNotes: 构建联网搜索按钮
+  Widget _buildWebSearchButton(BuildContext context, AIPromptInputState state) {
+    final isEnabled = state.enableWebSearch;
+    final borderColor = isEnabled
+        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
+        : const Color(0xFFCDCDCD); // rgba(205, 205, 205, 1)
+    final textColor = isEnabled
+        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
+        : const Color(0xFF636363); // rgba(99, 99, 99, 1)
+    
+    return GestureDetector(
+      onTap: () {
+        context.read<AIPromptInputBloc>().add(const AIPromptInputEvent.toggleWebSearch());
+      },
+      child: Container(
+        height: 30,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: borderColor,
+            width: 1,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            '联网搜索',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: textColor,
+              fontFamily: 'PingFangSC-Medium',
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// PonyNotes: 构建AI使用次数显示
+  Widget _buildAIUsageIndicator(BuildContext context) {
+    return _AIUsageIndicatorWidget();
+  }
+}
+
+/// PonyNotes: AI使用次数显示组件（需要异步加载数据）
+class _AIUsageIndicatorWidget extends StatefulWidget {
+  @override
+  State<_AIUsageIndicatorWidget> createState() => _AIUsageIndicatorWidgetState();
+}
+
+class _AIUsageIndicatorWidgetState extends State<_AIUsageIndicatorWidget> {
+  WorkspaceUsagePB? _usage;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsage();
+  }
+
+  Future<void> _loadUsage() async {
+    try {
+      final workspaceBloc = context.read<UserWorkspaceBloc?>();
+      final workspaceId = workspaceBloc?.state.currentWorkspace?.workspaceId;
+      if (workspaceId == null || workspaceId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _usage = null;
+          });
+        }
+        return;
+      }
+      
+      final service = WorkspaceService(
+        workspaceId: workspaceId,
+        userId: fixnum.Int64.ZERO,
+      );
+      
+      final result = await service.getWorkspaceUsage();
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          result.fold(
+            (usage) => _usage = usage,
+            (err) => _error = err.msg,
+          );
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const SizedBox.shrink();
+    }
+    
+    if (_error != null || _usage == null) {
+      return const SizedBox.shrink();
+    }
+    
+    final usage = _usage!;
+    
+    // 如果无限制，不显示
+    if (usage.aiResponsesUnlimited) {
+      return const SizedBox.shrink();
+    }
+    
+    final used = usage.aiResponsesCount.toInt();
+    final total = usage.aiResponsesCountLimit.toInt();
+    
+    // 检测未订阅状态：total == -1 表示用户未订阅
+    if (total == -1) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.errorContainer,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          '未订阅，不可用',
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ),
+      );
+    }
+    
+    final remaining = total - used;
+    
+    // 验证数据有效性
+    if (total == 0) {
+      return const SizedBox.shrink();
+    }
+    
+    // 根据剩余次数选择颜色
+    final textColor = _getUsageTextColor(context, remaining);
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        _getUsageDisplayText(used, total, remaining),
+        style: TextStyle(
+          fontSize: 12,
+          color: textColor,
+        ),
+      ),
+    );
+  }
+
+  String _getUsageDisplayText(int used, int total, int remaining) {
+    if (remaining <= 0) {
+      return '$used/$total 0次可用';
+    }
+    return '$used/$total $remaining次可用';
+  }
+
+  Color _getUsageTextColor(BuildContext context, int remaining) {
+    if (remaining <= 0) {
+      return Colors.red;
+    } else if (remaining <= 5) {
+      return Colors.orange.shade700;
+    } else {
+      return Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+    }
   }
 }

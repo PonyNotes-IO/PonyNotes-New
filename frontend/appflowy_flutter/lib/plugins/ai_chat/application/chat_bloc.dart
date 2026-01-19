@@ -165,8 +165,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         receiveMessage: (message) async => _handleReceiveMessage(message),
 
         // Sending messages
-        sendMessage: (message, format, metadata, promptId) async =>
-            _handleSendMessage(message, format, metadata, promptId, emit),
+        sendMessage: (message, format, metadata, promptId, enableDeepThinking, enableWebSearch) async =>
+            _handleSendMessage(message, format, metadata, promptId, enableDeepThinking, enableWebSearch, emit),
         finishSending: () async => emit(
           state.copyWith(
             promptResponseState: PromptResponseState.streamingAnswer,
@@ -329,13 +329,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     PredefinedFormat? format,
     Map<String, dynamic>? metadata,
     String? promptId,
+    // PonyNotes: 深度思考开关（可选，为null时使用ChatBloc初始设置）
+    bool? enableDeepThinkingOverride,
+    // PonyNotes: 联网搜索开关（可选，为null时使用ChatBloc初始设置）
+    bool? enableWebSearchOverride,
     Emitter<ChatState> emit,
   ) {
     _messageHandler.clearErrorMessages();
     emit(state.copyWith(clearErrorMessages: !state.clearErrorMessages));
 
     _messageHandler.clearRelatedQuestions();
-    _startStreamingMessage(message, format, metadata, promptId);
+    // PonyNotes: 使用覆盖参数或默认设置
+    final actualEnableDeepThinking = enableDeepThinkingOverride ?? enableDeepThinking;
+    final actualEnableWebSearch = enableWebSearchOverride ?? enableWebSearch;
+    _startStreamingMessage(message, format, metadata, promptId, actualEnableDeepThinking, actualEnableWebSearch);
     lastSentMessage = null;
 
     isFetchingRelatedQuestions = false;
@@ -895,6 +902,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     PredefinedFormat? format,
     Map<String, dynamic>? metadata,
     String? promptId,
+    // PonyNotes: 深度思考开关（用于动态覆盖）
+    bool actualEnableDeepThinking,
+    // PonyNotes: 联网搜索开关（用于动态覆盖）
+    bool actualEnableWebSearch,
   ) async {
     // Prepare streams
     await _streamManager.prepareStreams();
@@ -960,12 +971,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
     // Send stream request (model is already set via _setPreferredModel)
     // 【关键修复】传递图片数据到 Rust 层
+    // PonyNotes: 传递深度思考和联网搜索覆盖参数
     await _streamManager.sendStreamRequest(
       message, 
       format, 
       promptId,
       images: images,
       hasImages: hasImages,
+      enableDeepThinkingOverride: actualEnableDeepThinking,
+      enableWebSearchOverride: actualEnableWebSearch,
     ).fold(
       (question) {
         if (!isClosed) {
@@ -1082,6 +1096,10 @@ class ChatEvent with _$ChatEvent {
     PredefinedFormat? format,
     Map<String, dynamic>? metadata,
     String? promptId,
+    // PonyNotes: 深度思考开关（可选，用于动态覆盖ChatBloc初始设置）
+    bool? enableDeepThinking,
+    // PonyNotes: 联网搜索开关（可选，用于动态覆盖ChatBloc初始设置）
+    bool? enableWebSearch,
   }) = _SendMessage;
   const factory ChatEvent.finishSending() = _FinishSendMessage;
   const factory ChatEvent.failedSending() = _FailSendMessage;
