@@ -60,28 +60,58 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
 
     return DraggableItem<ViewPB>(
       data: widget.view,
-      onDragging: widget.onDragging,
-      onWillAcceptWithDetails: (data) => true,
+      onDragging: (isDragging) {
+        widget.onDragging?.call(isDragging);
+        // 确保拖拽结束时清理位置状态
+        if (!isDragging) {
+          _updatePosition(DraggableHoverPosition.none);
+        }
+      },
+      onWillAcceptWithDetails: (data) {
+        // 只在有效的列表项区域内接受拖拽
+        return _shouldAccept(data.data, DraggableHoverPosition.center);
+      },
       onMove: (data) {
         final renderBox = context.findRenderObject() as RenderBox;
         final offset = renderBox.globalToLocal(data.offset);
+        final size = renderBox.size;
 
-        if (offset.dx > renderBox.size.width) {
+        // 检查是否在列表项的有效区域内（不在列表中间的空隙）
+        if (offset.dx > size.width || offset.dx < 0) {
+          _updatePosition(DraggableHoverPosition.none);
           return;
         }
 
-        final position = _computeHoverPosition(offset, renderBox.size);
+        // 只在列表项的中心区域接受拖拽，不允许在列表中间位置
+        // 使用更严格的阈值，确保只在列表项主体区域内接受
+        final threshold = size.height / 3.0;
+        final isInCenterArea = offset.dy >= -threshold && offset.dy <= size.height + threshold;
+        
+        if (!isInCenterArea) {
+          // 不在列表项的有效区域内，不显示拖拽指示器
+          _updatePosition(DraggableHoverPosition.none);
+          return;
+        }
+
+        // 只在中心位置接受拖拽（不允许 top 和 bottom）
+        final position = DraggableHoverPosition.center;
         if (!_shouldAccept(data.data, position)) {
+          _updatePosition(DraggableHoverPosition.none);
           return;
         }
         _updatePosition(position);
       },
-      onLeave: (_) => _updatePosition(
-        DraggableHoverPosition.none,
-      ),
+      onLeave: (_) {
+        // 确保离开时清理位置状态
+        _updatePosition(DraggableHoverPosition.none);
+      },
       onAcceptWithDetails: (details) {
         final data = details.data;
-        _move(data, widget.view);
+        // 只在中心位置执行移动操作
+        if (position == DraggableHoverPosition.center) {
+          _move(data, widget.view);
+        }
+        // 确保接受后清理位置状态
         _updatePosition(DraggableHoverPosition.none);
       },
       feedback: IntrinsicWidth(
@@ -239,20 +269,19 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
   }
 
   DraggableHoverPosition _computeHoverPosition(Offset offset, Size size) {
-    final threshold = size.height / 5.0;
-    if (widget.isFirstChild && offset.dy < -5.0) {
-      return DraggableHoverPosition.top;
-    }
-    if (offset.dy > threshold) {
-      return DraggableHoverPosition.bottom;
-    }
+    // 只返回 center 位置，不允许在列表中间位置拖拽
+    // 这样可以确保拖拽只在列表项上起作用
     return DraggableHoverPosition.center;
   }
 
   bool _shouldAccept(ViewPB data, DraggableHoverPosition position) {
+    // 只接受中心位置的拖拽，不允许 top 和 bottom
+    if (position != DraggableHoverPosition.center) {
+      return false;
+    }
+
     // could not move the view to a database
-    if (widget.view.layout.isDatabaseView &&
-        position == DraggableHoverPosition.center) {
+    if (widget.view.layout.isDatabaseView) {
       return false;
     }
 

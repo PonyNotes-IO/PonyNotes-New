@@ -87,19 +87,28 @@ class _ResizableDividerState extends State<ResizableDivider> {
         }
       },
       child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart: (_) {
+        // 使用 translucent，允许文档拖拽穿透，避免拦截文档拖拽
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (details) {
+          // 只有在分隔线区域内开始水平拖动时才处理
           setState(() => _isDragging = true);
         },
         onHorizontalDragUpdate: (details) {
-          final newWidth = _currentLeftWidth + details.delta.dx;
-          if (newWidth >= widget.minLeftWidth &&
-              newWidth <= widget.maxLeftWidth) {
-            _currentLeftWidth = newWidth;
-            widget.onResize(newWidth);
+          // 只有在拖动分隔线时才更新宽度
+          if (_isDragging) {
+            final newWidth = _currentLeftWidth + details.delta.dx;
+            if (newWidth >= widget.minLeftWidth &&
+                newWidth <= widget.maxLeftWidth) {
+              _currentLeftWidth = newWidth;
+              widget.onResize(newWidth);
+            }
           }
         },
         onHorizontalDragEnd: (_) {
+          setState(() => _isDragging = false);
+        },
+        onHorizontalDragCancel: () {
+          // 确保在拖拽取消时重置状态，防止阴影残留
           setState(() => _isDragging = false);
         },
         child: AnimatedContainer(

@@ -50,9 +50,11 @@ class AFFilledTextButton extends AFBaseTextButton {
           return AppFlowyTheme.of(context).fillColorScheme.contentHover;
         }
         if (isHovering) {
-          return AppFlowyTheme.of(context).fillColorScheme.themeThickHover;
+          // 使用主题色的深色版本作为悬停状态
+          return Theme.of(context).colorScheme.primary.withOpacity(0.8);
         }
-        return AppFlowyTheme.of(context).fillColorScheme.themeThick;
+        // 使用主题色作为背景
+        return Theme.of(context).colorScheme.primary;
       },
     );
   }
