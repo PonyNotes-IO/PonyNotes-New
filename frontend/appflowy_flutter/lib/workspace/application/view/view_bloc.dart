@@ -75,9 +75,13 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
                 add(ViewEvent.viewDidUpdate(FlowyResult.success(result)));
               },
               onViewChildViewsUpdated: (result) async {
-                final view = await _updateChildViews(result);
-                if (!isClosed && view != null) {
-                  add(ViewEvent.viewUpdateChildView(view));
+                Log.info('[ViewBloc] onViewChildViewsUpdated: viewId=${this.view.id}, update=$result');
+                final updatedView = await _updateChildViews(result);
+                if (!isClosed && updatedView != null) {
+                  Log.info('[ViewBloc] Child views updated, emitting new view with ${updatedView.childViews.length} children');
+                  add(ViewEvent.viewUpdateChildView(updatedView));
+                } else {
+                  Log.warn('[ViewBloc] Child views update returned null or bloc is closed');
                 }
               },
             );
@@ -483,30 +487,36 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
   Future<ViewPB?> _updateChildViews(
     ChildViewUpdatePB update,
   ) async {
+    Log.info('[ViewBloc] _updateChildViews: viewId=${this.view.id}, parentViewId=${update.parentViewId}, createCount=${update.createChildViews.length}, deleteCount=${update.deleteChildViews.length}, updateCount=${update.updateChildViews.length}');
+    
     if (update.createChildViews.isNotEmpty) {
       // refresh the child views if the update isn't empty
       // because there's no info to get the inserted index.
       assert(update.parentViewId == this.view.id);
-      final view = await ViewBackendService.getView(
+      final fetchedView = await ViewBackendService.getView(
         update.parentViewId,
       );
-      return view.fold((l) => l, (r) => null);
+      return fetchedView.fold((l) => l, (r) => null);
     }
 
-    final view = state.view;
-    view.freeze();
-    final childViews = [...view.childViews];
+    final currentView = state.view;
+    currentView.freeze();
+    final childViews = [...currentView.childViews];
+    Log.info('[ViewBloc] _updateChildViews: current childViews count=${childViews.length}');
+    
     if (update.deleteChildViews.isNotEmpty) {
+      Log.info('[ViewBloc] _updateChildViews: deleting child views: ${update.deleteChildViews}');
       childViews.removeWhere((v) => update.deleteChildViews.contains(v.id));
-      return view.rebuild((p0) {
+      Log.info('[ViewBloc] _updateChildViews: after deletion, childViews count=${childViews.length}');
+      return currentView.rebuild((p0) {
         p0.childViews.clear();
         p0.childViews.addAll(childViews);
       });
     }
 
     if (update.updateChildViews.isNotEmpty && update.parentViewId.isNotEmpty) {
-      final view = await ViewBackendService.getView(update.parentViewId);
-      final childViews = view.fold((l) => l.childViews, (r) => []);
+      final fetchedView = await ViewBackendService.getView(update.parentViewId);
+      final childViews = fetchedView.fold((l) => l.childViews, (r) => []);
       bool isSameOrder = true;
       if (childViews.length == update.updateChildViews.length) {
         for (var i = 0; i < childViews.length; i++) {
@@ -519,7 +529,7 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
         isSameOrder = false;
       }
       if (!isSameOrder) {
-        return view.fold((l) => l, (r) => null);
+        return fetchedView.fold((l) => l, (r) => null);
       }
     }
 

@@ -135,6 +135,10 @@ class FlowyRunner {
         // don't catch errors in test mode
         if (!mode.isUnitTest && !mode.isIntegrationTest)
           const PlatformErrorCatcherTask(),
+        // this task should be after PlatformErrorCatcherTask, for handling keyboard state errors.
+        // It suppresses the known Flutter bug about keyboard state synchronization.
+        if (!mode.isUnitTest && !mode.isIntegrationTest)
+          const KeyboardStateFixTask(),
         // this task should be second task, for handling memory leak.
         // there's a flag named _enable in memory_leak_detector.dart. If it's false, the task will be ignored.
         MemoryLeakDetectorTask(),

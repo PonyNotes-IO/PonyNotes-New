@@ -9,7 +9,6 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/string_extension.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
-import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/workspace/prelude.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_sections_listener.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon_popup.dart';
@@ -304,6 +303,22 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               ),
             );
 
+            // 启动对当前空间子视图变化的监听
+            // 这样当删除子视图后，列表会立即更新
+            await _currentSpaceListener?.stop();
+            _currentSpaceListener = ViewListener(viewId: space.id);
+            Log.info('[SpaceBloc] Starting ViewListener for space: ${space.name} (${space.id})');
+            _currentSpaceListener?.start(
+              onViewChildViewsUpdated: (update) {
+                Log.info('[SpaceBloc] Received child views update for space: ${space.id}, deleteCount=${update.deleteChildViews.length}, createCount=${update.createChildViews.length}');
+                if (!isClosed) {
+                  add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                } else {
+                  Log.warn('[SpaceBloc] Bloc is closed, ignoring child views update');
+                }
+              },
+            );
+
             // don't open the page automatically on mobile
             if (UniversalPlatform.isDesktop) {
               // 如果是空间类型，不设置 lastCreatedPage，让 sidebar 打开空间统一页面
@@ -401,6 +416,58 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                 spaces: spaces,
                 currentSpace: currentSpace,
               ),
+            );
+          },
+          didUpdateCurrentSpaceChildViews: () async {
+            // 当前空间的子视图发生变化时（如删除），重新加载子视图列表
+            // 注意：使用最新的 state，因为事件可能被多次触发
+            final latestState = state;
+            Log.info('[SpaceBloc] didUpdateCurrentSpaceChildViews: reloading child views');
+            final currentSpace = latestState.currentSpace;
+            if (currentSpace == null) {
+              Log.warn('[SpaceBloc] didUpdateCurrentSpaceChildViews: currentSpace is null');
+              return;
+            }
+
+            final spaceId = currentSpace.id;
+            Log.info('[SpaceBloc] didUpdateCurrentSpaceChildViews: currentSpace=${currentSpace.name} ($spaceId), current childViews count=${currentSpace.childViews.length}');
+            
+            final childViewsResult = await ViewBackendService.getChildViews(
+              viewId: spaceId,
+            );
+            childViewsResult.fold(
+              (childViews) {
+                Log.info('[SpaceBloc] didUpdateCurrentSpaceChildViews: fetched ${childViews.length} child views for space $spaceId');
+                
+                // 再次检查 state 是否仍然匹配（避免并发问题）
+                final currentState = state;
+                if (currentState.currentSpace?.id != spaceId) {
+                  Log.warn('[SpaceBloc] didUpdateCurrentSpaceChildViews: space changed during fetch, ignoring update');
+                  return;
+                }
+                
+                // 创建新的 ViewPB 对象，确保引用变化
+                currentSpace.freeze();
+                final updatedSpace = currentSpace.rebuild((b) {
+                  b.childViews.clear();
+                  b.childViews.addAll(childViews);
+                });
+                
+                // 确保创建了新对象
+                if (identical(updatedSpace, currentSpace)) {
+                  Log.error('[SpaceBloc] didUpdateCurrentSpaceChildViews: rebuild did not create new object!');
+                }
+                
+                emit(
+                  currentState.copyWith(
+                    currentSpace: updatedSpace,
+                  ),
+                );
+                Log.info('[SpaceBloc] didUpdateCurrentSpaceChildViews: emitted new state with ${updatedSpace.childViews.length} child views (old count was ${currentSpace.childViews.length})');
+              },
+              (error) {
+                Log.error('[SpaceBloc] didUpdateCurrentSpaceChildViews: failed to get child views: $error');
+              },
             );
           },
           reset: (userProfile, workspaceId, openFirstPage) async {
@@ -602,12 +669,15 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
   late String workspaceId;
   late UserProfilePB userProfile;
   WorkspaceSectionsListener? _listener;
+  ViewListener? _currentSpaceListener; // 监听当前空间的子视图变化
   bool openFirstPage = false;
 
   @override
   Future<void> close() async {
     await _listener?.stop();
     _listener = null;
+    await _currentSpaceListener?.stop();
+    _currentSpaceListener = null;
     return super.close();
   }
 
@@ -1009,6 +1079,7 @@ class SpaceEvent with _$SpaceEvent {
   }) = _CreatePage;
   const factory SpaceEvent.delete(ViewPB? space) = _Delete;
   const factory SpaceEvent.didReceiveSpaceUpdate() = _DidReceiveSpaceUpdate;
+  const factory SpaceEvent.didUpdateCurrentSpaceChildViews() = _DidUpdateCurrentSpaceChildViews;
   const factory SpaceEvent.reset(
     UserProfilePB userProfile,
     String workspaceId,
