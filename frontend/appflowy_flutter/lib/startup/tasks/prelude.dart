@@ -6,6 +6,7 @@ export 'device_info_task.dart';
 export 'feature_flag_task.dart';
 export 'generate_router.dart';
 export 'hot_key.dart';
+export 'keyboard_state_fix_task.dart';
 export 'load_plugin.dart';
 export 'localization.dart';
 export 'media_kit_task.dart';

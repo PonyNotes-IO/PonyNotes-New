@@ -592,6 +592,52 @@ class _SpaceDocumentList extends StatelessWidget {
       },
       child: BlocBuilder<SpaceBloc, SpaceState>(
         bloc: spaceBloc,
+        buildWhen: (previous, current) {
+          // 检查当前空间是否匹配目标空间
+          final currSpace = current.currentSpace;
+          final prevSpace = previous.currentSpace;
+          
+          debugPrint('[SpaceHub] buildWhen: prevSpace=${prevSpace?.id}, currSpace=${currSpace?.id}, targetSpace=${spaceView.id}');
+          
+          // 如果当前空间不匹配目标空间，只在空间ID变化时重建
+          if (currSpace?.id != spaceView.id) {
+            final shouldRebuild = prevSpace?.id != currSpace?.id;
+            debugPrint('[SpaceHub] buildWhen: space not matching target, shouldRebuild=$shouldRebuild');
+            return shouldRebuild;
+          }
+          
+          // 当前空间匹配目标空间，检查子视图是否变化
+          if (prevSpace?.id != currSpace?.id) {
+            debugPrint('[SpaceHub] buildWhen: Space changed: ${prevSpace?.id} -> ${currSpace?.id}, shouldRebuild=true');
+            return true;
+          }
+          
+          // 检查子视图数量或ID列表是否变化
+          final prevCount = prevSpace?.childViews.length ?? 0;
+          final currCount = currSpace?.childViews.length ?? 0;
+          if (prevCount != currCount) {
+            debugPrint('[SpaceHub] buildWhen: Child views count changed: $prevCount -> $currCount, shouldRebuild=true');
+            return true;
+          }
+          
+          // 检查子视图ID列表是否变化（使用 Set 比较，忽略顺序）
+          final prevIds = prevSpace?.childViews.map((v) => v.id).toSet();
+          final currIds = currSpace?.childViews.map((v) => v.id).toSet();
+          if (prevIds != currIds) {
+            debugPrint('[SpaceHub] buildWhen: Child views IDs changed: prev=${prevIds?.toList()} curr=${currIds?.toList()}, shouldRebuild=true');
+            return true;
+          }
+          
+          // 其他重要状态变化也需要重建
+          if (previous.isInitialized != current.isInitialized) {
+            debugPrint('[SpaceHub] buildWhen: isInitialized changed, shouldRebuild=true');
+            return true;
+          }
+          
+          // 默认不重建（避免不必要的重建）
+          debugPrint('[SpaceHub] buildWhen: No changes detected, shouldRebuild=false');
+          return false;
+        },
         builder: (context, state) {
           // 确保当前空间已加载，如果没有则触发加载
           final currentSpace = state.currentSpace;
