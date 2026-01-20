@@ -63,12 +63,8 @@ impl ChatServiceMiddleware {
         } else if lower_name.contains("deepseek") {
           "deepseek-chat".to_string()
         } else if model_name.contains("通义") || lower_name.contains("qwen") {
-          if model_name.contains("VL Plus") || model_name.contains("vl plus") || lower_name.contains("qwen3") {
-            "qwen3-vl-plus".to_string()
-          } else {
-            // 通义千问的其他变体，默认使用qwen3-vl-plus
-            "qwen3-vl-plus".to_string()
-          }
+          // 通义千问模型统一使用qwen3-vl-plus
+          "qwen3-vl-plus".to_string()
         } else if model_name.contains("豆包") || lower_name.contains("doubao") {
           "doubao".to_string()
         } else {
