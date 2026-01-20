@@ -313,11 +313,11 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                             // Dispatch invite events for all selected users
                             for (final u in selectedUsers) {
                               final identifier = u.email;
-                              // Validate email format before inviting
-                              if (!isEmail(identifier)) {
+                              // Validate email or phone format before inviting
+                              if (!_isValidEmailOrPhone(identifier)) {
                                 showToastNotification(
                                   type: ToastificationType.error,
-                                  message: '用户 ${u.name} 的邮箱格式无效，无法邀请',
+                                  message: '用户 ${u.name} 的邮箱或手机号格式无效，无法邀请',
                                 );
                                 continue;
                               }
@@ -348,11 +348,30 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
     );
   }
 
-  bool _isPhoneNumber(String input) {
-    // Normalize: remove non-digit characters
-    final digits = input.replaceAll(RegExp(r'\\D'), '');
-    // Basic length check for phone numbers (allow 6-15 digits)
-    return digits.length >= 6 && digits.length <= 15;
+  /// 验证邮箱或手机号格式
+  /// 支持：
+  /// - 邮箱：包含@符号的标准邮箱格式
+  /// - 手机号：纯数字或以+开头的数字（至少6位，最多15位）
+  bool _isValidEmailOrPhone(String input) {
+    if (input.isEmpty) return false;
+    
+    // 检查是否是邮箱（包含@符号）
+    if (input.contains('@')) {
+      return isEmail(input);
+    }
+    
+    // 检查是否是手机号（纯数字或以+开头）
+    String cleaned = input.trim();
+    if (cleaned.startsWith('+')) {
+      cleaned = cleaned.substring(1);
+    }
+    if (cleaned.isNotEmpty && RegExp(r'^\d+$').hasMatch(cleaned)) {
+      final len = cleaned.length;
+      // 手机号长度一般在6-15位之间（与后端验证逻辑一致）
+      return len >= 6 && len <= 15;
+    }
+    
+    return false;
   }
 
 }
