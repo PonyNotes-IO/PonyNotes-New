@@ -2,6 +2,7 @@ import 'package:appflowy/plugins/ai_chat/application/chat_entity.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_message_service.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_message_stream.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_user_message_bloc.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:flowy_infra/theme_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -67,13 +68,22 @@ class ChatUserMessageWidget extends StatelessWidget {
   /// 获取消息中的图片数据（base64编码）
   List<String> _getImages() {
     if (message.metadata == null) {
+      Log.info('📸 UserTextMessage: message.metadata为null');
       return const [];
     }
 
+    Log.info('📸 UserTextMessage: 检查metadata中的图片数据');
+    Log.info('   - metadata键列表: ${message.metadata!.keys.toList()}');
+    
     final imagesData = message.metadata!['images'];
+    Log.info('   - images字段类型: ${imagesData.runtimeType}');
+    Log.info('   - images字段值: ${imagesData is List ? "List(${(imagesData as List).length})" : imagesData}');
+    
     if (imagesData is List && imagesData.isNotEmpty) {
+      Log.info('📸 UserTextMessage: 找到 ${imagesData.length} 张图片');
       return imagesData.cast<String>();
     }
+    Log.info('📸 UserTextMessage: 没有找到图片数据');
     return const [];
   }
 }

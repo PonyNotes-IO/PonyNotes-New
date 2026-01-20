@@ -47,8 +47,6 @@ impl ChatServiceMiddleware {
   fn map_model_name_to_id(model_name: &str) -> String {
     match model_name {
       "DeepSeek" => "deepseek-chat".to_string(),
-      "通义千问 Turbo" => "qwen-turbo".to_string(),
-      "通义千问 Max" => "qwen-max".to_string(),
       "豆包" => "doubao".to_string(),
       "Auto" => {
         // "Auto"表示自动选择，使用默认模型
@@ -65,12 +63,11 @@ impl ChatServiceMiddleware {
         } else if lower_name.contains("deepseek") {
           "deepseek-chat".to_string()
         } else if model_name.contains("通义") || lower_name.contains("qwen") {
-          if model_name.contains("Turbo") || model_name.contains("turbo") {
-            "qwen-turbo".to_string()
-          } else if model_name.contains("Max") || model_name.contains("max") {
-            "qwen-max".to_string()
+          if model_name.contains("VL Plus") || model_name.contains("vl plus") || lower_name.contains("qwen3") {
+            "qwen3-vl-plus".to_string()
           } else {
-            "qwen-turbo".to_string() // 默认使用turbo
+            // 通义千问的其他变体，默认使用qwen3-vl-plus
+            "qwen3-vl-plus".to_string()
           }
         } else if model_name.contains("豆包") || lower_name.contains("doubao") {
           "doubao".to_string()
