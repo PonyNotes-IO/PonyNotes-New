@@ -618,6 +618,75 @@ class UserBackendService implements IUserBackendService {
     }
   }
 
+  /// Update a collab member's permission
+  Future<FlowyResult<void, FlowyError>> updateCollabMemberPermission(
+    String workspaceId,
+    String objectId,
+    int memberUid,
+    int permissionId,
+  ) async {
+    try {
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold((c) => c, (e) => throw e);
+      final baseUrl = cloudConfig.serverUrl;
+      if (baseUrl.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL',
+        );
+      }
+
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final rawToken = userResult.fold((user) => user.token, (err) => '');
+      final token = _normalizeToken(rawToken);
+      if (token.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing access token',
+        );
+      }
+
+      final uri = Uri.parse('$baseUrl/api/workspace/$workspaceId/collab/$objectId/members/$memberUid');
+      final response = await http.patch(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'permission_id': permissionId}),
+      );
+
+      if (response.statusCode == 200) {
+        return FlowyResult.success(null);
+      } else {
+        final errorMsg = response.body.isNotEmpty ? response.body : 'HTTP ${response.statusCode}';
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e) {
+      Log.error('[UserBackendService] Exception updateCollabMemberPermission: $e');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Failed to update collab member permission: $e',
+      );
+    }
+  }
+
+  /// Remove a collab member (best-effort) — currently implemented as setting permission_id to 0
+  Future<FlowyResult<void, FlowyError>> removeCollabMember(
+    String workspaceId,
+    String objectId,
+    int memberUid,
+  ) async {
+    return await updateCollabMemberPermission(workspaceId, objectId, memberUid, 0);
+  }
+
   Future<FlowyResult<void, FlowyError>> leaveWorkspace(
     String workspaceId,
   ) async {

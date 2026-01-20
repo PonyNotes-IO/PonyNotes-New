@@ -1361,11 +1361,9 @@ class _SpaceRowState extends State<_SpaceRow> {
                                                           allOk = false;
                                                           showDialog(
                                                               context: dctx2,
-                                                              builder: (_) =>
+                                                        builder: (_) =>
                                                                   NavigatorOkCancelDialog(
-                                                                      message: err
-                                                                              .msg ??
-                                                                          '邀请失败'));
+                                                                      message: err.msg));
                                                         });
                                                       }
                                                       if (allOk) {
@@ -1493,12 +1491,175 @@ class _SpaceRowState extends State<_SpaceRow> {
                                         ],
                                       ),
                                     ),
-                                    // Role column
+                                    // Role column (styled popover similar to "访问权限")
                                     Expanded(
                                       flex: 4,
-                                      child: FlowyText(
-                                          isOwner ? '团队协作区所有者' : '团队协作区成员',
-                                          fontSize: 14),
+                                      child: Builder(builder: (roleCtx) {
+                                        final int currentUid = widget.userProfile.id.toInt();
+                                        final ownersCount = members
+                                            .where((mm) => (mm.permissionId ?? 0) == 4)
+                                            .length;
+                                        final currentIsOwner = members.any((mm) =>
+                                            mm.uid == currentUid && (mm.permissionId ?? 0) == 4);
+
+                                        final popoverController = AFPopoverController();
+
+                                        Widget buildMenu() {
+                                          final List<Widget> items = [];
+                                          final canChangeRole =
+                                              currentIsOwner && m.uid != currentUid;
+
+                                          items.add(IgnorePointer(
+                                            ignoring: !canChangeRole,
+                                            child: AFTextMenuItem(
+                                              title: '团队协作区所有者',
+                                              titleColor: canChangeRole
+                                                  ? null
+                                                  : Theme.of(ctx).hintColor,
+                                              onTap: () {
+                                                userService
+                                                    .updateCollabMemberPermission(
+                                                        widget.workspaceId,
+                                                        widget.space.id,
+                                                        m.uid,
+                                                        4)
+                                                    .then((res) {
+                                                  res.fold((_) {
+                                                    m.permissionId = 4;
+                                                    try {
+                                                      (ctx as Element)
+                                                          .markNeedsBuild();
+                                                    } catch (_) {}
+                                                  }, (e) {
+                                                    Log.error(
+                                                        'Failed to set owner: $e');
+                                                  });
+                                                }).whenComplete(
+                                                    () => popoverController.hide());
+                                              },
+                                            ),
+                                          ));
+
+                                          items.add(IgnorePointer(
+                                            ignoring: !canChangeRole,
+                                            child: AFTextMenuItem(
+                                              title: '团队协作区成员',
+                                              titleColor: canChangeRole
+                                                  ? null
+                                                  : Theme.of(ctx).hintColor,
+                                              onTap: () {
+                                                userService
+                                                    .updateCollabMemberPermission(
+                                                        widget.workspaceId,
+                                                        widget.space.id,
+                                                        m.uid,
+                                                        3)
+                                                    .then((res) {
+                                                  res.fold((_) {
+                                                    m.permissionId = 3;
+                                                    try {
+                                                      (ctx as Element)
+                                                          .markNeedsBuild();
+                                                    } catch (_) {}
+                                                  }, (e) {
+                                                    Log.error(
+                                                        'Failed to set member: $e');
+                                                  });
+                                                }).whenComplete(
+                                                    () => popoverController.hide());
+                                              },
+                                            ),
+                                          ));
+
+                                          items.add(AFDivider());
+
+                                          bool removeEnabled = false;
+                                          if (currentIsOwner) {
+                                            if ((m.permissionId ?? 0) == 4 &&
+                                                ownersCount == 1 &&
+                                                m.uid == currentUid) {
+                                              removeEnabled = false;
+                                            } else {
+                                              removeEnabled = true;
+                                            }
+                                          } else {
+                                            removeEnabled = (m.uid == currentUid);
+                                          }
+
+                                          items.add(IgnorePointer(
+                                            ignoring: !removeEnabled,
+                                            child: AFTextMenuItem(
+                                              title: '移除',
+                                              titleColor: removeEnabled
+                                                  ? Theme.of(ctx).colorScheme.error
+                                                  : Theme.of(ctx).hintColor,
+                                              onTap: () {
+                                                showDialog<bool>(
+                                                        context: roleCtx,
+                                                        builder: (_) =>
+                                                            NavigatorOkCancelDialog(
+                                                                message:
+                                                                    '确认要移除该成员吗？'))
+                                                    .then((confirm) {
+                                                  if (confirm != true) {
+                                                    popoverController.hide();
+                                                    return;
+                                                  }
+                                                  userService
+                                                      .removeCollabMember(
+                                                          widget.workspaceId,
+                                                          widget.space.id,
+                                                          m.uid)
+                                                      .then((res) {
+                                                    res.fold((_) {
+                                                      members.removeAt(idx);
+                                                      try {
+                                                        (ctx as Element)
+                                                            .markNeedsBuild();
+                                                      } catch (_) {}
+                                                    }, (e) {
+                                                      Log.error(
+                                                          'Failed to remove collab member: $e');
+                                                    });
+                                                  }).whenComplete(
+                                                      () => popoverController.hide());
+                                                });
+                                              },
+                                            ),
+                                          ));
+
+                                          return AFMenu(children: items, width: 220);
+                                        }
+
+                                        return AFPopover(
+                                          controller: popoverController,
+                                          popover: (_) => buildMenu(),
+                                          child: AFGhostButton.normal(
+                                            onTap: () {
+                                              popoverController.show();
+                                            },
+                                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            builder: (bCtx, isHovering, disabled) {
+                                              return SizedBox(
+                                                width: double.infinity,
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: FlowyText.regular(
+                                                        isOwner ? '团队协作区所有者' : '团队协作区成员',
+                                                      ),
+                                                    ),
+                                                    FlowySvg(
+                                                      FlowySvgs.arrow_down_s,
+                                                      color: Theme.of(ctx).hintColor,
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        );
+                                      }),
                                     ),
                                   ],
                                 ),
