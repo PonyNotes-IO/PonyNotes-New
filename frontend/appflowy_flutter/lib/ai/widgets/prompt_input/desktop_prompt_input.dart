@@ -243,7 +243,7 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     );
   }
 
-  void checkForAskingAI() {
+  Future<void> checkForAskingAI() async {
     final paletteBloc = context.read<CommandPaletteBloc?>(),
         paletteState = paletteBloc?.state;
     if (paletteBloc == null || paletteState == null) return;
@@ -254,7 +254,7 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     if (query.isEmpty) return;
     final sources = (paletteState.askAISources ?? []).map((e) => e.id).toList();
     final metadata =
-        context.read<AIPromptInputBloc?>()?.consumeMetadata() ?? {};
+        await context.read<AIPromptInputBloc?>()?.consumeMetadata() ?? {};
     final promptBloc = context.read<AIPromptInputBloc?>();
     final promptId = promptBloc?.promptId;
     final promptState = promptBloc?.state;
@@ -300,7 +300,7 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     }
   }
 
-  void handleSend() {
+  Future<void> handleSend() async {
     if (widget.isStreaming) {
       return;
     }
@@ -313,8 +313,8 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
       return;
     }
 
-    // get the attached files and mentioned pages
-    final metadata = context.read<AIPromptInputBloc>().consumeMetadata();
+    // get the attached files and mentioned pages (异步处理图片)
+    final metadata = await context.read<AIPromptInputBloc>().consumeMetadata();
 
     final bloc = context.read<AIPromptInputBloc>();
     final showPredefinedFormats = bloc.state.showPredefinedFormats;
@@ -483,8 +483,15 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     final bottom = DesktopAIPromptSizes.actionBarSendButtonSize +
         DesktopAIChatSizes.inputActionBarMargin.vertical;
 
-    return DesktopAIPromptSizes.textFieldContentPadding
-        .add(EdgeInsets.only(top: top, bottom: bottom));
+    // 修复：将top padding设置为0，确保文字从顶部开始显示
+    // textAlignVertical.top 需要配合 top padding = 0 才能生效
+    final basePadding = DesktopAIPromptSizes.textFieldContentPadding;
+    return EdgeInsets.only(
+      left: basePadding.horizontal / 2,
+      right: basePadding.horizontal / 2,
+      top: top, // top padding 设置为0（当showPredefinedFormats为false时）或predefinedFormatButtonHeight
+      bottom: bottom,
+    );
   }
 
   Map<ShortcutActivator, Intent> buildShortcuts() {
@@ -533,7 +540,7 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
               orElse: () {},
             );
           } else {
-            handleSend();
+            handleSend(); // 异步调用，但不等待结果
           }
           return;
         },
@@ -607,11 +614,18 @@ class PromptInputTextField extends StatelessWidget {
       focusNode: textFieldFocusNode,
       readOnly: !editable,
       enabled: editable,
+      textAlignVertical: TextAlignVertical.top,
       decoration: InputDecoration(
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
-        contentPadding: contentPadding,
+        // 修复：确保contentPadding的top为0，让文字从顶部开始
+        contentPadding: EdgeInsets.only(
+          left: contentPadding.resolve(TextDirection.ltr).left,
+          right: contentPadding.resolve(TextDirection.ltr).right,
+          top: 0, // 强制top为0
+          bottom: contentPadding.resolve(TextDirection.ltr).bottom,
+        ),
         hintText: hintText,
         hintStyle: inputHintTextStyle(context),
         isCollapsed: true,

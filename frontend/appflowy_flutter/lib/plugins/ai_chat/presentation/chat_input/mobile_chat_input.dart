@@ -188,9 +188,9 @@ class _MobileChatInputState extends State<MobileChatInput> {
     onSubmitText(trimmedText);
   }
 
-  void onSubmitText(String text) {
-    // get the attached files and mentioned pages
-    final metadata = context.read<AIPromptInputBloc>().consumeMetadata();
+  Future<void> onSubmitText(String text) async {
+    // get the attached files and mentioned pages (异步处理图片)
+    final metadata = await context.read<AIPromptInputBloc>().consumeMetadata();
 
     final bloc = context.read<AIPromptInputBloc>();
     final showPredefinedFormats = bloc.state.showPredefinedFormats;
@@ -203,7 +203,7 @@ class _MobileChatInputState extends State<MobileChatInput> {
     );
   }
 
-  void checkForAskingAI() {
+  Future<void> checkForAskingAI() async {
     if (!UniversalPlatform.isMobile) return;
     final paletteBloc = context.read<CommandPaletteBloc?>(),
         paletteState = paletteBloc?.state;
@@ -215,7 +215,7 @@ class _MobileChatInputState extends State<MobileChatInput> {
     if (query.isEmpty) return;
     final sources = (paletteState.askAISources ?? []).map((e) => e.id).toList();
     final metadata =
-        context.read<AIPromptInputBloc?>()?.consumeMetadata() ?? {};
+        await context.read<AIPromptInputBloc?>()?.consumeMetadata() ?? {};
     final promptState = context.read<AIPromptInputBloc?>()?.state;
     final predefinedFormat = promptState?.predefinedFormat;
     if (sources.isNotEmpty) {
@@ -288,7 +288,7 @@ class _MobileChatInputState extends State<MobileChatInput> {
         return ExtendedTextField(
           controller: textController,
           focusNode: focusNode,
-          textAlignVertical: TextAlignVertical.center,
+          textAlignVertical: TextAlignVertical.top,
           decoration: InputDecoration(
             border: InputBorder.none,
             enabledBorder: InputBorder.none,

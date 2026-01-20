@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:collection';
 
 import 'package:appflowy/util/int64_extension.dart';
@@ -80,19 +81,87 @@ class ChatMessageHandler {
       Log.info('ℹ️ MessageHandler.createTextMessage: 未找到映射');
       Log.info('   - 消息ID: $messageId');
       Log.info('   - 当前映射表: $_temporaryMessageIDMap');
+      
+      // 【关键修复】即使没有映射，也尝试从现有消息中查找相同ID的消息，获取图片数据
+      // 这可以处理从服务器加载历史消息时的情况
+      final existingMessage = chatController.messages.firstWhereOrNull(
+        (m) => m.id == messageId,
+      );
+      if (existingMessage != null && existingMessage.metadata != null) {
+        final existingMeta = existingMessage.metadata!;
+        if (existingMeta['images'] != null && existingMeta['images'] is List) {
+          preservedImages = (existingMeta['images'] as List).cast<String>();
+          Log.info('📸 MessageHandler: 从现有消息复制 ${preservedImages.length} 张图片（无映射情况）');
+        }
+        if (existingMeta['has_images'] != null) {
+          preservedHasImages = existingMeta['has_images'] as bool;
+        }
+      }
     }
-    final metadata = message.metadata == 'null' ? '[]' : message.metadata;
+    // 处理metadata：如果为空或'null'，使用空对象字符串
+    final metadata = (message.metadata.isEmpty || message.metadata == 'null') 
+        ? '{}' 
+        : message.metadata;
+    Log.info('📋 MessageHandler: 原始metadata字符串: ${metadata.length > 200 ? metadata.substring(0, 200) + "..." : metadata}');
+    Log.info('📋 MessageHandler: 消息ID: $messageId, 作者ID: ${message.authorId}');
+
+    // 尝试从metadata字符串中解析图片数据
+    List<String>? serverImages;
+    bool? serverHasImages;
+    try {
+      final metadataJson = jsonDecode(metadata);
+      Log.info('📋 MessageHandler: 解析后的metadata类型: ${metadataJson.runtimeType}');
+      if (metadataJson is Map<String, dynamic>) {
+        Log.info('📋 MessageHandler: metadata键列表: ${metadataJson.keys.toList()}');
+        if (metadataJson['images'] != null) {
+          if (metadataJson['images'] is List) {
+            serverImages = (metadataJson['images'] as List)
+                .map((e) => e.toString())
+                .toList();
+            Log.info('📸 MessageHandler: 从metadata提取到 ${serverImages.length} 张图片');
+          } else {
+            Log.warn('⚠️ MessageHandler: images字段不是List类型，是: ${metadataJson['images'].runtimeType}');
+          }
+        } else {
+          Log.info('📋 MessageHandler: metadata中没有images字段');
+        }
+        if (metadataJson['has_images'] != null) {
+          serverHasImages = metadataJson['has_images'] as bool;
+        }
+      } else if (metadataJson is List) {
+        Log.info('📋 MessageHandler: metadata是List类型（可能是旧格式），尝试查找图片数据');
+        // 如果是List格式，可能是旧格式，尝试查找包含图片的对象
+        for (final item in metadataJson) {
+          if (item is Map<String, dynamic> && item['images'] != null) {
+            if (item['images'] is List) {
+              serverImages = (item['images'] as List).map((e) => e.toString()).toList();
+              Log.info('📸 MessageHandler: 从List格式metadata中提取到 ${serverImages.length} 张图片');
+              break;
+            }
+          }
+        }
+      } else {
+        Log.info('📋 MessageHandler: metadata不是Map或List类型，是: ${metadataJson.runtimeType}');
+      }
+    } catch (e) {
+      // 解析失败，忽略
+      Log.warn('⚠️ MessageHandler: 解析metadata失败: $e, metadata: $metadata');
+    }
 
     // 构建最终的 metadata，保留图片数据
     final finalMetadata = <String, dynamic>{
       messageRefSourceJsonStringKey: metadata,
     };
     
-    // 如果有保留的图片数据，添加到 metadata 中
+    // 优先使用从临时消息中保留的图片数据，如果没有则使用从服务器解析的图片数据
     if (preservedImages != null && preservedImages.isNotEmpty) {
       finalMetadata['images'] = preservedImages;
       finalMetadata['has_images'] = preservedHasImages ?? true;
-      Log.info('📸 MessageHandler: 图片数据已保留到最终消息');
+      Log.info('📸 MessageHandler: 图片数据已保留到最终消息（从临时消息）');
+    } else if (serverImages != null && serverImages.isNotEmpty) {
+      finalMetadata['images'] = serverImages;
+      finalMetadata['has_images'] = serverHasImages ?? true;
+      Log.info('📸 MessageHandler: 图片数据已保留到最终消息（从服务器metadata）');
     }
 
     return TextMessage(

@@ -600,6 +600,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     'deepseek-chat': 'DeepSeek',
     'qwen-turbo': '通义千问 Turbo',
     'qwen-max': '通义千问 Max',
+    'qwen3-vl-plus': '通义千问 VL Plus',
     'doubao': '豆包',
   };
 

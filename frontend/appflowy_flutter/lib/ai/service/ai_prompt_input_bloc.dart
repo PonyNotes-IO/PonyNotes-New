@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:appflowy/ai/service/ai_model_state_notifier.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_entity.dart';
@@ -140,17 +142,58 @@ class AIPromptInputBloc extends Bloc<AIPromptInputEvent, AIPromptInputState> {
     );
   }
 
-  Map<String, dynamic> consumeMetadata() {
-    final metadata = {
-      for (final file in state.attachedFiles) file.filePath: file,
-      for (final page in state.mentionedPages) page.id: page,
-    };
+  /// 消费metadata，将图片文件转换为base64并添加到images字段
+  Future<Map<String, dynamic>> consumeMetadata() async {
+    final metadata = <String, dynamic>{};
+
+    // 添加提到的页面
+    for (final page in state.mentionedPages) {
+      metadata[page.id] = page;
+    }
+
+    // 识别并处理图片文件
+    final List<String> imageBase64List = [];
+    final List<ChatFile> nonImageFiles = [];
+    
+    for (final file in state.attachedFiles) {
+      if (_isImageFile(file.filePath)) {
+        try {
+          // 读取图片文件并转换为base64
+          final fileData = await File(file.filePath).readAsBytes();
+          final base64String = base64Encode(fileData);
+          imageBase64List.add(base64String);
+        } catch (e) {
+          // 如果读取失败，仍然作为普通文件处理
+          nonImageFiles.add(file);
+        }
+      } else {
+        nonImageFiles.add(file);
+      }
+    }
+
+    // 如果有图片，添加到metadata的images字段
+    if (imageBase64List.isNotEmpty) {
+      metadata['images'] = imageBase64List;
+      metadata['has_images'] = true;
+    }
+
+    // 保留非图片文件
+    for (final file in nonImageFiles) {
+      metadata[file.filePath] = file;
+    }
 
     if (metadata.isNotEmpty && !isClosed) {
       add(const AIPromptInputEvent.clearMetadata());
     }
 
     return metadata;
+  }
+
+  /// 判断文件是否为图片
+  bool _isImageFile(String filePath) {
+    final extension = filePath.split('.').last.toLowerCase();
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff'];
+    return imageExtensions.contains(extension);
   }
 }
 
