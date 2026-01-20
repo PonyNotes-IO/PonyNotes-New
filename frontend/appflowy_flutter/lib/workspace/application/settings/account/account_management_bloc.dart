@@ -1817,81 +1817,83 @@ class AccountManagementBloc
                 (error) => throw error,
           );
 
-          // final baseUrl = cloudConfig.serverUrl;
-          final baseUrl = "https://www.xiaomabiji.com";
-          //#/price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
-          String payUrl =
-              "$baseUrl/#/price?planId=${planIdValue ?? ''}&addonId=${addonIdValue ?? ''}&billingType=$billingType";
-          // 使用浏览器打开支付链接
-          await PaymentUtil.webPay(payUrl);
-          
-          // 设置状态，触发显示弹框（不启动轮询）
-          // 注意：轮询接口逻辑保留，但不自动执行
-          final promptToken =
-              'BROWSER_OPENED|ts=${DateTime.now().millisecondsSinceEpoch}';
-          state.maybeWhen(
-            orElse: () {},
-            ready: (
-              subscriptionInfo,
-              planConfigs,
-              addons,
-              selectedPlan,
-              selectedDuration,
-              selectedTab,
-              selectedAddonIndex,
-              agreedProtocols,
-              isLoadingSubscription,
-              isLoadingPlans,
-              isLoadingAddons,
-              isProcessingPayment,
-              error,
-              paymentResult,
-            ) {
-              emit(
-                AccountManagementState.ready(
-                  subscriptionInfo: subscriptionInfo,
-                  planConfigs: planConfigs,
-                  addons: addons,
-                  selectedPlan: selectedPlan,
-                  selectedDuration: selectedDuration,
-                  selectedTab: selectedTab,
-                  selectedAddonIndex: selectedAddonIndex,
-                  agreedProtocols: agreedProtocols,
-                  isLoadingSubscription: isLoadingSubscription,
-                  isLoadingPlans: isLoadingPlans,
-                  isLoadingAddons: isLoadingAddons,
-                  isProcessingPayment: false,
-                  error: error,
-                  paymentResult: promptToken, // 特殊标记（带时间戳，确保每次点击都触发）
-                ),
-              );
-            },
-          );
-          return;
-          // 创建支付订单 --- todo 后续需要根据实际情况进行调整
-          // await createPaymentOrder(
-          //   emit: emit,
-          //   selectedPrice: selectedPrice,
-          //   paymentType: paymentType,
-          //   workspaceId: workspaceId,
-          //   planIdValue: planIdValue,
-          //   addonIdValue: addonIdValue,
-          //   billingType: billingType,
-          //   subscriptionInfo: subscriptionInfo,
-          //   planConfigs: planConfigs,
-          //   addons: addons,
-          //   selectedPlan: selectedPlan,
-          //   selectedDuration: selectedDuration,
-          //   selectedTab: selectedTab,
-          //   selectedAddonIndex: selectedAddonIndex,
-          //   agreedProtocols: agreedProtocols,
-          //   isLoadingSubscription: isLoadingSubscription,
-          //   isLoadingPlans: isLoadingPlans,
-          //   isLoadingAddons: isLoadingAddons,
-          //   isProcessingPayment: isProcessingPayment,
-          //   error: error,
-          //   paymentResult: paymentResult,
-          // );
+          if(!PaymentDevConfig.enableTestMode) {
+            // final baseUrl = cloudConfig.serverUrl;
+            final baseUrl = "https://www.xiaomabiji.com";
+            //#/price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
+            String payUrl =
+                "$baseUrl/#/price?planId=${planIdValue ?? ''}&addonId=${addonIdValue ?? ''}&billingType=$billingType";
+            // 使用浏览器打开支付链接
+            await PaymentUtil.webPay(payUrl);
+
+            // 设置状态，触发显示弹框（不启动轮询）
+            // 注意：轮询接口逻辑保留，但不自动执行
+            final promptToken =
+                'BROWSER_OPENED|ts=${DateTime.now().millisecondsSinceEpoch}';
+            state.maybeWhen(
+              orElse: () {},
+              ready: (
+                  subscriptionInfo,
+                  planConfigs,
+                  addons,
+                  selectedPlan,
+                  selectedDuration,
+                  selectedTab,
+                  selectedAddonIndex,
+                  agreedProtocols,
+                  isLoadingSubscription,
+                  isLoadingPlans,
+                  isLoadingAddons,
+                  isProcessingPayment,
+                  error,
+                  paymentResult,
+                  ) {
+                emit(
+                  AccountManagementState.ready(
+                    subscriptionInfo: subscriptionInfo,
+                    planConfigs: planConfigs,
+                    addons: addons,
+                    selectedPlan: selectedPlan,
+                    selectedDuration: selectedDuration,
+                    selectedTab: selectedTab,
+                    selectedAddonIndex: selectedAddonIndex,
+                    agreedProtocols: agreedProtocols,
+                    isLoadingSubscription: isLoadingSubscription,
+                    isLoadingPlans: isLoadingPlans,
+                    isLoadingAddons: isLoadingAddons,
+                    isProcessingPayment: false,
+                    error: error,
+                    paymentResult: promptToken, // 特殊标记（带时间戳，确保每次点击都触发）
+                  ),
+                );
+              },
+            );
+          } else {
+            // 创建支付订单 --- todo 后续需要根据实际情况进行调整
+            await createPaymentOrder(
+              emit: emit,
+              selectedPrice: selectedPrice,
+              paymentType: paymentType,
+              workspaceId: workspaceId,
+              planIdValue: planIdValue,
+              addonIdValue: addonIdValue,
+              billingType: billingType,
+              subscriptionInfo: subscriptionInfo,
+              planConfigs: planConfigs,
+              addons: addons,
+              selectedPlan: selectedPlan,
+              selectedDuration: selectedDuration,
+              selectedTab: selectedTab,
+              selectedAddonIndex: selectedAddonIndex,
+              agreedProtocols: agreedProtocols,
+              isLoadingSubscription: isLoadingSubscription,
+              isLoadingPlans: isLoadingPlans,
+              isLoadingAddons: isLoadingAddons,
+              isProcessingPayment: isProcessingPayment,
+              error: error,
+              paymentResult: paymentResult,
+            );
+          }
         });
   }
 
