@@ -210,6 +210,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // ''');
       // debug log removed
 
+      // 首先隐藏加载时的底图标志（尽早执行，避免闪现）
+      await _hideLoadingLogo();
+      
       // 隐藏主菜单（汉堡菜单）
       await _hideMainMenu();
       
@@ -371,6 +374,42 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             display: none !important;
             visibility: hidden !important;
           }
+          
+          /* 隐藏实时协作按钮 */
+          .collab-button,
+          [class*="collab-button"],
+          [data-testid="collab-button"],
+          button[title*="实时协作"],
+          button[title*="liveCollaboration"],
+          button[title*="LiveCollaboration"],
+          button[title*="协作"],
+          [aria-label*="实时协作"],
+          [aria-label*="liveCollaboration"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          
+          /* 隐藏素材库按钮 */
+          [class*="library"],
+          [class*="Library"],
+          [class*="DefaultSidebar.Trigger"],
+          [class*="DefaultSidebarTrigger"],
+          [class*="DefaultSidebar"],
+          button[title*="library"],
+          button[title*="Library"],
+          button[title*="素材"],
+          button[title*="素材库"],
+          [aria-label*="library"],
+          [aria-label*="Library"],
+          [aria-label*="素材库"],
+          [aria-label*="素材"],
+          [data-testid*="library"],
+          [data-testid*="Library"],
+          [data-testid*="sidebar-trigger"],
+          [data-testid*="default-sidebar"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
         `;
         
         // 如果样式已存在，先移除
@@ -383,13 +422,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         
         // 使用MutationObserver持续监听并隐藏元素
         const observer = new MutationObserver(function(mutations) {
-          // 隐藏欢迎界面
+          // 隐藏欢迎界面（但确保不是工具栏的一部分）
           const welcomeScreens = document.querySelectorAll(
             '.welcome-screen, [class*="WelcomeScreen"], [class*="welcome-screen"], [data-testid*="welcome"], [data-testid*="Welcome"]'
           );
           welcomeScreens.forEach(el => {
-            el.style.display = 'none';
-            el.style.visibility = 'hidden';
+            // 确保不是工具栏内的元素
+            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
           });
           
           // 隐藏Excalidraw+按钮
@@ -404,13 +446,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             }
           });
           
-          // 隐藏帮助和快捷键按钮
+          // 隐藏帮助和快捷键按钮（但确保不是工具栏的一部分）
           const helpButtons = document.querySelectorAll(
             '[data-testid*="help"], [data-testid*="Help"], [aria-label*="help"], [aria-label*="Help"], [aria-label*="快捷键"], button[title*="帮助"], button[title*="help"], .help-button, [class*="help-button"]'
           );
           helpButtons.forEach(el => {
-            el.style.display = 'none';
-            el.style.visibility = 'hidden';
+            // 确保不是工具栏内的元素
+            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
           });
           
           // 隐藏欢迎界面中心内容
@@ -418,8 +463,57 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             '.welcome-screen-center, [class*="WelcomeScreen.Center"]'
           );
           welcomeCenter.forEach(el => {
-            el.style.display = 'none';
-            el.style.visibility = 'hidden';
+            // 确保不是工具栏内的元素
+            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]')) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
+          });
+          
+          // 隐藏实时协作按钮
+          const collabButtons = document.querySelectorAll(
+            '.collab-button, [class*="collab-button"], [data-testid="collab-button"], button[title*="实时协作"], button[title*="liveCollaboration"], [aria-label*="实时协作"]'
+          );
+          collabButtons.forEach(el => {
+            // 确保不是工具栏内的其他元素
+            if (!el.closest('.App-toolbar') || el.classList.contains('collab-button')) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
+          });
+          
+          // 隐藏素材库按钮
+          const hideLibraryButton = () => {
+            const libraryButtons = document.querySelectorAll(
+              '[class*="library"], [class*="Library"], [class*="DefaultSidebar.Trigger"], [class*="DefaultSidebarTrigger"], [class*="DefaultSidebar"], button[title*="library"], button[title*="Library"], button[title*="素材"], button[title*="素材库"], [aria-label*="library"], [aria-label*="Library"], [aria-label*="素材库"], [aria-label*="素材"], [data-testid*="library"], [data-testid*="Library"], [data-testid*="sidebar-trigger"], [data-testid*="default-sidebar"], [role="button"]'
+            );
+            libraryButtons.forEach(el => {
+              const text = (el.textContent || '').toLowerCase();
+              const title = (el.getAttribute('title') || '').toLowerCase();
+              const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+              const isLibrary =
+                text.includes('library') ||
+                text.includes('素材') ||
+                title.includes('library') ||
+                title.includes('素材') ||
+                aria.includes('library') ||
+                aria.includes('素材');
+              if (isLibrary) {
+                const target = el.closest('button') ?? el;
+                target.style.display = 'none';
+                target.style.visibility = 'hidden';
+              }
+            });
+          };
+          hideLibraryButton();
+          
+          // 确保工具栏始终显示
+          const toolbars = document.querySelectorAll(
+            '.App-toolbar, [class*="App-toolbar"], [data-testid*="toolbar"]'
+          );
+          toolbars.forEach(el => {
+            el.style.display = '';
+            el.style.visibility = '';
           });
         });
         
@@ -433,13 +527,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         
         // 立即执行一次隐藏
         setTimeout(() => {
-          // 隐藏欢迎界面
+          // 隐藏欢迎界面（但确保不是工具栏的一部分）
           const welcomeScreens = document.querySelectorAll(
             '.welcome-screen, [class*="WelcomeScreen"], [class*="welcome-screen"], [data-testid*="welcome"]'
           );
           welcomeScreens.forEach(el => {
-            el.style.display = 'none';
-            el.style.visibility = 'hidden';
+            // 确保不是工具栏内的元素
+            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
           });
           
           // 隐藏Excalidraw+按钮
@@ -454,13 +551,62 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             }
           });
           
-          // 隐藏帮助按钮
+          // 隐藏帮助按钮（但确保不是工具栏的一部分）
           const helpButtons = document.querySelectorAll(
             '[data-testid*="help"], [aria-label*="help"], [aria-label*="快捷键"], button[title*="帮助"]'
           );
           helpButtons.forEach(el => {
+            // 确保不是工具栏内的元素
+            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
+          });
+          
+          // 隐藏实时协作按钮
+          const collabButtons = document.querySelectorAll(
+            '.collab-button, [class*="collab-button"], [data-testid="collab-button"], button[title*="实时协作"], button[title*="liveCollaboration"], [aria-label*="实时协作"]'
+          );
+          collabButtons.forEach(el => {
             el.style.display = 'none';
             el.style.visibility = 'hidden';
+          });
+          
+          // 隐藏素材库按钮
+          const hideLibraryButton = () => {
+            const libraryButtons = document.querySelectorAll(
+              '[class*="library"], [class*="Library"], [class*="DefaultSidebar.Trigger"], [class*="DefaultSidebarTrigger"], [class*="DefaultSidebar"], button[title*="library"], button[title*="Library"], button[title*="素材"], button[title*="素材库"], [aria-label*="library"], [aria-label*="Library"], [aria-label*="素材库"], [aria-label*="素材"], [data-testid*="library"], [data-testid*="Library"], [data-testid*="sidebar-trigger"], [data-testid*="default-sidebar"], [role="button"]'
+            );
+            libraryButtons.forEach(el => {
+              const text = (el.textContent || '').toLowerCase();
+              const title = (el.getAttribute('title') || '').toLowerCase();
+              const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+              const classNames = (el.className || '').toString().toLowerCase();
+              const isLibrary =
+                text.includes('library') ||
+                text.includes('素材') ||
+                title.includes('library') ||
+                title.includes('素材') ||
+                aria.includes('library') ||
+                aria.includes('素材') ||
+                classNames.includes('sidebartrigger') ||
+                classNames.includes('defaultsidebar');
+              if (isLibrary) {
+                const target = el.closest('button') ?? el;
+                target.style.display = 'none';
+                target.style.visibility = 'hidden';
+              }
+            });
+          };
+          hideLibraryButton();
+          
+          // 确保工具栏始终显示
+          const toolbars = document.querySelectorAll(
+            '.App-toolbar, [class*="App-toolbar"], [data-testid*="toolbar"]'
+          );
+          toolbars.forEach(el => {
+            el.style.display = '';
+            el.style.visibility = '';
           });
         }, 200);
         
@@ -468,6 +614,120 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         window._ponynotesUIObserver = observer;
       })();
     ''', tag: 'hideUnwantedUI');
+  }
+
+  /// 隐藏加载阶段的 Excalidraw 底图标志（闪屏）
+  /// 注意：只隐藏欢迎界面中心的LOGO，不隐藏工具栏和其他功能元素
+  Future<void> _hideLoadingLogo() async {
+    await _safeEvalJs('''
+      (function() {
+        // 立即注入CSS，在DOM加载前就隐藏
+        const style = document.createElement('style');
+        style.id = 'ponynotes-hide-loading-logo';
+        style.textContent = `
+          /* 只隐藏欢迎界面中心的LOGO和文字，不隐藏工具栏 */
+          .welcome-screen-center,
+          [class*="WelcomeScreen.Center"],
+          [class*="welcome-screen-center"],
+          .welcome-screen-center *,
+          [class*="WelcomeScreen.Center"] * {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          
+          /* 确保工具栏始终显示 */
+          .App-toolbar,
+          [class*="App-toolbar"],
+          [data-testid*="toolbar"] {
+            display: flex !important;
+            visibility: visible !important;
+          }
+        `;
+
+        // 如果样式已存在，先移除
+        const existingStyle = document.getElementById('ponynotes-hide-loading-logo');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+
+        // 立即插入到head，确保尽早生效
+        if (document.head) {
+          document.head.appendChild(style);
+        } else {
+          // 如果head还没准备好，等待DOMContentLoaded
+          document.addEventListener('DOMContentLoaded', () => {
+            document.head.appendChild(style);
+          });
+        }
+
+        // 使用MutationObserver持续监听
+        const observer = new MutationObserver(() => {
+          // 隐藏欢迎界面中心的所有内容
+          const welcomeCenters = document.querySelectorAll(
+            '.welcome-screen-center, [class*="WelcomeScreen.Center"], [class*="welcome-screen-center"]'
+          );
+          welcomeCenters.forEach(el => {
+            // 确保不是工具栏内的元素
+            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
+          });
+          
+          // 确保工具栏始终显示
+          const toolbars = document.querySelectorAll(
+            '.App-toolbar, [class*="App-toolbar"], [data-testid*="toolbar"]'
+          );
+          toolbars.forEach(el => {
+            el.style.display = '';
+            el.style.visibility = '';
+            // 确保flex布局
+            if (getComputedStyle(el).display !== 'flex' && getComputedStyle(el).display !== 'inline-flex') {
+              el.style.display = 'flex';
+            }
+          });
+        });
+
+        // 开始观察
+        observer.observe(document.body || document.documentElement, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['class', 'style']
+        });
+
+        // 立即执行一次（不延迟，避免闪现）
+        const hideWelcomeCenter = () => {
+          const welcomeCenters = document.querySelectorAll(
+            '.welcome-screen-center, [class*="WelcomeScreen.Center"], [class*="welcome-screen-center"]'
+          );
+          welcomeCenters.forEach(el => {
+            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
+          });
+          
+          // 确保工具栏显示
+          const toolbars = document.querySelectorAll(
+            '.App-toolbar, [class*="App-toolbar"], [data-testid*="toolbar"]'
+          );
+          toolbars.forEach(el => {
+            el.style.display = '';
+            el.style.visibility = '';
+          });
+        };
+
+        // 立即执行
+        hideWelcomeCenter();
+        
+        // 也延迟执行一次，确保捕获动态创建的元素
+        setTimeout(hideWelcomeCenter, 50);
+        setTimeout(hideWelcomeCenter, 200);
+
+        window._ponynotesLoadingObserver = observer;
+      })();
+    ''', tag: 'hideLoadingLogo');
   }
 
 
