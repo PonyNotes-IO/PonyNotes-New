@@ -882,33 +882,35 @@ class _MemberRoleActionListState extends State<_MemberRoleActionList> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    return DropdownButton<AFRolePB>(
-      value: _currentRole,
-      items: [
-        DropdownMenuItem(value: AFRolePB.Owner, child: Text('工作空间所有者')),
-        DropdownMenuItem(value: AFRolePB.Member, child: Text('成员')),
-        DropdownMenuItem(value: AFRolePB.Guest, child: Text('受限成员')),
-      ],
-      onChanged: (v) {
-        if (v == null) return;
-        if (v == _currentRole) return;
-        // Optimistically update UI
-        setState(() {
-          _currentRole = v;
-        });
-        // Dispatch update event
-        context.read<WorkspaceMemberBloc>().add(
-              WorkspaceMemberEvent.updateWorkspaceMember(
-                widget.member.email,
-                v,
-              ),
-            );
-      },
-      underline: const SizedBox.shrink(),
-      elevation: 0,
-      dropdownColor: Theme.of(context).cardColor,
-      style: theme.textStyle.body.standard(
-        color: theme.textColorScheme.primary,
+    return FittedBox(
+      child: DropdownButton<AFRolePB>(
+        value: _currentRole,
+        items: [
+          DropdownMenuItem(value: AFRolePB.Owner, child: Text('工作空间所有者')),
+          DropdownMenuItem(value: AFRolePB.Member, child: Text('成员')),
+          DropdownMenuItem(value: AFRolePB.Guest, child: Text('受限成员')),
+        ],
+        onChanged: (v) {
+          if (v == null) return;
+          if (v == _currentRole) return;
+          // Optimistically update UI
+          setState(() {
+            _currentRole = v;
+          });
+          // Dispatch update event
+          context.read<WorkspaceMemberBloc>().add(
+                WorkspaceMemberEvent.updateWorkspaceMember(
+                  widget.member.email,
+                  v,
+                ),
+              );
+        },
+        underline: const SizedBox.shrink(),
+        elevation: 0,
+        dropdownColor: Theme.of(context).cardColor,
+        style: theme.textStyle.body.standard(
+          color: theme.textColorScheme.primary,
+        ),
       ),
     );
   }
