@@ -182,8 +182,10 @@ class AIChatViewService {
         userId: userProfile.id,
       );
 
-      // 3. 获取私有空间视图列表
+      // 3. 获取私有空间和公共空间视图列表
       final privateViewsResult = await workspaceService.getPrivateViews();
+      final publicViewsResult = await workspaceService.getPublicViews();
+      
       final privateViews = privateViewsResult.fold(
         (views) => views,
         (error) {
@@ -191,23 +193,35 @@ class AIChatViewService {
           return <ViewPB>[];
         },
       );
+      
+      final publicViews = publicViewsResult.fold(
+        (views) => views,
+        (error) {
+          Log.error('❌ 获取公共视图列表失败: ${error.msg}');
+          return <ViewPB>[];
+        },
+      );
 
-      Log.info('📋 私有空间视图数量: ${privateViews.length}');
-      for (final view in privateViews) {
-        Log.info('   - ${view.name} (id: ${view.id}, isSpace: ${view.isSpace})');
+      // 4. 合并私有空间和公共空间
+      final allViews = [...privateViews, ...publicViews];
+      final allSpaces = allViews.where((view) => view.isSpace).toList();
+
+      Log.info('📋 所有空间视图数量: ${allSpaces.length}');
+      for (final view in allSpaces) {
+        Log.info('   - ${view.name} (id: ${view.id}, isSpace: ${view.isSpace}, permission: ${view.spacePermission})');
       }
 
-      // 4. 查找"我的AI会话"子空间（isSpace=true 且名称匹配）
-      final existingSpace = privateViews.firstWhereOrNull(
+      // 5. 查找"我的AI会话"子空间（isSpace=true 且名称匹配）
+      final existingSpace = allSpaces.firstWhereOrNull(
         (view) => view.isSpace && view.name == kAIChatSpaceName,
       );
 
       if (existingSpace != null) {
-        Log.info('✅ 找到已存在的"$kAIChatSpaceName"子空间: ${existingSpace.id}');
+        Log.info('✅ 找到已存在的"$kAIChatSpaceName"子空间: ${existingSpace.id}，类型: ${existingSpace.spacePermission}');
         return existingSpace.id;
       }
 
-      // 5. 不存在则创建"我的AI会话"子空间（Space类型）
+      // 6. 不存在则在私有空间中创建"我的AI会话"子空间（Space类型）
       Log.info('🔄 创建"$kAIChatSpaceName"子空间...');
       
       // 构建Space的extra属性

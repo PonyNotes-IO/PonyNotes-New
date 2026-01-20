@@ -5,8 +5,11 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'import_page_widgets.dart';
 import 'package:appflowy/plugins/import_page/import_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/settings/share/import_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -127,14 +130,14 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
               ),
             ),
             const SizedBox(width: 30),
-            Expanded(
-              child: ImportFileCard(
-                icon: Icons.picture_as_pdf,
-                title: "PDF",
-                onTap: () => _handleFileImport('pdf'),
-              ),
-            ),
-            const SizedBox(width: 30),
+            // Expanded(
+            //   child: ImportFileCard(
+            //     icon: Icons.picture_as_pdf,
+            //     title: "PDF",
+            //     onTap: () => _handleFileImport('pdf'),
+            //   ),
+            // ),
+            // const SizedBox(width: 30),
             Expanded(
               child: ImportFileCard(
                 icon: Icons.text_snippet,
@@ -142,32 +145,40 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
                 onTap: () => _handleFileImport('markdown'),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 30),
-        
-        // Second row: HTML, Word
-        Row(
-          children: [
+            const SizedBox(width: 30),
             Expanded(
               child: ImportFileCard(
                 icon: Icons.code,
-                title: "HTML", 
+                title: "HTML",
                 onTap: () => _handleFileImport('html'),
               ),
             ),
-            const SizedBox(width: 30),
-            Expanded(
-              child: ImportFileCard(
-                icon: Icons.description,
-                title: "Word",
-                onTap: () => _handleFileImport('word'),
-              ),
-            ),
-            const SizedBox(width: 30),
-            const Expanded(child: SizedBox()), // Empty space for alignment
           ],
         ),
+        // const SizedBox(height: 30),
+        //
+        // // Second row: HTML, Word
+        // Row(
+        //   children: [
+        //     Expanded(
+        //       child: ImportFileCard(
+        //         icon: Icons.code,
+        //         title: "HTML",
+        //         onTap: () => _handleFileImport('html'),
+        //       ),
+        //     ),
+        //     const SizedBox(width: 30),
+        //     Expanded(
+        //       child: ImportFileCard(
+        //         icon: Icons.description,
+        //         title: "Word",
+        //         onTap: () => _handleFileImport('word'),
+        //       ),
+        //     ),
+        //     const SizedBox(width: 30),
+        //     const Expanded(child: SizedBox()), // Empty space for alignment
+        //   ],
+        // ),
       ],
     );
   }
@@ -416,41 +427,68 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
   Future<ViewPB> _getOrCreateExternalImportView(String workspaceId) async {
     const externalImportName = '外部导入';
     
-    // 获取工作空间根目录下的所有公共视图
+    // 获取工作空间服务
     final workspaceService = WorkspaceService(
       workspaceId: workspaceId,
       userId: fixnum.Int64(1),
     );
     
+    // 获取私有空间和公共空间
+    final privateViewsResult = await workspaceService.getPrivateViews();
     final publicViewsResult = await workspaceService.getPublicViews();
-    final publicViews = publicViewsResult.fold(
+    
+    final privateViews = privateViewsResult.fold(
       (views) => views,
-      (error) => throw Exception('获取工作空间视图失败: $error'),
+      (error) => throw Exception('获取私有空间失败: $error'),
     );
     
-    // 检查是否已在工作空间根目录下存在"外部导入"项目
-    Log.info('检查工作空间根目录下是否已存在"外部导入"，当前视图: ${publicViews.map((v) => v.name).toList()}');
-    final existingView = publicViews.firstWhere(
-      (view) => view.name == externalImportName,
+    final publicViews = publicViewsResult.fold(
+      (views) => views,
+      (error) => throw Exception('获取公共空间失败: $error'),
+    );
+    
+    // 查找私有空间和公共空间中的空间类型视图
+    final allViews = [...privateViews, ...publicViews];
+    final allSpaces = allViews.where((view) => view.isSpace).toList();
+    
+    // 检查是否已存在"外部导入"空间
+    Log.info('检查私有空间和公共空间中是否已存在"外部导入"，当前空间: ${allSpaces.map((v) => v.name).toList()}');
+    final existingSpace = allSpaces.firstWhere(
+      (space) => space.name == externalImportName,
       orElse: () => ViewPB(),
     );
 
-    if (existingView.id.isNotEmpty) {
-      Log.info('找到已存在的"外部导入"视图，ID: ${existingView.id}');
-      return existingView;
+    if (existingSpace.id.isNotEmpty) {
+      Log.info('找到已存在的"外部导入"空间，ID: ${existingSpace.id}，类型: ${existingSpace.spacePermission}');
+      return existingSpace;
     }
 
-    // 在工作空间根目录下创建"外部导入"项目
-    Log.info('在工作空间根目录下创建新的"外部导入"项目');
-    final result = await ViewBackendService.createView(
-      parentViewId: workspaceId,
+    // 在私有空间中创建"外部导入"空间
+    Log.info('在私有空间中创建新的"外部导入"空间');
+    
+    // 创建空间（使用与AI会话相同的逻辑）
+    final spaceExtra = {
+      ViewExtKeys.isSpaceKey: true,
+      ViewExtKeys.spaceIconKey: '📥',
+      ViewExtKeys.spaceIconColorKey: '#FF6B6B',
+      ViewExtKeys.spacePermissionKey: SpacePermission.private.index,
+      ViewExtKeys.spaceCreatedAtKey: DateTime.now().millisecondsSinceEpoch,
+    };
+    
+    final result = await workspaceService.createView(
       name: externalImportName,
-      layoutType: ViewLayoutPB.Document,
+      viewSection: ViewSectionPB.Private,
+      layout: ViewLayoutPB.Document,
+      extra: jsonEncode(spaceExtra),
+      setAsCurrent: false,
     );
 
     return result.fold(
-      (view) => view,
-      (error) => throw Exception('创建外部导入项目失败: $error'),
+      (view) {
+        Log.info('成功创建"外部导入"空间，ID: ${view.id}');
+        return view;
+      },
+      (error) => throw Exception('创建外部导入空间失败: $error'),
     );
   }
 
