@@ -595,12 +595,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   /// 模型ID到Name的映射表
-  /// 因为前端AIModel使用ID（如"qwen-turbo"），而后端AIModelPB只有name（如"通义千问 Turbo"）
+  /// 因为前端AIModel使用ID（如"qwen3-vl-plus"），而后端AIModelPB只有name（如"通义千问"）
   static const Map<String, String> _modelIdToNameMap = {
     'deepseek-chat': 'DeepSeek',
-    'qwen-turbo': '通义千问 Turbo',
-    'qwen-max': '通义千问 Max',
-    'qwen3-vl-plus': '通义千问 VL Plus',
+    'qwen3-vl-plus': '通义千问',
     'doubao': '豆包',
   };
 

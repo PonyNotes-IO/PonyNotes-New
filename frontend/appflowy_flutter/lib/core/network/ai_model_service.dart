@@ -108,15 +108,9 @@ class AIModelService {
         isDefault: true,
       ),
       AIModel(
-        id: 'qwen-turbo',
-        name: '通义千问 Turbo',
-        description: '阿里云通义千问快速版',
-        isDefault: false,
-      ),
-      AIModel(
-        id: 'qwen-max',
-        name: '通义千问 Max',
-        description: '阿里云通义千问旗舰版',
+        id: 'qwen3-vl-plus',
+        name: '通义千问',
+        description: '阿里云通义千问qwen3',
         isDefault: false,
       ),
       AIModel(
