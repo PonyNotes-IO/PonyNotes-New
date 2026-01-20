@@ -47,37 +47,37 @@ class _MobileFavoriteSpaceState extends State<MobileFavoriteSpace>
           create: (_) => FavoriteBloc()..add(const FavoriteEvent.initial()),
         ),
       ],
-      child: BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
-        listener: (context, state) =>
-            context.read<FavoriteBloc>().add(const FavoriteEvent.initial()),
-        child: MultiBlocListener(
-          listeners: [
-            BlocListener<SidebarSectionsBloc, SidebarSectionsState>(
-              listenWhen: (p, c) =>
-                  p.lastCreatedRootView?.id != c.lastCreatedRootView?.id,
-              listener: (context, state) =>
-                  context.pushView(state.lastCreatedRootView!),
-            ),
-          ],
-          child: Builder(
-            builder: (context) {
-              final favoriteState = context.watch<FavoriteBloc>().state;
-
-              if (favoriteState.isLoading) {
-                return const SizedBox.shrink();
-              }
-
-              if (favoriteState.views.isEmpty) {
-                return const EmptySpacePlaceholder(
-                  type: MobilePageCardType.favorite,
-                );
-              }
-
-              return _FavoriteViews(
-                favoriteViews: favoriteState.views.reversed.toList(),
-              );
-            },
+      child: MultiBlocListener(
+        listeners: [
+          BlocListener<SidebarSectionsBloc, SidebarSectionsState>(
+            listenWhen: (p, c) =>
+                p.lastCreatedRootView?.id != c.lastCreatedRootView?.id,
+            listener: (context, state) =>
+                context.pushView(state.lastCreatedRootView!),
           ),
+          BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+              listener: (context, state) =>
+                  context.read<FavoriteBloc>().add(const FavoriteEvent.initial()),
+          ),
+        ],
+        child: Builder(
+          builder: (context) {
+            final favoriteState = context.watch<FavoriteBloc>().state;
+
+            if (favoriteState.isLoading) {
+              return const SizedBox.shrink();
+            }
+
+            if (favoriteState.views.isEmpty) {
+              return const EmptySpacePlaceholder(
+                type: MobilePageCardType.favorite,
+              );
+            }
+
+            return _FavoriteViews(
+              favoriteViews: favoriteState.views.reversed.toList(),
+            );
+          },
         ),
       ),
     );

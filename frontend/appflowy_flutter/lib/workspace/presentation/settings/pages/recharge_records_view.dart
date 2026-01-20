@@ -19,7 +19,7 @@ class RechargeRecordsView extends StatefulWidget {
 
 class _RechargeRecordsViewState extends State<RechargeRecordsView> {
   static const int _pageSize = 20;
-  late final List<_RechargeRecord> _records = _generateMockRecords();
+  late final List<_RechargeRecord> _records = []; //_generateMockRecords();
   int _visibleCount = _pageSize;
   bool _isLoadingMore = false;
 
@@ -69,11 +69,19 @@ class _RechargeRecordsViewState extends State<RechargeRecordsView> {
                       onRefresh: _onRefresh,
                       child: NotificationListener<ScrollNotification>(
                         onNotification: _handleScrollNotification,
-                        child: ListView.builder(
+                        child: _records.isEmpty ?
+                             Center(
+                                  child: FlowyText(
+                                    '暂无充值记录',
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                )
+                             : ListView.builder(
                           physics: const AlwaysScrollableScrollPhysics(),
-                          itemCount: _visibleCount + 1,
+                          itemCount: _records.length + 1,
                           itemBuilder: (context, index) {
-                            if (index == _visibleCount) {
+                            if (index == _records.length) {
                               return _buildLoadMoreFooter(theme);
                             }
                             final record = _records[index];
@@ -373,7 +381,6 @@ List<_RechargeRecord> _generateMockRecords() {
   const prices = ['3元', '30元', '5元'];
   const amounts = [3.0, 30.0, 5.0];
   const payMethods = ['微信扫码支付', '支付宝扫码支付', '银行卡'];
-
   return List.generate(40, (index) {
     final productIndex = index % products.length;
     final date = DateTime(2025, 9, 12).subtract(Duration(days: index * 2));
