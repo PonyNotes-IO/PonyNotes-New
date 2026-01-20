@@ -1409,22 +1409,18 @@ class _SpaceRowState extends State<_SpaceRow> {
                     ],
                   ),
                   const VSpace(12),
-                  // Members list header row
+                  // Members list header row (only Name + Role)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6.0),
                     child: Row(
                       children: [
                         Expanded(
-                            flex: 4,
+                            flex: 6,
                             child: FlowyText('名称',
                                 fontSize: 12, color: Theme.of(ctx).hintColor)),
                         Expanded(
-                            flex: 3,
+                            flex: 4,
                             child: FlowyText('角色',
-                                fontSize: 12, color: Theme.of(ctx).hintColor)),
-                        Expanded(
-                            flex: 3,
-                            child: FlowyText('操作',
                                 fontSize: 12, color: Theme.of(ctx).hintColor)),
                       ],
                     ),
@@ -1433,7 +1429,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                   const VSpace(8),
                   // Members list (show members who have joined this collab)
                   Expanded(
-                    child: members.isEmpty
+                        child: members.isEmpty
                         ? Center(child: FlowyText('无法加载成员或无成员', fontSize: 14))
                         : ListView.builder(
                             itemCount: members.length,
@@ -1454,8 +1450,9 @@ class _SpaceRowState extends State<_SpaceRow> {
                                     const EdgeInsets.symmetric(vertical: 8.0),
                                 child: Row(
                                   children: [
+                                    // Name column
                                     Expanded(
-                                      flex: 4,
+                                      flex: 6,
                                       child: Row(
                                         children: [
                                           CircleAvatar(
@@ -1478,39 +1475,13 @@ class _SpaceRowState extends State<_SpaceRow> {
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
-                                                Row(
-                                                  children: [
-                                                    FlowyText(
-                                                        m.name.isNotEmpty
-                                                            ? m.name
-                                                            : email,
-                                                        fontSize: 14,
-                                                        fontWeight:
-                                                            FontWeight.w500),
-                                                    const HSpace(6),
-                                                    Container(
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 8,
-                                                          vertical: 4),
-                                                      decoration: BoxDecoration(
-                                                        color: Theme.of(ctx)
-                                                            .cardColor,
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(8),
-                                                      ),
-                                                      child: FlowyText(
-                                                        isOwner
-                                                            ? '团队协作区所有者'
-                                                            : '团队协作区成员',
-                                                        fontSize: 12,
-                                                        color: Theme.of(ctx)
-                                                            .hintColor,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
+                                                FlowyText(
+                                                    m.name.isNotEmpty
+                                                        ? m.name
+                                                        : email,
+                                                    fontSize: 14,
+                                                    fontWeight:
+                                                        FontWeight.w500),
                                                 const VSpace(2),
                                                 FlowyText(email,
                                                     fontSize: 12,
@@ -1522,18 +1493,12 @@ class _SpaceRowState extends State<_SpaceRow> {
                                         ],
                                       ),
                                     ),
+                                    // Role column
                                     Expanded(
-                                      flex: 3,
+                                      flex: 4,
                                       child: FlowyText(
-                                          isOwner ? '所有者' : '成员',
+                                          isOwner ? '团队协作区所有者' : '团队协作区成员',
                                           fontSize: 14),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Align(
-                                        alignment: Alignment.centerRight,
-                                        child: const SizedBox.shrink(),
-                                      ),
                                     ),
                                   ],
                                 ),

@@ -542,15 +542,59 @@ class UserBackendService implements IUserBackendService {
 
       if (response.statusCode == 200) {
         final body = response.body;
-        final List<dynamic> parsed = body.isNotEmpty ? jsonDecode(body) as List<dynamic> : [];
-        final members = parsed.map((e) {
+        dynamic parsed;
+        try {
+          parsed = body.isNotEmpty ? jsonDecode(body) : null;
+        } catch (e) {
+          Log.error('[UserBackendService] Failed to parse getCollabMembers response: $e');
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.Internal
+              ..msg = 'Invalid JSON response',
+          );
+        }
+
+        // Normalize to a List<dynamic> if possible.
+        List<dynamic> rawList = [];
+        if (parsed == null) {
+          rawList = [];
+        } else if (parsed is List) {
+          rawList = parsed;
+        } else if (parsed is Map) {
+          // Common shapes:
+          // 1) { "data": [...] } (AppResponse wrapper)
+          // 2) { "code": ..., "msg": ... } (error)
+          if (parsed.containsKey('data') && parsed['data'] is List) {
+            rawList = parsed['data'] as List<dynamic>;
+          } else if (parsed.containsKey('code') && parsed['code'] != 0) {
+            final errMsg = (parsed['msg'] ?? parsed['message'] ?? parsed['error'] ?? 'Unknown error').toString();
+            Log.error('[UserBackendService] getCollabMembers returned error: $errMsg');
+            return FlowyResult.failure(
+              FlowyError()
+                ..code = ErrorCode.Internal
+                ..msg = errMsg,
+            );
+          } else {
+            // Unexpected map shape — try to see if it's a single member map
+            // which we can convert into a single-element list.
+            rawList = [parsed];
+          }
+        } else {
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.Internal
+              ..msg = 'Unexpected response shape',
+          );
+        }
+
+        final members = rawList.map((e) {
           final map = e as Map<String, dynamic>;
           return CollabMember(
-            uid: map['uid'] as int,
+            uid: (map['uid'] is num) ? (map['uid'] as num).toInt() : int.tryParse(map['uid']?.toString() ?? '0') ?? 0,
             name: (map['name'] as String?) ?? '',
             email: map['email'] as String?,
             avatarUrl: map['avatar_url'] as String?,
-            permissionId: (map['permission_id'] as num).toInt(),
+            permissionId: (map['permission_id'] is num) ? (map['permission_id'] as num).toInt() : int.tryParse(map['permission_id']?.toString() ?? '0') ?? 0,
           );
         }).toList();
         return FlowyResult.success(members);
