@@ -31,10 +31,13 @@ class ExcalidrawWebView extends StatefulWidget {
   final Function(String error)? onError;
 
   @override
-  State<ExcalidrawWebView> createState() => _ExcalidrawWebViewState();
+  State<ExcalidrawWebView> createState() => ExcalidrawWebViewState();
 }
 
-class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
+/// ExcalidrawWebView的State类，暴露公共方法供外部调用
+class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
+
+  // 内部状态（保持原有实现）
   InAppWebViewController? _controller;
   bool _isLoading = true;
   String? _loadingError;
@@ -207,6 +210,12 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // ''');
       // debug log removed
 
+      // 隐藏主菜单（汉堡菜单）
+      await _hideMainMenu();
+      
+      // 隐藏欢迎界面和其他不需要的UI元素
+      await _hideUnwantedUI();
+
       // 设置主题
       final theme = Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
       // debug log removed
@@ -223,6 +232,242 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       Log.error('❌ [ExcalidrawWebView] Initialization failed: $e');
       widget.onError?.call('初始化Excalidraw失败: $e');
     }
+  }
+
+  /// 隐藏Excalidraw主菜单
+  Future<void> _hideMainMenu() async {
+    // 使用CSS和JavaScript隐藏主菜单
+    await _safeEvalJs('''
+      (function() {
+        // 注入CSS隐藏菜单
+        const style = document.createElement('style');
+        style.id = 'ponynotes-hide-menu-style';
+        style.textContent = `
+          /* 隐藏主菜单按钮 */
+          .main-menu-trigger,
+          [data-testid="main-menu-trigger"],
+          button[aria-label*="menu"],
+          button[aria-label*="Menu"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          
+          /* 隐藏菜单容器 */
+          .main-menu-dropdown,
+          .dropdown-menu-content[data-placement*="bottom"] {
+            display: none !important;
+          }
+        `;
+        
+        // 如果样式已存在，先移除
+        const existingStyle = document.getElementById('ponynotes-hide-menu-style');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+        
+        document.head.appendChild(style);
+        
+        // 使用MutationObserver持续监听并隐藏菜单
+        const observer = new MutationObserver(function(mutations) {
+          // 隐藏菜单按钮
+          const menuTriggers = document.querySelectorAll(
+            '.main-menu-trigger, [data-testid="main-menu-trigger"], button[aria-label*="menu"], button[aria-label*="Menu"]'
+          );
+          menuTriggers.forEach(trigger => {
+            trigger.style.display = 'none';
+            trigger.style.visibility = 'hidden';
+          });
+          
+          // 隐藏菜单容器
+          const menuContainers = document.querySelectorAll(
+            '.main-menu-dropdown, .dropdown-menu-content'
+          );
+          menuContainers.forEach(container => {
+            if (container.closest('.main-menu-trigger')) {
+              container.style.display = 'none';
+            }
+          });
+        });
+        
+        // 开始观察
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['style', 'class']
+        });
+        
+        // 立即执行一次隐藏
+        setTimeout(() => {
+          const menuTriggers = document.querySelectorAll(
+            '.main-menu-trigger, [data-testid="main-menu-trigger"], button[aria-label*="menu"], button[aria-label*="Menu"]'
+          );
+          menuTriggers.forEach(trigger => {
+            trigger.style.display = 'none';
+            trigger.style.visibility = 'hidden';
+          });
+        }, 100);
+        
+        // 保存observer到window，以便后续清理
+        window._ponynotesMenuObserver = observer;
+      })();
+    ''', tag: 'hideMainMenu');
+  }
+
+  /// 隐藏不需要的UI元素（欢迎界面、Excalidraw+按钮、帮助按钮等）
+  Future<void> _hideUnwantedUI() async {
+    await _safeEvalJs('''
+      (function() {
+        // 注入CSS隐藏不需要的UI元素
+        const style = document.createElement('style');
+        style.id = 'ponynotes-hide-ui-style';
+        style.textContent = `
+          /* 隐藏欢迎界面 */
+          .welcome-screen,
+          [class*="WelcomeScreen"],
+          [class*="welcome-screen"],
+          .welcome-screen-center,
+          [data-testid*="welcome"],
+          [data-testid*="Welcome"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          
+          /* 隐藏Excalidraw+按钮和横幅 */
+          .plus-banner,
+          [class*="plus-banner"],
+          [class*="ExcalidrawPlus"],
+          [href*="excalidraw.com/plus"],
+          button:has-text("Excalidraw+"),
+          a:has-text("Excalidraw+") {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          
+          /* 隐藏帮助按钮和快捷键按钮 */
+          [data-testid*="help"],
+          [data-testid*="Help"],
+          [aria-label*="help"],
+          [aria-label*="Help"],
+          [aria-label*="快捷键"],
+          [aria-label*="shortcut"],
+          [aria-label*="Shortcut"],
+          button[title*="帮助"],
+          button[title*="help"],
+          button[title*="Help"],
+          button[title*="快捷键"],
+          .help-button,
+          .shortcut-button,
+          [class*="help-button"],
+          [class*="shortcut-button"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
+          
+          /* 隐藏欢迎界面的提示元素 */
+          .welcome-screen-hint,
+          [class*="WelcomeScreen.Hints"],
+          [class*="welcome-screen-hint"] {
+            display: none !important;
+            visibility: hidden !important;
+          }
+        `;
+        
+        // 如果样式已存在，先移除
+        const existingStyle = document.getElementById('ponynotes-hide-ui-style');
+        if (existingStyle) {
+          existingStyle.remove();
+        }
+        
+        document.head.appendChild(style);
+        
+        // 使用MutationObserver持续监听并隐藏元素
+        const observer = new MutationObserver(function(mutations) {
+          // 隐藏欢迎界面
+          const welcomeScreens = document.querySelectorAll(
+            '.welcome-screen, [class*="WelcomeScreen"], [class*="welcome-screen"], [data-testid*="welcome"], [data-testid*="Welcome"]'
+          );
+          welcomeScreens.forEach(el => {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+          });
+          
+          // 隐藏Excalidraw+按钮
+          const plusButtons = document.querySelectorAll(
+            '.plus-banner, [class*="plus-banner"], [class*="ExcalidrawPlus"], [href*="excalidraw.com/plus"], a[href*="/plus"]'
+          );
+          plusButtons.forEach(el => {
+            const text = el.textContent || '';
+            if (text.includes('Excalidraw+') || el.href?.includes('plus')) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
+          });
+          
+          // 隐藏帮助和快捷键按钮
+          const helpButtons = document.querySelectorAll(
+            '[data-testid*="help"], [data-testid*="Help"], [aria-label*="help"], [aria-label*="Help"], [aria-label*="快捷键"], button[title*="帮助"], button[title*="help"], .help-button, [class*="help-button"]'
+          );
+          helpButtons.forEach(el => {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+          });
+          
+          // 隐藏欢迎界面中心内容
+          const welcomeCenter = document.querySelectorAll(
+            '.welcome-screen-center, [class*="WelcomeScreen.Center"]'
+          );
+          welcomeCenter.forEach(el => {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+          });
+        });
+        
+        // 开始观察
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['style', 'class', 'href']
+        });
+        
+        // 立即执行一次隐藏
+        setTimeout(() => {
+          // 隐藏欢迎界面
+          const welcomeScreens = document.querySelectorAll(
+            '.welcome-screen, [class*="WelcomeScreen"], [class*="welcome-screen"], [data-testid*="welcome"]'
+          );
+          welcomeScreens.forEach(el => {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+          });
+          
+          // 隐藏Excalidraw+按钮
+          const plusButtons = document.querySelectorAll(
+            '.plus-banner, [class*="plus-banner"], [href*="excalidraw.com/plus"], a[href*="/plus"]'
+          );
+          plusButtons.forEach(el => {
+            const text = el.textContent || '';
+            if (text.includes('Excalidraw+') || el.href?.includes('plus')) {
+              el.style.display = 'none';
+              el.style.visibility = 'hidden';
+            }
+          });
+          
+          // 隐藏帮助按钮
+          const helpButtons = document.querySelectorAll(
+            '[data-testid*="help"], [aria-label*="help"], [aria-label*="快捷键"], button[title*="帮助"]'
+          );
+          helpButtons.forEach(el => {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+          });
+        }, 200);
+        
+        // 保存observer到window
+        window._ponynotesUIObserver = observer;
+      })();
+    ''', tag: 'hideUnwantedUI');
   }
 
 
@@ -252,32 +497,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     }
   }
 
-  /// 获取当前白板数据
-  Future<void> getData() async {
-    try {
-      await _safeEvalJs('''
-        console.log('window.getExcalidrawData',window.getExcalidrawData);
-        if (window.getExcalidrawData) {
-          window.getExcalidrawData();
-        }
-      ''', tag: 'getData');
-    } catch (e) {
-      widget.onError?.call('获取数据失败: $e');
-    }
-  }
 
-  /// 加载白板数据
-  Future<void> loadData(Map<String, dynamic> data) async {
-    try {
-      await _safeEvalJs('''
-        if (window.loadExcalidrawData) {
-          window.loadExcalidrawData(${jsonEncode(data)});
-        }
-      ''', tag: 'loadData');
-    } catch (e) {
-      widget.onError?.call('加载数据失败: $e');
-    }
-  }
 
   /// 清空画布
   Future<void> clearCanvas() async {
@@ -318,7 +538,7 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     }
   }
 
-  /// 更新主题
+  /// 更新主题（公共方法，供外部调用）
   Future<void> updateTheme(String theme) async {
     try {
       await _safeEvalJs('''
@@ -329,6 +549,26 @@ class _ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     } catch (e) {
       widget.onError?.call('更新主题失败: $e');
     }
+  }
+
+  /// 加载数据（公共方法，供外部调用）
+  Future<void> loadData(Map<String, dynamic> data) async {
+    try {
+      await _safeEvalJs('''
+        if (window.loadExcalidrawData) {
+          window.loadExcalidrawData(${jsonEncode(data)});
+        }
+      ''', tag: 'loadData');
+    } catch (e) {
+      widget.onError?.call('加载数据失败: $e');
+    }
+  }
+
+  /// 获取当前数据（公共方法，供外部调用）
+  Future<Map<String, dynamic>?> getData() async {
+    // TODO: 通过JavaScript获取当前白板数据
+    // 这需要Excalidraw提供相应的API
+    return null;
   }
 
   @override

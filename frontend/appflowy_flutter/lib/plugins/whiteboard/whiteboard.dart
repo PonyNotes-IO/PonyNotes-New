@@ -1,10 +1,14 @@
 library;
 
+import 'dart:convert';
+import 'dart:io';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
@@ -15,6 +19,8 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
+import 'package:flowy_infra/file_picker/file_picker_service.dart';
+import 'package:path_provider/path_provider.dart';
 
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
@@ -163,6 +169,12 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   
   // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
   WhiteboardCollabAdapter? _collabAdapter;
+  
+  // ExcalidrawWebView的GlobalKey，用于调用其方法
+  final GlobalKey<ExcalidrawWebViewState> _webViewKey = GlobalKey<ExcalidrawWebViewState>();
+  
+  // 主题监听
+  Brightness? _lastBrightness;
 
   @override
   void initState() {
@@ -302,6 +314,20 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   Widget build(BuildContext context) {
     Log.debug('🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData');
     
+    // 监听主题变化
+    final appearanceCubit = context.watch<AppearanceSettingsCubit>();
+    final currentBrightness = Theme.of(context).brightness;
+    
+    // 如果主题发生变化，更新Excalidraw主题
+    if (_lastBrightness != null && _lastBrightness != currentBrightness) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _webViewKey.currentState?.updateTheme(
+          currentBrightness == Brightness.dark ? 'dark' : 'light',
+        );
+      });
+    }
+    _lastBrightness = currentBrightness;
+    
     if (_isLoadingData) {
       Log.debug('⏳ [WhiteboardPage] Showing loading indicator');
       return Scaffold(
@@ -360,7 +386,22 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
               ],
             ),
             actions: [
-              // 导出按钮
+              // 导入按钮
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.upload_file, size: 22),
+                  tooltip: '导入',
+                  onPressed: _importWhiteboard,
+                  style: IconButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              // 导出按钮（下拉菜单）
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
@@ -374,18 +415,23 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                   ),
                   offset: const Offset(0, 8),
                   onSelected: (format) {
-                    // 导出功能将在后续版本中实现
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('导出 $format 格式功能将在后续版本中实现'),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    );
+                    _exportWhiteboard(format);
                   },
                   itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'excalidraw',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.data_object,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 12),
+                          const Text('源文件 (.excalidraw)'),
+                        ],
+                      ),
+                    ),
                     PopupMenuItem(
                       value: 'png',
                       child: Row(
@@ -396,7 +442,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                             color: Theme.of(context).colorScheme.primary,
                           ),
                           const SizedBox(width: 12),
-                          const Text('导出为 PNG'),
+                          const Text('图片 (PNG)'),
                         ],
                       ),
                     ),
@@ -410,21 +456,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                             color: Theme.of(context).colorScheme.primary,
                           ),
                           const SizedBox(width: 12),
-                          const Text('导出为 SVG'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'json',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.data_object,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 12),
-                          const Text('导出为 JSON'),
+                          const Text('图片 (SVG)'),
                         ],
                       ),
                     ),
@@ -477,13 +509,194 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     Log.debug('🔑 [Whiteboard] Creating ExcalidrawWebView with unique key: $uniqueKey');
     
     return ExcalidrawWebView(
-      key: ValueKey(uniqueKey), // 全局唯一的Key，确保PlatformView正确创建和清理
+      key: _webViewKey, // 使用GlobalKey以便调用其方法
       viewId: widget.view.id,
       initialData: _initialData,
       onDataChanged: _onWhiteboardDataChanged,
       onExport: _onWhiteboardExport,
       onError: _onWhiteboardError,
     );
+  }
+
+  /// 导入白板文件
+  Future<void> _importWhiteboard() async {
+    try {
+      final filePicker = getIt<FilePickerService>();
+      final result = await filePicker.pickFiles(
+        dialogTitle: '选择Excalidraw文件',
+        type: FileType.custom,
+        allowedExtensions: ['excalidraw', 'json'],
+      );
+
+      if (result == null || result.files.isEmpty) {
+        return; // 用户取消了选择
+      }
+
+      final file = result.files.first;
+      if (file.path == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('无法读取文件路径'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // 读取文件内容
+      final fileContent = await File(file.path!).readAsString();
+      final data = jsonDecode(fileContent) as Map<String, dynamic>;
+
+      // 验证数据格式
+      if (!_isValidExcalidrawData(data)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('文件格式无效，请选择有效的Excalidraw文件'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // 确认是否覆盖当前内容
+      final shouldImport = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('导入确认'),
+          content: const Text('导入文件将替换当前白板内容，是否继续？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('确认'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldImport == true) {
+        // 加载数据到Excalidraw
+        await _webViewKey.currentState?.loadData(data);
+        
+        // 保存到后端
+        final service = WhiteboardDataService();
+        await service.saveWhiteboardData(widget.view.id, data);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('导入成功'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Import failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('导入失败: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// 导出白板
+  Future<void> _exportWhiteboard(String format) async {
+    try {
+      if (format == 'excalidraw') {
+        // 导出为源文件
+        await _exportAsSourceFile();
+      } else if (format == 'png' || format == 'svg') {
+        // 导出为图片
+        await _exportAsImage(format);
+      }
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Export failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('导出失败: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// 导出为源文件
+  Future<void> _exportAsSourceFile() async {
+    try {
+      // 获取当前白板数据
+      final service = WhiteboardDataService();
+      final data = await service.loadWhiteboardData(widget.view.id);
+
+      // 转换为JSON字符串
+      final jsonString = const JsonEncoder.withIndent('  ').convert(data);
+
+      // 选择保存位置
+      final filePicker = getIt<FilePickerService>();
+      final savePath = await filePicker.saveFile(
+        dialogTitle: '保存Excalidraw文件',
+        fileName: '${widget.view.name}.excalidraw',
+        type: FileType.custom,
+        allowedExtensions: ['excalidraw'],
+      );
+
+      if (savePath == null) {
+        return; // 用户取消了保存
+      }
+
+      // 保存文件
+      final file = File(savePath);
+      await file.writeAsString(jsonString);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('导出成功'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Export source file failed: $e');
+      rethrow;
+    }
+  }
+
+  /// 导出为图片
+  Future<void> _exportAsImage(String format) async {
+    // 通过JavaScript调用Excalidraw的导出API
+    // 注意：这需要Excalidraw提供相应的API
+    // 暂时显示提示
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('图片导出功能（$format）将在后续版本中实现'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+    
+    // TODO: 实现图片导出
+    // 1. 通过JavaScript调用Excalidraw的导出API
+    // 2. 获取图片数据（base64或blob）
+    // 3. 保存为文件
+  }
+
+  /// 验证是否为有效的Excalidraw数据格式
+  bool _isValidExcalidrawData(Map<String, dynamic> data) {
+    return data.containsKey('type') &&
+        data['type'] == 'excalidraw' &&
+        data.containsKey('elements') &&
+        data['elements'] is List;
   }
 }
 

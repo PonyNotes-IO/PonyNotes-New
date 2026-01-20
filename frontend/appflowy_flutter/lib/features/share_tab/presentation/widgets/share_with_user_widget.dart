@@ -85,7 +85,33 @@ class _ShareWithUserWidgetState extends State<ShareWithUserWidget> {
   void _onTextChanged() {
     setState(() {
       final texts = effectiveController.text.trim().split(',');
-      isButtonEnabled = texts.isNotEmpty && texts.every(isEmail);
+      isButtonEnabled = texts.isNotEmpty && texts.every(_isValidEmailOrPhone);
     });
+  }
+
+  /// 验证邮箱或手机号格式
+  /// 支持：
+  /// - 邮箱：包含@符号的标准邮箱格式
+  /// - 手机号：纯数字或以+开头的数字（至少6位，最多15位）
+  bool _isValidEmailOrPhone(String input) {
+    if (input.isEmpty) return false;
+    
+    // 检查是否是邮箱（包含@符号）
+    if (input.contains('@')) {
+      return isEmail(input);
+    }
+    
+    // 检查是否是手机号（纯数字或以+开头）
+    String cleaned = input.trim();
+    if (cleaned.startsWith('+')) {
+      cleaned = cleaned.substring(1);
+    }
+    if (cleaned.isNotEmpty && RegExp(r'^\d+$').hasMatch(cleaned)) {
+      final len = cleaned.length;
+      // 手机号长度一般在6-15位之间（与后端验证逻辑一致）
+      return len >= 6 && len <= 15;
+    }
+    
+    return false;
   }
 }
