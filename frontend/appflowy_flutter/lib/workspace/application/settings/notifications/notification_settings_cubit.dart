@@ -46,12 +46,29 @@ class NotificationSettingsCubit extends Cubit<NotificationSettingsState> {
       final headers = await _getAuthHeaders();
       final resp = await http.get(Uri.parse('${getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_url}/api/user/notification-preferences'), headers: headers);
       if (resp.statusCode == 200) {
-        final map = json.decode(resp.body);
-        atMeServer = map['notify_at_me'] as bool?;
-        pendingServer = map['notify_pending'] as bool?;
-        permissionChangeServer = map['notify_permission_change'] as bool?;
-        joinTeamServer = map['notify_join_team'] as bool?;
-        clipServer = map['notify_clip'] as bool?;
+        final map = json.decode(resp.body) as Map?;
+        if (map != null && map.isNotEmpty){
+          final mapNew = map['data'] as Map?;
+          if(mapNew != null && mapNew.isNotEmpty){
+            atMeServer = mapNew['notify_at_me'] as bool?;
+            pendingServer = mapNew['notify_pending'] as bool?;
+            permissionChangeServer = mapNew['notify_permission_change'] as bool?;
+            joinTeamServer = mapNew['notify_join_team'] as bool?;
+            clipServer = mapNew['notify_clip'] as bool?;
+          } else {
+            atMeServer = _notificationSettings.notifyAtMe;
+            pendingServer = _notificationSettings.notifyPending;
+            permissionChangeServer = _notificationSettings.notifyPermissionChange;
+            joinTeamServer = _notificationSettings.notifyJoinTeam;
+            clipServer = _notificationSettings.notifyClip;
+          }
+        } else {
+          atMeServer = _notificationSettings.notifyAtMe;
+          pendingServer = _notificationSettings.notifyPending;
+          permissionChangeServer = _notificationSettings.notifyPermissionChange;
+          joinTeamServer = _notificationSettings.notifyJoinTeam;
+          clipServer = _notificationSettings.notifyClip;
+        }
       } else {
         atMeServer = _notificationSettings.notifyAtMe;
         pendingServer = _notificationSettings.notifyPending;
