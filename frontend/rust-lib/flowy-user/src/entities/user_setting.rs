@@ -252,15 +252,46 @@ impl std::default::Default for DateTimeSettingsPB {
 
 #[derive(ProtoBuf, Serialize, Deserialize, Debug, Clone)]
 pub struct NotificationSettingsPB {
+  /// 总开关：是否允许应用展示任何通知
   #[pb(index = 1)]
   #[serde(default)]
   pub notifications_enabled: bool,
+
+  /// 分类型：@我/提及
+  #[pb(index = 2)]
+  #[serde(default)]
+  pub notify_at_me: bool,
+
+  /// 分类型：待处理（审批等）
+  #[pb(index = 3)]
+  #[serde(default)]
+  pub notify_pending: bool,
+
+  /// 分类型：权限变更
+  #[pb(index = 4)]
+  #[serde(default)]
+  pub notify_permission_change: bool,
+
+  /// 分类型：加入团队/协作
+  #[pb(index = 5)]
+  #[serde(default)]
+  pub notify_join_team: bool,
+
+  /// 分类型：剪藏通知
+  #[pb(index = 6)]
+  #[serde(default)]
+  pub notify_clip: bool,
 }
 
 impl std::default::Default for NotificationSettingsPB {
   fn default() -> Self {
     NotificationSettingsPB {
       notifications_enabled: true,
+      notify_at_me: true,
+      notify_pending: true,
+      notify_permission_change: true,
+      notify_join_team: true,
+      notify_clip: true,
     }
   }
 }

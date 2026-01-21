@@ -913,7 +913,9 @@
         "multipleChoice": "选择更多"
       },
       "settings": {
-        "settings": "设置"
+        "settings": "设置",
+        "markAllAsRead": "全部标记为已读",
+        "archiveAll": "全部归档"
       },
       "tabs": {
         "unread": "未读"

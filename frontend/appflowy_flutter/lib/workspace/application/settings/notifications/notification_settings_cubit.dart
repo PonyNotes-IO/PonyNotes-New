@@ -2,13 +2,16 @@ import 'dart:async';
 
 import 'dart:convert';
 import 'package:appflowy/core/config/kv.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:http/http.dart' as http;
 import 'package:appflowy/core/config/kv_keys.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/user/application/user_settings_service.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_setting.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -33,9 +36,6 @@ class NotificationSettingsCubit extends Cubit<NotificationSettingsState> {
       _notificationSettings = NotificationSettingsPB();
     }
 
-    final showNotificationSetting = await getIt<KeyValueStorage>()
-        .getWithFormat(KVKeys.showNotificationIcon, (v) => bool.parse(v));
-
     // Try fetch per-type settings from backend first
     bool? atMeServer;
     bool? pendingServer;
@@ -43,7 +43,8 @@ class NotificationSettingsCubit extends Cubit<NotificationSettingsState> {
     bool? joinTeamServer;
     bool? clipServer;
     try {
-      final resp = await http.get(Uri.parse('${getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_url}/api/user/notification-preferences'));
+      final headers = await _getAuthHeaders();
+      final resp = await http.get(Uri.parse('${getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_url}/api/user/notification-preferences'), headers: headers);
       if (resp.statusCode == 200) {
         final map = json.decode(resp.body);
         atMeServer = map['notify_at_me'] as bool?;
@@ -51,30 +52,23 @@ class NotificationSettingsCubit extends Cubit<NotificationSettingsState> {
         permissionChangeServer = map['notify_permission_change'] as bool?;
         joinTeamServer = map['notify_join_team'] as bool?;
         clipServer = map['notify_clip'] as bool?;
+      } else {
+        atMeServer = _notificationSettings.notifyAtMe;
+        pendingServer = _notificationSettings.notifyPending;
+        permissionChangeServer = _notificationSettings.notifyPermissionChange;
+        joinTeamServer = _notificationSettings.notifyJoinTeam;
+        clipServer = _notificationSettings.notifyClip;
       }
     } catch (_) {}
-
-    // load per-type notification settings from local KV (frontend first), fallback to server, else default true
-    final atMeLocal = await getIt<KeyValueStorage>()
-        .getWithFormat(KVKeys.notificationAtMe, (v) => bool.parse(v));
-    final pendingLocal = await getIt<KeyValueStorage>()
-        .getWithFormat(KVKeys.notificationPending, (v) => bool.parse(v));
-    final permissionChangeLocal = await getIt<KeyValueStorage>()
-        .getWithFormat(KVKeys.notificationPermissionChange, (v) => bool.parse(v));
-    final joinTeamLocal = await getIt<KeyValueStorage>()
-        .getWithFormat(KVKeys.notificationJoinTeam, (v) => bool.parse(v));
-    final clipLocal = await getIt<KeyValueStorage>()
-        .getWithFormat(KVKeys.notificationClip, (v) => bool.parse(v));
 
     emit(
       state.copyWith(
         isNotificationsEnabled: _notificationSettings.notificationsEnabled,
-        isShowNotificationsIconEnabled: showNotificationSetting ?? true,
-        isAtMeEnabled: atMeLocal ?? atMeServer ?? true,
-        isPendingEnabled: pendingLocal ?? pendingServer ?? true,
-        isPermissionChangeEnabled: permissionChangeLocal ?? permissionChangeServer ?? true,
-        isJoinTeamEnabled: joinTeamLocal ?? joinTeamServer ?? true,
-        isClipEnabled: clipLocal ?? clipServer ?? true,
+        isAtMeEnabled: atMeServer ?? true,
+        isPendingEnabled: pendingServer ?? true,
+        isPermissionChangeEnabled: permissionChangeServer ?? true,
+        isJoinTeamEnabled: joinTeamServer ?? true,
+        isClipEnabled: clipServer ?? true,
       ),
     );
 
@@ -84,86 +78,119 @@ class NotificationSettingsCubit extends Cubit<NotificationSettingsState> {
   Future<void> toggleNotificationsEnabled() async {
     await _initCompleter.future;
 
-    _notificationSettings.notificationsEnabled = !state.isNotificationsEnabled;
+    final originalVal = state.isNotificationsEnabled;
+    final newVal = !originalVal;
 
-    emit(
-      state.copyWith(
-        isNotificationsEnabled: _notificationSettings.notificationsEnabled,
-      ),
+    _notificationSettings.notificationsEnabled = newVal;
+
+    final result = await UserSettingsBackendService()
+        .setNotificationSettings(_notificationSettings);
+    
+    final success = result.fold(
+      (r) => true,
+      (error) {
+        Log.error(error);
+        _notificationSettings.notificationsEnabled = originalVal;
+        return false;
+      },
     );
-
-    await _saveNotificationSettings();
+    
+    if (success) {
+      emit(
+        state.copyWith(
+          isNotificationsEnabled: newVal,
+        ),
+      );
+    }
   }
 
   Future<void> toggleAtMeEnabled() async {
     await _initCompleter.future;
-    final newVal = !state.isAtMeEnabled;
+    final originalVal = state.isAtMeEnabled;
+    final newVal = !originalVal;
     emit(state.copyWith(isAtMeEnabled: newVal));
-    await getIt<KeyValueStorage>().set(KVKeys.notificationAtMe, newVal.toString());
-    // sync to backend
-    try {
-      await http.post(
-        Uri.parse('${getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_url}/api/user/notification-preferences'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'notify_at_me': newVal}),
-      );
-    } catch (_) {}
+    // 先发送API请求
+    final success = await _updateNotificationPreference({'notify_at_me': newVal});
+    if (!success) {
+      emit(state.copyWith(isAtMeEnabled: originalVal));
+      showToastNotification(message: "请求失败，请重试",type: ToastificationType.error);
+    } else {
+      _notificationSettings.notifyAtMe = newVal;
+
+      final result = await UserSettingsBackendService()
+          .setNotificationSettings(_notificationSettings);
+    }
   }
 
   Future<void> togglePendingEnabled() async {
     await _initCompleter.future;
-    final newVal = !state.isPendingEnabled;
+    final originalVal = state.isPendingEnabled;
+    final newVal = !originalVal;
     emit(state.copyWith(isPendingEnabled: newVal));
-    await getIt<KeyValueStorage>().set(KVKeys.notificationPending, newVal.toString());
-    try {
-      await http.post(
-        Uri.parse('${getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_url}/api/user/notification-preferences'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'notify_pending': newVal}),
-      );
-    } catch (_) {}
+    final success = await _updateNotificationPreference({'notify_pending': newVal});
+    if (!success) {
+      emit(state.copyWith(isPendingEnabled: originalVal));
+      showToastNotification(message: "请求失败，请重试",type: ToastificationType.error);
+    } else {
+      _notificationSettings.notifyPending = newVal;
+
+      final result = await UserSettingsBackendService()
+          .setNotificationSettings(_notificationSettings);
+    }
   }
 
   Future<void> togglePermissionChangeEnabled() async {
     await _initCompleter.future;
-    final newVal = !state.isPermissionChangeEnabled;
+    final originalVal = state.isPermissionChangeEnabled;
+    final newVal = !originalVal;
     emit(state.copyWith(isPermissionChangeEnabled: newVal));
-    await getIt<KeyValueStorage>().set(KVKeys.notificationPermissionChange, newVal.toString());
-    try {
-      await http.post(
-        Uri.parse('${getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_url}/api/user/notification-preferences'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'notify_permission_change': newVal}),
-      );
-    } catch (_) {}
+    final success = await _updateNotificationPreference({'notify_permission_change': newVal});
+    
+    if (!success) {
+      emit(state.copyWith(isPermissionChangeEnabled: originalVal));
+      showToastNotification(message: "请求失败，请重试",type: ToastificationType.error);
+    } else {
+      _notificationSettings.notifyPermissionChange = newVal;
+
+      final result = await UserSettingsBackendService()
+          .setNotificationSettings(_notificationSettings);
+    }
   }
 
   Future<void> toggleJoinTeamEnabled() async {
     await _initCompleter.future;
-    final newVal = !state.isJoinTeamEnabled;
+    final originalVal = state.isJoinTeamEnabled;
+    final newVal = !originalVal;
     emit(state.copyWith(isJoinTeamEnabled: newVal));
-    await getIt<KeyValueStorage>().set(KVKeys.notificationJoinTeam, newVal.toString());
-    try {
-      await http.post(
-        Uri.parse('${getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_url}/api/user/notification-preferences'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'notify_join_team': newVal}),
-      );
-    } catch (_) {}
+    final success = await _updateNotificationPreference({'notify_join_team': newVal});
+    
+    if (!success) {
+      emit(state.copyWith(isJoinTeamEnabled: originalVal));
+      showToastNotification(message: "请求失败，请重试",type: ToastificationType.error);
+    } else {
+      _notificationSettings.notifyJoinTeam = newVal;
+
+      final result = await UserSettingsBackendService()
+          .setNotificationSettings(_notificationSettings);
+    }
   }
 
   Future<void> toggleClipEnabled() async {
     await _initCompleter.future;
-    final newVal = !state.isClipEnabled;
+    final originalVal = state.isClipEnabled;
+    final newVal = !originalVal;
     emit(state.copyWith(isClipEnabled: newVal));
-    await getIt<KeyValueStorage>().set(KVKeys.notificationClip, newVal.toString());
-    try {
-      await http.post(
-        Uri.parse('${getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_url}/api/user/notification-preferences'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'notify_clip': newVal}),
-      );
-    } catch (_) {}
+    final success = await _updateNotificationPreference({'notify_clip': newVal});
+    
+    if (!success) {
+      emit(state.copyWith(isClipEnabled: originalVal));
+      showToastNotification(message: "请求失败，请重试",type: ToastificationType.error);
+    } else {
+      _notificationSettings.notifyClip = newVal;
+
+      final result = await UserSettingsBackendService()
+          .setNotificationSettings(_notificationSettings);
+    }
   }
 
   Future<void> toggleShowNotificationIconEnabled() async {
@@ -174,6 +201,61 @@ class NotificationSettingsCubit extends Cubit<NotificationSettingsState> {
         isShowNotificationsIconEnabled: !state.isShowNotificationsIconEnabled,
       ),
     );
+  }
+
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+    
+    final userResult = await UserBackendService.getCurrentUserProfile();
+    final rawToken = userResult.fold(
+      (user) => user.token,
+      (error) {
+        Log.error('[NotificationSettingsCubit] Failed to get user profile: $error');
+        return '';
+      },
+    );
+    
+    if (rawToken.isNotEmpty) {
+      final token = _normalizeToken(rawToken);
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+    }
+    
+    return headers;
+  }
+
+  String _normalizeToken(String token) {
+    if (token.isEmpty) return token;
+    if (token.trim().startsWith('{')) {
+      try {
+        final map = json.decode(token);
+        if (map is Map && map['access_token'] is String) {
+          return map['access_token'] as String;
+        }
+      } catch (_) {
+        // ignore parse errors, fallback to raw token
+      }
+    }
+    return token;
+  }
+
+  Future<bool> _updateNotificationPreference(Map<String, dynamic> data) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final response = await http.post(
+        Uri.parse('${getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_url}/api/user/notification-preferences'),
+        headers: headers,
+        body: json.encode(data),
+      );
+      await Future.delayed(Duration(milliseconds: 500));
+      return response.statusCode == 200;
+    } catch (e) {
+      Log.error('[NotificationSettingsCubit] Failed to update notification preference: $e');
+      return false;
+    }
   }
 
   Future<void> _saveNotificationSettings() async {
