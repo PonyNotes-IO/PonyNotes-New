@@ -21,6 +21,11 @@ import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapte
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
+import 'package:appflowy/plugins/shared/share/share_button.dart';
+import 'package:appflowy/shared/feature_flags.dart';
+import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
+import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
@@ -171,7 +176,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   WhiteboardCollabAdapter? _collabAdapter;
   
   // ExcalidrawWebView的GlobalKey，用于调用其方法
-  final GlobalKey<ExcalidrawWebViewState> _webViewKey = GlobalKey<ExcalidrawWebViewState>();
+  // ✅ 关键修复：为每个视图创建唯一的GlobalKey，避免视图切换时PlatformView重复创建
+  // 使用view.id确保每个白板视图都有唯一的key
+  late final GlobalKey<ExcalidrawWebViewState> _webViewKey;
   
   // 主题监听
   Brightness? _lastBrightness;
@@ -180,6 +187,10 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   void initState() {
     super.initState();
     // debug logs removed
+    
+    // ✅ 关键修复：为每个视图创建唯一的GlobalKey
+    // 使用view.id确保每个白板视图都有唯一的key，避免视图切换时PlatformView重复创建
+    _webViewKey = GlobalKey<ExcalidrawWebViewState>(debugLabel: 'whiteboard_webview_${widget.view.id}');
     
     // 初始化 Collab 适配器（模仿 DocumentBloc）
     _initCollabAdapter();
@@ -346,170 +357,60 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     
     Log.debug('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
-          appBar: AppBar(
-            elevation: 0,
-            shadowColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            foregroundColor: Theme.of(context).colorScheme.onSurface,
-            toolbarHeight: 64,
-            titleSpacing: 8,
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.palette_outlined,
-                        size: 20,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.view.name,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              // 导入按钮
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.upload_file, size: 22),
-                  tooltip: '导入',
-                  onPressed: _importWhiteboard,
-                  style: IconButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              // 导出按钮（下拉菜单）
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.download_outlined, size: 22),
-                  tooltip: '导出',
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  offset: const Offset(0, 8),
-                  onSelected: (format) {
-                    _exportWhiteboard(format);
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'excalidraw',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.data_object,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 12),
-                          const Text('源文件 (.excalidraw)'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'png',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.image_outlined,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 12),
-                          const Text('图片 (PNG)'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'svg',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.code,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 12),
-                          const Text('图片 (SVG)'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // 保存按钮
-              Container(
-                margin: const EdgeInsets.only(left: 4, right: 12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.save_outlined, size: 22),
-                  onPressed: _saveWhiteboard,
-                  tooltip: '保存',
-                  style: IconButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1),
-              child: Container(
-                height: 1,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.transparent,
-                      Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
+      body: Column(
+        children: [
+          // 顶部按钮栏（与手写笔记和文档视图统一）
+          _buildTopActionsBar(context),
+          // 白板内容
+          Expanded(
+            child: _buildExcalidrawView(),
           ),
-          body: _buildExcalidrawView(),
-        );
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopActionsBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (FeatureFlag.syncDocument.isOn) ...[
+            DocumentCollaborators(
+              key: ValueKey('collaborators_${widget.view.id}'),
+              width: 120,
+              height: 32,
+              view: widget.view,
+            ),
+            const SizedBox(width: 16),
+          ] else
+            const SizedBox(width: 8),
+          ViewFavoriteButton(
+            key: ValueKey('favorite_button_${widget.view.id}'),
+            view: widget.view,
+          ),
+          const SizedBox(width: 10),
+          ShareButton(
+            key: ValueKey('share_button_${widget.view.id}'),
+            view: widget.view,
+          ),
+          const SizedBox(width: 4),
+          MoreViewActions(view: widget.view),
+        ],
+      ),
+    );
   }
 
   Widget _buildExcalidrawView() {
     // ✅ 每次build都创建新的Widget实例，避免PlatformView重复创建错误
-    // ✅ 使用全局唯一的实例ID作为key，确保绝对不会出现ID冲突
-    // 📌 Key的组成：viewId（白板ID） + 全局唯一的实例编号
-    // 🎯 这样即使快速切换白板视图，每个WebView的Key也是全局唯一的
-    final uniqueKey = '${widget.view.id}_global_$_webViewInstanceId';
-    Log.debug('🔑 [Whiteboard] Creating ExcalidrawWebView with unique key: $uniqueKey');
+    // ✅ 使用基于view.id的GlobalKey，确保每个白板视图都有唯一的key
+    // 📌 关键修复：GlobalKey基于view.id，确保视图切换时不会复用旧的Widget
+    // 🎯 这样即使快速切换白板视图，每个WebView的Key也是唯一的，不会导致PlatformView重复创建
+    Log.debug('🔑 [Whiteboard] Creating ExcalidrawWebView with key based on view.id: ${widget.view.id}');
     
     return ExcalidrawWebView(
-      key: _webViewKey, // 使用GlobalKey以便调用其方法
+      key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
       viewId: widget.view.id,
       initialData: _initialData,
       onDataChanged: _onWhiteboardDataChanged,

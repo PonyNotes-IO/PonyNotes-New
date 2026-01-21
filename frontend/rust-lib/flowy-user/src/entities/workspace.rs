@@ -246,7 +246,7 @@ pub struct WorkspaceMemberInvitationPB {
   pub workspace_id: String,
 
   #[pb(index = 2)]
-  #[validate(custom(function = "email_or_phone"))]
+  #[validate(custom(function = "lib_infra::validator_fn::email_or_phone"))]
   pub invitee_email: String,
 
   #[pb(index = 3)]
