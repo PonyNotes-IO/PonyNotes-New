@@ -609,7 +609,7 @@ class _MemberListHeader extends StatelessWidget {
           ),
         ),
         // email column removed per design
-        const HSpace(28.0),
+        SizedBox(width: 24.0),
       ],
     );
   }
@@ -704,9 +704,10 @@ class _MemberItemState extends State<_MemberItem> {
                 size: AFAvatarSize.s,
               ),
               HSpace(8),
-              Flexible(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       member.name,
@@ -773,7 +774,7 @@ class _MemberItemState extends State<_MemberItem> {
         myRole.canDelete &&
                 member.email != userProfile.email // can't delete self
             ? _MemberMoreActionList(member: member)
-            : const HSpace(28.0),
+            : SizedBox(width: 24.0),
       ],
     );
   }

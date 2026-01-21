@@ -53,7 +53,11 @@ class InitAppWidgetTask extends LaunchTask {
 
     await NotificationService.initialize();
 
-    await loadIconGroups();
+    // 异步加载图标，不阻塞应用启动
+    loadIconGroups().catchError((e) {
+      // 图标加载失败不应该阻止应用启动
+      // 错误已在loadIconGroups内部记录
+    });
 
     final widget = context.getIt<EntryPoint>().create(context.config);
     final appearanceSetting =

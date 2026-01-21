@@ -60,18 +60,26 @@ Future<List<IconGroup>> loadIconGroups() async {
   }
 
   final stopwatch = Stopwatch()..start();
-  final jsonString = await rootBundle.loadString('assets/icons/icons.json');
   try {
-    final json = jsonDecode(jsonString) as Map<String, dynamic>;
-    final iconGroups = json.entries.map(IconGroup.fromMapEntry).toList();
-    kIconGroups = iconGroups;
-    return iconGroups;
+    final jsonString = await rootBundle.loadString('assets/icons/icons.json');
+    try {
+      final json = jsonDecode(jsonString) as Map<String, dynamic>;
+      final iconGroups = json.entries.map(IconGroup.fromMapEntry).toList();
+      kIconGroups = iconGroups;
+      stopwatch.stop();
+      Log.info('Loaded icon groups in ${stopwatch.elapsedMilliseconds}ms');
+      return iconGroups;
+    } catch (e) {
+      Log.error('Failed to decode icons.json', e);
+      kIconGroups = [];
+      return [];
+    }
   } catch (e) {
-    Log.error('Failed to decode icons.json', e);
-    return [];
-  } finally {
+    // 如果资源文件不存在或加载失败，记录错误但不阻塞应用启动
+    Log.warn('Failed to load icons.json asset, using empty icon groups: $e');
+    kIconGroups = [];
     stopwatch.stop();
-    Log.info('Loaded icon groups in ${stopwatch.elapsedMilliseconds}ms');
+    return [];
   }
 }
 
