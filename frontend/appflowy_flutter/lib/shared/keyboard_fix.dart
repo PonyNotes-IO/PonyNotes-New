@@ -10,6 +10,7 @@
 /// 解决方案：
 /// 在关键的键盘事件处理点添加防护代码，检测并忽略重复的KeyDown事件。
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 /// 安全的键盘事件处理器
@@ -68,7 +69,7 @@ class SafeKeyboardHandler {
   /// ```
   static Widget wrapWithFocus({
     required Widget child,
-    required KeyEventCallback? onKeyEvent,
+    required FocusOnKeyEventCallback? onKeyEvent,
     bool canRequestFocus = false,
     bool skipTraversal = true,
     bool includeSemantics = false,
@@ -110,7 +111,7 @@ extension SafeFocusExtension on Focus {
   /// 创建一个带有键盘状态防护的Focus组件
   static Focus safe({
     required Widget child,
-    required KeyEventCallback onKeyEvent,
+    required FocusOnKeyEventCallback onKeyEvent,
     bool canRequestFocus = false,
     bool skipTraversal = true,
     bool includeSemantics = false,
