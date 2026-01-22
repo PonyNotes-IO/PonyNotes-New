@@ -1,3 +1,4 @@
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -21,30 +22,52 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
 
   @override
   Widget build(BuildContext context) {
+    // 获取当前工作区ID和用户信息
+    final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+    final currentWorkspace = userWorkspaceBloc.state.currentWorkspace;
+    final workspaceId = currentWorkspace?.workspaceId;
+    final userProfile = userWorkspaceBloc.state.userProfile;
+    
     return BlocProvider(
-      create: (_) => FavoriteBloc()..add(const FavoriteEvent.initial()),
-      child: BlocBuilder<FavoriteBloc, FavoriteState>(
-        builder: (context, state) {
-          // 如果正在加载，显示空组件（避免闪烁）
-          if (state.isLoading) {
-            return const SizedBox.shrink();
-          }
-          
-          // 加载完成后，如果没有最爱笔记（views 为空），不显示菜单项
-          if (state.views.isEmpty) {
-            return const SizedBox.shrink();
-          }
-          
-          // 有1个及以上最爱笔记时，显示菜单项
-          return Column(
-            children: [
-              // 收藏夹标题行
-              _buildFavoriteHeader(context, state),
-              // 收藏的页面列表
-              if (_isExpanded) ..._buildFavoriteItems(context, state),
-            ],
+      create: (_) => FavoriteBloc(
+        workspaceId: workspaceId,
+        userProfile: userProfile,
+      )..add(const FavoriteEvent.initial()),
+      child: BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+        listenWhen: (previous, current) =>
+            previous.currentWorkspace?.workspaceId !=
+            current.currentWorkspace?.workspaceId,
+        listener: (context, state) {
+          // 工作区切换时，更新 FavoriteBloc 的工作区ID
+          final newWorkspaceId = state.currentWorkspace?.workspaceId;
+          context.read<FavoriteBloc>().setWorkspaceId(
+            newWorkspaceId,
+            userProfile: state.userProfile,
           );
         },
+        child: BlocBuilder<FavoriteBloc, FavoriteState>(
+          builder: (context, state) {
+            // 如果正在加载，显示空组件（避免闪烁）
+            if (state.isLoading) {
+              return const SizedBox.shrink();
+            }
+            
+            // 加载完成后，如果没有最爱笔记（views 为空），不显示菜单项
+            if (state.views.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            
+            // 有1个及以上最爱笔记时，显示菜单项
+            return Column(
+              children: [
+                // 收藏夹标题行
+                _buildFavoriteHeader(context, state),
+                // 收藏的页面列表
+                if (_isExpanded) ..._buildFavoriteItems(context, state),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -78,36 +101,6 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
   }
 
   List<Widget> _buildFavoriteItems(BuildContext context, FavoriteState state) {
-    if (state.views.isEmpty) {
-      return [
-        const SizedBox(height: 4),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-            child: Row(
-              children: [
-                const SizedBox(width: 20), // 缩进
-                Icon(
-                  Icons.favorite_border,
-                  size: 14,
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: FlowyText(
-                    '暂无收藏',
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ];
-    }
-
     return state.views.map((sectionView) {
       final view = sectionView.item;
       return ViewItem(
