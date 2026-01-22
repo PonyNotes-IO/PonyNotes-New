@@ -178,6 +178,41 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     controller.addJavaScriptHandler(handlerName: "localStorageOnClear", callback:(args){
       // debug log removed
     });
+    controller.addJavaScriptHandler(
+      handlerName: "onExport",
+      callback: (args) async {
+        try {
+          if (args.isEmpty) return;
+          final payload = args[0];
+          if (payload is Map &&
+              payload.containsKey('format') &&
+              payload.containsKey('data')) {
+            final format = payload['format'] as String;
+            final data = payload['data'];
+            widget.onExport?.call(format, data);
+          }
+        } catch (e) {
+          Log.error('[ExcalidrawWebView] onExport handler error: $e');
+          widget.onError?.call('导出处理失败: $e');
+        }
+      },
+    );
+    controller.addJavaScriptHandler(
+      handlerName: "onExportError",
+      callback: (args) async {
+        try {
+          if (args.isEmpty) return;
+          final payload = args[0];
+          if (payload is Map && payload.containsKey('message')) {
+            final message = payload['message'] as String;
+            widget.onError?.call('导出失败: $message');
+          }
+        } catch (e) {
+          Log.error('[ExcalidrawWebView] onExportError handler error: $e');
+          widget.onError?.call('导出失败: $e');
+        }
+      },
+    );
   }
 
   Future<void> _initializeExcalidraw() async {
@@ -948,8 +983,40 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           window.loadExcalidrawData(${jsonEncode(data)});
         }
       ''', tag: 'loadData');
+      
+      // 加载数据后重新初始化UI，确保工具栏等元素正确显示
+      await reinitializeUI();
     } catch (e) {
       widget.onError?.call('加载数据失败: $e');
+    }
+  }
+
+  /// 重新初始化UI（公共方法，供外部调用）
+  /// 用于在导入数据后恢复UI状态
+  Future<void> reinitializeUI() async {
+    try {
+      // 隐藏加载时的底图标志
+      await _hideLoadingLogo();
+      
+      // 隐藏主菜单（汉堡菜单）
+      await _hideMainMenu();
+      
+      // 隐藏欢迎界面和其他不需要的UI元素
+      await _hideUnwantedUI();
+
+      // 设置主题
+      final theme = Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
+      await _safeEvalJs('''
+        console.log('[ExcalidrawWebView] Reinitializing UI, setting theme to $theme');
+        if (window.setTheme) {
+          window.setTheme('$theme');
+        } else {
+          console.error('[ExcalidrawWebView] window.setTheme not found!');
+        }
+      ''', tag: 'reinitializeUI');
+    } catch (e) {
+      Log.error('❌ [ExcalidrawWebView] Reinitialize UI failed: $e');
+      widget.onError?.call('重新初始化UI失败: $e');
     }
   }
 

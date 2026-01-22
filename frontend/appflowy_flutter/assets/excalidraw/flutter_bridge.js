@@ -116,4 +116,108 @@
     originalLocalStorage.clear();
     await window.flutter_inappwebview.callHandler('initData');
     init = true;
+
+    // =========================================================================
+    // Excalidraw API 适配：导入 / 导出 / 数据加载
+    // =========================================================================
+    const waitForExcalidrawAPI = (maxAttempts = 60, interval = 150) =>
+        new Promise((resolve, reject) => {
+            let attempt = 0;
+            const timer = setInterval(() => {
+                attempt++;
+                const api =
+                    window.excalidrawAPI ||
+                    window.__EXCALIDRAW_API__ ||
+                    window._excalidrawAPI;
+                if (api) {
+                    clearInterval(timer);
+                    resolve(api);
+                }
+                if (attempt >= maxAttempts) {
+                    clearInterval(timer);
+                    reject(new Error('Excalidraw API not ready'));
+                }
+            }, interval);
+        });
+
+    const getSceneData = (api) => ({
+        elements: api.getSceneElements?.() || [],
+        appState: api.getAppState?.() || {},
+        files: api.getFiles?.() || {},
+    });
+
+    // Flutter 调用：导出
+    window.exportExcalidraw = async function (format = 'png') {
+        try {
+            const api = await waitForExcalidrawAPI();
+
+            if (format === 'png') {
+                // 获取场景数据
+                const sceneData = getSceneData(api);
+                
+                // 使用exportToBlob导出PNG，需要传入完整的场景数据
+                const blob = await api.exportToBlob?.({
+                    elements: sceneData.elements,
+                    appState: sceneData.appState,
+                    files: sceneData.files,
+                    mimeType: 'image/png',
+                    quality: 0.95,
+                });
+                
+                if (!blob) {
+                    throw new Error('exportToBlob 返回空结果');
+                }
+
+                // 使用Promise包装FileReader，确保异步处理完成
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        if (reader.result) {
+                            resolve(reader.result);
+                        } else {
+                            reject(new Error('FileReader 读取失败'));
+                        }
+                    };
+                    reader.onerror = () => {
+                        reject(new Error('FileReader 读取错误'));
+                    };
+                    reader.readAsDataURL(blob);
+                });
+
+                window.flutter_inappwebview?.callHandler('onExport', {
+                    format: 'png',
+                    data: dataUrl, // dataURL
+                });
+                return;
+            }
+
+            if (format === 'excalidraw' || format === 'json') {
+                const data = getSceneData(api);
+                window.flutter_inappwebview?.callHandler('onExport', {
+                    format: 'excalidraw',
+                    data,
+                });
+                return;
+            }
+
+            window.flutter_inappwebview?.callHandler('onExportError', {
+                message: `不支持的导出格式: ${format}`,
+            });
+        } catch (e) {
+            console.error('[PonyNotes] exportExcalidraw failed', e);
+            window.flutter_inappwebview?.callHandler('onExportError', {
+                message: e?.message || String(e),
+            });
+        }
+    };
+
+    // Flutter 调用：载入数据
+    window.loadExcalidrawData = async function (data) {
+        try {
+            const api = await waitForExcalidrawAPI();
+            api.updateScene?.(data || {});
+        } catch (e) {
+            console.error('[PonyNotes] loadExcalidrawData failed', e);
+        }
+    };
 })();

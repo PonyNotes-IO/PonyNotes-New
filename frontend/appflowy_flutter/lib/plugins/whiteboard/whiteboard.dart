@@ -273,11 +273,106 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   void _onWhiteboardExport(String format, dynamic data) {
-    // 处理导出
-    Log.debug('Export format: $format, data: $data');
+    if (!mounted) return;
+
+    if (format == 'png' && data is String) {
+      // dataURL -> 保存
+      _savePngDataUrl(data);
+      return;
+    }
+
+    // Excalidraw 源文件（json）
+    if (format == 'excalidraw' && data is Map<String, dynamic>) {
+      _saveExcalidrawJson(data);
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('导出 $format 格式完成')),
+      SnackBar(
+        content: Text('导出格式不受支持: $format'),
+        backgroundColor: Colors.red,
+      ),
     );
+  }
+
+  Future<void> _saveExcalidrawJson(Map<String, dynamic> data) async {
+    try {
+      // 确保数据符合Excalidraw标准格式
+      final excalidrawData = <String, dynamic>{
+        'type': 'excalidraw',
+        'version': 2,
+        'source': 'https://excalidraw.com',
+        'elements': data['elements'] ?? [],
+        'appState': data['appState'] ?? {},
+        'files': data['files'] ?? {},
+      };
+
+      final filePicker = getIt<FilePickerService>();
+      final savePath = await filePicker.saveFile(
+        dialogTitle: '保存Excalidraw文件',
+        fileName: '${widget.view.name}.excalidraw',
+        type: FileType.custom,
+        allowedExtensions: ['excalidraw', 'json'],
+      );
+      if (savePath == null) return;
+
+      final file = File(savePath);
+      await file.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(excalidrawData),
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('导出成功'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Save Excalidraw json failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('保存失败: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _savePngDataUrl(String dataUrl) async {
+    try {
+      final filePicker = getIt<FilePickerService>();
+      final savePath = await filePicker.saveFile(
+        dialogTitle: '保存PNG图片',
+        fileName: '${widget.view.name}.png',
+        type: FileType.custom,
+        allowedExtensions: ['png'],
+      );
+      if (savePath == null) return;
+
+      final uri = Uri.parse(dataUrl);
+      final data = uri.data;
+      if (data == null) {
+        throw Exception('PNG 数据为空');
+      }
+      final bytes = data.contentAsBytes();
+      final file = File(savePath);
+      await file.writeAsBytes(bytes);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('导出成功'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Save PNG failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('保存失败: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _onWhiteboardError(String error) {
@@ -376,6 +471,39 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          // 导入 / 导出
+          Tooltip(
+            message: '导入 Excalidraw 文件',
+            child: TextButton.icon(
+              icon: const Icon(Icons.file_download_outlined, size: 18),
+              label: const Text('导入'),
+              onPressed: _importWhiteboard,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: '导出为 Excalidraw / PNG',
+            child: PopupMenuButton<String>(
+              position: PopupMenuPosition.under,
+              onSelected: _exportWhiteboard,
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: 'excalidraw',
+                  child: Text('导出为 Excalidraw 文件'),
+                ),
+                PopupMenuItem(
+                  value: 'png',
+                  child: Text('导出为 PNG 图片'),
+                ),
+              ],
+              child: TextButton.icon(
+                icon: const Icon(Icons.file_upload_outlined, size: 18),
+                label: const Text('导出'),
+                onPressed: null,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
           if (FeatureFlag.syncDocument.isOn) ...[
             DocumentCollaborators(
               key: ValueKey('collaborators_${widget.view.id}'),
@@ -479,10 +607,17 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       );
 
       if (shouldImport == true) {
-        // 加载数据到Excalidraw
-        await _webViewKey.currentState?.loadData(data);
+        // 从标准Excalidraw格式中提取场景数据
+        final sceneData = <String, dynamic>{
+          'elements': data['elements'] ?? [],
+          'appState': data['appState'] ?? {},
+          'files': data['files'] ?? {},
+        };
         
-        // 保存到后端
+        // 加载数据到Excalidraw（这会自动重新初始化UI）
+        await _webViewKey.currentState?.loadData(sceneData);
+        
+        // 保存到后端（保存完整格式）
         final service = WhiteboardDataService();
         await service.saveWhiteboardData(widget.view.id, data);
 
@@ -512,7 +647,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   Future<void> _exportWhiteboard(String format) async {
     try {
       if (format == 'excalidraw') {
-        // 导出为源文件
+        // 导出为源文件：使用WebView的导出API获取标准格式数据
         await _exportAsSourceFile();
       } else if (format == 'png' || format == 'svg') {
         // 导出为图片
@@ -532,64 +667,33 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   /// 导出为源文件
+  /// 修复：使用WebView的导出API获取标准格式的Excalidraw数据，而不是直接从服务加载
   Future<void> _exportAsSourceFile() async {
     try {
-      // 获取当前白板数据
-      final service = WhiteboardDataService();
-      final data = await service.loadWhiteboardData(widget.view.id);
-
-      // 转换为JSON字符串
-      final jsonString = const JsonEncoder.withIndent('  ').convert(data);
-
-      // 选择保存位置
-      final filePicker = getIt<FilePickerService>();
-      final savePath = await filePicker.saveFile(
-        dialogTitle: '保存Excalidraw文件',
-        fileName: '${widget.view.name}.excalidraw',
-        type: FileType.custom,
-        allowedExtensions: ['excalidraw'],
-      );
-
-      if (savePath == null) {
-        return; // 用户取消了保存
-      }
-
-      // 保存文件
-      final file = File(savePath);
-      await file.writeAsString(jsonString);
-
+      // 触发 WebView 内的导出，通过 _onWhiteboardExport 回调处理
+      await _webViewKey.currentState?.exportDrawing('excalidraw');
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Export source file failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('导出成功'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Text('导出失败: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (e) {
-      Log.error('❌ [Whiteboard] Export source file failed: $e');
-      rethrow;
     }
   }
 
   /// 导出为图片
   Future<void> _exportAsImage(String format) async {
-    // 通过JavaScript调用Excalidraw的导出API
-    // 注意：这需要Excalidraw提供相应的API
-    // 暂时显示提示
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('图片导出功能（$format）将在后续版本中实现'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    try {
+      // 触发 WebView 内的导出
+      await _webViewKey.currentState?.exportDrawing(format);
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Export image failed: $e');
+      rethrow;
     }
-    
-    // TODO: 实现图片导出
-    // 1. 通过JavaScript调用Excalidraw的导出API
-    // 2. 获取图片数据（base64或blob）
-    // 3. 保存为文件
   }
 
   /// 验证是否为有效的Excalidraw数据格式
