@@ -25,6 +25,17 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
       create: (_) => FavoriteBloc()..add(const FavoriteEvent.initial()),
       child: BlocBuilder<FavoriteBloc, FavoriteState>(
         builder: (context, state) {
+          // 如果正在加载，显示空组件（避免闪烁）
+          if (state.isLoading) {
+            return const SizedBox.shrink();
+          }
+          
+          // 加载完成后，如果没有最爱笔记（views 为空），不显示菜单项
+          if (state.views.isEmpty) {
+            return const SizedBox.shrink();
+          }
+          
+          // 有1个及以上最爱笔记时，显示菜单项
           return Column(
             children: [
               // 收藏夹标题行
