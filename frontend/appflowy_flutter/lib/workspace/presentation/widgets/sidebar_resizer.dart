@@ -71,7 +71,7 @@ class _SidebarResizerState extends State<SidebarResizer> {
                   margin: const EdgeInsets.only(right: 2.0),
                   height: MediaQuery.of(context).size.height,
                   color: isHovered || isDragging
-                      ? const Color(0xFF00B5FF)
+                      ? Theme.of(context).colorScheme.primary
                       : Colors.transparent,
                 );
               },
