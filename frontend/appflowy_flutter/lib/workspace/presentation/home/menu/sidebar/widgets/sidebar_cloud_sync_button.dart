@@ -119,7 +119,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     // 保存原始 context，用于后续打开设置对话框
     final originalContext = context;
 
-    showDialog(
+    await showDialog(
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.transparent,

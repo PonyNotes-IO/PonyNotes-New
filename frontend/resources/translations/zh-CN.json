@@ -115,7 +115,29 @@
     "confirmPasswordCannotBeEmpty": "确认密码不能为空",
     "passwordsDoNotMatch": "两次输入的密码不一致",
     "passwordMustContain": "密码必须包含至少一个字母、一个数字和一个符号",
-    "backToLogin": "返回登录"
+    "backToLogin": "返回登录",
+    "anonymousMode": "匿名模式",
+    "checkYourEmail": "请检查您的邮箱",
+    "continueToSignIn": "继续登录",
+    "continueWithEmail": "使用邮箱继续",
+    "continueWithLocalModel": "使用本地模型继续",
+    "continueWithLoginCode": "使用登录码继续",
+    "continueWithPassword": "使用密码继续",
+    "enterCode": "输入验证码",
+    "enterCodeManually": "手动输入验证码",
+    "enterPassword": "输入密码",
+    "invalidLoginCredentials": "密码错误，请重试",
+    "invalidVerificationCode": "输入验证码",
+    "loginAs": "登录为",
+    "loginToAppFlowyCloud": "登录到小马笔记云",
+    "signingIn": "登录中...",
+    "switchToAppFlowyCloud": "小马笔记云",
+    "temporaryVerificationCodeSent": "临时验证码已发送，请检查您的邮箱",
+    "temporaryVerificationLinkSent": "临时验证链接已发送，请检查您的邮箱",
+    "tokenHasExpiredOrInvalid": "请输入有效的验证码",
+    "tooFrequentVerificationCodeRequest": "请求过于频繁，请稍后再试",
+    "verifying": "验证中...",
+    "youAreInLocalMode": "您当前处于本地模式"
   },
   "workspace": {
     "chooseWorkspace": "选择您的工作区",
@@ -198,7 +220,8 @@
     "charCountLabel": "字符总数:",
     "createdAtLabel": "已创建的:",
     "syncedAtLabel": "已同步的:",
-    "saveAsNewPage": "在页面中添加消息"
+    "saveAsNewPage": "在页面中添加消息",
+    "saveAsNewPageDisabled": "没有可用消息"
   },
   "importPanel": {
     "textAndMarkdown": "文本 和 Markdown",
@@ -266,9 +289,22 @@
       "imageOnly": "仅图片",
       "textAndImage": "文本与图片",
       "text": "段落",
-      "table": "表格"
+      "table": "表格",
+      "blankDescription": "格式化响应",
+      "bullet": "项目符号列表",
+      "bulletWithImageDescription": "项目符号列表",
+      "defaultDescription": "自动响应格式",
+      "number": "编号列表",
+      "numberWithImageDescription": "编号列表",
+      "tableWithImageDescription": "表格",
+      "textOnly": "文本",
+      "textWithImageDescription": "文本"
     },
-    "referenceSource": "找到 {} 个来源",
+    "referenceSource": {
+      "zero": "找到 0 个来源",
+      "one": "找到 {count} 个来源",
+      "other": "找到 {count} 个来源"
+    },
     "referenceSources": "找到 {} 个来源",
     "questionTitle": "想法",
     "switchModel": {
@@ -276,7 +312,21 @@
       "localModel": "本地模型",
       "cloudModel": "云端模型",
       "autoModel": "自动"
-    }
+    },
+    "addToNewPageName": "从\"{}\"提取的消息",
+    "addToNewPageSuccessToast": "消息已添加到",
+    "currentPage": "当前页面",
+    "question5": "为我的页面创建插图",
+    "question6": "为我即将到来的一周制定待办事项列表",
+    "selectBanner": {
+      "allSelected": "全部选中",
+      "nSelected": "{} 已选中",
+      "saveButton": "添加到...",
+      "selectMessages": "选择消息"
+    },
+    "selectSources": "选择来源",
+    "sourcesLimitReached": "您最多只能选择3个顶级文档及其子文档",
+    "stopTooltip": "停止生成"
   },
   "trash": {
     "text": "回收站",
@@ -326,7 +376,9 @@
       "fail": "无法将调试信息复制到剪贴板"
     },
     "feedback": "反馈",
-    "help": "帮助和支持"
+    "help": "帮助和支持",
+    "getSupport": "获取支持",
+    "helpAndDocumentation": "帮助和文档"
   },
   "menuAppHeader": {
     "moreButtonToolTip": "更多按钮工具",
@@ -424,7 +476,10 @@
     "purchaseAIResponse": "购买",
     "askOwnerToUpgradeToLocalAI": "联系工作区所有者启用设备上 AI",
     "upgradeToAILocal": "在你的设备上运行本地模型，极致保护隐私",
-    "upgradeToAILocalDesc": "使用本地 AI 用 PDF 聊天、改善写作、自动填充表格"
+    "upgradeToAILocalDesc": "使用本地 AI 用 PDF 聊天、改善写作、自动填充表格",
+    "expandSidebar": "展开为全页",
+    "purchaseAIMax": "您的工作区已用完AI图像响应额度。请联系工作区所有者购买AI Max",
+    "singleFileProPlanLimitationDescription": "您已超过免费计划允许的最大文件上传大小。请升级到专业版以上传更大的文件"
   },
   "notifications": {
     "export": {
@@ -439,7 +494,7 @@
     "editContact": "编辑联系人"
   },
   "button": {
-    "ok": "OK",
+    "ok": "确定",
     "confirm": "确认",
     "done": "完成",
     "cancel": "取消",
@@ -501,7 +556,9 @@
     "uploadFailed": "上传失败",
     "Done": "完成",
     "Cancel": "取消",
-    "OK": "确认"
+    "OK": "确认",
+    "change": "更改",
+    "copyLinkOriginal": "复制原始链接"
   },
   "label": {
     "welcome": "欢迎!",
@@ -529,7 +586,9 @@
       "settings": "设置",
       "members": "成员",
       "trash": "回收站",
-      "helpAndSupport": "帮助与支持"
+      "helpAndSupport": "帮助与支持",
+      "getSupport": "获取支持",
+      "helpAndDocumentation": "帮助和文档"
     },
     "sites": {
       "title": "站点",
@@ -546,7 +605,9 @@
         "upgradeToPro": "请升级至 Pro 订阅计划以设置主页",
         "redirectToPayment": "正在重定向至付款页面......",
         "onlyWorkspaceOwnerCanSetHomePage": "仅工作空间的所有者能为其设置主页",
-        "pleaseAskOwnerToSetHomePage": "请联系工作空间所有者更新至 Pro 订阅计划"
+        "pleaseAskOwnerToSetHomePage": "请联系工作空间所有者更新至 Pro 订阅计划",
+        "description": "此更改将应用于此命名空间下所有已发布的页面",
+        "tooltip": "我们保留删除任何不当命名空间的权利"
       },
       "publishedPage": {
         "title": "所有已发布页面",
@@ -556,7 +617,9 @@
         "noPublishedPages": "没有已发布的页面",
         "settings": "发布设置",
         "clickToOpenPageInApp": "在 App 中打开页面",
-        "clickToOpenPageInBrowser": "在浏览器中打开页面"
+        "clickToOpenPageInBrowser": "在浏览器中打开页面",
+        "page": "页面",
+        "pathName": "路径名称"
       },
       "error": {
         "failedToUpdateNamespace": "更新名称空间失败",
@@ -578,13 +641,18 @@
         "publishNameAlreadyInUse": "该路径名称已被使用，请尝试其他路径名称",
         "namespaceContainsInvalidCharacters": "该名称空间包含无效的字符，请尝试其他名称空间",
         "publishPermissionDenied": "仅工作空间所有者或页面发布者可管理发布设置",
-        "publishNameCannotBeEmpty": "该路径名称不能为空，请尝试其他路径名称"
+        "publishNameCannotBeEmpty": "该路径名称不能为空，请尝试其他路径名称",
+        "failedToGeneratePaymentLink": "生成专业版支付链接失败"
       },
       "success": {
         "namespaceUpdated": "更新名称空间成功",
         "setHomepageSuccess": "成功设置主页",
         "updatePathNameSuccess": "更新路径名称成功",
         "removeHomePageSuccess": "成功删除主页"
+      },
+      "clearHomePage": "清除此命名空间的主页",
+      "homePage": {
+        "upgradeToPro": "升级到专业版以设置主页"
       }
     },
     "accountPage": {
@@ -605,7 +673,9 @@
         "loginLabel": "登录",
         "logoutLabel": "退出登录"
       },
-      "description": "自定义您的简介，管理账户安全信息和 AI API keys，或登陆您的账户"
+      "description": "自定义您的简介，管理账户安全信息和 AI API keys，或登陆您的账户",
+      "isUpToDate": "@:appName 已是最新版本！",
+      "officialVersion": "Version {version} (官方構建)"
     },
     "workspacePage": {
       "menuLabel": "工作区",
@@ -643,7 +713,8 @@
       "theme": {
         "title": "主题",
         "description": "选择预设主题，或上传你自己的自定义主题。",
-        "uploadCustomThemeTooltip": "上传自定义主题"
+        "uploadCustomThemeTooltip": "上传自定义主题",
+        "failedToLoadThemes": "加载失败"
       },
       "workspaceFont": {
         "title": "工作区字体",
@@ -741,7 +812,8 @@
       },
       "data": {
         "fixYourData": "修复数据",
-        "fixButton": "修复"
+        "fixButton": "修复",
+        "fixYourDataDescription": "If you're experiencing issues with your data, you can try to fix it here."
       }
     },
     "shortcutsPage": {
@@ -751,14 +823,19 @@
         "resetDefault": "重置为默认"
       },
       "errorPage": {
-        "howToFix": "请再次尝试，如果该问题依然存在，请在 Github 上联系我们"
+        "howToFix": "请再次尝试，如果该问题依然存在，请在 Github 上联系我们",
+        "message": "加载失败"
       },
       "resetDialog": {
         "title": "重置快捷键",
-        "description": "这将会将所有按键绑定重置为默认，之后无法撤销。你确定要继续吗？"
+        "description": "这将会将所有按键绑定重置为默认，之后无法撤销。你确定要继续吗？",
+        "buttonLabel": "Reset"
       },
       "conflictDialog": {
-        "confirmLabel": "继续"
+        "confirmLabel": "继续",
+        "descriptionPrefix": "This keybinding is currently being used by ",
+        "descriptionSuffix": ". If you replace this keybinding, it will be removed from {}.",
+        "title": "{} is currently in use"
       },
       "keybindings": {
         "insertNewParagraphInCodeblock": "插入新的段落",
@@ -784,8 +861,70 @@
         "moveCursorEnd": "将光标移至末尾",
         "moveCursorRightWord": "将光标移至文字右侧",
         "home": "滚动至顶部",
-        "end": "滚动至底部"
-      }
+        "end": "滚动至底部",
+        "backSpaceInTableCell": "在单元的开头停下",
+        "cut": "Cut selection",
+        "downInTableCell": "Move down one cell in table",
+        "enterInTableCell": "Add linebreak in table",
+        "exit": "Exit editing",
+        "indent": "Indent",
+        "indentLineCodeblock": "Insert two spaces at line start",
+        "insertInlineMathEquation": "Insert inline math eqaution",
+        "leftInTableCell": "Move left one cell in table",
+        "moveCursorBeginSelect": "Select 和 move cursor to the beginning",
+        "moveCursorBottom": "Move cursor to the bottom",
+        "moveCursorBottomSelect": "Select 和 move cursor to the bottom",
+        "moveCursorDown": "Move cursor down",
+        "moveCursorDownSelect": "Select 和 move cursor down",
+        "moveCursorEndSelect": "Select 和 move cursor to the end",
+        "moveCursorLeftSelect": "Select 和 move cursor left",
+        "moveCursorLeftWordSelect": "Select 和 move cursor left one word",
+        "moveCursorRightSelect": "Select 和 move cursor right one",
+        "moveCursorRightWordSelect": "Select 和 move cursor to the right one word",
+        "moveCursorTop": "Move cursor to the top",
+        "moveCursorTopSelect": "Select 和 move cursor to the top",
+        "moveCursorUp": "Move cursor up",
+        "moveCursorUpSelect": "Select 和 move cursor up",
+        "openInlineLink": "Open in-line link",
+        "openLinks": "Open all selected links",
+        "outdent": "Outdent",
+        "outdentLineCodeblock": "Delete two spaces at line start",
+        "pageDown": "Scroll one page down",
+        "pageUp": "Scroll one page up",
+        "paste": "Paste in content",
+        "pasteWithoutFormatting": "Paste content without formatting",
+        "rightInTableCell": "Move right one cell in table",
+        "selectAll": "Select all",
+        "shiftTabInTableCell": "Go to previously avAIlable cell in table",
+        "showEmojiPicker": "Show emoji picker",
+        "showLinkMenu": "Show link menu",
+        "tabInTableCell": "Go to next avAIlable cell in table",
+        "toggleBold": "Toggle bold",
+        "toggleCode": "Toggle in-line code",
+        "toggleHighlight": "Toggle highlight",
+        "toggleItalic": "Toggle italic",
+        "toggleStrikethrough": "Toggle strikethrough",
+        "toggleToDoList": "Toggle to do list",
+        "toggleUnderline": "Toggle underline",
+        "twoSpacesCursorCodeblock": "Insert two spaces at cursor",
+        "upInTableCell": "Move up one cell in table"
+      },
+      "commands": {
+        "codeBlockAddTwoSpaces": "Insert two spaces at the cursor position in code block",
+        "codeBlockIndentLines": "Insert two spaces at the line start in code block",
+        "codeBlockNewParagraph": "Insert a new paragraph 下一个 to the code block",
+        "codeBlockOutdentLines": "Delete two spaces at the line start in code block",
+        "codeBlockPasteText": "Paste text in codeblock",
+        "codeBlockSelectAll": "Select all content inside a code block",
+        "textAlignCenter": "Align text to the center",
+        "textAlignLeft": "Align text to the left",
+        "textAlignRight": "Align text to the right"
+      },
+      "couldNotLoadErrorMsg": "Could not load shortcuts, Try agAIn",
+      "couldNotSaveErrorMsg": "Could not save shortcuts, Try agAIn",
+      "editBindingHint": "Input new binding",
+      "editTooltip": "Press to start editing the keybinding",
+      "searchHint": "Search"
     },
     "aiPage": {
       "title": "AI 设置",
@@ -794,7 +933,48 @@
         "enableAISearchTitle": "AI 搜索",
         "aiSettingsDescription": "选择你偏好的模型来赋能 PonyNotes AI。目前可以使用 GPT 4-o、Claude 3,5、Llama 3.1 与 Mistral 7B",
         "llmModel": "语言模型",
-        "llmModelType": "语言模型类别"
+        "llmModelType": "语言模型类别",
+        "activeOfflineAI": "Active",
+        "disableLocalAIDescription": "Do you want to disable local AI?",
+        "disableLocalAITitle": "Disable local AI",
+        "downloadAIModelButton": "下载",
+        "downloadAppFlowyOfflineAI": "Downloading AI offline package will enable AI to run on your device. Do you want to continue?",
+        "downloadBigFilePrompt": "It may take around 10 minutes to complete the 下载",
+        "downloadLLMPrompt": "Download {}",
+        "downloadLLMPromptDetail": "Downloading {} local model will take up to {} of storage. Do you want to continue?",
+        "downloadModel": "to 下载 them.",
+        "downloadOfflineAI": "下载",
+        "downloadingModel": "Downloading",
+        "failToLoadLocalAI": "操作失败",
+        "globalLLMModel": "Global Language Model",
+        "installOllamaLai": "to set up Ollama and PonyNotes Local AI.",
+        "instructions": "instructions",
+        "laiNotReady": "The Local AI app was not installed correctly.",
+        "localAIDisabled": "You are using local AI, but it is disabled. Please go to settings to enable it or try different model",
+        "localAIDisabledTextFieldPrompt": "You can not edit while Local AI is disabled",
+        "localAIInitializing": "Local AI is loading. This may take a few seconds depending on your device",
+        "localAILoaded": "Local AI Model successfully added and ready to use",
+        "localAILoading": "Local AI Chat Model is loading...",
+        "localAINotReadyRetryLater": "Local AI is initializing, please retry later",
+        "localAINotReadyTextFieldPrompt": "You can not edit while Local AI is loading",
+        "localAIRunning": "Local AI is running",
+        "localAIStart": "Local AI is starting. If it's slow, try toggling it off and on",
+        "localAIStopped": "Local AI stopped",
+        "localAIToggleSubTitle": "Run the most advanced local AI models within PonyNotes for ultimate privacy and security",
+        "localAIToggleTitle": "PonyNotes Local AI (LAI)",
+        "loginToEnableAIFeature": "AI features are only enabled after logging in with @:appName Cloud. If you don't have an @:appName account, go to 'My Account' to sign up",
+        "modelsMissing": "Cannot find the required models: ",
+        "offlineAIDownload1": "If you have not downloaded the PonyNotes AI, please",
+        "offlineAIDownload2": "下载",
+        "offlineAIDownload3": "it first",
+        "offlineAIInstruction1": "Follow the",
+        "offlineAIInstruction2": "instruction",
+        "offlineAIInstruction3": "to enable offline AI.",
+        "ollamaNotReady": "The Ollama server is not ready.",
+        "openModelDirectory": "Open f更早",
+        "pleaseFollowThese": "Please follow these",
+        "readOnlyField": "This field is read-only",
+        "restartLocalAI": "Restart"
       }
     },
     "planPage": {
@@ -807,9 +987,62 @@
           "freeInfo": "适合本地使用，功能无限制",
           "studentInfo": "适合学生使用，2GB云存储，2个成员",
           "standardInfo": "适合个人和小团队，10GB存储，5个成员",
-          "teamInfo": "适合高效团队，20GB存储，10个成员"
-        }
-      }
+          "teamInfo": "适合高效团队，20GB存储，10个成员",
+          "bannerLabel": "Current plan",
+          "canceledInfo": "Your plan is cancelled, you will be 降级d to the Free plan on {}.",
+          "upgrade": "Change plan"
+        },
+        "addons": {
+          "activeLabel": "Added",
+          "addLabel": "添加",
+          "aiMax": {
+            "description": "Unlimited AI responses powered by advanced AI models, and 50 AI images per month",
+            "price": "{}",
+            "priceInfo": "Per user per month billed annually",
+            "title": "AI Max"
+          },
+          "aiOnDevice": {
+            "description": "Run Mistral 7B, LLAMA 3, 和 more local models on your machine",
+            "price": "{}",
+            "priceInfo": "Per user per month billed annually",
+            "recommend": "Recommend M1 or newer",
+            "title": "AI On-device for Mac"
+          },
+          "title": "Add-ons"
+        },
+        "aiCredit": {
+          "info": "Add 1,000 Ai credits per workspace and seamlessly integrate customizable AI into your workflow for smarter, faster results with up to:",
+          "infoItemOne": "10,000 responses per database",
+          "infoItemTwo": "1,000 responses per workspace",
+          "price": "{}",
+          "priceDescription": "for 1,000 credits",
+          "purchase": "Purchase AI",
+          "title": "Add @:appName AI Credit"
+        },
+        "aiMaxBadge": "AI Max",
+        "aiMaxToggle": "Unlimited AI and access to advanced models",
+        "aiOnDeviceBadge": "AI On-device for Mac",
+        "aiOnDeviceToggle": "Local AI for ultimate privacy",
+        "aiResponseLabel": "AI Responses",
+        "aiResponseUsage": "{} of {}",
+        "collaboratorsLabel": "Members",
+        "collaboratorsUsage": "{} of {}",
+        "deal": {
+          "bannerLabel": "New year deal!",
+          "info": "Upgrade and save 10% off Pro and Team plans! Boost your workspace productivity with powerful new features including @:appName AI.",
+          "title": "Grow your team!",
+          "viewPlans": "View plans"
+        },
+        "memberProToggle": "More members & unlimited AI & guest access",
+        "proBadge": "Pro",
+        "storageLabel": "Storage",
+        "storageUsage": "{} of {} GB",
+        "title": "Plan usage summary",
+        "unlimitedAILabel": "Unlimited responses",
+        "unlimitedStorageLabel": "Unlimited storage"
+      },
+      "menuLabel": "Plan",
+      "title": "Pricing plan"
     },
     "comparePlanDialog": {
       "proLabels": {
@@ -818,32 +1051,109 @@
         "itemFour": "是",
         "itemFive": "是",
         "itemSix": "无限",
-        "itemFileUpload": "无限"
-      }
+        "itemFileUpload": "无限",
+        "intelligentSearch": "Intelligent search",
+        "itemOne": "Charged per workspace",
+        "itemSeven": "50 images per month"
+      },
+      "actions": {
+        "current": "Current",
+        "downgrade": "降级",
+        "upgrade": "升级"
+      },
+      "current": "Current",
+      "downgradeDialog": {
+        "description": "Downgrading your plan will revert you back to the Free plan. Members may lose access to this workspace 和 you may need to free up space to meet the storage limits of the Free plan.",
+        "downgradeLabel": "Downgrade plan",
+        "title": "Are you sure you want to 降级 your plan?"
+      },
+      "freeLabels": {
+        "intelligentSearch": "Intelligent search",
+        "itemFileUpload": "Up to 7 MB",
+        "itemFive": "yes",
+        "itemFour": "yes",
+        "itemOne": "Charged per workspace",
+        "itemSeven": "2 lifetime",
+        "itemSix": "10 lifetime",
+        "itemThree": "5 GB",
+        "itemTwo": "Up to 2"
+      },
+      "freePlan": {
+        "description": "For individuals up to 2 members to organize everything",
+        "price": "{}",
+        "priceInfo": "Free forever",
+        "title": "Free"
+      },
+      "paymentSuccess": {
+        "description": "Your payment has been successfully processed and your plan is upgraded to @:appName {}. You can view your plan detAIls on the Plan page",
+        "title": "You are now on the {} plan!"
+      },
+      "planFeatures": "Plan\nFeatures",
+      "planLabels": {
+        "customNamespace": "Custom namespace",
+        "customNamespaceTooltip": "Custom published site URL",
+        "intelligentSearch": "Intelligent search",
+        "itemFileUpload": "File uploads",
+        "itemFive": "Guest editors",
+        "itemFour": "Real-time collaboration",
+        "itemOne": "Workspaces",
+        "itemSeven": "AI Images",
+        "itemSix": "AI Responses",
+        "itemThree": "Storage",
+        "itemTwo": "Members",
+        "tooltipFive": "Collaborate on specific pages with non-members",
+        "tooltipSeven": "Allows you to customize part of the URL for your workspace",
+        "tooltipSix": "Lifetime means the number of responses never reset"
+      },
+      "proPlan": {
+        "description": "For small teams to manage projects 和 team knowledge",
+        "price": "{}",
+        "priceInfo": "Per user per month \nbilled annually\n\n{} billed monthly",
+        "title": "Pro"
+      },
+      "title": "Compare & select plan"
     },
     "cancelSurveyDialog": {
       "questionOne": {
         "answerOne": "价格太高",
         "answerTwo": "功能未达预期",
-        "answerThree": "找到更好替代方案"
+        "answerThree": "找到更好替代方案",
+        "answerFive": "Service issue or technical difficulties",
+        "answerFour": "Did not use it enough to justify the expense",
+        "question": "What prompted you to cancel your @:appName Pro subscription?"
       },
       "questionTwo": {
         "answerOne": "非常可能",
         "answerTwo": "稍有可能",
         "answerThree": "不确定",
         "answerFour": "不太可能",
-        "answerFive": "非常不可能"
+        "answerFive": "非常不可能",
+        "question": "How likely are you to consider re-subscribing to @:appName Pro in the future?"
       },
       "questionFour": {
         "answerOne": "极好",
         "answerTwo": "良好",
         "answerThree": "一般",
         "answerFour": "较差",
-        "answerFive": "未满足"
-      }
+        "answerFive": "未满足",
+        "question": "How would you describe your overall experience with @:appName?"
+      },
+      "commonOther": "其他",
+      "description": "We're sorry to see you go. We'd love to hear your feedback to help us improve @:appName. Please take a moment to answer a few questions.",
+      "otherHint": "Write your answer here",
+      "questionThree": {
+        "answerFour": "Access to local AI models",
+        "answerOne": "Multi-user collaboration",
+        "answerThree": "Unlimited AI responses",
+        "answerTwo": "Longer time version history",
+        "question": "Which Pro feature did you value the most during your subscription?"
+      },
+      "title": "Sorry to see you go"
     },
     "common": {
-      "reset": "重置"
+      "reset": "重置",
+      "uploadNotionSuccess": "Your Notion zip file has been uploaded successfully. Once the import is complete, you will receive a confirmation emAIl",
+      "uploadingFile": "File is 上传中. Please do not quit the app"
     },
     "menu": {
       "appearance": "外观",
@@ -893,7 +1203,13 @@
       "importSuccess": "成功导入@:appName数据文件夹",
       "importFailed": "导入 @:appName 数据文件夹失败",
       "importGuide": "有关详细信息，请参阅参考文档",
-      "cloudSetting": "云设置"
+      "cloudSetting": "云设置",
+      "changeUrl": "Change self-hosted URL to {}",
+      "enableSyncLog": "Enable sync logging",
+      "enableSyncLogWarning": "Thank you for helping diagnose sync issues. This will log your document edits to a local file. Please quit 和 reopen the app after enabling",
+      "pleaseInputValidURL": "Please input a valid URL",
+      "webURL": "Web URL",
+      "webURLHint": "Input the base URL of your web server"
     },
     "notifications": {
       "enableNotifications": {
@@ -910,7 +1226,8 @@
       },
       "action": {
         "markAsRead": "标为已读",
-        "multipleChoice": "选择更多"
+        "multipleChoice": "选择更多",
+        "archive": "Archive"
       },
       "settings": {
         "settings": "设置",
@@ -918,12 +1235,50 @@
         "archiveAll": "全部归档"
       },
       "tabs": {
-        "unread": "未读"
+        "unread": "未读",
+        "archived": "Archived",
+        "inbox": "Inbox"
       },
       "refreshSuccess": "成功刷新通知",
       "titles": {
         "notifications": "通知",
         "reminder": "提醒"
+      },
+      "archiveNotifications": {
+        "allSuccess": "Archived all notifications 成功fully",
+        "success": "Archived notification 成功fully"
+      },
+      "clipNotifications": {
+        "hint": "Receive notifications about clip activities 和 updates.",
+        "label": "Clip notifications"
+      },
+      "emptyArchived": {
+        "description": "Archived notifications will appear here.",
+        "title": "No archived"
+      },
+      "emptyInbox": {
+        "description": "Set reminders to receive notifications here.",
+        "title": "Inbox Zero!"
+      },
+      "emptyUnread": {
+        "description": "You're all caught up!",
+        "title": "No unread notifications"
+      },
+      "mentionNotifications": {
+        "hint": "Receive notifications when you are mentioned in comments or discussions.",
+        "label": "Mention notifications"
+      },
+      "pendingNotifications": {
+        "hint": "Get notified about pending tasks 和 assignments.",
+        "label": "Pending notifications"
+      },
+      "permissionChangeNotifications": {
+        "hint": "Receive notifications when your permissions are changed.",
+        "label": "Permission change notifications"
+      },
+      "teamJoinNotifications": {
+        "hint": "Get notified when new members join your team.",
+        "label": "Team join notifications"
       }
     },
     "appearance": {
@@ -953,7 +1308,9 @@
         "opacityRangeError": "不透明度必须介于 1 到 100 之间",
         "app": "应用程序",
         "flowy": "弗洛菲",
-        "apply": "申请"
+        "apply": "申请",
+        "changeWidth": "更改",
+        "width": "Document width"
       },
       "layoutDirection": {
         "label": "布局方向",
@@ -1059,7 +1416,8 @@
         "generatedLinkFailed": "链接产生失败",
         "resetLinkSuccessfully": "链接已成功重置",
         "resetLinkFailed": "链接重置失败"
-      }
+      },
+      "displaySize": "Display Size"
     },
     "files": {
       "copy": "复制",
@@ -1160,30 +1518,30 @@
         "periodButtonLabel": "Edit period"
       },
       "paymentDetails": {
-        "title": "Payment details",
+        "title": "Payment detAIls",
         "methodLabel": "Payment method",
         "methodButtonLabel": "Edit method"
       },
       "addons": {
         "title": "Add-ons",
-        "addLabel": "Add",
-        "removeLabel": "Remove",
+        "addLabel": "添加",
+        "removeLabel": "移除",
         "renewLabel": "Renew",
         "aiMax": {
           "label": "AI Max",
           "description": "Unlock unlimited AI and advanced models",
           "activeDescription": "Next invoice due on {}",
-          "canceledDescription": "AI Max will be available until {}"
+          "canceledDescription": "AI Max will be avAIlable until {}"
         },
         "aiOnDevice": {
           "label": "AI On-device for Mac",
           "description": "Unlock unlimited AI On-device on your device",
           "activeDescription": "Next invoice due on {}",
-          "canceledDescription": "AI On-device for Mac will be available until {}"
+          "canceledDescription": "AI On-device for Mac will be avAIlable until {}"
         },
         "removeDialog": {
           "title": "Remove {}",
-          "description": "Are you sure you want to remove {plan}? You will lose access to the features and benefits of {plan} immediately."
+          "description": "Are you sure you want to remove {plan}? You will lose access to the features 和 benefits of {plan} immediately."
         }
       },
       "currentPeriodBadge": "CURRENT",
@@ -1193,7 +1551,7 @@
       "monthlyPriceInfo": "per seat billed monthly",
       "annualInterval": "Annually",
       "annualPriceInfo": "per seat billed annually",
-      "membershipUpgrades":"会员升级",
+      "membershipUpgrades": "会员升级",
       "storageAddon": "空间补充包",
       "storageSpace": "存储空间"
     }
@@ -1229,7 +1587,8 @@
       "duplicateView": "复制视图",
       "deleteView": "删除视图",
       "numberOfVisibleFields": "显示 {}",
-      "Properties": "属性"
+      "Properties": "属性",
+      "compactMode": "紧凑模式"
     },
     "textFilter": {
       "contains": "包含",
@@ -1282,8 +1641,11 @@
         "onOrBefore": "今天或之前",
         "onOrAfter": "今天或之后",
         "isEmpty": "为空",
-        "isNotEmpty": "不为空"
-      }
+        "isNotEmpty": "不为空",
+        "between": "之间"
+      },
+      "endDate": "结束日期",
+      "startDate": "开始日期"
     },
     "numberFilter": {
       "equal": "等于",
@@ -1350,7 +1712,14 @@
       "format": "格式",
       "reminderOnDateTooltip": "此单元格有预定的提醒",
       "optionAlreadyExist": "选项已存在",
-      "wrap": "自动换行"
+      "wrap": "自动换行",
+      "mediaFieldName": "Files & media",
+      "openRowDocument": "Open as a page",
+      "relationFieldName": "Relation",
+      "switchPrimaryFieldTooltip": "Cannot change field type of primary field",
+      "translateFieldName": "AI Translate",
+      "translateTo": "Translate to",
+      "wrapCellContent": "Wrap text"
     },
     "rowPage": {
       "newField": "添加新字段",
@@ -1364,7 +1733,10 @@
         "one": "隐藏 {count} 个隐藏字段",
         "many": "隐藏 {count} 个隐藏字段",
         "other": "隐藏 {count} 个隐藏字段"
-      }
+      },
+      "moreRowActions": "More row actions",
+      "openAsFullPage": "Open as full page",
+      "viewDatabase": "View the original Database"
     },
     "sort": {
       "ascending": "升序",
@@ -1375,7 +1747,9 @@
       "addSort": "添加排序",
       "removeSorting": "您想删除排序吗？",
       "fieldInUse": "您已按此字段排序",
-      "deleteSort": "删除排序"
+      "deleteSort": "删除排序",
+      "empty": "No active sorts",
+      "sortsActive": "Cannot {intention} while sorting"
     },
     "row": {
       "duplicate": "复制",
@@ -1391,7 +1765,14 @@
       "deleteRowPrompt": "您确定要删除此行吗？此操作无法撤消",
       "dragAndClick": "拖拽移动，点击打开菜单",
       "insertRecordAbove": "在上方插入记录",
-      "insertRecordBelow": "点击添加到下方"
+      "insertRecordBelow": "点击添加到下方",
+      "createRowAboveDescription": "create a row above",
+      "createRowBelowDescription": "insert a row below",
+      "deleteCardPrompt": "Are you sure you want to delete this card? This action cannot be undone.",
+      "label": "Row",
+      "loadMore": "Load more",
+      "noContent": "No content",
+      "reorderRowDescription": "reorder row"
     },
     "selectOption": {
       "create": "新建",
@@ -1427,7 +1808,14 @@
       "textFieldHint": "输入 URL"
     },
     "relation": {
-      "rowSearchTextFieldPlaceholder": "搜索"
+      "rowSearchTextFieldPlaceholder": "搜索",
+      "emptySearchResult": "No records found",
+      "inRelatedDatabase": "In",
+      "linkedRowListLabel": "{count} linked rows",
+      "noDatabaseSelected": "No database selected, please select one first from the list below:",
+      "relatedDatabasePlaceLabel": "Related Database",
+      "relatedDatabasePlaceholder": "None",
+      "unlinkedRowListLabel": "Link an其他 row"
     },
     "menuName": "网格",
     "referencedGridPrefix": "视图",
@@ -1438,13 +1826,31 @@
       "max": "最大限度",
       "median": "中位数",
       "min": "分钟",
-      "sum": "和"
+      "sum": "和",
+      "count": "Count",
+      "countEmpty": "Count empty",
+      "countEmptyShort": "EMPTY",
+      "countNonEmpty": "Count not empty",
+      "countNonEmptyShort": "FILLED"
     },
     "media": {
       "rename": "重命名",
       "download": "下载",
       "delete": "删除",
-      "open": "打开"
+      "open": "打开",
+      "addFileMobile": "Add file",
+      "addFileOrImage": "Add file or link",
+      "attachmentsHint": "{}",
+      "deleteFileDescription": "Are you sure you want to delete this file? This action is irreversible.",
+      "downloadFailedToken": "加载失败",
+      "downloadSuccess": "File 下载ed",
+      "embedLink": "Embed file link",
+      "expand": "展开",
+      "extraCount": "+{}",
+      "moreFilesHint": "+{}",
+      "openInBrowser": "Open in browser",
+      "setAsCover": "Set as cover",
+      "showFileNames": "Show file name"
     },
     "singleSelectOptionFilter": {
       "is": "等于",
@@ -1457,6 +1863,13 @@
       "doesNotContain": "不包含",
       "isEmpty": "为空",
       "isNotEmpty": "不为空"
+    },
+    "filter": {
+      "addFilter": "Add filter",
+      "cannotFindCreatableField": "Cannot find a suitable field to filter by",
+      "conditon": "Condition",
+      "empty": "No active filters",
+      "where": "Where"
     }
   },
   "document": {
@@ -1608,7 +2021,8 @@
         "addIcon": "添加图标",
         "changeIcon": "更改图标",
         "coverRemoveAlert": "删除后将从封面中移除。",
-        "alertDialogConfirmation": "您确定您要继续吗?"
+        "alertDialogConfirmation": "您确定您要继续吗?",
+        "removeCover": "移除封面"
       },
       "mathEquation": {
         "name": "数学方程",
@@ -1630,17 +2044,28 @@
         "right": "右",
         "defaultColor": "默认",
         "depth": "深度",
-        "copyLinkToBlock": "粘贴块链接"
+        "copyLinkToBlock": "粘贴块链接",
+        "drag": "拖拽",
+        "toMove": " 移动"
       },
       "image": {
         "addAnImage": "添加图像",
-        "copiedToPasteBoard": "图片链接已复制到剪贴板"
+        "copiedToPasteBoard": "图片链接已复制到剪贴板",
+        "addAnImageDesktop": "Add an image",
+        "addAnImageMobile": "Click to add one or more images",
+        "dropImageToInsert": "Drop images to insert",
+        "errorCode": "Error code",
+        "imageDownloadFailed": "加载失败",
+        "imageDownloadFailedToken": "加载失败",
+        "imageUploadFailed": "上传失败"
       },
       "urlPreview": {
-        "copiedToPasteBoard": "链接已复制到剪贴板"
+        "copiedToPasteBoard": "链接已复制到剪贴板",
+        "convertToLink": "Convert to embed link"
       },
       "outline": {
-        "addHeadingToCreateOutline": "添加标题以创建目录。"
+        "addHeadingToCreateOutline": "添加标题以创建目录。",
+        "noMatchHeadings": "No matching headings found."
       },
       "table": {
         "addAfter": "在后面添加",
@@ -1671,7 +2096,10 @@
         "emptyLabel": "添加视频",
         "placeholder": "粘贴视频链接",
         "copiedToPasteBoard": "视频链接已复制到剪贴板",
-        "insertVideo": "添加视频"
+        "insertVideo": "添加视频",
+        "invalidVideoUrl": "The source URL is not supported yet.",
+        "invalidVideoUrlYouTube": "YouTube is not supported yet.",
+        "supportedFormats": "Supported formats: MP4, WebM, MOV, AVI, FLV, MPEG/M4V, H.264"
       },
       "linkPreview": {
         "typeSelection": {
@@ -1693,6 +2121,90 @@
           "pasteHint": "粘贴 https://...",
           "unableToDisplay": "无法显示"
         }
+      },
+      "appflowyAIEditDisabled": "Sign in to enable AI features",
+      "cannotMoveToItsChildren": "Cannot move to its children",
+      "emptyToggleHeading": "Empty toggle h{}. Click to add content.",
+      "emptyToggleHeadingWeb": "Empty toggle h{level}. Click to add content",
+      "emptyToggleList": "Empty toggle list. Click to add content.",
+      "file": {
+        "dropFileToUpload": "拖放文件以上传",
+        "failedToOpenMsg": "操作失败",
+        "fileTooBigError": "File size is too big, please upload a file with size less than 10MB",
+        "fileUploadHint": "Drag & drop a file or click to ",
+        "fileUploadHintSuffix": "Browse",
+        "linkedAt": "Link added on {}",
+        "name": "File",
+        "networkAction": "Embed",
+        "networkHint": "Paste a file link",
+        "networkTab": "Embed link",
+        "networkUrlInvalid": "Invalid URL. Check the URL and try agAIn.",
+        "placeholderDragging": "Drop the file to upload",
+        "placeholderText": "Upload or embed a file",
+        "renameFile": {
+          "description": "Enter the new name for this file",
+          "nameEmptyError": "File name cannot be left empty.",
+          "title": "Rename file"
+        },
+        "uploadMobile": "Choose a file",
+        "uploadMobileGallery": "From Photo Gallery",
+        "uploadTab": "上传",
+        "uploadedAt": "Uploaded on {}"
+      },
+      "math": {
+        "copiedToPasteBoard": "The math equation has been copied to the clipboard"
+      },
+      "photoGallery": {
+        "addImageTooltip": "Add image",
+        "browserLayout": "Browser",
+        "changeLayoutTooltip": "Change layout",
+        "deleteBlockTooltip": "Delete whole gallery",
+        "galleryKeyword": "gallery",
+        "gridLayout": "Grid",
+        "imageGalleryKeyword": "image gallery",
+        "imageKeyword": "image",
+        "name": "Photo gallery",
+        "photoBrowserKeyword": "photo browser",
+        "photoKeyword": "photo"
+      },
+      "simpleTable": {
+        "clickToAddNewColumn": "Click to add a new 列",
+        "clickToAddNewRow": "Click to add a new row",
+        "clickToAddNewRowAndColumn": "Click to add a new row 和 column",
+        "headerName": {
+          "alignText": "Align text",
+          "table": "Table"
+        },
+        "moreActions": {
+          "align": "Align",
+          "cellBackgroundColor": "Cell background color",
+          "clearContents": "Clear contents",
+          "color": "Color",
+          "delete": "删除",
+          "distributeColumnsWidth": "Distribute 列s evenly",
+          "duplicate": "复制",
+          "duplicateColumn": "Duplicate 列",
+          "duplicateRow": "Duplicate row",
+          "duplicateTable": "Duplicate table",
+          "headerColumn": "Header 列",
+          "headerRow": "Header row",
+          "insertAbove": "Insert above",
+          "insertBelow": "Insert below",
+          "insertLeft": "Insert left",
+          "insertRight": "Insert right",
+          "setToPageWidth": "Set to page width",
+          "textColor": "Text color"
+        }
+      },
+      "subPage": {
+        "errors": {
+          "failedCreatePage": "创建失败",
+          "failedDeletePage": "操作失败",
+          "failedDuplicateFindView": "操作失败",
+          "failedDuplicatePage": "操作失败",
+          "failedMovePage": "操作失败"
+        },
+        "handlingPasteHint": " - (h和ling paste)"
       }
     },
     "outlineBlock": {
@@ -1728,7 +2240,8 @@
         "invalidImageSize": "图片大小必须小于 5MB",
         "invalidImageFormat": "不支持图像格式。支持的格式：JPEG、PNG、GIF、SVG",
         "invalidImageUrl": "图片网址无效",
-        "noImage": "没有这样的文件或目录"
+        "noImage": "没有这样的文件或目录",
+        "multipleImagesFailed": "上传失败"
       },
       "embedLink": {
         "label": "内嵌链接",
@@ -1746,7 +2259,22 @@
       "maximumImageSize": "支持的最大上传图片大小为 10MB",
       "uploadImageErrorImageSizeTooBig": "图片大小必须小于 10MB",
       "imageIsUploading": "图片正在上传",
-      "pleaseInputYourStabilityAIKey": "请在设置页面输入您的 Stability AI 密钥"
+      "pleaseInputYourStabilityAIKey": "请在设置页面输入您的 Stability AI 密钥",
+      "interactiveViewer": {
+        "toolbar": {
+          "changeZoomLevelTooltip": "Change zoom level",
+          "closeViewer": "Close interactive viewer",
+          "deleteImageTooltip": "Delete image",
+          "downloadImage": "Download image",
+          "nextImageTooltip": "Next image",
+          "openLocalImage": "Open image",
+          "previousImageTooltip": "Previous image",
+          "scalePercentage": "{}%",
+          "zoomInTooltip": "放大",
+          "zoomOutTooltip": "缩小"
+        }
+      },
+      "openFullScreen": "Open in full screen"
     },
     "codeBlock": {
       "language": {
@@ -1754,7 +2282,9 @@
         "placeholder": "选择语言",
         "auto": "自动"
       },
-      "copyTooltip": "复制代码块的内容"
+      "copyTooltip": "复制代码块的内容",
+      "codeCopiedSnackbar": "Code copied to clipboard!",
+      "searchLanguageHint": "Search for a language"
     },
     "inlineLink": {
       "placeholder": "粘贴或输入链接",
@@ -1775,14 +2305,55 @@
       "page": {
         "label": "链接到页面",
         "tooltip": "点击打开页面"
-      }
+      },
+      "deleted": "Deleted",
+      "deletedContent": "This content does not exist or 已被删除",
+      "deletedPage": "Deleted page",
+      "morePages": "more pages",
+      "noAccess": "No Access",
+      "trashHint": " - in trash"
     },
     "toolbar": {
-      "resetToDefaultFont": "重置为默认"
+      "resetToDefaultFont": "重置为默认",
+      "alignCenter": "Align center",
+      "alignLeft": "Align left",
+      "alignRight": "Align right",
+      "equation": "Equation",
+      "font": "Font",
+      "h1": "Heading 1",
+      "h2": "Heading 2",
+      "h3": "Heading 3",
+      "inlineCode": "Inline code",
+      "insert": "Insert",
+      "link": "Link",
+      "linkInputHint": "Paste link or search pages",
+      "linkName": "Link Name",
+      "linkNameHint": "Input link name",
+      "moreOptions": "More options",
+      "pageOrURL": "Page or URL",
+      "suggestions": "Suggestions",
+      "textAlign": "Text align",
+      "textColor": "Text color",
+      "textSize": "Text size",
+      "turnInto": "Turn into"
     },
     "errorBlock": {
       "theBlockIsNotSupported": "当前版本不支持该块。",
-      "blockContentHasBeenCopied": "块内容已被复制。"
+      "blockContentHasBeenCopied": "块内容已被复制。",
+      "clickToCopyTheBlockContent": "Click to 复制 the block content",
+      "copyBlockContent": "Copy block content",
+      "parseError": "An error occurred while parsing the {} block."
+    },
+    "attachmentMenu": {
+      "chooseFile": "Choose file",
+      "choosePhoto": "Choose photo",
+      "takePicture": "Take a picture"
+    },
+    "creating": "Creating...",
+    "mobilePageSelector": {
+      "failedToLoad": "加载失败",
+      "noPagesFound": "No pages found",
+      "title": "Select page"
     }
   },
   "board": {
@@ -1797,7 +2368,8 @@
       "newGroup": "新建组",
       "deleteColumn": "删除",
       "deleteColumnConfirmation": "这将删除该组及其中的所有卡片。你确定你要继续吗？",
-      "groupActions": "组操作"
+      "groupActions": "组操作",
+      "label": "列"
     },
     "hiddenGroupSection": {
       "sectionTitle": "隐藏组",
@@ -1835,8 +2407,16 @@
       "lastSevenDays": "过去 7 天",
       "nextSevenDays": "未来 7 天",
       "lastThirtyDays": "过去 30 天",
-      "nextThirtyDays": "未来 30 天"
-    }
+      "nextThirtyDays": "未来 30 天",
+      "weekOf": "{} - {} 周"
+    },
+    "groupCondition": "分组条件",
+    "media": {
+      "cardText": "{} {}",
+      "fallbackName": "files"
+    },
+    "noGroup": "未分组",
+    "noGroupDesc": "Board views require a property to group by in order to display"
   },
   "calendar": {
     "menuName": "日历",
@@ -1863,10 +2443,21 @@
       "unscheduledEventsTitle": "未安排的事件",
       "clickToAdd": "单击以添加到日历",
       "name": "日历布局",
-      "noDateHint": "计划外事件将显示在此处"
+      "noDateHint": {
+        "zero": "计划外事件将显示在此处",
+        "one": "{count} 个计划外事件",
+        "other": "{count} 个计划外事件"
+      },
+      "changeLayoutDateField": "更改布局字段",
+      "clickToOpen": "点击打开记录"
     },
     "referencedCalendarPrefix": "视图",
-    "quickJumpYear": "跳转到"
+    "quickJumpYear": "跳转到",
+    "duplicateEvent": "复制事件",
+    "mobileEventScreen": {
+      "emptyBody": "Press the plus button to create an event on this day.",
+      "emptyTitle": "No events yet"
+    }
   },
   "errorDialog": {
     "title": "@:appName 错误",
@@ -1877,8 +2468,23 @@
   },
   "search": {
     "label": "搜索",
+    "sidebarSearchIcon": "搜索并快速跳转到页面",
+    "searchOrAskAI": "搜索或向 AI 提问",
+    "searchFieldHint": "在 {} 中搜索或提问…",
+    "askAIAnything": "向 AI 询问任何问题",
+    "askAIFor": "向 AI 询问",
+    "searching": "正在搜索…",
+    "noResultForSearching": "未找到匹配结果",
+    "noResultForSearchingHint": "试试不同的问题或关键字，部分页面可能在回收站中。",
+    "noResultForSearchingHintWithoutTrash": "试试不同的问题或关键字。",
+    "bestMatch": "最佳匹配",
+    "seeMore": "查看更多",
+    "showMore": "显示更多",
+    "somethingWentWrong": "出错了",
+    "pageNotExist": "该页面不存在",
+    "tryAgainOrLater": "请稍后再试",
     "placeholder": {
-      "actions": "搜索操作..."
+      "actions": "搜索操作…"
     }
   },
   "message": {
@@ -1934,7 +2540,8 @@
       "medium": "适中",
       "mediumDark": "偏暗",
       "dark": "暗"
-    }
+    },
+    "openSourceIconsFrom": "开源图标来自"
   },
   "inlineActions": {
     "noResults": "没有结果",
@@ -1943,7 +2550,13 @@
     "reminder": {
       "groupTitle": "提醒",
       "shortKeyword": "提醒"
-    }
+    },
+    "boardReference": "Board reference",
+    "calReference": "Calendar reference",
+    "createPage": "Create \"{}\" sub-page",
+    "docReference": "Document reference",
+    "gridReference": "Grid reference",
+    "recentPages": "Recent pages"
   },
   "datePicker": {
     "dateTimeFormatTooltip": "在设置中更改日期和时间格式",
@@ -1959,8 +2572,16 @@
       "onDayOfEvent": "活动当天",
       "oneDayBefore": "1 天以前",
       "twoDaysBefore": "2 天以前",
-      "oneWeekBefore": "1 周以前"
-    }
+      "oneWeekBefore": "1 周以前",
+      "custom": "自定义"
+    },
+    "clearDate": "清除日期",
+    "dateFormat": "日期格式",
+    "includeTime": "包含时间",
+    "isRange": "结束日期",
+    "reminderLabel": "Reminder",
+    "selectReminder": "选择提醒",
+    "timeFormat": "时间格式"
   },
   "relativeDates": {
     "yesterday": "昨天",
@@ -2010,7 +2631,20 @@
       "groupByDate": "按日期分组",
       "showUnreadsOnly": "仅显示未读",
       "resetToDefault": "重置为默认"
-    }
+    },
+    "archivedTooltip": "归档此通知",
+    "closeNotification": "关闭通知",
+    "markAllAsArchivedSucceedToast": "全部归档成功",
+    "markAllAsReadSucceedToast": "Mark all as read 成功fully",
+    "markAsArchivedSucceedToast": "归档成功",
+    "markAsReadSucceedToast": "Mark as read successfully",
+    "markAsReadTooltip": "Mark this notification as read",
+    "mentionedYou": "提到了您",
+    "noNotifications": "No notifications yet",
+    "older": "更早",
+    "today": "今天",
+    "unarchiveTooltip": "Un归档此通知",
+    "viewNotifications": "查看通知"
   },
   "reminderNotification": {
     "title": "提醒",
@@ -2027,13 +2661,15 @@
     "replace": "替换",
     "replaceAll": "全部替换",
     "noResult": "没有结果",
-    "caseSensitive": "区分大小写"
+    "caseSensitive": "区分大小写",
+    "searchMore": "搜索以查找更多结果"
   },
   "error": {
     "weAreSorry": "我们很抱歉",
-    "loadingViewError": "我们在加载此视图时遇到问题。请检查您的互联网连接，刷新应用程序，如果问题仍然存在，请随时联系开发团队。"
-    ,
-    "clickToCopy": "点击复制"
+    "loadingViewError": "我们在加载此视图时遇到问题。请检查您的互联网连接，刷新应用程序，如果问题仍然存在，请随时联系开发团队。",
+    "clickToCopy": "点击复制",
+    "syncError": "数据未从其他设备同步",
+    "syncErrorHint": "Please reopen this page on the device where it was last edited, then open it agAIn on the current device."
   },
   "editor": {
     "bold": "加粗",
@@ -2146,11 +2782,33 @@
     "rowDuplicate": "复制行",
     "colClear": "清空本列内容",
     "rowClear": "清空本行内容",
-    "slashPlaceHolder": "输入 '/' 以插入块，或开始键入"
+    "slashPlaceHolder": "输入 '/' 以插入块，或开始键入",
+    "backgroundColorAqua": "水蓝色背景",
+    "backgroundColorLime": "青柠色背景",
+    "bulletedListShortForm": "Bulleted",
+    "codeBlockShortForm": "Code",
+    "convertTo": "Convert to",
+    "date": "Date",
+    "mathEquationShortForm": "Formula",
+    "mobileHeading4": "Heading 4",
+    "mobileHeading5": "Heading 5",
+    "mobileHeading6": "Heading 6",
+    "numberedListShortForm": "Numbered",
+    "page": "页面",
+    "quoteListShortForm": "Quote",
+    "select": "Select",
+    "selectAll": "Select all",
+    "toggleHeading1ShortForm": "Toggle H1",
+    "toggleHeading2ShortForm": "Toggle H2",
+    "toggleHeading3ShortForm": "Toggle H3",
+    "toggleListShortForm": "Toggle",
+    "typeSomething": "Type something..."
   },
   "favorite": {
     "noFavorite": "没有收藏页面",
-    "noFavoriteHintText": "向左滑动页面即可将其添加到您的收藏夹"
+    "noFavoriteHintText": "向左滑动页面即可将其添加到您的收藏夹",
+    "addToSidebar": "固定到侧边栏",
+    "removeFromSidebar": "从侧边栏移除"
   },
   "cardDetails": {
     "notesPlaceholder": "输入 “/” 以插入块，或开始键入"
@@ -2198,6 +2856,41 @@
         "failedToGetCurrentUser": "获取当前用户邮箱失败",
         "confirmTextValidationFailed": "你的确认文本不匹配 \"@:newSettings.myAccount.deleteAccount.confirmHint3\"",
         "deleteAccountSuccess": "账户删除成功"
+      },
+      "aboutAppFlowy": "About @:appName",
+      "myAccount": "My Account",
+      "myProfile": "My Profile",
+      "password": {
+        "changePassword": "Change password",
+        "confirmNewPassword": "Confirm new password",
+        "confirmPassword": "Confirm password",
+        "currentPassword": "Current password",
+        "error": {
+          "confirmPasswordIsRequired": "Confirm password is required",
+          "currentPasswordIsIncorrect": "Current password is incorrect",
+          "currentPasswordIsRequired": "Current password is required",
+          "newPasswordIsRequired": "New password is required",
+          "newPasswordIsSameAsCurrent": "New password is same as current password",
+          "passwordCannotBeLongerThan72Characters": "Password cannot be longer than {max} characters",
+          "passwordShouldBeAtLeast6Characters": "Password should be at least {min} characters",
+          "passwordsDoNotMatch": "Passwords do not match"
+        },
+        "hint": {
+          "confirmYourNewPassword": "Confirm your new password",
+          "confirmYourPassword": "Confirm your password",
+          "enterYourCurrentPassword": "Enter your current password",
+          "enterYourNewPassword": "Enter your new password",
+          "enterYourPassword": "Enter your password"
+        },
+        "newPassword": "New password",
+        "setupPassword": "Setup password",
+        "title": "Password",
+        "toast": {
+          "passwordSetupFailed": "操作失败",
+          "passwordSetupSuccessfully": "Password setup 成功fully",
+          "passwordUpdatedFailed": "操作失败",
+          "passwordUpdatedSuccessfully": "Password updated 成功fully"
+        }
       }
     },
     "workplace": {
@@ -2211,7 +2904,15 @@
           "dark": "黑暗"
         },
         "language": "语言"
-      }
+      },
+      "name": "Workplace",
+      "renameError": "操作失败",
+      "subtitle": "Customize your workspace appearance, theme, font, text layout, date, time, 和 language.",
+      "title": "Workplace Settings",
+      "workplaceIcon": "Workplace icon",
+      "workplaceIconSubtitle": "Upload an image or use an emoji for your workspace. Icon will show in your sidebar 和 notifications.",
+      "workplaceName": "Workplace name",
+      "workplaceNamePlaceholder": "Enter workplace name"
     },
     "syncState": {
       "syncing": "同步中",
@@ -2222,10 +2923,44 @@
   "pageStyle": {
     "pageIcon": "页面图标",
     "openSettings": "打开设置",
-    "image": "图像"
+    "image": "图像",
+    "backgroundImage": "背景图片",
+    "cameraPermissionDescription": "@:appName needs access to your camera to let you add images to your documents from the camera",
+    "cameraPermissionTitle": "@:appName would like to access your camera",
+    "colors": "Colors",
+    "coverImage": "Cover image",
+    "doNotAllow": "Don't Allow",
+    "gradient": "Gradient",
+    "layout": "Layout",
+    "none": "None",
+    "pageCover": "Page cover",
+    "photo": "Photo",
+    "photoPermissionDescription": "@:appName needs access to your photos to let you add images to your documents",
+    "photoPermissionTitle": "@:appName would like to access your photo library",
+    "presets": "Presets",
+    "title": "Page style",
+    "unsplash": "Unsplash"
   },
   "commandPalette": {
-    "placeholder": "输入你要搜索的内容..."
+    "placeholder": "输入你要搜索的内容...",
+    "aiAskFollowUp": "继续提问",
+    "aiOverview": "AI 概览",
+    "aiOverviewMoreDetails": "更多详情",
+    "aiOverviewSource": "Reference sources",
+    "bestMatches": "Best matches",
+    "betaLabel": "BETA",
+    "betaTooltip": "We currently only support searching for pages 和 content in documents",
+    "clearSearchTooltip": "Clear input",
+    "clickToOpenPage": "Click to open page",
+    "created": "Created",
+    "edited": "Edited",
+    "fromTrashHint": "From trash",
+    "loadingTooltip": "We are looking for results...",
+    "location": "Location",
+    "navigateHint": "to navigate",
+    "noResultsHint": "We didn't find what you're looking for, try searching for an其他 term.",
+    "pagePreview": "Content 上一个iew",
+    "recentHistory": "Recent history"
   },
   "space": {
     "delete": "删除",
@@ -2326,72 +3061,148 @@
     "weekdaySix": "六",
     "weekdaySeven": "日"
   },
-    "publish": {
-      "saveThisPage": "使用此模板创建",
-      "retry": "重试",
-      "noPublished": "暂无发布",
-      "selectItemToView": "从左侧选择一个发布项查看内容",
-      "selectFavoriteToView": "选择左侧最爱项查看内容",
-      "selectPublishToView": "选择左侧发布项查看内容",
-      "noFavorites": "暂无最爱",
-      "hasNotBeenPublished": "此页面尚未发布。",
-      "spaceHasNotBeenPublished": "目前尚不支持发布工作区",
-      "reportPage": "举报页面",
-      "databaseHasNotBeenPublished": "目前尚不支持发布数据库。",
-      "createdWith": "创建于",
-      "downloadApp": "下载 PonyNotes",
-      "copy": {
-        "codeBlock": "代码区块的内容已复制到剪贴板",
-        "imageBlock": "图片链接已复制到剪贴板",
-        "mathBlock": "数学公式已复制到剪贴板",
-        "fileBlock": "文件链接已复制到剪贴板"
-      },
-      "containsPublishedPage": "此页面包含一个或多个已发布的页面。如果您继续，它们将会被取消发布。您要继续删除吗？",
-      "publishSuccessfully": "发布成功",
-      "unpublishSuccessfully": "取消发布成功",
-      "publishFailed": "发布失败",
-      "unpublishFailed": "取消发布失败",
-      "noAccessToVisit": "无法访问此页面...",
-      "createWithAppFlowy": "使用 AppFlowy 建立网站",
-      "fastWithAI": "使用 AI 快速且轻松。",
-      "tryItNow": "立即尝试",
-      "onlyGridViewCanBePublished": "仅限网格视图可发布",
-      "database": {
-        "zero": "发布所选取的 {} 视图",
-        "one": "发布所选取的 {} 个视图",
-        "many": "发布所选取的 {} 个视图",
-        "other": "发布所选取的 {} 个视图"
-      },
-      "mustSelectPrimaryDatabase": "必须选择主要视图",
-      "noDatabaseSelected": "未选取数据库，请至少选择一个数据库。",
-      "unableToDeselectPrimaryDatabase": "无法取消选择主要数据库",
-      "duplicateTitle": "您想将其新增到哪里？",
-      "selectWorkspace": "选择工作区",
-      "addTo": "添加",
-      "duplicateSuccessfully": "已新增至您的工作区",
-      "duplicateSuccessfullyDescription": "尚未安装 AppFlowy？点击“下载”后，下载将自动开始。",
-      "downloadIt": "下载",
-      "openApp": "在应用程序中打开",
-      "duplicateFailed": "复制失败",
-      "membersCount": {
-        "zero": "没有成员",
-        "one": "1 名成员",
-        "many": "{count} 名成员",
-        "other": "{count} 名成员"
-      },
-      "useThisTemplate": "使用模板"
+  "publish": {
+    "saveThisPage": "使用此模板创建",
+    "retry": "重试",
+    "noPublished": "暂无发布",
+    "selectItemToView": "从左侧选择一个发布项查看内容",
+    "selectFavoriteToView": "选择左侧最爱项查看内容",
+    "selectPublishToView": "选择左侧发布项查看内容",
+    "noFavorites": "暂无最爱",
+    "hasNotBeenPublished": "此页面尚未发布。",
+    "spaceHasNotBeenPublished": "目前尚不支持发布工作区",
+    "reportPage": "举报页面",
+    "databaseHasNotBeenPublished": "目前尚不支持发布数据库。",
+    "createdWith": "创建于",
+    "downloadApp": "下载 PonyNotes",
+    "copy": {
+      "codeBlock": "代码区块的内容已复制到剪贴板",
+      "imageBlock": "图片链接已复制到剪贴板",
+      "mathBlock": "数学公式已复制到剪贴板",
+      "fileBlock": "文件链接已复制到剪贴板"
     },
+    "containsPublishedPage": "此页面包含一个或多个已发布的页面。如果您继续，它们将会被取消发布。您要继续删除吗？",
+    "publishSuccessfully": "发布成功",
+    "unpublishSuccessfully": "取消发布成功",
+    "publishFailed": "发布失败",
+    "unpublishFailed": "取消发布失败",
+    "noAccessToVisit": "无法访问此页面...",
+    "createWithAppFlowy": "使用 AppFlowy 建立网站",
+    "fastWithAI": "使用 AI 快速且轻松。",
+    "tryItNow": "立即尝试",
+    "onlyGridViewCanBePublished": "仅限网格视图可发布",
+    "database": {
+      "zero": "发布所选取的 {} 视图",
+      "one": "发布所选取的 {} 个视图",
+      "many": "发布所选取的 {} 个视图",
+      "other": "发布所选取的 {} 个视图"
+    },
+    "mustSelectPrimaryDatabase": "必须选择主要视图",
+    "noDatabaseSelected": "未选取数据库，请至少选择一个数据库。",
+    "unableToDeselectPrimaryDatabase": "无法取消选择主要数据库",
+    "duplicateTitle": "您想将其新增到哪里？",
+    "selectWorkspace": "选择工作区",
+    "addTo": "添加",
+    "duplicateSuccessfully": "已新增至您的工作区",
+    "duplicateSuccessfullyDescription": "尚未安装 AppFlowy？点击“下载”后，下载将自动开始。",
+    "downloadIt": "下载",
+    "openApp": "在应用程序中打开",
+    "duplicateFailed": "复制失败",
+    "membersCount": {
+      "zero": "没有成员",
+      "one": "1 名成员",
+      "many": "{count} 名成员",
+      "other": "{count} 名成员"
+    },
+    "useThisTemplate": "使用模板"
+  },
   "web": {
     "continueWithGoogle": "使用 Google 账户登录",
     "continueWithGithub": "使用 GitHub 账户登录",
-    "continueWithDiscord": "使用 Discord 账户登录"
+    "continueWithDiscord": "使用 Discord 账户登录",
+    "and": "和",
+    "collapse": "收起",
+    "continue": "继续",
+    "continueWithApple": "Continue with Apple ",
+    "dropNotionFile": "Drop your Notion zip file here to upload, or click to browse",
+    "error": {
+      "pageNameIsEmpty": "The page name is empty, please try an其他 one"
+    },
+    "fileBlock": {
+      "empty": "Upload or embed a file",
+      "linkedAt": "Link added on {time}",
+      "retry": "Retry",
+      "uploadFailed": "上传失败",
+      "uploadedAt": "Uploaded on {time}"
+    },
+    "import": "Import",
+    "importFailed": "操作失败",
+    "importNotion": "Import from Notion",
+    "importSuccess": "Uploaded 成功fully",
+    "importSuccessMessage": "We'll notify you when the import is complete. After that, you can view your imported pages in the sidebar.",
+    "login": "Sign up or log in",
+    "moreOptions": "More options",
+    "or": "or",
+    "privacyPolicy": "Privacy Policy",
+    "signInAgreement": "点击上方的\"继续\"，即表示您同意\n小马笔记的 ",
+    "signInError": "登录错误",
+    "signInLocalAgreement": "点击上方的\"开始使用\"，即表示您同意\n小马笔记的 ",
+    "termOfUse": "Terms"
   },
   "template": {
     "deleteFromTemplate": "从模板中删除",
     "relatedTemplates": "相关模板",
     "deleteTemplate": "删除模板",
     "removeRelatedTemplate": "移除相关模板",
-    "label": "模板"
+    "label": "模板",
+    "about": "模板说明",
+    "addCategory": "添加\"{category}\"",
+    "addNewCategory": "添加新类别",
+    "addNewCreator": "Add new creator",
+    "addRelatedTemplate": "Add related template",
+    "asTemplate": "Save as template",
+    "categories": "Template Categories",
+    "category": {
+      "bgColor": "Category background color",
+      "byFeature": "By Feature",
+      "byUseCase": "By Use Case",
+      "colors": "Category Colors",
+      "deleteCategory": "Delete category",
+      "deleteCategoryDescription": "Are you sure you want to delete this category?",
+      "desc": "Category description",
+      "icon": "Category icon",
+      "icons": "Category Icons",
+      "name": "Category name",
+      "priority": "Category priority",
+      "type": "Category type",
+      "typeToSearch": "Type to search categories..."
+    },
+    "creator": {
+      "accountLinks": "Creator account links",
+      "avatar": "Creator avatar",
+      "deleteCreator": "Delete creator",
+      "deleteCreatorDescription": "Are you sure you want to delete this creator?",
+      "label": "Template Creator",
+      "name": "Creator name",
+      "typeToSearch": "Type to search creators...",
+      "uploadAvatar": "Click to upload avatar"
+    },
+    "deleteCategory": "Delete category",
+    "deleteSuccess": "Template deleted 成功fully",
+    "deleteTemplateDescription": "This won't affect the current page or published status. Are you sure you want to delete this template?",
+    "description": "Template Description",
+    "editCategory": "Edit category",
+    "editCreator": "Edit creator",
+    "featured": "PIN to Featured",
+    "isNewTemplate": "PIN to New template",
+    "name": "Template name",
+    "preview": "Template Preview",
+    "requiredField": "{field} is required",
+    "searchInCategory": "Search in {category}",
+    "uploadAvatar": "Upload avatar",
+    "uploadSuccess": "Template uploaded 成功fully",
+    "uploadSuccessDescription": "Your template has been uploaded 成功fully. You can now view it in the template gallery.",
+    "viewTemplate": "View template"
   },
   "time": {
     "justNow": "刚刚",
@@ -2505,25 +3316,362 @@
   "shareSection": {
     "shared": "與我分享"
   },
-  "search": {
-    "label": "搜索",
-    "sidebarSearchIcon": "搜索并快速跳转到页面",
-    "searchOrAskAI": "搜索或向 AI 提问",
-    "searchFieldHint": "在 {} 中搜索或提问…",
-    "askAIAnything": "向 AI 询问任何问题",
-    "askAIFor": "向 AI 询问",
-    "searching": "正在搜索…",
-    "noResultForSearching": "未找到匹配结果",
-    "noResultForSearchingHint": "试试不同的问题或关键字，部分页面可能在回收站中。",
-    "noResultForSearchingHintWithoutTrash": "试试不同的问题或关键字。",
-    "bestMatch": "最佳匹配",
-    "seeMore": "查看更多",
-    "showMore": "显示更多",
-    "somethingWentWrong": "出错了",
-    "pageNotExist": "该页面不存在",
-    "tryAgainOrLater": "请稍后再试",
-    "placeholder": {
-      "actions": "搜索操作…"
+  "ai": {
+    "analyzing": "分析中",
+    "contentPolicyViolation": "操作失败",
+    "continueWritingEmptyDocumentDescription": "We are having trouble exp和ing on the content in your document. Write a small intro 和 we can take it from there!",
+    "continueWritingEmptyDocumentTitle": "我们无法扩展您文档中的内容。请尝试添加更多内容或使用不同的提示。",
+    "customPrompt": {
+      "all": "All",
+      "browsePrompts": "Browse prompts",
+      "business": "Business",
+      "caseStudies": "Case Studies",
+      "category": "Category",
+      "configureDatabase": "Configure Database",
+      "content": "Content",
+      "contentSeo": "Content/SEO",
+      "copyWriting": "Copy Writing",
+      "custom": "自定义",
+      "customPrompt": "Custom Prompts",
+      "customerSuccess": "Customer Success",
+      "databasePrompts": "Load prompts from your own database",
+      "development": "Development",
+      "education": "Education",
+      "emailMarketing": "EmAIl Marketing",
+      "example": "Example",
+      "featured": "Featured",
+      "healthAndFitness": "Health & fitness",
+      "invalidDatabase": "Invalid Database",
+      "invalidDatabaseHelp": "Ensure that the database has at least two text properties:\n ◦ One used for the prompt name\n ◦ One used for the prompt content\nYou can also optionally add properties for the prompt example 和 category.",
+      "loading": "Loading",
+      "marketing": "Marketing",
+      "noResults": "No prompts found",
+      "others": "其他",
+      "paidAds": "PAId Ads",
+      "podcastProduction": "Podcast Production",
+      "prCommunication": "PR/Communication",
+      "prompt": "Prompt",
+      "promptDatabase": "Prompt database",
+      "promptExample": "Prompt Example",
+      "recruiting": "Recruiting",
+      "sales": "Sales",
+      "salesCopy": "Sales Copy",
+      "sampleOutput": "Sample output",
+      "selectDatabase": "Select database",
+      "selectField": "Select field",
+      "socialMedia": "Social Media",
+      "strategy": "Strategy",
+      "title": "Title",
+      "travel": "Travel",
+      "usePrompt": "Use prompt",
+      "work": "Work",
+      "writing": "Writing"
+    },
+    "editing": "Editing",
+    "imageLimitReachedDescription": "专业版计划",
+    "limitReachedAction": {
+      "aiAddon": "AI add-on",
+      "imageDescription": "You've used up your free AI image quota. Please",
+      "orPurchaseAn": "or purchase an",
+      "proPlan": "专业版计划",
+      "textDescription": "更多",
+      "toThe": "to the",
+      "upgrade": "升级"
+    },
+    "more": "更多",
+    "textLimitReachedDescription": "专业版计划"
+  },
+  "approveAccess": {
+    "alreadyProMessage": "Ask them to contact <emAIl/> to unlock more members",
+    "alreadyProTitle": "You've reached the workspace plan limit",
+    "approveButton": "批准",
+    "approveError": "操作失败",
+    "approveSuccess": "Approved 成功fully",
+    "asMember": "as a member",
+    "downloadApp": "下载应用",
+    "ensurePlanLimit": "Ensure the workspace plan limit is not exceeded. If the limit is exceeded, consider <upgrade/> the workspace plan or <下载/>.",
+    "getRequestInfoError": "操作失败",
+    "memberCount": {
+      "many": "{count} 个成员",
+      "one": "1 个成员",
+      "other": "{count} 个成员",
+      "zero": "No members"
+    },
+    "repeatApproveError": "批准",
+    "requestSummary": "<user/> requests to join <workspace/> 和 access <page/>",
+    "requestToJoin": "requested to join",
+    "title": "批准",
+    "upgrade": "升级"
+  },
+  "breadcrumbs": {
+    "label": "面包屑导航"
+  },
+  "emojiIconPicker": {
+    "iconUploader": {
+      "change": "更改",
+      "dropToUpload": "拖放文件以上传",
+      "placeholderLeft": "拖放文件，点击以 ",
+      "placeholderRight": "，或粘贴图片链接。",
+      "placeholderUpload": "上传"
     }
+  },
+  "fileDropzone": {
+    "dropFile": "点击或拖拽文件到此区域以上传",
+    "uploadFailed": "上传失败",
+    "uploadFailedDescription": "上传失败",
+    "uploadSuccess": "上传成功",
+    "uploadSuccessDescription": "文件已成功上传",
+    "uploading": "Uploading...",
+    "uploadingDescription": "The file is being uploaded"
+  },
+  "gallery": {
+    "copy": "复制",
+    "download": "下载",
+    "next": "下一个",
+    "prev": "上一个",
+    "preview": "Open in full screen",
+    "resetZoom": "重置缩放",
+    "zoomIn": "放大",
+    "zoomOut": "缩小"
+  },
+  "globalComment": {
+    "addComment": "添加评论",
+    "addReaction": "添加反应",
+    "collapse": "收起",
+    "commentAddedSuccessTip": "You've just added or replied to a comment. Would you like to jump to the top to see the latest comments?",
+    "commentAddedSuccessfully": "Comment added successfully.",
+    "comments": "Comments",
+    "confirmDeleteDescription": "Are you sure you want to delete this comment?",
+    "deleteComment": "Delete comment",
+    "failedToAddComment": "操作失败",
+    "hasBeenDeleted": "Deleted",
+    "noAccessDeleteComment": "You're not allowed to delete this comment",
+    "reactedBy": "反应来自",
+    "reactedByMore": "and {count} 其他s",
+    "readMore": "阅读更多",
+    "reply": "回复",
+    "replyingTo": "回复给",
+    "showDays": {
+      "many": "{count} days ago",
+      "one": "1 day ago",
+      "other": "{count} days ago"
+    },
+    "showHours": {
+      "many": "{count} hours ago",
+      "one": "1 hour ago",
+      "other": "{count} hours ago"
+    },
+    "showMinutes": {
+      "many": "{count} minutes ago",
+      "one": "1 minute ago",
+      "other": "{count} minutes ago"
+    },
+    "showMonths": {
+      "many": "{count} months ago",
+      "one": "1 month ago",
+      "other": "{count} months ago"
+    },
+    "showSeconds": {
+      "many": "{count} seconds ago",
+      "one": "1 second ago",
+      "other": "{count} seconds ago",
+      "zero": "Just now"
+    },
+    "showYears": {
+      "many": "{count} years ago",
+      "one": "1 year ago",
+      "other": "{count} years ago"
+    },
+    "youAreNotOwner": "You are not the owner of this comment"
+  },
+  "invitation": {
+    "alreadyAccepted": "您已接受此邀请",
+    "errorModal": {
+      "changeAccount": "切换账户",
+      "close": "返回首页",
+      "contactOwner": "Contact owner",
+      "description": "Your current account {emAIl} may not have access to this workspace. Please log in with the correct account or contact the workspace owner for help.",
+      "title": "Something went wrong"
+    },
+    "invitedBy": "Invited by",
+    "join": "Join",
+    "joinWorkspace": "Join workspace",
+    "membersCount": {
+      "many": "{count} 个成员",
+      "one": "{count} 个成员",
+      "other": "{count} 个成员",
+      "zero": "{count} 个成员"
+    },
+    "on": "on",
+    "openWorkspace": "Open AppFlowy",
+    "success": "You've 成功fully joined the workspace",
+    "successMessage": "You can now access all the pages 和 workspaces within it.",
+    "tip": "You've been invited to Join this workspace with the contact information below. If this is incorrect, contact your administrator to resend the invite."
+  },
+  "inviteMember": {
+    "addEmail": "emAIl@example.com, emAIl2@example.com...",
+    "description": "Input emAIls below with commas between them. Charges are based on member count.",
+    "emails": "EmAIl",
+    "inviteAlready": "You've already invited this emAIl: {emAIl}",
+    "inviteFailedMemberLimit": "Member limit has been reached, please ",
+    "inviteSuccess": "Invitation sent 成功fully",
+    "requestInviteMembers": "Invite to your workspace",
+    "requestInvites": "Send invites",
+    "upgrade": "升级"
+  },
+  "lockPage": {
+    "lockPage": "已锁定",
+    "lockTooltip": "页面已锁定以防止意外编辑。点击以解锁。",
+    "lockedOperationTooltip": "页面已锁定以防止意外编辑。",
+    "pageLockedToast": "Page 已锁定. Editing is disabled until someone unlocks it.",
+    "reLockPage": "Re-lock"
+  },
+  "members": {
+    "many": "{count} 个成员",
+    "one": "1 个成员",
+    "other": "{count} 个成员",
+    "zero": "No members"
+  },
+  "noLogFiles": "没有日志文件",
+  "openFileMessage": {
+    "fileNotFound": "未找到",
+    "noAppToOpenFile": "没有应用程序",
+    "permissionDenied": "无权限",
+    "success": "File opened 成功fully",
+    "unknownError": "操作失败"
+  },
+  "quickNote": {
+    "addNote": "新笔记",
+    "collapseFullView": "收起完整视图",
+    "createFailed": "创建失败",
+    "deleteNotePrompt": "The selected note will be deleted permanently. Are you sure you want to delete it?",
+    "emptyNote": "Empty note",
+    "expandFullView": "Exp和 full view",
+    "label": "Quick Note",
+    "noAdditionalText": "No additional text",
+    "quickNotes": "Quick Notes",
+    "quickNotesEmpty": "No Quick Notes",
+    "search": "Search Quick Notes"
+  },
+  "requestAccess": {
+    "backToHome": "返回首页",
+    "mightBe": "You might need to <login/> with a different account.",
+    "repeatRequestError": "您已请求访问此页面",
+    "requestAccess": "Request access",
+    "requestError": "操作失败",
+    "subtitle": "You can request access from the owner of this page. Once approved, you can view the page.",
+    "successful": "Request sent 成功fully",
+    "successfulMessage": "You will be notified once the owner approves your request.",
+    "tip": "You're currently logged in as <link/>.",
+    "title": "No access to this page"
+  },
+  "subscribe": {
+    "cancel": "降级",
+    "cancelPlan": {
+      "commonOther": "其他",
+      "description": "We're sorry to see you go. We'd love to hear your feedback to help us improve AppFlowy. Please take a moment to answer a few questions.",
+      "otherHint": "Write your answer here",
+      "questionFour": {
+        "answerFive": "Unsatisfied",
+        "answerFour": "Below average",
+        "answerOne": "Great",
+        "answerThree": "Average",
+        "answerTwo": "Good",
+        "question": "How would you describe your overall experience with AppFlowy?"
+      },
+      "questionOne": {
+        "answerFive": "Service issue or technical difficulties",
+        "answerFour": "Did not use it enough to justify the expense",
+        "answerOne": "Cost too high",
+        "answerThree": "Found a better alternative",
+        "answerTwo": "Features did not meet expectations",
+        "question": "What prompted you to cancel your AppFlowy Pro subscription?"
+      },
+      "questionThree": {
+        "answerFour": "Access to local AI models",
+        "answerOne": "Multi-user collaboration",
+        "answerThree": "Unlimited AI responses",
+        "answerTwo": "Longer time version history",
+        "question": "Which Pro feature did you value the most during your subscription?"
+      },
+      "questionTwo": {
+        "answerFive": "Very unlikely",
+        "answerFour": "Unlikely",
+        "answerOne": "Very likely",
+        "answerThree": "Not sure",
+        "answerTwo": "Somewhat likely",
+        "question": "How likely are you to consider re-subscribing to AppFlowy Pro in the future?"
+      },
+      "success": "Your subscription has been canceled 成功fully",
+      "title": "Sorry to see you go"
+    },
+    "changePlan": "升级到专业版",
+    "currentPlan": "Current",
+    "everythingInFree": "Everything in Free +",
+    "free": "Free",
+    "freeDescription": "For individuals up to 2 members to organize everything",
+    "freeDuration": "forever",
+    "freePoints": {
+      "first": "1 个成员",
+      "five": "20 AI responses",
+      "four": "Intelligent search",
+      "second": "Unlimited pages & blocks",
+      "seven": "Real-time collaboration",
+      "six": "Mobile app",
+      "three": "5 GB storage"
+    },
+    "monthly": "Monthly",
+    "priceIn": "Price in ",
+    "pro": "Pro",
+    "proDescription": "For small teams to manage projects 和 team knowledge",
+    "proDuration": {
+      "monthly": "per member per month\nbilled monthly",
+      "yearly": "per member per month\nbilled annually"
+    },
+    "proPoints": {
+      "first": "Unlimited storage",
+      "five": "Custom namespace",
+      "four": "Unlimited file uploads",
+      "second": "Up to 10 workspace members",
+      "three": "Unlimited AI responses"
+    },
+    "save": "Save {discount}%",
+    "upgradePlanTitle": "Compare & select plan",
+    "yearly": "Yearly"
+  },
+  "suggestion": {
+    "accept": "接受",
+    "close": "关闭",
+    "discard": "放弃",
+    "insertBelow": "Insert below",
+    "keep": "Keep",
+    "rewrite": "Rewrite",
+    "tryAgain": "Try agAIn"
+  },
+  "tabMenu": {
+    "close": "关闭",
+    "closeDisabledHint": "无法关闭已固定的标签页，请先取消固定",
+    "closeOthers": "关闭其他标签页",
+    "closeOthersDisabledHint": "All tabs are pinned, cannot find any tabs to 关闭",
+    "closeOthersHint": "This will 关闭 all unpinned tabs except this one",
+    "favorite": "Favorite",
+    "favoriteDisabledHint": "Cannot favorite this view",
+    "pinTab": "Pin",
+    "unfavorite": "Unfavorite",
+    "unpinTab": "Unpin"
+  },
+  "upgradePlanModal": {
+    "actionButton": "升级",
+    "appNote": "注意：",
+    "downloadLink": "下载应用",
+    "laterButton": "Later",
+    "message": "专业版计划",
+    "refresh": "here",
+    "refreshNote": "After successful 升级, click <refresh/> to activate your new features.",
+    "step1": "1. Go to Settings",
+    "step2": "2. Click on 'Plan'",
+    "step3": "3. Select 'Change Plan'",
+    "title": "升级到专业版",
+    "upgradeSteps": "How to 升级 your plan on AppFlowy:"
   }
 }
