@@ -6,6 +6,7 @@ import 'package:appflowy/shared/clipboard_state.dart';
 import 'package:appflowy/shared/easy_localiation_service.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
+import 'package:appflowy/shared/icon_emoji_picker/icon.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_settings_service.dart';
 import 'package:appflowy/util/font_family_extension.dart';
@@ -50,13 +51,19 @@ class InitAppWidgetTask extends LaunchTask {
     await super.initialize(context);
 
     WidgetsFlutterBinding.ensureInitialized();
+    
+    // 配置 Flutter ImageCache 内存限制，防止内存溢出
+    // 设置最大缓存图片数量为 1000 张，最大内存为 200MB
+    PaintingBinding.instance.imageCache.maximumSize = 1000;
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 200 * 1024 * 1024; // 200MB
 
     await NotificationService.initialize();
 
     // 异步加载图标，不阻塞应用启动
-    loadIconGroups().catchError((e) {
+    await loadIconGroups().catchError((e) {
       // 图标加载失败不应该阻止应用启动
       // 错误已在loadIconGroups内部记录
+      return <IconGroup>[];
     });
 
     final widget = context.getIt<EntryPoint>().create(context.config);

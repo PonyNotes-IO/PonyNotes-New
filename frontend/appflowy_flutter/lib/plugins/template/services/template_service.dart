@@ -34,6 +34,9 @@ class TemplateService {
   static bool _isLoading = false;
   static final Map<String, List<TemplateItem>> _categoryCache = {};
   
+  // 分类缓存大小限制：最多缓存 50 个分类，防止内存溢出
+  static const int _maxCategoryCacheSize = 50;
+  
   // 模拟模板数据，实际应用中应该从 API 获取
   static final List<TemplateItem> _mockTemplates = [
     TemplateItem(
@@ -257,6 +260,13 @@ class TemplateService {
         final websiteCategoryTemplates = await _fetchTemplatesFromWebsiteCategory(category);
         if (websiteCategoryTemplates.isNotEmpty) {
           _categoryCache[category] = websiteCategoryTemplates;
+          
+          // 清理缓存，防止内存溢出
+          if (_categoryCache.length > _maxCategoryCacheSize) {
+            final oldestKey = _categoryCache.keys.first;
+            _categoryCache.remove(oldestKey);
+          }
+          
           return websiteCategoryTemplates;
         }
       } catch (_) {
@@ -275,6 +285,14 @@ class TemplateService {
     
     // 缓存结果
     _categoryCache[category] = filteredTemplates;
+    
+    // 清理缓存，防止内存溢出
+    if (_categoryCache.length > _maxCategoryCacheSize) {
+      // 删除最旧的缓存（简化实现：删除第一个）
+      final oldestKey = _categoryCache.keys.first;
+      _categoryCache.remove(oldestKey);
+    }
+    
     return filteredTemplates;
   }
 

@@ -254,6 +254,15 @@ class FlowyNetworkRetryCounter with ChangeNotifier {
         (retryCount != null && retryCount >= maxRetries)) {
       _values.remove(url);
     }
+    
+    // 定期清理过期的 URL，防止内存泄漏
+    // 如果缓存超过 1000 个 URL，清理最旧的 500 个
+    if (_values.length > 1000) {
+      final keysToRemove = _values.keys.take(500).toList();
+      for (final key in keysToRemove) {
+        _values.remove(key);
+      }
+    }
   }
 
   /// Reset the retry counter.

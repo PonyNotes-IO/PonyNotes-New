@@ -284,6 +284,7 @@ class _SecondaryViewState extends State<SecondaryView>
         .removeListener(onShowSecondaryChanged);
     widget.pageManager.secondaryNotifier.removeListener(onSecondaryViewChanged);
     widthNotifier.dispose();
+    animationController.dispose();
     super.dispose();
   }
 
