@@ -51,7 +51,8 @@ class NotificationTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final baseStyle = Theme.of(context).textTheme.bodyMedium;
+    final theme = Theme.of(context);
+    final baseStyle = theme.textTheme.bodyMedium;
     final labelStyle = baseStyle?.copyWith(
       fontWeight: FontWeight.w500,
       fontSize: 16.0,
@@ -70,16 +71,16 @@ class NotificationTabBar extends StatelessWidget {
         controller: tabController,
         tabs: tabs.map((e) => Tab(text: e.tr)).toList(),
         indicatorSize: TabBarIndicatorSize.label,
-        isScrollable: true,
+        // isScrollable: true,
         labelStyle: labelStyle,
         labelColor: baseStyle?.color,
         labelPadding: const EdgeInsets.only(right: 20),
         unselectedLabelStyle: unselectedLabelStyle,
         overlayColor: WidgetStateProperty.all(Colors.transparent),
-        indicator: const RoundUnderlineTabIndicator(
+        indicator: RoundUnderlineTabIndicator(
           width: 28.0,
           borderSide: BorderSide(
-            color: Color(0xFF00C8FF),
+            color: theme.colorScheme.primary,
             width: 3,
           ),
         ),

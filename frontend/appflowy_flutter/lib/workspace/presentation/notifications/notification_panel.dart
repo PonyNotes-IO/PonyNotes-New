@@ -29,7 +29,7 @@ class _NotificationPanelState extends State<NotificationPanel>
 
   final tabs = [
     NotificationTabType.mention,
-    NotificationTabType.clip,
+    // NotificationTabType.clip,
     NotificationTabType.reminder,
     NotificationTabType.system,
   ];
@@ -37,7 +37,7 @@ class _NotificationPanelState extends State<NotificationPanel>
   @override
   void initState() {
     super.initState();
-    tabController = TabController(length: 4, vsync: this);
+    tabController = TabController(length: 3, vsync: this);
   }
 
   @override
