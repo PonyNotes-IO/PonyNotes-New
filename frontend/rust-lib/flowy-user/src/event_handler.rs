@@ -253,37 +253,218 @@ pub async fn get_date_time_settings(
   }
 }
 
-const NOTIFICATION_SETTINGS_CACHE_KEY: &str = "notification_settings";
+// 注意：通知设置不再在本地 KV 落盘。
+// Flutter 仅通过 Rust 读写；Rust 以服务端为准（GET/POST）。
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub async fn set_notification_settings(
-  store_preferences: AFPluginState<Weak<KVStorePreferences>>,
+  manager: AFPluginState<Weak<UserManager>>,
   data: AFPluginData<NotificationSettingsPB>,
+  _store_preferences: AFPluginState<Weak<KVStorePreferences>>,
 ) -> Result<(), FlowyError> {
-  let store_preferences = upgrade_store_preferences(store_preferences)?;
+  let manager = upgrade_manager(manager)?;
   let setting = data.into_inner();
-  store_preferences.set_object(NOTIFICATION_SETTINGS_CACHE_KEY, &setting)?;
+
+  // Rust 直接调用服务端接口同步（无本地落盘）
+  sync_notification_settings_to_cloud(&manager, &setting).await?;
   Ok(())
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
 pub async fn get_notification_settings(
-  store_preferences: AFPluginState<Weak<KVStorePreferences>>,
+  manager: AFPluginState<Weak<UserManager>>,
+  _store_preferences: AFPluginState<Weak<KVStorePreferences>>,
 ) -> DataResult<NotificationSettingsPB, FlowyError> {
-  let store_preferences = upgrade_store_preferences(store_preferences)?;
-  match store_preferences.get_str(NOTIFICATION_SETTINGS_CACHE_KEY) {
-    None => data_result_ok(NotificationSettingsPB::default()),
-    Some(s) => {
-      let setting = serde_json::from_str(&s).unwrap_or_else(|e| {
-        tracing::error!(
-          "Deserialize NotificationSettings failed: {:?}, fallback to default",
-          e
-        );
-        NotificationSettingsPB::default()
-      });
-      data_result_ok(setting)
-    },
+  let manager = upgrade_manager(manager)?;
+  let setting = fetch_notification_settings_from_cloud(&manager).await?;
+  data_result_ok(setting)
+}
+
+#[derive(Debug, serde::Serialize)]
+struct NotificationPreferencesRequest<'a> {
+  // 同时发送 camelCase + snake_case，兼容后端字段命名差异
+  #[serde(rename = "notificationsEnabled")]
+  notifications_enabled_camel: bool,
+  #[serde(rename = "notifyAtMe")]
+  notify_at_me_camel: bool,
+  #[serde(rename = "notifyPending")]
+  notify_pending_camel: bool,
+  #[serde(rename = "notifyPermissionChange")]
+  notify_permission_change_camel: bool,
+  #[serde(rename = "notifyJoinTeam")]
+  notify_join_team_camel: bool,
+  #[serde(rename = "notifyClip")]
+  notify_clip_camel: bool,
+
+  #[serde(rename = "notifications_enabled")]
+  notifications_enabled_snake: bool,
+  #[serde(rename = "notify_at_me")]
+  notify_at_me_snake: bool,
+  #[serde(rename = "notify_pending")]
+  notify_pending_snake: bool,
+  #[serde(rename = "notify_permission_change")]
+  notify_permission_change_snake: bool,
+  #[serde(rename = "notify_join_team")]
+  notify_join_team_snake: bool,
+  #[serde(rename = "notify_clip")]
+  notify_clip_snake: bool,
+
+  #[serde(skip)]
+  _phantom: std::marker::PhantomData<&'a ()>,
+}
+
+fn build_notification_preferences_request(setting: &NotificationSettingsPB) -> NotificationPreferencesRequest<'_> {
+  NotificationPreferencesRequest {
+    notifications_enabled_camel: setting.notifications_enabled,
+    notify_at_me_camel: setting.notify_at_me,
+    notify_pending_camel: setting.notify_pending,
+    notify_permission_change_camel: setting.notify_permission_change,
+    notify_join_team_camel: setting.notify_join_team,
+    notify_clip_camel: setting.notify_clip,
+    notifications_enabled_snake: setting.notifications_enabled,
+    notify_at_me_snake: setting.notify_at_me,
+    notify_pending_snake: setting.notify_pending,
+    notify_permission_change_snake: setting.notify_permission_change,
+    notify_join_team_snake: setting.notify_join_team,
+    notify_clip_snake: setting.notify_clip,
+    _phantom: std::marker::PhantomData,
   }
+}
+
+fn normalize_base_url(url: String) -> String {
+  url.trim_end_matches('/').to_string()
+}
+
+async fn sync_notification_settings_to_cloud(
+  manager: &UserManager,
+  setting: &NotificationSettingsPB,
+) -> Result<(), FlowyError> {
+  let cloud_service = manager.cloud_service()?;
+  let auth_type = cloud_service.get_server_auth_type();
+  if !auth_type.is_appflowy_cloud() {
+    // 非云端模式无需同步
+    return Ok(());
+  }
+
+  let token = manager.token_from_auth_type(&auth_type)?.unwrap_or_default();
+  if token.is_empty() {
+    return Err(FlowyError::unauthorized().with_context("missing auth token"));
+  }
+
+  let base_url = normalize_base_url(cloud_service.service_url());
+  let url = format!("{}/api/user/notification-preferences", base_url);
+
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(20))
+    .build()
+    .map_err(|e| FlowyError::new(ErrorCode::Internal, format!("create http client failed: {}", e)))?;
+
+  let body = build_notification_preferences_request(setting);
+  let resp = client
+    .post(url)
+    .bearer_auth(token)
+    .json(&body)
+    .send()
+    .await
+    .map_err(|e| FlowyError::new(ErrorCode::Internal, format!("sync notification settings failed: {}", e)))?;
+
+  if !resp.status().is_success() {
+    let status = resp.status();
+    let text = resp.text().await.unwrap_or_default();
+    return Err(FlowyError::new(
+      ErrorCode::Internal,
+      format!("sync notification settings failed: status={}, body={}", status, text),
+    ));
+  }
+  Ok(())
+}
+
+async fn fetch_notification_settings_from_cloud(manager: &UserManager) -> Result<NotificationSettingsPB, FlowyError> {
+  let cloud_service = manager.cloud_service()?;
+  let auth_type = cloud_service.get_server_auth_type();
+  if !auth_type.is_appflowy_cloud() {
+    return Ok(NotificationSettingsPB::default());
+  }
+
+  let token = manager.token_from_auth_type(&auth_type)?.unwrap_or_default();
+  if token.is_empty() {
+    return Ok(NotificationSettingsPB::default());
+  }
+
+  let base_url = normalize_base_url(cloud_service.service_url());
+  let url = format!("{}/api/user/notification-preferences", base_url);
+
+  let client = reqwest::Client::builder()
+    .timeout(std::time::Duration::from_secs(20))
+    .build()
+    .map_err(|e| FlowyError::new(ErrorCode::Internal, format!("create http client failed: {}", e)))?;
+
+  let resp = client
+    .get(url)
+    .bearer_auth(token)
+    .send()
+    .await
+    .map_err(|e| FlowyError::new(ErrorCode::Internal, format!("fetch notification settings failed: {}", e)))?;
+
+  if !resp.status().is_success() {
+    // 拉取失败不阻塞前端，fallback 默认值
+    return Ok(NotificationSettingsPB::default());
+  }
+
+  let json: serde_json::Value = resp.json().await.unwrap_or(serde_json::Value::Null);
+  Ok(parse_notification_settings_json(json))
+}
+
+fn parse_bool(v: Option<&serde_json::Value>) -> Option<bool> {
+  v.and_then(|x| {
+    if let Some(b) = x.as_bool() {
+      Some(b)
+    } else if let Some(s) = x.as_str() {
+      match s.to_lowercase().as_str() {
+        "true" | "1" => Some(true),
+        "false" | "0" => Some(false),
+        _ => None,
+      }
+    } else {
+      None
+    }
+  })
+}
+
+fn pick_bool(obj: &serde_json::Map<String, serde_json::Value>, keys: &[&str]) -> Option<bool> {
+  for k in keys {
+    if let Some(b) = parse_bool(obj.get(*k)) {
+      return Some(b);
+    }
+  }
+  None
+}
+
+fn parse_notification_settings_json(json: serde_json::Value) -> NotificationSettingsPB {
+  // 兼容：{code,msg,data:{...}} 或者直接 {...}
+  let root = match json {
+    serde_json::Value::Object(map) => {
+      if let Some(serde_json::Value::Object(data)) = map.get("data") {
+        serde_json::Value::Object(data.clone())
+      } else {
+        serde_json::Value::Object(map)
+      }
+    },
+    _ => serde_json::Value::Null,
+  };
+
+  let mut pb = NotificationSettingsPB::default();
+  if let serde_json::Value::Object(obj) = root {
+    pb.notifications_enabled = pick_bool(&obj, &["notificationsEnabled", "notifications_enabled"])
+      .unwrap_or(pb.notifications_enabled);
+    pb.notify_at_me = pick_bool(&obj, &["notifyAtMe", "notify_at_me"]).unwrap_or(pb.notify_at_me);
+    pb.notify_pending = pick_bool(&obj, &["notifyPending", "notify_pending"]).unwrap_or(pb.notify_pending);
+    pb.notify_permission_change =
+      pick_bool(&obj, &["notifyPermissionChange", "notify_permission_change"]).unwrap_or(pb.notify_permission_change);
+    pb.notify_join_team = pick_bool(&obj, &["notifyJoinTeam", "notify_join_team"]).unwrap_or(pb.notify_join_team);
+    pb.notify_clip = pick_bool(&obj, &["notifyClip", "notify_clip"]).unwrap_or(pb.notify_clip);
+  }
+  pb
 }
 
 #[tracing::instrument(level = "debug", skip_all, err)]
