@@ -80,7 +80,7 @@ class AFGhostIconTextButton extends StatelessWidget {
         if (disabled) {
           return theme.textColorScheme.tertiary;
         }
-        return theme.textColorScheme.primary;
+        return theme.textColorScheme.secondary;
       },
     );
   }
@@ -182,6 +182,7 @@ class AFGhostIconTextButton extends StatelessWidget {
                   text,
                   style: size.buildTextStyle(context).copyWith(
                         color: textColor,
+                    fontSize: 12
                       ),
                 ),
               )
@@ -190,6 +191,7 @@ class AFGhostIconTextButton extends StatelessWidget {
                 text,
                 style: size.buildTextStyle(context).copyWith(
                       color: textColor,
+                    fontSize: 12
                     ),
               ),
             // 箭头在文字后

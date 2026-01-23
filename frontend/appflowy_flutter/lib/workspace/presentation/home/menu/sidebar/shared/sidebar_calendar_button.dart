@@ -27,7 +27,7 @@ class SidebarCalendarButton extends StatelessWidget {
             ),
             borderRadius: theme.borderRadius.s,
             iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.icon_calendar_m,
+              FlowySvgs.icon_calendar_s,
               size: const Size.square(16.0),
               color: Theme.of(context).textTheme.bodyMedium?.color,
             ),

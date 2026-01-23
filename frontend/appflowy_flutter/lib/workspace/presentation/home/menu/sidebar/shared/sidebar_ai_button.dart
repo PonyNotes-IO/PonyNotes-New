@@ -29,11 +29,17 @@ class SidebarAiButton extends StatelessWidget {
               vertical: 10,
             ),
             borderRadius: theme.borderRadius.s,
-            iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.icon_ai_s,
-              size: const Size.square(16.0),
-              color: Theme.of(context).textTheme.bodyMedium?.color,
-            ),
+            iconBuilder: (context, isHover, disabled) =>
+                Image.asset(
+                  'assets/images/home_icon_ai.png',
+                  width: 18,
+                  height: 18,
+                )
+            //     FlowySvg(
+            //   FlowySvgs.icon_ai_s,
+            //   size: const Size.square(16.0),
+            //   color: Theme.of(context).textTheme.bodyMedium?.color,
+            // ),
           ),
         );
       },

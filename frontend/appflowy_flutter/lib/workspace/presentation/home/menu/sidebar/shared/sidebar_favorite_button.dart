@@ -89,7 +89,7 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
             ),
             borderRadius: theme.borderRadius.s,
             iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.favorite_s,
+              FlowySvgs.icon_favorite_s,
               size: const Size.square(16.0),
               color: Theme.of(context).textTheme.bodyMedium?.color,
             ),

@@ -103,11 +103,8 @@ class SidebarFolder extends StatelessWidget {
             // 共享
             const SidebarShareButton(),
             // 发布
-            const VSpace(sectionPadding),
+            // const VSpace(sectionPadding),
             const SidebarPublishButton(),
-            // 文件库
-            const VSpace(sectionPadding),
-            const SidebarFileLibraryButton(),
             // 模板
             // const VSpace(4.0),
             // const SidebarTemplateNewButton(),

@@ -66,15 +66,10 @@ class _FolderHeaderState extends State<FolderHeader> {
             size: AFButtonSize.l,
             onTap: widget.onPressed,
             padding: const EdgeInsets.symmetric(
-              horizontal: 8,
               vertical: 10,
             ),
             borderRadius: theme.borderRadius.s,
-            iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.folder_m,
-              size: const Size.square(16.0),
-              color: Theme.of(context).textTheme.bodyMedium?.color,
-            ),
+            iconBuilder: (context, isHover, disabled) => SizedBox.shrink(),
             showExpandArrow: true,
             isExpanded: widget.isExpanded,
           ),

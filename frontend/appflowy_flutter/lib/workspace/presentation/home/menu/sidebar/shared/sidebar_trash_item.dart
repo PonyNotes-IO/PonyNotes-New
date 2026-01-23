@@ -26,7 +26,7 @@ class SidebarTrashItem extends StatelessWidget {
         ),
         borderRadius: theme.borderRadius.s,
         iconBuilder: (context, isHover, disabled) => FlowySvg(
-          FlowySvgs.trash_s,
+          FlowySvgs.icon_trash_s,
           size: const Size.square(16.0),
           color: Theme.of(context).textTheme.bodyMedium?.color,
         ),
