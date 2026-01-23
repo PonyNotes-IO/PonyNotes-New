@@ -224,6 +224,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
               selectedPage: widget.currentPage,
               label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
               changeSelectedPage: widget.changeSelectedPage,
+              showIcon: true,
+              showArrow: false,
             ),
           ],
         ),
