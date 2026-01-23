@@ -217,9 +217,20 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
 
   @override
   Widget get leftBarItem {
-    return BlocProvider.value(
-      value: pageAccessLevelBloc,
-      child: ViewTitleBar(key: ValueKey(view.id), view: view),
+    // If a specific document inside the space is selected, hide the
+    // global space breadcrumb/title to avoid duplicate path UI.
+    return ValueListenableBuilder<ViewPB?>(
+      valueListenable: selectedViewNotifier,
+      builder: (context, selectedView, _) {
+        if (selectedView != null) {
+          return const SizedBox.shrink();
+        }
+
+        return BlocProvider.value(
+          value: pageAccessLevelBloc,
+          child: ViewTitleBar(key: ValueKey(view.id), view: view),
+        );
+      },
     );
   }
 

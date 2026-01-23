@@ -173,10 +173,9 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
 
   @override
   Widget get leftBarItem {
-    return BlocProvider.value(
-      value: pageAccessLevelBloc,
-      child: ViewTitleBar(key: ValueKey(view.id), view: view),
-    );
+    // Hide the breadcrumb/title bar for document pages to remove the
+    // top path area when a note is opened.
+    return const SizedBox.shrink();
   }
 
   @override
