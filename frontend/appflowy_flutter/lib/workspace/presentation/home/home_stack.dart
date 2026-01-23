@@ -81,39 +81,73 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
               ),
             ),
             Expanded(
-              child: IndexedStack(
-                index: selectedIndex,
-                children: state.pageManagers
-                    .map(
-                      (pm) => LayoutBuilder(
-                        builder: (context, constraints) {
-                          return Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    pm.stackTopBar(layout: widget.layout),
-                                    Expanded(
-                                      child: PageStack(
-                                        pageManager: pm,
-                                        delegate: widget.delegate,
-                                        userProfile: widget.userProfile,
-                                      ),
+              child: Stack(
+                children: [
+                  IndexedStack(
+                    index: selectedIndex,
+                    children: state.pageManagers
+                        .map(
+                          (pm) => LayoutBuilder(
+                            builder: (context, constraints) {
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      children: [
+                                        pm.stackTopBar(layout: widget.layout),
+                                        Expanded(
+                                          child: PageStack(
+                                            pageManager: pm,
+                                            delegate: widget.delegate,
+                                            userProfile: widget.userProfile,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              ),
-                              SecondaryView(
-                                pageManager: pm,
-                                adaptedPercentageWidth:
-                                    constraints.maxWidth * 3 / 7,
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    )
-                    .toList(),
+                                  ),
+                                  SecondaryView(
+                                    pageManager: pm,
+                                    adaptedPercentageWidth:
+                                        constraints.maxWidth * 3 / 7,
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        )
+                        .toList(),
+                  ),
+                  // Overlay original right-side actions for folder/fileLibrary plugins
+                  if (state.pageManagers.isNotEmpty)
+                    Builder(
+                      builder: (ctx) {
+                        final currentIndex = state.currentIndex;
+                        if (currentIndex < 0 ||
+                            currentIndex >= state.pageManagers.length) {
+                          return const SizedBox.shrink();
+                        }
+                        final pm = state.pageManagers[currentIndex];
+                        final pluginType = pm.plugin.pluginType;
+                        if (pluginType != PluginType.fileLibrary &&
+                            pluginType != PluginType.folder) {
+                          return const SizedBox.shrink();
+                        }
+
+                        return Positioned(
+                          top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding - (HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding) /*0*/,
+                          right: HomeInsets.topBarTitleHorizontalPadding,
+                          child: ChangeNotifierProvider.value(
+                            value: pm.notifier,
+                            child: Consumer<PageNotifier>(
+                              builder: (_, notifier, __) =>
+                                  notifier.plugin.widgetBuilder.rightBarItem ??
+                                  const SizedBox.shrink(),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                ],
               ),
             ),
           ],
@@ -699,7 +733,11 @@ class PageManager {
     // Return an empty placeholder so the plugin content aligns with the app
     // top area without extra spacing.
     try {
-      if (_notifier.plugin.pluginType == PluginType.fileLibrary) {
+      final pluginType = _notifier.plugin.pluginType;
+      if (pluginType == PluginType.fileLibrary || pluginType == PluginType.folder) {
+        // Hide the top bar entirely for these plugins so the left sidebar
+        // can align directly under the window title bar. Right-side actions
+        // are rendered in the WindowTitleBar via rightChildren.
         return const SizedBox.shrink();
       }
     } catch (_) {

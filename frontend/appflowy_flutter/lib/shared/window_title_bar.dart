@@ -21,9 +21,11 @@ class WindowTitleBar extends StatefulWidget {
   const WindowTitleBar({
     super.key,
     this.leftChildren = const [],
+    this.rightChildren = const [],
   });
 
   final List<Widget> leftChildren;
+  final List<Widget> rightChildren;
 
   @override
   State<WindowTitleBar> createState() => _WindowTitleBarState();
@@ -82,6 +84,7 @@ class _WindowTitleBarState extends State<WindowTitleBar> {
             const HSpace(4),
             ...widget.leftChildren,
             const Spacer(),
+            ...widget.rightChildren,
             WindowCaptionButton.minimize(
               brightness: brightness,
               onPressed: () => windowManager.minimize(),

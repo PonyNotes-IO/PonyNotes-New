@@ -15,6 +15,7 @@ import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -359,11 +360,15 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             });
           },
         ),
-        // 右侧：选中文档详情
+        // 右侧：选中文档详情（保留顶部间距，使正文不贴顶）
         Expanded(
-          child: _selectedView != null
-              ? _buildSelectedViewContent(_selectedView!)
-              : _buildEmptyState(),
+          child: Padding(
+            padding: EdgeInsets.only(
+                top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding),
+            child: _selectedView != null
+                ? _buildSelectedViewContent(_selectedView!)
+                : _buildEmptyState(),
+          ),
         ),
       ],
     );
