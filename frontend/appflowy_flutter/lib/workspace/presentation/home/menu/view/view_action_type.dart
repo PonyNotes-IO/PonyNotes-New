@@ -21,7 +21,8 @@ enum ViewMoreActionType {
   lockPage,
   leaveSharedPage,
   leaveWorkspace, // 离开工作区
-  manageSpace; // 管理空间
+  manageSpace, // 管理空间
+  export; // 导出
 
   static const disableInLockedView = [
     delete,
@@ -64,6 +65,8 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
         return LocaleKeys.workspace_leaveCurrentWorkspace.tr();
       case ViewMoreActionType.manageSpace:
         return LocaleKeys.space_manage.tr();
+      case ViewMoreActionType.export:
+        return '导出';
       case ViewMoreActionType.divider:
       case ViewMoreActionType.lastModified:
       case ViewMoreActionType.created:
@@ -101,6 +104,8 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
         return FlowySvgs.leave_workspace_s;
       case ViewMoreActionType.manageSpace:
         return FlowySvgs.settings_s; // 使用设置图标，或者可以添加专门的图标
+      case ViewMoreActionType.export:
+        return FlowySvgs.download_s; // 使用下载图标作为导出图标
       case ViewMoreActionType.divider:
       case ViewMoreActionType.lastModified:
       case ViewMoreActionType.copyLink:
@@ -129,6 +134,7 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
       case ViewMoreActionType.leaveSharedPage:
       case ViewMoreActionType.leaveWorkspace:
       case ViewMoreActionType.manageSpace:
+      case ViewMoreActionType.export:
         return const SizedBox.shrink();
     }
   }

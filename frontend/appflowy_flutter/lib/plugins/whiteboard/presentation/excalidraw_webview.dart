@@ -178,6 +178,41 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     controller.addJavaScriptHandler(handlerName: "localStorageOnClear", callback:(args){
       // debug log removed
     });
+    controller.addJavaScriptHandler(
+      handlerName: "onExport",
+      callback: (args) async {
+        try {
+          if (args.isEmpty) return;
+          final payload = args[0];
+          if (payload is Map &&
+              payload.containsKey('format') &&
+              payload.containsKey('data')) {
+            final format = payload['format'] as String;
+            final data = payload['data'];
+            widget.onExport?.call(format, data);
+          }
+        } catch (e) {
+          Log.error('[ExcalidrawWebView] onExport handler error: $e');
+          widget.onError?.call('导出处理失败: $e');
+        }
+      },
+    );
+    controller.addJavaScriptHandler(
+      handlerName: "onExportError",
+      callback: (args) async {
+        try {
+          if (args.isEmpty) return;
+          final payload = args[0];
+          if (payload is Map && payload.containsKey('message')) {
+            final message = payload['message'] as String;
+            widget.onError?.call('导出失败: $message');
+          }
+        } catch (e) {
+          Log.error('[ExcalidrawWebView] onExportError handler error: $e');
+          widget.onError?.call('导出失败: $e');
+        }
+      },
+    );
   }
 
   Future<void> _initializeExcalidraw() async {
@@ -389,12 +424,14 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             visibility: hidden !important;
           }
           
-          /* 隐藏素材库按钮 */
+          /* 隐藏素材库按钮 - 增强版 */
           [class*="library"],
           [class*="Library"],
           [class*="DefaultSidebar.Trigger"],
           [class*="DefaultSidebarTrigger"],
           [class*="DefaultSidebar"],
+          [class*="SidebarTrigger"],
+          [class*="sidebar-trigger"],
           button[title*="library"],
           button[title*="Library"],
           button[title*="素材"],
@@ -406,9 +443,22 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           [data-testid*="library"],
           [data-testid*="Library"],
           [data-testid*="sidebar-trigger"],
-          [data-testid*="default-sidebar"] {
+          [data-testid*="default-sidebar"],
+          /* 工具栏中的素材库按钮 */
+          .App-toolbar [class*="library"],
+          .App-toolbar [class*="Library"],
+          .App-toolbar button[title*="素材库"],
+          .App-toolbar button[aria-label*="素材库"],
+          /* 可能包含素材库文字的容器 */
+          [class*="toolbar"] [class*="library"],
+          [class*="Toolbar"] [class*="Library"],
+          /* SVG图标相关 */
+          svg[title*="素材库"],
+          svg[aria-label*="素材库"] {
             display: none !important;
             visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
           }
         `;
         
@@ -482,26 +532,84 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             }
           });
           
-          // 隐藏素材库按钮
+          // 隐藏素材库按钮 - 增强版
           const hideLibraryButton = () => {
-            const libraryButtons = document.querySelectorAll(
-              '[class*="library"], [class*="Library"], [class*="DefaultSidebar.Trigger"], [class*="DefaultSidebarTrigger"], [class*="DefaultSidebar"], button[title*="library"], button[title*="Library"], button[title*="素材"], button[title*="素材库"], [aria-label*="library"], [aria-label*="Library"], [aria-label*="素材库"], [aria-label*="素材"], [data-testid*="library"], [data-testid*="Library"], [data-testid*="sidebar-trigger"], [data-testid*="default-sidebar"], [role="button"]'
-            );
-            libraryButtons.forEach(el => {
-              const text = (el.textContent || '').toLowerCase();
-              const title = (el.getAttribute('title') || '').toLowerCase();
-              const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-              const isLibrary =
-                text.includes('library') ||
-                text.includes('素材') ||
-                title.includes('library') ||
-                title.includes('素材') ||
-                aria.includes('library') ||
-                aria.includes('素材');
-              if (isLibrary) {
-                const target = el.closest('button') ?? el;
-                target.style.display = 'none';
-                target.style.visibility = 'hidden';
+            // 扩展选择器列表
+            const selectors = [
+              '[class*="library"]',
+              '[class*="Library"]',
+              '[class*="DefaultSidebar"]',
+              '[class*="SidebarTrigger"]',
+              '[class*="sidebar-trigger"]',
+              'button[title*="library"]',
+              'button[title*="Library"]',
+              'button[title*="素材"]',
+              'button[title*="素材库"]',
+              '[aria-label*="library"]',
+              '[aria-label*="Library"]',
+              '[aria-label*="素材库"]',
+              '[aria-label*="素材"]',
+              '[data-testid*="library"]',
+              '[data-testid*="Library"]',
+              '[data-testid*="sidebar-trigger"]',
+              '[data-testid*="default-sidebar"]',
+              '[role="button"]'
+            ];
+            
+            // 使用所有选择器查找元素
+            selectors.forEach(selector => {
+              try {
+                const elements = document.querySelectorAll(selector);
+                elements.forEach(el => {
+                  const text = (el.textContent || '').toLowerCase();
+                  const title = (el.getAttribute('title') || '').toLowerCase();
+                  const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+                  const className = (el.className || '').toString().toLowerCase();
+                  
+                  // 检查是否与素材库相关
+                  const isLibrary =
+                    text.includes('library') ||
+                    text.includes('素材') ||
+                    title.includes('library') ||
+                    title.includes('素材库') ||
+                    title.includes('素材') ||
+                    aria.includes('library') ||
+                    aria.includes('素材库') ||
+                    aria.includes('素材') ||
+                    className.includes('library') ||
+                    className.includes('sidebar') ||
+                    className.includes('sidebartrigger');
+                  
+                  if (isLibrary) {
+                    // 隐藏元素及其父按钮（如果存在）
+                    const target = el.closest('button') || el;
+                    target.style.display = 'none';
+                    target.style.visibility = 'hidden';
+                    target.style.opacity = '0';
+                    target.style.pointerEvents = 'none';
+                    
+                    // 同时隐藏所有子元素
+                    const children = target.querySelectorAll('*');
+                    children.forEach(child => {
+                      child.style.display = 'none';
+                      child.style.visibility = 'hidden';
+                    });
+                  }
+                });
+              } catch (e) {
+                // 忽略选择器错误
+              }
+            });
+            
+            // 额外检查：查找包含"素材库"文字的所有元素
+            const allElements = document.querySelectorAll('*');
+            allElements.forEach(el => {
+              const text = el.textContent || '';
+              if (text.includes('素材库') && el.tagName === 'BUTTON') {
+                el.style.display = 'none';
+                el.style.visibility = 'hidden';
+                el.style.opacity = '0';
+                el.style.pointerEvents = 'none';
               }
             });
           };
@@ -572,33 +680,89 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             el.style.visibility = 'hidden';
           });
           
-          // 隐藏素材库按钮
-          const hideLibraryButton = () => {
-            const libraryButtons = document.querySelectorAll(
-              '[class*="library"], [class*="Library"], [class*="DefaultSidebar.Trigger"], [class*="DefaultSidebarTrigger"], [class*="DefaultSidebar"], button[title*="library"], button[title*="Library"], button[title*="素材"], button[title*="素材库"], [aria-label*="library"], [aria-label*="Library"], [aria-label*="素材库"], [aria-label*="素材"], [data-testid*="library"], [data-testid*="Library"], [data-testid*="sidebar-trigger"], [data-testid*="default-sidebar"], [role="button"]'
-            );
-            libraryButtons.forEach(el => {
-              const text = (el.textContent || '').toLowerCase();
-              const title = (el.getAttribute('title') || '').toLowerCase();
-              const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-              const classNames = (el.className || '').toString().toLowerCase();
-              const isLibrary =
-                text.includes('library') ||
-                text.includes('素材') ||
-                title.includes('library') ||
-                title.includes('素材') ||
-                aria.includes('library') ||
-                aria.includes('素材') ||
-                classNames.includes('sidebartrigger') ||
-                classNames.includes('defaultsidebar');
-              if (isLibrary) {
-                const target = el.closest('button') ?? el;
-                target.style.display = 'none';
-                target.style.visibility = 'hidden';
+          // 隐藏素材库按钮 - 增强版（setTimeout中调用）
+          const hideLibraryButtonDelayed = () => {
+            // 扩展选择器列表
+            const selectors = [
+              '[class*="library"]',
+              '[class*="Library"]',
+              '[class*="DefaultSidebar"]',
+              '[class*="SidebarTrigger"]',
+              '[class*="sidebar-trigger"]',
+              'button[title*="library"]',
+              'button[title*="Library"]',
+              'button[title*="素材"]',
+              'button[title*="素材库"]',
+              '[aria-label*="library"]',
+              '[aria-label*="Library"]',
+              '[aria-label*="素材库"]',
+              '[aria-label*="素材"]',
+              '[data-testid*="library"]',
+              '[data-testid*="Library"]',
+              '[data-testid*="sidebar-trigger"]',
+              '[data-testid*="default-sidebar"]',
+              '[role="button"]'
+            ];
+            
+            // 使用所有选择器查找元素
+            selectors.forEach(selector => {
+              try {
+                const elements = document.querySelectorAll(selector);
+                elements.forEach(el => {
+                  const text = (el.textContent || '').toLowerCase();
+                  const title = (el.getAttribute('title') || '').toLowerCase();
+                  const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+                  const className = (el.className || '').toString().toLowerCase();
+                  
+                  // 检查是否与素材库相关
+                  const isLibrary =
+                    text.includes('library') ||
+                    text.includes('素材') ||
+                    title.includes('library') ||
+                    title.includes('素材库') ||
+                    title.includes('素材') ||
+                    aria.includes('library') ||
+                    aria.includes('素材库') ||
+                    aria.includes('素材') ||
+                    className.includes('library') ||
+                    className.includes('sidebar') ||
+                    className.includes('sidebartrigger') ||
+                    className.includes('defaultsidebar');
+                  
+                  if (isLibrary) {
+                    // 隐藏元素及其父按钮（如果存在）
+                    const target = el.closest('button') || el;
+                    target.style.display = 'none';
+                    target.style.visibility = 'hidden';
+                    target.style.opacity = '0';
+                    target.style.pointerEvents = 'none';
+                    
+                    // 同时隐藏所有子元素
+                    const children = target.querySelectorAll('*');
+                    children.forEach(child => {
+                      child.style.display = 'none';
+                      child.style.visibility = 'hidden';
+                    });
+                  }
+                });
+              } catch (e) {
+                // 忽略选择器错误
+              }
+            });
+            
+            // 额外检查：查找包含"素材库"文字的所有元素
+            const allElements = document.querySelectorAll('*');
+            allElements.forEach(el => {
+              const text = el.textContent || '';
+              if (text.includes('素材库') && el.tagName === 'BUTTON') {
+                el.style.display = 'none';
+                el.style.visibility = 'hidden';
+                el.style.opacity = '0';
+                el.style.pointerEvents = 'none';
               }
             });
           };
-          hideLibraryButton();
+          hideLibraryButtonDelayed();
           
           // 确保工具栏始终显示
           const toolbars = document.querySelectorAll(
@@ -819,8 +983,40 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           window.loadExcalidrawData(${jsonEncode(data)});
         }
       ''', tag: 'loadData');
+      
+      // 加载数据后重新初始化UI，确保工具栏等元素正确显示
+      await reinitializeUI();
     } catch (e) {
       widget.onError?.call('加载数据失败: $e');
+    }
+  }
+
+  /// 重新初始化UI（公共方法，供外部调用）
+  /// 用于在导入数据后恢复UI状态
+  Future<void> reinitializeUI() async {
+    try {
+      // 隐藏加载时的底图标志
+      await _hideLoadingLogo();
+      
+      // 隐藏主菜单（汉堡菜单）
+      await _hideMainMenu();
+      
+      // 隐藏欢迎界面和其他不需要的UI元素
+      await _hideUnwantedUI();
+
+      // 设置主题
+      final theme = Theme.of(context).brightness == Brightness.dark ? 'dark' : 'light';
+      await _safeEvalJs('''
+        console.log('[ExcalidrawWebView] Reinitializing UI, setting theme to $theme');
+        if (window.setTheme) {
+          window.setTheme('$theme');
+        } else {
+          console.error('[ExcalidrawWebView] window.setTheme not found!');
+        }
+      ''', tag: 'reinitializeUI');
+    } catch (e) {
+      Log.error('❌ [ExcalidrawWebView] Reinitialize UI failed: $e');
+      widget.onError?.call('重新初始化UI失败: $e');
     }
   }
 

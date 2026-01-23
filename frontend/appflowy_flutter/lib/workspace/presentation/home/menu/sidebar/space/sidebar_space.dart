@@ -106,17 +106,17 @@ class SidebarSpace extends StatelessWidget {
             const VSpace(4.0),
             const SidebarPublishButton(),
             // 文件库
-            const VSpace(4.0),
-            const SidebarFileLibraryButton(),
+            // const VSpace(4.0),
+            // const SidebarFileLibraryButton(),
             // 模版
             // const VSpace(4.0),
             // const SidebarTemplateNewButton(),
             // 回收站
-            const VSpace(4.0),
-            const SidebarTrashItem(),
-            // 设置
-            const VSpace(4.0),
-            const SidebarSettingsButton(),
+            // const VSpace(4.0),
+            // const SidebarTrashItem(),
+            // // 设置
+            // const VSpace(4.0),
+            // const SidebarSettingsButton(),
 
             // spaces
             if (shouldShowSpaces) ...[

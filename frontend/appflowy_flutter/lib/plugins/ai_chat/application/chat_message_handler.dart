@@ -33,6 +33,10 @@ class ChatMessageHandler {
   
   /// 【修复消息重复】追踪已处理的消息ID，防止通过不同callback重复处理同一条消息
   final Set<String> _processedMessageIds = {};
+  
+  // 缓存大小限制：最多缓存 1000 个消息ID映射和已处理消息ID，防止内存溢出
+  static const int _maxMessageIdMapSize = 1000;
+  static const int _maxProcessedIdsSize = 1000;
 
   /// Gets the effective message ID from the temporary map
   String getEffectiveMessageId(String messageId) {
@@ -297,6 +301,16 @@ class ChatMessageHandler {
     
     // 标记消息为已处理
     _processedMessageIds.add(messageIdStr);
+    
+    // 清理已处理消息ID集合，防止内存溢出
+    if (_processedMessageIds.length > _maxProcessedIdsSize) {
+      final toRemove = _processedMessageIds.length - _maxProcessedIdsSize ~/ 2;
+      final idsToRemove = _processedMessageIds.take(toRemove).toList();
+      for (final id in idsToRemove) {
+        _processedMessageIds.remove(id);
+      }
+    }
+    
     Log.info('   - 标记消息为已处理，当前已处理消息数: ${_processedMessageIds.length}');
     
     // 3 means message response from AI
@@ -308,6 +322,16 @@ class ChatMessageHandler {
         messageIdStr,
         () => answerStreamMessageId,
       );
+      
+      // 清理消息ID映射表，防止内存溢出
+      if (_temporaryMessageIDMap.length > _maxMessageIdMapSize) {
+        final toRemove = _temporaryMessageIDMap.length - _maxMessageIdMapSize ~/ 2;
+        final keysToRemove = _temporaryMessageIDMap.keys.take(toRemove).toList();
+        for (final key in keysToRemove) {
+          _temporaryMessageIDMap.remove(key);
+        }
+      }
+      
       answerStreamMessageId = '';
       Log.info('   - 映射表更新后: $_temporaryMessageIDMap');
     }
@@ -321,6 +345,16 @@ class ChatMessageHandler {
         messageIdStr,
         () => questionStreamMessageId,
       );
+      
+      // 清理消息ID映射表，防止内存溢出
+      if (_temporaryMessageIDMap.length > _maxMessageIdMapSize) {
+        final toRemove = _temporaryMessageIDMap.length - _maxMessageIdMapSize ~/ 2;
+        final keysToRemove = _temporaryMessageIDMap.keys.take(toRemove).toList();
+        for (final key in keysToRemove) {
+          _temporaryMessageIDMap.remove(key);
+        }
+      }
+      
       questionStreamMessageId = '';
       Log.info('   - 映射表更新后: $_temporaryMessageIDMap');
     }

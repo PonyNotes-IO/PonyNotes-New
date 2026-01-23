@@ -142,13 +142,12 @@ class _SettingsMenuState extends State<SettingsMenu> {
             _buildUserInfoCard(context),
             const VSpace(16),
             SettingsMenuElement(
-              page: SettingsPage.member,
+              page: SettingsPage.account,
               selectedPage: widget.currentPage,
               label: "我的账户",
               trailingText: storageUsage,
               changeSelectedPage: widget.changeSelectedPage,
               showArrow: false,
-              isEnabled: false,
             ),
             SettingsMenuElement(
               page: SettingsPage.workspace,
@@ -225,6 +224,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
               selectedPage: widget.currentPage,
               label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
               changeSelectedPage: widget.changeSelectedPage,
+              showIcon: true,
+              showArrow: false,
             ),
           ],
         ),

@@ -27,7 +27,18 @@ class LocalAssetServer {
     try {
       // 创建请求处理器
       final handler = (shelf.Request request) async {
-        final assetPath = 'assets/excalidraw/${request.url.path}';
+        // 处理路径：根路径映射到 index.html，移除前导斜杠
+        String requestPath = request.url.path;
+        if (requestPath.isEmpty || requestPath == '/') {
+          requestPath = 'index.html';
+        } else {
+          // 移除前导斜杠
+          requestPath = requestPath.startsWith('/') 
+              ? requestPath.substring(1) 
+              : requestPath;
+        }
+        
+        final assetPath = 'assets/excalidraw/$requestPath';
 
         try {
           // 加载Flutter asset

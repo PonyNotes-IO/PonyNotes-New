@@ -201,6 +201,9 @@ class ViewMoreActionTypeWrapper extends CustomActionCell {
       child = _buildEmojiActionButton(context, controller);
     } else if (inner == ViewMoreActionType.moveTo) {
       child = _buildMoveToActionButton(context, controller);
+    } else if (inner == ViewMoreActionType.export) {
+      // Export action is handled by ExportAction widget, not here
+      child = const SizedBox.shrink();
     } else {
       child = _buildNormalActionButton(context, controller);
     }

@@ -10,6 +10,7 @@ import 'package:appflowy/plugins/document/presentation/editor_notification.dart'
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/loading.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
@@ -466,14 +467,10 @@ class _SidebarState extends State<_Sidebar> {
                 child: const FlowyDivider(),
               ),
             ),
-
             _renderFolderOrSpace(menuHorizontalInset),
-
             const VSpace(8),
-
             _renderUpgradeSpaceButton(menuHorizontalInset),
             _buildUpgradeApplicationButton(menuHorizontalInset),
-
             const VSpace(14),
             // Fixed bottom actions (trash, settings) - keep outside the scrollable area
             Padding(
@@ -481,6 +478,9 @@ class _SidebarState extends State<_Sidebar> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
+                  // 文件库
+                  SidebarFileLibraryButton(),
+                  VSpace(6),
                   SidebarTrashItem(),
                   VSpace(6),
                   SidebarSettingsButton(),

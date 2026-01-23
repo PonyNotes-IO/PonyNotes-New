@@ -21,6 +21,11 @@ import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapte
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
+import 'package:appflowy/plugins/shared/share/share_button.dart';
+import 'package:appflowy/shared/feature_flags.dart';
+import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
+import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
@@ -171,7 +176,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   WhiteboardCollabAdapter? _collabAdapter;
   
   // ExcalidrawWebView的GlobalKey，用于调用其方法
-  final GlobalKey<ExcalidrawWebViewState> _webViewKey = GlobalKey<ExcalidrawWebViewState>();
+  // ✅ 关键修复：为每个视图创建唯一的GlobalKey，避免视图切换时PlatformView重复创建
+  // 使用view.id确保每个白板视图都有唯一的key
+  late final GlobalKey<ExcalidrawWebViewState> _webViewKey;
   
   // 主题监听
   Brightness? _lastBrightness;
@@ -180,6 +187,10 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   void initState() {
     super.initState();
     // debug logs removed
+    
+    // ✅ 关键修复：为每个视图创建唯一的GlobalKey
+    // 使用view.id确保每个白板视图都有唯一的key，避免视图切换时PlatformView重复创建
+    _webViewKey = GlobalKey<ExcalidrawWebViewState>(debugLabel: 'whiteboard_webview_${widget.view.id}');
     
     // 初始化 Collab 适配器（模仿 DocumentBloc）
     _initCollabAdapter();
@@ -262,11 +273,106 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   void _onWhiteboardExport(String format, dynamic data) {
-    // 处理导出
-    Log.debug('Export format: $format, data: $data');
+    if (!mounted) return;
+
+    if (format == 'png' && data is String) {
+      // dataURL -> 保存
+      _savePngDataUrl(data);
+      return;
+    }
+
+    // Excalidraw 源文件（json）
+    if (format == 'excalidraw' && data is Map<String, dynamic>) {
+      _saveExcalidrawJson(data);
+      return;
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('导出 $format 格式完成')),
+      SnackBar(
+        content: Text('导出格式不受支持: $format'),
+        backgroundColor: Colors.red,
+      ),
     );
+  }
+
+  Future<void> _saveExcalidrawJson(Map<String, dynamic> data) async {
+    try {
+      // 确保数据符合Excalidraw标准格式
+      final excalidrawData = <String, dynamic>{
+        'type': 'excalidraw',
+        'version': 2,
+        'source': 'https://excalidraw.com',
+        'elements': data['elements'] ?? [],
+        'appState': data['appState'] ?? {},
+        'files': data['files'] ?? {},
+      };
+
+      final filePicker = getIt<FilePickerService>();
+      final savePath = await filePicker.saveFile(
+        dialogTitle: '保存Excalidraw文件',
+        fileName: '${widget.view.name}.excalidraw',
+        type: FileType.custom,
+        allowedExtensions: ['excalidraw', 'json'],
+      );
+      if (savePath == null) return;
+
+      final file = File(savePath);
+      await file.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(excalidrawData),
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('导出成功'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Save Excalidraw json failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('保存失败: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _savePngDataUrl(String dataUrl) async {
+    try {
+      final filePicker = getIt<FilePickerService>();
+      final savePath = await filePicker.saveFile(
+        dialogTitle: '保存PNG图片',
+        fileName: '${widget.view.name}.png',
+        type: FileType.custom,
+        allowedExtensions: ['png'],
+      );
+      if (savePath == null) return;
+
+      final uri = Uri.parse(dataUrl);
+      final data = uri.data;
+      if (data == null) {
+        throw Exception('PNG 数据为空');
+      }
+      final bytes = data.contentAsBytes();
+      final file = File(savePath);
+      await file.writeAsBytes(bytes);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('导出成功'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Save PNG failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('保存失败: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _onWhiteboardError(String error) {
@@ -346,170 +452,93 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     
     Log.debug('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
-          appBar: AppBar(
-            elevation: 0,
-            shadowColor: Colors.transparent,
-            surfaceTintColor: Colors.transparent,
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            foregroundColor: Theme.of(context).colorScheme.onSurface,
-            toolbarHeight: 64,
-            titleSpacing: 8,
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.palette_outlined,
-                        size: 20,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.view.name,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
+      body: Column(
+        children: [
+          // 顶部按钮栏（与手写笔记和文档视图统一）
+          _buildTopActionsBar(context),
+          // 白板内容
+          Expanded(
+            child: _buildExcalidrawView(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopActionsBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          // 导入 / 导出
+          Tooltip(
+            message: '导入 Excalidraw 文件',
+            child: TextButton.icon(
+              icon: const Icon(Icons.file_download_outlined, size: 18),
+              label: const Text('导入'),
+              onPressed: _importWhiteboard,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: '导出为 Excalidraw / PNG',
+            child: PopupMenuButton<String>(
+              position: PopupMenuPosition.under,
+              onSelected: _exportWhiteboard,
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: 'excalidraw',
+                  child: Text('导出为 Excalidraw 文件'),
+                ),
+                PopupMenuItem(
+                  value: 'png',
+                  child: Text('导出为 PNG 图片'),
                 ),
               ],
-            ),
-            actions: [
-              // 导入按钮
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.upload_file, size: 22),
-                  tooltip: '导入',
-                  onPressed: _importWhiteboard,
-                  style: IconButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              // 导出按钮（下拉菜单）
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: PopupMenuButton<String>(
-                  icon: const Icon(Icons.download_outlined, size: 22),
-                  tooltip: '导出',
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  offset: const Offset(0, 8),
-                  onSelected: (format) {
-                    _exportWhiteboard(format);
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: 'excalidraw',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.data_object,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 12),
-                          const Text('源文件 (.excalidraw)'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'png',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.image_outlined,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 12),
-                          const Text('图片 (PNG)'),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 'svg',
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.code,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 12),
-                          const Text('图片 (SVG)'),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // 保存按钮
-              Container(
-                margin: const EdgeInsets.only(left: 4, right: 12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.save_outlined, size: 22),
-                  onPressed: _saveWhiteboard,
-                  tooltip: '保存',
-                  style: IconButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-            ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1),
-              child: Container(
-                height: 1,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.transparent,
-                      Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
+              child: TextButton.icon(
+                icon: const Icon(Icons.file_upload_outlined, size: 18),
+                label: const Text('导出'),
+                onPressed: null,
               ),
             ),
           ),
-          body: _buildExcalidrawView(),
-        );
+          const SizedBox(width: 16),
+          if (FeatureFlag.syncDocument.isOn) ...[
+            DocumentCollaborators(
+              key: ValueKey('collaborators_${widget.view.id}'),
+              width: 120,
+              height: 32,
+              view: widget.view,
+            ),
+            const SizedBox(width: 16),
+          ] else
+            const SizedBox(width: 8),
+          ViewFavoriteButton(
+            key: ValueKey('favorite_button_${widget.view.id}'),
+            view: widget.view,
+          ),
+          const SizedBox(width: 10),
+          ShareButton(
+            key: ValueKey('share_button_${widget.view.id}'),
+            view: widget.view,
+          ),
+          const SizedBox(width: 4),
+          MoreViewActions(view: widget.view),
+        ],
+      ),
+    );
   }
 
   Widget _buildExcalidrawView() {
     // ✅ 每次build都创建新的Widget实例，避免PlatformView重复创建错误
-    // ✅ 使用全局唯一的实例ID作为key，确保绝对不会出现ID冲突
-    // 📌 Key的组成：viewId（白板ID） + 全局唯一的实例编号
-    // 🎯 这样即使快速切换白板视图，每个WebView的Key也是全局唯一的
-    final uniqueKey = '${widget.view.id}_global_$_webViewInstanceId';
-    Log.debug('🔑 [Whiteboard] Creating ExcalidrawWebView with unique key: $uniqueKey');
+    // ✅ 使用基于view.id的GlobalKey，确保每个白板视图都有唯一的key
+    // 📌 关键修复：GlobalKey基于view.id，确保视图切换时不会复用旧的Widget
+    // 🎯 这样即使快速切换白板视图，每个WebView的Key也是唯一的，不会导致PlatformView重复创建
+    Log.debug('🔑 [Whiteboard] Creating ExcalidrawWebView with key based on view.id: ${widget.view.id}');
     
     return ExcalidrawWebView(
-      key: _webViewKey, // 使用GlobalKey以便调用其方法
+      key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
       viewId: widget.view.id,
       initialData: _initialData,
       onDataChanged: _onWhiteboardDataChanged,
@@ -578,10 +607,17 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       );
 
       if (shouldImport == true) {
-        // 加载数据到Excalidraw
-        await _webViewKey.currentState?.loadData(data);
+        // 从标准Excalidraw格式中提取场景数据
+        final sceneData = <String, dynamic>{
+          'elements': data['elements'] ?? [],
+          'appState': data['appState'] ?? {},
+          'files': data['files'] ?? {},
+        };
         
-        // 保存到后端
+        // 加载数据到Excalidraw（这会自动重新初始化UI）
+        await _webViewKey.currentState?.loadData(sceneData);
+        
+        // 保存到后端（保存完整格式）
         final service = WhiteboardDataService();
         await service.saveWhiteboardData(widget.view.id, data);
 
@@ -611,7 +647,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   Future<void> _exportWhiteboard(String format) async {
     try {
       if (format == 'excalidraw') {
-        // 导出为源文件
+        // 导出为源文件：使用WebView的导出API获取标准格式数据
         await _exportAsSourceFile();
       } else if (format == 'png' || format == 'svg') {
         // 导出为图片
@@ -631,64 +667,33 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   /// 导出为源文件
+  /// 修复：使用WebView的导出API获取标准格式的Excalidraw数据，而不是直接从服务加载
   Future<void> _exportAsSourceFile() async {
     try {
-      // 获取当前白板数据
-      final service = WhiteboardDataService();
-      final data = await service.loadWhiteboardData(widget.view.id);
-
-      // 转换为JSON字符串
-      final jsonString = const JsonEncoder.withIndent('  ').convert(data);
-
-      // 选择保存位置
-      final filePicker = getIt<FilePickerService>();
-      final savePath = await filePicker.saveFile(
-        dialogTitle: '保存Excalidraw文件',
-        fileName: '${widget.view.name}.excalidraw',
-        type: FileType.custom,
-        allowedExtensions: ['excalidraw'],
-      );
-
-      if (savePath == null) {
-        return; // 用户取消了保存
-      }
-
-      // 保存文件
-      final file = File(savePath);
-      await file.writeAsString(jsonString);
-
+      // 触发 WebView 内的导出，通过 _onWhiteboardExport 回调处理
+      await _webViewKey.currentState?.exportDrawing('excalidraw');
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Export source file failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('导出成功'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Text('导出失败: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (e) {
-      Log.error('❌ [Whiteboard] Export source file failed: $e');
-      rethrow;
     }
   }
 
   /// 导出为图片
   Future<void> _exportAsImage(String format) async {
-    // 通过JavaScript调用Excalidraw的导出API
-    // 注意：这需要Excalidraw提供相应的API
-    // 暂时显示提示
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('图片导出功能（$format）将在后续版本中实现'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    try {
+      // 触发 WebView 内的导出
+      await _webViewKey.currentState?.exportDrawing(format);
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Export image failed: $e');
+      rethrow;
     }
-    
-    // TODO: 实现图片导出
-    // 1. 通过JavaScript调用Excalidraw的导出API
-    // 2. 获取图片数据（base64或blob）
-    // 3. 保存为文件
   }
 
   /// 验证是否为有效的Excalidraw数据格式

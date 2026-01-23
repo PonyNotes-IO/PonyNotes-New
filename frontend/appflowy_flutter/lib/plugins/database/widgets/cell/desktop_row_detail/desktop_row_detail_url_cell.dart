@@ -61,7 +61,6 @@ class _LinkTextFieldState extends State<LinkTextField> {
   void initState() {
     super.initState();
     _updateLinkClickableState();
-    // 使用 Focus 的 onKeyEvent 而不是全局键盘处理器，避免键盘状态不同步
     widget.focusNode.addListener(_onFocusChange);
   }
 
@@ -89,47 +88,43 @@ class _LinkTextFieldState extends State<LinkTextField> {
     }
   }
 
-  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    // 只在有焦点时更新状态
-    if (widget.focusNode.hasFocus && event is KeyDownEvent) {
-      _updateLinkClickableState();
-    }
-    // 返回 ignored 让事件继续传播，不拦截输入
-    return KeyEventResult.ignored;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Focus(
       focusNode: widget.focusNode,
-      onKeyEvent: _handleKeyEvent,
-      child: TextField(
-      mouseCursor:
-          isLinkClickable ? SystemMouseCursors.click : SystemMouseCursors.text,
-      controller: widget.controller,
-      focusNode: widget.focusNode,
-      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-            decoration: TextDecoration.underline,
-          ),
-      onTap: () {
-        if (isLinkClickable) {
-          openUrlCellLink(widget.controller.text);
+      onKeyEvent: (node, event) {
+        if (widget.focusNode.hasFocus && event is KeyDownEvent) {
+          _updateLinkClickableState();
         }
+        return KeyEventResult.ignored;
       },
-      decoration: InputDecoration(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
-        border: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        errorBorder: InputBorder.none,
-        disabledBorder: InputBorder.none,
-        hintText: LocaleKeys.grid_row_textPlaceholder.tr(),
-        hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).hintColor,
+      child: TextField(
+        mouseCursor:
+            isLinkClickable ? SystemMouseCursors.click : SystemMouseCursors.text,
+        controller: widget.controller,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              decoration: TextDecoration.underline,
             ),
-        isDense: true,
+        onTap: () {
+          if (isLinkClickable) {
+            openUrlCellLink(widget.controller.text);
+          }
+        },
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+          border: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
+          hintText: LocaleKeys.grid_row_textPlaceholder.tr(),
+          hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).hintColor,
+              ),
+          isDense: true,
+        ),
       ),
-    ));
+    );
   }
 }

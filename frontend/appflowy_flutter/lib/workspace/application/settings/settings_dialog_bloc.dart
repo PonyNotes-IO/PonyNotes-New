@@ -460,9 +460,9 @@ class SettingsDialogState with _$SettingsDialogState {
   ) =>
       SettingsDialogState(
         userProfile: userProfile,
-        page: page ?? SettingsPage.workspace,
+        page: page ?? SettingsPage.account,
         isBillingEnabled: false,
         currentSubscription: null,
-        isLoadingCurrentSubscription: false,
+        isLoadingCurrentSubscription: true,
       );
 }

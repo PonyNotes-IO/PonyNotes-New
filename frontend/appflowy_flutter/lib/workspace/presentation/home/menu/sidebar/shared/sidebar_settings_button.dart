@@ -70,7 +70,7 @@ class _SidebarSettingsButtonState extends State<SidebarSettingsButton> {
             ),
             borderRadius: theme.borderRadius.s,
             iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.settings_s,
+              FlowySvgs.icon_settings_s,
               size: const Size.square(16.0),
               color: Theme.of(context).textTheme.bodyMedium?.color,
             ),

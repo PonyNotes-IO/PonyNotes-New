@@ -78,15 +78,10 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
                       }
                     },
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
                       vertical: 10,
                     ),
                     borderRadius: theme.borderRadius.s,
-                    iconBuilder: (context, isHover, disabled) => FlowySvg(
-                      FlowySvgs.share_publish_s,
-                      size: const Size.square(16.0),
-                      color: Theme.of(context).textTheme.bodyMedium?.color,
-                    ),
+                    iconBuilder: (context, isHover, disabled) => SizedBox.shrink(),
                   ),
                   Positioned(
                     right: 12,

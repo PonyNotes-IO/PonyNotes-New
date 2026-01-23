@@ -10,6 +10,8 @@ import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/common_view_action.dart';
+import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/database_export_action.dart';
+import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/export_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/font_size_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/lock_page_action.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/view_meta_info.dart';
@@ -153,6 +155,26 @@ class _MoreViewActionsState extends State<MoreViewActions> {
           (widget.view.isDocument || widget.view.isDatabase) &&
           !pageAccessLevelState.isReadOnly) ...[
         LockPageAction(
+          view: view,
+        ),
+        ViewAction(
+          type: ViewMoreActionType.divider,
+          view: view,
+          mutex: popoverMutex,
+        ),
+      ],
+      if (widget.view.isDocument) ...[
+        ExportAction(
+          view: view,
+        ),
+        ViewAction(
+          type: ViewMoreActionType.divider,
+          view: view,
+          mutex: popoverMutex,
+        ),
+      ],
+      if (widget.view.isDatabase) ...[
+        DatabaseExportAction(
           view: view,
         ),
         ViewAction(

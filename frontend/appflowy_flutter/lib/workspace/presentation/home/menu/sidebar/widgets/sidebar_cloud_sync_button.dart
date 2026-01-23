@@ -119,7 +119,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     // 保存原始 context，用于后续打开设置对话框
     final originalContext = context;
 
-    showDialog(
+    await showDialog(
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.transparent,
@@ -360,22 +360,25 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          FlowyButton(
-            useIntrinsicWidth: true,
-            margin: EdgeInsets.zero,
-            text: FlowySvg(
-              iconData,
-              color: widget.isHover
-                  ? Theme.of(context).colorScheme.onSurface
-                  : iconColor,
-              opacity: widget.isHover ? 0.7 : 1.0,
+          Positioned(
+            left: 0,
+            child: FlowyButton(
+              useIntrinsicWidth: true,
+              margin: EdgeInsets.zero,
+              text: FlowySvg(
+                iconData,
+                color: widget.isHover
+                    ? Theme.of(context).colorScheme.onSurface
+                    : iconColor,
+                opacity: widget.isHover ? 0.7 : 1.0,
+              ),
+              onTap: onTap,
             ),
-            onTap: onTap,
           ),
           // 右上角文字标签
           Positioned(
-            top: -6.0,
-            right: -6.0,
+            top: -8.0,
+            right: -12.0,
             child: Container(
               constraints: const BoxConstraints(
                 maxWidth: 40.0,
@@ -383,7 +386,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
                 maxHeight: 14.0,
               ),
               padding:
-                  const EdgeInsets.symmetric(horizontal: 3.0, vertical: 1.0),
+                  const EdgeInsets.only(left: 5.0, top: 2.0,right: 5.0,bottom: 1.0),
               decoration: BoxDecoration(
                 color: labelColor,
                 borderRadius: BorderRadius.circular(7.0),
@@ -402,7 +405,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
                   labelText,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 8.0,
+                    fontSize: 12.0,
                     fontWeight: FontWeight.w600,
                     height: 1.0,
                   ),

@@ -3,6 +3,7 @@ import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/draggable_item/draggable_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -47,7 +48,6 @@ class DraggableViewItem extends StatefulWidget {
 
 class _DraggableViewItemState extends State<DraggableViewItem> {
   DraggableHoverPosition position = DraggableHoverPosition.none;
-  final hoverColor = const Color(0xFF00C8FF);
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +134,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
             height: kDraggableViewItemDividerHeight,
             thickness: kDraggableViewItemDividerHeight,
             color: position == DraggableHoverPosition.top
-                ? widget.topHighlightColor ?? hoverColor
+                ? widget.topHighlightColor ?? Theme.of(context).colorScheme.primary
                 : Colors.transparent,
           ),
         DecoratedBox(
@@ -142,7 +142,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
             borderRadius: BorderRadius.circular(6.0),
             color: position == DraggableHoverPosition.center
                 ? widget.centerHighlightColor ??
-                    hoverColor.withValues(alpha: 0.5)
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)
                 : Colors.transparent,
           ),
           child: widget.child,
@@ -151,7 +151,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
           height: kDraggableViewItemDividerHeight,
           thickness: kDraggableViewItemDividerHeight,
           color: position == DraggableHoverPosition.bottom
-              ? widget.bottomHighlightColor ?? hoverColor
+              ? widget.bottomHighlightColor ?? Theme.of(context).colorScheme.primary
               : Colors.transparent,
         ),
       ],

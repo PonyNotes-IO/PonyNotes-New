@@ -22,6 +22,10 @@ class ImageStorageService {
   // 内存缓存
   final Map<String, ChatImage> _imageCache = {};
   final Map<String, String> _imageMetadata = {};
+  
+  // 内存缓存配置：最大缓存数量为 100 张图片，最大内存为 50MB
+  static const int _maxCacheSize = 100;
+  static const int _maxCacheBytes = 50 * 1024 * 1024; // 50MB
 
   Directory? _storageDirectory;
 
@@ -81,6 +85,9 @@ class ImageStorageService {
         bytes: imageBytes,
       );
       _imageCache[image.id] = savedImage;
+      
+      // 检查并清理缓存，防止内存溢出
+      _cleanupCacheIfNeeded();
 
       Log.info('图片已保存: ${image.id} -> $fileName');
       return image.id;
@@ -131,6 +138,10 @@ class ImageStorageService {
 
       // 更新缓存
       _imageCache[imageId] = image;
+      
+      // 检查并清理缓存，防止内存溢出
+      _cleanupCacheIfNeeded();
+      
       return image;
     } catch (e) {
       Log.error('获取图片失败: $e');
@@ -326,6 +337,51 @@ class ImageStorageService {
       await metadataFile.writeAsString(content);
     } catch (e) {
       Log.error('保存图片元数据失败: $e');
+    }
+  }
+  
+  /// 清理缓存，防止内存溢出
+  void _cleanupCacheIfNeeded() {
+    // 检查缓存数量
+    if (_imageCache.length > _maxCacheSize) {
+      // 按时间戳排序，删除最旧的图片
+      final sortedEntries = _imageCache.entries.toList()
+        ..sort((a, b) => a.value.timestamp.compareTo(b.value.timestamp));
+      
+      // 删除最旧的一半图片
+      final toRemove = sortedEntries.take(_imageCache.length - _maxCacheSize ~/ 2);
+      for (final entry in toRemove) {
+        _imageCache.remove(entry.key);
+      }
+      
+      Log.info('清理图片缓存: 删除了 ${toRemove.length} 张图片');
+    }
+    
+    // 检查缓存内存大小
+    int totalBytes = 0;
+    final entries = _imageCache.entries.toList();
+    for (final entry in entries) {
+      totalBytes += entry.value.bytes?.length ?? 0;
+    }
+    
+    if (totalBytes > _maxCacheBytes) {
+      // 按时间戳排序，删除最旧的图片直到内存使用降到限制以下
+      final sortedEntries = entries
+        ..sort((a, b) => a.value.timestamp.compareTo(b.value.timestamp));
+      
+      int removedCount = 0;
+      for (final entry in sortedEntries) {
+        if (totalBytes <= _maxCacheBytes) break;
+        
+        final imageBytes = entry.value.bytes?.length ?? 0;
+        _imageCache.remove(entry.key);
+        totalBytes -= imageBytes;
+        removedCount++;
+      }
+      
+      if (removedCount > 0) {
+        Log.info('清理图片缓存: 删除了 $removedCount 张图片以释放内存');
+      }
     }
   }
 }

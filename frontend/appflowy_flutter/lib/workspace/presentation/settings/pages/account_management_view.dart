@@ -51,6 +51,9 @@ class _AccountManagementViewState extends State<AccountManagementView>
     with WidgetsBindingObserver {
   String? _lastHandledPaymentResult;
   bool _expectSubscribePaymentDialog = false;
+  
+  // TapGestureRecognizer 实例，用于在 dispose 时释放
+  final List<TapGestureRecognizer> _gestureRecognizers = [];
 
   void _resetPaymentPromptDedup() {
     _lastHandledPaymentResult = null;
@@ -74,6 +77,13 @@ class _AccountManagementViewState extends State<AccountManagementView>
   void dispose() {
     // 停止支付轮询（通过 Bloc 的 close 方法会自动停止）
     WidgetsBinding.instance.removeObserver(this);
+    
+    // 释放所有 TapGestureRecognizer
+    for (final recognizer in _gestureRecognizers) {
+      recognizer.dispose();
+    }
+    _gestureRecognizers.clear();
+    
     super.dispose();
   }
 
@@ -354,7 +364,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
           children: [
             Expanded(
               child: SettingsBody(
-                title: "我的账户",
+                title: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
                 headerTrailingBuilder: (_) =>
                 selectedTab == MembershipTab.upgrade ?
                     OutlinedRoundedButton(
@@ -401,43 +411,6 @@ class _AccountManagementViewState extends State<AccountManagementView>
                 ],
               ),
             ),
-            if (selectedTab == MembershipTab.upgrade)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-                child: GestureDetector(
-                  onTap: () async {
-                    // 重置 SignInBloc 状态（如果可用）
-                    try {
-                      final signInBloc = getIt<SignInBloc>();
-                      if (!signInBloc.isClosed) {
-                        signInBloc.add(const SignInEvent.reset());
-                      }
-                    } catch (e) {
-                      // SignInBloc 不可用，忽略
-                    }
-                    await getIt<AuthService>().signOut();
-                    await runAppFlowy();
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.primary,
-                        width: 1,
-                      ),
-                      borderRadius: BorderRadius.circular(theme.spacing.s),
-                    ),
-                    child: Center(
-                      child: FlowyText(
-                        '退出登录',
-                        fontSize: 16,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
           ],
         );
       },
@@ -545,8 +518,6 @@ class _AccountManagementViewState extends State<AccountManagementView>
             isProcessingPayment,
           ),
         ],
-        const VSpace(24),
-        _buildCommonInfoList(context),
       ],
     );
   }
@@ -619,8 +590,6 @@ class _AccountManagementViewState extends State<AccountManagementView>
             },
             prefixText: '升级前请确认 ',
           ),
-        const VSpace(24),
-        _buildCommonInfoList(context),
       ],
     );
   }
@@ -688,18 +657,22 @@ class _AccountManagementViewState extends State<AccountManagementView>
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 mouseCursor: SystemMouseCursors.click,
-                recognizer: TapGestureRecognizer()
-                  ..onTap = () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => LegalDocumentScreen(
-                          title: LocaleKeys.sidebar_appName.tr() +
-                              LocaleKeys.legal_userAgreement.tr(),
-                          content: LocaleKeys.legal_userAgreementContent.tr(),
+                recognizer: () {
+                  final recognizer = TapGestureRecognizer()
+                    ..onTap = () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => LegalDocumentScreen(
+                            title: LocaleKeys.sidebar_appName.tr() +
+                                LocaleKeys.legal_userAgreement.tr(),
+                            content: LocaleKeys.legal_userAgreementContent.tr(),
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    };
+                  _gestureRecognizers.add(recognizer);
+                  return recognizer;
+                }(),
               ),
               TextSpan(
                 text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
@@ -707,54 +680,24 @@ class _AccountManagementViewState extends State<AccountManagementView>
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 mouseCursor: SystemMouseCursors.click,
-                recognizer: TapGestureRecognizer()
-                  ..onTap = () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => LegalDocumentScreen(
-                          title: LocaleKeys.legal_privacyPolicy.tr(),
-                          content: LocaleKeys.legal_privacyPolicyContent.tr(),
+                recognizer: () {
+                  final recognizer = TapGestureRecognizer()
+                    ..onTap = () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => LegalDocumentScreen(
+                            title: LocaleKeys.legal_privacyPolicy.tr(),
+                            content: LocaleKeys.legal_privacyPolicyContent.tr(),
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    };
+                  _gestureRecognizers.add(recognizer);
+                  return recognizer;
+                }(),
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCommonInfoList(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildFeatureItem(
-          context,
-          LocaleKeys.settings_billingPage_storageSpace.tr(),
-          _buildStorageUsageSubtitle(),
-          showArrow: true,
-        ),
-        _buildFeatureItem(
-          context,
-          'AI使用次数',
-          _buildAiUsageSubtitle(),
-          showArrow: true,
-        ),
-        GestureDetector(
-          onTap: () => widget.changeSelectedPage(SettingsPage.userProfile),
-          child: _buildFeatureItem(context, '个人资料', '', showArrow: true),
-        ),
-        GestureDetector(
-          onTap: () => _showPhoneVerificationDialog(context),
-          child: _buildFeatureItem(context, '绑定手机', '修改',
-              showButton: true, buttonText: '修改'),
-        ),
-        GestureDetector(
-          onTap: () => _showEmailVerificationDialog(context),
-          child: _buildFeatureItem(context, '邮箱', '修改',
-              showButton: true, buttonText: '修改'),
         ),
       ],
     );
@@ -1089,35 +1032,6 @@ class _AccountManagementViewState extends State<AccountManagementView>
     );
   }
 
-  String _buildAiUsageSubtitle() {
-    final usage = widget.currentSubscription?.usage;
-    final remaining = usage?.aiChatRemaining;
-    if (remaining == null) {
-      return '';
-    }
-    return '本月剩余$remaining次';
-  }
-
-  String _buildStorageUsageSubtitle() {
-    final usage = widget.currentSubscription?.usage;
-    final usedGb = usage?.storageUsedGb;
-    final totalGb = usage?.storageTotalGb;
-    if (usedGb == null || totalGb == null) {
-      return '';
-    }
-
-    String fmt(double gb) {
-      if (gb < 1) {
-        final mb = gb * 1024;
-        return '${mb.toStringAsFixed(0)}M';
-      }
-      return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
-    }
-
-    // 按“已用/总量”展示（与“我的账户”右侧展示保持一致的简洁风格）
-    return '${fmt(usedGb)}/${fmt(totalGb)}';
-  }
-
   Widget _buildPurchaseDurationSection(
     BuildContext context,
     AccountManagementState state,
@@ -1314,19 +1228,23 @@ class _AccountManagementViewState extends State<AccountManagementView>
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       mouseCursor: SystemMouseCursors.click,
-                      recognizer: TapGestureRecognizer()
-                        ..onTap = () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => LegalDocumentScreen(
-                                title: LocaleKeys.sidebar_appName.tr() +
-                                    LocaleKeys.legal_userAgreement.tr(),
-                                content:
-                                    LocaleKeys.legal_userAgreementContent.tr(),
+                      recognizer: () {
+                        final recognizer = TapGestureRecognizer()
+                          ..onTap = () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => LegalDocumentScreen(
+                                  title: LocaleKeys.sidebar_appName.tr() +
+                                      LocaleKeys.legal_userAgreement.tr(),
+                                  content:
+                                      LocaleKeys.legal_userAgreementContent.tr(),
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          };
+                        _gestureRecognizers.add(recognizer);
+                        return recognizer;
+                      }(),
                     ),
                     TextSpan(
                       text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
@@ -1334,18 +1252,22 @@ class _AccountManagementViewState extends State<AccountManagementView>
                         color: Theme.of(context).colorScheme.primary,
                       ),
                       mouseCursor: SystemMouseCursors.click,
-                      recognizer: TapGestureRecognizer()
-                        ..onTap = () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => LegalDocumentScreen(
-                                title: LocaleKeys.legal_privacyPolicy.tr(),
-                                content:
-                                    LocaleKeys.legal_privacyPolicyContent.tr(),
+                      recognizer: () {
+                        final recognizer = TapGestureRecognizer()
+                          ..onTap = () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => LegalDocumentScreen(
+                                  title: LocaleKeys.legal_privacyPolicy.tr(),
+                                  content:
+                                      LocaleKeys.legal_privacyPolicyContent.tr(),
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          };
+                        _gestureRecognizers.add(recognizer);
+                        return recognizer;
+                      }(),
                     ),
                   ],
                 ),
@@ -1453,7 +1375,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('输入手机号'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1472,14 +1394,17 @@ class _AccountManagementViewState extends State<AccountManagementView>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              phoneController.dispose();
+              Navigator.of(dialogContext).pop();
+            },
             child: const Text('取消'),
           ),
           TextButton(
             onPressed: () {
               final phone = phoneController.text.trim();
               if (phone.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
                   const SnackBar(
                     content: Text('请输入手机号'),
                     duration: Duration(seconds: 2),
@@ -1490,7 +1415,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
 
               // 验证手机号格式
               if (!Validator.isValidPhone(phone)) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
                   const SnackBar(
                     content: Text('请输入正确的手机号格式'),
                     duration: Duration(seconds: 2),
@@ -1499,7 +1424,8 @@ class _AccountManagementViewState extends State<AccountManagementView>
                 return;
               }
 
-              Navigator.of(context).pop();
+              phoneController.dispose();
+              Navigator.of(dialogContext).pop();
               showDialog(
                 context: context,
                 builder: (context) => IdentityVerificationDialog(
@@ -1519,7 +1445,10 @@ class _AccountManagementViewState extends State<AccountManagementView>
           ),
         ],
       ),
-    );
+    ).then((_) {
+      // 确保在对话框关闭时释放 controller
+      phoneController.dispose();
+    });
   }
 
   void _showPhoneChangeDialog(BuildContext context) {

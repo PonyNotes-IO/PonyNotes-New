@@ -4,6 +4,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_util.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_input_field.dart';
 import 'package:appflowy_backend/log.dart';
@@ -12,6 +13,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class SettingsUserProfileView extends StatefulWidget {
   const SettingsUserProfileView({
@@ -48,6 +50,7 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
     return SettingsBody(
       title: "个人资料",
       autoSeparate: false,
+      headerLeadingBuilder: (context) => _buildBackButton(context),
       children: [
         const SizedBox(height: 20),
         // 我的名称
@@ -76,6 +79,25 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
         // 保存按钮
         _buildSaveButton(),
       ],
+    );
+  }
+
+  // 构建返回按钮
+  Widget _buildBackButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        context.read<SettingsDialogBloc>().add(
+              const SettingsDialogEvent.setSelectedPage(SettingsPage.account),
+            );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          Icons.arrow_back,
+          size: 24,
+          color: Theme.of(context).textTheme.bodyLarge?.color,
+        ),
+      ),
     );
   }
 

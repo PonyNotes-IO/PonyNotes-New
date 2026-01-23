@@ -3,6 +3,8 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../generated/flowy_svgs.g.dart';
+
 class SettingsMenuElement extends StatelessWidget {
   const SettingsMenuElement({
     super.key,
@@ -13,6 +15,8 @@ class SettingsMenuElement extends StatelessWidget {
     this.showArrow = true, // 默认显示箭头
     this.trailingText,
     this.isEnabled = true,
+    this.showIcon = false,
+    this.svg
   });
 
   final SettingsPage page;
@@ -22,6 +26,8 @@ class SettingsMenuElement extends StatelessWidget {
   final bool showArrow; // 是否显示右侧箭头
   final String? trailingText;
   final bool isEnabled;
+  final bool showIcon;
+  final FlowySvgData? svg;
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +51,14 @@ class SettingsMenuElement extends StatelessWidget {
       builder: (_, __, ___) {
         return Row(
           children: [
+            if (showIcon) ...[
+              FlowySvg(
+                svg ?? FlowySvgs.icon_setting_upgrade_s,
+                blendMode: null,
+                size: Size(18,18),
+              ),
+              const HSpace(4),
+            ],
             Expanded(
               child: Text(
                 label,
