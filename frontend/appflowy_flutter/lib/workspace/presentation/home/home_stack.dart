@@ -695,7 +695,17 @@ class PageManager {
   }
 
   Widget stackTopBar({required HomeLayout layout}) {
-    // 显示顶部标题栏（包含面包屑导航和右侧按钮）
+    // For some plugins (e.g. File Library) we don't want the global top bar.
+    // Return an empty placeholder so the plugin content aligns with the app
+    // top area without extra spacing.
+    try {
+      if (_notifier.plugin.pluginType == PluginType.fileLibrary) {
+        return const SizedBox.shrink();
+      }
+    } catch (_) {
+      // If anything goes wrong accessing plugin type, fall back to showing the bar.
+    }
+
     return ChangeNotifierProvider.value(
       value: _notifier,
       child: HomeTopBar(layout: layout),
