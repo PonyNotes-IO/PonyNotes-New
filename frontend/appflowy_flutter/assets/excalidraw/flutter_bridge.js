@@ -155,11 +155,31 @@
                 // 获取场景数据
                 const sceneData = getSceneData(api);
                 
-                // 使用exportToBlob导出PNG，需要传入完整的场景数据
+                // 检查是否有ExcalidrawLib.exportToCanvas（推荐方式）
+                if (window.ExcalidrawLib && window.ExcalidrawLib.exportToCanvas) {
+                    // 使用exportToCanvas导出PNG（推荐方式）
+                    const canvas = await window.ExcalidrawLib.exportToCanvas({
+                        elements: sceneData.elements,
+                        appState: sceneData.appState,
+                        files: sceneData.files,
+                    });
+                    
+                    if (!canvas) {
+                        throw new Error('exportToCanvas 返回空结果');
+                    }
+                    
+                    // 将canvas转换为dataURL
+                    const dataUrl = canvas.toDataURL('image/png', 0.95);
+                    
+                    window.flutter_inappwebview?.callHandler('onExport', {
+                        format: 'png',
+                        data: dataUrl,
+                    });
+                    return;
+                }
+                
+                // 回退方案：使用exportToBlob（不需要传入elements等参数，会自动使用当前场景）
                 const blob = await api.exportToBlob?.({
-                    elements: sceneData.elements,
-                    appState: sceneData.appState,
-                    files: sceneData.files,
                     mimeType: 'image/png',
                     quality: 0.95,
                 });
