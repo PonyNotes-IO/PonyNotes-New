@@ -65,19 +65,42 @@ class _AIInputAreaState extends State<AIInputArea> {
   // 功能开关状态
   bool _isDeepThinkingEnabled = false;  // 深度思考开关
   bool _isWebSearchEnabled = false;     // 全网搜索开关
+  // 文本长度限制与计数
+  static const int _kMaxMessageLength = 120;
+  int _currentCharCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadModelsFromAPI();
+    // 监听文本变化以更新字符计数并限制长度
+    _textController.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
     _overlayEntry?.remove();
+    _textController.removeListener(_onTextChanged);
     _textController.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    final text = _textController.text;
+    if (text.length > _kMaxMessageLength) {
+      // 截断并恢复光标到末尾
+      final truncated = text.substring(0, _kMaxMessageLength);
+      _textController.value = TextEditingValue(
+        text: truncated,
+        selection: TextSelection.collapsed(offset: truncated.length),
+      );
+      _currentCharCount = _kMaxMessageLength;
+    } else {
+      _currentCharCount = text.length;
+    }
+    // 更新显示
+    if (mounted) setState(() {});
   }
 
   /// 从API加载模型列表
@@ -251,20 +274,17 @@ class _AIInputAreaState extends State<AIInputArea> {
                       const SizedBox(width: 22),
                       _buildHistoryButton(),
                     ],
-                    // AI使用次数显示（放在附件按钮左边）
+                    // 字数统计（上传附件按钮左侧）
+                    _buildCharCountIndicator(),
+                    const SizedBox(width: 10),
+                    // AI使用次数显示（显示剩余可用次数），置于字数与附件之间
                     _buildAIUsageIndicator(),
                     const SizedBox(width: 10),
                     // 合并后的附件上传按钮（包含图片和附件上传功能）
                     const SizedBox(width: 12),
                     _buildAttachmentButton(),
-                    const SizedBox(width: 21),
-                    // 分隔线（对应 block_5）
-                    Container(
-                      width: 1,
-                      height: 20,
-                      decoration: AIWelcomeTheme.dividerDecoration(context),
-                    ),
-                    const SizedBox(width: 21),
+                    // 去掉附件与发送按钮之间的竖向分割线，保持适当间距
+                    const SizedBox(width: 12),
                     // 发送按钮（对应 label_9）
                     _buildSendButton(),
                   ],
@@ -736,62 +756,48 @@ class _AIInputAreaState extends State<AIInputArea> {
         if (!snapshot.hasData) {
           return const SizedBox.shrink();
         }
-        
+
         final result = snapshot.data!;
         return result.fold(
           (usage) {
             if (usage == null) {
               return const SizedBox.shrink();
             }
-            
-            // 如果无限制，不显示
+
+            // 如果无限制，不显示（无限制通常表示不需要展示次数）
             if (usage.aiResponsesUnlimited) {
               return const SizedBox.shrink();
             }
-            
+
             final used = usage.aiResponsesCount.toInt();
             final total = usage.aiResponsesCountLimit.toInt();
-            
+
             // 检测未订阅状态：total == -1 表示用户未订阅
             if (total == -1) {
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  '未订阅，不可用',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
+              return Text(
+                '未订阅，不可用',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.error,
+                  fontWeight: FontWeight.w500,
                 ),
               );
             }
-            
-            final remaining = total - used;
-            
-            // 验证数据有效性
+
             if (total == 0) {
               return const SizedBox.shrink();
             }
-            
-            // 根据剩余次数选择颜色
-            final textColor = _getUsageTextColor(remaining);
-            
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                _getUsageDisplayText(used, total, remaining),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: textColor,
-                ),
+
+            final remaining = total - used;
+            final textColor = remaining <= 0 ? Colors.red : Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+
+            // 仅显示“剩余 X 次可用”的提示，放在字数与附件之间
+            return Text(
+              '剩余 ${remaining < 0 ? 0 : remaining} 次可用',
+              style: TextStyle(
+                fontSize: 13,
+                color: textColor,
+                fontWeight: FontWeight.w500,
               ),
             );
           },
@@ -800,6 +806,22 @@ class _AIInputAreaState extends State<AIInputArea> {
           },
         );
       },
+    );
+  }
+
+  /// 构建输入框字符计数器（显示 x/120），并在超出时限制长度
+  Widget _buildCharCountIndicator() {
+    final textColor = _currentCharCount >= _kMaxMessageLength
+        ? Colors.red
+        : Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+    // 简洁文本显示（去掉暗色背景），字号加大并加粗
+    return Text(
+      '$_currentCharCount/$_kMaxMessageLength',
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: textColor,
+      ),
     );
   }
   
