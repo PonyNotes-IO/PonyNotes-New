@@ -1,4 +1,3 @@
-
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/guest_tag.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -10,6 +9,7 @@ import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dar
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_actions.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_icon.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_setting.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/cloud_sync_settings_panel.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/members/workspace_member_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
@@ -478,15 +478,7 @@ class _CreateWorkspaceButton extends StatelessWidget {
           context: context,
           title: LocaleKeys.workspace_create.tr(),
           description: '云同步已关闭，无法创建工作区。请先开启云同步功能。',
-          confirmLabel: '前往设置',
-          onConfirm: (_) {
-            // 导航到设置页面
-            showSettingsDialog(
-              context,
-              userWorkspaceBloc: workspaceBloc,
-              initPage: SettingsPage.accountManagement,
-            );
-          },
+          confirmLabel: '知道了',
         );
         return;
       }

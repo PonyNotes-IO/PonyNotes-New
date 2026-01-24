@@ -1431,8 +1431,19 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventUpdateFolderSyncState event,
     Emitter<UserWorkspaceState> emit,
   ) async {
-    emit(state.copyWith(folderSyncState: event.syncState));
-    Log.info('[UserWorkspaceBloc] 文件夹同步状态更新: isSyncing=${event.syncState.isSyncing}, isFinish=${event.syncState.isFinish}');
+    // 检查新状态是否与旧状态相同，如果相同则跳过更新
+    final oldSyncState = state.folderSyncState;
+    final newSyncState = event.syncState;
+    
+    if (oldSyncState != null && 
+        oldSyncState.isSyncing == newSyncState.isSyncing && 
+        oldSyncState.isFinish == newSyncState.isFinish) {
+      // 状态未改变，跳过更新
+      return;
+    }
+    
+    emit(state.copyWith(folderSyncState: newSyncState));
+    Log.info('[UserWorkspaceBloc] 文件夹同步状态更新: isSyncing=${newSyncState.isSyncing}, isFinish=${newSyncState.isFinish}');
   }
 
   String? _extractAccessToken(String? rawToken) {

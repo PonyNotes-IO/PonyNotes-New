@@ -41,18 +41,17 @@ class _WorkspaceMoreActionListState extends State<WorkspaceMoreActionList> {
   Widget build(BuildContext context) {
     final myRole = context.read<WorkspaceMemberBloc>().state.myRole;
     final actions = [];
-    // 如果当前工作区创建人是登录用户，显示删除和重命名
+    // 检查工作区的 role 字段，确保只有真正的所有者才能看到删除按钮
+    final isWorkspaceOwner = widget.workspace.role == AFRolePB.Owner;
+    // 如果当前用户是工作区所有者，显示删除和重命名
     // 否则显示退出工作区
-    if (myRole.isOwner) {
+    if (myRole.isOwner && isWorkspaceOwner) {
       // 当前用户是工作区创建人，显示删除和重命名
       actions.add(WorkspaceMoreAction.rename);
       actions.add(WorkspaceMoreAction.divider);
       actions.add(WorkspaceMoreAction.delete);
     } else {
-      // 当前用户不是工作区创建人，显示退出工作区
-      if (myRole.canLeave) {
         actions.add(WorkspaceMoreAction.leave);
-      }
     }
     if (actions.isEmpty) {
       return const SizedBox.shrink();
