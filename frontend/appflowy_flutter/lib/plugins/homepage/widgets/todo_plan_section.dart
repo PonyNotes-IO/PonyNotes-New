@@ -36,10 +36,6 @@ class TodoPlanSectionContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(
-        minHeight: 0,
-        maxHeight: 400,
-      ),
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -94,11 +90,14 @@ class TodoPlanSectionContent extends StatelessWidget {
                   children: [
                     SizedBox(
                       width: halfWidth,
-                      child: QuickEventCreator(
-                        onEventCreated: (todoItem) {
-                          // 创建成功后刷新待办列表
-                          context.read<TodoBloc>().add(const TodoEvent.loadTodos());
-                        },
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: QuickEventCreator(
+                          onEventCreated: (todoItem) {
+                            // 创建成功后刷新待办列表
+                            context.read<TodoBloc>().add(const TodoEvent.loadTodos());
+                          },
+                        ),
                       ),
                     ),
                     // 分割线（保留原有间距）
@@ -109,12 +108,15 @@ class TodoPlanSectionContent extends StatelessWidget {
                     ),
                     SizedBox(
                       width: halfWidth,
-                      child: TodoListDisplay(
-                        todayTodos: state.todayTodos,
-                        upcomingTodos: state.upcomingTodos,
-                        onTodoToggle: (todoId) {
-                          context.read<TodoBloc>().add(TodoEvent.toggleComplete(todoId));
-                        },
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: TodoListDisplay(
+                          todayTodos: state.todayTodos,
+                          upcomingTodos: state.upcomingTodos,
+                          onTodoToggle: (todoId) {
+                            context.read<TodoBloc>().add(TodoEvent.toggleComplete(todoId));
+                          },
+                        ),
                       ),
                     ),
                   ],
