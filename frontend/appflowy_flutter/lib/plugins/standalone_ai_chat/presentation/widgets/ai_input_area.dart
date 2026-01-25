@@ -953,107 +953,141 @@ class _AIInputAreaState extends State<AIInputArea> {
     final fileType = _getFileTypeDisplay(extension);
     
     return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      width: 220, // larger card so ~4 cards fit per row in typical toolbar width
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(6),
+        color: attachment.isSelected
+            ? Theme.of(context).colorScheme.errorContainer.withOpacity(0.2)
+            : Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: attachment.uploadStatus == _UploadStatus.failed
               ? Colors.red
-              : Theme.of(context).colorScheme.outline.withOpacity(0.2),
+              : Theme.of(context).colorScheme.outline.withOpacity(0.16),
           width: 1,
         ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: GestureDetector(
+        onTap: () {
+          // If not selected, select this attachment (and deselect others).
+          if (!attachment.isSelected) {
+            setState(() {
+              for (final a in _attachments) {
+                a.isSelected = false;
+              }
+              attachment.isSelected = true;
+            });
+            return;
+          }
+          // If already selected, open the attachment.
+          _openAttachment(attachment);
+        },
+        child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          // 小图标
-          Icon(
-            attachment.type == _AttachmentType.image
-                ? Icons.image
-                : _getFileIcon(extension),
-            size: 16,
-            color: attachment.type == _AttachmentType.image
-                ? Colors.red
-                : Colors.blue,
-          ),
-          const SizedBox(width: 6),
-          // 文件名和大小
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 文件名（限制宽度，过长用...显示）
-              SizedBox(
-                width: 120, // 限制最大宽度
-                child: Text(
-                  attachment.name,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF333333),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              // 小图标（放大一点）
+              Icon(
+                attachment.type == _AttachmentType.image
+                    ? Icons.image
+                    : _getFileIcon(extension),
+                size: 20,
+                color: attachment.type == _AttachmentType.image
+                    ? Colors.red
+                    : Colors.blue,
               ),
-              const SizedBox(height: 2),
-              // 文件类型和大小
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    fileType,
+              const SizedBox(width: 10),
+              // 文件名和大小
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                // 文件名（限制宽度，过长用...显示）
+                // reserve right padding so top-right delete button doesn't overlap title
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.only(right: 36),
+                  child: Text(
+                    attachment.name,
                     style: TextStyle(
-                      fontSize: 9,
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AIWelcomeTheme.primaryTextColor(context),
                     ),
-                  ),
-                  if (attachment.size != null) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      _formatFileSize(attachment.size!),
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              // 上传失败提示
-              if (attachment.uploadStatus == _UploadStatus.failed)
-                const Text(
-                  '上传失败',
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: Colors.red,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                    const SizedBox(height: 4),
+                    // 文件类型和大小
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          fileType,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.65),
+                          ),
+                        ),
+                        if (attachment.size != null) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            _formatFileSize(attachment.size!),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.65),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    // 上传失败提示
+                    if (attachment.uploadStatus == _UploadStatus.failed)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6.0),
+                        child: Text(
+                          '上传失败',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(width: 4),
-          // 删除按钮
-          GestureDetector(
-            onTap: () => _removeAttachment(attachment),
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.6),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.close,
-                size: 12,
-                color: Colors.white,
+          // 删除按钮放在卡片右上角
+          Positioned(
+            top: -8,
+            right: -8,
+            child: GestureDetector(
+              onTap: () => _removeAttachment(attachment),
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.close,
+                  size: 14,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
         ],
       ),
-    );
+    ),
+  );
   }
   
   /// 根据文件扩展名获取文件类型显示文本
@@ -1322,6 +1356,49 @@ class _AIInputAreaState extends State<AIInputArea> {
     return _buildErrorImageWidget();
   }
 
+  /// 打开附件（图片展示或使用系统默认程序打开文件）
+  Future<void> _openAttachment(_AttachmentItem attachment) async {
+    try {
+      // Always open attachments using the system default application.
+      // If the attachment is an in-memory image, write it to a temp file first.
+      File? targetFile;
+
+      if (attachment.file != null) {
+        targetFile = attachment.file!;
+      } else if (attachment.image != null) {
+        final image = attachment.image!;
+        if (image.filePath != null && image.filePath!.isNotEmpty) {
+          targetFile = File(image.filePath!);
+        } else if (image.bytes != null) {
+          // write bytes to temp file with the original name if possible
+          final tempDir = Directory.systemTemp;
+          final sanitizedName = attachment.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+          final tempFile = File('${tempDir.path}${Platform.pathSeparator}$sanitizedName');
+          await tempFile.writeAsBytes(image.bytes!);
+          targetFile = tempFile;
+        }
+      }
+
+      if (targetFile != null) {
+        final path = targetFile.path;
+        if (Platform.isWindows) {
+          await Process.start('cmd', ['/c', 'start', '', path]);
+        } else if (Platform.isMacOS) {
+          await Process.start('open', [path]);
+        } else if (Platform.isLinux) {
+          await Process.start('xdg-open', [path]);
+        }
+      }
+    } catch (e) {
+      debugPrint('打开附件失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('无法打开附件: $e')),
+        );
+      }
+    }
+  }
+
   /// 构建错误图片显示
   Widget _buildErrorImageWidget() {
     return Container(
@@ -1361,6 +1438,8 @@ class _AttachmentItem {
   final ChatImage? image; // 如果是图片
   final File? file; // 如果是文件
   final _UploadStatus uploadStatus;
+  // 是否被选中（用于点击高亮）
+  bool isSelected;
   
   _AttachmentItem({
     required this.type,
@@ -1369,6 +1448,7 @@ class _AttachmentItem {
     this.image,
     this.file,
     required this.uploadStatus,
+    this.isSelected = false,
   });
 }
 
