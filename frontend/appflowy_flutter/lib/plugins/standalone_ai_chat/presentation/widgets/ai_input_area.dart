@@ -274,12 +274,9 @@ class _AIInputAreaState extends State<AIInputArea> {
                       const SizedBox(width: 22),
                       _buildHistoryButton(),
                     ],
-                    // 字数统计（上传附件按钮左侧）
-                    _buildCharCountIndicator(),
-                    const SizedBox(width: 10),
-                    // AI使用次数显示（显示剩余可用次数），置于字数与附件之间
-                    _buildAIUsageIndicator(),
-                    const SizedBox(width: 10),
+                    // 字数与剩余可用次数合并显示（紧凑样式，靠近附件按钮）
+                    _buildCountAndRemainingIndicator(),
+                    const SizedBox(width: 12),
                     // 合并后的附件上传按钮（包含图片和附件上传功能）
                     const SizedBox(width: 12),
                     _buildAttachmentButton(),
@@ -791,9 +788,9 @@ class _AIInputAreaState extends State<AIInputArea> {
             final remaining = total - used;
             final textColor = remaining <= 0 ? Colors.red : Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
 
-            // 仅显示“剩余 X 次可用”的提示，放在字数与附件之间
+            // 仅显示“X 次可用”的提示，放在字数与附件之间
             return Text(
-              '剩余 ${remaining < 0 ? 0 : remaining} 次可用',
+              '${remaining < 0 ? 0 : remaining} 次可用',
               style: TextStyle(
                 fontSize: 13,
                 color: textColor,
@@ -822,6 +819,95 @@ class _AIInputAreaState extends State<AIInputArea> {
         fontWeight: FontWeight.w600,
         color: textColor,
       ),
+    );
+  }
+ 
+  /// 合并显示：字符计数 + 剩余可用次数，样式为轻灰圆角 pill，与设计图保持一致
+  Widget _buildCountAndRemainingIndicator() {
+    return FutureBuilder<FlowyResult<WorkspaceUsagePB?, FlowyError>>(
+      future: _loadUsage(),
+      builder: (context, snapshot) {
+        String remainingText = '';
+        Color remainingColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+
+        if (!snapshot.hasData) {
+          // 尚未加载到数据时显示占位（仅字符计数）
+          remainingText = '';
+        } else {
+          final result = snapshot.data!;
+          result.fold((usage) {
+            if (usage == null) {
+              remainingText = '';
+              return;
+            }
+            if (usage.aiResponsesUnlimited) {
+              remainingText = '';
+              return;
+            }
+            final used = usage.aiResponsesCount.toInt();
+            final total = usage.aiResponsesCountLimit.toInt();
+            if (total == -1) {
+              remainingText = '未订阅';
+              remainingColor = Theme.of(context).colorScheme.error;
+              return;
+            }
+            final remaining = total - used;
+            remainingText = '${remaining < 0 ? 0 : remaining} 次可用';
+            if (remaining <= 0) {
+              remainingColor = Colors.red;
+            } else {
+              remainingColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+            }
+          }, (error) {
+            remainingText = '';
+          });
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.12),
+              width: 1,
+            ),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$_currentCharCount/$_kMaxMessageLength',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _currentCharCount >= _kMaxMessageLength ? Colors.red : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              if (remainingText.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '|',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.12),
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  remainingText,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: remainingColor,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
   

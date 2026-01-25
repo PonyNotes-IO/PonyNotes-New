@@ -41,8 +41,6 @@ class AIWelcomePage extends StatelessWidget {
             onMessageSent: onMessageSent,
             onChatHistoryTap: onChatHistoryTap,
           ),
-          const SizedBox(height: 8),
-          const _AIWelcomeUsageIndicator(),
           const Spacer(),
           // 底部提示文字（对应 text_18）
           Container(
