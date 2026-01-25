@@ -5,6 +5,7 @@ import 'package:appflowy/plugins/homepage/application/todo_service.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+// kept no external svg here; using Material Icon for quick create header
 
 /// 快速创建事件/待办的组件
 /// 直接使用TodoService创建待办事项并保存到数据库
@@ -77,8 +78,8 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
           ),
           child: const Icon(
             Icons.calendar_today,
-            color: Colors.white,
             size: 28,
+            color: Colors.white,
           ),
         ),
         const SizedBox(height: 12),

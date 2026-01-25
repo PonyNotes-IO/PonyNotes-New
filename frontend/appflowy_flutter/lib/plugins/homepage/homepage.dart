@@ -9,6 +9,7 @@ import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
+import 'package:flowy_svg/flowy_svg.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -294,10 +295,10 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.only(bottom: 16.0),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  FlowySvg(
+                    const FlowySvgData('assets/flowy_icons/20x/home_to_do.svg'),
+                    size: const Size.square(18),
+                    blendMode: null,
                   ),
                   const SizedBox(width: 8.0),
                   const Text(
