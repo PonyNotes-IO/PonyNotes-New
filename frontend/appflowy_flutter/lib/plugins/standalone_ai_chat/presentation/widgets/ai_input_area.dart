@@ -15,6 +15,7 @@ import 'package:file_picker/file_picker.dart';
 import '../ai_welcome_theme.dart';
 import '../../services/image_service.dart';
 import '../../models/chat_image.dart';
+import 'package:flowy_svg/flowy_svg.dart';
 
 /// AI欢迎页面的输入交互区域
 /// 对应设计图中的 block_3 区域
@@ -598,44 +599,17 @@ class _AIInputAreaState extends State<AIInputArea> {
           child: Stack(
             children: [
               Center(
-                child: Image.asset(
-                  'assets/images/icons/tool_3.png',
-                  width: AIWelcomeTheme.iconSize * 0.8,
-                  height: AIWelcomeTheme.iconSize * 0.8,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.attach_file,
-                      size: AIWelcomeTheme.iconSize * 0.8,
-                      color: hasAttachments 
-                          ? AIWelcomeTheme.selectedItemTextColor(context) 
-                          : AIWelcomeTheme.secondaryTextColor(context),
-                    );
-                  },
+                child: FlowySvg(
+                  // show uploaded / not-uploaded variants
+                  hasAttachments
+                      ? const FlowySvgData('assets/flowy_icons/32x/askAHBU.svg')
+                      : const FlowySvgData('assets/flowy_icons/32x/askNAU.svg'),
+                  size: Size.square(AIWelcomeTheme.iconSize * 0.8),
+                  // keep original svg colors
+                  blendMode: null,
                 ),
               ),
-              if (hasAttachments)
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        '${_attachments.length}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              // badge removed — do not display attachment count on the icon
             ],
           ),
         ),
@@ -1160,25 +1134,13 @@ class _AIInputAreaState extends State<AIInputArea> {
       child: Container(
         width: AIWelcomeTheme.sendButtonSize,
         height: AIWelcomeTheme.sendButtonSize,
-        child: Image.asset(
-          'assets/images/icons/send_button.png',
-          width: AIWelcomeTheme.sendButtonSize,
-          height: AIWelcomeTheme.sendButtonSize,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              width: AIWelcomeTheme.sendButtonSize,
-              height: AIWelcomeTheme.sendButtonSize,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                borderRadius: BorderRadius.circular(AIWelcomeTheme.sendButtonSize / 2),
-              ),
-              child: Icon(
-                Icons.send,
-                size: AIWelcomeTheme.sendButtonSize * 0.6,
-                color: Theme.of(context).colorScheme.onPrimary,
-              ),
-            );
-          },
+        child: FlowySvg(
+          // show different svg based on input content
+          _currentCharCount > 0
+              ? const FlowySvgData('assets/flowy_icons/32x/askSendContent.svg')
+              : const FlowySvgData('assets/flowy_icons/32x/askSendNoContent.svg'),
+          size: Size.square(AIWelcomeTheme.sendButtonSize),
+          blendMode: null,
         ),
       ),
     );
