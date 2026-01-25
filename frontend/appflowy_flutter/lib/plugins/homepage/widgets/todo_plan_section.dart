@@ -81,40 +81,49 @@ class TodoPlanSectionContent extends StatelessWidget {
             );
           }
 
-          return IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 左侧：快速创建待办区域
-                Expanded(
-                  flex: 1,
-                  child: QuickEventCreator(
-                    onEventCreated: (todoItem) {
-                      // 创建成功后刷新待办列表
-                      context.read<TodoBloc>().add(const TodoEvent.loadTodos());
-                    },
+          return LayoutBuilder(
+              builder: (context, constraints) {
+                // divider has width 1 and horizontal margins 15 each => totalSpacing = 1 + 15*2
+                const double dividerWidth = 1;
+                const double dividerHorizontalMargin = 15;
+                final double totalDividerSpace = dividerWidth + dividerHorizontalMargin * 2;
+                final double halfWidth = (constraints.maxWidth - totalDividerSpace) / 2;
+
+                return SizedBox(
+                  height: constraints.maxHeight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: halfWidth,
+                        child: QuickEventCreator(
+                          onEventCreated: (todoItem) {
+                            // 创建成功后刷新待办列表
+                            context.read<TodoBloc>().add(const TodoEvent.loadTodos());
+                          },
+                        ),
+                      ),
+                      // 分割线（保留原有间距）
+                      Container(
+                        width: dividerWidth,
+                        margin: const EdgeInsets.symmetric(horizontal: dividerHorizontalMargin),
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                      ),
+                      SizedBox(
+                        width: halfWidth,
+                        child: TodoListDisplay(
+                          todayTodos: state.todayTodos,
+                          upcomingTodos: state.upcomingTodos,
+                          onTodoToggle: (todoId) {
+                            context.read<TodoBloc>().add(TodoEvent.toggleComplete(todoId));
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                // 分割线
-                Container(
-                  width: 1,
-                  margin: const EdgeInsets.symmetric(horizontal: 15),
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                ),
-                // 右侧：待办列表展示区域
-                Expanded(
-                  flex: 2,
-                  child: TodoListDisplay(
-                    todayTodos: state.todayTodos,
-                    upcomingTodos: state.upcomingTodos,
-                    onTodoToggle: (todoId) {
-                      context.read<TodoBloc>().add(TodoEvent.toggleComplete(todoId));
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
+                );
+              },
+            );
         },
       ),
     );
