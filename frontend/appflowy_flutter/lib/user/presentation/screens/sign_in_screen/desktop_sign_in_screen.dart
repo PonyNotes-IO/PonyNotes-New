@@ -367,7 +367,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                             LocaleKeys.welcomeToPonyNotes.tr(),
                             style: TextStyle(
                               color: theme.textColorScheme.primary,
-                              fontSize: 18,
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -695,8 +695,8 @@ class _QuickStartButton extends StatelessWidget {
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: materialTheme.colorScheme.primary.withOpacity(0.1),
-          border: Border.all(color: materialTheme.colorScheme.primary),
+          color: theme.surfaceColorScheme.layer01,
+          border: Border.all(color: theme.borderColorScheme.primary),
           borderRadius: BorderRadius.circular(8),
         ),
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -704,8 +704,8 @@ class _QuickStartButton extends StatelessWidget {
           "快速开始",
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: materialTheme.colorScheme.primary,
-            fontSize: 20,
+            color: theme.textColorScheme.primary,
+            fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -964,7 +964,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
                 "登录/注册",
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onPrimary,
-                  fontSize: 18,
+                  fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1134,7 +1134,7 @@ class _ThirdPartyIconButton extends StatelessWidget {
                       label,
                       style: TextStyle(
                         color: theme.textColorScheme.primary,
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
