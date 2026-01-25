@@ -426,15 +426,17 @@ class _AIInputAreaState extends State<AIInputArea> {
                     ),
                     child: Container(
                       width: double.infinity,
+                      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
+                        horizontal: 10,
+                        vertical: 8,
                       ),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? AIWelcomeTheme.selectedItemColor(context)
-                            : Colors.transparent,
-                      ),
+                      decoration: isSelected
+                          ? BoxDecoration(
+                              color: AIWelcomeTheme.selectedItemColor(context),
+                              borderRadius: BorderRadius.circular(8),
+                            )
+                          : null,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
@@ -442,7 +444,7 @@ class _AIInputAreaState extends State<AIInputArea> {
                           Text(
                             model.name,
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 12,
                               color: isSelected
                                   ? AIWelcomeTheme.selectedItemTextColor(context)
                                   : AIWelcomeTheme.primaryTextColor(context),
@@ -456,7 +458,7 @@ class _AIInputAreaState extends State<AIInputArea> {
                             Text(
                               model.description,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
                                 color: isSelected
                                     ? AIWelcomeTheme.selectedItemTextColor(context).withOpacity(0.7)
                                     : AIWelcomeTheme.secondaryTextColor(context),
