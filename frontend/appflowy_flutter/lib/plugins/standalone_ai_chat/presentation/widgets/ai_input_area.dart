@@ -223,8 +223,6 @@ class _AIInputAreaState extends State<AIInputArea> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 附件预览区域（在输入框内部上方）
-              if (_attachments.isNotEmpty) _buildAttachmentPreviewArea(),
               // 输入文本区域（对应 text-wrapper_5）
               Expanded(
                 child: Container(
@@ -287,6 +285,8 @@ class _AIInputAreaState extends State<AIInputArea> {
                   ],
                 ),
               ),
+              // 附件预览区域（显示在工具栏下方）
+              if (_attachments.isNotEmpty) _buildAttachmentPreviewArea(),
             ],
           ),
         ),
