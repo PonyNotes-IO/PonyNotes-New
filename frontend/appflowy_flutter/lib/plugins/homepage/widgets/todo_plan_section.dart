@@ -37,7 +37,7 @@ class TodoPlanSectionContent extends StatelessWidget {
     return Container(
       width: double.infinity,
       constraints: const BoxConstraints(
-        minHeight: 266,
+        minHeight: 0,
         maxHeight: 400,
       ),
       padding: const EdgeInsets.all(16.0),
@@ -89,38 +89,35 @@ class TodoPlanSectionContent extends StatelessWidget {
                 final double totalDividerSpace = dividerWidth + dividerHorizontalMargin * 2;
                 final double halfWidth = (constraints.maxWidth - totalDividerSpace) / 2;
 
-                return SizedBox(
-                  height: constraints.maxHeight,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: halfWidth,
-                        child: QuickEventCreator(
-                          onEventCreated: (todoItem) {
-                            // 创建成功后刷新待办列表
-                            context.read<TodoBloc>().add(const TodoEvent.loadTodos());
-                          },
-                        ),
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: halfWidth,
+                      child: QuickEventCreator(
+                        onEventCreated: (todoItem) {
+                          // 创建成功后刷新待办列表
+                          context.read<TodoBloc>().add(const TodoEvent.loadTodos());
+                        },
                       ),
-                      // 分割线（保留原有间距）
-                      Container(
-                        width: dividerWidth,
-                        margin: const EdgeInsets.symmetric(horizontal: dividerHorizontalMargin),
-                        color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                    ),
+                    // 分割线（保留原有间距）
+                    Container(
+                      width: dividerWidth,
+                      margin: const EdgeInsets.symmetric(horizontal: dividerHorizontalMargin),
+                      color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                    ),
+                    SizedBox(
+                      width: halfWidth,
+                      child: TodoListDisplay(
+                        todayTodos: state.todayTodos,
+                        upcomingTodos: state.upcomingTodos,
+                        onTodoToggle: (todoId) {
+                          context.read<TodoBloc>().add(TodoEvent.toggleComplete(todoId));
+                        },
                       ),
-                      SizedBox(
-                        width: halfWidth,
-                        child: TodoListDisplay(
-                          todayTodos: state.todayTodos,
-                          upcomingTodos: state.upcomingTodos,
-                          onTodoToggle: (todoId) {
-                            context.read<TodoBloc>().add(TodoEvent.toggleComplete(todoId));
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 );
               },
             );
