@@ -20,6 +20,7 @@ import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy/workspace/presentation/widgets/resizable_divider.dart';
 import 'package:flutter/foundation.dart';
@@ -518,12 +519,12 @@ class _SpaceDocumentList extends StatelessWidget {
   Widget _buildHeader(BuildContext context, SpaceBloc? spaceBloc) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Theme.of(context).dividerColor),
-        ),
-        color: Theme.of(context).colorScheme.surfaceContainer,
-      ),
+      // decoration: BoxDecoration(
+      //   border: Border(
+      //     bottom: BorderSide(color: Theme.of(context).dividerColor),
+      //   ),
+      //   color: Theme.of(context).colorScheme.surfaceContainer,
+      // ),
       child: Row(
         children: [
           Expanded(
@@ -573,6 +574,7 @@ class _SpaceDocumentList extends StatelessWidget {
   }
 
   Widget _buildListFromSpaceBloc(BuildContext context, SpaceBloc spaceBloc) {
+    final theme = AppFlowyTheme.of(context);
     return BlocListener<SpaceBloc, SpaceState>(
       bloc: spaceBloc,
       listenWhen: (prev, curr) {
@@ -684,19 +686,27 @@ class _SpaceDocumentList extends StatelessWidget {
 
           debugPrint('[SpaceHub] childViews count: ${childViews.length}, displaySpace.id=${displaySpace.id}');
 
-          if (childViews.isEmpty) {
-            return Center(
-              child: FlowyText.regular(
-                '暂无文档',
-                fontSize: 13,
-                color: Theme.of(context).hintColor,
-              ),
-            );
-          }
-
           return ListView.builder(
-            itemCount: childViews.length,
+            itemCount: childViews.length + 1,
             itemBuilder: (context, index) {
+              if (index == childViews.length) {
+                return AFGhostIconTextButton.primary(
+                  text: '新增日记页', // 临时使用硬编码文本
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  size: AFButtonSize.l,
+                  onTap: () => _createNewNote(context),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 10,
+                  ),
+                  borderRadius: theme.borderRadius.s,
+                  iconBuilder: (context, isHover, disabled) => FlowySvg(
+                    FlowySvgs.icon_add_circle_s,
+                    size: const Size.square(16.0),
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                  ),
+                );
+              }
               final childView = childViews[index];
               return ViewItem(
                 key: ValueKey('space_hub_${childView.id}'),
@@ -727,6 +737,7 @@ class _SpaceDocumentList extends StatelessWidget {
   }
 
   Widget _buildListFromBackend(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return FutureBuilder<List<ViewPB>>(
       future: _loadChildViews(spaceView.id),
       builder: (context, snapshot) {
@@ -736,19 +747,27 @@ class _SpaceDocumentList extends StatelessWidget {
 
         final childViews = snapshot.data ?? const <ViewPB>[];
 
-        if (childViews.isEmpty) {
-          return Center(
-            child: FlowyText.regular(
-              '暂无文档',
-              fontSize: 13,
-              color: Theme.of(context).hintColor,
-            ),
-          );
-        }
-
         return ListView.builder(
-          itemCount: childViews.length,
+          itemCount: childViews.length + 1,
           itemBuilder: (context, index) {
+            if (index == childViews.length) {
+              return AFGhostIconTextButton.primary(
+                text: '新增日记页', // 临时使用硬编码文本
+                mainAxisAlignment: MainAxisAlignment.start,
+                size: AFButtonSize.xl,
+                onTap: () => _createNewNote(context),
+                padding: EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
+                borderRadius: theme.borderRadius.s,
+                iconBuilder: (context, isHover, disabled) => FlowySvg(
+                  FlowySvgs.icon_add_circle_s,
+                  size: const Size.square(16.0),
+                  color: Theme.of(context).textTheme.bodyMedium?.color,
+                ),
+              );
+            }
             final childView = childViews[index];
             return ViewItem(
               key: ValueKey('space_hub_${childView.id}'),
@@ -779,5 +798,18 @@ class _SpaceDocumentList extends StatelessWidget {
   Future<List<ViewPB>> _loadChildViews(String spaceId) async {
     final result = await ViewBackendService.getChildViews(viewId: spaceId);
     return result.fold((views) => views, (_) => const <ViewPB>[]);
+  }
+
+  /// 新建笔记页
+  void _createNewNote(BuildContext context) {
+    // 使用 SpaceBloc 创建新文档
+    context.read<SpaceBloc>().add(
+          SpaceEvent.createPage(
+            name: ViewLayoutPB.Document.defaultName,
+            layout: ViewLayoutPB.Document,
+            index: 0,
+            openAfterCreate: true,
+          ),
+        );
   }
 }
