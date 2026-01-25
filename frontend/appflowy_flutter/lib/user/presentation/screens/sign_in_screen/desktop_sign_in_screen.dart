@@ -21,7 +21,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';  // 添加这行，用于KeyDownEvent和HardwareKeyboard
+import 'package:flutter/services.dart'; // 添加这行，用于KeyDownEvent和HardwareKeyboard
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:window_manager/window_manager.dart';
@@ -41,6 +41,9 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
   bool _phoneBindingCancelled = false; // 阻止未绑定时误入主页
   bool _isNavigatingToHome = false; // 防止重复导航
 
+  // 协议同意状态（提到登录页面级别）
+  bool _agreedToTerms = true;
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<SignInBloc, dynamic>(
@@ -49,12 +52,11 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
         if (_phoneBindingCancelled) {
           return;
         }
-        
+
         // 微信登录成功但未绑定手机号时，跳转到绑定手机号页面（全屏）
         final dynamic dynState = state;
-        final needBind =
-            (dynState.requiresPhoneBinding == true) ||
-                state.toString().contains('requiresPhoneBinding: true');
+        final needBind = (dynState.requiresPhoneBinding == true) ||
+            state.toString().contains('requiresPhoneBinding: true');
         if (needBind && !_phoneDialogOpen) {
           _phoneDialogOpen = true;
           _phoneBindingCancelled = false;
@@ -76,10 +78,10 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
             if (!context.mounted || _isNavigatingToHome) {
               return;
             }
-            
+
             // 设置导航标志，防止重复调用
             _isNavigatingToHome = true;
-            
+
             // 先设置登录成功状态，确保后续逻辑能正确执行
             try {
               final signInBloc = context.read<SignInBloc>();
@@ -89,33 +91,31 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
             } catch (e) {
               // SignInBloc 不可用，直接导航
             }
-            
+
             // 导航到主页
             final rootNavigator = Navigator.of(context, rootNavigator: true);
             if (rootNavigator != null) {
               final rootContext = rootNavigator.context;
-                if (rootContext.mounted) {
-                  getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+              if (rootContext.mounted) {
+                getIt<AuthRouter>().goHomeScreen(rootContext, profile);
               }
-                }
-              } else {
+            }
+          } else {
             // 用户取消了绑定，立即设置标志（在 reset 之前），防止 BlocListener 被触发时进入主界面
             _phoneBindingCancelled = true;
-                showToastNotification(
-                  message: '请先绑定手机号再继续',
-                  type: ToastificationType.info,
-                );
-                // 清理登录成功状态，防止后续触发进入主界面
-                if (context.mounted) {
-                  context
-                      .read<SignInBloc>()
-                      .add(SignInEvent.clearPhoneBindingRequirement());
-                  // 重置登录状态，确保不会进入主界面
-                  context
-                      .read<SignInBloc>()
-                      .add(const SignInEvent.reset());
-                }
-              }
+            showToastNotification(
+              message: '请先绑定手机号再继续',
+              type: ToastificationType.info,
+            );
+            // 清理登录成功状态，防止后续触发进入主界面
+            if (context.mounted) {
+              context
+                  .read<SignInBloc>()
+                  .add(SignInEvent.clearPhoneBindingRequirement());
+              // 重置登录状态，确保不会进入主界面
+              context.read<SignInBloc>().add(const SignInEvent.reset());
+            }
+          }
 
           // 清理标记，防止重复进入
           if (context.mounted) {
@@ -140,7 +140,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
               if (!context.mounted) {
                 return;
               }
-              
+
               // 如果之前取消过绑定，阻止直接进入主页
               // 这个检查必须在最前面，防止任何进入主界面的逻辑
               if (_phoneBindingCancelled) {
@@ -161,12 +161,13 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
               // 只有在第三方登录（微信/抖音）且未绑定手机号时，才跳转到绑定页
               // 手机号登录/注册的用户不应该触发绑定页面
               final dynamic dynState = state;
-              final needBind =
-                  (dynState.requiresPhoneBinding == true) ||
-                      state.toString().contains('requiresPhoneBinding: true');
-              if (needBind && _needBindPhone(userProfile.phone) && !_phoneDialogOpen) {
+              final needBind = (dynState.requiresPhoneBinding == true) ||
+                  state.toString().contains('requiresPhoneBinding: true');
+              if (needBind &&
+                  _needBindPhone(userProfile.phone) &&
+                  !_phoneDialogOpen) {
                 _phoneDialogOpen = true;
-              _phoneBindingCancelled = false;
+                _phoneBindingCancelled = false;
                 // 在 push 之前获取 SignInBloc 引用，避免在 builder 中访问失效的 context
                 final signInBloc = context.read<SignInBloc>();
                 final profile = await Navigator.of(context).push(
@@ -183,7 +184,8 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                   if (!context.mounted) {
                     return;
                   }
-                  final rootNavigator = Navigator.of(context, rootNavigator: true);
+                  final rootNavigator =
+                      Navigator.of(context, rootNavigator: true);
                   if (rootNavigator != null) {
                     final rootContext = rootNavigator.context;
                     if (rootContext.mounted) {
@@ -191,8 +193,8 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                     }
                   }
                 } else {
-                // 用户取消了绑定，设置标志并清理状态
-                _phoneBindingCancelled = true;
+                  // 用户取消了绑定，设置标志并清理状态
+                  _phoneBindingCancelled = true;
                   showToastNotification(
                     message: '请先绑定手机号再继续',
                     type: ToastificationType.info,
@@ -203,19 +205,17 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                         .read<SignInBloc>()
                         .add(SignInEvent.clearPhoneBindingRequirement());
                     // 重置登录状态，确保不会进入主界面
-                    context
-                        .read<SignInBloc>()
-                        .add(const SignInEvent.reset());
+                    context.read<SignInBloc>().add(const SignInEvent.reset());
                   }
                 }
                 return;
               }
-              
+
               // 如果用户取消了绑定，直接返回，不执行后续逻辑
               if (_phoneBindingCancelled) {
                 return;
               }
-              
+
               // 检查是否需要绑定手机号（第三方登录但未绑定手机号）
               if (_needBindPhone(userProfile.phone)) {
                 // 需要绑定手机号，跳转到绑定页面
@@ -238,7 +238,8 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                     if (!context.mounted) {
                       return;
                     }
-                    final rootNavigator = Navigator.of(context, rootNavigator: true);
+                    final rootNavigator =
+                        Navigator.of(context, rootNavigator: true);
                     if (rootNavigator != null) {
                       final rootContext = rootNavigator.context;
                       if (rootContext.mounted) {
@@ -258,9 +259,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                           .read<SignInBloc>()
                           .add(SignInEvent.clearPhoneBindingRequirement());
                       // 重置登录状态，确保不会进入主界面
-                      context
-                          .read<SignInBloc>()
-                          .add(const SignInEvent.reset());
+                      context.read<SignInBloc>().add(const SignInEvent.reset());
                     }
                   }
                 } else {
@@ -269,12 +268,12 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                 }
                 return;
               }
-              
+
               // 再次检查是否取消了绑定，防止在返回登录后仍然进入主界面
               if (_phoneBindingCancelled) {
                 return;
               }
-              
+
               // 使用根导航器确保导航不会因为 context 失效而失败
               // 检查 context 是否仍然有效
               if (!context.mounted) {
@@ -304,105 +303,145 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
         }
       },
       child: BlocBuilder<SignInBloc, SignInState>(
-      builder: (context, state) {
-        final theme = AppFlowyTheme.of(context);
-        return Focus(
-          canRequestFocus: false,  // 不请求焦点，避免与输入框冲突
-          skipTraversal: true,      // 跳过焦点遍历
-          includeSemantics: false,  // 不包含在语义树中
-          onKeyEvent: (node, event) {
-            // 防护代码：检测并忽略重复的KeyDown事件
-            // 这可以解决Flutter键盘状态管理的bug
-            if (event is KeyDownEvent) {
-              try {
-                final physicalKey = event.physicalKey;
-                final isAlreadyPressed = HardwareKeyboard.instance.physicalKeysPressed.contains(physicalKey);
-                
-                if (isAlreadyPressed) {
-                  // 这是重复的KeyDown事件，忽略它
-                  return KeyEventResult.ignored;
+        builder: (context, state) {
+          final theme = AppFlowyTheme.of(context);
+          return Focus(
+            canRequestFocus: false,
+            // 不请求焦点，避免与输入框冲突
+            skipTraversal: true,
+            // 跳过焦点遍历
+            includeSemantics: false,
+            // 不包含在语义树中
+            onKeyEvent: (node, event) {
+              // 防护代码：检测并忽略重复的KeyDown事件
+              // 这可以解决Flutter键盘状态管理的bug
+              if (event is KeyDownEvent) {
+                try {
+                  final physicalKey = event.physicalKey;
+                  final isAlreadyPressed = HardwareKeyboard
+                      .instance.physicalKeysPressed
+                      .contains(physicalKey);
+
+                  if (isAlreadyPressed) {
+                    // 这是重复的KeyDown事件，忽略它
+                    return KeyEventResult.ignored;
+                  }
+                } catch (e) {
+                  // 如果检查失败，保守地忽略
                 }
-              } catch (e) {
-                // 如果检查失败，保守地忽略
               }
-            }
-            return KeyEventResult.ignored;
-          },
-          child: Scaffold(
-          appBar: _buildAppBar(),
-            backgroundColor: theme.surfaceColorScheme.layer01,
-            body: Container(
-              width: double.infinity,
-              height: double.infinity,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    theme.surfaceColorScheme.layer01,
-                    theme.surfaceColorScheme.layer01,
-                  ],
-                ),
-              ),
-              child: Center(
-                child: SingleChildScrollView(
-                  child: Container(
-                    width: 380,
-                    padding: const EdgeInsets.symmetric(vertical: 40),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                      // Logo部分 - 小马笔记 Logo
-                      const _PonyNotesLogo(
-                        size: Size.square(80),
-                      ),
-                      const VSpace(30),
-
-                      // 标题 - 中文化
-                      Text(
-                        LocaleKeys.welcomeToPonyNotes.tr(),
-                        style: TextStyle(
-                          color: theme.textColorScheme.primary,
-                          fontSize: 24,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      const VSpace(40),
-
-                      // 快速开始按钮
-                      _QuickStartButton(
-                        onTap: () {
-                          context
-                              .read<SignInBloc>()
-                              .add(const SignInEvent.signInAsGuest());
-                        },
-                      ),
-                      const VSpace(10),
-
-                      // 分割线
-                      const _OrDivider(),
-                      const VSpace(10),
-
-                      // 邮箱输入框和登录按钮
-                      _EmailLoginSection(),
-
-                      // 第三方登录部分
-                if (isAuthEnabled) ...[
-                        const VSpace(40),
-                        const _CustomOrDivider(text: "其他登录方式"),
-                        const VSpace(40),
-                        _CustomThirdPartyButtons(),
-                      ],
-
-                      const VSpace(40),
+              return KeyEventResult.ignored;
+            },
+            child: Scaffold(
+              appBar: _buildAppBar(),
+              backgroundColor: theme.surfaceColorScheme.layer01,
+              body: Container(
+                width: double.infinity,
+                height: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      theme.surfaceColorScheme.layer01,
+                      theme.surfaceColorScheme.layer01,
                     ],
+                  ),
+                ),
+                child: Center(
+                  child: SingleChildScrollView(
+                    child: Container(
+                      width: 380,
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Logo部分 - 小马笔记 Logo
+                          const _PonyNotesLogo(
+                            size: Size.square(60),
+                          ),
+                          const VSpace(10),
+
+                          // 标题 - 中文化
+                          Text(
+                            LocaleKeys.welcomeToPonyNotes.tr(),
+                            style: TextStyle(
+                              color: theme.textColorScheme.primary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const VSpace(30),
+
+                          // 邮箱输入框和登录按钮
+                          _EmailLoginSection(
+                            checkTermsAgreement: () {
+                              if (!_agreedToTerms) {
+                                showToastNotification(
+                                  message: "请先同意用户协议和隐私政策",
+                                  type: ToastificationType.error,
+                                );
+                                return false;
+                              }
+                              return true;
+                            },
+                          ),
+                          const VSpace(12),
+                          // 快速开始按钮
+                          _QuickStartButton(
+                            onTap: () {
+                              context
+                                  .read<SignInBloc>()
+                                  .add(const SignInEvent.signInAsGuest());
+                            },
+                            checkTermsAgreement: () {
+                              if (!_agreedToTerms) {
+                                showToastNotification(
+                                  message: "请先同意用户协议和隐私政策",
+                                  type: ToastificationType.error,
+                                );
+                                return false;
+                              }
+                              return true;
+                            },
+                          ),
+                          const VSpace(20),
+                          // 分割线
+                          const _OrDivider(),
+                          const VSpace(20),
+                          // 第三方登录部分
+                          if (isAuthEnabled) ...[
+                            _CustomThirdPartyButtons(
+                              checkTermsAgreement: () {
+                                if (!_agreedToTerms) {
+                                  showToastNotification(
+                                    message: "请先同意用户协议和隐私政策",
+                                    type: ToastificationType.error,
+                                  );
+                                  return false;
+                                }
+                                return true;
+                              },
+                            ),
+                          ],
+                          const VSpace(20),
+                          // 用户协议部分（移到三方登录下方）
+                          _TermsAndConditionsSection(
+                            agreedToTerms: _agreedToTerms,
+                            onAgreedToTermsChanged: (value) {
+                              setState(() {
+                                _agreedToTerms = value;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),  // Scaffold结束
-          );  // Focus结束
+            ), // Scaffold结束
+          ); // Focus结束
         },
       ),
     );
@@ -422,6 +461,94 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
     // https://pub.dev/packages/window_manager#windows
     // must call setState once when the window is focused
     setState(() {});
+  }
+}
+
+// 用户协议部分组件
+class _TermsAndConditionsSection extends StatelessWidget {
+  const _TermsAndConditionsSection({
+    required this.agreedToTerms,
+    required this.onAgreedToTermsChanged,
+  });
+
+  final bool agreedToTerms;
+  final ValueChanged<bool> onAgreedToTermsChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: Checkbox(
+            value: agreedToTerms,
+            onChanged: (value) {
+              onAgreedToTermsChanged(value ?? false);
+            },
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+            ),
+            side: BorderSide(color: theme.borderColorScheme.primary),
+            activeColor: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: RichText(
+            text: TextSpan(
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.textColorScheme.tertiary,
+              ),
+              children: [
+                const TextSpan(text: "我已阅读并同意 "),
+                TextSpan(
+                  text: "《${LocaleKeys.legal_userAgreement.tr()}》",
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  mouseCursor: SystemMouseCursors.click,
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => LegalDocumentScreen(
+                            title: LocaleKeys.sidebar_appName.tr() +
+                                LocaleKeys.legal_userAgreement.tr(),
+                            content: LocaleKeys.legal_userAgreementContent.tr(),
+                          ),
+                        ),
+                      );
+                    },
+                ),
+                TextSpan(text: LocaleKeys.and.tr()),
+                TextSpan(
+                  text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  mouseCursor: SystemMouseCursors.click,
+                  recognizer: TapGestureRecognizer()
+                    ..onTap = () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => LegalDocumentScreen(
+                            title: LocaleKeys.legal_privacyPolicy.tr(),
+                            content: LocaleKeys.legal_privacyPolicyContent.tr(),
+                          ),
+                        ),
+                      );
+                    },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -502,7 +629,7 @@ class _OrDivider extends StatelessWidget {
 
 class _CustomOrDivider extends StatelessWidget {
   const _CustomOrDivider({required this.text});
-  
+
   final String text;
 
   @override
@@ -539,21 +666,37 @@ class _CustomOrDivider extends StatelessWidget {
 
 // 快速开始按钮组件
 class _QuickStartButton extends StatelessWidget {
-  const _QuickStartButton({required this.onTap});
-  
+  const _QuickStartButton({required this.onTap, this.checkTermsAgreement});
+
   final VoidCallback onTap;
+  final bool Function()? checkTermsAgreement;
+
+  // 检查用户是否同意了协议
+  bool _checkTermsAgreement(BuildContext context) {
+    if (checkTermsAgreement != null) {
+      return checkTermsAgreement!();
+    }
+
+    // 默认返回true，因为现在都通过回调传递状态
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     final materialTheme = Theme.of(context);
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        // 检查协议同意
+        if (_checkTermsAgreement(context)) {
+          onTap();
+        }
+      },
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: materialTheme.colorScheme.primary.withOpacity(0.1),
-          border: Border.all(color: materialTheme.colorScheme.primary),
+          color: theme.surfaceColorScheme.layer01,
+          border: Border.all(color: theme.borderColorScheme.primary),
           borderRadius: BorderRadius.circular(8),
         ),
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -561,8 +704,8 @@ class _QuickStartButton extends StatelessWidget {
           "快速开始",
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: materialTheme.colorScheme.primary,
-            fontSize: 20,
+            color: theme.textColorScheme.primary,
+            fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -573,7 +716,9 @@ class _QuickStartButton extends StatelessWidget {
 
 // 邮箱/手机号登录部分组件（PonyNotes 风格）
 class _EmailLoginSection extends StatefulWidget {
-  const _EmailLoginSection();
+  const _EmailLoginSection({this.checkTermsAgreement});
+
+  final bool Function()? checkTermsAgreement;
 
   @override
   State<_EmailLoginSection> createState() => _EmailLoginSectionState();
@@ -610,7 +755,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
 
   Future<void> _handleSubmit(BuildContext context) async {
     final input = _controller.text.trim();
-    
+
     if (input.isEmpty) {
       showToastNotification(
         message: "请输入邮箱或手机号",
@@ -627,7 +772,12 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
       return;
     }
 
-    if (!_agreedToTerms) {
+    // 检查协议同意状态
+    if (widget.checkTermsAgreement != null) {
+      if (!widget.checkTermsAgreement!()) {
+        return;
+      }
+    } else if (!_agreedToTerms) {
       showToastNotification(
         message: "请先同意用户协议和隐私政策",
         type: ToastificationType.error,
@@ -638,12 +788,12 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
     // 区分邮箱和手机号
     final bool isEmail = _isValidEmail(input);
     final bool isPhone = _isValidPhone(input);
-    
+
     // 清理手机号格式（移除+86等国际区号）
     final String emailOrPhone = isPhone ? _cleanPhoneNumber(input) : input;
-    
+
     final signInBloc = context.read<SignInBloc>();
-    
+
     // 先检查用户是否设置了密码
     signInBloc.add(
       SignInEvent.checkPasswordStatus(
@@ -651,7 +801,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
         phone: isPhone ? emailOrPhone : null,
       ),
     );
-    
+
     // 等待密码状态检查完成（以 passwordIsSet 的首次变化为准，超时则按未设置处理）
     final passwordIsSet = await _waitForPasswordStatus(signInBloc);
     if (passwordIsSet == true) {
@@ -659,7 +809,8 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
       _showPasswordLoginDialog(context, emailOrPhone, signInBloc);
     } else {
       // 用户未设置密码，直接发送验证码并跳转到验证码输入页面
-      _sendVerificationCodeAndNavigate(context, emailOrPhone, isEmail, signInBloc);
+      _sendVerificationCodeAndNavigate(
+          context, emailOrPhone, isEmail, signInBloc);
     }
   }
 
@@ -706,7 +857,8 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
             // 关闭密码登录对话框，切换到验证码登录
             Navigator.of(dialogContext).pop();
             final bool isEmail = _isValidEmail(emailOrPhone);
-            _sendVerificationCodeAndNavigate(context, emailOrPhone, isEmail, signInBloc);
+            _sendVerificationCodeAndNavigate(
+                context, emailOrPhone, isEmail, signInBloc);
           },
         ),
       ),
@@ -726,9 +878,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
 
     // 根据输入类型显示不同的提示信息
     showToastNotification(
-      message: isEmail 
-          ? "验证码已发送，请查看您的邮箱" 
-          : "验证码已发送，请查看您的手机短信",
+      message: isEmail ? "验证码已发送，请查看您的邮箱" : "验证码已发送，请查看您的手机短信",
       type: ToastificationType.success,
     );
 
@@ -814,88 +964,12 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
                 "登录/注册",
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onPrimary,
-                  fontSize: 18,
+                  fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
           ),
-        ),
-        const VSpace(8),
-
-        // 复选框和同意协议
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: Checkbox(
-                value: _agreedToTerms,
-                onChanged: (value) {
-                  setState(() {
-                    _agreedToTerms = value ?? false;
-                  });
-                },
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                side: BorderSide(color: theme.borderColorScheme.primary),
-                activeColor: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: RichText(
-                text: TextSpan(
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: theme.textColorScheme.tertiary,
-                  ),
-                  children: [
-                    const TextSpan(text: "我已阅读并同意 "),
-                    TextSpan(
-                      text: "《${LocaleKeys.legal_userAgreement.tr()}》",
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      mouseCursor: SystemMouseCursors.click,
-                      recognizer: TapGestureRecognizer()
-                        ..onTap = () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => LegalDocumentScreen(
-                                title: LocaleKeys.sidebar_appName.tr() + LocaleKeys.legal_userAgreement.tr(),
-                                content: LocaleKeys.legal_userAgreementContent.tr(),
-                              ),
-                            ),
-                          );
-                        },
-                    ),
-                    TextSpan(text: LocaleKeys.and.tr()),
-                    TextSpan(
-                      text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      mouseCursor: SystemMouseCursors.click,
-                      recognizer: TapGestureRecognizer()
-                        ..onTap = () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => LegalDocumentScreen(
-                                title: LocaleKeys.legal_privacyPolicy.tr(),
-                                content: LocaleKeys.legal_privacyPolicyContent.tr(),
-                              ),
-                            ),
-                          );
-                        },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ),
       ],
     );
@@ -904,22 +978,39 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
 
 // 自定义第三方登录按钮组（简化版 - 只显示图标）
 class _CustomThirdPartyButtons extends StatelessWidget {
-  const _CustomThirdPartyButtons();
+  const _CustomThirdPartyButtons({this.checkTermsAgreement});
+
+  final bool Function()? checkTermsAgreement;
+
+  // 检查用户是否同意了协议
+  bool _checkTermsAgreement(BuildContext context) {
+    if (checkTermsAgreement != null) {
+      return checkTermsAgreement!();
+    }
+
+    // 默认返回true，因为现在都通过回调传递状态
+    return true;
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<SignInBloc, SignInState>(
       builder: (context, state) {
-        return Row(
+        return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // 微信登录
             _ThirdPartyIconButton(
-              label: "微信",
+              label: "微信登录",
+              url: "assets/images/login/icon_login_wx.png",
               backgroundColor: const Color(0xFF09BB07),
               onTap: state.isSubmitting
                   ? null
                   : () async {
+                      // 检查协议同意
+                      if (!_checkTermsAgreement(context)) {
+                        return;
+                      }
                       if (UniversalPlatform.isWindows ||
                           UniversalPlatform.isMacOS ||
                           UniversalPlatform.isLinux) {
@@ -930,22 +1021,26 @@ class _CustomThirdPartyButtons extends StatelessWidget {
                               .add(SignInEvent.wechatCodeReceived(code));
                         }
                       } else {
-                      context.read<SignInBloc>().add(
-                            const SignInEvent.signInWithWeChat(),
-                          );
+                        context.read<SignInBloc>().add(
+                              const SignInEvent.signInWithWeChat(),
+                            );
                       }
                     },
               isLoading: state.isSubmitting,
             ),
-            const SizedBox(width: 32),
-
+            const SizedBox(height: 12),
             // 抖音登录
             _ThirdPartyIconButton(
-              label: "抖音",
+              label: "抖音登录",
+              url: "assets/images/login/icon_login_dy.png",
               backgroundColor: Colors.black,
               onTap: state.isSubmitting
                   ? null
                   : () async {
+                      // 检查协议同意
+                      if (!_checkTermsAgreement(context)) {
+                        return;
+                      }
                       if (UniversalPlatform.isWindows ||
                           UniversalPlatform.isMacOS ||
                           UniversalPlatform.isLinux) {
@@ -958,7 +1053,7 @@ class _CustomThirdPartyButtons extends StatelessWidget {
                       } else {
                         context.read<SignInBloc>().add(
                               const SignInEvent.signInWithDouYin(),
-                      );
+                            );
                       }
                     },
               isLoading: state.isSubmitting,
@@ -981,7 +1076,7 @@ class _PonyNotesLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FlowySvg(
-      FlowySvgs.pony_notes_logo_xl,
+      FlowySvgs.icon_logo_sign_s,
       blendMode: null, // 保持原始颜色
       size: size,
     );
@@ -992,12 +1087,14 @@ class _PonyNotesLogo extends StatelessWidget {
 class _ThirdPartyIconButton extends StatelessWidget {
   const _ThirdPartyIconButton({
     required this.label,
+    required this.url,
     required this.backgroundColor,
     this.onTap,
     this.isLoading = false,
   });
 
   final String label;
+  final String url;
   final Color backgroundColor;
   final VoidCallback? onTap;
   final bool isLoading;
@@ -1010,41 +1107,38 @@ class _ThirdPartyIconButton extends StatelessWidget {
       child: Opacity(
         opacity: (onTap == null || isLoading) ? 0.6 : 1.0,
         child: Container(
-          width: 48,
-          height: 48,
+          height: 44,
           decoration: BoxDecoration(
-            color: theme.surfaceColorScheme.layer02,
+            color: theme.surfaceColorScheme.layer01,
             border: Border.all(color: theme.borderColorScheme.primary),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Center(
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: backgroundColor,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Center(
-                child: isLoading
-                    ? SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : Text(
-                        label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+            child: isLoading
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Image.asset(
+                      url,
+                      width: 18,
+                      height: 18,
+                    ),
+                    HSpace(4),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: theme.textColorScheme.primary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
                       ),
-              ),
-            ),
+                    ),
+                  ]),
           ),
         ),
       ),
