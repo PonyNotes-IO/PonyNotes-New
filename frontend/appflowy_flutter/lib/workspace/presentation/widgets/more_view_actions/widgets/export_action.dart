@@ -9,6 +9,7 @@ import 'package:appflowy/plugins/document/application/prelude.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/parsers/simple_table_node_parser.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/simple_table/simple_table_block_component.dart';
 import 'package:appflowy/shared/markdown_to_document.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:appflowy/workspace/application/export/document_exporter.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
@@ -24,6 +25,8 @@ import 'package:get_it/get_it.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:http/http.dart' as http;
+import 'package:appflowy_editor/src/plugins/pdf/html_to_pdf_encoder.dart';
+import 'pdf_html_encoder_wrapper.dart';
 
 class ExportAction extends StatelessWidget {
   const ExportAction({
@@ -201,6 +204,22 @@ class ExportAction extends StatelessWidget {
           final markdown = await customDocumentToMarkdown(document);
           Log.info('Markdown 转换完成，长度: ${markdown.length} 字符');
           
+          // 调试：检查Markdown中是否包含代码块
+          if (markdown.contains('```')) {
+            Log.info('✅ Markdown中包含代码块标记');
+            final codeBlockMatches = RegExp(r'```[\s\S]*?```').allMatches(markdown);
+            Log.info('找到 ${codeBlockMatches.length} 个代码块');
+            for (final match in codeBlockMatches) {
+              final codeBlock = match.group(0) ?? '';
+              final preview = codeBlock.length > 100 
+                  ? '${codeBlock.substring(0, 100)}...' 
+                  : codeBlock;
+              Log.info('代码块预览: $preview');
+            }
+          } else {
+            Log.warn('⚠️ Markdown中未找到代码块标记');
+          }
+          
           if (markdown.isEmpty) {
             Log.error('导出 PDF 失败：Markdown 内容为空');
             if (context.mounted) {
@@ -210,8 +229,10 @@ class ExportAction extends StatelessWidget {
           }
 
           // 加载支持中文的字体
-          Log.info('开始加载中文字体...');
+          Log.info('开始加载中文字体和Emoji字体...');
           pw.Font? chineseFont;
+          pw.Font? emojiFont;
+          List<pw.Font> fontFallbackList = [];
           try {
             // 尝试从系统字体路径加载中文字体
             if (Platform.isMacOS) {
@@ -329,260 +350,164 @@ class ExportAction extends StatelessWidget {
             }
           } else {
             Log.info('✅ 中文字体加载成功，PDF 中文显示应该正常');
+            // 将中文字体添加到fontFallback
+            fontFallbackList.add(chineseFont);
           }
-
-          // 预先加载所有图片
-          Log.info('开始预加载图片...');
-          final imageRegex = RegExp(r'!\[([^\]]*)\]\(([^)]+)\)');
-          final imageMatches = imageRegex.allMatches(markdown);
-          final Map<String, pw.Widget?> loadedImages = {};
           
-          for (final match in imageMatches) {
-            final imageUrl = match.group(2) ?? '';
-            if (imageUrl.isNotEmpty && !loadedImages.containsKey(imageUrl)) {
-              Log.info('预加载图片: $imageUrl');
-              try {
-                final imageWidget = await _loadImageForPdf(imageUrl);
-                loadedImages[imageUrl] = imageWidget;
-                if (imageWidget != null) {
-                  Log.info('图片预加载成功: $imageUrl');
-                } else {
-                  Log.warn('图片预加载失败: $imageUrl');
+          // 尝试加载Emoji字体（macOS）
+          if (Platform.isMacOS) {
+            try {
+              final emojiFontPaths = [
+                '/System/Library/Fonts/Apple Color Emoji.ttc',
+                '/System/Library/Fonts/Supplemental/Apple Color Emoji.ttc',
+              ];
+              
+              for (final emojiPath in emojiFontPaths) {
+                final emojiFile = File(emojiPath);
+                if (await emojiFile.exists()) {
+                  try {
+                    final fontData = await emojiFile.readAsBytes();
+                    // .ttc文件可能包含多个字体，尝试加载第一个
+                    emojiFont = pw.Font.ttf(ByteData.view(fontData.buffer));
+                    fontFallbackList.add(emojiFont);
+                    Log.info('✅ 成功加载Emoji字体: $emojiPath');
+                    break;
+                  } catch (e) {
+                    Log.warn('⚠️ 加载Emoji字体失败 ($emojiPath): $e');
+                  }
                 }
-              } catch (e) {
-                Log.warn('图片预加载异常: $imageUrl, 错误: $e');
-                loadedImages[imageUrl] = null;
               }
+            } catch (e) {
+              Log.warn('⚠️ 尝试加载Emoji字体时出错: $e');
             }
           }
-          Log.info('图片预加载完成，共 ${loadedImages.length} 张图片');
+          
+          if (emojiFont == null) {
+            Log.warn('⚠️ 无法加载Emoji字体，代码块中的emoji可能显示为方框');
+            Log.warn('建议：确保系统中有 Apple Color Emoji 字体');
+          } else {
+            Log.info('✅ Emoji字体加载成功，代码块中的emoji应该正常显示');
+          }
 
-          // 使用 pdf 包生成 PDF
+          // 使用 PdfHTMLEncoder 生成 PDF（支持完整的 Markdown 语法）
+          // PdfHTMLEncoder 会自动处理图片、代码块、标题等所有 Markdown 语法
           Log.info('开始生成 PDF...');
-          final pdf = pw.Document();
           
           try {
-            pdf.addPage(
-              pw.MultiPage(
-                pageFormat: PdfPageFormat.a4,
-                margin: const pw.EdgeInsets.all(72), // 1 inch margins
-                theme: chineseFont != null
-                    ? pw.ThemeData.withFont(
-                        base: chineseFont,
-                        bold: chineseFont,
-                      )
-                    : null,
-                build: (pw.Context pdfContext) {
-                  final widgets = <pw.Widget>[];
-                  
-                  try {
-                    // 添加标题
-                    widgets.add(
-                      pw.Text(
-                        view.nameOrDefault,
-                        style: pw.TextStyle(
-                          fontSize: 24,
-                          fontWeight: pw.FontWeight.bold,
-                          font: chineseFont,
-                        ),
-                      ),
-                    );
-                    widgets.add(pw.SizedBox(height: 20));
-                    
-                    // 将 Markdown 转换为 PDF 文本
-                    // 处理 Markdown 内容，包括文本、标题、列表和图片
-                    final lines = markdown.split('\n');
-                    Log.info('Markdown 行数: ${lines.length}');
-                    
-                    for (final line in lines) {
-                      try {
-                        if (line.trim().isEmpty) {
-                          widgets.add(pw.SizedBox(height: 8));
-                          continue;
-                        }
-                        
-                        // 处理图片链接：![alt](url)
-                        final imageMatch = imageRegex.firstMatch(line);
-                        if (imageMatch != null) {
-                          final altText = imageMatch.group(1) ?? '';
-                          final imageUrl = imageMatch.group(2) ?? '';
-                          
-                          // 使用预加载的图片
-                          final imageWidget = loadedImages[imageUrl];
-                          if (imageWidget != null) {
-                            widgets.add(imageWidget);
-                            widgets.add(pw.SizedBox(height: 12));
-                            continue;
-                          } else {
-                            // 如果图片加载失败，显示alt文本或URL
-                            widgets.add(
-                              pw.Text(
-                                altText.isNotEmpty ? altText : imageUrl,
-                                style: pw.TextStyle(
-                                  fontSize: 10,
-                                  fontStyle: pw.FontStyle.italic,
-                                  color: PdfColors.grey,
-                                  font: chineseFont,
-                                ),
-                              ),
-                            );
-                            widgets.add(pw.SizedBox(height: 6));
-                            continue;
-                          }
-                        }
-                        
-                        // 处理标题
-                        if (line.startsWith('# ')) {
-                          widgets.add(
-                            pw.Text(
-                              line.substring(2).trim(),
-                              style: pw.TextStyle(
-                                fontSize: 20,
-                                fontWeight: pw.FontWeight.bold,
-                                font: chineseFont,
-                              ),
-                            ),
-                          );
-                          widgets.add(pw.SizedBox(height: 12));
-                        } else if (line.startsWith('## ')) {
-                          widgets.add(
-                            pw.Text(
-                              line.substring(3).trim(),
-                              style: pw.TextStyle(
-                                fontSize: 18,
-                                fontWeight: pw.FontWeight.bold,
-                                font: chineseFont,
-                              ),
-                            ),
-                          );
-                          widgets.add(pw.SizedBox(height: 10));
-                        } else if (line.startsWith('### ')) {
-                          widgets.add(
-                            pw.Text(
-                              line.substring(4).trim(),
-                              style: pw.TextStyle(
-                                fontSize: 16,
-                                fontWeight: pw.FontWeight.bold,
-                                font: chineseFont,
-                              ),
-                            ),
-                          );
-                          widgets.add(pw.SizedBox(height: 8));
-                        } else if (line.startsWith('- ') || line.startsWith('* ')) {
-                          // 列表项
-                          widgets.add(
-                            pw.Padding(
-                              padding: const pw.EdgeInsets.only(left: 20),
-                              child: pw.Text(
-                                '• ${line.substring(2).trim()}',
-                                style: pw.TextStyle(
-                                  fontSize: 12,
-                                  font: chineseFont,
-                                ),
-                              ),
-                            ),
-                          );
-                        } else {
-                          // 普通段落（需要移除可能包含的图片链接）
-                          String text = line.trim();
-                          // 移除图片链接，只保留文本
-                          text = text.replaceAll(imageRegex, '');
-                          if (text.isNotEmpty) {
-                            widgets.add(
-                              pw.Text(
-                                text,
-                                style: pw.TextStyle(
-                                  fontSize: 12,
-                                  font: chineseFont,
-                                ),
-                              ),
-                            );
-                          }
-                        }
-                        widgets.add(pw.SizedBox(height: 6));
-                      } catch (e) {
-                        Log.warn('处理 Markdown 行时出错: $e, 行内容: ${line.substring(0, line.length > 50 ? 50 : line.length)}');
-                        // 继续处理下一行
-                      }
-                    }
-                  } catch (e) {
-                    Log.error('构建 PDF 内容时出错: $e');
-                    // 至少添加标题
-                    widgets.add(
-                      pw.Text(
-                        'PDF 生成时出现错误，但已包含文档标题。',
-                        style: pw.TextStyle(
-                          fontSize: 12,
-                          color: PdfColors.red,
-                          font: chineseFont,
-                        ),
-                      ),
-                    );
-                  }
-                  
-                  return widgets;
-                },
-              ),
+            // 创建 PdfHTMLEncoderWrapper 实例（确保代码块被正确处理）
+            // 使用包含emoji字体的fontFallback，确保代码块中的emoji能正常显示
+            final pdfEncoder = PdfHTMLEncoderWrapper(
+              font: chineseFont,
+              fontFallback: fontFallbackList.isNotEmpty ? fontFallbackList : (chineseFont != null ? [chineseFont] : []),
             );
-          } catch (e) {
-            Log.error('添加 PDF 页面时出错: $e');
-            // 创建一个包含错误信息的简单 PDF
-            pdf.addPage(
-              pw.Page(
-                pageFormat: PdfPageFormat.a4,
-                build: (pw.Context context) {
-                  return pw.Center(
-                    child: pw.Text(
-                      'PDF 生成失败: $e',
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        color: PdfColors.red,
-                        font: chineseFont,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            );
-          }
-
-          Log.info('开始保存 PDF 字节...');
-          final pdfBytes = await pdf.save();
-          Log.info('PDF 保存完成，大小: ${pdfBytes.length} 字节');
-          Log.info('PDF 生成成功，大小: ${pdfBytes.length} 字节');
-          
-          final fileName = '${view.nameOrDefault}.pdf';
-          final filePicker = GetIt.instance<FilePickerService>();
-          
-          // 对于 PDF，我们需要先获取保存路径，然后写入文件
-          // 注意：FilePickerService 的 saveFile 在某些平台上可能需要 bytes 参数
-          // 这里我们使用反射或者直接调用实现类的方法
-          final savePath = await _saveFileWithBytes(
-            filePicker,
-            dialogTitle: '保存 PDF 文件',
-            fileName: fileName,
-            bytes: Uint8List.fromList(pdfBytes),
-          );
-
-          if (savePath != null) {
-            Log.info('PDF 文件已保存到: $savePath');
-            // 验证文件是否真的保存成功
-            final file = File(savePath);
-            if (await file.exists()) {
-              final fileSize = await file.length();
-              Log.info('PDF 文件验证成功，文件大小: $fileSize 字节');
-              if (context.mounted) {
-                _showSuccess(context, 'PDF 文件已保存');
-              }
-            } else {
-              Log.error('PDF 文件保存失败：文件不存在');
-              if (context.mounted) {
-                _showError(context, 'PDF 文件保存失败：文件不存在');
+            
+            // 添加文档标题到 Markdown 开头
+            final markdownWithTitle = '# ${view.nameOrDefault}\n\n$markdown';
+            
+            // 调试：检查Markdown中代码块格式
+            if (markdownWithTitle.contains('```')) {
+              Log.info('🔍 检查Markdown代码块格式...');
+              final codeBlockPattern = RegExp(r'```([^\n]*)\n([\s\S]*?)```');
+              final matches = codeBlockPattern.allMatches(markdownWithTitle);
+              Log.info('  找到 ${matches.length} 个代码块（带语言标识）');
+              
+              // 检查没有语言标识的代码块
+              final simpleCodeBlockPattern = RegExp(r'```\n([\s\S]*?)```');
+              final simpleMatches = simpleCodeBlockPattern.allMatches(markdownWithTitle);
+              Log.info('  找到 ${simpleMatches.length} 个代码块（无语言标识）');
+              
+              // 检查第一个代码块的内容
+              if (simpleMatches.isNotEmpty) {
+                final firstMatch = simpleMatches.first;
+                final codeContent = firstMatch.group(1) ?? '';
+                final preview = codeContent.length > 100 
+                    ? '${codeContent.substring(0, 100)}...' 
+                    : codeContent;
+                Log.info('  第一个代码块内容预览: $preview');
+                Log.info('  代码块内容长度: ${codeContent.length}');
               }
             }
-          } else {
-            Log.error('PDF 文件保存失败：用户取消了保存或保存路径为空');
-            // 不显示错误，因为用户可能只是取消了保存
+            
+            // 使用 PdfHTMLEncoder 转换 Markdown 为 PDF
+            Log.info('🔍 开始调用 PdfHTMLEncoder.convert...');
+            
+            // 直接测试 Markdown 到 HTML 的转换，检查代码块是否被正确转换
+            try {
+              final testHtml = md.markdownToHtml(
+                markdownWithTitle,
+                extensionSet: md.ExtensionSet.gitHubFlavored,
+              );
+              Log.info('🔍 直接测试HTML转换: 长度=${testHtml.length}');
+              final hasPre = testHtml.contains('<pre') || testHtml.contains('</pre>');
+              final hasCode = testHtml.contains('<code') || testHtml.contains('</code>');
+              Log.info('🔍 HTML转换结果: 包含pre标签=$hasPre, 包含code标签=$hasCode');
+              
+              if (hasPre) {
+                final preMatches = RegExp(r'<pre[^>]*>[\s\S]*?</pre>', multiLine: true).allMatches(testHtml);
+                Log.info('🔍 找到 ${preMatches.length} 个pre标签');
+                if (preMatches.isNotEmpty) {
+                  final firstPre = preMatches.first.group(0) ?? '';
+                  final preview = firstPre.length > 500 ? '${firstPre.substring(0, 500)}...' : firstPre;
+                  Log.info('🔍 第一个pre标签预览: $preview');
+                }
+              } else {
+                Log.error('❌ HTML转换后没有pre标签！');
+                // 输出HTML的前2000个字符用于调试
+                final htmlPreview = testHtml.length > 2000 ? '${testHtml.substring(0, 2000)}...' : testHtml;
+                Log.error('❌ HTML预览: $htmlPreview');
+              }
+            } catch (e) {
+              Log.error('❌ 测试HTML转换失败: $e');
+            }
+            
+            final pdf = await pdfEncoder.convert(markdownWithTitle);
+            Log.info('✅ PdfHTMLEncoder.convert 完成');
+            
+            Log.info('PDF 生成成功');
+
+            Log.info('开始保存 PDF 字节...');
+            final pdfBytes = await pdf.save();
+            Log.info('PDF 保存完成，大小: ${pdfBytes.length} 字节');
+            Log.info('PDF 生成成功，大小: ${pdfBytes.length} 字节');
+            
+            final fileName = '${view.nameOrDefault}.pdf';
+            final filePicker = GetIt.instance<FilePickerService>();
+            
+            // 对于 PDF，我们需要先获取保存路径，然后写入文件
+            // 注意：FilePickerService 的 saveFile 在某些平台上可能需要 bytes 参数
+            // 这里我们使用反射或者直接调用实现类的方法
+            final savePath = await _saveFileWithBytes(
+              filePicker,
+              dialogTitle: '保存 PDF 文件',
+              fileName: fileName,
+              bytes: Uint8List.fromList(pdfBytes),
+            );
+
+            if (savePath != null) {
+              Log.info('PDF 文件已保存到: $savePath');
+              // 验证文件是否真的保存成功
+              final file = File(savePath);
+              if (await file.exists()) {
+                final fileSize = await file.length();
+                Log.info('PDF 文件验证成功，文件大小: $fileSize 字节');
+                if (context.mounted) {
+                  _showSuccess(context, 'PDF 文件已保存');
+                }
+              } else {
+                Log.error('PDF 文件保存失败：文件不存在');
+                if (context.mounted) {
+                  _showError(context, 'PDF 文件保存失败：文件不存在');
+                }
+              }
+            } else {
+              Log.error('PDF 文件保存失败：用户取消了保存或保存路径为空');
+              // 不显示错误，因为用户可能只是取消了保存
+            }
+          } catch (e) {
+            Log.error('生成 PDF 时出错: $e');
+            if (context.mounted) {
+              _showError(context, 'PDF 生成失败：$e');
+            }
           }
         },
         (error) {
@@ -604,6 +529,7 @@ class ExportAction extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
+        backgroundColor: Colors.green,
         duration: const Duration(seconds: 2),
       ),
     );
