@@ -314,7 +314,10 @@ class _HomePageState extends State<HomePage> {
             ),
 
             // 待办计划
-            const TodoPlanSection(),
+            TodoPlanSection(
+              workspaceId:
+                  context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId,
+            ),
           ],
           ),
         ),
