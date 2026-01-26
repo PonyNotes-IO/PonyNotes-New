@@ -38,7 +38,7 @@ class MobileSpaceTabBar extends StatelessWidget {
         controller: tabController,
         tabs: tabs.map((e) => Tab(text: e.tr)).toList(),
         indicatorSize: TabBarIndicatorSize.label,
-        indicatorColor: Theme.of(context).primaryColor,
+        indicatorColor: Theme.of(context).colorScheme.primary,
         isScrollable: true,
         labelStyle: labelStyle,
         labelColor: baseStyle?.color,
@@ -48,7 +48,7 @@ class MobileSpaceTabBar extends StatelessWidget {
         indicator: RoundUnderlineTabIndicator(
           width: 28.0,
           borderSide: BorderSide(
-            color: Theme.of(context).primaryColor,
+            color: Theme.of(context).colorScheme.primary,
             width: 3,
           ),
         ),

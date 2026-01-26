@@ -449,7 +449,7 @@ class _TimePicker extends StatelessWidget {
               constraints: const BoxConstraints.tightFor(height: 42),
               mainAxisAlignment: MainAxisAlignment.center,
               fontColor: Theme.of(context).colorScheme.onPrimary,
-              fillColor: Theme.of(context).primaryColor,
+              fillColor: Theme.of(context).colorScheme.primary,
               onPressed: () {
                 Navigator.of(context).pop(result);
               },

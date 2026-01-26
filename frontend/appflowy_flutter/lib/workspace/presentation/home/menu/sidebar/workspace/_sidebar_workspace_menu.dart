@@ -14,6 +14,7 @@ import 'package:appflowy/workspace/presentation/settings/widgets/members/workspa
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -53,9 +54,11 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        _buildHeader(widget.currentWorkspace),
+        const VSpace(6.0),
         // user email
         Padding(
-          padding: const EdgeInsets.only(left: 10.0, top: 6.0, right: 10.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
           child: Row(
             children: [
               Expanded(
@@ -74,14 +77,14 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
             ],
           ),
         ),
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 6.0),
-          child: Divider(height: 1.0),
-        ),
+        // const Padding(
+        //   padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 6.0),
+        //   child: Divider(height: 1.0),
+        // ),
         // workspace list
         Flexible(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 6.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -102,7 +105,7 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
         ),
         // add new workspace
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 6.0),
+          padding: EdgeInsets.symmetric(horizontal: 12.0),
           child: _CreateWorkspaceButton(),
         ),
 
@@ -113,22 +116,131 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
         //   ),
         // ],
 
-        const VSpace(6.0),
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 20.0),
+          child: Divider(height: 1.0),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 8.0, bottom: 8, right: 8),
+          child: FlowyButton(
+            margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 7.0),
+            leftIcon: const FlowySvg(FlowySvgs.workspace_logout_s),
+            iconPadding: 10.0,
+            text: FlowyText.regular(LocaleKeys.button_logout.tr()),
+            onTap: () async {
+              await getIt<AuthService>().signOut();
+              await runAppFlowy();
+            },
+          ),
+        )
       ],
     );
   }
 
   String _getUserInfo() {
-    if (widget.userProfile.email.isNotEmpty) {
-      return widget.userProfile.email;
-    }
-
     if (widget.userProfile.name.isNotEmpty) {
       return widget.userProfile.name;
     }
 
+    if (widget.userProfile.email.isNotEmpty) {
+      return widget.userProfile.email;
+    }
+
     return LocaleKeys.defaultUsername.tr();
   }
+
+  Widget _buildHeader(UserWorkspacePB currentWorkspace) {
+    final theme = AppFlowyTheme.of(context);
+    final memberCount = widget.currentWorkspace.memberCount.toInt();
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.surfaceColorScheme.layer01Hover,
+        borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(theme.borderRadius.l),
+            topRight: Radius.circular(theme.borderRadius.l)),
+        // border: Border.all(
+        //   color: theme.borderColorScheme.primary,
+        // ),
+      ),
+      padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      child: Column(
+        children: [
+          Row(children: [
+            WorkspaceIcon(
+                workspaceName: widget.currentWorkspace.name,
+                workspaceIcon: widget.currentWorkspace.icon,
+                iconSize: 40,
+                emojiSize: 36.0,
+                fontSize: 20.0,
+                figmaLineHeight: 26.0,
+                borderRadius: 6.0,
+                isEditable: true,
+                onSelected: (result) => () {}),
+            HSpace(6),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // workspace name
+                  FlowyText.medium(
+                    widget.currentWorkspace.name,
+                    fontSize: 16.0,
+                    figmaLineHeight: 17.0,
+                    overflow: TextOverflow.ellipsis,
+                    withTooltip: true,
+                  ),
+                  VSpace(6),
+                  if (widget.currentWorkspace.role != AFRolePB.Guest) ...[
+                    // workspace members count
+                    FlowyText.regular(
+                      memberCount == 0
+                          ? ''
+                          : LocaleKeys.settings_appearance_members_membersCount
+                              .plural(
+                              memberCount,
+                            ),
+                      fontSize: 12.0,
+                      figmaLineHeight: 12.0,
+                      color: Theme.of(context).hintColor,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (widget.currentWorkspace.role == AFRolePB.Guest) ...[
+              const HSpace(6.0),
+              GuestTag(),
+            ],
+          ]),
+          VSpace(12),
+          Row(
+            children: [
+              _buildButton(context,LocaleKeys.settings_title.tr()),
+              HSpace(8),
+              _buildButton(context,LocaleKeys.settings_appearance_members_inviteMembers.tr()),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildButton(BuildContext context,String name) {
+    return FlowyText.regular(
+      name,
+      color: Theme.of(context).colorScheme.primary,
+    );
+  }
+
+  Widget _buildLeftIcon(BuildContext context) {
+    return FlowySvg(
+      FlowySvgs.icon_settings_s,
+      color: Theme.of(context).colorScheme.primary,
+      size: Size.square(30),
+    );
+  }
+
 }
 
 class WorkspaceMenuItem extends StatefulWidget {
@@ -171,7 +283,7 @@ class _WorkspaceMenuItemState extends State<WorkspaceMenuItem> {
           //  cause the popover dismiss intermediately when click the right icon.
           // so using the stack to put the right icon on the flowy button.
           return SizedBox(
-            height: 44,
+            height: 36,
             child: MouseRegion(
               onEnter: (_) => isHovered.value = true,
               onExit: (_) => isHovered.value = false,
@@ -202,11 +314,11 @@ class _WorkspaceMenuItemState extends State<WorkspaceMenuItem> {
       child: WorkspaceIcon(
         workspaceName: widget.workspace.name,
         workspaceIcon: widget.workspace.icon,
-        iconSize: 36,
-        emojiSize: 24.0,
-        fontSize: 18.0,
+        iconSize: 28,
+        emojiSize: 18.0,
+        fontSize: 16.0,
         figmaLineHeight: 26.0,
-        borderRadius: 12.0,
+        borderRadius: 6.0,
         isEditable: true,
         onSelected: (result) => context.read<UserWorkspaceBloc>().add(
               UserWorkspaceEvent.updateWorkspaceIcon(
@@ -239,18 +351,18 @@ class _WorkspaceMenuItemState extends State<WorkspaceMenuItem> {
               popoverMutex: widget.popoverMutex,
             ),
           ),
-        const HSpace(8.0),
-        if (widget.isSelected) ...[
-          const Padding(
-            padding: EdgeInsets.all(5.0),
-            child: FlowySvg(
-              FlowySvgs.workspace_selected_s,
-              blendMode: null,
-              size: Size.square(14.0),
-            ),
-          ),
-          const HSpace(8.0),
-        ],
+        // const HSpace(8.0),
+        // if (widget.isSelected) ...[
+        //   const Padding(
+        //     padding: EdgeInsets.all(5.0),
+        //     child: FlowySvg(
+        //       FlowySvgs.workspace_selected_s,
+        //       blendMode: null,
+        //       size: Size.square(14.0),
+        //     ),
+        //   ),
+        //   const HSpace(8.0),
+        // ],
       ],
     );
   }
@@ -270,9 +382,9 @@ class _WorkspaceInfo extends StatelessWidget {
     final memberCount = workspace.memberCount.toInt();
     return FlowyButton(
       onTap: () => _openWorkspace(context),
-      iconPadding: 10.0,
-      leftIconSize: const Size.square(32),
-      leftIcon: const SizedBox.square(dimension: 32),
+      iconPadding: 6.0,
+      leftIconSize: const Size.square(24),
+      leftIcon: const SizedBox.square(dimension: 24),
       rightIcon: const HSpace(32.0),
       text: Row(
         children: [
@@ -289,20 +401,20 @@ class _WorkspaceInfo extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   withTooltip: true,
                 ),
-                if (workspace.role != AFRolePB.Guest) ...[
-                  // workspace members count
-                  FlowyText.regular(
-                    memberCount == 0
-                        ? ''
-                        : LocaleKeys.settings_appearance_members_membersCount
-                            .plural(
-                            memberCount,
-                          ),
-                    fontSize: 10.0,
-                    figmaLineHeight: 12.0,
-                    color: Theme.of(context).hintColor,
-                  ),
-                ],
+                // if (workspace.role != AFRolePB.Guest) ...[
+                //   // workspace members count
+                //   FlowyText.regular(
+                //     memberCount == 0
+                //         ? ''
+                //         : LocaleKeys.settings_appearance_members_membersCount
+                //             .plural(
+                //             memberCount,
+                //           ),
+                //     fontSize: 10.0,
+                //     figmaLineHeight: 12.0,
+                //     color: Theme.of(context).hintColor,
+                //   ),
+                // ],
               ],
             ),
           ),
@@ -351,13 +463,14 @@ class _CreateWorkspaceDialogState extends State<CreateWorkspaceDialog> {
   Widget build(BuildContext context) {
     return BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
       listenWhen: (previous, current) {
-        return previous.actionResult?.actionType != current.actionResult?.actionType ||
+        return previous.actionResult?.actionType !=
+                current.actionResult?.actionType ||
             previous.actionResult?.isLoading != current.actionResult?.isLoading;
       },
       listener: (context, state) {
         final actionResult = state.actionResult;
-        if (actionResult != null && 
-            actionResult.actionType == WorkspaceActionType.create && 
+        if (actionResult != null &&
+            actionResult.actionType == WorkspaceActionType.create &&
             !actionResult.isLoading) {
           // 工作空间创建完成，检查context是否仍然mounted
           if (context.mounted) {
@@ -368,7 +481,7 @@ class _CreateWorkspaceDialogState extends State<CreateWorkspaceDialog> {
               }
             });
           }
-          
+
           // 如果创建失败，记录错误信息
           actionResult.result?.fold(
             (success) {
@@ -414,7 +527,7 @@ class _CreateWorkspaceButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 40,
+      height: 36,
       child: FlowyButton(
         key: createWorkspaceButtonKey,
         onTap: () async {
@@ -426,13 +539,14 @@ class _CreateWorkspaceButton extends StatelessWidget {
             await _showCreateWorkspaceDialog(context);
           }
         },
-        margin: const EdgeInsets.symmetric(horizontal: 4.0),
+        // margin: const EdgeInsets.symmetric(horizontal: 4.0),
         text: Row(
           children: [
             _buildLeftIcon(context),
-            const HSpace(8.0),
+            const HSpace(4.0),
             FlowyText.regular(
               LocaleKeys.workspace_create.tr(),
+              color: Theme.of(context).colorScheme.primary,
             ),
           ],
         ),
@@ -442,33 +556,39 @@ class _CreateWorkspaceButton extends StatelessWidget {
 
   Widget _buildLeftIcon(BuildContext context) {
     return Container(
-      width: 36.0,
-      height: 36.0,
-      padding: const EdgeInsets.all(7.0),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0x01717171).withValues(alpha: 0.12),
-          width: 0.8,
-        ),
+      // width: 36.0,
+      // height: 36.0,
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      // decoration: BoxDecoration(
+      //   borderRadius: BorderRadius.circular(12),
+      //   border: Border.all(
+      //     color: const Color(0x01717171).withValues(alpha: 0.12),
+      //     width: 0.8,
+      //   ),
+      // ),
+      child: FlowySvg(
+        FlowySvgs.icon_add_circle_s,
+        color: Theme.of(context).colorScheme.primary,
+        size: Size.square(30),
       ),
-      child: const FlowySvg(FlowySvgs.add_workspace_s),
     );
   }
 
   Future<void> _showCreateWorkspaceDialog(BuildContext context) async {
     if (!context.mounted) {
-      Log.warn('Context is not mounted when trying to show create workspace dialog');
+      Log.warn(
+          'Context is not mounted when trying to show create workspace dialog');
       return;
     }
-    
+
     try {
       final workspaceBloc = context.read<UserWorkspaceBloc>();
       final userProfile = workspaceBloc.state.userProfile;
       final isCloudSyncEnabled = workspaceBloc.state.isCloudSyncEnabled;
-      
-      Log.info('Showing create workspace dialog for user: ${userProfile.email}, auth type: ${userProfile.userAuthType}, isCloudSyncEnabled: $isCloudSyncEnabled');
-      
+
+      Log.info(
+          'Showing create workspace dialog for user: ${userProfile.email}, auth type: ${userProfile.userAuthType}, isCloudSyncEnabled: $isCloudSyncEnabled');
+
       // 检查云同步状态：如果云同步关闭，不能创建工作区
       if (!isCloudSyncEnabled) {
         Log.warn('云同步已关闭，不能创建工作区');
@@ -482,51 +602,53 @@ class _CreateWorkspaceButton extends StatelessWidget {
         );
         return;
       }
-      
+
       final dialog = CreateWorkspaceDialog(
         title: LocaleKeys.workspace_create.tr(),
         onConfirm: (name) {
           // DEBUG BREAKPOINT 3: onConfirm 回调被调用
           Log.info('=== DEBUG BREAKPOINT 3 === onConfirm 回调被调用，工作空间名称: $name');
-          
+
           if (name.trim().isEmpty) {
             Log.warn('Workspace name is empty, cannot create workspace');
             return;
           }
-          
+
           // 智能选择工作空间类型：
           // 1. 默认创建 ServerW 类型的工作区（cloud 保存），与 AppFlowy 的默认行为一致
           // 2. 如果云同步开启，创建服务器工作空间（会同步到服务端）
           // 3. 如果云同步关闭，创建本地工作空间（不同步到服务端）
           // 4. 如果用户是本地认证类型，强制创建本地工作空间
           final isCloudSyncEnabled = workspaceBloc.state.isCloudSyncEnabled;
-          final workspaceType = userProfile.userAuthType == AuthTypePB.Local 
-              ? WorkspaceTypePB.LocalW 
-              : WorkspaceTypePB.ServerW; // 默认创建 ServerW 类型（cloud 保存），与 AppFlowy 的默认行为一致
-          
-          Log.info('Creating workspace: name="$name", type=$workspaceType, isCloudSyncEnabled=$isCloudSyncEnabled');
-          
+          final workspaceType = userProfile.userAuthType == AuthTypePB.Local
+              ? WorkspaceTypePB.LocalW
+              : WorkspaceTypePB
+                  .ServerW; // 默认创建 ServerW 类型（cloud 保存），与 AppFlowy 的默认行为一致
+
+          Log.info(
+              'Creating workspace: name="$name", type=$workspaceType, isCloudSyncEnabled=$isCloudSyncEnabled');
+
           // DEBUG BREAKPOINT 4: 即将发送创建工作空间事件
           Log.info('=== DEBUG BREAKPOINT 4 === 即将发送创建工作空间事件到 BLoC');
-          
+
           workspaceBloc.add(
             UserWorkspaceEvent.createWorkspace(
               name: name,
               workspaceType: workspaceType,
             ),
           );
-          
+
           // DEBUG BREAKPOINT 5: 创建工作空间事件已发送
           Log.info('=== DEBUG BREAKPOINT 5 === 创建工作空间事件已发送到 BLoC');
         },
       );
-      
+
       Log.info('About to show dialog...');
-      
+
       // 确保键盘状态清理以避免输入问题
       FocusScope.of(context).unfocus();
       await Future.delayed(const Duration(milliseconds: 50));
-      
+
       if (context.mounted) {
         await showDialog(
           context: context,
@@ -540,7 +662,7 @@ class _CreateWorkspaceButton extends StatelessWidget {
     } catch (e, stackTrace) {
       Log.error('Failed to show create workspace dialog: $e');
       Log.error('Stack trace: $stackTrace');
-      
+
       // 如果对话框显示失败，尝试使用Flutter原生的showDialog作为后备方案
       if (context.mounted) {
         try {
@@ -553,19 +675,24 @@ class _CreateWorkspaceButton extends StatelessWidget {
                 title: LocaleKeys.workspace_create.tr(),
                 onConfirm: (name) {
                   if (name.trim().isEmpty) {
-                    Log.warn('Workspace name is empty, cannot create workspace');
+                    Log.warn(
+                        'Workspace name is empty, cannot create workspace');
                     return;
                   }
-                  
+
                   final workspaceBloc = context.read<UserWorkspaceBloc>();
                   final userProfile = workspaceBloc.state.userProfile;
-                  final isCloudSyncEnabled = workspaceBloc.state.isCloudSyncEnabled;
-                  final workspaceType = userProfile.userAuthType == AuthTypePB.Local 
-                      ? WorkspaceTypePB.LocalW 
-                      : WorkspaceTypePB.ServerW; // 默认创建 ServerW 类型（cloud 保存），与 AppFlowy 的默认行为一致
-                  
-                  Log.info('Creating workspace via fallback: name="$name", type=$workspaceType, isCloudSyncEnabled=$isCloudSyncEnabled');
-                  
+                  final isCloudSyncEnabled =
+                      workspaceBloc.state.isCloudSyncEnabled;
+                  final workspaceType = userProfile.userAuthType ==
+                          AuthTypePB.Local
+                      ? WorkspaceTypePB.LocalW
+                      : WorkspaceTypePB
+                          .ServerW; // 默认创建 ServerW 类型（cloud 保存），与 AppFlowy 的默认行为一致
+
+                  Log.info(
+                      'Creating workspace via fallback: name="$name", type=$workspaceType, isCloudSyncEnabled=$isCloudSyncEnabled');
+
                   workspaceBloc.add(
                     UserWorkspaceEvent.createWorkspace(
                       name: name,

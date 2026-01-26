@@ -114,7 +114,7 @@ class _MobileBottomSheetEditLinkWidgetState
                     const BoxConstraints.tightFor(width: 62, height: 30),
                 padding: const EdgeInsets.only(left: 12),
                 fontColor: theme.textColorScheme.onFill,
-                fillColor: Theme.of(context).primaryColor,
+                fillColor: Theme.of(context).colorScheme.primary,
                 onPressed: () {
                   if (isShowingSearchResult) {
                     onConfirm();

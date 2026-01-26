@@ -66,7 +66,7 @@ class _MobileBottomSheetRenameWidgetState
               horizontal: 16.0,
             ),
             fontColor: Colors.white,
-            fillColor: Theme.of(context).primaryColor,
+            fillColor: Theme.of(context).colorScheme.primary,
             onPressed: () {
               widget.onRename(controller.text);
             },

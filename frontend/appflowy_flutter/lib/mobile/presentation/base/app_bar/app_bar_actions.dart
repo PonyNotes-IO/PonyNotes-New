@@ -165,7 +165,7 @@ class AppBarFilledDoneButton extends StatelessWidget {
           visualDensity: VisualDensity.compact,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           enableFeedback: true,
-          backgroundColor: Theme.of(context).primaryColor,
+          backgroundColor: Theme.of(context).colorScheme.primary,
         ),
         onPressed: onTap,
         child: FlowyText.medium(

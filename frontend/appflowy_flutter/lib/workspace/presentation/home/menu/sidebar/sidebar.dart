@@ -772,7 +772,6 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
               color: Colors.transparent,
             ),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const HSpace(4),
                 // 使用小马emoji作为图标

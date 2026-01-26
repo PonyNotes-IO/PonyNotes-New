@@ -22,7 +22,7 @@ const _darkShader2 = Color(0xff1A202C);
 const _darkShader3 = Color(0xff363D49);
 const _darkShader5 = Color(0xffBBC3CD);
 const _darkShader6 = Color(0xffF2F2F2);
-const _darkMain1 = Color(0xffab00ff);
+const _darkMain1 = Color(0xFFFF3800);
 const _darkInput = Color(0xff282E3A);
 
 class LavenderColorScheme extends FlowyColorScheme {

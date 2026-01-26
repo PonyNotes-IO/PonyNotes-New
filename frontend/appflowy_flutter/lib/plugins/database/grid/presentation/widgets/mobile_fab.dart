@@ -12,7 +12,7 @@ Widget getGridFabs(BuildContext context) {
     children: [
       MobileGridFab(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        foregroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Theme.of(context).colorScheme.primary,
         onTap: () {
           final bloc = context.read<GridBloc>();
           if (bloc.state.rowInfos.isNotEmpty) {
@@ -36,7 +36,7 @@ Widget getGridFabs(BuildContext context) {
       ),
       const HSpace(16),
       MobileGridFab(
-        backgroundColor: Theme.of(context).primaryColor,
+        backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
         onTap: () {
           context
