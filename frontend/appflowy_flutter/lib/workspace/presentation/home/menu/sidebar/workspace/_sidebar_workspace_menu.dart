@@ -21,6 +21,8 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/shared/settings/show_settings.dart' as settings;
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import '_sidebar_import_notion.dart';
 
 @visibleForTesting
@@ -54,7 +56,7 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildHeader(widget.currentWorkspace),
+        _buildHeader(context,widget.currentWorkspace),
         const VSpace(6.0),
         // user email
         Padding(
@@ -149,7 +151,7 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
     return LocaleKeys.defaultUsername.tr();
   }
 
-  Widget _buildHeader(UserWorkspacePB currentWorkspace) {
+  Widget _buildHeader(BuildContext context,UserWorkspacePB currentWorkspace) {
     final theme = AppFlowyTheme.of(context);
     final memberCount = widget.currentWorkspace.memberCount.toInt();
     return Container(
@@ -216,9 +218,35 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
           VSpace(12),
           Row(
             children: [
-              _buildButton(context,LocaleKeys.settings_title.tr()),
+              _buildButton(context, LocaleKeys.settings_title.tr(),
+                  FlowySvgs.icon_settings_s, (){
+                    // 先关闭工作区弹框
+                    PopoverContainer.of(context).closeAll();
+                    // 打开设置弹框
+                    settings.showSettingsDialog(
+                      context,
+                      widget.userProfile,
+                      context.read<UserWorkspaceBloc>(),
+                    );
+                  }
+              ),
               HSpace(8),
-              _buildButton(context,LocaleKeys.settings_appearance_members_inviteMembers.tr()),
+              _buildButton(
+                  context,
+                  LocaleKeys.settings_appearance_members_inviteMembers.tr(),
+                  FlowySvgs.workspace_add_member_s,
+                  (){
+                    // 先关闭工作区弹框
+                    PopoverContainer.of(context).closeAll();
+                    // 打开设置弹框并跳转到成员管理页面
+                    settings.showSettingsDialog(
+                      context,
+                      widget.userProfile,
+                      context.read<UserWorkspaceBloc>(),
+                      SettingsPage.member,
+                    );
+                  }
+              ),
             ],
           )
         ],
@@ -226,10 +254,33 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
     );
   }
 
-  Widget _buildButton(BuildContext context,String name) {
-    return FlowyText.regular(
-      name,
-      color: Theme.of(context).colorScheme.primary,
+  Widget _buildButton(BuildContext context, String name, FlowySvgData svg,
+      GestureTapCallback? onTap) {
+    final theme = AppFlowyTheme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.surfaceColorScheme.layer02,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.borderColorScheme.primary),
+        ),
+        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          children: [
+            FlowySvg(
+              svg,
+              size: Size.square(18),
+              color: theme.textColorScheme.primary,
+            ),
+            HSpace(4),
+            FlowyText.regular(
+              name,
+              color: theme.textColorScheme.primary,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -240,7 +291,6 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
       size: Size.square(30),
     );
   }
-
 }
 
 class WorkspaceMenuItem extends StatefulWidget {

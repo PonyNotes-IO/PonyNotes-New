@@ -19,7 +19,10 @@ void showSettingsDialog(
   UserWorkspaceBloc? bloc,
   SettingsPage? initPage,
 ]) {
-  AFFocusManager.of(context).notifyLoseFocus();
+  final focusManager = AFFocusManager.maybeOf(context);
+  if (focusManager != null) {
+    focusManager.notifyLoseFocus();
+  }
   showDialog(
     context: context,
     builder: (dialogContext) => MultiBlocProvider(
