@@ -42,29 +42,23 @@ class TodoListDisplay extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         
-        // 内容区域
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 今天的待办
-                _buildTodaySection(context),
-                
-                // 间距
-                if (todayTodos.isNotEmpty && upcomingTodos.isNotEmpty)
-                  const SizedBox(height: 20),
-                
-                // 即将到来的待办
-                if (upcomingTodos.isNotEmpty)
-                  _buildUpcomingSection(context),
-                
-                // 空状态
-                if (todayTodos.isEmpty && upcomingTodos.isEmpty)
-                  _buildEmptyState(context),
-              ],
-            ),
-          ),
+        // 内容区域 - 不使用 Expanded，这样组件会根据内容高度收缩，避免强制撑高父容器
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 今天的待办
+            _buildTodaySection(context),
+
+            // 间距
+            if (todayTodos.isNotEmpty && upcomingTodos.isNotEmpty)
+              const SizedBox(height: 20),
+
+            // 即将到来的待办
+            if (upcomingTodos.isNotEmpty) _buildUpcomingSection(context),
+
+            // 空状态
+            if (todayTodos.isEmpty && upcomingTodos.isEmpty) _buildEmptyState(context),
+          ],
         ),
       ],
     );
@@ -327,9 +321,9 @@ class TodoListDisplay extends StatelessWidget {
 
   Widget _buildEmptyState(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 40),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           Icon(
             Icons.task_alt,

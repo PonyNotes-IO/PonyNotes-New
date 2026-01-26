@@ -36,32 +36,73 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
 
   @override
   Widget build(BuildContext context) {
+    // 简化为：图标 / 标题 / 描述 / 链接按钮（与设计图一致）
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 顶部图标和标题
-        _buildHeader(),
-        const SizedBox(height: 20),
-        
-        // 标题输入
-        _buildTitleInput(),
-        const SizedBox(height: 12),
-        
-        // 时间选择
-        _buildTimeSelector(),
-        const SizedBox(height: 12),
-        
-        // 全天开关
-        _buildAllDayToggle(),
-        const SizedBox(height: 20),
-        
-        // 创建按钮
-        _buildCreateButton(),
-        
-        const Spacer(),
-        
-        // 底部链接
-        _buildCalendarLink(),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 58,
+                height: 51,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF8D69),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.calendar_today,
+                  size: 28,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "用日历连接你的生活",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                "创建待办计划、创建日记，记录你的每个点滴故事……",
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                ),
+              ),
+              const SizedBox(height: 42),
+              InkWell(
+                onTap: _openCalendar,
+                borderRadius: BorderRadius.circular(6),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color.fromRGBO(255, 106, 77, 0.12), // 半透明粉色背景
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    "链接我的日历",
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFFFF6A4D),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
