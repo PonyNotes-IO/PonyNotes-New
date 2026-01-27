@@ -110,6 +110,12 @@ class AppFlowyPrimitiveTokens {
   /// #00b5ff33
   static Color get blueAlphaBlue50020 => Color(0x3300B5FF);
 
+  /// #0x26FF3800
+  static Color get mainThemeAlpha => Color(0x26FF3800);
+
+  /// #0x33FF3800
+  static Color get mainThemeAlpha33 => Color(0x33FF3800);
+
   /// #ecf9f5
   static Color get green100 => Color(0xFFECF9F5);
 
