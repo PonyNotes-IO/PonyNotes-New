@@ -4,7 +4,7 @@ use crate::entities::{
 };
 use crate::middleware::chat_service_mw::ChatServiceMiddleware;
 use crate::notification::{ChatNotification, chat_notification_builder};
-use crate::stream_message::{AIFollowUpData, StreamMessage};
+use crate::stream_message::{sanitize_ai_error_message, AIFollowUpData, StreamMessage};
 use allo_isolate::Isolate;
 use flowy_ai_pub::cloud::{
   AIModel, ChatCloudService, ChatMessage, ChatMessageType, MessageCursor, QuestionStreamValue, ResponseFormat,
@@ -306,8 +306,9 @@ impl Chat {
                   break; // 跳出循环，避免无限重试
                 } else {
                   error!("[Chat] failed to stream answer: {}", err);
+                  let message = sanitize_ai_error_message(&err.msg);
                   let _ = answer_sink
-                    .send(StreamMessage::OnError(err.msg.clone()).to_string())
+                    .send(StreamMessage::OnError(message).to_string())
                     .await;
                   let pb = ChatMessageErrorPB {
                     chat_id: chat_id.to_string(),
@@ -350,8 +351,9 @@ impl Chat {
               .send(StreamMessage::LocalAIDisabled(err.msg.clone()).to_string())
               .await;
           } else {
+            let message = sanitize_ai_error_message(&err.msg);
             let _ = answer_sink
-              .send(StreamMessage::OnError(err.msg.clone()).to_string())
+              .send(StreamMessage::OnError(message).to_string())
               .await;
           }
 

@@ -378,13 +378,15 @@ class AiWriterCubit extends Cubit<AiWriterState> {
     }
     final command = AiWriterCommand.userQuestion;
 
+    // 【修复】文档内向AI提问时，不传objectId，避免后端查找view失败的问题
+    // 提问和回答会直接插入到当前文档中，而不是创建新的AI会话视图
     final stream = await _aiService.streamCompletion(
-      objectId: documentId,
+      objectId: null,  // 不传objectId，避免后端查找view失败
       text: prompt,
       format: format,
       promptId: promptId,
       history: records,
-      sourceIds: selectedSourcesNotifier.value,
+      sourceIds: [],  // 不传sourceIds，避免RAG检索
       completionType: command.toCompletionType(),
       onStart: () async {
         final position = await ensurePreviousNodeIsEmptyParagraph(
@@ -454,6 +456,7 @@ class AiWriterCubit extends Cubit<AiWriterState> {
         ),
       );
     }
+
   }
 
   Future<void> _startContinueWriting(

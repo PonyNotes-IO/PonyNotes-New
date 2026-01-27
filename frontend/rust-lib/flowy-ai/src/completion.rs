@@ -12,7 +12,7 @@ use flowy_error::{FlowyError, FlowyResult};
 use futures::{SinkExt, StreamExt};
 use lib_infra::isolate_stream::IsolateSink;
 
-use crate::stream_message::StreamMessage;
+use crate::stream_message::{sanitize_ai_error_message, StreamMessage};
 use flowy_ai_pub::user_service::AIUserService;
 use std::sync::{Arc, Weak};
 use tokio::select;
@@ -124,11 +124,15 @@ impl CompletionTask {
         let _ = sink.send("start:".to_string()).await;
         let completion_history = Some(self.context.history.iter().map(Into::into).collect());
         let format = self.context.format.map(Into::into).unwrap_or_default();
-        if let Ok(object_id) = Uuid::from_str(&self.context.object_id) {
-          let params = CompleteTextParams {
-            text: self.context.text,
-            completion_type: Some(complete_type),
-            metadata: Some(CompletionMetadata {
+        
+        // 【修复】当object_id为空时，不设置metadata，因为metadata中的object_id是必需的
+        // 这样文档内向AI提问时即使不传objectId也能正常工作
+        let metadata = if self.context.object_id.is_empty() {
+          // object_id为空时，不设置metadata
+          None
+        } else {
+          match Uuid::from_str(&self.context.object_id) {
+            Ok(object_id) => Some(CompletionMetadata {
               object_id,
               workspace_id: Some(self.workspace_id),
               rag_ids: Some(self.context.rag_ids),
@@ -139,49 +143,61 @@ impl CompletionTask {
                 .map(|v| CustomPrompt { system: v }),
               prompt_id: self.context.prompt_id.clone(),
             }),
-            format,
-          };
-
-          info!("start completion: {:?}", params);
-          match cloud_service
-            .stream_complete(&self.workspace_id, params, self.preferred_model)
-            .await
-          {
-            Ok(mut stream) => loop {
-              select! {
-                  _ = self.stop_rx.recv() => {
-                      return;
-                  },
-                  result = stream.next() => {
-                    match result {
-                      Some(Ok(data)) => {
-                        match data {
-                          CompletionStreamValue::Answer{ value } => {
-                            let _ = sink.send(format!("data:{}", value)).await;
-                          }
-                           CompletionStreamValue::Comment{ value } => {
-                            let _ = sink.send(format!("comment:{}", value)).await;
-                          }
-                        }
-                      },
-                      Some(Err(error)) => {
-                          handle_error(&mut sink, error).await;
-                          return;
-                      },
-                      None => {
-                          let _ = sink.send(format!("finish:{}", self.task_id)).await;
-                          return;
-                      },
-                    }
-                  }
-              }
-            },
-            Err(error) => {
-              handle_error(&mut sink, error).await;
+            Err(e) => {
+              error!("Invalid uuid: {}, error: {}", self.context.object_id, e);
+              // 发送错误到客户端
+              let _ = sink
+                .send(StreamMessage::OnError(format!("Invalid object_id: {}", self.context.object_id)).to_string())
+                .await;
+              return;
             },
           }
-        } else {
-          error!("Invalid uuid: {}", self.context.object_id);
+        };
+        
+        let params = CompleteTextParams {
+          text: self.context.text,
+          completion_type: Some(complete_type),
+          metadata,
+          format,
+        };
+
+        info!("start completion: {:?}", params);
+        match cloud_service
+          .stream_complete(&self.workspace_id, params, self.preferred_model)
+          .await
+        {
+          Ok(mut stream) => loop {
+            select! {
+                _ = self.stop_rx.recv() => {
+                    return;
+                },
+                result = stream.next() => {
+                  match result {
+                    Some(Ok(data)) => {
+                      match data {
+                        CompletionStreamValue::Answer{ value } => {
+                          let _ = sink.send(format!("data:{}", value)).await;
+                        }
+                         CompletionStreamValue::Comment{ value } => {
+                          let _ = sink.send(format!("comment:{}", value)).await;
+                        }
+                      }
+                    },
+                    Some(Err(error)) => {
+                        handle_error(&mut sink, error).await;
+                        return;
+                    },
+                    None => {
+                        let _ = sink.send(format!("finish:{}", self.task_id)).await;
+                        return;
+                    },
+                  }
+                }
+            }
+          },
+          Err(error) => {
+            handle_error(&mut sink, error).await;
+          },
         }
       }
     });
@@ -198,10 +214,13 @@ async fn handle_error(sink: &mut IsolateSink, err: FlowyError) {
   } else if err.is_local_ai_not_ready() {
     let _ = sink.send(format!("local_ai_not_ready:{}", err.msg)).await;
   } else if err.is_local_ai_disabled() {
-    let _ = sink.send(format!("local_ai_disabled:{}", err.msg)).await;
-  } else {
     let _ = sink
-      .send(StreamMessage::OnError(err.msg.clone()).to_string())
+      .send(format!("local_ai_disabled:{}", err.msg))
+      .await;
+  } else {
+    let message = sanitize_ai_error_message(&err.msg);
+    let _ = sink
+      .send(StreamMessage::OnError(message).to_string())
       .await;
   }
 }
