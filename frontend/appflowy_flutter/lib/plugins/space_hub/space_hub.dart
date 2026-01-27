@@ -154,41 +154,31 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    // 使用 Builder 访问外层 context，尝试获取 SpaceBloc 或创建新的
+    // 使用 Builder 访问外层 context，尝试获取 UserWorkspaceBloc 以创建独立的 SpaceBloc
     return Builder(
       builder: (outerContext) {
-        // 尝试从外层 context 获取 SpaceBloc
+        // 尝试创建新的 SpaceBloc 实例，确保每个选项卡有独立的状态管理
         SpaceBloc? spaceBloc;
         try {
-          spaceBloc = BlocProvider.of<SpaceBloc>(outerContext);
-          debugPrint('[SpaceHub] Found existing SpaceBloc, isInitialized=${spaceBloc.state.isInitialized}, currentSpace=${spaceBloc.state.currentSpace?.id}');
-          // 如果 SpaceBloc 已存在且已初始化，但当前空间不是目标空间，需要打开目标空间
-          if (spaceBloc.state.isInitialized && spaceBloc.state.currentSpace?.id != view.id) {
-            debugPrint('[SpaceHub] Existing SpaceBloc initialized but currentSpace != target, will open target space in listener');
+          final userWorkspaceBloc = outerContext.read<UserWorkspaceBloc>();
+          final userProfile = userWorkspaceBloc.state.userProfile;
+          final workspaceId = userWorkspaceBloc.state.currentWorkspace?.workspaceId ?? '';
+          if (workspaceId.isNotEmpty) {
+            debugPrint('[SpaceHub] Creating new SpaceBloc for workspace: $workspaceId');
+            spaceBloc = SpaceBloc(
+              userProfile: userProfile,
+              workspaceId: workspaceId,
+            );
+            // 先初始化 SpaceBloc，空间打开会在 BlocListener 中处理
+            // 注意：初始化是异步的，需要等待 isInitialized 变为 true 后再打开空间
+            spaceBloc.add(const SpaceEvent.initial(openFirstPage: false));
+            debugPrint('[SpaceHub] SpaceBloc initial event dispatched');
+          } else {
+            debugPrint('[SpaceHub] workspaceId is empty, cannot create SpaceBloc');
           }
-        } catch (_) {
-          // SpaceBloc 不存在，尝试创建新的
-          try {
-            final userWorkspaceBloc = outerContext.read<UserWorkspaceBloc>();
-            final userProfile = userWorkspaceBloc.state.userProfile;
-            final workspaceId = userWorkspaceBloc.state.currentWorkspace?.workspaceId ?? '';
-            if (workspaceId.isNotEmpty) {
-              debugPrint('[SpaceHub] Creating new SpaceBloc for workspace: $workspaceId');
-              spaceBloc = SpaceBloc(
-                userProfile: userProfile,
-                workspaceId: workspaceId,
-              );
-              // 先初始化 SpaceBloc，空间打开会在 BlocListener 中处理
-              // 注意：初始化是异步的，需要等待 isInitialized 变为 true 后再打开空间
-              spaceBloc.add(const SpaceEvent.initial(openFirstPage: false));
-              debugPrint('[SpaceHub] SpaceBloc initial event dispatched');
-            } else {
-              debugPrint('[SpaceHub] workspaceId is empty, cannot create SpaceBloc');
-            }
-          } catch (e) {
-            debugPrint('[SpaceHub] Failed to create SpaceBloc: $e');
-            // UserWorkspaceBloc 也不存在，spaceBloc 保持为 null
-          }
+        } catch (e) {
+          debugPrint('[SpaceHub] Failed to create SpaceBloc: $e');
+          // UserWorkspaceBloc 也不存在，spaceBloc 保持为 null
         }
 
         final providers = <BlocProvider>[
@@ -198,7 +188,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
 
         // 如果创建了新的 SpaceBloc，添加到 providers
         if (spaceBloc != null) {
-          providers.add(BlocProvider<SpaceBloc>.value(value: spaceBloc));
+          providers.add(BlocProvider<SpaceBloc>(create: (_) => spaceBloc!));
         }
 
         return MultiBlocProvider(
@@ -303,7 +293,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         final currentSpace = spaceBloc.state.currentSpace;
         debugPrint('[SpaceHub] _trySelectFirstDocument: currentSpace=${currentSpace?.id}, targetSpace=${widget.spaceView.id}');
         if (currentSpace?.id == widget.spaceView.id &&
-            currentSpace!.childViews.isNotEmpty) {
+            currentSpace!.childViews.isNotEmpty &&
+            _selectedView == null) {
           final firstView = currentSpace.childViews.first;
           debugPrint('[SpaceHub] Selecting first document: ${firstView.name}');
           setState(() {
@@ -592,7 +583,6 @@ class _SpaceDocumentList extends StatelessWidget {
           if (currentSpace?.id != spaceView.id) {
             debugPrint('[SpaceHub] SpaceBloc initialized, opening target space: ${spaceView.name} (${spaceView.id}), currentSpace=${currentSpace?.id}');
             // 使用 Future.microtask 确保在下一帧执行，避免在 listener 中直接修改状态
-            // 添加一个标记来避免重复触发
             Future.microtask(() {
               if (!spaceBloc.isClosed) {
                 final currentState = spaceBloc.state;
@@ -617,26 +607,21 @@ class _SpaceDocumentList extends StatelessWidget {
           final currSpace = current.currentSpace;
           final prevSpace = previous.currentSpace;
           
-          debugPrint('[SpaceHub] buildWhen: prevSpace=${prevSpace?.id}, currSpace=${currSpace?.id}, targetSpace=${spaceView.id}');
-          
-          // 如果当前空间不匹配目标空间，只在空间ID变化时重建
-          if (currSpace?.id != spaceView.id) {
-            final shouldRebuild = prevSpace?.id != currSpace?.id;
-            debugPrint('[SpaceHub] buildWhen: space not matching target, shouldRebuild=$shouldRebuild');
-            return shouldRebuild;
+          // 只关注与当前空间相关的变化
+          if (currSpace?.id != spaceView.id && prevSpace?.id != spaceView.id) {
+            // 两个状态都与目标空间无关，不需要重建
+            return false;
           }
           
-          // 当前空间匹配目标空间，检查子视图是否变化
+          // 检查空间ID是否变化
           if (prevSpace?.id != currSpace?.id) {
-            debugPrint('[SpaceHub] buildWhen: Space changed: ${prevSpace?.id} -> ${currSpace?.id}, shouldRebuild=true');
             return true;
           }
           
-          // 检查子视图数量或ID列表是否变化
+          // 检查子视图数量是否变化
           final prevCount = prevSpace?.childViews.length ?? 0;
           final currCount = currSpace?.childViews.length ?? 0;
           if (prevCount != currCount) {
-            debugPrint('[SpaceHub] buildWhen: Child views count changed: $prevCount -> $currCount, shouldRebuild=true');
             return true;
           }
           
@@ -644,29 +629,23 @@ class _SpaceDocumentList extends StatelessWidget {
           final prevIds = prevSpace?.childViews.map((v) => v.id).toSet();
           final currIds = currSpace?.childViews.map((v) => v.id).toSet();
           if (prevIds != currIds) {
-            debugPrint('[SpaceHub] buildWhen: Child views IDs changed: prev=${prevIds?.toList()} curr=${currIds?.toList()}, shouldRebuild=true');
             return true;
           }
           
-          // 其他重要状态变化也需要重建
+          // 检查初始化状态是否变化
           if (previous.isInitialized != current.isInitialized) {
-            debugPrint('[SpaceHub] buildWhen: isInitialized changed, shouldRebuild=true');
             return true;
           }
           
           // 默认不重建（避免不必要的重建）
-          debugPrint('[SpaceHub] buildWhen: No changes detected, shouldRebuild=false');
           return false;
         },
         builder: (context, state) {
           // 确保当前空间已加载，如果没有则触发加载
           final currentSpace = state.currentSpace;
           
-          debugPrint('[SpaceHub] _buildListFromSpaceBloc: isInitialized=${state.isInitialized}, currentSpace=${currentSpace?.id}, targetSpace=${spaceView.id}');
-          
           // 如果 SpaceBloc 还未初始化，显示加载中
           if (!state.isInitialized) {
-            debugPrint('[SpaceHub] SpaceBloc not initialized yet, showing loading');
             return const Center(
               child: CircularProgressIndicator.adaptive(),
             );
@@ -674,7 +653,6 @@ class _SpaceDocumentList extends StatelessWidget {
 
           // 如果当前空间不是目标空间，显示加载中（等待 SpaceEvent.open 完成）
           if (currentSpace?.id != spaceView.id) {
-            debugPrint('[SpaceHub] Current space (${currentSpace?.id}) != target space (${spaceView.id}), showing loading');
             return const Center(
               child: CircularProgressIndicator.adaptive(),
             );
@@ -683,8 +661,6 @@ class _SpaceDocumentList extends StatelessWidget {
           // 当前空间匹配，使用 currentSpace（它已经包含了加载的子视图）
           final displaySpace = currentSpace!;
           final childViews = displaySpace.childViews;
-
-          debugPrint('[SpaceHub] childViews count: ${childViews.length}, displaySpace.id=${displaySpace.id}');
 
           return ListView.builder(
             itemCount: childViews.length + 1,
