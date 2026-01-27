@@ -47,7 +47,7 @@ class UserWorkspaceState {
     required this.userProfile,
     this.workspaceSubscriptionInfo,
     this.currentSubscription,
-    this.isCloudSyncEnabled = false, // 云同步开关状态，默认关闭
+    this.isCloudSyncEnabled = true, // 云同步开关状态，默认开启
     this.folderSyncState, // 文件夹同步状态
   });
 

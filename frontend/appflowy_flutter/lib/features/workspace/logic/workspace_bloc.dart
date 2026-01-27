@@ -95,12 +95,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   }
 
   /// 根据 AppFlowy 的 sync 开关状态初始化云同步开关
-  /// 1. 先获取 Rust 数据库中的值
-  /// 2. 然后判断会员信息
-  /// 3. 如果是其他会员（非免费版），保持不变（使用 Rust 层的值）
-  /// 4. 如果是免费版：
-  ///    - 如果当前开启状态，则修改为关闭状态
-  ///    - 如果当前关闭状态，则不用修改
+  /// 1.直接使用 Rust 层的值，不需要判断会员信息
   Future<void> _initializeCloudSyncFromAppFlowySync(
     Emitter<UserWorkspaceState> emit,
   ) async {
@@ -114,180 +109,22 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
           final rustEnabled = cloudConfig.enableSync;
           Log.info('[UserWorkspaceBloc] 从 Rust 层读取 enable_sync 状态: $rustEnabled');
           
-          // 2. 判断会员信息
-          final currentSubscription = state.currentSubscription;
-          final subscriptionInfo = state.workspaceSubscriptionInfo;
-          final isNonFreeMember = _isNonFreeMember(currentSubscription, subscriptionInfo);
-          
-          // 检查订阅信息是否已加载
-          final hasSubscriptionInfo = currentSubscription != null || subscriptionInfo != null;
-          
-          if (!hasSubscriptionInfo) {
-            // 订阅信息未加载，先使用 Rust 层的值，等订阅信息加载后再根据会员状态调整
-            Log.info('[UserWorkspaceBloc] 订阅信息未加载，先使用 Rust 层的值: $rustEnabled，等订阅信息加载后再调整');
-            if (state.isCloudSyncEnabled != rustEnabled) {
-              emit(state.copyWith(isCloudSyncEnabled: rustEnabled));
-            }
-          } else if (isNonFreeMember) {
-            // 3. 如果是其他会员（非免费版），保持不变（使用 Rust 层的值）
-            Log.info('[UserWorkspaceBloc] 用户是非免费版会员，使用 Rust 层的值: $rustEnabled');
-            if (state.isCloudSyncEnabled != rustEnabled) {
-              emit(state.copyWith(isCloudSyncEnabled: rustEnabled));
-            }
-          } else {
-            // 4. 如果是免费版：
-            //    - 如果当前开启状态，则修改为关闭状态
-            //    - 如果当前关闭状态，则不用修改
-            if (rustEnabled) {
-              // Rust 层是开启状态，免费版会员需要强制关闭
-              Log.info('[UserWorkspaceBloc] 用户是免费版会员，但 Rust 层 enable_sync 为 true，强制关闭');
-              emit(state.copyWith(isCloudSyncEnabled: false));
-              // 保存到 Rust 层
-              try {
-                final config = UpdateCloudConfigPB.create()..enableSync = false;
-                await UserEventSetCloudConfig(config).send();
-                Log.info('[UserWorkspaceBloc] 已强制关闭 AppFlowy 的 enableSync（免费版用户）');
-              } catch (e) {
-                Log.warn('[UserWorkspaceBloc] 无法强制关闭 AppFlowy 的 enableSync: $e');
-              }
-            } else {
-              // Rust 层是关闭状态，免费版会员保持关闭，不用修改
-              Log.info('[UserWorkspaceBloc] 用户是免费版会员，Rust 层 enable_sync 为 false，保持关闭状态');
-              if (state.isCloudSyncEnabled != false) {
-                emit(state.copyWith(isCloudSyncEnabled: false));
-              }
-            }
+          // 直接使用 Rust 层的值，不需要判断会员信息
+          Log.info('[UserWorkspaceBloc] 直接使用 Rust 层的值: $rustEnabled');
+          if (state.isCloudSyncEnabled != rustEnabled) {
+            emit(state.copyWith(isCloudSyncEnabled: rustEnabled));
           }
         },
         (error) async {
           Log.warn('[UserWorkspaceBloc] 无法读取 Rust 层 enable_sync 状态: $error');
-          // 如果读取失败，根据会员状态决定
-          final currentSubscription = state.currentSubscription;
-          final subscriptionInfo = state.workspaceSubscriptionInfo;
-          final isNonFreeMember = _isNonFreeMember(currentSubscription, subscriptionInfo);
-          
-          if (!isNonFreeMember) {
-            // 免费版会员：强制关闭
-            Log.info('[UserWorkspaceBloc] 无法读取 Rust 层，但用户是免费版会员，强制关闭云同步开关');
-            if (state.isCloudSyncEnabled) {
-              emit(state.copyWith(isCloudSyncEnabled: false));
-            }
-            // 保存到 Rust 层
-            try {
-              final config = UpdateCloudConfigPB.create()..enableSync = false;
-              await UserEventSetCloudConfig(config).send();
-              Log.info('[UserWorkspaceBloc] 已强制关闭 AppFlowy 的 enableSync（免费版用户）');
-            } catch (e) {
-              Log.warn('[UserWorkspaceBloc] 无法强制关闭 AppFlowy 的 enableSync: $e');
-            }
-          } else {
-            // 非免费版会员，但无法读取 Rust 层，保持当前状态（可能是默认值 false）
-            Log.info('[UserWorkspaceBloc] 无法读取 Rust 层，但用户是非免费版会员，保持当前状态');
-          }
+          // 如果读取失败，使用默认值（开启）
+          Log.info('[UserWorkspaceBloc] 无法读取 Rust 层，使用默认值: true');
+          emit(state.copyWith(isCloudSyncEnabled: true));
         },
       );
     } catch (e, stackTrace) {
       Log.error('[UserWorkspaceBloc] 初始化云同步开关状态时出错: $e', e, stackTrace);
     }
-  }
-
-  /// 判断用户是否为非免费版会员
-  bool _isNonFreeMember(
-    CurrentSubscription? currentSubscription,
-    WorkspaceSubscriptionInfoPB? subscriptionInfo,
-  ) {
-    // 优先使用 currentSubscription 判断
-    final subscription = currentSubscription?.subscription;
-    if (subscription != null && subscription.planCode != null && subscription.planCode!.isNotEmpty) {
-      final planCode = subscription.planCode!.toLowerCase();
-      // 如果是免费版，返回 false
-      if (planCode == 'free' || planCode == 'freeplan') {
-        return false;
-      }
-      // 检查是否已到期
-      final endDate = subscription.endDate;
-      if (endDate != null && endDate.isBefore(DateTime.now())) {
-        return false; // 已到期，视为免费版
-      }
-      // 非免费版且未到期
-      return true;
-    }
-    
-    // 降级方案：使用 subscriptionInfo 判断
-    if (subscriptionInfo != null) {
-      if (subscriptionInfo.plan == WorkspacePlanPB.FreePlan) {
-        return false;
-      }
-      // 非免费版
-      return true;
-    }
-    
-    // 没有会员信息，默认视为免费版
-    return false;
-  }
-
-  /// 检查空间是否已满
-  /// 返回 true 表示空间已满，false 表示空间未满
-  bool _isStorageFull(CurrentSubscription? currentSubscription) {
-    final usage = currentSubscription?.usage;
-    final storageUsedGb = usage?.storageUsedGb;
-    final storageTotalGb = usage?.storageTotalGb;
-    if (storageUsedGb != null && storageTotalGb != null) {
-      return storageUsedGb >= storageTotalGb;
-    }
-    return false;
-  }
-
-  /// 校验会员状态（会员级别、有效期、空间剩余大小）
-  /// 返回 (isValid, errorMessage)
-  /// isValid: true 表示可以开启云同步，false 表示不能开启
-  /// errorMessage: 如果 isValid 为 false，返回错误原因
-  Future<(bool isValid, String? errorMessage)> _validateMembershipForCloudSync() async {
-    final currentSubscription = state.currentSubscription;
-    final subscriptionInfo = state.workspaceSubscriptionInfo;
-    
-    // 优先使用 currentSubscription 判断
-    final subscription = currentSubscription?.subscription;
-    if (subscription != null && subscription.planCode != null && subscription.planCode!.isNotEmpty) {
-      final planCode = subscription.planCode!.toLowerCase();
-      
-      // 检查会员级别：如果是免费版，不能开启
-      if (planCode == 'free' || planCode == 'freeplan') {
-        return (false, '免费版会员无法开启云同步');
-      }
-      
-      // 检查有效期：如果已到期，不能开启
-      final endDate = subscription.endDate;
-      if (endDate != null && endDate.isBefore(DateTime.now())) {
-        return (false, '会员已到期，请续费以继续使用云同步功能');
-      }
-      
-      // 检查空间剩余大小：如果空间已满，不能开启
-      final usage = currentSubscription?.usage;
-      final storageUsedGb = usage?.storageUsedGb;
-      final storageTotalGb = usage?.storageTotalGb;
-      if (storageUsedGb != null && storageTotalGb != null) {
-        if (storageUsedGb >= storageTotalGb) {
-          return (false, '空间使用已满，请扩容以继续使用云同步功能');
-        }
-      }
-      
-      // 所有校验通过
-      return (true, null);
-    }
-    
-    // 降级方案：使用 subscriptionInfo 判断
-    if (subscriptionInfo != null) {
-      if (subscriptionInfo.plan == WorkspacePlanPB.FreePlan) {
-        return (false, '免费版会员无法开启云同步');
-      }
-      // subscriptionInfo 不包含到期时间和使用量信息，无法判断过期和空间满
-      // 但如果有 subscriptionInfo 且不是免费版，认为可以开启
-      return (true, null);
-    }
-    
-    // 没有会员信息，默认视为免费版
-    return (false, '未开通会员，无法开启云同步');
   }
 
   Future<void> _onFetchWorkspaces(
@@ -533,21 +370,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         
         // 启动文件夹同步状态监听器
         _startFolderSyncStateListener(event.workspaceId);
-        
-        // 工作空间打开成功后，延迟 2 秒再请求会员信息，确保页面已完全加载
-        Log.info('[UserWorkspaceBloc] 工作空间打开成功，延迟 2 秒后请求会员信息');
-        Future.delayed(const Duration(seconds: 2), () {
-          if (!isClosed && state.currentWorkspace?.workspaceId == event.workspaceId) {
-            Log.info('[UserWorkspaceBloc] 开始请求会员信息（工作空间打开完成后）');
-            // 同时请求 subscriptionInfo 和 currentSubscription
-            add(
-              UserWorkspaceEvent.fetchWorkspaceSubscriptionInfo(
-                workspaceId: event.workspaceId,
-              ),
-            );
-            add(UserWorkspaceEvent.fetchCurrentSubscription());
-          }
-        });
       })
       ..onFailure((f) {
         Log.error('open workspace error: $f');
@@ -806,113 +628,11 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventUpdateWorkspaceSubscriptionInfo event,
     Emitter<UserWorkspaceState> emit,
   ) async {
-    // 检测是否是从免费版变为非免费版（新开通会员）
-    // 需要区分"初始化时订阅信息未加载"和"真正的会员升级"
-    final previousSubscriptionInfo = state.workspaceSubscriptionInfo;
-    final wasNonFreeMember = _isNonFreeMember(
-      state.currentSubscription,
-      previousSubscriptionInfo,
-    );
-    
+    // 仅更新订阅信息，不处理云同步状态
     emit(
       state.copyWith(workspaceSubscriptionInfo: event.subscriptionInfo),
     );
-    
-    final isNonFreeMember = _isNonFreeMember(
-      state.currentSubscription,
-      event.subscriptionInfo,
-    );
-    
-    // 判断是否为新开通会员：
-    // 1. 之前不是非免费版会员（wasNonFreeMember = false）
-    // 2. 现在是非免费版会员（isNonFreeMember = true）
-    // 3. 之前的订阅信息存在（不是初始化时未加载的情况）
-    // 如果之前的订阅信息是 null，说明是初始化时未加载，不是真正的会员升级
-    final isNewlySubscribed = !wasNonFreeMember && 
-                              isNonFreeMember && 
-                              previousSubscriptionInfo != null;
-    
-    if (isNewlySubscribed) {
-      // 用户新开通会员，强制设置为开启云同步（不检查 Rust 层的值）
-      // 因为用户之前可能是免费版，云同步被强制关闭，现在开通会员后应该自动开启
-      Log.info('[UserWorkspaceBloc] 检测到用户新开通会员（通过工作区订阅信息），强制开启云同步');
-      
-      // 校验会员状态
-      final validation = await _validateMembershipForCloudSync();
-      if (validation.$1) {
-        // 校验通过，开启云同步
-        emit(state.copyWith(isCloudSyncEnabled: true));
-        
-        // 保存到 Rust 层的 enable_sync 设置
-        try {
-          final config = UpdateCloudConfigPB.create()..enableSync = true;
-          await UserEventSetCloudConfig(config).send();
-          Log.info('[UserWorkspaceBloc] 新开通会员，已强制开启并保存到 Rust 层 enable_sync: true');
-        } catch (e, stackTrace) {
-          Log.error('[UserWorkspaceBloc] 无法保存到 Rust 层 enable_sync: $e', e, stackTrace);
-        }
-      } else {
-        Log.warn('[UserWorkspaceBloc] 新开通会员但校验失败: ${validation.$2}');
-      }
-    } else if (isNonFreeMember) {
-      // 非免费版会员，但不是新开通，检查空间使用情况
-      Log.info('[UserWorkspaceBloc] 工作区订阅信息已更新，用户是非免费版会员，检查空间使用情况');
-      
-      // 检查空间是否已满（优先使用 currentSubscription，因为它包含使用量信息）
-      final isStorageFull = _isStorageFull(state.currentSubscription);
-      if (isStorageFull && state.isCloudSyncEnabled) {
-        // 空间已满且云同步已开启，自动关闭云同步
-        Log.warn('[UserWorkspaceBloc] 空间已满，自动关闭云同步');
-        emit(state.copyWith(isCloudSyncEnabled: false));
-        
-        // 保存到 Rust 层的 enable_sync 设置
-        try {
-          final config = UpdateCloudConfigPB.create()..enableSync = false;
-          await UserEventSetCloudConfig(config).send();
-          Log.info('[UserWorkspaceBloc] 已因空间不足关闭 Rust 层 enable_sync');
-        } catch (e) {
-          Log.warn('[UserWorkspaceBloc] 无法因空间不足关闭 Rust 层 enable_sync: $e');
-        }
-      } else {
-        // 空间未满或云同步已关闭
-        // 订阅信息加载后，如果初始化时还没加载订阅信息，现在需要从 Rust 层读取正确的值
-        // 非免费版会员：使用 Rust 层的值（保持不变）
-        Log.info('[UserWorkspaceBloc] 工作区订阅信息加载后，用户是非免费版会员，从 Rust 层读取 enable_sync 状态');
-        try {
-          final cloudConfigResult = await UserEventGetCloudConfig().send();
-          cloudConfigResult.fold(
-            (cloudConfig) {
-              final rustEnabled = cloudConfig.enableSync;
-              Log.info('[UserWorkspaceBloc] 从 Rust 层读取 enable_sync 状态: $rustEnabled');
-              // 非免费版会员，使用 Rust 层的值（保持不变）
-              if (state.isCloudSyncEnabled != rustEnabled) {
-                Log.info('[UserWorkspaceBloc] Rust 层 enable_sync 为 $rustEnabled，更新状态以保持一致');
-                emit(state.copyWith(isCloudSyncEnabled: rustEnabled));
-              }
-            },
-            (error) {
-              Log.warn('[UserWorkspaceBloc] 无法读取 Rust 层 enable_sync 状态: $error');
-            },
-          );
-        } catch (e) {
-          Log.warn('[UserWorkspaceBloc] 检查 Rust 层 enable_sync 状态时出错: $e');
-        }
-      }
-    } else {
-      // 变为免费版，强制关闭云同步
-      Log.info('[UserWorkspaceBloc] 用户变为免费版，强制关闭云同步');
-      if (state.isCloudSyncEnabled) {
-        emit(state.copyWith(isCloudSyncEnabled: false));
-      }
-      // 保存到 Rust 层的 enable_sync 设置
-      try {
-        final config = UpdateCloudConfigPB.create()..enableSync = false;
-        await UserEventSetCloudConfig(config).send();
-        Log.info('[UserWorkspaceBloc] 已强制关闭 Rust 层 enable_sync');
-      } catch (e) {
-        Log.warn('[UserWorkspaceBloc] 无法强制关闭 Rust 层 enable_sync: $e');
-      }
-    }
+    Log.info('[UserWorkspaceBloc] 工作区订阅信息已更新');
   }
 
   Future<void> _onEmitWorkspaces(
@@ -953,8 +673,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
           result.fold(
             (newProfile) {
               _safeAdd(UserWorkspaceEvent.emitUserProfile(userProfile: newProfile));
-              // 用户信息更新时，也更新会员信息
-              _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
             },
             (error) => Log.error("Failed to get user profile: $error"),
           );
@@ -1008,43 +726,12 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       'workspaces: ${workspaces.map((e) => e.workspaceId)}, isCollabWorkspaceOn: $isCollabWorkspaceOn',
     );
 
-    // 不在初始化时立即获取会员信息，等待页面加载完成后再请求
     if (currentWorkspace != null && result.shouldOpenWorkspace == true) {
       Log.info('init open workspace: ${currentWorkspace.workspaceId}');
       await repository.openWorkspace(
         workspaceId: currentWorkspace.workspaceId,
         workspaceType: currentWorkspace.workspaceType,
       );
-      
-      // 工作空间打开完成后，延迟 2 秒再请求会员信息，确保页面已完全加载
-      Log.info('[UserWorkspaceBloc] 工作空间打开完成，延迟 2 秒后请求会员信息');
-      Future.delayed(const Duration(seconds: 2), () {
-        if (!isClosed && state.currentWorkspace?.workspaceId == currentWorkspace.workspaceId) {
-          Log.info('[UserWorkspaceBloc] 开始请求会员信息（页面加载完成后）');
-          // 同时请求 subscriptionInfo 和 currentSubscription
-          add(
-            UserWorkspaceEvent.fetchWorkspaceSubscriptionInfo(
-              workspaceId: currentWorkspace.workspaceId,
-            ),
-          );
-          add(UserWorkspaceEvent.fetchCurrentSubscription());
-        }
-      });
-    } else if (currentWorkspace != null) {
-      // 如果不需要打开工作空间，也延迟请求会员信息
-      Log.info('[UserWorkspaceBloc] 工作空间已存在，延迟 2 秒后请求会员信息');
-      Future.delayed(const Duration(seconds: 2), () {
-        if (!isClosed && state.currentWorkspace?.workspaceId == currentWorkspace.workspaceId) {
-          Log.info('[UserWorkspaceBloc] 开始请求会员信息（页面加载完成后）');
-          // 同时请求 subscriptionInfo 和 currentSubscription
-          add(
-            UserWorkspaceEvent.fetchWorkspaceSubscriptionInfo(
-              workspaceId: currentWorkspace.workspaceId,
-            ),
-          );
-          add(UserWorkspaceEvent.fetchCurrentSubscription());
-        }
-      });
     }
 
     emit(
@@ -1168,112 +855,11 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventUpdateCurrentSubscription event,
     Emitter<UserWorkspaceState> emit,
   ) async {
-    // 检测是否是从免费版变为非免费版（新开通会员）
-    // 需要区分"初始化时订阅信息未加载"和"真正的会员升级"
-    final previousCurrentSubscription = state.currentSubscription;
-    final wasNonFreeMember = _isNonFreeMember(
-      previousCurrentSubscription,
-      state.workspaceSubscriptionInfo,
-    );
-    final isNonFreeMember = _isNonFreeMember(
-      event.currentSubscription,
-      state.workspaceSubscriptionInfo,
-    );
-    
-    // 判断是否为新开通会员：
-    // 1. 之前不是非免费版会员（wasNonFreeMember = false）
-    // 2. 现在是非免费版会员（isNonFreeMember = true）
-    // 3. 之前的订阅信息存在（不是初始化时未加载的情况）
-    // 如果之前的订阅信息是 null，说明是初始化时未加载，不是真正的会员升级
-    final isNewlySubscribed = !wasNonFreeMember && 
-                              isNonFreeMember && 
-                              previousCurrentSubscription != null;
-    
+    // 仅更新订阅信息，不处理云同步状态
     emit(
       state.copyWith(currentSubscription: event.currentSubscription),
     );
-    
-    if (isNewlySubscribed) {
-      // 用户新开通会员，强制设置为开启云同步（不检查 Rust 层的值）
-      // 因为用户之前可能是免费版，云同步被强制关闭，现在开通会员后应该自动开启
-      Log.info('[UserWorkspaceBloc] 检测到用户新开通会员，强制开启云同步');
-      
-      // 校验会员状态
-      final validation = await _validateMembershipForCloudSync();
-      if (validation.$1) {
-        // 校验通过，开启云同步
-        emit(state.copyWith(isCloudSyncEnabled: true));
-        
-        // 保存到 Rust 层的 enable_sync 设置
-        try {
-          final config = UpdateCloudConfigPB.create()..enableSync = true;
-          await UserEventSetCloudConfig(config).send();
-          Log.info('[UserWorkspaceBloc] 新开通会员，已强制开启并保存到 Rust 层 enable_sync: true');
-        } catch (e, stackTrace) {
-          Log.error('[UserWorkspaceBloc] 无法保存到 Rust 层 enable_sync: $e', e, stackTrace);
-        }
-      } else {
-        Log.warn('[UserWorkspaceBloc] 新开通会员但校验失败: ${validation.$2}');
-      }
-    } else if (isNonFreeMember) {
-      // 非免费版会员，但不是新开通，检查空间使用情况
-      Log.info('[UserWorkspaceBloc] 会员订阅信息已更新，用户是非免费版会员，检查空间使用情况');
-      
-      // 检查空间是否已满
-      final isStorageFull = _isStorageFull(event.currentSubscription);
-      if (isStorageFull && state.isCloudSyncEnabled) {
-        // 空间已满且云同步已开启，自动关闭云同步
-        Log.warn('[UserWorkspaceBloc] 空间已满，自动关闭云同步');
-        emit(state.copyWith(isCloudSyncEnabled: false));
-        
-        // 保存到 Rust 层的 enable_sync 设置
-        try {
-          final config = UpdateCloudConfigPB.create()..enableSync = false;
-          await UserEventSetCloudConfig(config).send();
-          Log.info('[UserWorkspaceBloc] 已因空间不足关闭 Rust 层 enable_sync');
-        } catch (e) {
-          Log.warn('[UserWorkspaceBloc] 无法因空间不足关闭 Rust 层 enable_sync: $e');
-        }
-      } else {
-        // 空间未满或云同步已关闭
-        // 订阅信息加载后，如果初始化时还没加载订阅信息，现在需要从 Rust 层读取正确的值
-        // 非免费版会员：使用 Rust 层的值（保持不变）
-        Log.info('[UserWorkspaceBloc] 订阅信息加载后，用户是非免费版会员，从 Rust 层读取 enable_sync 状态');
-        try {
-          final cloudConfigResult = await UserEventGetCloudConfig().send();
-          cloudConfigResult.fold(
-            (cloudConfig) {
-              final rustEnabled = cloudConfig.enableSync;
-              Log.info('[UserWorkspaceBloc] 从 Rust 层读取 enable_sync 状态: $rustEnabled');
-              // 非免费版会员，使用 Rust 层的值（保持不变）
-              if (state.isCloudSyncEnabled != rustEnabled) {
-                Log.info('[UserWorkspaceBloc] Rust 层 enable_sync 为 $rustEnabled，更新状态以保持一致');
-                emit(state.copyWith(isCloudSyncEnabled: rustEnabled));
-              }
-            },
-            (error) {
-              Log.warn('[UserWorkspaceBloc] 无法读取 Rust 层 enable_sync 状态: $error');
-            },
-          );
-        } catch (e) {
-          Log.warn('[UserWorkspaceBloc] 检查 Rust 层 enable_sync 状态时出错: $e');
-        }
-      }
-    } else {
-      // 变为免费版或会员到期，强制关闭云同步
-      Log.info('[UserWorkspaceBloc] 用户变为免费版或会员到期，强制关闭云同步');
-      if (state.isCloudSyncEnabled) {
-        emit(state.copyWith(isCloudSyncEnabled: false));
-      }
-      // 保存到 Rust 层的 enable_sync 设置
-      try {
-        final config = UpdateCloudConfigPB.create()..enableSync = false;
-        await UserEventSetCloudConfig(config).send();
-        Log.info('[UserWorkspaceBloc] 已强制关闭 Rust 层 enable_sync');
-      } catch (e) {
-        Log.warn('[UserWorkspaceBloc] 无法强制关闭 Rust 层 enable_sync: $e');
-      }
-    }
+    Log.info('[UserWorkspaceBloc] 会员订阅信息已更新');
   }
 
   /// 获取当前订阅信息（包含使用量）
@@ -1367,43 +953,15 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     Log.info('[UserWorkspaceBloc] 更新云同步开关状态: ${event.enabled}');
     
-    // 如果要关闭云同步，直接关闭（不需要校验）
-    if (!event.enabled) {
-      Log.info('[UserWorkspaceBloc] 用户手动关闭云同步开关');
-      emit(state.copyWith(isCloudSyncEnabled: false));
-      
-      // 保存到 Rust 层的 enable_sync 设置
-      try {
-        final config = UpdateCloudConfigPB.create()..enableSync = false;
-        await UserEventSetCloudConfig(config).send();
-        Log.info('[UserWorkspaceBloc] 已保存到 Rust 层 enable_sync: false');
-      } catch (e, stackTrace) {
-        Log.error('[UserWorkspaceBloc] 无法保存到 Rust 层 enable_sync: $e', e, stackTrace);
-      }
-      return;
-    }
-    
-    // 如果要开启云同步，需要校验会员状态
-    Log.info('[UserWorkspaceBloc] 用户尝试开启云同步，开始校验会员状态');
-    final validation = await _validateMembershipForCloudSync();
-    
-    if (!validation.$1) {
-      // 校验失败，不能开启
-      Log.warn('[UserWorkspaceBloc] 会员状态校验失败: ${validation.$2}');
-      // 保持当前状态不变，不更新
-      // 注意：这里不抛出异常，因为这是用户操作，应该由 UI 层显示错误提示
-      return;
-    }
-    
-    // 校验通过，更新云同步开关状态
-    Log.info('[UserWorkspaceBloc] 会员状态校验通过，开启云同步');
-    emit(state.copyWith(isCloudSyncEnabled: true));
+    // 直接更新云同步开关状态，不需要校验会员状态
+    Log.info('[UserWorkspaceBloc] 直接更新云同步开关状态: ${event.enabled}');
+    emit(state.copyWith(isCloudSyncEnabled: event.enabled));
     
     // 保存到 Rust 层的 enable_sync 设置
     try {
-      final config = UpdateCloudConfigPB.create()..enableSync = true;
+      final config = UpdateCloudConfigPB.create()..enableSync = event.enabled;
       await UserEventSetCloudConfig(config).send();
-      Log.info('[UserWorkspaceBloc] 已保存到 Rust 层 enable_sync: true');
+      Log.info('[UserWorkspaceBloc] 已保存到 Rust 层 enable_sync: ${event.enabled}');
     } catch (e, stackTrace) {
       Log.error('[UserWorkspaceBloc] 无法保存到 Rust 层 enable_sync: $e', e, stackTrace);
     }
