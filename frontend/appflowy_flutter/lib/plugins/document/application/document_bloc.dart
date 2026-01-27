@@ -183,9 +183,23 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
       },
       deletePermanently: () async {
         if (databaseViewId == null && rowId == null) {
+          // 在删除文档前，先清理 editorState，避免渲染错误
+          final currentEditorState = state.editorState;
+          if (currentEditorState != null) {
+            // 先清理 editorState 相关的监听器和资源
+            _updateSelectionDebounce.dispose();
+            _syncThrottle.dispose();
+            _syncTimer?.cancel();
+            _syncTimer = null;
+            currentEditorState.selectionNotifier
+                .removeListener(_debounceOnSelectionUpdate);
+            currentEditorState.service.keyboardService?.closeKeyboard();
+            currentEditorState.dispose();
+          }
           final result = await _trashService.deleteViews([documentId]);
           final forceClose = result.fold((l) => true, (r) => false);
-          emit(state.copyWith(forceClose: forceClose));
+          // 设置 forceClose 时，同时清空 editorState，避免渲染已销毁的组件
+          emit(state.copyWith(forceClose: forceClose, editorState: null));
         }
       },
       restorePage: () async {
