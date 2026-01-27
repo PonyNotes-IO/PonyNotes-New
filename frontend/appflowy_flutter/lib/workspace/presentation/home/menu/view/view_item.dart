@@ -1182,7 +1182,12 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               // 复制后刷新列表（通过 BlocListener 监听成功）
               break;
             case ViewMoreActionType.openInNewTab:
-              context.read<TabsBloc>().openTab(widget.view);
+              // 使用addPostFrameCallback延迟执行，避免在渲染周期中触发UI状态变化
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted) {
+                  context.read<TabsBloc>().openTab(widget.view);
+                }
+              });
               break;
             case ViewMoreActionType.collapseAllPages:
               context.read<ViewBloc>().add(const ViewEvent.collapseAllPages());
