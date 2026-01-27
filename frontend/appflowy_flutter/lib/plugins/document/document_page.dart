@@ -151,7 +151,13 @@ class _DocumentPageState extends State<DocumentPage>
               }
 
               if (state.forceClose) {
-                widget.onDeleted();
+                // 使用 addPostFrameCallback 延迟关闭页面，确保当前帧完成后再关闭
+                // 这样可以避免在渲染过程中关闭页面导致的断言错误
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    widget.onDeleted();
+                  }
+                });
                 return const SizedBox.shrink();
               }
 
