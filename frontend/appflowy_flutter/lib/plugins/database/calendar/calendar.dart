@@ -1,9 +1,11 @@
+import 'dart:convert';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/database/calendar/presentation/widgets/calendar_content_widget.dart';
 import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:easy_localization/easy_localization.dart';
 // removed unused: easy_localization
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
@@ -24,6 +26,9 @@ import 'package:appflowy_backend/log.dart';
 // removed unused: toggle, schedule_sidebar_content
 import 'package:flowy_infra/uuid.dart';
 import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
+import '../../../generated/locale_keys.g.dart';
+import '../../../workspace/application/sidebar/space/space_bloc.dart';
+import '../../../workspace/application/view/view_ext.dart';
 import 'presentation/new_event_page.dart';
 import 'presentation/edit_event_page.dart';
 import 'models/schedule_model.dart';
@@ -150,6 +155,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   late ViewPB? _selectedNote; // 添加选中的笔记
   // 通过Bloc触发子组件刷新
   bool _isSubscribeSystemCalendar = false;
+  late CalendarContentCubit _calendarContentCubit; // 保存CalendarContentCubit实例的引用
 
   // 添加状态管理变量
   late bool _isLoadingContent;
@@ -182,6 +188,14 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
     // 初始化时尝试创建或获取日历视图
     _initializeCalendarView();
+
+    // 初始化 CalendarContentCubit 实例
+    // 注意：这里需要在 Widget 树构建完成后才能访问 context
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _calendarContentCubit = context.read<CalendarContentCubit>();
+      }
+    });
 
     // 调试输出已移除以减少运行时噪声
   }
@@ -394,12 +408,16 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                                 userId: userProfile.id,
                               );
 
-                              // 创建Document类型的视图
-                              final result = await workspaceService.createView(
+                              //创建日历空间
+                              ViewPB externalCalenderView = await _buildCalendarSpace(workspaceService);
+
+                              // 在“日历”空间下创建Document类型的视图
+                              final result = await ViewBackendService.createView(
+                                layoutType: ViewLayoutPB.Document,
                                 name: documentTitle.trim(),
-                                viewSection: ViewSectionPB.Public, // 创建在公共区域
-                                layout: ViewLayoutPB.Document, // 使用Document类型
-                                setAsCurrent: true,
+                                section: ViewSectionPB.Private, // 创建在私有区域
+                                parentViewId: externalCalenderView.id, // 在“日历”空间下创建
+                                openAfterCreate: false,  // 先不打开，等更新extra后再打开
                               );
 
                               result.fold(
@@ -430,9 +448,17 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                                     Future.delayed(Duration(milliseconds: 1000),
                                         () {
                                       if (mounted) {
+                                        // 先触发 CalendarMainPanel 组件的刷新
                                         setState(() {
 
                                         });
+                                        // 然后通过 CalendarContentCubit 触发 CalendarContent 组件的刷新
+                                        try {
+                                          _calendarContentCubit.refresh();
+                                        } catch (e) {
+                                          // 如果无法访问到 CalendarContentCubit 实例，忽略错误
+                                          Log.error('无法访问 CalendarContentCubit 实例: $e');
+                                        }
                                       }
                                     });
                                   }
@@ -1724,6 +1750,50 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     // 确保释放资源
     _scheduleModel.dispose();
 
+  }
+
+  Future<ViewPB> _buildCalendarSpace(WorkspaceService workspaceService) async {
+    // 检查私有空间下是否存在“日历”空间
+    final privateViewsResult = await workspaceService.getPrivateViews();
+    final privateViews = privateViewsResult.fold(
+          (views) => views,
+          (error) => [],
+    );
+
+    // 查找是否已存在“日历”空间
+    final calendarSpace = privateViews.firstWhere(
+          (view) => view.name == LocaleKeys.calendar_menuName.tr(),
+      orElse: () => ViewPB(),
+    );
+
+    if (calendarSpace.id.isNotEmpty) {
+      // 已存在“日历”空间，使用其ID
+      return calendarSpace;
+    } else {
+      // 不存在“日历”空间，创建新的
+      final spaceExtra = {
+        ViewExtKeys.isSpaceKey: true,
+        ViewExtKeys.spaceIconKey: '📥',
+        ViewExtKeys.spaceIconColorKey: '#4A90E2',
+        ViewExtKeys.spacePermissionKey: SpacePermission.private.index,
+        ViewExtKeys.spaceCreatedAtKey: DateTime.now().millisecondsSinceEpoch,
+      };
+
+      final createSpaceResult = await workspaceService.createView(
+        name: LocaleKeys.calendar_menuName.tr(),
+        viewSection: ViewSectionPB.Private,
+        layout: ViewLayoutPB.Document,
+        extra: jsonEncode(spaceExtra),
+        setAsCurrent: false,
+      );
+
+      return createSpaceResult.fold(
+            (view) => view,
+            (error) {
+          throw Exception('创建日历空间失败: $error');
+        },
+      );
+    }
   }
 }
 

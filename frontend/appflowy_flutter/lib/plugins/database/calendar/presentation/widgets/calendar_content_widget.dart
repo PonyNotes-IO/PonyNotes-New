@@ -276,6 +276,9 @@ class _CalendarContentState extends State<CalendarContent> {
                 createTime.isBefore(selectedDateEnd);
           }).toList();
 
+          // 按创建时间排序，从新到旧
+          notesForDate.sort((a, b) => b.createTime.compareTo(a.createTime));
+
           setState(() {
             _realNotes = notesForDate;
             _isLoading = false;
