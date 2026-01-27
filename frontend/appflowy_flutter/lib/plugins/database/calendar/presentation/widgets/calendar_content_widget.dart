@@ -283,6 +283,13 @@ class _CalendarContentState extends State<CalendarContent> {
             _realNotes = notesForDate;
             _isLoading = false;
           });
+
+          // 如果有笔记且没有当前选中的笔记，自动选择第一条笔记
+          if (_realNotes.isNotEmpty && widget.selectedNoteId == null) {
+            if (widget.onNoteTap != null) {
+              widget.onNoteTap!(_realNotes.first);
+            }
+          }
         },
             (error) {
           setState(() {

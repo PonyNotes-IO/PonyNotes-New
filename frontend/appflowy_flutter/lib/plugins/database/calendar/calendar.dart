@@ -872,7 +872,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   width: double.infinity,
                   height: double.infinity,
                   margin: EdgeInsets.only(left: 1, right: 1, bottom: 1),
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  color: Theme.of(context).colorScheme.surface, // 添加背景色设置
                   child: _showNewEventPage
                       ? _buildNewEventView()
                       : _showEditEventPage && _editingSchedule != null
