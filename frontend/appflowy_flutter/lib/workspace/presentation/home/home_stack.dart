@@ -734,7 +734,7 @@ class PageManager {
     // top area without extra spacing.
     try {
       final pluginType = _notifier.plugin.pluginType;
-      if (pluginType == PluginType.fileLibrary || pluginType == PluginType.folder) {
+      if (pluginType == PluginType.fileLibrary || pluginType == PluginType.folder || pluginType == PluginType.calendar) {
         // Hide the top bar entirely for these plugins so the left sidebar
         // can align directly under the window title bar. Right-side actions
         // are rendered in the WindowTitleBar via rightChildren.
