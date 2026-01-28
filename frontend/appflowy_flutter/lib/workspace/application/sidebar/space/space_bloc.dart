@@ -109,42 +109,52 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             openAfterCreate,
           ) async {
             // Check workspace setting: if only owners can create team workspace, verify current user is owner.
-            try {
-              final settingPayload =
-                  UserWorkspaceIdPB(workspaceId: workspaceId);
-              final settingRes =
-                  await UserEventGetWorkspaceSetting(settingPayload).send();
-              settingRes.fold((settings) async {
-                final onlyOwner = settings.onlyOwnerCanCreateTeamWorkspace;
-                if (onlyOwner) {
-                  try {
-                    final membersRes =
-                        await UserBackendService(userId: userProfile.id)
-                            .getWorkspaceMembers(workspaceId);
-                    membersRes.fold((members) async {
-                      final isOwner = members.items.any((m) =>
-                          m.role == AFRolePB.Owner &&
-                          m.email == userProfile.email);
-                      if (!isOwner) {
-                        showToastNotification(message: '仅工作空间所有者可以创建团队协作区');
-                        return;
-                      }
-                    }, (e) {
-                      // unable to fetch members - fall through and allow create attempt (backend will enforce)
+            // Only apply this check for public/closed spaces, not for private spaces.
+            bool shouldProceed = true;
+            if (permission != SpacePermission.private) {
+              try {
+                final settingPayload =
+                    UserWorkspaceIdPB(workspaceId: workspaceId);
+                final settingRes =
+                    await UserEventGetWorkspaceSetting(settingPayload).send();
+                await settingRes.fold((settings) async {
+                  final onlyOwner = settings.onlyOwnerCanCreateTeamWorkspace;
+                  if (onlyOwner) {
+                    try {
+                      final membersRes =
+                          await UserBackendService(userId: userProfile.id)
+                              .getWorkspaceMembers(workspaceId);
+                      await membersRes.fold((members) async {
+                        final isOwner = members.items.any((m) =>
+                            m.role == AFRolePB.Owner &&
+                            m.email == userProfile.email);
+                        if (!isOwner) {
+                          showToastNotification(message: '仅工作空间所有者可以创建团队协作区');
+                          shouldProceed = false;
+                        }
+                      }, (e) {
+                        // unable to fetch members - fall through and allow create attempt (backend will enforce)
+                        Log.error(
+                            'Failed to fetch workspace members to validate create permission: ${e.msg}');
+                      });
+                    } catch (e, st) {
                       Log.error(
-                          'Failed to fetch workspace members to validate create permission: ${e.msg}');
-                    });
-                  } catch (e, st) {
-                    Log.error(
-                        'Exception when checking workspace members: $e\n$st');
+                          'Exception when checking workspace members: $e\n$st');
+                    }
                   }
-                }
-              }, (err) {
-                // failed to get settings - allow create attempt, backend will enforce if necessary
-                Log.error('Failed to get workspace settings: ${err.msg}');
-              });
-            } catch (e, st) {
-              Log.error('Exception when checking workspace settings: $e\n$st');
+                }, (err) {
+                  // failed to get settings - allow create attempt, backend will enforce if necessary
+                  Log.error('Failed to get workspace settings: ${err.msg}');
+                  showToastNotification(message: '工作空间创建失败：${err.msg}',type: ToastificationType.error);
+                });
+              } catch (e, st) {
+                Log.error('Exception when checking workspace settings: $e\n$st');
+                showToastNotification(message: '工作空间创建失败：$e',type: ToastificationType.error);
+              }
+            }
+
+            if (!shouldProceed) {
+              return;
             }
 
             final space = await _createSpace(
@@ -821,6 +831,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
       return space;
     }, (error) {
       Log.error('Failed to create space: $error');
+      showToastNotification(message: '工作空间创建失败：${error.msg}',type: ToastificationType.error);
       return null;
     });
   }

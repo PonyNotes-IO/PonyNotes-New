@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../../workspace/application/view/view_listener.dart';
 import '../../../../../workspace/application/view/view_service.dart';
+import '../../../../../workspace/application/view/view_ext.dart';
 import '../../application/calendar_content_cubit.dart';
 import '../../models/schedule_model.dart';
 
@@ -276,6 +277,8 @@ class _CalendarContentState extends State<CalendarContent> {
                 createTime.isBefore(selectedDateEnd);
           }).toList();
 
+          // 过滤掉空间类型的文档（空间统一页面本身不作为“日记/笔记”显示）
+          notesForDate.removeWhere((view) => view.isSpace);
           // 按创建时间排序，从新到旧
           notesForDate.sort((a, b) => b.createTime.compareTo(a.createTime));
 

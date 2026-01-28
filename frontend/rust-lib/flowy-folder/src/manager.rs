@@ -594,24 +594,37 @@ impl FolderManager {
     // Backend enforcement: if workspace setting requires owner-only creation for team spaces,
     // and this creation request is for a space (is_space flag in params.extra), block non-owners.
     // We try best-effort to read workspace settings from local DB; failures fall back to allowing creation.
-    if let Ok(user_id) = self.user.user_id() {
-      if let Ok(mut conn) = self.user.sqlite_connection(user_id) {
-        if let Ok(ws_setting) = select_workspace_setting(&mut conn, &workspace_id.to_string()) {
-          if ws_setting.only_owner_can_create_team_workspace {
-            // Detect space creation by checking params.extra JSON for is_space flag.
-            let mut is_space_creation = false;
-            if let Some(extra_json) = &params.extra {
-              if extra_json.contains("\"is_space\":true") || extra_json.contains("\"is_space\": true") {
-                is_space_creation = true;
+    // Skip permission check for private spaces (ViewSectionPB::Private) or when section is not specified (default to private)
+    // Also check extra field to determine if this is a private space creation
+    let mut is_private_space = params.section == Some(ViewSectionPB::Private) || params.section.is_none();
+
+    // Check extra field to see if this is a private space creation
+    if let Some(extra_json) = &params.extra {
+      if extra_json.contains("\"space_permission\":1") || extra_json.contains("\"space_permission\": 1") {
+        is_private_space = true;
+      }
+    }
+    
+    if !is_private_space {
+      if let Ok(user_id) = self.user.user_id() {
+        if let Ok(mut conn) = self.user.sqlite_connection(user_id) {
+          if let Ok(ws_setting) = select_workspace_setting(&mut conn, &workspace_id.to_string()) {
+            if ws_setting.only_owner_can_create_team_workspace {
+              // Detect space creation by checking params.extra JSON for is_space flag.
+              let mut is_space_creation = false;
+              if let Some(extra_json) = &params.extra {
+                if extra_json.contains("\"is_space\":true") || extra_json.contains("\"is_space\": true") {
+                  is_space_creation = true;
+                }
               }
-            }
-            if is_space_creation {
-              if let Ok(uw) = self.user.get_active_user_workspace() {
-                if uw.role != Some(Role::Owner) {
-                  return Err(FlowyError::new(
-                    ErrorCode::NotEnoughPermissions,
-                    "Only workspace owner can create team workspace",
-                  ));
+              if is_space_creation {
+                if let Ok(uw) = self.user.get_active_user_workspace() {
+                  if uw.role != Some(Role::Owner) {
+                    return Err(FlowyError::new(
+                      ErrorCode::NotEnoughPermissions,
+                      "Only workspace owner can create team workspace",
+                    ));
+                  }
                 }
               }
             }
