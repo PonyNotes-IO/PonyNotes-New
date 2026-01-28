@@ -632,9 +632,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     try {
       final filePicker = getIt<FilePickerService>();
       final result = await filePicker.pickFiles(
-        dialogTitle: '选择Excalidraw文件',
+        dialogTitle: '选择PonyNotes白板文件',
         type: FileType.custom,
-        allowedExtensions: ['excalidraw', 'json'],
+        allowedExtensions: ['ponynotes', 'excalidraw', 'json'],
       );
 
       if (result == null || result.files.isEmpty) {
@@ -660,7 +660,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       if (!_isValidExcalidrawData(data)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('文件格式无效，请选择有效的Excalidraw文件'),
+            content: Text('文件格式无效，请选择有效的白板文件'),
             backgroundColor: Colors.red,
           ),
         );
