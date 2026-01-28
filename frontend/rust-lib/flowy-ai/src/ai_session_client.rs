@@ -196,12 +196,20 @@ pub async fn stream_ai_session_with_attachments(
     .map_err(|e| {
       error!("[AISession] 请求失败: {}", e);
       error!("[AISession] 错误详情: {:?}", e);
-      if e.is_connect() {
+      
+      // 根据错误类型返回更友好的错误消息
+      let error_message = if e.is_connect() {
         error!("[AISession] 连接错误 - 网络问题或服务器不可达");
+        "AI 服务连接失败，请检查网络连接后重试。".to_string()
       } else if e.is_timeout() {
         error!("[AISession] 请求超时");
-      }
-      FlowyError::new(ErrorCode::Internal, format!("HTTP请求失败: {}", e))
+        "AI 服务响应超时，请稍后重试。".to_string()
+      } else {
+        // 其他错误，使用 sanitize_ai_error_message 清洗
+        format!("HTTP请求失败: {}", e)
+      };
+      
+      FlowyError::new(ErrorCode::Internal, error_message)
     })?;
 
   let status = resp.status();
@@ -256,9 +264,40 @@ pub async fn stream_ai_session_with_attachments(
       ));
     }
 
+    // 处理 502/503/504 网关错误（服务器暂时不可用）
+    if status == 502 || status == 503 || status == 504 {
+      let message = if let Some(msg) = message_str {
+        // 如果后端返回了友好的错误消息，使用它
+        msg.to_string()
+      } else {
+        // 否则使用默认的友好提示
+        format!("AI 服务暂时不可用（网关错误 {}），请稍后重试。", status)
+      };
+      error!("[AISession] 网关错误 {}: {}", status, message);
+      // 使用 Internal 错误码，但消息会被 sanitize_ai_error_message 清洗
+      return Err(FlowyError::new(
+        ErrorCode::Internal,
+        message,
+      ));
+    }
+
+    // 处理 500 内部服务器错误
+    if status == 500 {
+      let message = message_str
+        .unwrap_or("AI 服务内部错误，请稍后重试。")
+        .to_string();
+      error!("[AISession] 服务器内部错误: {}", message);
+      return Err(FlowyError::new(
+        ErrorCode::Internal,
+        message,
+      ));
+    }
+
+    // 其他错误，使用 sanitize_ai_error_message 清洗错误消息
+    let error_message = format!("服务器返回错误: {} - {}", status, error_text);
     return Err(FlowyError::new(
       ErrorCode::Internal,
-      format!("服务器返回错误: {} - {}", status, error_text),
+      error_message,
     ));
   }
 

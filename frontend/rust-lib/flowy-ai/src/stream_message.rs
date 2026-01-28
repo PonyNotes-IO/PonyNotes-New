@@ -72,17 +72,41 @@ impl Display for StreamMessage {
 /// - 如果包含 `502 Bad Gateway` 或明显的 HTML 标签，则返回一条简洁的中文提示。
 /// - 其它错误保持原样，方便排查问题。
 pub(crate) fn sanitize_ai_error_message(raw: &str) -> String {
-  let lower = raw.to_lowercase();
+  // 先去除首尾空白字符，包括换行符
+  let trimmed = raw.trim();
+  if trimmed.is_empty() {
+    return "AI 服务暂时不可用，请稍后重试。".to_string();
+  }
+
+  // 转换为小写进行匹配（忽略大小写和空白字符）
+  let normalized: String = trimmed
+    .chars()
+    .filter(|c| !c.is_whitespace())
+    .flat_map(|c| c.to_lowercase())
+    .collect();
 
   // 网关类错误（nginx 502/504），通常会返回整页 HTML
-  if lower.contains("502 bad gateway")
-    || lower.contains("504 gateway")
-    || lower.contains("<html>")
-    || lower.contains("<!doctype html")
+  // 检查多种可能的错误模式
+  if normalized.contains("502badgateway")
+    || normalized.contains("504gatewaytimeout")
+    || normalized.contains("503serviceunavailable")
+    || normalized.contains("<html>")
+    || normalized.contains("<!doctypehtml")
+    || normalized.contains("<title>")
+    || trimmed.to_lowercase().contains("502 bad gateway")
+    || trimmed.to_lowercase().contains("504 gateway")
+    || trimmed.to_lowercase().contains("503 service unavailable")
+    || trimmed.to_lowercase().starts_with("<html")
+    || trimmed.to_lowercase().starts_with("<!doctype")
   {
     return "AI 服务暂时不可用（网关错误 502/504），请稍后重试。".to_string();
   }
 
-  raw.to_string()
+  // 如果错误消息过长（可能是HTML），也进行清洗
+  if trimmed.len() > 500 && (trimmed.contains('<') || trimmed.contains('>')) {
+    return "AI 服务暂时不可用，请稍后重试。".to_string();
+  }
+
+  trimmed.to_string()
 }
 

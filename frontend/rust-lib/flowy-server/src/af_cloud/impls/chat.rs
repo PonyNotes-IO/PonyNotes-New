@@ -17,7 +17,7 @@ use lib_infra::async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
-use tracing::trace;
+use tracing::{info, trace};
 use uuid::Uuid;
 
 pub(crate) struct CloudChatServiceImpl<T> {
@@ -215,15 +215,45 @@ where
     params: CompleteTextParams,
     ai_model: AIModel,
   ) -> Result<StreamComplete, FlowyError> {
-    let stream = self
-      .inner
-      .try_get_client()?
-      .stream_completion_v2(workspace_id, params, Some(ai_model.name))
-      .await
-      .map_err(FlowyError::from)?
-      .map_err(FlowyError::from);
-
-    Ok(stream.boxed())
+    use flowy_ai::ai_session_client::stream_ai_session;
+    use flowy_ai_pub::cloud::CompletionStreamValue;
+    use futures_util::StreamExt;
+    
+    let client = self.inner.try_get_client()?;
+    let base_url = client.base_url();
+    // 使用 access_token（JWT），避免将 JSON token 直接传给 AI 会话接口
+    let token = client.get_access_token().ok();
+    
+    // 将 CompleteTextParams 转换为 ChatRequestParams 格式
+    let message = params.text;
+    let preferred_model = Some(ai_model.name);
+    
+    info!("[StreamComplete] 使用 /api/ai/chat/session 接口，message_len: {}", message.len());
+    
+    // 调用 /api/ai/chat/session 接口
+    let session_stream = stream_ai_session(
+      base_url,
+      &message,
+      preferred_model,
+      token,
+      false, // enable_thinking - 文档内问AI暂时不支持深度思考
+      false, // enable_web_search - 文档内问AI暂时不支持全网搜索
+    ).await?;
+    
+    // 将 AISessionStreamValue 转换为 CompletionStreamValue
+    let converted_stream = session_stream.map(|result| {
+      result.map(|value| match value {
+        flowy_ai::ai_session_client::AISessionStreamValue::Answer { value } => {
+          CompletionStreamValue::Answer { value }
+        },
+        flowy_ai::ai_session_client::AISessionStreamValue::Metadata { value: _ } => {
+          // 忽略metadata，只返回答案
+          CompletionStreamValue::Answer { value: String::new() }
+        },
+      })
+    });
+    
+    Ok(converted_stream.boxed())
   }
 
   async fn embed_file(
