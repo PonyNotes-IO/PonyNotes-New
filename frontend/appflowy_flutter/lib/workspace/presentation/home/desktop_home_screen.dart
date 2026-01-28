@@ -43,6 +43,7 @@ import '../widgets/sidebar_resizer.dart';
 import '../widgets/dialogs.dart';
 import 'home_layout.dart';
 import 'home_stack.dart';
+import 'full_window_controller.dart';
 import 'menu/sidebar/slider_menu_hover_trigger.dart';
 import 'menu/sidebar/space/shared_widget.dart';
 
@@ -145,6 +146,10 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                         FloatingActionButton(
                           tooltip: '显示侧边栏',
                           onPressed: () {
+                            // 如果当前处于全窗口模式，先退出全窗口，再显示侧边栏
+                            if (FullWindowController.isFullWindow.value) {
+                              FullWindowController.exit();
+                            }
                             context.read<HomeSettingBloc>().add(
                                   HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
                                 );
@@ -264,19 +269,32 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
 
     // 使用 BlocBuilder 监听 TabsBloc 状态变化，以便在切换标签时更新问号按钮的显示
     return BlocBuilder<TabsBloc, TabsState>(
-      buildWhen: (previous, current) => 
-        previous.currentPageManager.plugin.pluginType != 
-        current.currentPageManager.plugin.pluginType,
+      buildWhen: (previous, current) =>
+          previous.currentPageManager.plugin.pluginType !=
+          current.currentPageManager.plugin.pluginType,
       builder: (context, tabsState) {
-        return _layoutWidgets(
-          layout: layout,
-          homeStack: homeStack,
-          sidebar: sidebar,
-          editPanel: editPanel,
-          bubble: const QuestionBubble(),
-          homeMenuResizer: homeMenuResizer,
-          notificationPanel: notificationPanel,
-          sliderHoverTrigger: sliderHoverTrigger,
+        // 再使用全窗口控制器，决定是否隐藏左右侧栏，仅保留中间内容
+        return ValueListenableBuilder<bool>(
+          valueListenable: FullWindowController.isFullWindow,
+          builder: (context, isFullWindow, _) {
+            if (isFullWindow) {
+              return _layoutFullWindow(
+                layout: layout,
+                homeStack: homeStack,
+              );
+            }
+
+            return _layoutWidgets(
+              layout: layout,
+              homeStack: homeStack,
+              sidebar: sidebar,
+              editPanel: editPanel,
+              bubble: const QuestionBubble(),
+              homeMenuResizer: homeMenuResizer,
+              notificationPanel: notificationPanel,
+              sliderHoverTrigger: sliderHoverTrigger,
+            );
+          },
         );
       },
     );
@@ -385,6 +403,27 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
             .positioned(left: 0, top: 0, width: layout.menuWidth, bottom: 0),
         homeMenuResizer
             .positioned(left: layout.menuWidth)
+            .animate(layout.animDuration, Curves.easeOutQuad),
+      ],
+    );
+  }
+
+  /// 全窗口布局：隐藏侧栏 / 编辑面板 / 通知面板 / 悬浮气泡等，只保留中间内容区域
+  Widget _layoutFullWindow({
+    required HomeLayout layout,
+    required Widget homeStack,
+  }) {
+    return Stack(
+      children: [
+        homeStack
+            .constrained(minWidth: 500)
+            .positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              top: 0,
+              animate: true,
+            )
             .animate(layout.animDuration, Curves.easeOutQuad),
       ],
     );

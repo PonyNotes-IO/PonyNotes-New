@@ -512,21 +512,6 @@ class _SidebarState extends State<_Sidebar> {
       context.read<SpaceBloc>().add(const SpaceEvent.didReceiveSpaceUpdate());
     }
 
-    return Expanded(
-      child: Padding(
-        padding: menuHorizontalInset - const EdgeInsets.only(right: 6),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.only(right: 6),
-          controller: _scrollController,
-          physics: const ClampingScrollPhysics(),
-          child: SidebarFolder(
-            userProfile: widget.userProfile,
-            isHoverEnabled: !_isScrolling,
-          ),
-        ),
-      ),
-    );
-
     final shouldShowFolder = !containsSpace ||
         spaceState.spaces.isEmpty ||
         !workspaceState.isCollabWorkspaceOn;

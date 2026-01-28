@@ -39,6 +39,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.textEditingMode = false, // ✅ 文本编辑模式标志
     this.onToggleTextEditingMode, // ✅ 切换文本编辑模式回调
     this.quillFocus, // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
+    this.isFullWindow = false, // ✅ 是否处于全窗口模式
+    this.onToggleFullWindow, // ✅ 切换全窗口模式回调
   });
 
   final Tool currentTool;
@@ -66,6 +68,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final bool textEditingMode; // ✅ 文本编辑模式标志
   final VoidCallback? onToggleTextEditingMode; // ✅ 切换文本编辑模式回调
   final QuillStruct? quillFocus; // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
+  final bool isFullWindow; // ✅ 是否处于全窗口模式
+  final VoidCallback? onToggleFullWindow; // ✅ 切换全窗口模式回调
 
   // 预定义颜色列表
   static const List<Color> presetColors = [
@@ -234,7 +238,49 @@ class HandwritingSaberToolbar extends StatelessWidget {
           // ✅ 移除独立的富文本编辑按钮，整合到文本框工具中
           // ✅ 背景纸模式选择
           _buildBackgroundPatternSelector(),
+                if (onToggleFullWindow != null) ...[
+                  _buildDivider(),
+                  _buildFullWindowButton(context),
+                ],
         ],
+      ),
+    );
+  }
+
+  /// ✅ 构建全窗口切换按钮
+  Widget _buildFullWindowButton(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest
+              .withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: IconButton(
+          iconSize: 18,
+          padding: const EdgeInsets.all(8),
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+          ),
+          icon: Icon(
+            isFullWindow
+                ? Icons.fullscreen_exit_rounded
+                : Icons.fullscreen_rounded,
+            color: theme.colorScheme.onSurface,
+          ),
+          onPressed: onToggleFullWindow,
+        ),
       ),
     );
   }

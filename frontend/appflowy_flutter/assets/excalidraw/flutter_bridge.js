@@ -150,71 +150,269 @@
     window.exportExcalidraw = async function (format = 'png') {
         try {
             const api = await waitForExcalidrawAPI();
+            
+            console.log('[PonyNotes] 开始导出，格式:', format);
+            
+            // 全面检查所有可能的导出API
+            const exportAPIs = {
+                'window.exportToPng': typeof window.exportToPng,
+                'window.exportToSvg': typeof window.exportToSvg,
+                'window.exportToImage': typeof window.exportToImage,
+                'window.ExcalidrawLib': typeof window.ExcalidrawLib,
+                'window.Excalidraw': typeof window.Excalidraw,
+            };
+            
+            console.log('[PonyNotes] 检查可用的导出方法:', exportAPIs);
+            
+            // 如果ExcalidrawLib存在，检查它的方法
+            if (window.ExcalidrawLib) {
+                console.log('[PonyNotes] ExcalidrawLib 的方法:', Object.keys(window.ExcalidrawLib));
+            }
 
             if (format === 'png') {
                 // 获取场景数据
                 const sceneData = getSceneData(api);
+                console.log('[PonyNotes] 场景数据:', {
+                    elementsCount: sceneData.elements?.length,
+                    filesCount: Object.keys(sceneData.files || {}).length,
+                });
                 
-                // 检查是否有ExcalidrawLib.exportToCanvas（推荐方式）
+                // 方案1: 使用 window.exportToPng
+                if (typeof window.exportToPng === 'function') {
+                    console.log('[PonyNotes] 方案1: 使用 window.exportToPng');
+                    try {
+                        const blob = await window.exportToPng({
+                            elements: sceneData.elements,
+                            appState: sceneData.appState,
+                            files: sceneData.files,
+                        });
+                        
+                        if (blob) {
+                            const dataUrl = await new Promise((resolve, reject) => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => resolve(reader.result);
+                                reader.onerror = () => reject(new Error('FileReader 错误'));
+                                reader.readAsDataURL(blob);
+                            });
+
+                            window.flutter_inappwebview?.callHandler('onExport', {
+                                format: 'png',
+                                data: dataUrl,
+                            });
+                            console.log('[PonyNotes] ✅ PNG 导出成功（方案1）');
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('[PonyNotes] 方案1失败:', e);
+                    }
+                }
+                
+                // 方案2: 使用 ExcalidrawLib.exportToCanvas
                 if (window.ExcalidrawLib && window.ExcalidrawLib.exportToCanvas) {
-                    // 使用exportToCanvas导出PNG（推荐方式）
-                    const canvas = await window.ExcalidrawLib.exportToCanvas({
+                    console.log('[PonyNotes] 方案2: 使用 ExcalidrawLib.exportToCanvas');
+                    try {
+                        const canvas = await window.ExcalidrawLib.exportToCanvas({
+                            elements: sceneData.elements,
+                            appState: sceneData.appState,
+                            files: sceneData.files,
+                        });
+                        
+                        if (canvas) {
+                            const dataUrl = canvas.toDataURL('image/png', 0.95);
+                            window.flutter_inappwebview?.callHandler('onExport', {
+                                format: 'png',
+                                data: dataUrl,
+                            });
+                            console.log('[PonyNotes] ✅ PNG 导出成功（方案2）');
+                            return;
+                        }
+                    } catch (e) {
+                        console.warn('[PonyNotes] 方案2失败:', e);
+                    }
+                }
+                
+                // 方案3: 使用 exportToImage
+                if (typeof window.exportToImage === 'function') {
+                    console.log('[PonyNotes] 方案3: 使用 window.exportToImage');
+                    try {
+                        const result = await window.exportToImage({
+                            elements: sceneData.elements,
+                            appState: sceneData.appState,
+                            files: sceneData.files,
+                            mimeType: 'image/png',
+                        });
+                        
+                        if (result) {
+                            let dataUrl;
+                            if (typeof result === 'string') {
+                                dataUrl = result;
+                            } else if (result instanceof Blob) {
+                                dataUrl = await new Promise((resolve, reject) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => resolve(reader.result);
+                                    reader.onerror = () => reject(new Error('FileReader 错误'));
+                                    reader.readAsDataURL(result);
+                                });
+                            }
+                            
+                            if (dataUrl) {
+                                window.flutter_inappwebview?.callHandler('onExport', {
+                                    format: 'png',
+                                    data: dataUrl,
+                                });
+                                console.log('[PonyNotes] ✅ PNG 导出成功（方案3）');
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[PonyNotes] 方案3失败:', e);
+                    }
+                }
+                
+                // 方案4: 回退 - 直接使用canvas（可能不完整）
+                console.log('[PonyNotes] ⚠️ 方案4: 使用当前可见canvas（内容可能不完整）');
+                const canvas = document.querySelector('canvas.excalidraw__canvas');
+                if (canvas) {
+                    console.log('[PonyNotes] Canvas尺寸:', canvas.width, 'x', canvas.height);
+                    
+                    const dataUrl = canvas.toDataURL('image/png', 0.95);
+                    window.flutter_inappwebview?.callHandler('onExport', {
+                        format: 'png',
+                        data: dataUrl,
+                    });
+                    console.log('[PonyNotes] ⚠️ PNG 导出完成（仅可见区域，请确保滚动查看所有内容）');
+                    return;
+                }
+                
+                throw new Error('所有PNG导出方案都失败了');
+            }
+
+            if (format === 'svg') {
+                // 获取场景数据
+                const sceneData = getSceneData(api);
+                
+                // 检查是否有全局的exportToSvg函数
+                if (typeof window.exportToSvg === 'function') {
+                    console.log('[PonyNotes] 使用 window.exportToSvg');
+                    const svg = await window.exportToSvg({
                         elements: sceneData.elements,
                         appState: sceneData.appState,
                         files: sceneData.files,
                     });
                     
-                    if (!canvas) {
-                        throw new Error('exportToCanvas 返回空结果');
+                    if (!svg) {
+                        throw new Error('exportToSvg 返回空结果');
                     }
                     
-                    // 将canvas转换为dataURL
-                    const dataUrl = canvas.toDataURL('image/png', 0.95);
+                    // 序列化SVG为字符串
+                    let svgString;
+                    if (typeof svg === 'string') {
+                        svgString = svg;
+                    } else if (svg instanceof SVGSVGElement || svg instanceof Element) {
+                        const serializer = new XMLSerializer();
+                        svgString = serializer.serializeToString(svg);
+                    } else if (svg instanceof Blob) {
+                        // 如果返回的是Blob，读取为文本
+                        svgString = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                if (reader.result) {
+                                    resolve(reader.result);
+                                } else {
+                                    reject(new Error('FileReader 读取失败'));
+                                }
+                            };
+                            reader.onerror = () => reject(new Error('FileReader 读取错误'));
+                            reader.readAsText(svg);
+                        });
+                    } else {
+                        throw new Error(`exportToSvg 返回了未知类型: ${typeof svg}`);
+                    }
                     
+                    console.log('[PonyNotes] SVG 字符串长度:', svgString.length);
+
                     window.flutter_inappwebview?.callHandler('onExport', {
-                        format: 'png',
-                        data: dataUrl,
+                        format: 'svg',
+                        data: svgString,
+                    });
+                    console.log('[PonyNotes] SVG 导出成功');
+                    return;
+                }
+                
+                // 回退方案1：尝试使用 exportToImage 导出SVG
+                console.log('[PonyNotes] 回退方案1：尝试使用 window.exportToImage');
+                if (typeof window.exportToImage === 'function') {
+                    try {
+                        const result = await window.exportToImage({
+                            elements: sceneData.elements,
+                            appState: sceneData.appState,
+                            files: sceneData.files,
+                            mimeType: 'image/svg+xml',
+                        });
+                        
+                        if (result) {
+                            let svgString;
+                            if (typeof result === 'string') {
+                                svgString = result;
+                            } else if (result instanceof Blob) {
+                                svgString = await new Promise((resolve, reject) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => resolve(reader.result || '');
+                                    reader.onerror = () => reject(new Error('FileReader 读取错误'));
+                                    reader.readAsText(result);
+                                });
+                            } else if (result instanceof SVGSVGElement || result instanceof Element) {
+                                const serializer = new XMLSerializer();
+                                svgString = serializer.serializeToString(result);
+                            }
+                            
+                            if (svgString) {
+                                console.log('[PonyNotes] SVG 导出成功（使用exportToImage）, 长度:', svgString.length);
+                                window.flutter_inappwebview?.callHandler('onExport', {
+                                    format: 'svg',
+                                    data: svgString,
+                                });
+                                return;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('[PonyNotes] exportToImage 失败:', e.message);
+                    }
+                }
+                
+                // 回退方案2：使用PNG嵌入SVG（不理想但可用）
+                console.log('[PonyNotes] 回退方案2：将PNG嵌入SVG');
+                const canvas = document.querySelector('canvas.excalidraw__canvas');
+                if (canvas) {
+                    const pngDataUrl = canvas.toDataURL('image/png', 0.95);
+                    const width = canvas.width;
+                    const height = canvas.height;
+                    
+                    // 创建包含PNG的SVG
+                    const svgString = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" 
+     width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <title>Excalidraw Export</title>
+  <desc>Exported from PonyNotes Whiteboard</desc>
+  <image width="${width}" height="${height}" xlink:href="${pngDataUrl}"/>
+</svg>`;
+                    
+                    console.log('[PonyNotes] SVG生成成功（PNG嵌入方式）, 长度:', svgString.length);
+                    window.flutter_inappwebview?.callHandler('onExport', {
+                        format: 'svg',
+                        data: svgString,
                     });
                     return;
                 }
                 
-                // 回退方案：使用exportToBlob（不需要传入elements等参数，会自动使用当前场景）
-                const blob = await api.exportToBlob?.({
-                    mimeType: 'image/png',
-                    quality: 0.95,
-                });
-                
-                if (!blob) {
-                    throw new Error('exportToBlob 返回空结果');
-                }
-
-                // 使用Promise包装FileReader，确保异步处理完成
-                const dataUrl = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        if (reader.result) {
-                            resolve(reader.result);
-                        } else {
-                            reject(new Error('FileReader 读取失败'));
-                        }
-                    };
-                    reader.onerror = () => {
-                        reject(new Error('FileReader 读取错误'));
-                    };
-                    reader.readAsDataURL(blob);
-                });
-
-                window.flutter_inappwebview?.callHandler('onExport', {
-                    format: 'png',
-                    data: dataUrl, // dataURL
-                });
-                return;
+                throw new Error('所有SVG导出方案都失败了');
             }
 
-            if (format === 'excalidraw' || format === 'json') {
+            if (format === 'ponynotes' || format === 'excalidraw' || format === 'json') {
                 const data = getSceneData(api);
+                console.log('[PonyNotes] 导出场景数据, elements:', data.elements?.length);
                 window.flutter_inappwebview?.callHandler('onExport', {
-                    format: 'excalidraw',
+                    format: 'ponynotes',
                     data,
                 });
                 return;

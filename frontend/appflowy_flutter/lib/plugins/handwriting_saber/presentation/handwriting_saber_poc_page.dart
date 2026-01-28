@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -526,7 +527,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _laserStrokeStopwatches[stroke] = Stopwatch()..reset()..start();
     }
   }
-  
+
   /// ✅ 开始选择
   void _startSelection(Offset position, {int? pageIndex}) {
     final pageIdx = pageIndex ?? 0;
@@ -3684,36 +3685,62 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                           return ValueListenableBuilder<bool>(
                             valueListenable: _textEditingModeNotifier,
                             builder: (ctx3, textEditingMode, _) {
-                              return ValueListenableBuilder<int?>(
-                                valueListenable: _quillFocusPageIndexNotifier,
-                                builder: (ctx4, quillFocusPageIndex, _) {
+                              return ValueListenableBuilder<bool>(
+                                valueListenable:
+                                    FullWindowController.isFullWindow,
+                                builder: (context, isFullWindow, __) {
                                   return HandwritingSaberToolbar(
                                     currentTool: currentTool,
                                     onToolChanged: _onToolChanged,
-                                    currentBackgroundPattern: _currentBackgroundPattern,
-                                    onBackgroundPatternChanged: _onBackgroundPatternChanged,
+                                    currentBackgroundPattern:
+                                        _currentBackgroundPattern,
+                                    onBackgroundPatternChanged:
+                                        _onBackgroundPatternChanged,
                                     // 使用全局颜色/线宽，确保切换工具时保持用户设置
-                                    currentColor: _globalColorNotifier.value,
+                                    currentColor:
+                                        _globalColorNotifier.value,
                                     onColorChanged: _onColorChanged,
-                                    currentStrokeWidth: _globalStrokeWidthNotifier.value,
-                                    onStrokeWidthChanged: _onStrokeWidthChanged,
-                                    currentFillColor: fillColor, // ✅ 填充颜色（由 notifier 驱动）
-                                    onFillColorChanged: _onFillColorChanged, // ✅ 填充颜色改变回调
-                                    onImportPdf: _importPdf,  // ✅ PDF 导入回调
-                                    onImportImage: _importImage, // ✅ 图片导入回调
-                                    onInsertWebView: _insertWebView, // ✅ 网页嵌入回调
-                                    onExtractPdfText: _extractPdfText, // ✅ PDF文本提取回调
-                                    canUndo: canUndo, // ✅ 撤销按钮状态
-                                    canRedo: canRedo, // ✅ 恢复按钮状态
+                                    currentStrokeWidth:
+                                        _globalStrokeWidthNotifier.value,
+                                    onStrokeWidthChanged:
+                                        _onStrokeWidthChanged,
+                                    currentFillColor:
+                                        fillColor, // ✅ 填充颜色（由 notifier 驱动）
+                                    onFillColorChanged:
+                                        _onFillColorChanged, // ✅ 填充颜色改变回调
+                                    onImportPdf:
+                                        _importPdf, // ✅ PDF 导入回调
+                                    onImportImage:
+                                        _importImage, // ✅ 图片导入回调
+                                    onInsertWebView:
+                                        _insertWebView, // ✅ 网页嵌入回调
+                                    onExtractPdfText:
+                                        _extractPdfText, // ✅ PDF文本提取回调
+                                    canUndo:
+                                        canUndo, // ✅ 撤销按钮状态
+                                    canRedo:
+                                        canRedo, // ✅ 恢复按钮状态
                                     onUndo: _undo, // ✅ 撤销回调
                                     onRedo: _redo, // ✅ 恢复回调
-                                    currentDashStyle: _dashStyleNotifier.value, // ✅ 当前虚线样式
-                                    onDashStyleChanged: _onDashStyleChanged, // ✅ 虚线样式改变回调
-                                    currentArrowStyle: _arrowStyleNotifier.value, // ✅ 当前箭头样式
-                                    onArrowStyleChanged: _onArrowStyleChanged, // ✅ 箭头样式改变回调
-                                    textEditingMode: textEditingMode, // ✅ 文本编辑模式标志
-                                    onToggleTextEditingMode: _toggleTextEditingMode, // ✅ 切换文本编辑模式回调
-                                    quillFocus: _getActiveQuillStruct(), // ✅ 获取当前活动的 Quill 结构（可能来自页面或文本框）
+                                    currentDashStyle:
+                                        _dashStyleNotifier.value, // ✅ 当前虚线样式
+                                    onDashStyleChanged:
+                                        _onDashStyleChanged, // ✅ 虚线样式改变回调
+                                    currentArrowStyle:
+                                        _arrowStyleNotifier.value, // ✅ 当前箭头样式
+                                    onArrowStyleChanged:
+                                        _onArrowStyleChanged, // ✅ 箭头样式改变回调
+                                    textEditingMode:
+                                        textEditingMode, // ✅ 文本编辑模式标志
+                                    onToggleTextEditingMode:
+                                        _toggleTextEditingMode, // ✅ 切换文本编辑模式回调
+                                    quillFocus:
+                                        _getActiveQuillStruct(), // ✅ 获取当前活动的 Quill 结构（可能来自页面或文本框）
+                                    isFullWindow:
+                                        isFullWindow, // ✅ 全窗口状态（与全局控制器同步）
+                                    onToggleFullWindow:
+                                        FullWindowController
+                                            .toggle, // ✅ 全窗口切换回调
                                   );
                                 },
                               );

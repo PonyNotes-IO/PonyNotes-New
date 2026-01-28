@@ -31,6 +31,7 @@ import 'package:universal_platform/universal_platform.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'home_layout.dart';
+import 'full_window_controller.dart';
 
 typedef NavigationCallback = void Function(String id);
 
@@ -62,95 +63,101 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     return BlocProvider<TabsBloc>.value(
       value: getIt<TabsBloc>(),
       child: BlocBuilder<TabsBloc, TabsState>(
-        builder: (context, state) => Column(
-          children: [
-            if (UniversalPlatform.isWindows)
-              WindowTitleBar(leftChildren: [_buildToggleMenuButton(context)]),
-            Padding(
-              padding: EdgeInsets.only(left: widget.layout.menuSpacing),
-              child: TabsManager(
-                onIndexChanged: (index) {
-                  if (selectedIndex != index) {
-                    // Unfocus editor to hide selection toolbar
-                    FocusScope.of(context).unfocus();
+        builder: (context, state) => ValueListenableBuilder<bool>(
+          valueListenable: FullWindowController.isFullWindow,
+          builder: (context, isFullWindow, _) {
+            return Column(
+              children: [
+                if (UniversalPlatform.isWindows)
+                  WindowTitleBar(leftChildren: [_buildToggleMenuButton(context)]),
+                Padding(
+                  padding: EdgeInsets.only(left: widget.layout.menuSpacing),
+                  child: TabsManager(
+                    onIndexChanged: (index) {
+                      if (selectedIndex != index) {
+                        // Unfocus editor to hide selection toolbar
+                        FocusScope.of(context).unfocus();
 
-                    context.read<TabsBloc>().add(TabsEvent.selectTab(index));
-                    setState(() => selectedIndex = index);
-                  }
-                },
-              ),
-            ),
-            Expanded(
-              child: Stack(
-                children: [
-                  IndexedStack(
-                    index: selectedIndex,
-                    children: state.pageManagers
-                        .map(
-                          (pm) => LayoutBuilder(
-                            builder: (context, constraints) {
-                              return Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      children: [
-                                        pm.stackTopBar(layout: widget.layout),
-                                        Expanded(
-                                          child: PageStack(
-                                            pageManager: pm,
-                                            delegate: widget.delegate,
-                                            userProfile: widget.userProfile,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  SecondaryView(
-                                    pageManager: pm,
-                                    adaptedPercentageWidth:
-                                        constraints.maxWidth * 3 / 7,
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                        )
-                        .toList(),
+                        context.read<TabsBloc>().add(TabsEvent.selectTab(index));
+                        setState(() => selectedIndex = index);
+                      }
+                    },
                   ),
-                  // Overlay original right-side actions for folder/fileLibrary plugins
-                  if (state.pageManagers.isNotEmpty)
-                    Builder(
-                      builder: (ctx) {
-                        final currentIndex = state.currentIndex;
-                        if (currentIndex < 0 ||
-                            currentIndex >= state.pageManagers.length) {
-                          return const SizedBox.shrink();
-                        }
-                        final pm = state.pageManagers[currentIndex];
-                        final pluginType = pm.plugin.pluginType;
-                        if (pluginType != PluginType.fileLibrary &&
-                            pluginType != PluginType.folder) {
-                          return const SizedBox.shrink();
-                        }
+                ),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      IndexedStack(
+                        index: selectedIndex,
+                        children: state.pageManagers
+                            .map(
+                              (pm) => LayoutBuilder(
+                                builder: (context, constraints) {
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          children: [
+                                            pm.stackTopBar(layout: widget.layout),
+                                            Expanded(
+                                              child: PageStack(
+                                                pageManager: pm,
+                                                delegate: widget.delegate,
+                                                userProfile: widget.userProfile,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (!isFullWindow)
+                                        SecondaryView(
+                                          pageManager: pm,
+                                          adaptedPercentageWidth:
+                                              constraints.maxWidth * 3 / 7,
+                                        ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            )
+                            .toList(),
+                      ),
+                      // Overlay original right-side actions for folder/fileLibrary plugins
+                      if (state.pageManagers.isNotEmpty)
+                        Builder(
+                          builder: (ctx) {
+                            final currentIndex = state.currentIndex;
+                            if (currentIndex < 0 ||
+                                currentIndex >= state.pageManagers.length) {
+                              return const SizedBox.shrink();
+                            }
+                            final pm = state.pageManagers[currentIndex];
+                            final pluginType = pm.plugin.pluginType;
+                            if (pluginType != PluginType.fileLibrary &&
+                                pluginType != PluginType.folder) {
+                              return const SizedBox.shrink();
+                            }
 
-                        return Positioned(
-                          top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding - (HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding) /*0*/,
-                          right: HomeInsets.topBarTitleHorizontalPadding,
-                          child: ChangeNotifierProvider.value(
-                            value: pm.notifier,
-                            child: Consumer<PageNotifier>(
-                              builder: (_, notifier, __) =>
-                                  notifier.plugin.widgetBuilder.rightBarItem ??
-                                  const SizedBox.shrink(),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              ),
-            ),
-          ],
+                            return Positioned(
+                              top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding - (HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding) /*0*/,
+                              right: HomeInsets.topBarTitleHorizontalPadding,
+                              child: ChangeNotifierProvider.value(
+                                value: pm.notifier,
+                                child: Consumer<PageNotifier>(
+                                  builder: (_, notifier, __) =>
+                                      notifier.plugin.widgetBuilder.rightBarItem ??
+                                      const SizedBox.shrink(),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -886,6 +893,7 @@ class _HomeTopBarState extends State<HomeTopBar>
             HSpace(widget.layout.menuSpacing),
             const FlowyNavigation(),
             const HSpace(16),
+            // 插件自带的右侧工具区域
             ChangeNotifierProvider.value(
               value: Provider.of<PageNotifier>(context, listen: false),
               child: Consumer(
@@ -893,6 +901,27 @@ class _HomeTopBarState extends State<HomeTopBar>
                     notifier.plugin.widgetBuilder.rightBarItem ??
                     const SizedBox.shrink(),
               ),
+            ),
+            const Spacer(),
+            // 全局全窗口切换按钮（应用于所有视图）
+            ValueListenableBuilder<bool>(
+              valueListenable: FullWindowController.isFullWindow,
+              builder: (context, isFullWindow, _) {
+                return FlowyIconButton(
+                  width: 28,
+                  height: 28,
+                  tooltipText: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+                  radius: const BorderRadius.all(Radius.circular(999)),
+                  icon: Icon(
+                    isFullWindow
+                        ? Icons.fullscreen_exit_rounded
+                        : Icons.fullscreen_rounded,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  onPressed: FullWindowController.toggle,
+                );
+              },
             ),
           ],
         ),

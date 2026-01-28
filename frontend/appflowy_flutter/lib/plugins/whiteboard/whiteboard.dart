@@ -9,12 +9,15 @@ import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
@@ -276,14 +279,20 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     if (!mounted) return;
 
     if (format == 'png' && data is String) {
-      // dataURL -> 保存
+      // dataURL -> 保存PNG
       _savePngDataUrl(data);
       return;
     }
 
-    // Excalidraw 源文件（json）
-    if (format == 'excalidraw' && data is Map<String, dynamic>) {
-      _saveExcalidrawJson(data);
+    if (format == 'svg' && data is String) {
+      // SVG 文本 -> 保存SVG
+      _saveSvgData(data);
+      return;
+    }
+
+    // PonyNotes 源文件（json）
+    if (format == 'ponynotes' && data is Map<String, dynamic>) {
+      _savePonyNotesJson(data);
       return;
     }
 
@@ -295,13 +304,13 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     );
   }
 
-  Future<void> _saveExcalidrawJson(Map<String, dynamic> data) async {
+  Future<void> _savePonyNotesJson(Map<String, dynamic> data) async {
     try {
-      // 确保数据符合Excalidraw标准格式
-      final excalidrawData = <String, dynamic>{
+      // 确保数据符合Excalidraw标准格式（保持兼容性）
+      final ponyNotesData = <String, dynamic>{
         'type': 'excalidraw',
         'version': 2,
-        'source': 'https://excalidraw.com',
+        'source': 'https://ponynotes.io',
         'elements': data['elements'] ?? [],
         'appState': data['appState'] ?? {},
         'files': data['files'] ?? {},
@@ -309,16 +318,16 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
       final filePicker = getIt<FilePickerService>();
       final savePath = await filePicker.saveFile(
-        dialogTitle: '保存Excalidraw文件',
-        fileName: '${widget.view.name}.excalidraw',
+        dialogTitle: '保存PonyNotes白板文件',
+        fileName: '${widget.view.name}.ponynotes',
         type: FileType.custom,
-        allowedExtensions: ['excalidraw', 'json'],
+        allowedExtensions: ['ponynotes', 'json'],
       );
       if (savePath == null) return;
 
       final file = File(savePath);
       await file.writeAsString(
-        const JsonEncoder.withIndent('  ').convert(excalidrawData),
+        const JsonEncoder.withIndent('  ').convert(ponyNotesData),
       );
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -328,7 +337,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         ),
       );
     } catch (e) {
-      Log.error('❌ [Whiteboard] Save Excalidraw json failed: $e');
+      Log.error('❌ [Whiteboard] Save PonyNotes json failed: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('保存失败: $e'),
@@ -366,6 +375,37 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       );
     } catch (e) {
       Log.error('❌ [Whiteboard] Save PNG failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('保存失败: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveSvgData(String svgContent) async {
+    try {
+      final filePicker = getIt<FilePickerService>();
+      final savePath = await filePicker.saveFile(
+        dialogTitle: '保存SVG图片',
+        fileName: '${widget.view.name}.svg',
+        type: FileType.custom,
+        allowedExtensions: ['svg'],
+      );
+      if (savePath == null) return;
+
+      final file = File(savePath);
+      await file.writeAsString(svgContent);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('导出成功'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      Log.error('❌ [Whiteboard] Save SVG failed: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('保存失败: $e'),
@@ -469,8 +509,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          const Spacer(),
           // 导入 / 导出
           Tooltip(
             message: '导入 Excalidraw 文件',
@@ -482,18 +522,22 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
           ),
           const SizedBox(width: 8),
           Tooltip(
-            message: '导出为 Excalidraw / PNG',
+            message: '导出白板',
             child: PopupMenuButton<String>(
               position: PopupMenuPosition.under,
               onSelected: _exportWhiteboard,
               itemBuilder: (context) => const [
                 PopupMenuItem(
-                  value: 'excalidraw',
-                  child: Text('导出为 Excalidraw 文件'),
+                  value: 'ponynotes',
+                  child: Text('导出ponynotes文件'),
                 ),
                 PopupMenuItem(
                   value: 'png',
                   child: Text('导出为 PNG 图片'),
+                ),
+                PopupMenuItem(
+                  value: 'svg',
+                  child: Text('导出为 SVG 图片'),
                 ),
               ],
               child: TextButton.icon(
@@ -525,6 +569,42 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
           ),
           const SizedBox(width: 4),
           MoreViewActions(view: widget.view),
+          const SizedBox(width: 12),
+          // 全窗口 / 退出全窗口按钮：通过 FullWindowController 控制全局布局
+          ValueListenableBuilder<bool>(
+            valueListenable: FullWindowController.isFullWindow,
+            builder: (context, isFullWindow, _) {
+              return Tooltip(
+                message: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    iconSize: 18,
+                    padding: const EdgeInsets.all(8),
+                    icon: Icon(
+                      isFullWindow
+                          ? Icons.fullscreen_exit_rounded
+                          : Icons.fullscreen_rounded,
+                    ),
+                    onPressed: FullWindowController.toggle,
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -646,7 +726,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   /// 导出白板
   Future<void> _exportWhiteboard(String format) async {
     try {
-      if (format == 'excalidraw') {
+      if (format == 'ponynotes') {
         // 导出为源文件：使用WebView的导出API获取标准格式数据
         await _exportAsSourceFile();
       } else if (format == 'png' || format == 'svg') {
@@ -671,7 +751,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   Future<void> _exportAsSourceFile() async {
     try {
       // 触发 WebView 内的导出，通过 _onWhiteboardExport 回调处理
-      await _webViewKey.currentState?.exportDrawing('excalidraw');
+      await _webViewKey.currentState?.exportDrawing('ponynotes');
     } catch (e) {
       Log.error('❌ [Whiteboard] Export source file failed: $e');
       if (mounted) {
