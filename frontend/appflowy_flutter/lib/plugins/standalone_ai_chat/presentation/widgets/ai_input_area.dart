@@ -315,6 +315,30 @@ class _AIInputAreaState extends State<AIInputArea> {
     );
   }
 
+  /// 获取按钮背景颜色（适配深色模式）
+  Color _getButtonBackgroundColor(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+  }
+
+  /// 获取按钮边框颜色（适配深色模式）
+  Color _getButtonBorderColor(BuildContext context, bool isEnabled) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    if (isEnabled) {
+      return const Color(0xFFE94618); // 启用状态始终使用主题橙色
+    }
+    return isDarkMode ? const Color(0xFF4A4A4A) : const Color(0xFFCDCDCD);
+  }
+
+  /// 获取按钮文字颜色（适配深色模式）
+  Color _getButtonTextColor(BuildContext context, bool isEnabled) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    if (isEnabled) {
+      return const Color(0xFFE94618); // 启用状态始终使用主题橙色
+    }
+    return isDarkMode ? const Color(0xFFB0B0B0) : const Color(0xFF636363);
+  }
+
   /// 构建模型选择下拉框
   Widget _buildModelSelector() {
     return GestureDetector(
@@ -324,10 +348,10 @@ class _AIInputAreaState extends State<AIInputArea> {
         width: 102,
         height: 30,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _getButtonBackgroundColor(context),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: const Color(0xFFE94618), // rgba(233, 70, 24, 1)
+            color: _getButtonBorderColor(context, _selectedModel != null),
             width: 1,
           ),
         ),
@@ -337,10 +361,10 @@ class _AIInputAreaState extends State<AIInputArea> {
             Expanded(
               child: Text(
                 _selectedModel?.name ?? 'DeepSeek',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFFE94618), // rgba(233, 70, 24, 1)
+                  color: _getButtonTextColor(context, _selectedModel != null),
                   fontFamily: 'PingFangSC-Medium',
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -354,10 +378,10 @@ class _AIInputAreaState extends State<AIInputArea> {
                 width: 9,
                 height: 7,
                 errorBuilder: (context, error, stackTrace) {
-                  return const Icon(
+                  return Icon(
                     Icons.arrow_drop_down,
                     size: 7,
-                    color: Color(0xFFE94618),
+                    color: _getButtonTextColor(context, _selectedModel != null),
                   );
                 },
               ),
@@ -543,12 +567,6 @@ class _AIInputAreaState extends State<AIInputArea> {
   /// 构建全网搜索按钮
   Widget _buildWebSearchButton() {
     final isEnabled = _isWebSearchEnabled;
-    final borderColor = isEnabled
-        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
-        : const Color(0xFFCDCDCD); // rgba(205, 205, 205, 1)
-    final textColor = isEnabled
-        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
-        : const Color(0xFF636363); // rgba(99, 99, 99, 1)
     
     return GestureDetector(
       onTap: () {
@@ -561,10 +579,10 @@ class _AIInputAreaState extends State<AIInputArea> {
         height: 30,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _getButtonBackgroundColor(context),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: borderColor,
+            color: _getButtonBorderColor(context, isEnabled),
             width: 1,
           ),
         ),
@@ -574,7 +592,7 @@ class _AIInputAreaState extends State<AIInputArea> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: textColor,
+              color: _getButtonTextColor(context, isEnabled),
               fontFamily: 'PingFangSC-Medium',
             ),
           ),
@@ -1185,12 +1203,6 @@ class _AIInputAreaState extends State<AIInputArea> {
   /// 构建深度思考按钮
   Widget _buildDeepThinkingButton() {
     final isEnabled = _isDeepThinkingEnabled;
-    final borderColor = isEnabled
-        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
-        : const Color(0xFFCDCDCD); // rgba(205, 205, 205, 1)
-    final textColor = isEnabled
-        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
-        : const Color(0xFF636363); // rgba(99, 99, 99, 1)
     
     return GestureDetector(
       onTap: () {
@@ -1203,10 +1215,10 @@ class _AIInputAreaState extends State<AIInputArea> {
         height: 30,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: _getButtonBackgroundColor(context),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: borderColor,
+            color: _getButtonBorderColor(context, isEnabled),
             width: 1,
           ),
         ),
@@ -1216,7 +1228,7 @@ class _AIInputAreaState extends State<AIInputArea> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: textColor,
+              color: _getButtonTextColor(context, isEnabled),
               fontFamily: 'PingFangSC-Medium',
             ),
           ),

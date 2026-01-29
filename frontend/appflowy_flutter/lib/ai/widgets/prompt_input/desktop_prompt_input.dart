@@ -823,16 +823,24 @@ class _PromptBottomActions extends StatelessWidget {
     );
   }
 
-  /// PonyNotes: 构建深度思考按钮
+  /// PonyNotes: 构建深度思考按钮（适配深色模式）
   Widget _buildDeepThinkingButton(BuildContext context, AIPromptInputState state) {
     final isEnabled = state.enableDeepThinking;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final borderColor = isEnabled
         ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
-        : const Color(0xFFCDCDCD); // rgba(205, 205, 205, 1)
+        : isDarkMode
+            ? const Color(0xFF4A4A4A) // 深色模式下灰色边框
+            : const Color(0xFFCDCDCD); // 浅色模式下灰色边框
     final textColor = isEnabled
         ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
-        : const Color(0xFF636363); // rgba(99, 99, 99, 1)
-    
+        : isDarkMode
+            ? const Color(0xFFB0B0B0) // 深色模式下浅灰色文字
+            : const Color(0xFF636363); // 浅色模式下深灰色文字
+    final backgroundColor = isDarkMode
+        ? const Color(0xFF2A2A2A) // 深色模式下深色背景
+        : Colors.white; // 浅色模式下白色背景
+
     return GestureDetector(
       onTap: () {
         context.read<AIPromptInputBloc>().add(const AIPromptInputEvent.toggleDeepThinking());
@@ -841,7 +849,7 @@ class _PromptBottomActions extends StatelessWidget {
         height: 30,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: borderColor,
@@ -863,16 +871,24 @@ class _PromptBottomActions extends StatelessWidget {
     );
   }
 
-  /// PonyNotes: 构建联网搜索按钮
+  /// PonyNotes: 构建联网搜索按钮（适配深色模式）
   Widget _buildWebSearchButton(BuildContext context, AIPromptInputState state) {
     final isEnabled = state.enableWebSearch;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final borderColor = isEnabled
         ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
-        : const Color(0xFFCDCDCD); // rgba(205, 205, 205, 1)
+        : isDarkMode
+            ? const Color(0xFF4A4A4A) // 深色模式下灰色边框
+            : const Color(0xFFCDCDCD); // 浅色模式下灰色边框
     final textColor = isEnabled
         ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
-        : const Color(0xFF636363); // rgba(99, 99, 99, 1)
-    
+        : isDarkMode
+            ? const Color(0xFFB0B0B0) // 深色模式下浅灰色文字
+            : const Color(0xFF636363); // 浅色模式下深灰色文字
+    final backgroundColor = isDarkMode
+        ? const Color(0xFF2A2A2A) // 深色模式下深色背景
+        : Colors.white; // 浅色模式下白色背景
+
     return GestureDetector(
       onTap: () {
         context.read<AIPromptInputBloc>().add(const AIPromptInputEvent.toggleWebSearch());
@@ -881,7 +897,7 @@ class _PromptBottomActions extends StatelessWidget {
         height: 30,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: borderColor,

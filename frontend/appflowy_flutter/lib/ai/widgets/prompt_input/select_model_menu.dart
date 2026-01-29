@@ -210,6 +210,11 @@ class _CurrentModelButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final hintColor = isDarkMode
+        ? const Color(0xFFB0B0B0) // 深色模式下浅灰色
+        : const Color(0xFF858585); // 浅色模式下深灰色
+
     return FlowyTooltip(
       message: LocaleKeys.chat_switchModel_label.tr(),
       child: GestureDetector(
@@ -218,8 +223,11 @@ class _CurrentModelButton extends StatelessWidget {
         child: SizedBox(
           height: DesktopAIPromptSizes.actionBarButtonSize,
           child: FlowyHover(
-            style: const HoverStyle(
-              borderRadius: BorderRadius.all(Radius.circular(8)),
+            style: HoverStyle(
+              borderRadius: const BorderRadius.all(Radius.circular(8)),
+              hoverColor: isDarkMode
+                  ? const Color(0xFF3A3A3A) // 深色模式下hover颜色
+                  : const Color(0xFFF5F5F5), // 浅色模式下hover颜色
             ),
             child: Padding(
               padding: const EdgeInsetsDirectional.all(4.0),
@@ -228,27 +236,27 @@ class _CurrentModelButton extends StatelessWidget {
                 children: [
                   Padding(
                     // TODO: remove this after change icon to 20px
-                    padding: EdgeInsets.all(2),
+                    padding: const EdgeInsets.all(2),
                     child: FlowySvg(
                       FlowySvgs.ai_sparks_s,
-                      color: Theme.of(context).hintColor,
-                      size: Size.square(16),
+                      color: hintColor,
+                      size: const Size.square(16),
                     ),
                   ),
                   if (model != null && !model!.isDefault)
                     Padding(
-                      padding: EdgeInsetsDirectional.only(end: 2.0),
+                      padding: const EdgeInsetsDirectional.only(end: 2.0),
                       child: FlowyText(
                         model!.i18n,
                         fontSize: 12,
                         figmaLineHeight: 16,
-                        color: Theme.of(context).hintColor,
+                        color: hintColor,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   FlowySvg(
                     FlowySvgs.ai_source_drop_down_s,
-                    color: Theme.of(context).hintColor,
+                    color: hintColor,
                     size: const Size.square(8),
                   ),
                 ],
