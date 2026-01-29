@@ -5,6 +5,7 @@ import 'package:appflowy/core/config/kv.dart';
 import 'package:appflowy/core/config/kv_keys.dart';
 import 'package:appflowy/shared/list_extension.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/view/expanded_views_cache.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/string_extension.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
@@ -915,38 +916,24 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
     await getIt<KeyValueStorage>().set(KVKeys.lastOpenedSpaceId, space.id);
   }
 
+  /// 设置空间展开状态（使用缓存，性能优化）
   Future<void> _setSpaceExpandStatus(ViewPB? space, bool isExpanded) async {
     if (space == null) {
       return;
     }
-
-    final result = await getIt<KeyValueStorage>().get(KVKeys.expandedViews);
-    var map = {};
-    if (result != null) {
-      map = jsonDecode(result);
-    }
-    if (isExpanded) {
-      // set expand status to true if it's not expanded
-      map[space.id] = true;
-    } else {
-      // remove the expand status if it's expanded
-      map.remove(space.id);
-    }
-    await getIt<KeyValueStorage>().set(KVKeys.expandedViews, jsonEncode(map));
+    ExpandedViewsCache.instance.setExpanded(space.id, isExpanded);
   }
 
+  /// 获取空间展开状态（使用缓存，同步快速访问）
   Future<bool> _getSpaceExpandStatus(ViewPB? space) async {
     if (space == null) {
       return true;
     }
-
-    return getIt<KeyValueStorage>().get(KVKeys.expandedViews).then((result) {
-      if (result == null) {
-        return true;
-      }
-      final map = jsonDecode(result);
-      return map[space.id] ?? true;
-    });
+    // 确保缓存已初始化
+    await ExpandedViewsCache.instance.initialize();
+    // 空间默认展开（如果缓存中没有记录）
+    return ExpandedViewsCache.instance.isExpanded(space.id) || 
+           !ExpandedViewsCache.instance.cache.containsKey(space.id);
   }
 
   Future<bool> migrate({bool auto = true}) async {

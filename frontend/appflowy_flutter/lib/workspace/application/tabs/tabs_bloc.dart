@@ -1,13 +1,10 @@
-import 'dart:convert';
-
-import 'package:appflowy/core/config/kv.dart';
-import 'package:appflowy/core/config/kv_keys.dart';
 import 'package:appflowy/plugins/blank/blank.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/expand_views.dart';
 import 'package:appflowy/workspace/application/recent/cached_recent_service.dart';
+import 'package:appflowy/workspace/application/view/expanded_views_cache.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
@@ -26,11 +23,16 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   TabsBloc() : super(TabsState()) {
     menuSharedState = getIt<MenuSharedState>();
     _recentService = getIt<CachedRecentService>();
+    // 初始化 ExpandedViewsCache（异步，不阻塞）
+    ExpandedViewsCache.instance.initialize();
     _dispatch();
   }
 
   late final MenuSharedState menuSharedState;
   late final CachedRecentService _recentService;
+  
+  /// 上次添加到最近访问的视图 ID（用于防抖）
+  String? _lastAddedRecentViewId;
 
   @override
   Future<void> close() {
@@ -242,39 +244,61 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     }
   }
   
-  /// 添加视图到最近访问列表的异步方法
+  /// 添加视图到最近访问列表的异步方法（带防抖）
   void _addToRecentViews(String viewId) {
+    // 防抖：如果是同一个视图，跳过
+    if (_lastAddedRecentViewId == viewId) {
+      return;
+    }
+    _lastAddedRecentViewId = viewId;
+    
     // 使用异步方式更新最近访问，避免阻塞UI
     Future.microtask(() async {
       try {
         await _recentService.updateRecentViews([viewId], true);
-        // Log.debug('已添加视图到最近访问: $viewId'); // PonyNotes: 关闭非白板日志
       } catch (e) {
-        // Log.error('添加视图到最近访问失败: $viewId, 错误: $e'); // PonyNotes: 关闭非白板日志
+        // 静默处理错误，避免影响 UI
       }
     });
   }
 
+  /// 展开视图祖先链（优化版本，使用缓存）
   Future<void> _expandAncestors(ViewPB view) async {
     final viewExpanderRegistry = getIt.get<ViewExpanderRegistry>();
+    
+    // 快速检查：如果父视图已展开，跳过
     if (viewExpanderRegistry.isViewExpanded(view.parentViewId)) return;
-    final value = await getIt<KeyValueStorage>().get(KVKeys.expandedViews);
+    
+    // 使用缓存检查（同步操作，非常快）
+    final cache = ExpandedViewsCache.instance;
+    if (cache.isExpanded(view.parentViewId)) {
+      // 父视图在缓存中已标记为展开，尝试通过 UI 展开器展开
+      final expander = viewExpanderRegistry.getExpander(view.parentViewId);
+      if (expander != null && !expander.isViewExpanded) {
+        expander.expand();
+      }
+      return;
+    }
+    
+    // 异步获取祖先链（后台操作，不阻塞 UI）
     try {
-      final Map expandedViews = value == null ? {} : jsonDecode(value);
-      final List<String> ancestors =
-          await ViewBackendService.getViewAncestors(view.id)
-              .fold((s) => s.items.map((e) => e.id).toList(), (f) => []);
+      final ancestors = await ViewBackendService.getViewAncestors(view.id)
+          .fold((s) => s.items.map((e) => e.id).toList(), (f) => <String>[]);
+      
+      if (ancestors.isEmpty) return;
+      
+      // 批量更新缓存
+      cache.setExpandedBatch(ancestors, true);
+      
+      // 找到第一个未展开的祖先并展开
       ViewExpander? viewExpander;
       for (final id in ancestors) {
-        expandedViews[id] = true;
         final expander = viewExpanderRegistry.getExpander(id);
-        if (expander == null) continue;
-        if (!expander.isViewExpanded && viewExpander == null) {
+        if (expander != null && !expander.isViewExpanded && viewExpander == null) {
           viewExpander = expander;
+          break;
         }
       }
-      await getIt<KeyValueStorage>()
-          .set(KVKeys.expandedViews, jsonEncode(expandedViews));
       viewExpander?.expand();
     } catch (e) {
       Log.error('expandAncestors error', e);

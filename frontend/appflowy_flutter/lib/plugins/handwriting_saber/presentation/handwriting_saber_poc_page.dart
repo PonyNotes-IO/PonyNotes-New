@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show File;
 import 'dart:math' as math;
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -32,6 +33,7 @@ import 'widgets/canvas_webview_widget.dart';
 import 'dialogs/insert_webview_dialog.dart';
 import '../widgets/pdf_text_selection_dialog.dart';
 import '../services/pdf_text_extraction_service.dart';
+import '../services/editor_exporter.dart';  // ✅ PDF导出器
 import '../../../util/log_utils.dart';
 
 /// PoC 页面：暂时只展示占位 UI，并在本地创建一个占位的 .sbn2 文件。
@@ -3116,6 +3118,77 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
   }
   
+  /// ✅ 导出为 PDF 文件（参考 Saber 的 exportAsPdf）
+  Future<void> _exportPdf() async {
+    try {
+      debugPrint('📄[HandwritingSaber] 开始导出 PDF...');
+      
+      // 检查是否有可导出的内容
+      if (_coreInfo.pages.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('没有可导出的页面')),
+          );
+        }
+        return;
+      }
+      
+      // 显示加载提示
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('正在生成 PDF...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      
+      // 使用 EditorExporter 生成 PDF
+      final pdf = await EditorExporter.generatePdf(
+        _coreInfo,
+        context,
+        pageNotifiers: _pageNotifiers,
+      );
+      
+      // 保存 PDF 字节数据
+      final pdfBytes = await pdf.save();
+      
+      // 让用户选择保存位置
+      final fileName = '${widget.view.name.isNotEmpty ? widget.view.name : "手写笔记"}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final outputPath = await FilePicker.platform.saveFile(
+        dialogTitle: '保存 PDF',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
+      
+      if (outputPath == null) {
+        debugPrint('📄[HandwritingSaber] 用户取消保存');
+        return;  // 用户取消保存
+      }
+      
+      // 写入文件
+      final file = File(outputPath.endsWith('.pdf') ? outputPath : '$outputPath.pdf');
+      await file.writeAsBytes(pdfBytes);
+      
+      debugPrint('📄[HandwritingSaber] PDF 导出成功: ${file.path}');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF 导出成功: ${file.path}')),
+        );
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ [HandwritingSaber] 导出 PDF 失败: $e');
+      debugPrint('❌ [HandwritingSaber] 堆栈: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('导出 PDF 失败: $e')),
+        );
+      }
+    }
+  }
+  
   /// ✅ 导入 PDF 文件（参考 Saber 的 importPdfFromFilePath）
   Future<void> _importPdf() async {
     try {
@@ -3734,6 +3807,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                         _onFillColorChanged, // ✅ 填充颜色改变回调
                                     onImportPdf:
                                         _importPdf, // ✅ PDF 导入回调
+                                    onExportPdf:
+                                        _exportPdf, // ✅ PDF 导出回调
                                     onImportImage:
                                         _importImage, // ✅ 图片导入回调
                                     onInsertWebView:

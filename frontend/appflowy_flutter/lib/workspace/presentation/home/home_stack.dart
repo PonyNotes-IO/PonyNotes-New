@@ -605,7 +605,8 @@ class FadingIndexedStack extends StatefulWidget {
     super.key,
     required this.index,
     required this.children,
-    this.duration = const Duration(milliseconds: 250),
+    // 性能优化：减少切换动画时间，从 250ms 降到 100ms
+    this.duration = const Duration(milliseconds: 100),
   });
 
   final int index;

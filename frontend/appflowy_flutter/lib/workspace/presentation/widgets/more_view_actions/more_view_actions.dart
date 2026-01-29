@@ -3,6 +3,7 @@ import 'package:appflowy/features/share_tab/data/models/share_access_level.dart'
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/handwriting_saber/presentation/handwriting_export_action.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
@@ -141,9 +142,13 @@ class _MoreViewActionsState extends State<MoreViewActions> {
         ],
     };
 
+    // ✅ 检测是否是手写笔记类型
+    final isHandwriting = isHandwritingNote(widget.view);
+    
     final actions = [
       ...widget.customActions,
-      if (widget.view.isDocument) ...[
+      // ✅ 手写笔记不显示字体大小选项
+      if (widget.view.isDocument && !isHandwriting) ...[
         const FontSizeAction(),
         ViewAction(
           type: ViewMoreActionType.divider,
@@ -153,7 +158,8 @@ class _MoreViewActionsState extends State<MoreViewActions> {
       ],
       if (state.workspaceType == WorkspaceTypePB.ServerW &&
           (widget.view.isDocument || widget.view.isDatabase) &&
-          !pageAccessLevelState.isReadOnly) ...[
+          !pageAccessLevelState.isReadOnly &&
+          !isHandwriting) ...[  // ✅ 手写笔记不显示锁定选项
         LockPageAction(
           view: view,
         ),
@@ -163,7 +169,20 @@ class _MoreViewActionsState extends State<MoreViewActions> {
           mutex: popoverMutex,
         ),
       ],
-      if (widget.view.isDocument) ...[
+      // ✅ 手写笔记使用专用的导出/导入组件
+      if (isHandwriting) ...[
+        HandwritingExportAction(
+          view: view,
+        ),
+        HandwritingImportAction(
+          view: view,
+        ),
+        ViewAction(
+          type: ViewMoreActionType.divider,
+          view: view,
+          mutex: popoverMutex,
+        ),
+      ] else if (widget.view.isDocument) ...[
         ExportAction(
           view: view,
         ),

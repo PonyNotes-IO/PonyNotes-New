@@ -25,6 +25,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.currentFillColor, // ✅ 当前填充颜色（可选）
     this.onFillColorChanged, // ✅ 填充颜色改变回调（可选）
     this.onImportPdf,  // ✅ PDF 导入回调（可选）
+    this.onExportPdf,  // ✅ PDF 导出回调（可选）
     this.onImportImage, // ✅ 图片导入回调（可选）
     this.onInsertWebView, // ✅ 网页嵌入回调（可选）
     this.onExtractPdfText, // ✅ PDF文本提取回调（可选）
@@ -54,6 +55,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final Color? currentFillColor; // ✅ 当前填充颜色
   final ValueChanged<Color?>? onFillColorChanged; // ✅ 填充颜色改变回调
   final VoidCallback? onImportPdf;  // ✅ PDF 导入回调
+  final VoidCallback? onExportPdf;  // ✅ PDF 导出回调
   final VoidCallback? onImportImage;  // ✅ 图片导入回调
   final VoidCallback? onInsertWebView;  // ✅ 网页嵌入回调
   final VoidCallback? onExtractPdfText;  // ✅ PDF文本提取回调
@@ -195,6 +197,20 @@ class HandwritingSaberToolbar extends StatelessWidget {
               child: IconButton(
                 icon: const Icon(FontAwesomeIcons.filePdf, size: 20),
                 onPressed: onImportPdf,
+                padding: const EdgeInsets.all(8),
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                ),
+              ),
+            ),
+          // ✅ PDF 导出按钮
+          if (onExportPdf != null)
+            Tooltip(
+              message: '导出为 PDF',
+              child: IconButton(
+                icon: const Icon(FontAwesomeIcons.fileExport, size: 20),
+                onPressed: onExportPdf,
                 padding: const EdgeInsets.all(8),
                 constraints: const BoxConstraints(
                   minWidth: 40,

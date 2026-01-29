@@ -125,6 +125,7 @@ dependencies:
   path_provider: ^2.0.15
   perfect_freehand: ^2.5.1
   pdf: ^3.11.1
+  screenshot: ^3.0.0  # ✅ 用于手写笔记导出PDF时截图
   syncfusion_flutter_pdf: ^27.2.5
   pdf_text: ^0.5.0  # ✅ PDF文本提取，支持获取文本位置信息
   pdfx: 2.6.0

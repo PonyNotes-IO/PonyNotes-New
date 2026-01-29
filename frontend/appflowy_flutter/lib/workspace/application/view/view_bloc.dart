@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:appflowy/core/config/kv.dart';
-import 'package:appflowy/core/config/kv_keys.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/workspace/application/view/expanded_views_cache.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/expand_views.dart';
@@ -458,30 +456,16 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
     );
   }
 
+  /// 设置视图展开状态（使用缓存，性能优化）
   Future<void> _setViewIsExpanded(ViewPB view, bool isExpanded) async {
-    final result = await getIt<KeyValueStorage>().get(KVKeys.expandedViews);
-    final Map map;
-    if (result != null) {
-      map = jsonDecode(result);
-    } else {
-      map = {};
-    }
-    if (isExpanded) {
-      map[view.id] = true;
-    } else {
-      map.remove(view.id);
-    }
-    await getIt<KeyValueStorage>().set(KVKeys.expandedViews, jsonEncode(map));
+    ExpandedViewsCache.instance.setExpanded(view.id, isExpanded);
   }
 
-  Future<bool> _getViewIsExpanded(ViewPB view) {
-    return getIt<KeyValueStorage>().get(KVKeys.expandedViews).then((result) {
-      if (result == null) {
-        return false;
-      }
-      final map = jsonDecode(result);
-      return map[view.id] ?? false;
-    });
+  /// 获取视图展开状态（使用缓存，同步快速访问）
+  Future<bool> _getViewIsExpanded(ViewPB view) async {
+    // 确保缓存已初始化
+    await ExpandedViewsCache.instance.initialize();
+    return ExpandedViewsCache.instance.isExpanded(view.id);
   }
 
   Future<ViewPB?> _updateChildViews(
