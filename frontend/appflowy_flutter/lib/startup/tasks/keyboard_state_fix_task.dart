@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart';
 
@@ -11,13 +13,17 @@ import '../startup.dart';
 /// 这个问题在焦点切换、页面跳转等场景中会出现，因为KeyDown和KeyUp事件不配对。
 /// 这是Flutter框架本身的已知问题。
 /// 
-/// 解决方案：通过自定义FlutterError处理器来抑制这个特定的错误，
-/// 避免它在控制台中显示并影响用户体验。键盘输入会继续正常工作。
+/// 解决方案：
+/// 1. 设置 PlatformDispatcher.instance.onError 来捕获所有平台错误（包括断言错误）
+/// 2. 设置 FlutterError.onError 来处理 Flutter 框架错误
+/// 
+/// 这样可以确保键盘状态相关的断言错误不会中断应用程序的正常运行。
 class KeyboardStateFixTask extends LaunchTask {
   const KeyboardStateFixTask();
   
   static bool _initialized = false;
-  static FlutterExceptionHandler? _originalErrorHandler;
+  static FlutterExceptionHandler? _originalFlutterErrorHandler;
+  static ErrorCallback? _originalPlatformErrorHandler;
   
   @override
   Future<void> initialize(LaunchContext context) async {
@@ -31,10 +37,14 @@ class KeyboardStateFixTask extends LaunchTask {
     Log.info('KeyboardStateFixTask: 注册键盘状态错误抑制处理器');
     
     // 保存原有的错误处理器
-    _originalErrorHandler = FlutterError.onError;
+    _originalFlutterErrorHandler = FlutterError.onError;
+    _originalPlatformErrorHandler = PlatformDispatcher.instance.onError;
     
-    // 设置新的错误处理器
-    FlutterError.onError = _customErrorHandler;
+    // 设置新的 FlutterError 处理器
+    FlutterError.onError = _customFlutterErrorHandler;
+    
+    // 设置新的平台错误处理器（捕获断言错误等）
+    PlatformDispatcher.instance.onError = _customPlatformErrorHandler;
   }
   
   @override
@@ -43,67 +53,103 @@ class KeyboardStateFixTask extends LaunchTask {
     
     if (_initialized) {
       // 恢复原有的错误处理器
-      if (_originalErrorHandler != null) {
-        FlutterError.onError = _originalErrorHandler;
+      if (_originalFlutterErrorHandler != null) {
+        FlutterError.onError = _originalFlutterErrorHandler;
+      }
+      if (_originalPlatformErrorHandler != null) {
+        PlatformDispatcher.instance.onError = _originalPlatformErrorHandler;
       }
       _initialized = false;
       Log.info('KeyboardStateFixTask: 移除键盘状态错误抑制处理器');
     }
   }
   
-  /// 自定义错误处理器
+  /// 平台错误处理器
+  /// 
+  /// 捕获断言错误等平台级错误，特别是键盘状态相关的断言错误
+  static bool _customPlatformErrorHandler(Object error, StackTrace stack) {
+    // 检查是否是键盘状态相关的错误
+    if (_isKeyboardStateErrorFromObject(error, stack)) {
+      // 静默处理键盘状态错误，返回 true 表示已处理
+      // 不打印日志，避免刷屏
+      return true;
+    }
+    
+    // 对于其他错误，调用原始处理器
+    if (_originalPlatformErrorHandler != null) {
+      return _originalPlatformErrorHandler!(error, stack);
+    }
+    
+    // 默认返回 false，让错误继续传播（但不会导致应用崩溃）
+    return false;
+  }
+  
+  /// 自定义 Flutter 错误处理器
   /// 
   /// 抑制键盘状态相关的已知Flutter bug错误，其他错误正常处理
-  static void _customErrorHandler(FlutterErrorDetails details) {
+  static void _customFlutterErrorHandler(FlutterErrorDetails details) {
     // 检查是否是键盘状态相关的错误
-    if (_isKeyboardStateError(details)) {
-      // 只在调试模式下记录日志，避免在生产环境中产生过多日志
-      if (kDebugMode) {
-        Log.trace(
-          'KeyboardStateFixTask: 抑制键盘状态错误 (Flutter已知bug) - '
-          '${details.exception}'
-        );
-      }
-      // 不调用原始处理器，从而抑制这个错误
+    if (_isKeyboardStateErrorFromDetails(details)) {
+      // 静默处理，不打印日志
       return;
     }
     
     // 对于其他错误，调用原始处理器
-    if (_originalErrorHandler != null) {
-      _originalErrorHandler!(details);
+    if (_originalFlutterErrorHandler != null) {
+      _originalFlutterErrorHandler!(details);
     } else {
       // 如果没有原始处理器，使用默认行为
       FlutterError.presentError(details);
     }
   }
   
-  /// 检查是否是键盘状态相关的错误
-  static bool _isKeyboardStateError(FlutterErrorDetails details) {
+  /// 从错误对象检查是否是键盘状态相关的错误
+  static bool _isKeyboardStateErrorFromObject(Object error, StackTrace stack) {
+    final errorString = error.toString();
+    final stackString = stack.toString();
+    
+    return _matchKeyboardStateError(errorString, stackString);
+  }
+  
+  /// 从 FlutterErrorDetails 检查是否是键盘状态相关的错误
+  static bool _isKeyboardStateErrorFromDetails(FlutterErrorDetails details) {
     final exception = details.exception;
     final exceptionString = exception.toString();
+    final stackString = details.stack?.toString() ?? '';
     
+    return _matchKeyboardStateError(exceptionString, stackString);
+  }
+  
+  /// 匹配键盘状态错误的通用逻辑
+  static bool _matchKeyboardStateError(String errorString, String stackString) {
     // 检查是否包含键盘状态相关的错误信息
     // "A KeyDownEvent is dispatched, but the state shows that the physical key is already pressed"
     // "A KeyUpEvent is dispatched, but the state shows that the physical key is not pressed"
-    if (exceptionString.contains('KeyDownEvent is dispatched') ||
-        exceptionString.contains('KeyUpEvent is dispatched')) {
-      if (exceptionString.contains('physical key is already pressed') ||
-          exceptionString.contains('physical key is not pressed')) {
+    if (errorString.contains('KeyDownEvent is dispatched') ||
+        errorString.contains('KeyUpEvent is dispatched')) {
+      if (errorString.contains('physical key is already pressed') ||
+          errorString.contains('physical key is not pressed')) {
         return true;
       }
     }
     
     // 检查断言错误信息中的特定字符串
-    if (exceptionString.contains('_pressedKeys.containsKey') ||
-        exceptionString.contains('!_pressedKeys.containsKey')) {
+    if (errorString.contains('_pressedKeys.containsKey') ||
+        errorString.contains('!_pressedKeys.containsKey')) {
       return true;
     }
     
     // 检查是否来自 hardware_keyboard.dart
-    final stackTrace = details.stack?.toString() ?? '';
-    if (stackTrace.contains('hardware_keyboard.dart') &&
-        (exceptionString.contains('KeyDownEvent') ||
-         exceptionString.contains('KeyUpEvent'))) {
+    if (stackString.contains('hardware_keyboard.dart') &&
+        (errorString.contains('KeyDownEvent') ||
+         errorString.contains('KeyUpEvent'))) {
+      return true;
+    }
+    
+    // 检查是否是 HardwareKeyboard 相关的断言错误
+    if (errorString.contains('HardwareKeyboard') &&
+        (errorString.contains('assertion') || 
+         errorString.contains('Failed assertion'))) {
       return true;
     }
     

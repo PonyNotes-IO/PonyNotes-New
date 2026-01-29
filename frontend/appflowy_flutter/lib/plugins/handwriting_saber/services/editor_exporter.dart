@@ -4,28 +4,25 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdfrx/pdfrx.dart' as pdfrx;
 
 import '../third_party/saber_core/components/canvas/canvas_background_pattern.dart';
 import '../third_party/saber_core/components/canvas/image/editor_image.dart';
+import '../third_party/saber_core/components/canvas/image/pdf_editor_image.dart';
 import '../third_party/saber_core/data/editor/editor_core_info.dart';
 import '../third_party/saber_core/data/editor/page.dart';
 import '../third_party/saber_core/data/tools/tool.dart';
 
-/// PDF导出器 - 高性能版本
+/// PDF导出器 - 高性能版本（包含PDF背景支持）
 /// 使用直接Canvas绘制方式，避免Widget截图的性能问题
 abstract class EditorExporter {
   /// 默认背景颜色
   static const defaultBackgroundColor = Color(0xFFFCFCFC);
   
-  /// 导出分辨率倍数（1.0 = 原始分辨率，1.5 = 1.5倍清晰度）
+  /// 导出分辨率倍数
   static const double exportPixelRatio = 1.5;
 
-  /// 生成PDF文档（高性能版本）
-  /// 
-  /// [coreInfo] 编辑器核心信息
-  /// [context] BuildContext（用于获取图片资源，可选）
-  /// [pageNotifiers] 页面状态通知器
-  /// [onProgress] 进度回调 (当前页, 总页数)
+  /// 生成PDF文档
   static Future<pw.Document> generatePdf(
     EditorCoreInfo coreInfo,
     BuildContext context, {
@@ -47,7 +44,7 @@ abstract class EditorExporter {
     final pdf = pw.Document();
     final totalPages = pages.length;
 
-    debugPrint('📄[EditorExporter] 开始生成PDF，共 $totalPages 页（高性能模式）');
+    debugPrint('📄[EditorExporter] 开始生成PDF，共 $totalPages 页');
     final startTime = DateTime.now();
 
     // 逐页渲染
@@ -60,7 +57,7 @@ abstract class EditorExporter {
       onProgress?.call(pageIndex + 1, totalPages);
 
       try {
-        // 使用Canvas直接绘制
+        // 渲染页面为图片
         final imageBytes = await _renderPageToImage(
           coreInfo: coreInfo,
           page: page,
@@ -105,7 +102,7 @@ abstract class EditorExporter {
            page.backgroundImage == null;
   }
 
-  /// 使用Canvas直接渲染页面为图片
+  /// 渲染页面为图片
   static Future<Uint8List> _renderPageToImage({
     required EditorCoreInfo coreInfo,
     required EditorPage page,
@@ -130,24 +127,31 @@ abstract class EditorExporter {
       ..style = PaintingStyle.fill;
     canvas.drawRect(Rect.fromLTWH(0, 0, pageSize.width, pageSize.height), bgPaint);
     
-    // 2. 绘制背景图案
-    _drawBackgroundPattern(
-      canvas, 
-      pageSize, 
-      coreInfo.backgroundPattern, 
-      coreInfo.lineHeight, 
-      coreInfo.lineThickness,
-    );
+    // 2. 绘制背景图案（仅在没有PDF背景时绘制）
+    if (page.backgroundImage == null) {
+      _drawBackgroundPattern(
+        canvas, 
+        pageSize, 
+        coreInfo.backgroundPattern, 
+        coreInfo.lineHeight, 
+        coreInfo.lineThickness,
+      );
+    }
     
-    // 3. 绘制图片
+    // 3. ✅ 绘制PDF背景图（关键修复）
+    if (page.backgroundImage != null) {
+      await _drawPdfBackground(canvas, page.backgroundImage!, pageSize);
+    }
+    
+    // 4. 绘制普通图片
     for (final image in page.images) {
       await _drawImage(canvas, image);
     }
     
-    // 4. 绘制笔迹
+    // 5. 绘制笔迹
     _drawStrokes(canvas, page.strokes);
     
-    // 5. 绘制文本框
+    // 6. 绘制文本框
     _drawTextBoxes(canvas, page.textBoxes);
     
     // 结束录制
@@ -166,6 +170,88 @@ abstract class EditorExporter {
     }
     
     return byteData.buffer.asUint8List();
+  }
+
+  /// ✅ 绘制PDF背景图
+  static Future<void> _drawPdfBackground(
+    Canvas canvas,
+    PdfEditorImage pdfImage,
+    Size pageSize,
+  ) async {
+    try {
+      debugPrint('📄[EditorExporter] 开始渲染PDF背景: ${pdfImage.pdfFilePath}, 页面: ${pdfImage.pdfPageIndex}');
+      
+      // 加载PDF文档
+      final pdfDocument = await pdfrx.PdfDocument.openFile(pdfImage.pdfFilePath);
+      
+      // 检查页面索引有效性
+      if (pdfImage.pdfPageIndex < 0 || pdfImage.pdfPageIndex >= pdfDocument.pages.length) {
+        debugPrint('⚠️ [EditorExporter] PDF页面索引无效: ${pdfImage.pdfPageIndex}');
+        pdfDocument.dispose();
+        return;
+      }
+      
+      // 获取PDF页面
+      final pdfPage = pdfDocument.pages[pdfImage.pdfPageIndex];
+      
+      // 计算渲染尺寸（保持宽高比，适应页面大小）
+      final pdfWidth = pdfPage.width;
+      final pdfHeight = pdfPage.height;
+      final scale = _calculateFitScale(pdfWidth, pdfHeight, pageSize.width, pageSize.height);
+      
+      final renderWidth = (pdfWidth * scale * exportPixelRatio).toInt();
+      final renderHeight = (pdfHeight * scale * exportPixelRatio).toInt();
+      
+      debugPrint('📄[EditorExporter] PDF页面尺寸: ${pdfWidth}x$pdfHeight, 渲染尺寸: ${renderWidth}x$renderHeight');
+      
+      // 渲染PDF页面为图片
+      final pdfPageImage = await pdfPage.render(
+        width: renderWidth,
+        height: renderHeight,
+        backgroundColor: Colors.white,
+      );
+      
+      if (pdfPageImage == null) {
+        debugPrint('⚠️ [EditorExporter] PDF页面渲染失败');
+        pdfDocument.dispose();
+        return;
+      }
+      
+      // 转换为ui.Image
+      final uiImage = await pdfPageImage.createImage();
+      
+      // 计算居中位置
+      final destWidth = pdfWidth * scale;
+      final destHeight = pdfHeight * scale;
+      final offsetX = (pageSize.width - destWidth) / 2;
+      final offsetY = (pageSize.height - destHeight) / 2;
+      
+      // 绘制到Canvas
+      canvas.drawImageRect(
+        uiImage,
+        Rect.fromLTWH(0, 0, uiImage.width.toDouble(), uiImage.height.toDouble()),
+        Rect.fromLTWH(offsetX, offsetY, destWidth, destHeight),
+        Paint(),
+      );
+      
+      debugPrint('📄[EditorExporter] PDF背景渲染完成');
+      
+      // 清理资源
+      uiImage.dispose();
+      pdfPageImage.dispose();
+      pdfDocument.dispose();
+      
+    } catch (e) {
+      debugPrint('❌ [EditorExporter] 绘制PDF背景失败: $e');
+      // 不抛出异常，继续渲染其他内容
+    }
+  }
+
+  /// 计算适应缩放比例
+  static double _calculateFitScale(double srcWidth, double srcHeight, double destWidth, double destHeight) {
+    final scaleX = destWidth / srcWidth;
+    final scaleY = destHeight / srcHeight;
+    return scaleX < scaleY ? scaleX : scaleY;
   }
 
   /// 绘制背景图案
@@ -212,7 +298,7 @@ abstract class EditorExporter {
     }
   }
 
-  /// 绘制图片
+  /// 绘制普通图片
   static Future<void> _drawImage(Canvas canvas, EditorImage image) async {
     final dstRect = image.dstRect;
     if (dstRect == null) return;

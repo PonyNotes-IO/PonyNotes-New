@@ -273,26 +273,24 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   }
 
   /// 隐藏Excalidraw主菜单
+  /// 重要：使用精确选择器，避免影响工具栏按钮
   Future<void> _hideMainMenu() async {
     // 使用CSS和JavaScript隐藏主菜单
     await _safeEvalJs('''
       (function() {
-        // 注入CSS隐藏菜单
+        // 注入CSS隐藏菜单 - 使用精确的类名选择器
         const style = document.createElement('style');
         style.id = 'ponynotes-hide-menu-style';
         style.textContent = `
-          /* 隐藏主菜单按钮 */
+          /* 隐藏主菜单按钮 - 精确匹配 */
           .main-menu-trigger,
-          [data-testid="main-menu-trigger"],
-          button[aria-label*="menu"],
-          button[aria-label*="Menu"] {
+          [data-testid="main-menu-trigger"] {
             display: none !important;
             visibility: hidden !important;
           }
           
           /* 隐藏菜单容器 */
-          .main-menu-dropdown,
-          .dropdown-menu-content[data-placement*="bottom"] {
+          .main-menu-dropdown {
             display: none !important;
           }
         `;
@@ -305,160 +303,111 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         
         document.head.appendChild(style);
         
-        // 使用MutationObserver持续监听并隐藏菜单
-        const observer = new MutationObserver(function(mutations) {
-          // 隐藏菜单按钮
-          const menuTriggers = document.querySelectorAll(
-            '.main-menu-trigger, [data-testid="main-menu-trigger"], button[aria-label*="menu"], button[aria-label*="Menu"]'
-          );
-          menuTriggers.forEach(trigger => {
+        // 隐藏主菜单的函数
+        const hideMainMenu = () => {
+          // 只使用精确的选择器
+          document.querySelectorAll('.main-menu-trigger, [data-testid="main-menu-trigger"]').forEach(trigger => {
             trigger.style.display = 'none';
             trigger.style.visibility = 'hidden';
           });
           
-          // 隐藏菜单容器
-          const menuContainers = document.querySelectorAll(
-            '.main-menu-dropdown, .dropdown-menu-content'
-          );
-          menuContainers.forEach(container => {
-            if (container.closest('.main-menu-trigger')) {
-              container.style.display = 'none';
-            }
+          document.querySelectorAll('.main-menu-dropdown').forEach(container => {
+            container.style.display = 'none';
           });
-        });
+        };
         
-        // 开始观察
+        // 初始执行
+        hideMainMenu();
+        
+        // 使用防抖的 MutationObserver
+        let debounceTimer = null;
+        const debouncedHide = () => {
+          if (debounceTimer) {
+            clearTimeout(debounceTimer);
+          }
+          debounceTimer = setTimeout(hideMainMenu, 100);
+        };
+        
+        const observer = new MutationObserver(debouncedHide);
+        
+        // 只观察 body 的直接子元素变化
         observer.observe(document.body, {
           childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['style', 'class']
+          subtree: false
         });
         
-        // 立即执行一次隐藏
-        setTimeout(() => {
-          const menuTriggers = document.querySelectorAll(
-            '.main-menu-trigger, [data-testid="main-menu-trigger"], button[aria-label*="menu"], button[aria-label*="Menu"]'
-          );
-          menuTriggers.forEach(trigger => {
-            trigger.style.display = 'none';
-            trigger.style.visibility = 'hidden';
-          });
-        }, 100);
+        // 延迟执行
+        setTimeout(hideMainMenu, 100);
+        setTimeout(hideMainMenu, 300);
         
-        // 保存observer到window，以便后续清理
+        // 保存observer到window
         window._ponynotesMenuObserver = observer;
       })();
     ''', tag: 'hideMainMenu');
   }
 
   /// 隐藏不需要的UI元素（欢迎界面、Excalidraw+按钮、帮助按钮等）
+  /// 重要：此方法已优化，避免使用过于宽泛的选择器影响工具栏按钮的点击区域
   Future<void> _hideUnwantedUI() async {
     await _safeEvalJs('''
       (function() {
         // 注入CSS隐藏不需要的UI元素
+        // 重要：使用精确选择器，避免影响工具栏中的绘图工具按钮
         const style = document.createElement('style');
         style.id = 'ponynotes-hide-ui-style';
         style.textContent = `
-          /* 隐藏欢迎界面 */
-          .welcome-screen,
-          [class*="WelcomeScreen"],
-          [class*="welcome-screen"],
-          .welcome-screen-center,
-          [data-testid*="welcome"],
-          [data-testid*="Welcome"] {
+          /* 隐藏欢迎界面 - 不影响工具栏 */
+          .welcome-screen:not(.App-toolbar *),
+          .welcome-screen-center:not(.App-toolbar *) {
             display: none !important;
             visibility: hidden !important;
           }
           
           /* 隐藏Excalidraw+按钮和横幅 */
           .plus-banner,
-          [class*="plus-banner"],
-          [class*="ExcalidrawPlus"],
           [href*="excalidraw.com/plus"],
-          button:has-text("Excalidraw+"),
-          a:has-text("Excalidraw+") {
+          a[href*="/plus"] {
             display: none !important;
             visibility: hidden !important;
           }
           
-          /* 隐藏帮助按钮和快捷键按钮 */
-          [data-testid*="help"],
-          [data-testid*="Help"],
-          [aria-label*="help"],
-          [aria-label*="Help"],
-          [aria-label*="快捷键"],
-          [aria-label*="shortcut"],
-          [aria-label*="Shortcut"],
-          button[title*="帮助"],
-          button[title*="help"],
-          button[title*="Help"],
-          button[title*="快捷键"],
-          .help-button,
-          .shortcut-button,
-          [class*="help-button"],
-          [class*="shortcut-button"] {
+          /* 隐藏帮助按钮 - 精确匹配，不影响工具栏 */
+          .HelpButton,
+          button.help-icon,
+          [data-testid="help-icon"] {
             display: none !important;
             visibility: hidden !important;
           }
           
-          /* 隐藏欢迎界面的提示元素 */
-          .welcome-screen-hint,
-          [class*="WelcomeScreen.Hints"],
-          [class*="welcome-screen-hint"] {
-            display: none !important;
-            visibility: hidden !important;
-          }
-          
-          /* 隐藏实时协作按钮 */
+          /* 隐藏实时协作按钮 - 精确匹配 */
           .collab-button,
-          [class*="collab-button"],
-          [data-testid="collab-button"],
-          button[title*="实时协作"],
-          button[title*="liveCollaboration"],
-          button[title*="LiveCollaboration"],
-          button[title*="协作"],
-          [aria-label*="实时协作"],
-          [aria-label*="liveCollaboration"] {
+          [data-testid="collab-button"] {
             display: none !important;
             visibility: hidden !important;
           }
           
-          /* 隐藏素材库按钮 - 增强版 */
-          [class*="library"],
-          [class*="Library"],
-          [class*="DefaultSidebar.Trigger"],
-          [class*="DefaultSidebarTrigger"],
-          [class*="DefaultSidebar"],
-          [class*="SidebarTrigger"],
-          [class*="sidebar-trigger"],
-          button[title*="library"],
-          button[title*="Library"],
-          button[title*="素材"],
-          button[title*="素材库"],
-          [aria-label*="library"],
-          [aria-label*="Library"],
-          [aria-label*="素材库"],
-          [aria-label*="素材"],
-          [data-testid*="library"],
-          [data-testid*="Library"],
-          [data-testid*="sidebar-trigger"],
-          [data-testid*="default-sidebar"],
-          /* 工具栏中的素材库按钮 */
-          .App-toolbar [class*="library"],
-          .App-toolbar [class*="Library"],
-          .App-toolbar button[title*="素材库"],
-          .App-toolbar button[aria-label*="素材库"],
-          /* 可能包含素材库文字的容器 */
-          [class*="toolbar"] [class*="library"],
-          [class*="Toolbar"] [class*="Library"],
-          /* SVG图标相关 */
-          svg[title*="素材库"],
-          svg[aria-label*="素材库"] {
+          /* 隐藏素材库按钮 - 使用精确的类名选择器 */
+          .default-sidebar-trigger,
+          .sidebar-trigger,
+          label.sidebar-trigger__label-element {
             display: none !important;
             visibility: hidden !important;
-            opacity: 0 !important;
-            pointer-events: none !important;
+          }
+          
+          /* 确保工具栏始终正常显示和响应点击 */
+          .App-toolbar,
+          .App-toolbar * {
+            pointer-events: auto !important;
+          }
+          
+          /* 确保工具栏按钮可以正常点击 */
+          .App-toolbar .ToolIcon,
+          .App-toolbar .Shape,
+          .App-toolbar label.ToolIcon {
+            pointer-events: auto !important;
+            display: inline-flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
           }
         `;
         
@@ -470,309 +419,80 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         
         document.head.appendChild(style);
         
-        // 使用MutationObserver持续监听并隐藏元素
-        const observer = new MutationObserver(function(mutations) {
-          // 隐藏欢迎界面（但确保不是工具栏的一部分）
-          const welcomeScreens = document.querySelectorAll(
-            '.welcome-screen, [class*="WelcomeScreen"], [class*="welcome-screen"], [data-testid*="welcome"], [data-testid*="Welcome"]'
-          );
-          welcomeScreens.forEach(el => {
-            // 确保不是工具栏内的元素
-            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
-              el.style.display = 'none';
-              el.style.visibility = 'hidden';
-            }
-          });
+        // 精确隐藏素材库按钮的函数
+        const hideLibraryButton = () => {
+          // 只使用精确的类名选择器，避免影响其他按钮
+          const librarySelectors = [
+            '.default-sidebar-trigger',
+            '.sidebar-trigger',
+            'label.sidebar-trigger__label-element'
+          ];
           
-          // 隐藏Excalidraw+按钮
-          const plusButtons = document.querySelectorAll(
-            '.plus-banner, [class*="plus-banner"], [class*="ExcalidrawPlus"], [href*="excalidraw.com/plus"], a[href*="/plus"]'
-          );
-          plusButtons.forEach(el => {
-            const text = el.textContent || '';
-            if (text.includes('Excalidraw+') || el.href?.includes('plus')) {
-              el.style.display = 'none';
-              el.style.visibility = 'hidden';
-            }
-          });
-          
-          // 隐藏帮助和快捷键按钮（但确保不是工具栏的一部分）
-          const helpButtons = document.querySelectorAll(
-            '[data-testid*="help"], [data-testid*="Help"], [aria-label*="help"], [aria-label*="Help"], [aria-label*="快捷键"], button[title*="帮助"], button[title*="help"], .help-button, [class*="help-button"]'
-          );
-          helpButtons.forEach(el => {
-            // 确保不是工具栏内的元素
-            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
-              el.style.display = 'none';
-              el.style.visibility = 'hidden';
-            }
-          });
-          
-          // 隐藏欢迎界面中心内容
-          const welcomeCenter = document.querySelectorAll(
-            '.welcome-screen-center, [class*="WelcomeScreen.Center"]'
-          );
-          welcomeCenter.forEach(el => {
-            // 确保不是工具栏内的元素
-            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]')) {
-              el.style.display = 'none';
-              el.style.visibility = 'hidden';
-            }
-          });
-          
-          // 隐藏实时协作按钮
-          const collabButtons = document.querySelectorAll(
-            '.collab-button, [class*="collab-button"], [data-testid="collab-button"], button[title*="实时协作"], button[title*="liveCollaboration"], [aria-label*="实时协作"]'
-          );
-          collabButtons.forEach(el => {
-            // 确保不是工具栏内的其他元素
-            if (!el.closest('.App-toolbar') || el.classList.contains('collab-button')) {
-              el.style.display = 'none';
-              el.style.visibility = 'hidden';
-            }
-          });
-          
-          // 隐藏素材库按钮 - 增强版
-          const hideLibraryButton = () => {
-            // 扩展选择器列表
-            const selectors = [
-              '[class*="library"]',
-              '[class*="Library"]',
-              '[class*="DefaultSidebar"]',
-              '[class*="SidebarTrigger"]',
-              '[class*="sidebar-trigger"]',
-              'button[title*="library"]',
-              'button[title*="Library"]',
-              'button[title*="素材"]',
-              'button[title*="素材库"]',
-              '[aria-label*="library"]',
-              '[aria-label*="Library"]',
-              '[aria-label*="素材库"]',
-              '[aria-label*="素材"]',
-              '[data-testid*="library"]',
-              '[data-testid*="Library"]',
-              '[data-testid*="sidebar-trigger"]',
-              '[data-testid*="default-sidebar"]',
-              '[role="button"]'
-            ];
-            
-            // 使用所有选择器查找元素
-            selectors.forEach(selector => {
-              try {
-                const elements = document.querySelectorAll(selector);
-                elements.forEach(el => {
-                  const text = (el.textContent || '').toLowerCase();
-                  const title = (el.getAttribute('title') || '').toLowerCase();
-                  const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-                  const className = (el.className || '').toString().toLowerCase();
-                  
-                  // 检查是否与素材库相关
-                  const isLibrary =
-                    text.includes('library') ||
-                    text.includes('素材') ||
-                    title.includes('library') ||
-                    title.includes('素材库') ||
-                    title.includes('素材') ||
-                    aria.includes('library') ||
-                    aria.includes('素材库') ||
-                    aria.includes('素材') ||
-                    className.includes('library') ||
-                    className.includes('sidebar') ||
-                    className.includes('sidebartrigger');
-                  
-                  if (isLibrary) {
-                    // 隐藏元素及其父按钮（如果存在）
-                    const target = el.closest('button') || el;
-                    target.style.display = 'none';
-                    target.style.visibility = 'hidden';
-                    target.style.opacity = '0';
-                    target.style.pointerEvents = 'none';
-                    
-                    // 同时隐藏所有子元素
-                    const children = target.querySelectorAll('*');
-                    children.forEach(child => {
-                      child.style.display = 'none';
-                      child.style.visibility = 'hidden';
-                    });
-                  }
-                });
-              } catch (e) {
-                // 忽略选择器错误
-              }
-            });
-            
-            // 额外检查：查找包含"素材库"文字的所有元素
-            const allElements = document.querySelectorAll('*');
-            allElements.forEach(el => {
-              const text = el.textContent || '';
-              if (text.includes('素材库') && el.tagName === 'BUTTON') {
+          librarySelectors.forEach(selector => {
+            try {
+              const elements = document.querySelectorAll(selector);
+              elements.forEach(el => {
                 el.style.display = 'none';
                 el.style.visibility = 'hidden';
-                el.style.opacity = '0';
-                el.style.pointerEvents = 'none';
-              }
-            });
-          };
-          hideLibraryButton();
-          
-          // 确保工具栏始终显示
-          const toolbars = document.querySelectorAll(
-            '.App-toolbar, [class*="App-toolbar"], [data-testid*="toolbar"]'
-          );
-          toolbars.forEach(el => {
-            el.style.display = '';
-            el.style.visibility = '';
+              });
+            } catch (e) {
+              // 忽略选择器错误
+            }
           });
-        });
+        };
         
-        // 开始观察
-        observer.observe(document.body, {
-          childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['style', 'class', 'href']
-        });
-        
-        // 立即执行一次隐藏
-        setTimeout(() => {
-          // 隐藏欢迎界面（但确保不是工具栏的一部分）
-          const welcomeScreens = document.querySelectorAll(
-            '.welcome-screen, [class*="WelcomeScreen"], [class*="welcome-screen"], [data-testid*="welcome"]'
-          );
-          welcomeScreens.forEach(el => {
-            // 确保不是工具栏内的元素
-            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
+        // 隐藏不需要元素的函数（不使用 MutationObserver 持续监听，避免干扰点击事件）
+        const hideElements = () => {
+          // 隐藏欢迎界面（确保不影响工具栏）
+          document.querySelectorAll('.welcome-screen, .welcome-screen-center').forEach(el => {
+            if (!el.closest('.App-toolbar')) {
               el.style.display = 'none';
               el.style.visibility = 'hidden';
             }
           });
           
           // 隐藏Excalidraw+按钮
-          const plusButtons = document.querySelectorAll(
-            '.plus-banner, [class*="plus-banner"], [href*="excalidraw.com/plus"], a[href*="/plus"]'
-          );
-          plusButtons.forEach(el => {
-            const text = el.textContent || '';
-            if (text.includes('Excalidraw+') || el.href?.includes('plus')) {
-              el.style.display = 'none';
-              el.style.visibility = 'hidden';
-            }
-          });
-          
-          // 隐藏帮助按钮（但确保不是工具栏的一部分）
-          const helpButtons = document.querySelectorAll(
-            '[data-testid*="help"], [aria-label*="help"], [aria-label*="快捷键"], button[title*="帮助"]'
-          );
-          helpButtons.forEach(el => {
-            // 确保不是工具栏内的元素
-            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
-              el.style.display = 'none';
-              el.style.visibility = 'hidden';
-            }
-          });
-          
-          // 隐藏实时协作按钮
-          const collabButtons = document.querySelectorAll(
-            '.collab-button, [class*="collab-button"], [data-testid="collab-button"], button[title*="实时协作"], button[title*="liveCollaboration"], [aria-label*="实时协作"]'
-          );
-          collabButtons.forEach(el => {
+          document.querySelectorAll('.plus-banner, a[href*="/plus"]').forEach(el => {
             el.style.display = 'none';
             el.style.visibility = 'hidden';
           });
           
-          // 隐藏素材库按钮 - 增强版（setTimeout中调用）
-          const hideLibraryButtonDelayed = () => {
-            // 扩展选择器列表
-            const selectors = [
-              '[class*="library"]',
-              '[class*="Library"]',
-              '[class*="DefaultSidebar"]',
-              '[class*="SidebarTrigger"]',
-              '[class*="sidebar-trigger"]',
-              'button[title*="library"]',
-              'button[title*="Library"]',
-              'button[title*="素材"]',
-              'button[title*="素材库"]',
-              '[aria-label*="library"]',
-              '[aria-label*="Library"]',
-              '[aria-label*="素材库"]',
-              '[aria-label*="素材"]',
-              '[data-testid*="library"]',
-              '[data-testid*="Library"]',
-              '[data-testid*="sidebar-trigger"]',
-              '[data-testid*="default-sidebar"]',
-              '[role="button"]'
-            ];
-            
-            // 使用所有选择器查找元素
-            selectors.forEach(selector => {
-              try {
-                const elements = document.querySelectorAll(selector);
-                elements.forEach(el => {
-                  const text = (el.textContent || '').toLowerCase();
-                  const title = (el.getAttribute('title') || '').toLowerCase();
-                  const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-                  const className = (el.className || '').toString().toLowerCase();
-                  
-                  // 检查是否与素材库相关
-                  const isLibrary =
-                    text.includes('library') ||
-                    text.includes('素材') ||
-                    title.includes('library') ||
-                    title.includes('素材库') ||
-                    title.includes('素材') ||
-                    aria.includes('library') ||
-                    aria.includes('素材库') ||
-                    aria.includes('素材') ||
-                    className.includes('library') ||
-                    className.includes('sidebar') ||
-                    className.includes('sidebartrigger') ||
-                    className.includes('defaultsidebar');
-                  
-                  if (isLibrary) {
-                    // 隐藏元素及其父按钮（如果存在）
-                    const target = el.closest('button') || el;
-                    target.style.display = 'none';
-                    target.style.visibility = 'hidden';
-                    target.style.opacity = '0';
-                    target.style.pointerEvents = 'none';
-                    
-                    // 同时隐藏所有子元素
-                    const children = target.querySelectorAll('*');
-                    children.forEach(child => {
-                      child.style.display = 'none';
-                      child.style.visibility = 'hidden';
-                    });
-                  }
-                });
-              } catch (e) {
-                // 忽略选择器错误
-              }
-            });
-            
-            // 额外检查：查找包含"素材库"文字的所有元素
-            const allElements = document.querySelectorAll('*');
-            allElements.forEach(el => {
-              const text = el.textContent || '';
-              if (text.includes('素材库') && el.tagName === 'BUTTON') {
-                el.style.display = 'none';
-                el.style.visibility = 'hidden';
-                el.style.opacity = '0';
-                el.style.pointerEvents = 'none';
-              }
-            });
-          };
-          hideLibraryButtonDelayed();
-          
-          // 确保工具栏始终显示
-          const toolbars = document.querySelectorAll(
-            '.App-toolbar, [class*="App-toolbar"], [data-testid*="toolbar"]'
-          );
-          toolbars.forEach(el => {
-            el.style.display = '';
-            el.style.visibility = '';
+          // 隐藏实时协作按钮
+          document.querySelectorAll('.collab-button, [data-testid="collab-button"]').forEach(el => {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
           });
-        }, 200);
+          
+          // 隐藏素材库按钮
+          hideLibraryButton();
+        };
+        
+        // 初始执行一次
+        hideElements();
+        
+        // 使用简化的 MutationObserver，只在必要时触发
+        // 使用防抖来减少频繁执行
+        let debounceTimer = null;
+        const debouncedHide = () => {
+          if (debounceTimer) {
+            clearTimeout(debounceTimer);
+          }
+          debounceTimer = setTimeout(() => {
+            hideElements();
+          }, 100);
+        };
+        
+        const observer = new MutationObserver(debouncedHide);
+        
+        // 只观察 body 的直接子元素变化，减少触发频率
+        observer.observe(document.body, {
+          childList: true,
+          subtree: false
+        });
+        
+        // 延迟执行，确保页面完全加载
+        setTimeout(hideElements, 200);
+        setTimeout(hideElements, 500);
         
         // 保存observer到window
         window._ponynotesUIObserver = observer;
@@ -824,70 +544,39 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           });
         }
 
-        // 使用MutationObserver持续监听
-        const observer = new MutationObserver(() => {
-          // 隐藏欢迎界面中心的所有内容
-          const welcomeCenters = document.querySelectorAll(
-            '.welcome-screen-center, [class*="WelcomeScreen.Center"], [class*="welcome-screen-center"]'
-          );
-          welcomeCenters.forEach(el => {
-            // 确保不是工具栏内的元素
-            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
-              el.style.display = 'none';
-              el.style.visibility = 'hidden';
-            }
-          });
-          
-          // 确保工具栏始终显示
-          const toolbars = document.querySelectorAll(
-            '.App-toolbar, [class*="App-toolbar"], [data-testid*="toolbar"]'
-          );
-          toolbars.forEach(el => {
-            el.style.display = '';
-            el.style.visibility = '';
-            // 确保flex布局
-            if (getComputedStyle(el).display !== 'flex' && getComputedStyle(el).display !== 'inline-flex') {
-              el.style.display = 'flex';
-            }
-          });
-        });
-
-        // 开始观察
-        observer.observe(document.body || document.documentElement, {
-          childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['class', 'style']
-        });
-
-        // 立即执行一次（不延迟，避免闪现）
+        // 隐藏欢迎界面中心的函数
         const hideWelcomeCenter = () => {
-          const welcomeCenters = document.querySelectorAll(
-            '.welcome-screen-center, [class*="WelcomeScreen.Center"], [class*="welcome-screen-center"]'
-          );
-          welcomeCenters.forEach(el => {
-            if (!el.closest('.App-toolbar') && !el.closest('[class*="App-toolbar"]') && !el.closest('[data-testid*="toolbar"]')) {
+          document.querySelectorAll('.welcome-screen-center').forEach(el => {
+            if (!el.closest('.App-toolbar')) {
               el.style.display = 'none';
               el.style.visibility = 'hidden';
             }
-          });
-          
-          // 确保工具栏显示
-          const toolbars = document.querySelectorAll(
-            '.App-toolbar, [class*="App-toolbar"], [data-testid*="toolbar"]'
-          );
-          toolbars.forEach(el => {
-            el.style.display = '';
-            el.style.visibility = '';
           });
         };
 
         // 立即执行
         hideWelcomeCenter();
         
-        // 也延迟执行一次，确保捕获动态创建的元素
-        setTimeout(hideWelcomeCenter, 50);
-        setTimeout(hideWelcomeCenter, 200);
+        // 使用防抖的 MutationObserver，减少触发频率
+        let debounceTimer = null;
+        const debouncedHide = () => {
+          if (debounceTimer) {
+            clearTimeout(debounceTimer);
+          }
+          debounceTimer = setTimeout(hideWelcomeCenter, 50);
+        };
+        
+        const observer = new MutationObserver(debouncedHide);
+
+        // 只观察 body 的直接子元素变化，减少触发频率
+        observer.observe(document.body || document.documentElement, {
+          childList: true,
+          subtree: false
+        });
+        
+        // 延迟执行，确保捕获动态创建的元素
+        setTimeout(hideWelcomeCenter, 100);
+        setTimeout(hideWelcomeCenter, 300);
 
         window._ponynotesLoadingObserver = observer;
       })();
