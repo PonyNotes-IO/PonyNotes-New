@@ -25,7 +25,7 @@ class PaymentType {
 class PaymentDevConfig {
   /// 是否启用开发测试模式（跳过真实支付）
   /// 设置为 true 后，点击"确认协议开通"将直接模拟支付成功
-  static const bool enableTestMode = true;
+  static const bool enableTestMode = false;
   
   /// 模拟支付成功的延迟时间（毫秒），用于模拟支付查询轮询效果
   static const int mockPaymentDelayMs = 1500;

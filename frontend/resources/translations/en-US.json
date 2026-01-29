@@ -1080,7 +1080,9 @@
       "annualPriceInfo": "per seat billed annually",
       "membershipUpgrades":"会员升级",
       "storageAddon": "空间补充包",
-      "storageSpace": "存储空间"
+      "storageSpace": "存储空间",
+      "paidMonthly": "月付",
+      "paidYearly": "年付"
     },
     "comparePlanDialog": {
       "title": "Compare & select plan",

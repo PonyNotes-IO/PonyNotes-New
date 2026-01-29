@@ -51,12 +51,12 @@ class ShareConstants {
       queryParameters: <String, String>{
         'viewId': viewId,
         'workspaceId': workspaceId,
-        'type': 'share', // 添加类型参数，标识这是分享链接
+        'type': '3', // 添加类型参数，标识这是分享链接
         if (blockId != null && blockId.isNotEmpty) 'blockId': blockId,
       },
     ).query;
 
-    return '$host/#/noteshare?$query';
+    return '$host/share?$query';
   }
 }
 

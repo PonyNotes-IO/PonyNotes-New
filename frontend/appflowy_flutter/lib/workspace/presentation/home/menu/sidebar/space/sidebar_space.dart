@@ -72,38 +72,42 @@ class SidebarSpace extends StatelessWidget {
             const VSpace(4.0),
             const SidebarFavoriteButton(),
 
+            // public or private (只在协作工作空间显示)
             BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
               builder: (context, state) {
-                // only show public and private section if the workspace is collaborative and not local
+                // 是否协作工作区
                 final isCollaborativeWorkspace =
                     context.read<UserWorkspaceBloc>().state.isCollabWorkspaceOn;
+                // 使用 SpaceBloc 中的 getter，只展示「空间」类型视图
+                final spaceBloc = context.read<SpaceBloc>();
+                final privateSpaces = spaceBloc.privateSpaces;
+                final publicSpaces = spaceBloc.publicSpaces;
 
-                // only show public and private section if the workspace is collaborative
                 return Column(
                   children: isCollaborativeWorkspace
                       ? [
-                    // private
+                    // 私有空间（仅 Space）
                     PrivateSectionFolder(
-                      views: state.section.privateViews,
+                      views: privateSpaces,
                     ),
-                    // public
-                    const VSpace(4.0),
-                    PublicSectionFolder(views: state.section.publicViews),
+                    // 协作区 / 公共空间（仅 Space）
+                    PublicSectionFolder(
+                      views: publicSpaces,
+                    ),
                   ]
                       : [
+                    // 非协作工作区：个人空间仅使用公共空间中的 Space
                     PersonalSectionFolder(
-                      views: state.section.publicViews,
+                      views: publicSpaces,
                     ),
-                  ], // 非协作工作空间不显示底部的个人空间（已移至上方）
+                  ],
                 );
               },
             ),
-            
+
             // 共享
-            const VSpace(4.0),
             const SidebarShareButton(),
             // 发布
-            const VSpace(4.0),
             const SidebarPublishButton(),
             // 文件库
             // const VSpace(4.0),
@@ -119,11 +123,11 @@ class SidebarSpace extends StatelessWidget {
             // const SidebarSettingsButton(),
 
             // spaces
-            if (shouldShowSpaces) ...[
-              // spaces
-              const VSpace(16.0),
-              const _Space(),
-            ],
+            // if (shouldShowSpaces) ...[
+            //   // spaces
+            //   const VSpace(16.0),
+            //   const _Space(),
+            // ],
 
             const VSpace(200),
           ],

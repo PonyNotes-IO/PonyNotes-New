@@ -36,9 +36,9 @@ enum MembershipTab {
 
 class RemotePlan {
   final int? id;
-  final String planCode;
-  final String planName;
-  final String planNameCn;
+  final String? planCode;
+  final String? planName;
+  final String? planNameCn;
   final double? monthlyPriceYuan;
   final double? yearlyPriceYuan;
   final int? cloudStorageGb;
@@ -1625,8 +1625,8 @@ class AccountManagementBloc
           }
 
           final billingType = selectedDuration == PurchaseDurationOption.monthly
-              ? 'monthly'
-              : 'yearly';
+              ? 0
+              : 1;
 
           emit(
             AccountManagementState.ready(
@@ -1820,9 +1820,9 @@ class AccountManagementBloc
           if(!PaymentDevConfig.enableTestMode) {
             // final baseUrl = cloudConfig.serverUrl;
             final baseUrl = "https://www.xiaomabiji.com";
-            //#/price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
+            //price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
             String payUrl =
-                "$baseUrl/#/price?planId=${planIdValue ?? ''}&addonId=${addonIdValue ?? ''}&billingType=$billingType";
+                "$baseUrl/price?planId=${planIdValue ?? ''}&billingType=$billingType&userInfo=${userProfile.id}";
             // 使用浏览器打开支付链接
             await PaymentUtil.webPay(payUrl);
 
@@ -1904,7 +1904,7 @@ class AccountManagementBloc
       String? workspaceId,
       String? planIdValue,
       String? addonIdValue,
-      String? billingType,
+      int? billingType,
       WorkspaceSubscriptionInfoPB? subscriptionInfo,
         required Map<WorkspacePlanPB, RemotePlan> planConfigs,
         required List<AddonPlan> addons,
@@ -1935,7 +1935,7 @@ class AccountManagementBloc
         // 会员升级时设置
         addonId: addonIdValue,
         // 空间补充包时设置
-        billingType: billingType);
+        billingType: billingType == 0 ? 'monthly' : 'yearly' );
 
     final orderResult = await PaymentApi.createPaymentOrder(createRequest);
 
@@ -2107,7 +2107,7 @@ class AccountManagementBloc
 
         // 空间补充包也走 H5 支付（跳转浏览器），不走接口直购逻辑
         final billingType =
-            selectedDuration == PurchaseDurationOption.monthly ? 'monthly' : 'yearly';
+            selectedDuration == PurchaseDurationOption.monthly ? 0 : 1;
 
         // 1. 获取当前云端配置（拿到 serverUrl）
         final cloudConfigResult = await UserEventGetCloudConfig().send();
@@ -2120,7 +2120,7 @@ class AccountManagementBloc
         final baseUrl = "https://www.xiaomabiji.com";
 
         final payUrl =
-            "$baseUrl/#/price?planId=&addonId=$addonId&billingType=$billingType";
+            "$baseUrl/price?planId=&billingType=$billingType";
 
         await PaymentUtil.webPay(payUrl);
 
@@ -2490,9 +2490,9 @@ extension AccountManagementStateExtension on AccountManagementState {
     );
   }
 
-  Map<String, dynamic> getPlanConfig(WorkspacePlanPB? plan) {
+  RemotePlan? getPlanConfig(WorkspacePlanPB? plan) {
     return maybeWhen(
-      orElse: () => {},
+      orElse: () => null,
       ready: (
         subscriptionInfo,
         planConfigs,
@@ -2509,30 +2509,34 @@ extension AccountManagementStateExtension on AccountManagementState {
         error,
         paymentResult,
       ) {
-        if (plan == null) return {};
+        if (plan == null) return null;
         final remote = planConfigs[plan];
         if (remote != null) {
-          final monthly = remote.monthlyPriceYuan ?? 0.0;
-          final yearly = remote.yearlyPriceYuan ?? monthly * 12;
-          String formatCurrency(double value) {
-            if (value == value.truncateToDouble()) {
-              return value.toInt().toString();
-            }
-            return value.toStringAsFixed(2);
-          }
-
-          return {
-            'title': remote.planNameCn.isNotEmpty
-                ? remote.planNameCn
-                : remote.planName,
-            'price': '¥${formatCurrency(monthly)}',
-            'tag':
-                "每月${remote.cloudStorageGb}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}",
-            'monthlyPrice': monthly,
-            'yearlyPrice': yearly,
-          };
+          // final monthly = remote.monthlyPriceYuan ?? 0.0;
+          // final yearly = remote.yearlyPriceYuan ?? monthly * 12;
+          // String formatCurrency(double value) {
+          //   if (value == value.truncateToDouble()) {
+          //     return value.toInt().toString();
+          //   }
+          //   return value.toStringAsFixed(2);
+          // }
+          //
+          // final price =
+          //     selectedDuration == PurchaseDurationOption.monthly ? monthly : yearly;
+          return remote;
+          // return {
+          //   'title': remote.planNameCn.isNotEmpty
+          //       ? remote.planNameCn
+          //       : remote.planName,
+          //   // 改版：根据顶部月付/年付切换，动态展示价格
+          //   'price': '¥${formatCurrency(price)}',
+          //   'tag':
+          //       "每月${remote.cloudStorageGb}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}",
+          //   'monthlyPrice': monthly,
+          //   'yearlyPrice': yearly,
+          // };
         }
-        return {};
+        return null;
       },
     );
   }
