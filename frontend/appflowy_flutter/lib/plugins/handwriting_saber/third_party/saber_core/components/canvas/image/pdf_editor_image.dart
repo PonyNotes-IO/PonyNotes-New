@@ -136,6 +136,15 @@ class PdfDocumentCacheManager {
     }
   }
 
+  /// 清理指定PDF页面的Widget缓存
+  void clearPageWidgetCache(String filePath, int pageIndex) {
+    final key = '$filePath|$pageIndex';
+    final removed = _pageWidgetCache.remove(key);
+    if (removed != null) {
+      LogUtils.debug('🧹[PdfDocumentCache] 清理页面Widget缓存: $key');
+    }
+  }
+
   /// 清理过期缓存（参考Saber的缓存清理策略）
   void _cleanupExpiredCache() {
     // 如果缓存过大，清理最旧的文档（简化实现）
@@ -435,6 +444,22 @@ class PdfEditorImage {
     }
   }
 
+  /// ✅ 重置加载状态并预加载（用于视图切换后强制重新加载）
+  void resetLoadStateAndPreload() {
+    debugPrint('🔄[PdfEditorImage] 重置加载状态并预加载: $pdfFilePath (页面 $pdfPageIndex)');
+    
+    // ✅ 关键修复：清理Widget缓存，确保重新构建ValueListenableBuilder
+    // 否则缓存的Widget中的ValueListenableBuilder监听的是旧对象的_loadState
+    _cacheManager.clearPageWidgetCache(pdfFilePath, pdfPageIndex);
+    
+    // 重置加载状态为notLoaded，触发ValueNotifier更新
+    _loadState.value = PdfLoadState.notLoaded;
+    _loadError = null;
+    
+    // 立即触发预加载
+    preloadPdfDocument();
+  }
+
   /// 异步加载 PDF 文档（参考saber的firstLoad实现）
   Future<void> _loadPdfDocumentAsync() async {
     try {
@@ -530,13 +555,17 @@ class PdfEditorImage {
     // 先检查页面Widget缓存，避免重复创建
     final cachedWidget = _cacheManager.getCachedPageWidget(pdfFilePath, pdfPageIndex);
     if (cachedWidget != null) {
+      debugPrint('🎨[PdfEditorImage] 使用缓存的Widget: $pdfFilePath (页面 $pdfPageIndex)');
       return cachedWidget;
     }
+
+    debugPrint('🎨[PdfEditorImage] 构建新的Widget: $pdfFilePath (页面 $pdfPageIndex), loadState=${_loadState.value}');
 
     // 使用ValueNotifier监听PDF文档加载状态（参考Saber的实现）
     return ValueListenableBuilder<PdfLoadState>(
       valueListenable: _loadState,
       builder: (context, loadState, child) {
+        debugPrint('🎨[PdfEditorImage] ValueListenableBuilder rebuild: loadState=$loadState');
         switch (loadState) {
           case PdfLoadState.notLoaded:
           case PdfLoadState.loading:
@@ -631,8 +660,8 @@ class PdfEditorImage {
   void dispose() {
     _loadState.dispose();
     // 注意：PDF文档现在由PdfDocumentCacheManager管理，不在这里释放
-    // 但是可以清理页面Widget缓存以释放内存
-    _cacheManager.cachePageWidget(pdfFilePath, pdfPageIndex, const SizedBox.shrink());
+    // PdfDocumentCacheManager是全局单例，会自动管理缓存
+    // 这里只需要释放ValueNotifier即可
   }
 }
 

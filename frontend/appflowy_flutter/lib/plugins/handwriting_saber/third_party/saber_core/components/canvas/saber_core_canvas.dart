@@ -48,6 +48,18 @@ class _PdfBackgroundState extends State<_PdfBackground> {
   }
 
   @override
+  void didUpdateWidget(_PdfBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // ✅ 关键修复：检查pdfImage对象是否改变（通过对象引用判断）
+    // 当视图切换时，EditorPage.fromJson会创建新的PdfEditorImage对象
+    // 即使文件路径相同，对象引用也不同，需要重新预加载
+    if (widget.pdfImage != oldWidget.pdfImage) {
+      debugPrint('🔄[PdfBackground] pdfImage changed, reloading...');
+      widget.pdfImage.resetLoadStateAndPreload();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Positioned(
       left: widget.offsetX,

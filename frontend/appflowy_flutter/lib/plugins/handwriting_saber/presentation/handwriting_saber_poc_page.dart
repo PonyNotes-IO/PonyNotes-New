@@ -239,7 +239,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     int pdfPageCount = 0;
     for (final page in _coreInfo.pages) {
       if (page.backgroundImage != null) {
-        page.backgroundImage!.preloadPdfDocument();
+        // ✅ 使用resetLoadStateAndPreload强制重新加载，确保视图切换后PDF能正确显示
+        page.backgroundImage!.resetLoadStateAndPreload();
         pdfPageCount++;
       }
     }
@@ -3606,8 +3607,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
     _pageNotifiers.clear();
 
-    // ✅ 清理PDF文档缓存管理器
-    PdfDocumentCacheManager().dispose();
+    // ❌ 不要清理PDF文档缓存管理器！
+    // PdfDocumentCacheManager是全局单例，不应该在单个页面的dispose中清理
+    // 它会自动管理缓存（定期清理过期缓存），不需要手动dispose
+    // 如果在这里dispose，会导致其他页面的PDF缓存也被清空！
+    // PdfDocumentCacheManager().dispose();
 
     // ✅ 清理当前笔迹通知器
     _currentStrokeNotifier.dispose();
@@ -3640,6 +3644,26 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           // 检查是否按下 Control (Windows/Linux) 或 Command (macOS)
           final isCtrlPressed = HardwareKeyboard.instance.isControlPressed ||
               HardwareKeyboard.instance.isMetaPressed;
+          
+          // 检查是否按下 Shift
+          final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+          
+          // ✅ Ctrl+Z / Cmd+Z 撤销
+          if (isCtrlPressed && !isShiftPressed && event.logicalKey == LogicalKeyboardKey.keyZ) {
+            if (_history.canUndo) {
+              _undo();
+              return KeyEventResult.handled;
+            }
+          }
+          
+          // ✅ Ctrl+Shift+Z / Cmd+Shift+Z 或 Ctrl+Y / Cmd+Y 重做
+          if ((isCtrlPressed && isShiftPressed && event.logicalKey == LogicalKeyboardKey.keyZ) ||
+              (isCtrlPressed && event.logicalKey == LogicalKeyboardKey.keyY)) {
+            if (_history.canRedo) {
+              _redo();
+              return KeyEventResult.handled;
+            }
+          }
           
           // Ctrl+C 复制
           if (isCtrlPressed && event.logicalKey == LogicalKeyboardKey.keyC) {
