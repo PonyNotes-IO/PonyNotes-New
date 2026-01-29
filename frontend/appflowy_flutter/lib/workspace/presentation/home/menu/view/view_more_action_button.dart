@@ -85,29 +85,57 @@ class ViewMoreActionPopover extends StatelessWidget {
         ViewMoreActionType.changeIcon,
         ViewMoreActionType.manageSpace,
         ViewMoreActionType.duplicate, // 复制空间
-        ViewMoreActionType.divider,
       ]);
 
       // 如果有子视图且已展开，显示收起全部子页面
       if (view.childViews.isNotEmpty && isExpanded) {
+        actionTypes.add(ViewMoreActionType.divider,);
         actionTypes.add(ViewMoreActionType.collapseAllPages);
-        actionTypes.add(ViewMoreActionType.divider);
       }
 
       // 根据用户角色显示删除或离开工作区
       if (context != null) {
-        final currentWorkspace = context.read<UserWorkspaceBloc>().state.currentWorkspace;
-        final userRole = currentWorkspace?.role;
-        
-        if (userRole == AFRolePB.Owner) {
-          // 拥有者显示删除
+        // 改版需求：
+        // - 私有空间列表：不展示“退出工作区”，改为展示“删除”
+        // - 公共空间列表：如果是自己创建的展示“删除”，不展示“退出工作区”
+        final isPrivateSpace = view.spacePermission == SpacePermission.private;
+
+        bool isOwner = false;
+        try {
+          isOwner = context
+                  .read<UserWorkspaceBloc?>()
+                  ?.state
+                  .currentWorkspace
+                  ?.role ==
+              AFRolePB.Owner;
+        } catch (_) {
+          isOwner = false;
+        }
+
+        bool isCreator = false;
+        try {
+          final userId = context.read<UserProfilePB?>()?.id;
+          isCreator = userId != null && view.hasCreatedBy() && view.createdBy == userId;
+        } catch (_) {
+          isCreator = false;
+        }
+
+        final allowDelete = isOwner || isCreator;
+
+        if (isPrivateSpace) {
+          actionTypes.add(ViewMoreActionType.divider);
+          // 私有空间：始终提供“删除”入口（是否可删由后续逻辑/后端校验）
           actionTypes.add(ViewMoreActionType.delete);
         } else {
-          // 参与者显示离开工作区
-          actionTypes.add(ViewMoreActionType.leaveWorkspace);
+          // 公共空间：仅自己创建/Owner 才展示“删除”，且不再展示“退出工作区”
+          if (allowDelete) {
+            actionTypes.add(ViewMoreActionType.divider);
+            actionTypes.add(ViewMoreActionType.delete);
+          }
         }
       } else {
         // 如果无法获取上下文，默认显示删除
+        actionTypes.add(ViewMoreActionType.divider);
         actionTypes.add(ViewMoreActionType.delete);
       }
       return actionTypes;
