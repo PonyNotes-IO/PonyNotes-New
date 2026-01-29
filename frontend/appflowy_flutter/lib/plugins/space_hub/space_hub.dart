@@ -11,6 +11,7 @@ import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
@@ -322,47 +323,63 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 
     debugPrint('[SpaceHub] _SpaceHubContent building, selectedView: ${_selectedView?.name}');
     
-    Widget content = Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 左侧：空间文档列表
-        SizedBox(
-          width: _leftPanelWidth,
-          child: _SpaceDocumentList(
-            spaceView: widget.spaceView,
-            selectedView: _selectedView,
-            onViewSelected: (view) {
-              debugPrint('[SpaceHub] View selected: ${view.name} (${view.id})');
-              setState(() {
-                _selectedView = view;
-              });
-              // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-              widget.selectedViewNotifier.value = view;
-            },
-          ),
+    final rightPanel = Expanded(
+      child: Padding(
+        padding: EdgeInsets.only(
+          top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding,
         ),
-        // 可拖动分隔线 - 增强对比度并支持拖动调整大小
-        ResizableDivider(
-          initialLeftWidth: _leftPanelWidth,
-          minLeftWidth: _minLeftWidth,
-          maxLeftWidth: _maxLeftWidth,
-          onResize: (newWidth) {
-            setState(() {
-              _leftPanelWidth = newWidth;
-            });
-          },
-        ),
-        // 右侧：选中文档详情（保留顶部间距，使正文不贴顶）
-        Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(
-                top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding),
-            child: _selectedView != null
-                ? _buildSelectedViewContent(_selectedView!)
-                : _buildEmptyState(),
-          ),
-        ),
-      ],
+        child: _selectedView != null
+            ? _buildSelectedViewContent(_selectedView!)
+            : _buildEmptyState(),
+      ),
+    );
+
+    // ✅ 全窗口模式：隐藏 SpaceHub 左侧菜单栏（文档列表）与拖拽分隔线
+    Widget content = ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        if (isFullWindow) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [rightPanel],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 左侧：空间文档列表
+            SizedBox(
+              width: _leftPanelWidth,
+              child: _SpaceDocumentList(
+                spaceView: widget.spaceView,
+                selectedView: _selectedView,
+                onViewSelected: (view) {
+                  debugPrint(
+                      '[SpaceHub] View selected: ${view.name} (${view.id})');
+                  setState(() {
+                    _selectedView = view;
+                  });
+                  // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+                  widget.selectedViewNotifier.value = view;
+                },
+              ),
+            ),
+            // 可拖动分隔线 - 增强对比度并支持拖动调整大小
+            ResizableDivider(
+              initialLeftWidth: _leftPanelWidth,
+              minLeftWidth: _minLeftWidth,
+              maxLeftWidth: _maxLeftWidth,
+              onResize: (newWidth) {
+                setState(() {
+                  _leftPanelWidth = newWidth;
+                });
+              },
+            ),
+            rightPanel,
+          ],
+        );
+      },
     );
 
     // 如果有 SpaceBloc，使用 BlocListener 监听空间状态变化
