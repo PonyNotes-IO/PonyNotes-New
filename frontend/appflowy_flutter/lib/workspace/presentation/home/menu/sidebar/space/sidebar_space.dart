@@ -129,7 +129,7 @@ class SidebarSpace extends StatelessWidget {
             //   const _Space(),
             // ],
 
-            const VSpace(200),
+            // const VSpace(200),
           ],
         ),
       ),

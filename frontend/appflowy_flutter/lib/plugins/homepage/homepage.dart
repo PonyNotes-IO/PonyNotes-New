@@ -7,6 +7,7 @@ import 'package:appflowy/plugins/standalone_ai_chat/presentation/widgets/ai_inpu
 import 'package:appflowy/plugins/standalone_ai_chat/models/chat_image.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:flowy_svg/flowy_svg.dart';
@@ -22,6 +23,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
+import 'dart:convert';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/ai_chat_usage_indicator.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/user_avatar.dart';
@@ -29,6 +31,8 @@ import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy/util/string_extension.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:string_validator/string_validator.dart';
+
+import '../../workspace/application/sidebar/space/space_bloc.dart';
 
 class HomePagePluginBuilder extends PluginBuilder {
   @override
@@ -406,6 +410,67 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 获取或创建"最近访问"空间
+  Future<ViewPB> _getOrCreateRecentAccessSpace(String workspaceId, fixnum.Int64 userId) async {
+    const recentAccessName = '最近访问';
+    
+    // 获取工作空间服务
+    final workspaceService = WorkspaceService(
+      workspaceId: workspaceId,
+      userId: userId,
+    );
+    
+    // 获取私有空间和公共空间
+    final privateViewsResult = await workspaceService.getPrivateViews();
+    
+    final privateViews = privateViewsResult.fold(
+      (views) => views,
+      (error) => throw Exception('获取私有空间失败: $error'),
+    );
+
+    final allSpaces = privateViews.where((view) => view.isSpace).toList();
+    
+    // 检查是否已存在"最近访问"空间
+    Log.info('检查私有空间中是否已存在"最近访问"，当前空间: ${allSpaces.map((v) => v.name).toList()}');
+    final existingSpace = allSpaces.firstWhere(
+      (space) => space.name == recentAccessName,
+      orElse: () => ViewPB(),
+    );
+
+    if (existingSpace.id.isNotEmpty) {
+      Log.info('找到已存在的"最近访问"空间，ID: ${existingSpace.id}');
+      return existingSpace;
+    }
+
+    // 在私有空间中创建"最近访问"空间
+    Log.info('在私有空间中创建新的"最近访问"空间');
+    
+    // 创建空间（参考导入笔记的逻辑）
+    final spaceExtra = {
+      ViewExtKeys.isSpaceKey: true,
+      ViewExtKeys.spaceIconKey: '📋',
+      ViewExtKeys.spaceIconColorKey: '#4A90E2',
+      ViewExtKeys.spacePermissionKey: SpacePermission.private.index,
+      ViewExtKeys.spaceCreatedAtKey: DateTime.now().millisecondsSinceEpoch,
+    };
+    
+    final result = await workspaceService.createView(
+      name: recentAccessName,
+      viewSection: ViewSectionPB.Private,
+      layout: ViewLayoutPB.Document,
+      extra: jsonEncode(spaceExtra),
+      setAsCurrent: false,
+    );
+
+    return result.fold(
+      (view) {
+        Log.info('成功创建"最近访问"空间，ID: ${view.id}');
+        return view;
+      },
+      (error) => throw Exception('创建最近访问空间失败: $error'),
+    );
+  }
+
   /// 处理添加笔记本点击事件
   void _handleAddNotebook() async {
     try {
@@ -432,18 +497,15 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      // 使用WorkspaceService创建笔记本视图
-      final workspaceService = WorkspaceService(
-        workspaceId: workspaceId,
-        userId: userProfile.id,
-      );
+      // 先获取或创建"最近访问"空间
+      final recentAccessSpace = await _getOrCreateRecentAccessSpace(workspaceId, userProfile.id);
 
-      // 创建Document类型的视图（而不是Notebook类型）
-      final result = await workspaceService.createView(
+      // 在"最近访问"空间中创建笔记本视图
+      final result = await ViewBackendService.createView(
+        parentViewId: recentAccessSpace.id,
         name: '新笔记本',
-        viewSection: ViewSectionPB.Public, // 创建在公共区域，这样在"我的空间"中可见
-        layout: ViewLayoutPB.Document, // 使用Document类型，这是稳定可用的类型
-        setAsCurrent: true,
+        layoutType: ViewLayoutPB.Document,
+        openAfterCreate: true,
       );
 
       result.fold(

@@ -433,26 +433,17 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       userId: fixnum.Int64(1),
     );
     
-    // 获取私有空间和公共空间
+    // 获取私有空间
     final privateViewsResult = await workspaceService.getPrivateViews();
-    final publicViewsResult = await workspaceService.getPublicViews();
-    
     final privateViews = privateViewsResult.fold(
       (views) => views,
       (error) => throw Exception('获取私有空间失败: $error'),
     );
-    
-    final publicViews = publicViewsResult.fold(
-      (views) => views,
-      (error) => throw Exception('获取公共空间失败: $error'),
-    );
-    
-    // 查找私有空间和公共空间中的空间类型视图
-    final allViews = [...privateViews, ...publicViews];
-    final allSpaces = allViews.where((view) => view.isSpace).toList();
+    // 查找私有空间中的空间类型视图
+    final allSpaces = privateViews.where((view) => view.isSpace).toList();
     
     // 检查是否已存在"外部导入"空间
-    Log.info('检查私有空间和公共空间中是否已存在"外部导入"，当前空间: ${allSpaces.map((v) => v.name).toList()}');
+    Log.info('检查私有空间中是否已存在"外部导入"，当前空间: ${allSpaces.map((v) => v.name).toList()}');
     final existingSpace = allSpaces.firstWhere(
       (space) => space.name == externalImportName,
       orElse: () => ViewPB(),
