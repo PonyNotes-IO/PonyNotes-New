@@ -338,35 +338,33 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     Widget content = ValueListenableBuilder<bool>(
       valueListenable: FullWindowController.isFullWindow,
       builder: (context, isFullWindow, _) {
-        if (isFullWindow) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [rightPanel],
-          );
-        }
-
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 左侧：空间文档列表
-            SizedBox(
-              width: _leftPanelWidth,
-              child: _SpaceDocumentList(
-                spaceView: widget.spaceView,
-                selectedView: _selectedView,
-                onViewSelected: (view) {
-                  debugPrint(
-                      '[SpaceHub] View selected: ${view.name} (${view.id})');
-                  setState(() {
-                    _selectedView = view;
-                  });
-                  // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-                  widget.selectedViewNotifier.value = view;
-                },
+            Visibility(
+              visible: !isFullWindow,
+              child: SizedBox(
+                width: _leftPanelWidth,
+                child: _SpaceDocumentList(
+                  spaceView: widget.spaceView,
+                  selectedView: _selectedView,
+                  onViewSelected: (view) {
+                    debugPrint(
+                        '[SpaceHub] View selected: ${view.name} (${view.id})');
+                    setState(() {
+                      _selectedView = view;
+                    });
+                    // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+                    widget.selectedViewNotifier.value = view;
+                  },
+                ),
               ),
             ),
             // 可拖动分隔线 - 增强对比度并支持拖动调整大小
-            ResizableDivider(
+            Visibility(
+            visible: !isFullWindow,
+            child: ResizableDivider(
               initialLeftWidth: _leftPanelWidth,
               minLeftWidth: _minLeftWidth,
               maxLeftWidth: _maxLeftWidth,
@@ -375,7 +373,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                   _leftPanelWidth = newWidth;
                 });
               },
-            ),
+            )),
             rightPanel,
           ],
         );

@@ -273,17 +273,10 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
           previous.currentPageManager.plugin.pluginType !=
           current.currentPageManager.plugin.pluginType,
       builder: (context, tabsState) {
-        // 再使用全窗口控制器，决定是否隐藏左右侧栏，仅保留中间内容
+        // 全窗口模式：不切换布局，仅用 Visibility 控制左侧菜单显隐，避免重新绘制
         return ValueListenableBuilder<bool>(
           valueListenable: FullWindowController.isFullWindow,
           builder: (context, isFullWindow, _) {
-            if (isFullWindow) {
-              return _layoutFullWindow(
-                layout: layout,
-                homeStack: homeStack,
-              );
-            }
-
             return _layoutWidgets(
               layout: layout,
               homeStack: homeStack,
@@ -293,6 +286,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
               homeMenuResizer: homeMenuResizer,
               notificationPanel: notificationPanel,
               sliderHoverTrigger: sliderHoverTrigger,
+              isFullWindow: isFullWindow,
             );
           },
         );
@@ -350,15 +344,19 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     required Widget homeMenuResizer,
     required Widget notificationPanel,
     required Widget sliderHoverTrigger,
+    bool isFullWindow = false,
   }) {
     final isSliderbarShowing = layout.showMenu;
+    // 全窗口时主内容区铺满；非全窗口时为主内容区留出左侧偏移
+    final homeStackLeft = isFullWindow ? 0.0 : layout.homePageLOffset;
+    final homeStackRight = layout.homePageROffset;
     return Stack(
       children: [
         homeStack
             .constrained(minWidth: 500)
             .positioned(
-              left: layout.homePageLOffset,
-              right: layout.homePageROffset,
+              left: homeStackLeft,
+              right: homeStackRight,
               bottom: 0,
               top: 0,
               animate: true,
@@ -388,43 +386,41 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
               duration: layout.animDuration.inMilliseconds * 0.001,
             )
             .positioned(
-              left: isSliderbarShowing ? layout.menuWidth : 0,
+              left: isFullWindow ? 0 : (isSliderbarShowing ? layout.menuWidth : 0),
               top: isSliderbarShowing ? 0 : 52,
               width: layout.notificationPanelWidth,
               bottom: 0,
             ),
-        sidebar
-            .animatedPanelX(
+        // 左侧菜单：Positioned 必须是 Stack 直接子组件才能正确布局；全屏时宽度为 0 不占位
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: isFullWindow ? 0 : layout.menuWidth,
+          child: Visibility(
+            visible: !isFullWindow,
+            maintainState: true,
+            child: sidebar.animatedPanelX(
               closeX: -layout.menuWidth,
               isClosed: !isSliderbarShowing,
               curve: Curves.easeOutQuad,
               duration: layout.animDuration.inMilliseconds * 0.001,
-            )
-            .positioned(left: 0, top: 0, width: layout.menuWidth, bottom: 0),
-        homeMenuResizer
-            .positioned(left: layout.menuWidth)
-            .animate(layout.animDuration, Curves.easeOutQuad),
-      ],
-    );
-  }
-
-  /// 全窗口布局：隐藏侧栏 / 编辑面板 / 通知面板 / 悬浮气泡等，只保留中间内容区域
-  Widget _layoutFullWindow({
-    required HomeLayout layout,
-    required Widget homeStack,
-  }) {
-    return Stack(
-      children: [
-        homeStack
-            .constrained(minWidth: 500)
-            .positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              top: 0,
-              animate: true,
-            )
-            .animate(layout.animDuration, Curves.easeOutQuad),
+            ),
+          ),
+        ),
+        // 左侧与主内容之间的 resizer，全屏时宽度为 0 不占位
+        Positioned(
+          left: isFullWindow ? 0 : layout.menuWidth,
+          top: 0,
+          bottom: 0,
+          width: isFullWindow ? 0 : null,
+          child: Visibility(
+            visible: !isFullWindow,
+            maintainState: true,
+            child: homeMenuResizer
+                .animate(layout.animDuration, Curves.easeOutQuad),
+          ),
+        ),
       ],
     );
   }
