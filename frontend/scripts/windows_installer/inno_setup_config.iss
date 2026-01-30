@@ -9,7 +9,7 @@ Compression=lzma2
 SolidCompression=yes
 DefaultDirName={autopf}\PonyNotes\
 DefaultGroupName=PonyNotes
-SetupIconFile=flowy_logo.ico
+SetupIconFile=app_icon.ico
 UninstallDisplayIcon={app}\PonyNotes.exe
 UninstallDisplayName=PonyNotes
 VersionInfoVersion={#AppVersion}
@@ -19,7 +19,8 @@ OutputDir=Output
 
 [Files]
 Source: "AppFlowy\PonyNotes.exe"; DestDir: "{app}"; DestName: "PonyNotes.exe"; Flags: ignoreversion
-Source: "AppFlowy\*";DestDir: "{app}"
+Source: "AppFlowy\*.dll"; DestDir: "{app}"
+Source: "AppFlowy\data"; DestDir: "{app}\data"; Flags: recursesubdirs
 
 [Icons]
 Name: "{userdesktop}\PonyNotes"; Filename: "{app}\PonyNotes.exe"
