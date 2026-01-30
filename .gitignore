@@ -154,3 +154,13 @@ credentials/
 *.keystore
 config/local.yml
 config/production.yml
+
+# Windows 安装包构建输出
+scripts/windows_installer/AppFlowy/
+scripts/windows_installer/Output/
+scripts/windows_installer/*.exe
+scripts/windows_installer/*.cmd
+scripts/windows_installer/README.md
+
+# Flutter 安装包构建产物
+installer_output/
