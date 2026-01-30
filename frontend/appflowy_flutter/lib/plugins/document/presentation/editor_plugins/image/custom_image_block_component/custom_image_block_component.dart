@@ -162,7 +162,8 @@ class CustomImageBlockComponentState extends State<CustomImageBlockComponent>
   Widget build(BuildContext context) {
     final node = widget.node;
     final attributes = node.attributes;
-    final src = attributes[CustomImageBlockKeys.url];
+    // url 可能为 null（例如旧数据或被清空时），需要兜底避免对 null 调用 isEmpty
+    final String src = (attributes[CustomImageBlockKeys.url] as String?) ?? '';
 
     final alignment = AlignmentExtension.fromString(
       attributes[CustomImageBlockKeys.align] ?? 'center',

@@ -24,6 +24,8 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../workspace/presentation/home/full_window_controller.dart';
+
 class DocumentPluginBuilder extends PluginBuilder {
   @override
   Plugin build(dynamic data) {
@@ -174,6 +176,10 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
   @override
   Widget get leftBarItem {
     // Hide the breadcrumb/title bar for document pages to remove the
+    // return BlocProvider.value(
+    //   value: pageAccessLevelBloc,
+    //   child: ViewTitleBar(key: ValueKey(view.id), view: view),
+    // );
     // top path area when a note is opened.
     return const SizedBox.shrink();
   }
@@ -207,17 +213,38 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
                   const HSpace(16),
                 ]
               : [const HSpace(8)],
-          ViewFavoriteButton(
-            key: ValueKey('favorite_button_${view.id}'),
-            view: view,
-          ),
-          const HSpace(10),
           ShareButton(
             key: ValueKey('share_button_${view.id}'),
             view: view,
           ),
           const HSpace(4),
+          ViewFavoriteButton(
+            key: ValueKey('favorite_button_${view.id}'),
+            view: view,
+          ),
+          const HSpace(10),
           MoreViewActions(view: view),
+          const HSpace(10),
+          //全局全窗口切换按钮（应用于所有视图）
+          ValueListenableBuilder<bool>(
+            valueListenable: FullWindowController.isFullWindow,
+            builder: (context, isFullWindow, _) {
+              return FlowyIconButton(
+                width: 28,
+                height: 28,
+                tooltipText: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+                radius: const BorderRadius.all(Radius.circular(999)),
+                icon: Icon(
+                  isFullWindow
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                onPressed: FullWindowController.toggle,
+              );
+            },
+          ),
         ],
       ),
     );

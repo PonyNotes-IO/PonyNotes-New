@@ -24,7 +24,10 @@ class ShareMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: FlowySvg(FlowySvgs.icon_share_m),
+      icon: FlowySvg(FlowySvgs.icon_share_m,
+        size: const Size.square(18),
+        blendMode: null,
+      ),
       tooltip: LocaleKeys.shareAction_buttonText.tr(),
       padding: const EdgeInsets.all(8),
       constraints: const BoxConstraints(

@@ -32,6 +32,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
 
+import '../../../workspace/presentation/home/full_window_controller.dart';
 import 'desktop/tab_bar_header.dart';
 import 'mobile/mobile_tab_bar_header.dart';
 
@@ -492,6 +493,27 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
           ViewFavoriteButton(view: view),
           const HSpace(4),
           MoreViewActions(view: view),
+          const HSpace(10),
+          //全局全窗口切换按钮（应用于所有视图）
+          ValueListenableBuilder<bool>(
+            valueListenable: FullWindowController.isFullWindow,
+            builder: (context, isFullWindow, _) {
+              return FlowyIconButton(
+                width: 28,
+                height: 28,
+                tooltipText: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+                radius: const BorderRadius.all(Radius.circular(999)),
+                icon: Icon(
+                  isFullWindow
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                onPressed: FullWindowController.toggle,
+              );
+            },
+          ),
         ],
       ),
     );
