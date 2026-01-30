@@ -155,51 +155,18 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    // 使用 Builder 访问外层 context，尝试获取 UserWorkspaceBloc 以创建独立的 SpaceBloc
+    // 使用 Builder 获取外层 context，再用 StatefulWidget 保证 SpaceBloc 只创建一次；
+    // 否则每次父组件重建都会新建 SpaceBloc 并 dispatch initial()，导致一直处于未初始化状态，菜单栏一直显示 loading。
     return Builder(
       builder: (outerContext) {
-        // 尝试创建新的 SpaceBloc 实例，确保每个选项卡有独立的状态管理
-        SpaceBloc? spaceBloc;
-        try {
-          final userWorkspaceBloc = outerContext.read<UserWorkspaceBloc>();
-          final userProfile = userWorkspaceBloc.state.userProfile;
-          final workspaceId = userWorkspaceBloc.state.currentWorkspace?.workspaceId ?? '';
-          if (workspaceId.isNotEmpty) {
-            debugPrint('[SpaceHub] Creating new SpaceBloc for workspace: $workspaceId');
-            spaceBloc = SpaceBloc(
-              userProfile: userProfile,
-              workspaceId: workspaceId,
-            );
-            // 先初始化 SpaceBloc，空间打开会在 BlocListener 中处理
-            // 注意：初始化是异步的，需要等待 isInitialized 变为 true 后再打开空间
-            spaceBloc.add(const SpaceEvent.initial(openFirstPage: false));
-            debugPrint('[SpaceHub] SpaceBloc initial event dispatched');
-          } else {
-            debugPrint('[SpaceHub] workspaceId is empty, cannot create SpaceBloc');
-          }
-        } catch (e) {
-          debugPrint('[SpaceHub] Failed to create SpaceBloc: $e');
-          // UserWorkspaceBloc 也不存在，spaceBloc 保持为 null
-        }
-
-        final providers = <BlocProvider>[
-          BlocProvider<ViewInfoBloc>.value(value: bloc),
-          BlocProvider<PageAccessLevelBloc>.value(value: pageAccessLevelBloc),
-        ];
-
-        // 如果创建了新的 SpaceBloc，添加到 providers
-        if (spaceBloc != null) {
-          providers.add(BlocProvider<SpaceBloc>(create: (_) => spaceBloc!));
-        }
-
-        return MultiBlocProvider(
-          providers: providers,
-          child: _SpaceHubContent(
-            spaceView: view,
-            selectedViewNotifier: selectedViewNotifier,
-            onDeleted: (deletedView, index) =>
-                context.onDeleted?.call(deletedView, index),
-          ),
+        return _SpaceHubBlocProvider(
+          spaceView: view,
+          selectedViewNotifier: selectedViewNotifier,
+          onDeleted: (deletedView, index) =>
+              context.onDeleted?.call(deletedView, index),
+          pluginContext: context,
+          bloc: bloc,
+          pageAccessLevelBloc: pageAccessLevelBloc,
         );
       },
     );
@@ -233,6 +200,86 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
 
   @override
   List<NavigationItem> get navigationItems => [this];
+}
+
+/// 持有 SpaceBloc 的 StatefulWidget，保证同一 workspace/spaceView 只创建一次 SpaceBloc，
+/// 避免每次父组件重建都新建 Bloc 导致一直处于 loading。
+class _SpaceHubBlocProvider extends StatefulWidget {
+  const _SpaceHubBlocProvider({
+    required this.spaceView,
+    required this.selectedViewNotifier,
+    required this.onDeleted,
+    required this.pluginContext,
+    required this.bloc,
+    required this.pageAccessLevelBloc,
+  });
+
+  final ViewPB spaceView;
+  final ValueNotifier<ViewPB?> selectedViewNotifier;
+  final Function(ViewPB, int?)? onDeleted;
+  final PluginContext pluginContext;
+  final ViewInfoBloc bloc;
+  final PageAccessLevelBloc pageAccessLevelBloc;
+
+  @override
+  State<_SpaceHubBlocProvider> createState() => _SpaceHubBlocProviderState();
+}
+
+class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
+  SpaceBloc? _spaceBloc;
+  String _lastWorkspaceId = '';
+  String _lastSpaceViewId = '';
+
+  @override
+  void dispose() {
+    _spaceBloc?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String workspaceId = '';
+    dynamic userProfile;
+    try {
+      final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+      userProfile = userWorkspaceBloc.state.userProfile;
+      workspaceId = userWorkspaceBloc.state.currentWorkspace?.workspaceId ?? '';
+    } catch (_) {}
+
+    final spaceViewId = widget.spaceView.id;
+    final needNewBloc = _spaceBloc == null ||
+        _lastWorkspaceId != workspaceId ||
+        _lastSpaceViewId != spaceViewId;
+
+    if (needNewBloc && workspaceId.isNotEmpty && userProfile != null) {
+      _spaceBloc?.close();
+      _spaceBloc = SpaceBloc(
+        userProfile: userProfile as UserProfilePB,
+        workspaceId: workspaceId,
+      );
+      _spaceBloc!.add(const SpaceEvent.initial(openFirstPage: false));
+      _lastWorkspaceId = workspaceId;
+      _lastSpaceViewId = spaceViewId;
+      debugPrint('[SpaceHub] Created SpaceBloc once for workspace: $workspaceId, space: ${widget.spaceView.name}');
+    }
+
+    final providers = <BlocProvider>[
+      BlocProvider<ViewInfoBloc>.value(value: widget.bloc),
+      BlocProvider<PageAccessLevelBloc>.value(value: widget.pageAccessLevelBloc),
+    ];
+    if (_spaceBloc != null) {
+      providers.add(BlocProvider<SpaceBloc>.value(value: _spaceBloc!));
+    }
+
+    return MultiBlocProvider(
+      providers: providers,
+      child: _SpaceHubContent(
+        spaceView: widget.spaceView,
+        selectedViewNotifier: widget.selectedViewNotifier,
+        onDeleted: widget.onDeleted,
+      ),
+    );
+  }
 }
 
 /// 空间统一页面内容组件
