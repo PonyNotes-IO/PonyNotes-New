@@ -19,12 +19,15 @@ OutputDir=Output
 
 [Files]
 Source: "AppFlowy\PonyNotes.exe"; DestDir: "{app}"; DestName: "PonyNotes.exe"; Flags: ignoreversion
-Source: "AppFlowy\*.dll"; DestDir: "{app}"
-Source: "AppFlowy\data"; DestDir: "{app}\data"; Flags: recursesubdirs
+Source: "AppFlowy\vc_redist_x64.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "AppFlowy\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
 Name: "{userdesktop}\PonyNotes"; Filename: "{app}\PonyNotes.exe"
 Name: "{group}\PonyNotes"; Filename: "{app}\PonyNotes.exe"
+
+[Run]
+Filename: "{app}\vc_redist_x64.exe"; Parameters: "/install /quiet /norestart"; Description: "Installing Visual C++ Redistributable..."; Flags: shellexec waituntilterminated
 
 [Registry]
 Root: HKCR; Subkey: "PonyNotes"; ValueType: "string"; ValueData: "URL:Custom Protocol"; Flags: uninsdeletekey

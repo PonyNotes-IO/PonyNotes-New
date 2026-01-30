@@ -31,11 +31,28 @@ echo [OK] Inno Setup compiler found
 
 echo.
 echo [2/5] Checking Flutter Release build...
-set "FLUTTER_EXE=%FRONTEND_DIR%\appflowy_flutter\build\windows\x64\runner\Release\AppFlowy.exe"
+set "FLUTTER_EXE=%FRONTEND_DIR%\appflowy_flutter\build\windows\x64\runner\Release\PonyNotes.exe"
 if not exist "%FLUTTER_EXE%" (
-    echo [ERROR] Flutter Release build not found
-    echo Please run: flutter build windows --release
-    exit /b 1
+    echo [WARNING] Flutter Release build not found
+    echo Automatically building Release version...
+    echo.
+    cd /d "%FRONTEND_DIR%\appflowy_flutter"
+    flutter clean
+    echo Cleaning up cached files...
+    powershell -Command "Remove-Item -Path '%FRONTEND_DIR%\appflowy_flutter\build' -Recurse -Force -ErrorAction SilentlyContinue"
+    flutter pub get
+    flutter build windows --release
+    if %errorlevel% neq 0 (
+        echo [ERROR] Flutter Release build failed
+        exit /b 1
+    )
+    if not exist "%FLUTTER_EXE%" (
+        echo [ERROR] Flutter Release build failed - executable not found
+        exit /b 1
+    )
+    echo.
+    echo [OK] Flutter Release build completed
+    cd /d "%SCRIPT_DIR%"
 )
 echo [OK] Flutter Release build found
 
@@ -56,6 +73,14 @@ mkdir "%INSTALL_DIR%"
 REM Copy Flutter build artifacts
 echo Copying Flutter artifacts...
 xcopy "%FRONTEND_DIR%\appflowy_flutter\build\windows\x64\runner\Release\*" "%INSTALL_DIR%\" /E /H /Y >nul
+
+REM Verify data directory was copied (required for Flutter)
+if not exist "%INSTALL_DIR%\data" (
+    echo [ERROR] data directory is missing! This is required for the app to run.
+    echo Please run: flutter build windows --release
+    exit /b 1
+)
+echo [OK] data directory verified
 
 REM Remove AppFlowy.exe to avoid confusion, keep only PonyNotes.exe
 if exist "%INSTALL_DIR%\AppFlowy.exe" del "%INSTALL_DIR%\AppFlowy.exe"
@@ -101,7 +126,29 @@ if exist "%FRONTEND_DIR%\rust-lib\target\release\*.dll" (
     )
 )
 
+REM Copy VC++ Redistributable
+echo Copying VC++ Redistributable...
+if exist "%SCRIPT_DIR%vc_redist_x64.exe" (
+    copy "%SCRIPT_DIR%vc_redist_x64.exe" "%INSTALL_DIR%\" /Y >nul
+)
+
 echo [OK] Installation directory ready
+
+REM Ensure data directory exists (required for Flutter app)
+if not exist "%INSTALL_DIR%\data" (
+    echo [WARNING] data directory missing, copying from Flutter build...
+    xcopy "%FRONTEND_DIR%\appflowy_flutter\build\windows\x64\runner\Release\data" "%INSTALL_DIR%\data\" /E /H /Y >nul
+    if not exist "%INSTALL_DIR%\data" (
+        echo [ERROR] Failed to copy data directory
+        exit /b 1
+    )
+)
+
+REM Final check before compilation
+if not exist "%INSTALL_DIR%\data\app.so" (
+    echo [ERROR] data directory is incomplete
+    exit /b 1
+)
 
 echo.
 echo [5/5] Compiling installer...
