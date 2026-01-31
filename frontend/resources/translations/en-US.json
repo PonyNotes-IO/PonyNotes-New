@@ -173,6 +173,9 @@
   "shareAction": {
     "buttonText": "Share",
     "workInProgress": "Coming soon",
+    "refresh": "Refresh",
+    "removeOwnAccess": "Remove own access",
+    "peopleWithAccess": "People with access",
     "markdown": "Markdown",
     "html": "HTML",
     "clipboard": "Copy to clipboard",
@@ -1198,6 +1201,7 @@
     "menu": {
       "appearance": "Appearance",
       "language": "Language",
+      "featureFlags": "Feature Flags",
       "user": "User",
       "files": "Files",
       "notifications": "Notifications",
@@ -2345,7 +2349,8 @@
       "editURL": "Edit URL",
       "showGroup": "Show group",
       "showGroupContent": "Are you sure you want to show this group on the board?",
-      "failedToLoad": "Failed to load board view"
+      "failedToLoad": "Failed to load board view",
+      "comingSoon": "Coming soon"
     },
     "dateCondition": {
       "weekOf": "Week of {} - {}",
@@ -2615,7 +2620,9 @@
     "loadingViewError": "We're having trouble loading this view. Please check your internet connection, refresh the app, and do not hesitate to reach out to the team if the issue continues.",
     "syncError": "Data is not synced from another device",
     "syncErrorHint": "Please reopen this page on the device where it was last edited, then open it again on the current device.",
-    "clickToCopy": "Click to copy error code"
+    "clickToCopy": "Click to copy error code",
+    "cannotLoadPage": "Cannot load page",
+    "unexpectedError": "Unexpected error"
   },
   "editor": {
     "bold": "Bold",
@@ -2967,6 +2974,7 @@
   "sidebar": {
     "appName": "PonyNotes",
     "template": "Template",
+    "fileLibrary": "File Library",
     "share": "Share",
     "publish": "Publish",
     "noSharedNotes": "No shared notes",
@@ -3009,6 +3017,11 @@
     "weekdaySeven": "Sun"
   },
   "publish": {
+    "database": {
+      "zero": "0 databases selected",
+      "one": "{count} database selected",
+      "other": "{count} databases selected"
+    },
     "hasNotBeenPublished": "This page hasn't been published yet",
     "spaceHasNotBeenPublished": "Haven't supported publishing a space yet",
     "reportPage": "Report page",

@@ -969,7 +969,7 @@
         "localAIStopped": "本地 AI 已停止",
         "localAIToggleSubTitle": "在小马笔记中运行最先进的本地 AI 模型，获得极致的隐私和安全保护",
         "localAIToggleTitle": "小马笔记本地 AI (LAI)",
-        "loginToEnableAIFeature": "AI 功能仅在使用 @:appName 云登录后才能启用。如果您没有 @:appName 账户，请前往"我的账户"注册",
+        "loginToEnableAIFeature": "AI 功能仅在使用 @:appName 云登录后才能启用。如果您没有 @:appName 账户，请前往「我的账户」注册",
         "modelsMissing": "找不到所需的模型：",
         "offlineAIDownload1": "如果您尚未下载小马笔记 AI，请",
         "offlineAIDownload2": "下载",
@@ -3683,8 +3683,8 @@
     "refresh": "这里",
     "refreshNote": "升级成功后，点击<refresh/>激活您的新功能。",
     "step1": "1. 前往设置",
-    "step2": "2. 点击"计划"",
-    "step3": "3. 选择"更换计划"",
+    "step2": "2. 点击「计划」",
+    "step3": "3. 选择「更换计划」",
     "title": "升级到专业版",
     "upgradeSteps": "如何在小马笔记中升级您的计划："
   }
