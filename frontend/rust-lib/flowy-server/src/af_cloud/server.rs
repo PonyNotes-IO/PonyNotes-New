@@ -274,6 +274,10 @@ impl AppFlowyServer for AppFlowyCloudServer {
     )))
   }
 
+  fn subscribe_user_message(&self) -> Option<tokio::sync::broadcast::Receiver<UserMessage>> {
+    Some(self.ws_client.subscribe_user_changed())
+  }
+
   async fn search_service(&self) -> Option<Arc<dyn SearchCloudService>> {
     let state = self.tanvity_state.read().await.clone();
     Some(Arc::new(AFCloudSearchCloudServiceImpl {

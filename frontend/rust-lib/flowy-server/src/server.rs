@@ -1,8 +1,10 @@
+use client_api::entity::UserMessage;
 use client_api::ws::ConnectState;
 use client_api::ws::WSConnectStateReceiver;
 use client_api::ws::WebSocketChannel;
 use flowy_search_pub::cloud::SearchCloudService;
 use std::sync::{Arc, Weak};
+use tokio::sync::broadcast;
 
 use anyhow::Error;
 use arc_swap::ArcSwapOption;
@@ -157,6 +159,12 @@ pub trait AppFlowyServer: Send + Sync + 'static {
   }
 
   fn file_storage(&self) -> Option<Arc<dyn StorageCloudService>>;
+
+  /// 订阅系统通知
+  /// 返回一个接收器，用于接收系统通知（成员加入、权限变更等）
+  fn subscribe_user_message(&self) -> Option<broadcast::Receiver<UserMessage>> {
+    None
+  }
 }
 
 pub struct EncryptionImpl {
