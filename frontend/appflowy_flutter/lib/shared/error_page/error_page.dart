@@ -127,7 +127,7 @@ class FlowyErrorPage extends StatelessWidget {
           FlowyText.regular(howToFix, maxLines: 10),
           const SizedBox(height: _titleToMessagePadding),
           GitHubRedirectButton(
-            title: 'Unexpected error',
+            title: LocaleKeys.error_unexpectedError.tr(),
             message: message,
             stackTrace: stackTrace,
           ),

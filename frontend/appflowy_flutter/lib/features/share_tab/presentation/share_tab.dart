@@ -176,13 +176,13 @@ class _ShareTabState extends State<ShareTab> {
         if (removingSelf) {
           showConfirmDialog(
             context: context,
-            title: 'Remove your own access',
+            title: LocaleKeys.shareAction_removeOwnAccess.tr(),
             titleStyle: theme.textStyle.body.standard(
               color: theme.textColorScheme.primary,
             ),
             description: '',
             style: ConfirmPopupStyle.cancelAndOk,
-            confirmLabel: 'Remove',
+            confirmLabel: LocaleKeys.button_delete.tr(),
             onConfirm: (_) {
               shareTabBloc.add(
                 ShareTabEvent.removeUsers(emails: [user.email]),
@@ -654,7 +654,7 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                         if (removingSelf) {
                                           showConfirmDialog(
                                             context: context,
-                                            title: 'Remove your own access',
+                                            title: LocaleKeys.shareAction_removeOwnAccess.tr(),
                                             titleStyle: theme.textStyle.body
                                                 .standard(
                                               color: theme
@@ -663,7 +663,7 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                             description: '',
                                             style: ConfirmPopupStyle
                                                 .cancelAndOk,
-                                            confirmLabel: 'Remove',
+                                            confirmLabel: LocaleKeys.button_delete.tr(),
                                             onConfirm: (_) {
                                               _bloc.add(
                                                 ShareTabEvent.removeUsers(

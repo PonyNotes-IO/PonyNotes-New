@@ -208,7 +208,7 @@ class _AiPromptVisibleListState extends State<AiPromptVisibleList> {
 
     return AFTextField(
       groupId: "ai_prompt_category_list",
-      hintText: "Search",
+      hintText: LocaleKeys.search_label.tr(),
       controller: context.read<AiPromptSelectorCubit>().filterTextController,
       autoFocus: true,
       suffixIconConstraints: BoxConstraints.tightFor(

@@ -1,4 +1,6 @@
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/feature_flags/feature_flag_page.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 class FeatureFlagScreen extends StatelessWidget {
@@ -12,7 +14,7 @@ class FeatureFlagScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Feature Flags'),
+        title: Text(LocaleKeys.settings_menu_featureFlags.tr()),
       ),
       body: const FeatureFlagsPage(),
     );

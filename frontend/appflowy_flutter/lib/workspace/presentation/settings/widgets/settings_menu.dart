@@ -478,10 +478,9 @@ class SimpleSettingsMenu extends StatelessWidget {
                   ),
                   if (kDebugMode)
                     SettingsMenuElement(
-                      // no need to translate this page
                       page: SettingsPage.featureFlags,
                       selectedPage: SettingsPage.cloud,
-                      label: 'Feature Flags',
+                      label: LocaleKeys.settings_menu_featureFlags.tr(),
                       changeSelectedPage: (_) {},
                     ),
                 ],

@@ -1,7 +1,9 @@
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/plugins/database/application/cell/bloc/relation_cell_bloc.dart';
 import 'package:appflowy/plugins/database/widgets/cell/editable_cell_skeleton/relation.dart';
 import 'package:appflowy/plugins/database/widgets/row/cells/cell_container.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 
@@ -20,7 +22,7 @@ class MobileRowDetailRelationCellSkin extends IEditableRelationCellSkin {
       onTap: () => showMobileBottomSheet(
         context,
         builder: (context) {
-          return const FlowyText("Coming soon");
+          return FlowyText(LocaleKeys.board_mobile_comingSoon.tr());
         },
       ),
       child: Container(

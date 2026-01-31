@@ -1,4 +1,6 @@
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 class RefreshSharedSectionButton extends StatelessWidget {
@@ -18,7 +20,7 @@ class RefreshSharedSectionButton extends StatelessWidget {
         size: 20,
         color: theme.iconColorScheme.secondary,
       ),
-      title: 'Refresh',
+      title: LocaleKeys.shareAction_refresh.tr(),
       onTap: onTap,
     );
   }

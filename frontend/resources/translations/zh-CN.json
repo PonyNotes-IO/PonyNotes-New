@@ -202,7 +202,11 @@
     "copyLinkToBlockSuccess": "区块链接已复制到剪贴板",
     "copyLinkToBlockFailed": "无法将区块链接复制到剪贴板",
     "manageAllSites": "管理所有站点",
-    "updatePathName": "更新路径名称"
+    "updatePathName": "更新路径名称",
+    "removeOwnAccess": "移除自己的访问权限",
+    "peopleWithAccess": "有访问权限的人员",
+    "refresh": "刷新",
+    "sendInvite": "发送邀请"
   },
   "moreAction": {
     "small": "小",
@@ -484,7 +488,9 @@
   "notifications": {
     "export": {
       "markdown": "导出笔记为Markdown文档",
-      "path": "文档/flowy"
+      "path": "文档/flowy",
+      "jsonDebugMode": "JSON (调试模式)",
+      "rawDatabaseDataDebugMode": "原始数据库数据 (调试模式)"
     }
   },
   "contactsPage": {
@@ -498,6 +504,7 @@
     "confirm": "确认",
     "done": "完成",
     "cancel": "取消",
+    "back": "返回",
     "signIn": "登录",
     "signOut": "登出",
     "complete": "完成",
@@ -938,43 +945,43 @@
         "disableLocalAIDescription": "Do you want to disable local AI?",
         "disableLocalAITitle": "Disable local AI",
         "downloadAIModelButton": "下载",
-        "downloadAppFlowyOfflineAI": "Downloading AI offline package will enable AI to run on your device. Do you want to continue?",
-        "downloadBigFilePrompt": "It may take around 10 minutes to complete the 下载",
-        "downloadLLMPrompt": "Download {}",
-        "downloadLLMPromptDetail": "Downloading {} local model will take up to {} of storage. Do you want to continue?",
-        "downloadModel": "to 下载 them.",
+        "downloadAppFlowyOfflineAI": "下载AI离线包将使AI能够在您的设备上运行。是否继续？",
+        "downloadBigFilePrompt": "下载可能需要大约10分钟完成",
+        "downloadLLMPrompt": "下载 {}",
+        "downloadLLMPromptDetail": "下载 {} 本地模型将占用约 {} 存储空间。是否继续？",
+        "downloadModel": "下载它们。",
         "downloadOfflineAI": "下载",
-        "downloadingModel": "Downloading",
+        "downloadingModel": "下载中",
         "failToLoadLocalAI": "操作失败",
-        "globalLLMModel": "Global Language Model",
-        "installOllamaLai": "to set up Ollama and PonyNotes Local AI.",
-        "instructions": "instructions",
-        "laiNotReady": "The Local AI app was not installed correctly.",
-        "localAIDisabled": "You are using local AI, but it is disabled. Please go to settings to enable it or try different model",
-        "localAIDisabledTextFieldPrompt": "You can not edit while Local AI is disabled",
-        "localAIInitializing": "Local AI is loading. This may take a few seconds depending on your device",
-        "localAILoaded": "Local AI Model successfully added and ready to use",
-        "localAILoading": "Local AI Chat Model is loading...",
-        "localAINotReadyRetryLater": "Local AI is initializing, please retry later",
-        "localAINotReadyTextFieldPrompt": "You can not edit while Local AI is loading",
-        "localAIRunning": "Local AI is running",
-        "localAIStart": "Local AI is starting. If it's slow, try toggling it off and on",
-        "localAIStopped": "Local AI stopped",
-        "localAIToggleSubTitle": "Run the most advanced local AI models within PonyNotes for ultimate privacy and security",
-        "localAIToggleTitle": "PonyNotes Local AI (LAI)",
-        "loginToEnableAIFeature": "AI features are only enabled after logging in with @:appName Cloud. If you don't have an @:appName account, go to 'My Account' to sign up",
-        "modelsMissing": "Cannot find the required models: ",
-        "offlineAIDownload1": "If you have not downloaded the PonyNotes AI, please",
+        "globalLLMModel": "全局语言模型",
+        "installOllamaLai": "设置 Ollama 和小马笔记本地 AI。",
+        "instructions": "说明",
+        "laiNotReady": "本地 AI 应用未正确安装。",
+        "localAIDisabled": "您正在使用本地 AI，但它已被禁用。请前往设置启用它或尝试其他模型",
+        "localAIDisabledTextFieldPrompt": "本地 AI 禁用时无法编辑",
+        "localAIInitializing": "本地 AI 正在加载。根据您的设备情况，这可能需要几秒钟",
+        "localAILoaded": "本地 AI 模型已成功添加并准备就绪",
+        "localAILoading": "本地 AI 聊天模型正在加载...",
+        "localAINotReadyRetryLater": "本地 AI 正在初始化，请稍后重试",
+        "localAINotReadyTextFieldPrompt": "本地 AI 加载时无法编辑",
+        "localAIRunning": "本地 AI 正在运行",
+        "localAIStart": "本地 AI 正在启动。如果速度慢，请尝试关闭后重新开启",
+        "localAIStopped": "本地 AI 已停止",
+        "localAIToggleSubTitle": "在小马笔记中运行最先进的本地 AI 模型，获得极致的隐私和安全保护",
+        "localAIToggleTitle": "小马笔记本地 AI (LAI)",
+        "loginToEnableAIFeature": "AI 功能仅在使用 @:appName 云登录后才能启用。如果您没有 @:appName 账户，请前往"我的账户"注册",
+        "modelsMissing": "找不到所需的模型：",
+        "offlineAIDownload1": "如果您尚未下载小马笔记 AI，请",
         "offlineAIDownload2": "下载",
-        "offlineAIDownload3": "it first",
-        "offlineAIInstruction1": "Follow the",
-        "offlineAIInstruction2": "instruction",
-        "offlineAIInstruction3": "to enable offline AI.",
-        "ollamaNotReady": "The Ollama server is not ready.",
-        "openModelDirectory": "Open f更早",
-        "pleaseFollowThese": "Please follow these",
-        "readOnlyField": "This field is read-only",
-        "restartLocalAI": "Restart"
+        "offlineAIDownload3": "它",
+        "offlineAIInstruction1": "请按照",
+        "offlineAIInstruction2": "说明",
+        "offlineAIInstruction3": "启用离线 AI。",
+        "ollamaNotReady": "Ollama 服务器尚未就绪。",
+        "openModelDirectory": "打开文件夹",
+        "pleaseFollowThese": "请按照这些",
+        "readOnlyField": "此字段为只读",
+        "restartLocalAI": "重启"
       }
     },
     "planPage": {
@@ -988,55 +995,55 @@
           "studentInfo": "适合学生使用，2GB云存储，2个成员",
           "standardInfo": "适合个人和小团队，10GB存储，5个成员",
           "teamInfo": "适合高效团队，20GB存储，10个成员",
-          "bannerLabel": "Current plan",
-          "canceledInfo": "Your plan is cancelled, you will be 降级d to the Free plan on {}.",
-          "upgrade": "Change plan"
+          "bannerLabel": "当前计划",
+          "canceledInfo": "您的计划已取消，将于 {} 降级为免费版。",
+          "upgrade": "更换计划"
         },
         "addons": {
-          "activeLabel": "Added",
+          "activeLabel": "已添加",
           "addLabel": "添加",
           "aiMax": {
-            "description": "Unlimited AI responses powered by advanced AI models, and 50 AI images per month",
+            "description": "由高级 AI 模型驱动的无限 AI 响应，每月 50 张 AI 图片",
             "price": "{}",
-            "priceInfo": "Per user per month billed annually",
+            "priceInfo": "每用户每月，按年计费",
             "title": "AI Max"
           },
           "aiOnDevice": {
-            "description": "Run Mistral 7B, LLAMA 3, 和 more local models on your machine",
+            "description": "在您的设备上运行 Mistral 7B、LLAMA 3 等本地模型",
             "price": "{}",
-            "priceInfo": "Per user per month billed annually",
-            "recommend": "Recommend M1 or newer",
-            "title": "AI On-device for Mac"
+            "priceInfo": "每用户每月，按年计费",
+            "recommend": "推荐 M1 或更新的设备",
+            "title": "Mac 设备端 AI"
           },
-          "title": "Add-ons"
+          "title": "附加功能"
         },
         "aiCredit": {
-          "info": "Add 1,000 Ai credits per workspace and seamlessly integrate customizable AI into your workflow for smarter, faster results with up to:",
-          "infoItemOne": "10,000 responses per database",
-          "infoItemTwo": "1,000 responses per workspace",
+          "info": "为每个工作区添加 1,000 个 AI 积分，并将可定制的 AI 无缝集成到您的工作流程中，获得更智能、更快速的结果：",
+          "infoItemOne": "每个数据库 10,000 次响应",
+          "infoItemTwo": "每个工作区 1,000 次响应",
           "price": "{}",
-          "priceDescription": "for 1,000 credits",
-          "purchase": "Purchase AI",
-          "title": "Add @:appName AI Credit"
+          "priceDescription": "1,000 积分",
+          "purchase": "购买 AI",
+          "title": "添加 @:appName AI 积分"
         },
         "aiMaxBadge": "AI Max",
-        "aiMaxToggle": "Unlimited AI and access to advanced models",
-        "aiOnDeviceBadge": "AI On-device for Mac",
-        "aiOnDeviceToggle": "Local AI for ultimate privacy",
-        "aiResponseLabel": "AI Responses",
-        "aiResponseUsage": "{} of {}",
-        "collaboratorsLabel": "Members",
-        "collaboratorsUsage": "{} of {}",
+        "aiMaxToggle": "无限 AI 和高级模型访问",
+        "aiOnDeviceBadge": "Mac 设备端 AI",
+        "aiOnDeviceToggle": "本地 AI 保护极致隐私",
+        "aiResponseLabel": "AI 响应",
+        "aiResponseUsage": "{} / {}",
+        "collaboratorsLabel": "成员",
+        "collaboratorsUsage": "{} / {}",
         "deal": {
-          "bannerLabel": "New year deal!",
-          "info": "Upgrade and save 10% off Pro and Team plans! Boost your workspace productivity with powerful new features including @:appName AI.",
-          "title": "Grow your team!",
-          "viewPlans": "View plans"
+          "bannerLabel": "新年特惠！",
+          "info": "升级专业版和团队版可节省 10%！使用强大的新功能（包括 @:appName AI）提升您的工作区效率。",
+          "title": "壮大您的团队！",
+          "viewPlans": "查看计划"
         },
-        "memberProToggle": "More members & unlimited AI & guest access",
-        "proBadge": "Pro",
-        "storageLabel": "Storage",
-        "storageUsage": "{} of {} GB",
+        "memberProToggle": "更多成员 & 无限 AI & 访客访问",
+        "proBadge": "专业版",
+        "storageLabel": "存储",
+        "storageUsage": "{} / {} GB",
         "title": "Plan usage summary",
         "unlimitedAILabel": "Unlimited responses",
         "unlimitedStorageLabel": "Unlimited storage"
@@ -1079,48 +1086,48 @@
         "itemTwo": "Up to 2"
       },
       "freePlan": {
-        "description": "For individuals up to 2 members to organize everything",
+        "description": "适合最多2人的个人用户组织一切",
         "price": "{}",
-        "priceInfo": "Free forever",
-        "title": "Free"
+        "priceInfo": "永久免费",
+        "title": "免费版"
       },
       "paymentSuccess": {
-        "description": "Your payment has been successfully processed and your plan is upgraded to @:appName {}. You can view your plan detAIls on the Plan page",
-        "title": "You are now on the {} plan!"
+        "description": "您的付款已成功处理，您的计划已升级到 @:appName {}。您可以在计划页面查看计划详情",
+        "title": "您现在使用的是 {} 计划！"
       },
-      "planFeatures": "Plan\nFeatures",
+      "planFeatures": "计划\n功能",
       "planLabels": {
-        "customNamespace": "Custom namespace",
-        "customNamespaceTooltip": "Custom published site URL",
-        "intelligentSearch": "Intelligent search",
-        "itemFileUpload": "File uploads",
-        "itemFive": "Guest editors",
-        "itemFour": "Real-time collaboration",
-        "itemOne": "Workspaces",
-        "itemSeven": "AI Images",
-        "itemSix": "AI Responses",
-        "itemThree": "Storage",
-        "itemTwo": "Members",
-        "tooltipFive": "Collaborate on specific pages with non-members",
-        "tooltipSeven": "Allows you to customize part of the URL for your workspace",
-        "tooltipSix": "Lifetime means the number of responses never reset"
+        "customNamespace": "自定义命名空间",
+        "customNamespaceTooltip": "自定义发布网站 URL",
+        "intelligentSearch": "智能搜索",
+        "itemFileUpload": "文件上传",
+        "itemFive": "访客编辑",
+        "itemFour": "实时协作",
+        "itemOne": "工作区",
+        "itemSeven": "AI 图片",
+        "itemSix": "AI 响应",
+        "itemThree": "存储",
+        "itemTwo": "成员",
+        "tooltipFive": "与非成员在特定页面上协作",
+        "tooltipSeven": "允许您自定义工作区 URL 的部分内容",
+        "tooltipSix": "终身意味着响应次数永不重置"
       },
       "proPlan": {
-        "description": "For small teams to manage projects 和 team knowledge",
+        "description": "适合小团队管理项目和团队知识",
         "price": "{}",
-        "priceInfo": "Per user per month \nbilled annually\n\n{} billed monthly",
-        "title": "Pro"
+        "priceInfo": "每用户每月\n按年计费\n\n{} 按月计费",
+        "title": "专业版"
       },
-      "title": "Compare & select plan"
+      "title": "比较并选择计划"
     },
     "cancelSurveyDialog": {
       "questionOne": {
         "answerOne": "价格太高",
         "answerTwo": "功能未达预期",
         "answerThree": "找到更好替代方案",
-        "answerFive": "Service issue or technical difficulties",
-        "answerFour": "Did not use it enough to justify the expense",
-        "question": "What prompted you to cancel your @:appName Pro subscription?"
+        "answerFive": "服务问题或技术困难",
+        "answerFour": "使用不够频繁，不值得花费",
+        "question": "是什么促使您取消 @:appName 专业版订阅？"
       },
       "questionTwo": {
         "answerOne": "非常可能",
@@ -1128,7 +1135,7 @@
         "answerThree": "不确定",
         "answerFour": "不太可能",
         "answerFive": "非常不可能",
-        "question": "How likely are you to consider re-subscribing to @:appName Pro in the future?"
+        "question": "您将来重新订阅 @:appName 专业版的可能性有多大？"
       },
       "questionFour": {
         "answerOne": "极好",
@@ -1136,24 +1143,24 @@
         "answerThree": "一般",
         "answerFour": "较差",
         "answerFive": "未满足",
-        "question": "How would you describe your overall experience with @:appName?"
+        "question": "您如何描述使用 @:appName 的整体体验？"
       },
       "commonOther": "其他",
-      "description": "We're sorry to see you go. We'd love to hear your feedback to help us improve @:appName. Please take a moment to answer a few questions.",
-      "otherHint": "Write your answer here",
+      "description": "很遗憾看到您离开。我们希望听取您的反馈以帮助我们改进 @:appName。请花一点时间回答几个问题。",
+      "otherHint": "请在此输入您的答案",
       "questionThree": {
-        "answerFour": "Access to local AI models",
-        "answerOne": "Multi-user collaboration",
-        "answerThree": "Unlimited AI responses",
-        "answerTwo": "Longer time version history",
-        "question": "Which Pro feature did you value the most during your subscription?"
+        "answerFour": "访问本地 AI 模型",
+        "answerOne": "多用户协作",
+        "answerThree": "无限 AI 响应",
+        "answerTwo": "更长的版本历史",
+        "question": "在您的订阅期间，您最看重哪个专业版功能？"
       },
-      "title": "Sorry to see you go"
+      "title": "很遗憾看到您离开"
     },
     "common": {
       "reset": "重置",
-      "uploadNotionSuccess": "Your Notion zip file has been uploaded successfully. Once the import is complete, you will receive a confirmation emAIl",
-      "uploadingFile": "File is 上传中. Please do not quit the app"
+      "uploadNotionSuccess": "您的 Notion zip 文件已成功上传。导入完成后，您将收到确认邮件",
+      "uploadingFile": "文件正在上传中。请不要退出应用程序"
     },
     "menu": {
       "appearance": "外观",
@@ -1161,6 +1168,7 @@
       "user": "用户",
       "files": "文件",
       "notifications": "通知",
+      "featureFlags": "功能标志",
       "open": "打开设置",
       "logout": "登出",
       "logoutPrompt": "您确定要登出吗？",
@@ -1236,8 +1244,8 @@
       },
       "tabs": {
         "unread": "未读",
-        "archived": "Archived",
-        "inbox": "Inbox"
+        "archived": "已归档",
+        "inbox": "收件箱"
       },
       "refreshSuccess": "成功刷新通知",
       "titles": {
@@ -1245,40 +1253,40 @@
         "reminder": "提醒"
       },
       "archiveNotifications": {
-        "allSuccess": "Archived all notifications 成功fully",
-        "success": "Archived notification 成功fully"
+        "allSuccess": "已成功归档所有通知",
+        "success": "已成功归档通知"
       },
       "clipNotifications": {
-        "hint": "Receive notifications about clip activities 和 updates.",
-        "label": "Clip notifications"
+        "hint": "接收有关片段活动和更新的通知。",
+        "label": "片段通知"
       },
       "emptyArchived": {
-        "description": "Archived notifications will appear here.",
-        "title": "No archived"
+        "description": "归档的通知将显示在这里。",
+        "title": "暂无归档"
       },
       "emptyInbox": {
-        "description": "Set reminders to receive notifications here.",
-        "title": "Inbox Zero!"
+        "description": "设置提醒以在此处接收通知。",
+        "title": "收件箱为空！"
       },
       "emptyUnread": {
-        "description": "You're all caught up!",
-        "title": "No unread notifications"
+        "description": "您已全部处理完毕！",
+        "title": "暂无未读通知"
       },
       "mentionNotifications": {
-        "hint": "Receive notifications when you are mentioned in comments or discussions.",
-        "label": "Mention notifications"
+        "hint": "当您在评论或讨论中被提及时接收通知。",
+        "label": "提及通知"
       },
       "pendingNotifications": {
-        "hint": "Get notified about pending tasks 和 assignments.",
-        "label": "Pending notifications"
+        "hint": "接收有关待处理任务和分配的通知。",
+        "label": "待处理通知"
       },
       "permissionChangeNotifications": {
-        "hint": "Receive notifications when your permissions are changed.",
-        "label": "Permission change notifications"
+        "hint": "当您的权限发生更改时接收通知。",
+        "label": "权限变更通知"
       },
       "teamJoinNotifications": {
-        "hint": "Get notified when new members join your team.",
-        "label": "Team join notifications"
+        "hint": "当新成员加入您的团队时接收通知。",
+        "label": "团队加入通知"
       }
     },
     "appearance": {
@@ -1310,7 +1318,7 @@
         "flowy": "弗洛菲",
         "apply": "申请",
         "changeWidth": "更改",
-        "width": "Document width"
+        "width": "文档宽度"
       },
       "layoutDirection": {
         "label": "布局方向",
@@ -2400,7 +2408,8 @@
       "failedToLoad": "无法加载版面视图",
       "unhideGroup": "显示隐藏的组",
       "unhideGroupContent": "您确定要在看板上显示该组吗？",
-      "faildToLoad": "无法加载看板视图"
+      "faildToLoad": "无法加载看板视图",
+      "comingSoon": "即将推出"
     },
     "dateCondition": {
       "today": "今天",
@@ -2637,15 +2646,15 @@
     "archivedTooltip": "归档此通知",
     "closeNotification": "关闭通知",
     "markAllAsArchivedSucceedToast": "全部归档成功",
-    "markAllAsReadSucceedToast": "Mark all as read 成功fully",
+    "markAllAsReadSucceedToast": "全部标记为已读成功",
     "markAsArchivedSucceedToast": "归档成功",
-    "markAsReadSucceedToast": "Mark as read successfully",
-    "markAsReadTooltip": "Mark this notification as read",
+    "markAsReadSucceedToast": "标记为已读成功",
+    "markAsReadTooltip": "将此通知标记为已读",
     "mentionedYou": "提到了您",
-    "noNotifications": "No notifications yet",
+    "noNotifications": "暂无通知",
     "older": "更早",
     "today": "今天",
-    "unarchiveTooltip": "Un归档此通知",
+    "unarchiveTooltip": "取消归档此通知",
     "viewNotifications": "查看通知"
   },
   "reminderNotification": {
@@ -2671,7 +2680,9 @@
     "loadingViewError": "我们在加载此视图时遇到问题。请检查您的互联网连接，刷新应用程序，如果问题仍然存在，请随时联系开发团队。",
     "clickToCopy": "点击复制",
     "syncError": "数据未从其他设备同步",
-    "syncErrorHint": "Please reopen this page on the device where it was last edited, then open it agAIn on the current device."
+    "syncErrorHint": "请在最后编辑此页面的设备上重新打开，然后再在当前设备上打开。",
+    "unexpectedError": "意外错误",
+    "cannotLoadPage": "无法加载页面"
   },
   "editor": {
     "bold": "加粗",
@@ -2878,20 +2889,20 @@
           "passwordsDoNotMatch": "Passwords do not match"
         },
         "hint": {
-          "confirmYourNewPassword": "Confirm your new password",
-          "confirmYourPassword": "Confirm your password",
-          "enterYourCurrentPassword": "Enter your current password",
-          "enterYourNewPassword": "Enter your new password",
-          "enterYourPassword": "Enter your password"
+          "confirmYourNewPassword": "确认您的新密码",
+          "confirmYourPassword": "确认您的密码",
+          "enterYourCurrentPassword": "输入您的当前密码",
+          "enterYourNewPassword": "输入您的新密码",
+          "enterYourPassword": "输入您的密码"
         },
-        "newPassword": "New password",
-        "setupPassword": "Setup password",
-        "title": "Password",
+        "newPassword": "新密码",
+        "setupPassword": "设置密码",
+        "title": "密码",
         "toast": {
           "passwordSetupFailed": "操作失败",
-          "passwordSetupSuccessfully": "Password setup 成功fully",
+          "passwordSetupSuccessfully": "密码设置成功",
           "passwordUpdatedFailed": "操作失败",
-          "passwordUpdatedSuccessfully": "Password updated 成功fully"
+          "passwordUpdatedSuccessfully": "密码更新成功"
         }
       }
     },
@@ -2907,14 +2918,14 @@
         },
         "language": "语言"
       },
-      "name": "Workplace",
+      "name": "工作区",
       "renameError": "操作失败",
-      "subtitle": "Customize your workspace appearance, theme, font, text layout, date, time, 和 language.",
-      "title": "Workplace Settings",
-      "workplaceIcon": "Workplace icon",
-      "workplaceIconSubtitle": "Upload an image or use an emoji for your workspace. Icon will show in your sidebar 和 notifications.",
-      "workplaceName": "Workplace name",
-      "workplaceNamePlaceholder": "Enter workplace name"
+      "subtitle": "自定义您的工作区外观、主题、字体、文本布局、日期、时间和语言。",
+      "title": "工作区设置",
+      "workplaceIcon": "工作区图标",
+      "workplaceIconSubtitle": "上传图片或使用表情符号作为工作区图标。图标将显示在侧边栏和通知中。",
+      "workplaceName": "工作区名称",
+      "workplaceNamePlaceholder": "输入工作区名称"
     },
     "syncState": {
       "syncing": "同步中",
@@ -2927,20 +2938,20 @@
     "openSettings": "打开设置",
     "image": "图像",
     "backgroundImage": "背景图片",
-    "cameraPermissionDescription": "@:appName needs access to your camera to let you add images to your documents from the camera",
-    "cameraPermissionTitle": "@:appName would like to access your camera",
-    "colors": "Colors",
-    "coverImage": "Cover image",
-    "doNotAllow": "Don't Allow",
-    "gradient": "Gradient",
-    "layout": "Layout",
-    "none": "None",
-    "pageCover": "Page cover",
-    "photo": "Photo",
-    "photoPermissionDescription": "@:appName needs access to your photos to let you add images to your documents",
-    "photoPermissionTitle": "@:appName would like to access your photo library",
-    "presets": "Presets",
-    "title": "Page style",
+    "cameraPermissionDescription": "@:appName 需要访问您的相机，以便您可以从相机添加图片到文档中",
+    "cameraPermissionTitle": "@:appName 想要访问您的相机",
+    "colors": "颜色",
+    "coverImage": "封面图片",
+    "doNotAllow": "不允许",
+    "gradient": "渐变",
+    "layout": "布局",
+    "none": "无",
+    "pageCover": "页面封面",
+    "photo": "照片",
+    "photoPermissionDescription": "@:appName 需要访问您的照片，以便您可以将图片添加到文档中",
+    "photoPermissionTitle": "@:appName 想要访问您的照片库",
+    "presets": "预设",
+    "title": "页面样式",
     "unsplash": "Unsplash"
   },
   "commandPalette": {
@@ -2948,21 +2959,21 @@
     "aiAskFollowUp": "继续提问",
     "aiOverview": "AI 概览",
     "aiOverviewMoreDetails": "更多详情",
-    "aiOverviewSource": "Reference sources",
-    "bestMatches": "Best matches",
-    "betaLabel": "BETA",
-    "betaTooltip": "We currently only support searching for pages 和 content in documents",
-    "clearSearchTooltip": "Clear input",
-    "clickToOpenPage": "Click to open page",
-    "created": "Created",
-    "edited": "Edited",
-    "fromTrashHint": "From trash",
-    "loadingTooltip": "We are looking for results...",
-    "location": "Location",
-    "navigateHint": "to navigate",
-    "noResultsHint": "We didn't find what you're looking for, try searching for an其他 term.",
-    "pagePreview": "Content 上一个iew",
-    "recentHistory": "Recent history"
+    "aiOverviewSource": "参考来源",
+    "bestMatches": "最佳匹配",
+    "betaLabel": "测试版",
+    "betaTooltip": "我们目前仅支持搜索文档中的页面和内容",
+    "clearSearchTooltip": "清除输入",
+    "clickToOpenPage": "点击打开页面",
+    "created": "创建时间",
+    "edited": "编辑时间",
+    "fromTrashHint": "来自回收站",
+    "loadingTooltip": "正在搜索结果...",
+    "location": "位置",
+    "navigateHint": "导航",
+    "noResultsHint": "未找到您要查找的内容，请尝试其他关键词。",
+    "pagePreview": "内容预览",
+    "recentHistory": "最近历史"
   },
   "space": {
     "delete": "删除",
@@ -3026,7 +3037,8 @@
     "publish": "发布",
     "noSharedNotes": "暂无分享的笔记",
     "noPublished": "暂无发布",
-    "import": "导入"
+    "import": "导入",
+    "fileLibrary": "文件库"
   },
   "repeat": {
     "title": "任务重复",
@@ -3128,28 +3140,28 @@
     "continueWithApple": "Continue with Apple ",
     "dropNotionFile": "Drop your Notion zip file here to upload, or click to browse",
     "error": {
-      "pageNameIsEmpty": "The page name is empty, please try an其他 one"
+      "pageNameIsEmpty": "页面名称为空，请尝试其他名称"
     },
     "fileBlock": {
-      "empty": "Upload or embed a file",
-      "linkedAt": "Link added on {time}",
-      "retry": "Retry",
+      "empty": "上传或嵌入文件",
+      "linkedAt": "链接添加于 {time}",
+      "retry": "重试",
       "uploadFailed": "上传失败",
-      "uploadedAt": "Uploaded on {time}"
+      "uploadedAt": "上传于 {time}"
     },
-    "import": "Import",
+    "import": "导入",
     "importFailed": "操作失败",
-    "importNotion": "Import from Notion",
-    "importSuccess": "Uploaded 成功fully",
-    "importSuccessMessage": "We'll notify you when the import is complete. After that, you can view your imported pages in the sidebar.",
-    "login": "Sign up or log in",
-    "moreOptions": "More options",
-    "or": "or",
-    "privacyPolicy": "Privacy Policy",
+    "importNotion": "从 Notion 导入",
+    "importSuccess": "上传成功",
+    "importSuccessMessage": "导入完成后我们会通知您。届时，您可以在侧边栏中查看导入的页面。",
+    "login": "注册或登录",
+    "moreOptions": "更多选项",
+    "or": "或",
+    "privacyPolicy": "隐私政策",
     "signInAgreement": "点击上方的\"继续\"，即表示您同意\n小马笔记的 ",
     "signInError": "登录错误",
     "signInLocalAgreement": "点击上方的\"开始使用\"，即表示您同意\n小马笔记的 ",
-    "termOfUse": "Terms"
+    "termOfUse": "服务条款"
   },
   "template": {
     "deleteFromTemplate": "从模板中删除",
@@ -3160,51 +3172,51 @@
     "about": "模板说明",
     "addCategory": "添加\"{category}\"",
     "addNewCategory": "添加新类别",
-    "addNewCreator": "Add new creator",
-    "addRelatedTemplate": "Add related template",
-    "asTemplate": "Save as template",
-    "categories": "Template Categories",
+    "addNewCreator": "添加新创作者",
+    "addRelatedTemplate": "添加相关模板",
+    "asTemplate": "保存为模板",
+    "categories": "模板分类",
     "category": {
-      "bgColor": "Category background color",
-      "byFeature": "By Feature",
-      "byUseCase": "By Use Case",
-      "colors": "Category Colors",
-      "deleteCategory": "Delete category",
-      "deleteCategoryDescription": "Are you sure you want to delete this category?",
-      "desc": "Category description",
-      "icon": "Category icon",
-      "icons": "Category Icons",
-      "name": "Category name",
-      "priority": "Category priority",
-      "type": "Category type",
-      "typeToSearch": "Type to search categories..."
+      "bgColor": "分类背景颜色",
+      "byFeature": "按功能",
+      "byUseCase": "按用途",
+      "colors": "分类颜色",
+      "deleteCategory": "删除分类",
+      "deleteCategoryDescription": "您确定要删除此分类吗？",
+      "desc": "分类描述",
+      "icon": "分类图标",
+      "icons": "分类图标",
+      "name": "分类名称",
+      "priority": "分类优先级",
+      "type": "分类类型",
+      "typeToSearch": "输入以搜索分类..."
     },
     "creator": {
-      "accountLinks": "Creator account links",
-      "avatar": "Creator avatar",
-      "deleteCreator": "Delete creator",
-      "deleteCreatorDescription": "Are you sure you want to delete this creator?",
-      "label": "Template Creator",
-      "name": "Creator name",
-      "typeToSearch": "Type to search creators...",
-      "uploadAvatar": "Click to upload avatar"
+      "accountLinks": "创作者账户链接",
+      "avatar": "创作者头像",
+      "deleteCreator": "删除创作者",
+      "deleteCreatorDescription": "您确定要删除此创作者吗？",
+      "label": "模板创作者",
+      "name": "创作者名称",
+      "typeToSearch": "输入以搜索创作者...",
+      "uploadAvatar": "点击上传头像"
     },
-    "deleteCategory": "Delete category",
-    "deleteSuccess": "Template deleted 成功fully",
-    "deleteTemplateDescription": "This won't affect the current page or published status. Are you sure you want to delete this template?",
-    "description": "Template Description",
-    "editCategory": "Edit category",
-    "editCreator": "Edit creator",
-    "featured": "PIN to Featured",
-    "isNewTemplate": "PIN to New template",
-    "name": "Template name",
-    "preview": "Template Preview",
-    "requiredField": "{field} is required",
-    "searchInCategory": "Search in {category}",
-    "uploadAvatar": "Upload avatar",
-    "uploadSuccess": "Template uploaded 成功fully",
-    "uploadSuccessDescription": "Your template has been uploaded 成功fully. You can now view it in the template gallery.",
-    "viewTemplate": "View template"
+    "deleteCategory": "删除分类",
+    "deleteSuccess": "模板删除成功",
+    "deleteTemplateDescription": "这不会影响当前页面或发布状态。您确定要删除此模板吗？",
+    "description": "模板描述",
+    "editCategory": "编辑分类",
+    "editCreator": "编辑创作者",
+    "featured": "置顶到精选",
+    "isNewTemplate": "置顶到新模板",
+    "name": "模板名称",
+    "preview": "模板预览",
+    "requiredField": "{field} 是必填项",
+    "searchInCategory": "在 {category} 中搜索",
+    "uploadAvatar": "上传头像",
+    "uploadSuccess": "模板上传成功",
+    "uploadSuccessDescription": "您的模板已成功上传。您现在可以在模板库中查看它。",
+    "viewTemplate": "查看模板"
   },
   "time": {
     "justNow": "刚刚",
@@ -3384,24 +3396,24 @@
     "textLimitReachedDescription": "专业版计划"
   },
   "approveAccess": {
-    "alreadyProMessage": "Ask them to contact <emAIl/> to unlock more members",
-    "alreadyProTitle": "You've reached the workspace plan limit",
+    "alreadyProMessage": "请联系 <emAIl/> 以解锁更多成员",
+    "alreadyProTitle": "您已达到工作区计划限制",
     "approveButton": "批准",
     "approveError": "操作失败",
-    "approveSuccess": "Approved 成功fully",
-    "asMember": "as a member",
+    "approveSuccess": "审批成功",
+    "asMember": "作为成员",
     "downloadApp": "下载应用",
-    "ensurePlanLimit": "Ensure the workspace plan limit is not exceeded. If the limit is exceeded, consider <upgrade/> the workspace plan or <下载/>.",
+    "ensurePlanLimit": "请确保未超过工作区计划限制。如果已超过限制，请考虑<upgrade/>工作区计划或<下载/>。",
     "getRequestInfoError": "操作失败",
     "memberCount": {
       "many": "{count} 个成员",
       "one": "1 个成员",
       "other": "{count} 个成员",
-      "zero": "No members"
+      "zero": "暂无成员"
     },
     "repeatApproveError": "批准",
-    "requestSummary": "<user/> requests to join <workspace/> 和 access <page/>",
-    "requestToJoin": "requested to join",
+    "requestSummary": "<user/> 请求加入 <workspace/> 并访问 <page/>",
+    "requestToJoin": "请求加入",
     "title": "批准",
     "upgrade": "升级"
   },
@@ -3423,15 +3435,15 @@
     "uploadFailedDescription": "上传失败",
     "uploadSuccess": "上传成功",
     "uploadSuccessDescription": "文件已成功上传",
-    "uploading": "Uploading...",
-    "uploadingDescription": "The file is being uploaded"
+    "uploading": "上传中...",
+    "uploadingDescription": "文件正在上传"
   },
   "gallery": {
     "copy": "复制",
     "download": "下载",
     "next": "下一个",
     "prev": "上一个",
-    "preview": "Open in full screen",
+    "preview": "全屏打开",
     "resetZoom": "重置缩放",
     "zoomIn": "放大",
     "zoomOut": "缩小"
@@ -3440,240 +3452,240 @@
     "addComment": "添加评论",
     "addReaction": "添加反应",
     "collapse": "收起",
-    "commentAddedSuccessTip": "You've just added or replied to a comment. Would you like to jump to the top to see the latest comments?",
-    "commentAddedSuccessfully": "Comment added successfully.",
-    "comments": "Comments",
-    "confirmDeleteDescription": "Are you sure you want to delete this comment?",
-    "deleteComment": "Delete comment",
+    "commentAddedSuccessTip": "您刚刚添加或回复了一条评论。是否跳转到顶部查看最新评论？",
+    "commentAddedSuccessfully": "评论添加成功。",
+    "comments": "评论",
+    "confirmDeleteDescription": "您确定要删除此评论吗？",
+    "deleteComment": "删除评论",
     "failedToAddComment": "操作失败",
-    "hasBeenDeleted": "Deleted",
-    "noAccessDeleteComment": "You're not allowed to delete this comment",
+    "hasBeenDeleted": "已删除",
+    "noAccessDeleteComment": "您无权删除此评论",
     "reactedBy": "反应来自",
     "reactedByMore": "and {count} 其他s",
     "readMore": "阅读更多",
     "reply": "回复",
     "replyingTo": "回复给",
     "showDays": {
-      "many": "{count} days ago",
-      "one": "1 day ago",
-      "other": "{count} days ago"
+      "many": "{count} 天前",
+      "one": "1 天前",
+      "other": "{count} 天前"
     },
     "showHours": {
-      "many": "{count} hours ago",
-      "one": "1 hour ago",
-      "other": "{count} hours ago"
+      "many": "{count} 小时前",
+      "one": "1 小时前",
+      "other": "{count} 小时前"
     },
     "showMinutes": {
-      "many": "{count} minutes ago",
-      "one": "1 minute ago",
-      "other": "{count} minutes ago"
+      "many": "{count} 分钟前",
+      "one": "1 分钟前",
+      "other": "{count} 分钟前"
     },
     "showMonths": {
-      "many": "{count} months ago",
-      "one": "1 month ago",
-      "other": "{count} months ago"
+      "many": "{count} 个月前",
+      "one": "1 个月前",
+      "other": "{count} 个月前"
     },
     "showSeconds": {
-      "many": "{count} seconds ago",
-      "one": "1 second ago",
-      "other": "{count} seconds ago",
-      "zero": "Just now"
+      "many": "{count} 秒前",
+      "one": "1 秒前",
+      "other": "{count} 秒前",
+      "zero": "刚刚"
     },
     "showYears": {
-      "many": "{count} years ago",
-      "one": "1 year ago",
-      "other": "{count} years ago"
+      "many": "{count} 年前",
+      "one": "1 年前",
+      "other": "{count} 年前"
     },
-    "youAreNotOwner": "You are not the owner of this comment"
+    "youAreNotOwner": "您不是此评论的所有者"
   },
   "invitation": {
     "alreadyAccepted": "您已接受此邀请",
     "errorModal": {
       "changeAccount": "切换账户",
       "close": "返回首页",
-      "contactOwner": "Contact owner",
-      "description": "Your current account {emAIl} may not have access to this workspace. Please log in with the correct account or contact the workspace owner for help.",
-      "title": "Something went wrong"
+      "contactOwner": "联系所有者",
+      "description": "您当前的账户 {emAIl} 可能无权访问此工作区。请使用正确的账户登录或联系工作区所有者获取帮助。",
+      "title": "出现问题"
     },
-    "invitedBy": "Invited by",
-    "join": "Join",
-    "joinWorkspace": "Join workspace",
+    "invitedBy": "邀请者",
+    "join": "加入",
+    "joinWorkspace": "加入工作区",
     "membersCount": {
       "many": "{count} 个成员",
       "one": "{count} 个成员",
       "other": "{count} 个成员",
       "zero": "{count} 个成员"
     },
-    "on": "on",
-    "openWorkspace": "Open AppFlowy",
-    "success": "You've 成功fully joined the workspace",
-    "successMessage": "You can now access all the pages 和 workspaces within it.",
-    "tip": "You've been invited to Join this workspace with the contact information below. If this is incorrect, contact your administrator to resend the invite."
+    "on": "于",
+    "openWorkspace": "打开小马笔记",
+    "success": "您已成功加入工作区",
+    "successMessage": "您现在可以访问其中的所有页面和工作区。",
+    "tip": "您已被邀请使用以下联系信息加入此工作区。如有错误，请联系管理员重新发送邀请。"
   },
   "inviteMember": {
-    "addEmail": "emAIl@example.com, emAIl2@example.com...",
-    "description": "Input emAIls below with commas between them. Charges are based on member count.",
-    "emails": "EmAIl",
-    "inviteAlready": "You've already invited this emAIl: {emAIl}",
-    "inviteFailedMemberLimit": "Member limit has been reached, please ",
-    "inviteSuccess": "Invitation sent 成功fully",
-    "requestInviteMembers": "Invite to your workspace",
-    "requestInvites": "Send invites",
+    "addEmail": "email@example.com, email2@example.com...",
+    "description": "在下方输入邮箱地址，用逗号分隔。费用基于成员数量计算。",
+    "emails": "邮箱",
+    "inviteAlready": "您已邀请过此邮箱：{emAIl}",
+    "inviteFailedMemberLimit": "已达到成员限制，请",
+    "inviteSuccess": "邀请发送成功",
+    "requestInviteMembers": "邀请加入您的工作区",
+    "requestInvites": "发送邀请",
     "upgrade": "升级"
   },
   "lockPage": {
     "lockPage": "已锁定",
     "lockTooltip": "页面已锁定以防止意外编辑。点击以解锁。",
     "lockedOperationTooltip": "页面已锁定以防止意外编辑。",
-    "pageLockedToast": "Page 已锁定. Editing is disabled until someone unlocks it.",
-    "reLockPage": "Re-lock"
+    "pageLockedToast": "页面已锁定。在有人解锁之前，编辑功能已禁用。",
+    "reLockPage": "重新锁定"
   },
   "members": {
     "many": "{count} 个成员",
     "one": "1 个成员",
     "other": "{count} 个成员",
-    "zero": "No members"
+    "zero": "暂无成员"
   },
   "noLogFiles": "没有日志文件",
   "openFileMessage": {
     "fileNotFound": "未找到",
     "noAppToOpenFile": "没有应用程序",
     "permissionDenied": "无权限",
-    "success": "File opened 成功fully",
+    "success": "文件已成功打开",
     "unknownError": "操作失败"
   },
   "quickNote": {
     "addNote": "新笔记",
     "collapseFullView": "收起完整视图",
     "createFailed": "创建失败",
-    "deleteNotePrompt": "The selected note will be deleted permanently. Are you sure you want to delete it?",
-    "emptyNote": "Empty note",
-    "expandFullView": "Exp和 full view",
-    "label": "Quick Note",
-    "noAdditionalText": "No additional text",
-    "quickNotes": "Quick Notes",
-    "quickNotesEmpty": "No Quick Notes",
-    "search": "Search Quick Notes"
+    "deleteNotePrompt": "所选笔记将被永久删除。您确定要删除吗？",
+    "emptyNote": "空笔记",
+    "expandFullView": "展开完整视图",
+    "label": "快速笔记",
+    "noAdditionalText": "无附加文本",
+    "quickNotes": "快速笔记",
+    "quickNotesEmpty": "暂无快速笔记",
+    "search": "搜索快速笔记"
   },
   "requestAccess": {
     "backToHome": "返回首页",
-    "mightBe": "You might need to <login/> with a different account.",
+    "mightBe": "您可能需要使用其他账户<login/>。",
     "repeatRequestError": "您已请求访问此页面",
-    "requestAccess": "Request access",
+    "requestAccess": "请求访问",
     "requestError": "操作失败",
-    "subtitle": "You can request access from the owner of this page. Once approved, you can view the page.",
-    "successful": "Request sent 成功fully",
-    "successfulMessage": "You will be notified once the owner approves your request.",
-    "tip": "You're currently logged in as <link/>.",
-    "title": "No access to this page"
+    "subtitle": "您可以向此页面的所有者请求访问权限。一旦获得批准，您就可以查看此页面。",
+    "successful": "请求发送成功",
+    "successfulMessage": "一旦所有者批准您的请求，您将收到通知。",
+    "tip": "您当前登录的账户是 <link/>。",
+    "title": "无权访问此页面"
   },
   "subscribe": {
     "cancel": "降级",
     "cancelPlan": {
       "commonOther": "其他",
-      "description": "We're sorry to see you go. We'd love to hear your feedback to help us improve AppFlowy. Please take a moment to answer a few questions.",
-      "otherHint": "Write your answer here",
+      "description": "很遗憾看到您离开。我们希望听取您的反馈以帮助我们改进小马笔记。请花一点时间回答几个问题。",
+      "otherHint": "请在此输入您的答案",
       "questionFour": {
-        "answerFive": "Unsatisfied",
-        "answerFour": "Below average",
-        "answerOne": "Great",
-        "answerThree": "Average",
-        "answerTwo": "Good",
-        "question": "How would you describe your overall experience with AppFlowy?"
+        "answerFive": "不满意",
+        "answerFour": "低于平均水平",
+        "answerOne": "很棒",
+        "answerThree": "一般",
+        "answerTwo": "良好",
+        "question": "您如何描述使用小马笔记的整体体验？"
       },
       "questionOne": {
-        "answerFive": "Service issue or technical difficulties",
-        "answerFour": "Did not use it enough to justify the expense",
-        "answerOne": "Cost too high",
-        "answerThree": "Found a better alternative",
-        "answerTwo": "Features did not meet expectations",
-        "question": "What prompted you to cancel your AppFlowy Pro subscription?"
+        "answerFive": "服务问题或技术困难",
+        "answerFour": "使用不够频繁，不值得花费",
+        "answerOne": "费用太高",
+        "answerThree": "找到了更好的替代方案",
+        "answerTwo": "功能未达到预期",
+        "question": "是什么促使您取消小马笔记专业版订阅？"
       },
       "questionThree": {
-        "answerFour": "Access to local AI models",
-        "answerOne": "Multi-user collaboration",
-        "answerThree": "Unlimited AI responses",
-        "answerTwo": "Longer time version history",
-        "question": "Which Pro feature did you value the most during your subscription?"
+        "answerFour": "访问本地AI模型",
+        "answerOne": "多用户协作",
+        "answerThree": "无限AI响应",
+        "answerTwo": "更长的版本历史",
+        "question": "在您的订阅期间，您最看重哪个专业版功能？"
       },
       "questionTwo": {
-        "answerFive": "Very unlikely",
-        "answerFour": "Unlikely",
-        "answerOne": "Very likely",
-        "answerThree": "Not sure",
-        "answerTwo": "Somewhat likely",
-        "question": "How likely are you to consider re-subscribing to AppFlowy Pro in the future?"
+        "answerFive": "非常不可能",
+        "answerFour": "不太可能",
+        "answerOne": "非常可能",
+        "answerThree": "不确定",
+        "answerTwo": "有点可能",
+        "question": "您将来重新订阅小马笔记专业版的可能性有多大？"
       },
-      "success": "Your subscription has been canceled 成功fully",
-      "title": "Sorry to see you go"
+      "success": "您的订阅已成功取消",
+      "title": "很遗憾看到您离开"
     },
     "changePlan": "升级到专业版",
-    "currentPlan": "Current",
-    "everythingInFree": "Everything in Free +",
-    "free": "Free",
-    "freeDescription": "For individuals up to 2 members to organize everything",
-    "freeDuration": "forever",
+    "currentPlan": "当前",
+    "everythingInFree": "免费版包含的所有功能 +",
+    "free": "免费版",
+    "freeDescription": "适合最多2人的个人用户组织一切",
+    "freeDuration": "永久免费",
     "freePoints": {
       "first": "1 个成员",
-      "five": "20 AI responses",
-      "four": "Intelligent search",
-      "second": "Unlimited pages & blocks",
-      "seven": "Real-time collaboration",
-      "six": "Mobile app",
-      "three": "5 GB storage"
+      "five": "20次AI响应",
+      "four": "智能搜索",
+      "second": "无限页面和块",
+      "seven": "实时协作",
+      "six": "移动应用",
+      "three": "5 GB存储空间"
     },
-    "monthly": "Monthly",
-    "priceIn": "Price in ",
-    "pro": "Pro",
-    "proDescription": "For small teams to manage projects 和 team knowledge",
+    "monthly": "月度",
+    "priceIn": "价格（",
+    "pro": "专业版",
+    "proDescription": "适合小团队管理项目和团队知识",
     "proDuration": {
-      "monthly": "per member per month\nbilled monthly",
-      "yearly": "per member per month\nbilled annually"
+      "monthly": "每成员每月\n按月计费",
+      "yearly": "每成员每月\n按年计费"
     },
     "proPoints": {
-      "first": "Unlimited storage",
-      "five": "Custom namespace",
-      "four": "Unlimited file uploads",
-      "second": "Up to 10 workspace members",
-      "three": "Unlimited AI responses"
+      "first": "无限存储空间",
+      "five": "自定义命名空间",
+      "four": "无限文件上传",
+      "second": "最多10个工作区成员",
+      "three": "无限AI响应"
     },
-    "save": "Save {discount}%",
-    "upgradePlanTitle": "Compare & select plan",
-    "yearly": "Yearly"
+    "save": "节省 {discount}%",
+    "upgradePlanTitle": "比较并选择计划",
+    "yearly": "年度"
   },
   "suggestion": {
     "accept": "接受",
     "close": "关闭",
     "discard": "放弃",
-    "insertBelow": "Insert below",
-    "keep": "Keep",
-    "rewrite": "Rewrite",
-    "tryAgain": "Try agAIn"
+    "insertBelow": "在下方插入",
+    "keep": "保留",
+    "rewrite": "重写",
+    "tryAgain": "重试"
   },
   "tabMenu": {
     "close": "关闭",
     "closeDisabledHint": "无法关闭已固定的标签页，请先取消固定",
     "closeOthers": "关闭其他标签页",
-    "closeOthersDisabledHint": "All tabs are pinned, cannot find any tabs to 关闭",
-    "closeOthersHint": "This will 关闭 all unpinned tabs except this one",
-    "favorite": "Favorite",
-    "favoriteDisabledHint": "Cannot favorite this view",
-    "pinTab": "Pin",
-    "unfavorite": "Unfavorite",
-    "unpinTab": "Unpin"
+    "closeOthersDisabledHint": "所有标签页都已固定，没有可关闭的标签页",
+    "closeOthersHint": "这将关闭除此标签页外的所有未固定标签页",
+    "favorite": "收藏",
+    "favoriteDisabledHint": "无法收藏此视图",
+    "pinTab": "固定",
+    "unfavorite": "取消收藏",
+    "unpinTab": "取消固定"
   },
   "upgradePlanModal": {
     "actionButton": "升级",
     "appNote": "注意：",
     "downloadLink": "下载应用",
-    "laterButton": "Later",
+    "laterButton": "稍后",
     "message": "专业版计划",
-    "refresh": "here",
-    "refreshNote": "After successful 升级, click <refresh/> to activate your new features.",
-    "step1": "1. Go to Settings",
-    "step2": "2. Click on 'Plan'",
-    "step3": "3. Select 'Change Plan'",
+    "refresh": "这里",
+    "refreshNote": "升级成功后，点击<refresh/>激活您的新功能。",
+    "step1": "1. 前往设置",
+    "step2": "2. 点击"计划"",
+    "step3": "3. 选择"更换计划"",
     "title": "升级到专业版",
-    "upgradeSteps": "How to 升级 your plan on AppFlowy:"
+    "upgradeSteps": "如何在小马笔记中升级您的计划："
   }
 }

@@ -36,7 +36,7 @@ class AboutSettingGroup extends StatelessWidget {
         ),
         if (kDebugMode)
           MobileSettingItem(
-            name: 'Feature Flags',
+            name: LocaleKeys.settings_menu_featureFlags.tr(),
             trailing: MobileSettingTrailing(
               text: '',
             ),

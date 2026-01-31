@@ -1,3 +1,4 @@
+use chrono::Utc;
 use client_api::entity::GotrueTokenResponse;
 use collab_integrate::collab_builder::AppFlowyCollabBuilder;
 use collab_integrate::CollabKVDB;
@@ -730,8 +731,91 @@ impl UserManager {
   }
 
   pub async fn receive_realtime_event(&self, json: Value) {
+    // 首先转发给 user_service 处理
     if let Ok(user_service) = self.cloud_service().and_then(|v| v.get_user_service()) {
-      user_service.receive_realtime_event(json)
+      user_service.receive_realtime_event(json.clone())
+    }
+
+    // 处理系统通知：检查是否是 WorkspaceNotification::SystemNotification
+    // JSON 格式: { "SystemNotification": { "id": "...", "workspace_id": "...", ... } }
+    if let Some(system_notification) = json.get("SystemNotification") {
+      self.handle_system_notification(system_notification).await;
+    }
+  }
+
+  /// 处理系统通知，将其转换为 Reminder 并保存
+  async fn handle_system_notification(&self, notification: &Value) {
+    // 解析系统通知字段
+    let id = notification
+      .get("id")
+      .and_then(|v| v.as_str())
+      .unwrap_or("");
+    let workspace_id = notification
+      .get("workspace_id")
+      .and_then(|v| v.as_str())
+      .unwrap_or("");
+    let notification_type = notification
+      .get("notification_type")
+      .and_then(|v| v.as_str())
+      .unwrap_or("system");
+    let title = notification
+      .get("title")
+      .and_then(|v| v.as_str())
+      .unwrap_or("系统通知");
+    let message = notification
+      .get("message")
+      .and_then(|v| v.as_str())
+      .unwrap_or("");
+    let payload_json = notification
+      .get("payload_json")
+      .and_then(|v| v.as_str())
+      .unwrap_or("{}");
+    let created_at = notification
+      .get("created_at")
+      .and_then(|v| v.as_i64())
+      .unwrap_or_else(|| chrono::Utc::now().timestamp());
+
+    if id.is_empty() {
+      warn!("Received system notification with empty id, skipping");
+      return;
+    }
+
+    info!(
+      "Received system notification: id={}, type={}, title={}",
+      id, notification_type, title
+    );
+
+    // 创建 Reminder
+    let mut meta = std::collections::HashMap::new();
+    meta.insert("notification_type".to_string(), notification_type.to_string());
+    meta.insert("payload".to_string(), payload_json.to_string());
+    meta.insert(
+      "created_at".to_string(),
+      created_at.to_string(),
+    );
+
+    let reminder_pb = crate::entities::ReminderPB {
+      id: id.to_string(),
+      object_id: workspace_id.to_string(),
+      scheduled_at: created_at,
+      is_ack: true, // 系统通知默认已确认
+      is_read: false,
+      title: title.to_string(),
+      message: message.to_string(),
+      meta,
+    };
+
+    // 添加 Reminder
+    match self.add_reminder(reminder_pb).await {
+      Ok(_) => {
+        info!("Successfully created reminder for system notification: {}", id);
+      },
+      Err(e) => {
+        error!(
+          "Failed to create reminder for system notification {}: {:?}",
+          id, e
+        );
+      },
     }
   }
 

@@ -137,7 +137,7 @@ class CreateFolderWidgetState extends State<CreateFolderWidget> {
           child: TextButton.icon(
             onPressed: widget.onPressedBack,
             icon: const Icon(Icons.arrow_back_rounded),
-            label: const Text('Back'),
+            label: Text(LocaleKeys.button_back.tr()),
           ),
         ),
         _FolderCard(

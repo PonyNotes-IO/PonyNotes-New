@@ -1,3 +1,4 @@
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -5,6 +6,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pbserver.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -61,7 +63,7 @@ class _BuiltInPageWidgetState extends State<BuiltInPageWidget> {
           // Delete the page if not found
           WidgetsBinding.instance.addPostFrameCallback((_) => _deletePage());
 
-          return const Center(child: FlowyText('Cannot load the page'));
+          return Center(child: FlowyText(LocaleKeys.error_cannotLoadPage.tr()));
         }
 
         return const Center(child: CircularProgressIndicator());
