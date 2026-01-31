@@ -862,6 +862,70 @@ impl UserManager {
     }
   }
 
+  /// 订阅系统通知并处理
+  /// 注意：此方法需要在 Arc<UserManager> 上调用
+  pub fn subscribe_system_notifications_with_manager(
+    manager: Arc<UserManager>,
+    cloud_service: &Arc<dyn flowy_user_pub::cloud::UserCloudServiceProvider>,
+  ) {
+    use client_api::entity::UserMessage;
+
+    if let Some(mut rx) = cloud_service.subscribe_user_message() {
+      let weak_manager = Arc::downgrade(&manager);
+
+      tokio::spawn(async move {
+        info!("Started listening for system notifications");
+        while let Ok(msg) = rx.recv().await {
+          if let UserMessage::SystemNotification(notification) = msg {
+            info!(
+              "Received system notification from WebSocket: id={}, type={}",
+              notification.id, notification.notification_type
+            );
+
+            // 通过弱引用获取 UserManager 并创建 Reminder
+            if let Some(manager) = weak_manager.upgrade() {
+              // 创建 Reminder
+              let mut meta = std::collections::HashMap::new();
+              meta.insert(
+                "notification_type".to_string(),
+                notification.notification_type.clone(),
+              );
+              meta.insert("payload".to_string(), notification.payload_json.clone());
+              meta.insert("created_at".to_string(), notification.created_at.to_string());
+
+              let reminder_pb = crate::entities::ReminderPB {
+                id: notification.id.clone(),
+                object_id: notification.workspace_id.clone(),
+                scheduled_at: notification.created_at,
+                is_ack: true,
+                is_read: false,
+                title: notification.title.clone(),
+                message: notification.message.clone(),
+                meta,
+              };
+
+              match manager.add_reminder(reminder_pb).await {
+                Ok(_) => {
+                  info!(
+                    "Successfully created reminder for system notification: {}",
+                    notification.id
+                  );
+                },
+                Err(e) => {
+                  error!(
+                    "Failed to create reminder for system notification {}: {:?}",
+                    notification.id, e
+                  );
+                },
+              }
+            }
+          }
+        }
+        info!("Stopped listening for system notifications");
+      });
+    }
+  }
+
   #[instrument(level = "info", skip_all)]
   pub(crate) async fn generate_sign_in_url_with_email(
     &self,

@@ -319,6 +319,12 @@ impl AppFlowyCore {
       error!("Init user failed: {}", err)
     }
 
+    // 订阅系统通知
+    UserManager::subscribe_system_notifications_with_manager(
+      user_manager.clone(),
+      &server_provider,
+    );
+
     #[allow(clippy::arc_with_non_send_sync)]
     let event_dispatcher = Arc::new(AFPluginDispatcher::new(
       runtime,
