@@ -39,8 +39,10 @@ use flowy_server_pub::guest_dto::{
 };
 use flowy_storage_pub::cloud::{ObjectIdentity, ObjectValue, StorageCloudService};
 use flowy_storage_pub::storage::{CompletedPartRequest, CreateUploadResponse, UploadPartResponse};
+use client_api::entity::UserMessage;
 use flowy_user_pub::cloud::{UserCloudService, UserCloudServiceProvider};
 use flowy_user_pub::entities::{AuthType, UserTokenState};
+use tokio::sync::broadcast;
 use lib_infra::async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -235,6 +237,11 @@ impl UserCloudServiceProvider for ServerProvider {
         .map(|config| config.base_url)
         .unwrap_or_default(),
     }
+  }
+
+  fn subscribe_user_message(&self) -> Option<broadcast::Receiver<UserMessage>> {
+    let server = self.get_server().ok()?;
+    server.subscribe_user_message()
   }
 }
 

@@ -1,4 +1,5 @@
 use client_api::entity::GotrueTokenResponse;
+use client_api::entity::UserMessage;
 use client_api::entity::billing_dto::RecurringInterval;
 use client_api::entity::billing_dto::SubscriptionPlan;
 use client_api::entity::billing_dto::SubscriptionPlanDetail;
@@ -16,6 +17,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use tokio_stream::wrappers::WatchStream;
 use uuid::Uuid;
 
@@ -115,6 +117,14 @@ pub trait UserCloudServiceProvider: Send + Sync {
   /// # Returns
   /// A `String` representing the service URL.
   fn service_url(&self) -> String;
+
+  /// Subscribes to user messages (including system notifications).
+  ///
+  /// # Returns
+  /// An `Option` containing a `broadcast::Receiver<UserMessage>` if available, or `None` otherwise.
+  fn subscribe_user_message(&self) -> Option<broadcast::Receiver<UserMessage>> {
+    None
+  }
 }
 
 /// Provide the generic interface for the user cloud service
