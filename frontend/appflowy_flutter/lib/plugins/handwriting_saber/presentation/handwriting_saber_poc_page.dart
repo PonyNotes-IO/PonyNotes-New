@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
@@ -151,6 +152,19 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   
   /// ✅ 当前焦点页面的 Quill 结构（用于在编辑模式下显示工具栏）
   final ValueNotifier<int?> _quillFocusPageIndexNotifier = ValueNotifier<int?>(null);
+  
+  /// ✅ 视图缩放级别（1.0 = 100%，范围 0.2 ~ 3.0）
+  final ValueNotifier<double> _zoomLevelNotifier = ValueNotifier<double>(1.0);
+  
+  /// 缩放级别常量
+  static const double _minZoom = 0.2;  // 20%
+  static const double _maxZoom = 3.0;  // 300%
+  static const double _zoomStep = 0.1; // 每次缩放10%
+  
+  /// 预设缩放档位（用于快捷键和UI显示）
+  static const List<double> _zoomPresets = [
+    0.2, 0.5, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.5, 2.0, 2.5, 3.0
+  ];
 
   @override
   void initState() {
@@ -2406,6 +2420,125 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _canRedoNotifier.value = _history.canRedo;
   }
   
+  // ==================== 视图缩放相关方法 ====================
+  
+  /// ✅ 放大视图
+  void _zoomIn() {
+    final currentZoom = _zoomLevelNotifier.value;
+    // 找到下一个预设档位
+    double newZoom = currentZoom + _zoomStep;
+    // 对齐到预设档位（避免浮点数精度问题）
+    for (final preset in _zoomPresets) {
+      if (preset > currentZoom + 0.01) {
+        newZoom = preset;
+        break;
+      }
+    }
+    _setZoomLevel(newZoom);
+  }
+  
+  /// ✅ 缩小视图
+  void _zoomOut() {
+    final currentZoom = _zoomLevelNotifier.value;
+    // 找到上一个预设档位
+    double newZoom = currentZoom - _zoomStep;
+    // 对齐到预设档位（从大到小查找）
+    for (int i = _zoomPresets.length - 1; i >= 0; i--) {
+      if (_zoomPresets[i] < currentZoom - 0.01) {
+        newZoom = _zoomPresets[i];
+        break;
+      }
+    }
+    _setZoomLevel(newZoom);
+  }
+  
+  /// ✅ 重置缩放到100%
+  void _zoomReset() {
+    _setZoomLevel(1.0);
+  }
+  
+  /// ✅ 设置缩放级别（带范围限制）
+  void _setZoomLevel(double zoom) {
+    final clampedZoom = zoom.clamp(_minZoom, _maxZoom);
+    if (_zoomLevelNotifier.value != clampedZoom) {
+      _zoomLevelNotifier.value = clampedZoom;
+      debugPrint('🔍 [HandwritingSaber] Zoom level changed to: ${(clampedZoom * 100).toInt()}%');
+    }
+  }
+  
+  /// ✅ 处理鼠标滚轮缩放
+  void _handleScrollZoom(double scrollDelta) {
+    // scrollDelta > 0 表示向下滚动（缩小），< 0 表示向上滚动（放大）
+    if (scrollDelta < 0) {
+      _zoomIn();
+    } else if (scrollDelta > 0) {
+      _zoomOut();
+    }
+  }
+  
+  /// ✅ 获取缩放级别显示文本
+  String _getZoomLevelText() {
+    return '${(_zoomLevelNotifier.value * 100).toInt()}%';
+  }
+  
+  /// ✅ 构建缩放级别指示器（右下角浮动按钮组）
+  Widget _buildZoomIndicator(double zoomLevel) {
+    final zoomPercent = (zoomLevel * 100).toInt();
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 缩小按钮
+          IconButton(
+            onPressed: zoomLevel > _minZoom ? _zoomOut : null,
+            icon: const Icon(Icons.remove, size: 18),
+            tooltip: '缩小 (Cmd/Ctrl + -)',
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            padding: EdgeInsets.zero,
+          ),
+          // 缩放百分比显示（可点击重置）
+          InkWell(
+            onTap: _zoomReset,
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Text(
+                '$zoomPercent%',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ),
+          // 放大按钮
+          IconButton(
+            onPressed: zoomLevel < _maxZoom ? _zoomIn : null,
+            icon: const Icon(Icons.add, size: 18),
+            tooltip: '放大 (Cmd/Ctrl + +)',
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            padding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // ==================== 结束视图缩放相关方法 ====================
+  
   /// ✅ 撤销操作
   void _undo() {
     if (!_history.canUndo) return;
@@ -3703,6 +3836,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _arrowStyleNotifier.dispose();
     _textEditingModeNotifier.dispose();
     _quillFocusPageIndexNotifier.dispose();
+    _zoomLevelNotifier.dispose();
 
     super.dispose();
   }
@@ -3760,6 +3894,32 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
               _deleteSelectedObjects();
               return KeyEventResult.handled;
             }
+          }
+          
+          // ✅ Ctrl/Cmd + Plus (+) 或 Ctrl/Cmd + Equal (=) 放大视图
+          // 注意：大多数键盘上 + 需要按 Shift，所以同时支持 = 键
+          if (isCtrlPressed && (
+              event.logicalKey == LogicalKeyboardKey.add ||
+              event.logicalKey == LogicalKeyboardKey.equal ||
+              event.logicalKey == LogicalKeyboardKey.numpadAdd)) {
+            _zoomIn();
+            return KeyEventResult.handled;
+          }
+          
+          // ✅ Ctrl/Cmd + Minus (-) 缩小视图
+          if (isCtrlPressed && (
+              event.logicalKey == LogicalKeyboardKey.minus ||
+              event.logicalKey == LogicalKeyboardKey.numpadSubtract)) {
+            _zoomOut();
+            return KeyEventResult.handled;
+          }
+          
+          // ✅ Ctrl/Cmd + 0 重置缩放到100%
+          if (isCtrlPressed && (
+              event.logicalKey == LogicalKeyboardKey.digit0 ||
+              event.logicalKey == LogicalKeyboardKey.numpad0)) {
+            _zoomReset();
+            return KeyEventResult.handled;
           }
         }
         return KeyEventResult.ignored;
@@ -3854,73 +4014,113 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             },
           ),
           const Divider(height: 1),
+          // ✅ 缩放级别监听器包装
           Expanded(
-            child: LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                // ✅ 支持多页滚动显示
-                if (_coreInfo.pages.isEmpty) {
-                  return const Center(
-                    child: Text('没有页面'),
-                  );
-                }
-                
-                // ✅ 计算每页的显示大小（使用屏幕宽度，保持比例）
-                final double screenWidth = constraints.maxWidth;
-                final List<Widget> pageWidgets = [];
-                
-                debugPrint('🖼️🖼️🖼️ [HandwritingSaber] Building ${_coreInfo.pages.length} pages for view: ${widget.view.name}');
-                
-                for (int pageIndex = 0; pageIndex < _coreInfo.pages.length; pageIndex++) {
-                  // 确保 page notifier 已初始化，避免 index out of range 导致 RangeError
-                  if (_pageNotifiers.length <= pageIndex) {
-                    _pageNotifiers.add(EditorPageNotifier(_coreInfo.pages[pageIndex]));
-                  }
+            child: ValueListenableBuilder<double>(
+              valueListenable: _zoomLevelNotifier,
+              builder: (context, zoomLevel, _) {
+                return Stack(
+                  children: [
+                    // ✅ 主内容区域（支持鼠标滚轮缩放）
+                    Listener(
+                      onPointerSignal: (PointerSignalEvent event) {
+                        // 监听鼠标滚轮事件
+                        if (event is PointerScrollEvent) {
+                          // 检查是否按下 Ctrl/Cmd 键
+                          final isCtrlPressed = HardwareKeyboard.instance.isControlPressed ||
+                              HardwareKeyboard.instance.isMetaPressed;
+                          
+                          if (isCtrlPressed) {
+                            // Ctrl/Cmd + 滚轮 = 缩放
+                            _handleScrollZoom(event.scrollDelta.dy);
+                          }
+                          // 如果没有按 Ctrl/Cmd，让 SingleChildScrollView 处理滚动
+                        }
+                      },
+                      child: LayoutBuilder(
+                        builder: (BuildContext context, BoxConstraints constraints) {
+                          // ✅ 支持多页滚动显示
+                          if (_coreInfo.pages.isEmpty) {
+                            return const Center(
+                              child: Text('没有页面'),
+                            );
+                          }
+                          
+                          // ✅ 计算每页的显示大小（使用屏幕宽度，保持比例，并应用用户缩放）
+                          final double screenWidth = constraints.maxWidth;
+                          final List<Widget> pageWidgets = [];
+                          
+                          debugPrint('🖼️🖼️🖼️ [HandwritingSaber] Building ${_coreInfo.pages.length} pages for view: ${widget.view.name}, zoomLevel: ${(zoomLevel * 100).toInt()}%');
+                          
+                          for (int pageIndex = 0; pageIndex < _coreInfo.pages.length; pageIndex++) {
+                            // 确保 page notifier 已初始化，避免 index out of range 导致 RangeError
+                            if (_pageNotifiers.length <= pageIndex) {
+                              _pageNotifiers.add(EditorPageNotifier(_coreInfo.pages[pageIndex]));
+                            }
 
-                  // ✅ 使用ListenableBuilder包装页面，只在特定页面数据变化时重建
-                  final pageWidget = ListenableBuilder(
-                    listenable: _pageNotifiers[pageIndex],
-                    builder: (context, child) {
-                      final page = _pageNotifiers[pageIndex].page;
+                            // ✅ 使用ListenableBuilder包装页面，只在特定页面数据变化时重建
+                            final pageWidget = ListenableBuilder(
+                              listenable: _pageNotifiers[pageIndex],
+                              builder: (context, child) {
+                                final page = _pageNotifiers[pageIndex].page;
 
-                      // 防止除零错误
-                      if (page.size.width <= 0 || page.size.height <= 0) {
-                        return const SizedBox.shrink();
-                      }
+                                // 防止除零错误
+                                if (page.size.width <= 0 || page.size.height <= 0) {
+                                  return const SizedBox.shrink();
+                                }
 
-                      // ✅ 计算页面缩放（使用屏幕宽度，保持比例）
-                      // 确保页面宽度不超过屏幕宽度，高度按比例缩放
-                      final double pageScale = screenWidth / page.size.width;
-                      final double pageDisplayWidth = page.size.width * pageScale;
-                      final double pageDisplayHeight = page.size.height * pageScale;
+                                // ✅ 计算页面缩放（基础缩放 * 用户缩放级别）
+                                // 基础缩放：使页面宽度适应屏幕宽度
+                                // 用户缩放：在基础缩放上叠加用户选择的缩放级别
+                                final double baseScale = screenWidth / page.size.width;
+                                final double effectiveScale = baseScale * zoomLevel;
+                                final double pageDisplayWidth = page.size.width * effectiveScale;
+                                final double pageDisplayHeight = page.size.height * effectiveScale;
 
-                      // ✅ 创建单页画布
-                      return _buildSinglePageCanvas(
-                        page: page,
-                        pageIndex: pageIndex,
-                        pageDisplayWidth: pageDisplayWidth,
-                        pageDisplayHeight: pageDisplayHeight,
-                        screenWidth: screenWidth,
-                      );
-                    },
-                  );
-                  pageWidgets.add(pageWidget);
-                  
-                  // ✅ 页面之间的间距（除了最后一页）
-                  if (pageIndex < _coreInfo.pages.length - 1) {
-                    pageWidgets.add(const SizedBox(height: 16));
-                  }
-                }
-                
-                // ✅ 直接使用新创建的pageWidgets，不使用缓存
-                // 原因：之前的缓存机制有严重bug - 只检查页面数量，导致数据更新后界面不刷新
-                // ListenableBuilder已经提供了充分的优化（每个页面只在自己的数据变化时重建）
-                debugPrint('🖼️🖼️🖼️ [HandwritingSaber] Rendering ${pageWidgets.length} page widgets directly (no cache)');
+                                // ✅ 创建单页画布
+                                return _buildSinglePageCanvas(
+                                  page: page,
+                                  pageIndex: pageIndex,
+                                  pageDisplayWidth: pageDisplayWidth,
+                                  pageDisplayHeight: pageDisplayHeight,
+                                  screenWidth: screenWidth,
+                                );
+                              },
+                            );
+                            pageWidgets.add(pageWidget);
+                            
+                            // ✅ 页面之间的间距（除了最后一页）
+                            if (pageIndex < _coreInfo.pages.length - 1) {
+                              pageWidgets.add(const SizedBox(height: 16));
+                            }
+                          }
+                          
+                          // ✅ 直接使用新创建的pageWidgets，不使用缓存
+                          // 原因：之前的缓存机制有严重bug - 只检查页面数量，导致数据更新后界面不刷新
+                          // ListenableBuilder已经提供了充分的优化（每个页面只在自己的数据变化时重建）
+                          debugPrint('🖼️🖼️🖼️ [HandwritingSaber] Rendering ${pageWidgets.length} page widgets directly (no cache)');
 
-                // ✅ 使用 SingleChildScrollView 支持垂直滚动
-                return SingleChildScrollView(
-                  child: Column(
-                    children: pageWidgets,  // 直接使用最新的pageWidgets
-                  ),
+                          // ✅ 使用 SingleChildScrollView 支持垂直和水平滚动（当放大超过100%时需要水平滚动）
+                          return SingleChildScrollView(
+                            scrollDirection: Axis.vertical,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: pageWidgets,  // 直接使用最新的pageWidgets
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    // ✅ 缩放级别指示器（右下角显示当前缩放百分比）
+                    Positioned(
+                      right: 16,
+                      bottom: 16,
+                      child: _buildZoomIndicator(zoomLevel),
+                    ),
+                  ],
                 );
               },
             ),
