@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy/plugins/whiteboard/application/local_asset_server.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 
 import '../application/whiteboard_data_service.dart';
 import 'package:appflowy_backend/log.dart';
@@ -859,25 +860,66 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           },
         ),
 
+        // 加载覆盖层 - 使用完全不透明背景遮挡 Excalidraw 的加载界面
         if (_isLoading)
-          Container(
-            color: Colors.white.withOpacity(0.9),
-            child: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text(
-                    '正在加载专业白板编辑器...',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                    ),
+          Builder(
+            builder: (context) {
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              return Container(
+                // 使用完全不透明的背景色，根据主题切换，彻底遮挡底层的 Excalidraw 加载界面
+                color: isDark ? const Color(0xFF121212) : Colors.white,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // 小马笔记 Logo - 50% 透明度
+                      Opacity(
+                        opacity: 0.5,
+                        child: FlowySvg(
+                          FlowySvgs.pony_notes_logo_xl,
+                          blendMode: null,
+                          size: const Size.square(80),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // 小马笔记白板 文字 - 与图标保持一致的透明度
+                      Opacity(
+                        opacity: 0.5,
+                        child: Text(
+                          '小马笔记白板',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // 加载指示器
+                      SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            isDark ? Colors.white38 : Colors.grey.shade400,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '正在加载白板编辑器...',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.white54 : Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
       ],
     );
