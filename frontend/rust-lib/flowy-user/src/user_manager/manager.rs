@@ -107,48 +107,9 @@ impl UserManager {
       }
     }
 
-    // 订阅系统通知
-    let weak_user_manager_for_notification = Arc::downgrade(&user_manager);
-    if let Some(cloud_service) = user_manager.cloud_service.upgrade() {
-      if let Some(mut rx) = cloud_service.subscribe_user_message() {
-        tokio::spawn(async move {
-          loop {
-            match rx.recv().await {
-              Ok(user_message) => {
-                // 处理 SystemNotification 类型的消息
-                if let client_api::entity::UserMessage::SystemNotification(notification) =
-                  user_message
-                {
-                  if let Some(user_manager) = weak_user_manager_for_notification.upgrade() {
-                    // 将系统通知转换为 JSON 格式并调用 receive_realtime_event
-                    let json = serde_json::json!({
-                      "SystemNotification": {
-                        "id": notification.id,
-                        "workspace_id": notification.workspace_id,
-                        "notification_type": notification.notification_type,
-                        "title": notification.title,
-                        "message": notification.message,
-                        "payload_json": notification.payload_json,
-                        "created_at": notification.created_at,
-                        "recipient_uid": notification.recipient_uid,
-                      }
-                    });
-                    user_manager.receive_realtime_event(json).await;
-                  }
-                }
-              },
-              Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                info!("System notification channel closed");
-                break;
-              },
-              Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                warn!("System notification receiver lagged by {} messages", n);
-              },
-            }
-          }
-        });
-      }
-    }
+    // 注意：系统通知订阅在 AppFlowyCore 初始化时通过
+    // subscribe_system_notifications_with_manager() 方法进行，
+    // 因为此时需要访问 ServerProvider 来获取 WebSocket 消息接收器
 
     user_manager
   }
@@ -864,9 +825,9 @@ impl UserManager {
 
   /// 订阅系统通知并处理
   /// 注意：此方法需要在 Arc<UserManager> 上调用
-  pub fn subscribe_system_notifications_with_manager(
+  pub fn subscribe_system_notifications_with_manager<T: flowy_user_pub::cloud::UserCloudServiceProvider + 'static>(
     manager: Arc<UserManager>,
-    cloud_service: &Arc<dyn flowy_user_pub::cloud::UserCloudServiceProvider>,
+    cloud_service: &Arc<T>,
   ) {
     use client_api::entity::UserMessage;
 
