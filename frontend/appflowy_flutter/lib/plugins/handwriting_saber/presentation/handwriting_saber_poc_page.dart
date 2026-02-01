@@ -482,20 +482,34 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   
   /// ✅ 滚动到指定页面
   void _scrollToPage(int pageIndex) {
-    if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) return;
+    debugPrint('📜 [PageManager] _scrollToPage called: pageIndex=$pageIndex');
+    
+    if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) {
+      debugPrint('📜 [PageManager] Invalid pageIndex, returning');
+      return;
+    }
     
     // 计算目标滚动位置
     double targetOffset = 0;
+    
+    // 获取实际可用宽度（需要考虑页面管理器的宽度）
+    final mediaQueryWidth = MediaQuery.of(context).size.width;
+    final pageManagerWidth = _showPageManagerNotifier.value ? 200.0 : 0.0;
+    final screenWidth = mediaQueryWidth - pageManagerWidth;
+    final zoomLevel = _zoomLevelNotifier.value;
+    
+    debugPrint('📜 [PageManager] mediaQueryWidth=$mediaQueryWidth, pageManagerWidth=$pageManagerWidth, screenWidth=$screenWidth, zoomLevel=$zoomLevel');
+    
     for (int i = 0; i < pageIndex; i++) {
       final page = _coreInfo.pages[i];
       // 计算页面高度（保持宽高比）
-      final screenWidth = MediaQuery.of(context).size.width - (_showPageManagerNotifier.value ? 200 : 0);
-      final zoomLevel = _zoomLevelNotifier.value;
       final baseScale = screenWidth / page.size.width;
       final effectiveScale = baseScale * zoomLevel;
       final pageHeight = page.size.height * effectiveScale;
       targetOffset += pageHeight + _gapBetweenPages;
     }
+    
+    debugPrint('📜 [PageManager] targetOffset=$targetOffset, hasClients=${_pageScrollController.hasClients}');
     
     // 滚动到目标位置
     if (_pageScrollController.hasClients) {
@@ -504,6 +518,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
+      debugPrint('📜 [PageManager] animateTo called with offset=$targetOffset');
+    } else {
+      // 如果控制器还没有绑定，延迟执行
+      debugPrint('📜 [PageManager] Controller has no clients, scheduling delayed scroll');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_pageScrollController.hasClients) {
+          _pageScrollController.animateTo(
+            targetOffset,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+          debugPrint('📜 [PageManager] Delayed animateTo called with offset=$targetOffset');
+        }
+      });
     }
     
     // 更新当前查看的页面索引
@@ -4234,8 +4262,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                         _onFillColorChanged, // ✅ 填充颜色改变回调
                                     onImportPdf:
                                         _importPdf, // ✅ PDF 导入回调
-                                    onExportPdf:
-                                        _exportPdf, // ✅ PDF 导出回调
                                     onImportImage:
                                         _importImage, // ✅ 图片导入回调
                                     onInsertWebView:
@@ -4399,13 +4425,26 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                           debugPrint('🖼️🖼️🖼️ [HandwritingSaber] Rendering ${pageWidgets.length} page widgets directly (no cache)');
 
                           // ✅ 使用 SingleChildScrollView 支持垂直和水平滚动（当放大超过100%时需要水平滚动）
-                          return SingleChildScrollView(
-                            scrollDirection: Axis.vertical,
+                          return NotificationListener<ScrollNotification>(
+                            onNotification: (notification) {
+                              // 更新当前查看的页面索引
+                              if (notification is ScrollUpdateNotification) {
+                                final newIndex = _getCurrentPageIndexFromScroll();
+                                if (_viewingPageIndexNotifier.value != newIndex) {
+                                  _viewingPageIndexNotifier.value = newIndex;
+                                }
+                              }
+                              return false;
+                            },
                             child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: pageWidgets,  // 直接使用最新的pageWidgets
+                              controller: _pageScrollController, // ✅ 绑定滚动控制器
+                              scrollDirection: Axis.vertical,
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: pageWidgets,  // 直接使用最新的pageWidgets
+                                ),
                               ),
                             ),
                           );
