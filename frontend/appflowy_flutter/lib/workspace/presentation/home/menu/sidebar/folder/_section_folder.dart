@@ -174,9 +174,6 @@ class _SectionFolderState extends State<SectionFolder> {
       await result.fold(
         (view) async {
           // 创建成功，展开文件夹以显示新创建的视图
-          Log.info(
-            '[SECTION_FOLDER] view created: id=${view.id}, layout=${view.layout}, extra=${view.extra}',
-          );
 
           // 如果是 Saber 手写笔记，创建后需要在 extra 中写入 view_type，供 ViewExtension.plugin() 识别
           if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
@@ -186,12 +183,8 @@ class _SectionFolderState extends State<SectionFolder> {
               extra: extraJson,
             );
             updateResult.fold(
-              (_) => Log.info(
-                '[SECTION_FOLDER] set extra for handwriting_saber view success: ${view.id}, extra=$extraJson',
-              ),
-              (error) => Log.error(
-                '[SECTION_FOLDER] set extra for handwriting_saber view failed: ${view.id}, error=${error.msg} (${error.code})',
-              ),
+              (_) => null,
+              (error) => null,
             );
           }
 
@@ -262,16 +255,10 @@ class _SectionFolderState extends State<SectionFolder> {
         // 根据类型做不同的处理逻辑
         if (isSpace) {
           // Space 类型的特殊处理
-          Log.info(
-            '[SECTION_FOLDER] Building Space view: ${view.name} (id: ${view.id})',
-          );
           // 可以在这里添加 Space 类型的特殊逻辑
           // 例如：不同的样式、不同的点击行为等
         } else if (isDocument) {
           // 文档类型的特殊处理
-          Log.info(
-            '[SECTION_FOLDER] Building Document view: ${view.name} (id: ${view.id})',
-          );
           // 可以在这里添加文档类型的特殊逻辑
         }
 
@@ -296,8 +283,6 @@ class _SectionFolderState extends State<SectionFolder> {
           onSelected: (viewContext, view) {
             // 如果是 Space 类型，打开空间统一页面（SpaceHubPlugin）
             if (view.isSpace) {
-              Log.info('[SECTION_FOLDER] Space clicked: ${view.name}');
-              
               // 使用 SpaceBloc 打开空间（加载空间下的文档列表）
               final spaceBloc = context.read<SpaceBloc>();
               spaceBloc.add(SpaceEvent.open(space: view));
@@ -312,15 +297,13 @@ class _SectionFolderState extends State<SectionFolder> {
             }
             
             // 文档类型的点击处理
-            Log.info('[SECTION_FOLDER] Document clicked: ${view.name}');
-
             if (HardwareKeyboard.instance.isControlPressed) {
               context.read<TabsBloc>().openTab(view);
             }
 
             // Defensive: ensure view has a valid id before attempting to open plugin.
             if (view.id.isEmpty) {
-              Log.error('[SECTION_FOLDER] Attempted to open plugin with empty view.id, aborting. view.name=${view.name}');
+              // 空 view.id 的错误处理
             } else {
               context.read<TabsBloc>().openPlugin(view);
             }

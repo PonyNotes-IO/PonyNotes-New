@@ -101,29 +101,24 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     try {
       // 1. 先获取 Rust 数据库中的值
-      Log.info('[UserWorkspaceBloc] 初始化时，优先读取 Rust 层保存的 enable_sync 设置');
       final cloudConfigResult = await UserEventGetCloudConfig().send();
       
       await cloudConfigResult.fold(
         (cloudConfig) async {
           final rustEnabled = cloudConfig.enableSync;
-          Log.info('[UserWorkspaceBloc] 从 Rust 层读取 enable_sync 状态: $rustEnabled');
           
           // 直接使用 Rust 层的值，不需要判断会员信息
-          Log.info('[UserWorkspaceBloc] 直接使用 Rust 层的值: $rustEnabled');
           if (state.isCloudSyncEnabled != rustEnabled) {
             emit(state.copyWith(isCloudSyncEnabled: rustEnabled));
           }
         },
         (error) async {
-          Log.warn('[UserWorkspaceBloc] 无法读取 Rust 层 enable_sync 状态: $error');
           // 如果读取失败，使用默认值（开启）
-          Log.info('[UserWorkspaceBloc] 无法读取 Rust 层，使用默认值: true');
           emit(state.copyWith(isCloudSyncEnabled: true));
         },
       );
     } catch (e, stackTrace) {
-      Log.error('[UserWorkspaceBloc] 初始化云同步开关状态时出错: $e', e, stackTrace);
+      // 初始化云同步开关状态时出错
     }
   }
 
@@ -137,9 +132,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
 
     final currentWorkspace = result.currentWorkspace;
     final workspaces = result.workspaces;
-    Log.info(
-      'fetch workspaces: current workspace: ${currentWorkspace?.workspaceId}, workspaces: ${workspaces.map((e) => e.workspaceId)}',
-    );
 
     emit(
       state.copyWith(
@@ -149,9 +141,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
 
     if (currentWorkspace != null &&
         currentWorkspace.workspaceId != state.currentWorkspace?.workspaceId) {
-      Log.info(
-        'fetch workspaces: try to open workspace: ${currentWorkspace.workspaceId}',
-      );
       add(
         UserWorkspaceEvent.openWorkspace(
           workspaceId: currentWorkspace.workspaceId,
@@ -177,11 +166,9 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
 
     // 检查云同步开关状态
     final isCloudSyncEnabled = state.isCloudSyncEnabled;
-    Log.info('[UserWorkspaceBloc] 创建工作区: name=${event.name}, workspaceType=${event.workspaceType}, isCloudSyncEnabled=$isCloudSyncEnabled');
 
     // 如果云同步关闭，不能创建工作区
     if (!isCloudSyncEnabled) {
-      Log.warn('[UserWorkspaceBloc] 云同步已关闭，不能创建工作区');
       final errorResult = FlowyResult.failure(
         FlowyError(
           code: ErrorCode.Internal,
@@ -203,8 +190,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     // 始终创建 ServerW 类型的工作区（服务类型），与用户需求一致
     // 云同步开关只控制是否启用 sync 功能，不影响工作区类型
     final workspaceType = WorkspaceTypePB.ServerW;
-    
-    Log.info('[UserWorkspaceBloc] 最终工作区类型: $workspaceType (始终创建 ServerW 类型，云同步: $isCloudSyncEnabled)');
     
     final result = await repository.createWorkspace(
       name: event.name,
@@ -229,13 +214,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
 
     result
       ..onSuccess((s) {
-        Log.info('[UserWorkspaceBloc] 工作区创建成功: workspaceId=${s.workspaceId}, isCloudSyncEnabled=$isCloudSyncEnabled');
         // 如果云同步开启，确保工作区已同步到服务端
-        if (isCloudSyncEnabled) {
-          Log.info('[UserWorkspaceBloc] 云同步已开启，工作区已同步到服务端: workspaceId=${s.workspaceId}');
-        } else {
-          Log.warn('[UserWorkspaceBloc] 云同步已关闭，工作区可能未同步到服务端: workspaceId=${s.workspaceId}');
-        }
         add(
           UserWorkspaceEvent.openWorkspace(
             workspaceId: s.workspaceId,
@@ -244,7 +223,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         );
       })
       ..onFailure((f) {
-        Log.error('[UserWorkspaceBloc] 工作区创建失败: $f');
+        // 工作区创建失败
       });
   }
 
@@ -252,7 +231,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventDeleteWorkspace event,
     Emitter<UserWorkspaceState> emit,
   ) async {
-    Log.info('try to delete workspace: ${event.workspaceId}');
     emit(
       state.copyWith(
         actionResult: const WorkspaceActionResult(
@@ -295,7 +273,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
 
     result
       ..onSuccess((_) {
-        Log.info('delete workspace success: ${event.workspaceId}');
         final firstWorkspace = workspaces.firstOrNull;
         assert(
           firstWorkspace != null,
@@ -303,9 +280,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         );
         if (state.currentWorkspace?.workspaceId == event.workspaceId &&
             firstWorkspace != null) {
-          Log.info(
-            'delete workspace: open the first workspace: ${firstWorkspace.workspaceId}',
-          );
           add(
             UserWorkspaceEvent.openWorkspace(
               workspaceId: firstWorkspace.workspaceId,
@@ -315,7 +289,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         }
       })
       ..onFailure((f) {
-        Log.error('delete workspace error: $f');
         if (!containsDeletedWorkspace && workspaces.isNotEmpty) {
           add(
             UserWorkspaceEvent.openWorkspace(
@@ -364,15 +337,11 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
 
     result
       ..onSuccess((s) {
-        Log.info(
-          'open workspace success: ${event.workspaceId}, current workspace: ${currentWorkspace?.toProto3Json()}',
-        );
-        
         // 启动文件夹同步状态监听器
         _startFolderSyncStateListener(event.workspaceId);
       })
       ..onFailure((f) {
-        Log.error('open workspace error: $f');
+        // 打开工作区失败
       });
 
     emit(
@@ -400,12 +369,9 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     final isCloudSyncEnabled = state.isCloudSyncEnabled;
     final isServerWorkspace = workspace?.workspaceType == WorkspaceTypePB.ServerW;
     
-    Log.info('[UserWorkspaceBloc] 重命名工作区: workspaceId=${event.workspaceId}, name=${event.name}, workspaceType=${workspace?.workspaceType}, isCloudSyncEnabled=$isCloudSyncEnabled');
-    
     // 如果工作区类型是 ServerW 但云同步关闭，只做本地修改，不调用服务器 API
     FlowyResult<void, FlowyError> result;
     if (isServerWorkspace && !isCloudSyncEnabled) {
-      Log.info('[UserWorkspaceBloc] 工作区类型为 ServerW 但云同步已关闭，只做本地修改，不上传到服务器');
       // 创建一个成功的结果，但不调用服务器 API
       result = FlowyResult.success(null);
     } else {
@@ -431,10 +397,8 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       workspaces,
     );
 
-    Log.info('[UserWorkspaceBloc] 重命名工作区完成: workspaceId=${event.workspaceId}, name=${event.name}');
-
     result.onFailure((f) {
-      Log.error('[UserWorkspaceBloc] 重命名工作区失败: $f');
+      // 重命名工作区失败
     });
 
     emit(
@@ -456,12 +420,11 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     final workspace = _findWorkspaceById(event.workspaceId);
     if (workspace == null) {
-      Log.error('[UserWorkspaceBloc] 工作区未找到: ${event.workspaceId}');
+      // 工作区未找到
       return;
     }
 
     if (event.icon == workspace.icon) {
-      Log.info('[UserWorkspaceBloc] 忽略相同的图标更新');
       return;
     }
 
@@ -469,12 +432,9 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     final isCloudSyncEnabled = state.isCloudSyncEnabled;
     final isServerWorkspace = workspace.workspaceType == WorkspaceTypePB.ServerW;
     
-    Log.info('[UserWorkspaceBloc] 更新工作区图标: workspaceId=${event.workspaceId}, icon=${event.icon}, workspaceType=${workspace.workspaceType}, isCloudSyncEnabled=$isCloudSyncEnabled');
-    
     // 如果工作区类型是 ServerW 但云同步关闭，只做本地修改，不调用服务器 API
     FlowyResult<void, FlowyError> result;
     if (isServerWorkspace && !isCloudSyncEnabled) {
-      Log.info('[UserWorkspaceBloc] 工作区类型为 ServerW 但云同步已关闭，只做本地修改，不上传到服务器');
       // 创建一个成功的结果，但不调用服务器 API
       result = FlowyResult.success(null);
     } else {
@@ -500,12 +460,8 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       workspaces,
     );
 
-    Log.info(
-      'update workspace icon: ${event.workspaceId}, icon: ${event.icon}',
-    );
-
     result.onFailure((f) {
-      Log.error('update workspace icon error: $f');
+      // 更新工作区图标失败
     });
 
     emit(
@@ -538,7 +494,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
 
     result
       ..onSuccess((_) {
-        Log.info('leave workspace success: ${event.workspaceId}');
         if (state.currentWorkspace?.workspaceId == event.workspaceId &&
             workspaces.isNotEmpty) {
           add(
@@ -550,7 +505,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         }
       })
       ..onFailure((f) {
-        Log.error('leave workspace error: $f');
+        // 离开工作区失败
       });
 
     emit(
@@ -569,18 +524,13 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventFetchWorkspaceSubscriptionInfo event,
     Emitter<UserWorkspaceState> emit,
   ) async {
-    Log.info('[UserWorkspaceBloc] 开始获取工作空间订阅信息: workspaceId=${event.workspaceId}');
-    
     final enabled = await repository.isBillingEnabled();
-    Log.info('[UserWorkspaceBloc] isBillingEnabled: $enabled');
     
     // If billing is not enabled, we don't need to fetch the workspace subscription info
     if (!enabled) {
-      Log.warn('[UserWorkspaceBloc] 计费功能未启用，跳过获取工作空间订阅信息');
       return;
     }
 
-    Log.info('[UserWorkspaceBloc] 开始调用 getWorkspaceSubscriptionInfo API');
     unawaited(
       repository
           .getWorkspaceSubscriptionInfo(
@@ -588,22 +538,14 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       )
           .fold(
         (workspaceSubscriptionInfo) {
-          Log.info('[UserWorkspaceBloc] getWorkspaceSubscriptionInfo 成功: workspaceId=${event.workspaceId}, plan=${workspaceSubscriptionInfo.plan}');
-          
           if (isClosed) {
-            Log.warn('[UserWorkspaceBloc] Bloc 已关闭，跳过更新工作空间订阅信息');
             return;
           }
 
           final currentWorkspaceId = state.currentWorkspace?.workspaceId;
           if (currentWorkspaceId != event.workspaceId) {
-            Log.warn('[UserWorkspaceBloc] 工作空间 ID 不匹配: current=$currentWorkspaceId, event=${event.workspaceId}，跳过更新');
             return;
           }
-
-          Log.info(
-            '[UserWorkspaceBloc] 更新工作空间订阅信息: workspaceId=${event.workspaceId}, plan=${workspaceSubscriptionInfo.plan}',
-          );
 
           add(
             UserWorkspaceEvent.updateWorkspaceSubscriptionInfo(
@@ -613,10 +555,9 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
           );
         },
         (e) {
-          Log.error('[UserWorkspaceBloc] 获取工作空间订阅信息失败: workspaceId=${event.workspaceId}, error=$e', e);
           // 即使失败，也尝试更新状态为 null，避免一直等待
           if (!isClosed && state.currentWorkspace?.workspaceId == event.workspaceId) {
-            Log.warn('[UserWorkspaceBloc] 请求失败，但更新状态为 null 以便后续重试');
+            // 请求失败，更新状态
             // 注意：这里不更新为 null，因为可能只是临时错误，保持原有状态
           }
         },
@@ -632,7 +573,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     emit(
       state.copyWith(workspaceSubscriptionInfo: event.subscriptionInfo),
     );
-    Log.info('[UserWorkspaceBloc] 工作区订阅信息已更新');
   }
 
   Future<void> _onEmitWorkspaces(
@@ -674,7 +614,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
             (newProfile) {
               _safeAdd(UserWorkspaceEvent.emitUserProfile(userProfile: newProfile));
             },
-            (error) => Log.error("Failed to get user profile: $error"),
+            (error) => null,
           );
         }
       },
@@ -702,12 +642,9 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     try {
       add(event);
     } on StateError catch (e, st) {
-      // Log detailed info but avoid crashing the UI
-      Log.error('[UserWorkspaceBloc] Failed to add event ${event.runtimeType}: $e', e);
-      Log.error('[UserWorkspaceBloc] Stack: $st');
+      // 静默处理事件添加错误
     } catch (e, st) {
-      Log.error('[UserWorkspaceBloc] Unexpected error when adding event ${event.runtimeType}: $e', e);
-      Log.error('[UserWorkspaceBloc] Stack: $st');
+      // 静默处理意外错误
     }
   }
 
@@ -721,13 +658,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         state.userProfile.userAuthType == AuthTypePB.Server &&
             FeatureFlag.collaborativeWorkspace.isOn;
 
-    Log.info(
-      'init workspace, current workspace: ${currentWorkspace?.workspaceId}, '
-      'workspaces: ${workspaces.map((e) => e.workspaceId)}, isCollabWorkspaceOn: $isCollabWorkspaceOn',
-    );
-
     if (currentWorkspace != null && result.shouldOpenWorkspace == true) {
-      Log.info('init open workspace: ${currentWorkspace.workspaceId}');
       await repository.openWorkspace(
         workspaceId: currentWorkspace.workspaceId,
         workspaceType: currentWorkspace.workspaceType,
@@ -804,10 +735,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
 
       final sortedWorkspaces = _sortWorkspaces(workspaces);
 
-      Log.info(
-        'fetch workspaces: current workspace: ${currentWorkspaceInList?.workspaceId}, sorted workspaces: ${sortedWorkspaces.map((e) => '${e.name}: ${e.workspaceId}')}',
-      );
-
       return _WorkspaceFetchResult(
         currentWorkspace: currentWorkspaceInList,
         workspaces: sortedWorkspaces,
@@ -815,7 +742,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
             currentWorkspaceInList?.workspaceId != currentWorkspaceId,
       );
     } catch (e) {
-      Log.error('fetch workspace error: $e');
       return _WorkspaceFetchResult(
         currentWorkspace: state.currentWorkspace,
         workspaces: state.workspaces,
@@ -835,14 +761,8 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventFetchCurrentSubscription event,
     Emitter<UserWorkspaceState> emit,
   ) async {
-    Log.info('[UserWorkspaceBloc] 开始获取会员订阅信息');
     final currentSubscription = await _fetchCurrentSubscriptionData(state.userProfile);
     if (!isClosed) {
-      if (currentSubscription != null) {
-        Log.info('[UserWorkspaceBloc] 会员订阅信息获取成功: planCode=${currentSubscription.subscription?.planCode}');
-      } else {
-        Log.warn('[UserWorkspaceBloc] 会员订阅信息获取失败或为空');
-      }
       add(
         UserWorkspaceEvent.updateCurrentSubscription(
           currentSubscription: currentSubscription,
@@ -859,7 +779,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     emit(
       state.copyWith(currentSubscription: event.currentSubscription),
     );
-    Log.info('[UserWorkspaceBloc] 会员订阅信息已更新');
   }
 
   /// 获取当前订阅信息（包含使用量）
@@ -867,25 +786,18 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     UserProfilePB userProfile,
   ) async {
     try {
-      Log.info('[UserWorkspaceBloc] 开始调用订阅信息接口');
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
       final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
       if (baseUrl.isEmpty) {
-        Log.warn('[UserWorkspaceBloc] 订阅信息接口 baseUrl 为空，跳过请求');
         return null;
       }
-      Log.info('[UserWorkspaceBloc] baseUrl: $baseUrl');
 
       final accessToken = _extractAccessToken(userProfile.token);
       if (accessToken == null || accessToken.isEmpty) {
-        Log.warn('[UserWorkspaceBloc] 订阅信息接口缺少 access_token，跳过请求');
-        Log.warn('[UserWorkspaceBloc] userProfile.token 是否存在: ${userProfile.hasToken()}, token长度: ${userProfile.token.length}');
         return null;
       }
-      Log.info('[UserWorkspaceBloc] access_token 提取成功，长度: ${accessToken.length}');
 
       final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/current');
-      Log.info('[UserWorkspaceBloc] 请求 URL: $uri');
       final response = await http.get(
         uri,
         headers: {
@@ -895,54 +807,39 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       ).timeout(
         const Duration(seconds: 30), // 增加超时时间到 30 秒，避免页面启动时网络未准备好导致超时
         onTimeout: () {
-          Log.warn('[UserWorkspaceBloc] 订阅信息接口请求超时（30秒），可能网络未准备好，返回 null 不影响应用启动');
           // 不抛出异常，而是返回 null，避免影响应用启动流程
           // 后续可以通过手动刷新或延迟重试来获取订阅信息
           return http.Response('', 408); // 返回 408 Request Timeout 状态码
         },
       );
 
-      Log.info('[UserWorkspaceBloc] 响应状态码: ${response.statusCode}');
-
       // 处理超时情况（408 Request Timeout）
       if (response.statusCode == 408) {
-        Log.warn('[UserWorkspaceBloc] 订阅信息接口请求超时，返回 null');
         return null;
       }
 
       if (response.statusCode == 404) {
-        Log.info('[UserWorkspaceBloc] 订阅信息接口返回 404，无订阅');
         return null;
       }
 
       if (response.statusCode != 200) {
-        Log.warn(
-          '[UserWorkspaceBloc] 订阅信息接口返回非 200: ${response.statusCode}, body: ${response.body}',
-        );
         return null;
       }
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
       final code = decoded['code'] as int? ?? -1;
-      Log.info('[UserWorkspaceBloc] 响应 code: $code');
       if (code != 0) {
-        Log.warn(
-          '[UserWorkspaceBloc] 订阅信息接口 code!=0: code=$code, message=${decoded['message']}',
-        );
         return null;
       }
 
       final data = decoded['data'];
       if (data == null || data is! Map<String, dynamic>) {
-        Log.warn('[UserWorkspaceBloc] 订阅信息接口 data 为空或格式错误');
         return null;
       }
 
       final subscription = CurrentSubscription.fromJson(data);
-      Log.info('[UserWorkspaceBloc] 会员订阅信息解析成功: planCode=${subscription.subscription?.planCode}, planName=${subscription.subscription?.planNameCn}');
       return subscription;
     } catch (e, stackTrace) {
-      Log.error('[UserWorkspaceBloc] 订阅信息接口请求异常: $e', e, stackTrace);
       return null;
     }
   }
@@ -951,19 +848,14 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventUpdateCloudSyncEnabled event,
     Emitter<UserWorkspaceState> emit,
   ) async {
-    Log.info('[UserWorkspaceBloc] 更新云同步开关状态: ${event.enabled}');
-    
-    // 直接更新云同步开关状态，不需要校验会员状态
-    Log.info('[UserWorkspaceBloc] 直接更新云同步开关状态: ${event.enabled}');
     emit(state.copyWith(isCloudSyncEnabled: event.enabled));
     
     // 保存到 Rust 层的 enable_sync 设置
     try {
       final config = UpdateCloudConfigPB.create()..enableSync = event.enabled;
       await UserEventSetCloudConfig(config).send();
-      Log.info('[UserWorkspaceBloc] 已保存到 Rust 层 enable_sync: ${event.enabled}');
     } catch (e, stackTrace) {
-      Log.error('[UserWorkspaceBloc] 无法保存到 Rust 层 enable_sync: $e', e, stackTrace);
+      // 无法保存到 Rust 层
     }
   }
 
@@ -981,7 +873,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         }
       },
     );
-    Log.info('[UserWorkspaceBloc] 已启动文件夹同步状态监听器: workspaceId=$workspaceId');
   }
 
   /// 更新文件夹同步状态
@@ -1001,7 +892,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     }
     
     emit(state.copyWith(folderSyncState: newSyncState));
-    Log.info('[UserWorkspaceBloc] 文件夹同步状态更新: isSyncing=${newSyncState.isSyncing}, isFinish=${newSyncState.isFinish}');
   }
 
   String? _extractAccessToken(String? rawToken) {

@@ -18,8 +18,6 @@ class WhiteboardCollabAdapter {
     required this.viewId,
     required this.onDataChanged,
   }) {
-    Log.info(
-        '[WhiteboardCollabAdapter] Initializing adapter for viewId: $viewId');
     _service = WhiteboardDataService();
   }
 
@@ -44,27 +42,16 @@ class WhiteboardCollabAdapter {
   /// 关键：立即同步到后端（模仿 TransactionAdapter.apply()）
   void onWhiteboardDataChanged(String type, Map<String, dynamic> data) {
     if (_disposed) {
-      Log.warn(
-          '[WhiteboardCollabAdapter] Adapter disposed, ignoring data change');
       return;
     }
 
-    Log.info(
-        '[WhiteboardCollabAdapter] =====================================================');
-    Log.info(
-        '[WhiteboardCollabAdapter] Data changed received (like TransactionAdapter.apply)');
-    Log.info('[WhiteboardCollabAdapter] ViewID: $viewId');
-    Log.info('[WhiteboardCollabAdapter] Data keys: ${data.keys.toList()}');
-
     // 首先，data不能一样。
     if (_pendingType == type && mapEquals(_pendingData, data)){
-      Log.info('[WhiteboardCollabAdapter] [check-1] The data remained unchanged.');
       return;
     }
 
     // 正在同步和等待同步的数据不一样
     if (_pendingType == _syncType && !mapEquals(_pendingData, _syncData)){
-      Log.info('[WhiteboardCollabAdapter] [check-2] The data remained unchanged.');
       return;
     }
 
@@ -82,12 +69,6 @@ class WhiteboardCollabAdapter {
     _debounceTimer = Timer(_debounceDuration, () {
       _syncImmediately();
     });
-
-    Log.info(
-        '[WhiteboardCollabAdapter] Debounce timer set (${_debounceDuration
-            .inMilliseconds}ms)');
-    Log.info(
-        '[WhiteboardCollabAdapter] =====================================================');
   }
 
   /// 立即同步到 Collab 后端（模仿 TransactionAdapter.apply()）
@@ -104,15 +85,6 @@ class WhiteboardCollabAdapter {
     _pendingData.clear(); // 清空待同步数据
 
     try {
-      Log.info(
-          '[WhiteboardCollabAdapter] =====================================================');
-      Log.info(
-          '[WhiteboardCollabAdapter] 🚀 IMMEDIATE SYNC to Collab backend (like TransactionAdapter.apply)');
-      Log.info('[WhiteboardCollabAdapter] ViewID: $viewId');
-      Log.info(
-          '[WhiteboardCollabAdapter] Data keys: ${_syncData.keys.toList()}');
-
-
       var success = false;
 
       if (_syncType == 'update'){
@@ -121,22 +93,11 @@ class WhiteboardCollabAdapter {
         success = await _service.deleteWhiteboardData(viewId, _syncData);
       }
 
-      if (success) {
-        Log.info(
-            '[WhiteboardCollabAdapter] ✅✅✅ Data synced successfully to Collab!');
-        Log.info(
-            '[WhiteboardCollabAdapter] ✅✅✅ This should trigger CRDT persistence!');
-      } else {
-        Log.error(
-            '[WhiteboardCollabAdapter] ❌ Sync failed, will retry on next change');
+      if (!success) {
         // 同步失败，重新缓存数据等待下次同步
         _pendingData.addAll(_syncData);
       }
-      Log.info(
-          '[WhiteboardCollabAdapter] =====================================================');
-    } catch (e, stackTrace) {
-      Log.error('[WhiteboardCollabAdapter] ❌ Sync error: $e');
-      Log.error('[WhiteboardCollabAdapter] Stack trace: $stackTrace');
+    } catch (e) {
       // 发生错误，重新缓存数据等待下次同步
       _pendingData.addAll(_syncData);
     } finally {
@@ -148,12 +109,8 @@ class WhiteboardCollabAdapter {
   /// 强制立即同步（用于手动保存）
   Future<void> forceSync() async {
     if (_disposed) {
-      Log.warn('[WhiteboardCollabAdapter] Adapter disposed, cannot force sync');
       return;
     }
-
-    Log.info(
-        '[WhiteboardCollabAdapter] ⚡ Force sync requested (like DocumentBloc manual save)');
 
     // 取消防抖定时器，立即同步
     _debounceTimer?.cancel();
@@ -162,7 +119,6 @@ class WhiteboardCollabAdapter {
 
   /// 销毁适配器
   void dispose() {
-    Log.info('[WhiteboardCollabAdapter] Disposing adapter for viewId: $viewId');
     _disposed = true;
     _debounceTimer?.cancel();
     _debounceTimer = null;

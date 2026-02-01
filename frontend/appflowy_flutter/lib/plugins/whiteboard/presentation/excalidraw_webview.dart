@@ -296,12 +296,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           }
         `;
         
-        // 如果样式已存在，先移除
-        const existingStyle = document.getElementById('ponynotes-hide-menu-style');
-        if (existingStyle) {
-          existingStyle.remove();
-        }
-        
         document.head.appendChild(style);
         
         // 隐藏主菜单的函数
@@ -470,33 +464,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         
         // 初始执行一次
         hideElements();
-        
-        // 使用简化的 MutationObserver，只在必要时触发
-        // 使用防抖来减少频繁执行
-        let debounceTimer = null;
-        const debouncedHide = () => {
-          if (debounceTimer) {
-            clearTimeout(debounceTimer);
-          }
-          debounceTimer = setTimeout(() => {
-            hideElements();
-          }, 100);
-        };
-        
-        const observer = new MutationObserver(debouncedHide);
-        
-        // 只观察 body 的直接子元素变化，减少触发频率
-        observer.observe(document.body, {
-          childList: true,
-          subtree: false
-        });
-        
-        // 延迟执行，确保页面完全加载
-        setTimeout(hideElements, 200);
-        setTimeout(hideElements, 500);
-        
-        // 保存observer到window
-        window._ponynotesUIObserver = observer;
       })();
     ''', tag: 'hideUnwantedUI');
   }
@@ -856,7 +823,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
           onConsoleMessage: (controller, consoleMessage) {
             // 打印 WebView 控制台消息（用于调试）
-            // print('[WebView Console] ${consoleMessage.message}');
+            // Log.debug('[WebView Console] ${consoleMessage.message}');
           },
         ),
 
