@@ -1239,7 +1239,7 @@
       },
       "settings": {
         "settings": "设置",
-        "markAllAsRead": "全部标记为已读",
+        "markAllAsRead": "标记已读",
         "archiveAll": "清空"
       },
       "tabs": {
