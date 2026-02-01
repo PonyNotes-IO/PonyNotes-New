@@ -253,6 +253,35 @@ class AccountManagementBloc
     return null;
   }
 
+  /// 从当前用户的 token 中解析出 GoTrue 的用户 UUID（JWT 的 sub 字段），
+  /// 如果解析失败，则回退为内部自增 ID（userProfile.id）。
+  String _getUserUuid() {
+    final rawToken = userProfile.token;
+    final accessToken = _extractAccessToken(rawToken);
+    if (accessToken != null && accessToken.isNotEmpty) {
+      try {
+        final parts = accessToken.split('.');
+        if (parts.length >= 2) {
+          final payloadPart = parts[1];
+          // base64url -> base64，并补齐 padding
+          var normalized = payloadPart.replaceAll('-', '+').replaceAll('_', '/');
+          while (normalized.length % 4 != 0) {
+            normalized += '=';
+          }
+          final decoded = utf8.decode(base64.decode(normalized));
+          final payload = jsonDecode(decoded);
+          if (payload is Map && payload['sub'] is String) {
+            return payload['sub'] as String;
+          }
+        }
+      } catch (_) {
+        // 解析异常时回退到内部 ID
+      }
+    }
+    return userProfile.id.toString();
+  }
+
+
   WorkspacePlanPB? _mapPlanCodeToPb(String code) {
     switch (code) {
       case 'free_local':
@@ -1811,18 +1840,14 @@ class AccountManagementBloc
           }
 
           // 1. 获取当前云端配置（拿到 serverUrl）
-          final cloudConfigResult = await UserEventGetCloudConfig().send();
-          final cloudConfig = cloudConfigResult.fold(
-                (config) => config,
-                (error) => throw error,
-          );
+          final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+          final baseUrl = cloudEnv.appflowyCloudConfig.base_web_domain;
 
           if(!PaymentDevConfig.enableTestMode) {
-            // final baseUrl = cloudConfig.serverUrl;
-            final baseUrl = "https://www.xiaomabiji.com";
             //price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
+            final userUuid = _getUserUuid();
             String payUrl =
-                "$baseUrl/price?planId=${planIdValue ?? ''}&billingType=$billingType&userInfo=${userProfile.id}";
+                "$baseUrl/price?planId=${planIdValue ?? ''}&billingType=$billingType&userInfo=${userUuid}";
             // 使用浏览器打开支付链接
             await PaymentUtil.webPay(payUrl);
 

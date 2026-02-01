@@ -9,6 +9,9 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../env/cloud_env.dart';
+import '../../../startup/startup.dart';
+
 /// 支付方式类型（用于后端接口的 paymentType 字段）
 class PaymentType {
   static const String applePay = 'APPLE_PAY';
@@ -323,15 +326,8 @@ class PaymentApi {
   static Future<FlowyResult<PaymentCreateResponse, FlowyError>> createOrder
       (PaymentCreateRequest request) async{
     try {
-      // 1. 获取当前云端配置（拿到 serverUrl）
-      final cloudConfigResult = await UserEventGetCloudConfig().send();
-      final cloudConfig = cloudConfigResult.fold(
-            (config) => config,
-            (error) => throw error,
-      );
-
-      // final baseUrl = cloudConfig.serverUrl;
-      final baseUrl = "https://www.xiaomabiji.com";
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
 
       // 2. 获取当前用户 Profile（包含 token）
       // final userProfileResult = await UserBackendService.getCurrentUserProfile();
@@ -546,13 +542,8 @@ class PaymentApi {
     
     try {
       // 1. 获取当前云端配置（拿到 serverUrl）
-      final cloudConfigResult = await UserEventGetCloudConfig().send();
-      final cloudConfig = cloudConfigResult.fold(
-        (config) => config,
-        (error) => throw error,
-      );
-
-      final baseUrl = "https://www.xiaomabiji.com";
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
 
       // 2. 获取当前用户 Profile（包含 token）
       final userProfileResult = await UserBackendService.getCurrentUserProfile();
