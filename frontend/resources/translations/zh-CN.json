@@ -1240,7 +1240,7 @@
       "settings": {
         "settings": "设置",
         "markAllAsRead": "全部标记为已读",
-        "archiveAll": "全部归档"
+        "archiveAll": "清空"
       },
       "tabs": {
         "unread": "未读",
