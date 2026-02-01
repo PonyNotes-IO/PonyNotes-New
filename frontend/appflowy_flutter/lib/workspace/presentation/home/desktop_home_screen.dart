@@ -22,7 +22,6 @@ import 'package:appflowy/workspace/presentation/home/errors/workspace_failed_scr
 import 'package:appflowy/workspace/presentation/home/hotkeys.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/sidebar.dart';
 import 'package:appflowy/workspace/presentation/widgets/edit_panel/panel_animation.dart';
-import 'package:appflowy/workspace/presentation/widgets/float_bubble/question_bubble.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -282,7 +281,6 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
               homeStack: homeStack,
               sidebar: sidebar,
               editPanel: editPanel,
-              bubble: const QuestionBubble(),
               homeMenuResizer: homeMenuResizer,
               notificationPanel: notificationPanel,
               sliderHoverTrigger: sliderHoverTrigger,
@@ -340,7 +338,6 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     required Widget sidebar,
     required Widget homeStack,
     required Widget editPanel,
-    required Widget bubble,
     required Widget homeMenuResizer,
     required Widget notificationPanel,
     required Widget sliderHoverTrigger,
@@ -362,9 +359,6 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
               animate: true,
             )
             .animate(layout.animDuration, Curves.easeOutQuad),
-        bubble
-            .positioned(right: 20, bottom: 16, animate: true)
-            .animate(layout.animDuration, Curves.easeOut),
         editPanel
             .animatedPanelX(
               duration: layout.animDuration.inMilliseconds * 0.001,
