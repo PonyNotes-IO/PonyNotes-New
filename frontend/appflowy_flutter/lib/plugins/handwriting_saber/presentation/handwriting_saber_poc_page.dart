@@ -29,6 +29,8 @@ import '../third_party/saber_core/data/tools/select_result.dart';
 import '../third_party/saber_core/data/tools/tool.dart';
 import 'handwriting_saber_toolbar.dart';
 import 'widgets/canvas_image_widget.dart';
+import 'widgets/canvas_preview.dart';  // ✅ 导入页面预览组件
+import 'widgets/editor_page_manager.dart';  // ✅ 导入页面管理器组件
 import '../third_party/saber_core/components/canvas/webview/webview_editor_element.dart';
 import 'widgets/canvas_webview_widget.dart';
 import 'dialogs/insert_webview_dialog.dart';
@@ -165,6 +167,18 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   static const List<double> _zoomPresets = [
     0.2, 0.5, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.5, 2.0, 2.5, 3.0
   ];
+  
+  /// ✅ 是否显示页面管理器侧边栏
+  final ValueNotifier<bool> _showPageManagerNotifier = ValueNotifier<bool>(false);
+  
+  /// ✅ 当前查看的页面索引（用于页面管理器高亮显示）
+  final ValueNotifier<int> _viewingPageIndexNotifier = ValueNotifier<int>(0);
+  
+  /// ✅ 滚动控制器（用于滚动到指定页面）
+  final ScrollController _pageScrollController = ScrollController();
+  
+  /// ✅ 页面之间的间距
+  static const double _gapBetweenPages = 16;
 
   @override
   void initState() {
@@ -456,6 +470,251 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _saveToStorage(suppressStatusUpdate: true);
     });
   }
+
+  // ============================================================
+  // ✅ 页面管理方法（分页功能）
+  // ============================================================
+  
+  /// ✅ 切换页面管理器侧边栏显示状态
+  void _togglePageManager() {
+    _showPageManagerNotifier.value = !_showPageManagerNotifier.value;
+  }
+  
+  /// ✅ 滚动到指定页面
+  void _scrollToPage(int pageIndex) {
+    if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) return;
+    
+    // 计算目标滚动位置
+    double targetOffset = 0;
+    for (int i = 0; i < pageIndex; i++) {
+      final page = _coreInfo.pages[i];
+      // 计算页面高度（保持宽高比）
+      final screenWidth = MediaQuery.of(context).size.width - (_showPageManagerNotifier.value ? 200 : 0);
+      final zoomLevel = _zoomLevelNotifier.value;
+      final baseScale = screenWidth / page.size.width;
+      final effectiveScale = baseScale * zoomLevel;
+      final pageHeight = page.size.height * effectiveScale;
+      targetOffset += pageHeight + _gapBetweenPages;
+    }
+    
+    // 滚动到目标位置
+    if (_pageScrollController.hasClients) {
+      _pageScrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+    
+    // 更新当前查看的页面索引
+    _viewingPageIndexNotifier.value = pageIndex;
+  }
+  
+  /// ✅ 在指定页后插入新页
+  void _insertPageAfter(int pageIndex) {
+    debugPrint('📄 [PageManager] insertPageAfter: pageIndex=$pageIndex');
+    
+    // 创建新页面
+    final newPage = EditorPage(size: EditorPage.defaultSize);
+    
+    // 插入到指定位置之后
+    final insertIndex = pageIndex + 1;
+    _coreInfo.pages.insert(insertIndex, newPage);
+    
+    // 更新页面notifier
+    _pageNotifiers.insert(insertIndex, EditorPageNotifier(newPage));
+    
+    // 记录历史（用于撤销）
+    _history.recordPageInsert(insertIndex, newPage);
+    _updateUndoRedoState();
+    
+    // 保存并刷新
+    _scheduleSave();
+    setState(() {});
+  }
+  
+  /// ✅ 复制页面
+  void _duplicatePage(int pageIndex) {
+    debugPrint('📄 [PageManager] duplicatePage: pageIndex=$pageIndex');
+    
+    if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) return;
+    
+    final sourcePage = _coreInfo.pages[pageIndex];
+    
+    // 深拷贝页面数据
+    final newStrokes = sourcePage.strokes.map((s) {
+      // 创建笔迹的副本
+      return Stroke(
+        points: List.from(s.points),
+        color: s.color,
+        strokeWidth: s.strokeWidth,
+        toolId: s.toolId,
+        pressureEnabled: s.pressureEnabled,
+      );
+    }).toList();
+    
+    // 创建新页面（带有复制的数据）
+    final newPage = EditorPage(
+      size: sourcePage.size,
+      strokes: newStrokes,
+      backgroundImage: sourcePage.backgroundImage,
+      // 其他元素暂不复制（可以根据需要扩展）
+    );
+    
+    // 插入到源页面之后
+    final insertIndex = pageIndex + 1;
+    _coreInfo.pages.insert(insertIndex, newPage);
+    
+    // 更新页面notifier
+    _pageNotifiers.insert(insertIndex, EditorPageNotifier(newPage));
+    
+    // 记录历史
+    _history.recordPageInsert(insertIndex, newPage);
+    _updateUndoRedoState();
+    
+    // 保存并刷新
+    _scheduleSave();
+    setState(() {});
+  }
+  
+  /// ✅ 清空页面内容
+  void _clearPage(int pageIndex) {
+    debugPrint('📄 [PageManager] clearPage: pageIndex=$pageIndex');
+    
+    if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) return;
+    
+    final page = _coreInfo.pages[pageIndex];
+    
+    // 记录被删除的内容（用于撤销）
+    final removedStrokes = List<Stroke>.from(page.strokes);
+    final removedTextBoxes = List.from(page.textBoxes);
+    
+    // 清空页面内容
+    page.strokes.clear();
+    page.textBoxes.clear();
+    page.images.clear();
+    page.webViews.clear();
+    
+    // 更新页面notifier
+    if (pageIndex < _pageNotifiers.length) {
+      _pageNotifiers[pageIndex].updatePage(page);
+    }
+    
+    // 记录历史（清空操作记录为批量删除）
+    if (removedStrokes.isNotEmpty) {
+      _history.recordErase(removedStrokes);
+    }
+    _updateUndoRedoState();
+    
+    // 移除多余的空白页（保留至少一页）
+    _removeExcessPages();
+    
+    // 保存并刷新
+    _scheduleSave();
+    setState(() {});
+  }
+  
+  /// ✅ 删除页面
+  void _deletePage(int pageIndex) {
+    debugPrint('📄 [PageManager] deletePage: pageIndex=$pageIndex');
+    
+    if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) return;
+    
+    // 确保至少保留一页
+    if (_coreInfo.pages.length <= 1) {
+      // 如果只有一页，清空而不是删除
+      _clearPage(pageIndex);
+      return;
+    }
+    
+    // 获取要删除的页面
+    final deletedPage = _coreInfo.pages[pageIndex];
+    
+    // 删除页面
+    _coreInfo.pages.removeAt(pageIndex);
+    
+    // 删除对应的notifier
+    if (pageIndex < _pageNotifiers.length) {
+      _pageNotifiers[pageIndex].dispose();
+      _pageNotifiers.removeAt(pageIndex);
+    }
+    
+    // 记录历史
+    _history.recordPageDelete(pageIndex, deletedPage);
+    _updateUndoRedoState();
+    
+    // 更新当前查看的页面索引
+    if (_viewingPageIndexNotifier.value >= _coreInfo.pages.length) {
+      _viewingPageIndexNotifier.value = _coreInfo.pages.length - 1;
+    }
+    
+    // 保存并刷新
+    _scheduleSave();
+    setState(() {});
+  }
+  
+  /// ✅ 移除多余的空白页（保留至少一页）
+  void _removeExcessPages() {
+    // 从后往前检查，移除连续的空白页（保留至少一页）
+    while (_coreInfo.pages.length > 1) {
+      final lastPage = _coreInfo.pages.last;
+      final secondLastPage = _coreInfo.pages[_coreInfo.pages.length - 2];
+      
+      // 如果最后两页都是空的，删除最后一页
+      if (_isPageEmpty(lastPage) && _isPageEmpty(secondLastPage)) {
+        _coreInfo.pages.removeLast();
+        if (_pageNotifiers.isNotEmpty) {
+          _pageNotifiers.last.dispose();
+          _pageNotifiers.removeLast();
+        }
+      } else {
+        break;
+      }
+    }
+  }
+  
+  /// ✅ 检查页面是否为空
+  bool _isPageEmpty(EditorPage page) {
+    return page.strokes.isEmpty &&
+           page.textBoxes.isEmpty &&
+           page.images.isEmpty &&
+           page.webViews.isEmpty &&
+           page.backgroundImage == null;
+  }
+  
+  /// ✅ 重绘并保存（供页面管理器调用）
+  void _redrawAndSave() {
+    _scheduleSave();
+    setState(() {});
+  }
+  
+  /// ✅ 获取当前页面索引（基于滚动位置）
+  int _getCurrentPageIndexFromScroll() {
+    if (!_pageScrollController.hasClients) return 0;
+    
+    final scrollOffset = _pageScrollController.offset;
+    double currentOffset = 0;
+    
+    for (int i = 0; i < _coreInfo.pages.length; i++) {
+      final page = _coreInfo.pages[i];
+      final screenWidth = MediaQuery.of(context).size.width - (_showPageManagerNotifier.value ? 200 : 0);
+      final zoomLevel = _zoomLevelNotifier.value;
+      final baseScale = screenWidth / page.size.width;
+      final effectiveScale = baseScale * zoomLevel;
+      final pageHeight = page.size.height * effectiveScale;
+      
+      if (scrollOffset < currentOffset + pageHeight / 2) {
+        return i;
+      }
+      currentOffset += pageHeight + _gapBetweenPages;
+    }
+    
+    return _coreInfo.pages.length - 1;
+  }
+
+  // ============================================================
+  // ✅ 结束页面管理方法
+  // ============================================================
 
   /// ✅ 当前正在绘制的页面索引
   int? _currentPageIndex;
@@ -3837,6 +4096,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _textEditingModeNotifier.dispose();
     _quillFocusPageIndexNotifier.dispose();
     _zoomLevelNotifier.dispose();
+    
+    // ✅ 清理页面管理器相关 notifier
+    _showPageManagerNotifier.dispose();
+    _viewingPageIndexNotifier.dispose();
+    _pageScrollController.dispose();
 
     super.dispose();
   }
@@ -3946,6 +4210,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                 valueListenable:
                                     FullWindowController.isFullWindow,
                                 builder: (context, isFullWindow, __) {
+                                  return ValueListenableBuilder<bool>(
+                                    valueListenable: _showPageManagerNotifier,
+                                    builder: (context, showPageManager, ___) {
                                   return HandwritingSaberToolbar(
                                     currentTool: currentTool,
                                     onToolChanged: _onToolChanged,
@@ -4000,6 +4267,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                     onToggleFullWindow:
                                         FullWindowController
                                             .toggle, // ✅ 全窗口切换回调
+                                    showPageManager:
+                                        showPageManager, // ✅ 页面管理器显示状态
+                                    onTogglePageManager:
+                                        _togglePageManager, // ✅ 切换页面管理器回调
+                                  );
+                                    },
                                   );
                                 },
                               );
@@ -4014,41 +4287,66 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             },
           ),
           const Divider(height: 1),
-          // ✅ 缩放级别监听器包装
+          // ✅ 主内容区域（页面管理器 + 画布）
           Expanded(
-            child: ValueListenableBuilder<double>(
-              valueListenable: _zoomLevelNotifier,
-              builder: (context, zoomLevel, _) {
-                return Stack(
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _showPageManagerNotifier,
+              builder: (context, showPageManager, _) {
+                return Row(
                   children: [
-                    // ✅ 主内容区域（支持鼠标滚轮缩放）
-                    Listener(
-                      onPointerSignal: (PointerSignalEvent event) {
-                        // 监听鼠标滚轮事件
-                        if (event is PointerScrollEvent) {
-                          // 检查是否按下 Ctrl/Cmd 键
-                          final isCtrlPressed = HardwareKeyboard.instance.isControlPressed ||
-                              HardwareKeyboard.instance.isMetaPressed;
-                          
-                          if (isCtrlPressed) {
-                            // Ctrl/Cmd + 滚轮 = 缩放
-                            _handleScrollZoom(event.scrollDelta.dy);
-                          }
-                          // 如果没有按 Ctrl/Cmd，让 SingleChildScrollView 处理滚动
-                        }
-                      },
-                      child: LayoutBuilder(
-                        builder: (BuildContext context, BoxConstraints constraints) {
-                          // ✅ 支持多页滚动显示
-                          if (_coreInfo.pages.isEmpty) {
-                            return const Center(
-                              child: Text('没有页面'),
-                            );
-                          }
-                          
-                          // ✅ 计算每页的显示大小（使用屏幕宽度，保持比例，并应用用户缩放）
-                          final double screenWidth = constraints.maxWidth;
-                          final List<Widget> pageWidgets = [];
+                    // ✅ 左侧页面管理器侧边栏
+                    if (showPageManager)
+                      ValueListenableBuilder<int>(
+                        valueListenable: _viewingPageIndexNotifier,
+                        builder: (context, viewingPageIndex, _) {
+                          return EditorPageManager(
+                            coreInfo: _coreInfo,
+                            currentPageIndex: viewingPageIndex,
+                            redrawAndSave: _redrawAndSave,
+                            scrollToPage: _scrollToPage,
+                            insertPageAfter: _insertPageAfter,
+                            duplicatePage: _duplicatePage,
+                            clearPage: _clearPage,
+                            deletePage: _deletePage,
+                            width: 200,
+                          );
+                        },
+                      ),
+                    // ✅ 右侧画布区域
+                    Expanded(
+                      child: ValueListenableBuilder<double>(
+                        valueListenable: _zoomLevelNotifier,
+                        builder: (context, zoomLevel, _) {
+                          return Stack(
+                            children: [
+                              // ✅ 主内容区域（支持鼠标滚轮缩放）
+                              Listener(
+                                onPointerSignal: (PointerSignalEvent event) {
+                                  // 监听鼠标滚轮事件
+                                  if (event is PointerScrollEvent) {
+                                    // 检查是否按下 Ctrl/Cmd 键
+                                    final isCtrlPressed = HardwareKeyboard.instance.isControlPressed ||
+                                        HardwareKeyboard.instance.isMetaPressed;
+                                    
+                                    if (isCtrlPressed) {
+                                      // Ctrl/Cmd + 滚轮 = 缩放
+                                      _handleScrollZoom(event.scrollDelta.dy);
+                                    }
+                                    // 如果没有按 Ctrl/Cmd，让 SingleChildScrollView 处理滚动
+                                  }
+                                },
+                                child: LayoutBuilder(
+                                  builder: (BuildContext context, BoxConstraints constraints) {
+                                    // ✅ 支持多页滚动显示
+                                    if (_coreInfo.pages.isEmpty) {
+                                      return const Center(
+                                        child: Text('没有页面'),
+                                      );
+                                    }
+                                    
+                                    // ✅ 计算每页的显示大小（使用屏幕宽度，保持比例，并应用用户缩放）
+                                    final double screenWidth = constraints.maxWidth;
+                                    final List<Widget> pageWidgets = [];
                           
                           debugPrint('🖼️🖼️🖼️ [HandwritingSaber] Building ${_coreInfo.pages.length} pages for view: ${widget.view.name}, zoomLevel: ${(zoomLevel * 100).toInt()}%');
                           
@@ -4114,11 +4412,16 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                         },
                       ),
                     ),
-                    // ✅ 缩放级别指示器（右下角显示当前缩放百分比）
-                    Positioned(
-                      right: 16,
-                      bottom: 16,
-                      child: _buildZoomIndicator(zoomLevel),
+                              // ✅ 缩放级别指示器（右下角显示当前缩放百分比）
+                              Positioned(
+                                right: 16,
+                                bottom: 16,
+                                child: _buildZoomIndicator(zoomLevel),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                     ),
                   ],
                 );

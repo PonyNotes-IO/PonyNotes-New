@@ -42,6 +42,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.quillFocus, // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
     this.isFullWindow = false, // ✅ 是否处于全窗口模式
     this.onToggleFullWindow, // ✅ 切换全窗口模式回调
+    this.showPageManager = false, // ✅ 是否显示页面管理器
+    this.onTogglePageManager, // ✅ 切换页面管理器显示回调
   });
 
   final Tool currentTool;
@@ -72,6 +74,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final QuillStruct? quillFocus; // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
   final bool isFullWindow; // ✅ 是否处于全窗口模式
   final VoidCallback? onToggleFullWindow; // ✅ 切换全窗口模式回调
+  final bool showPageManager; // ✅ 是否显示页面管理器
+  final VoidCallback? onTogglePageManager; // ✅ 切换页面管理器显示回调
 
   // 预定义颜色列表
   static const List<Color> presetColors = [
@@ -254,6 +258,11 @@ class HandwritingSaberToolbar extends StatelessWidget {
           // ✅ 移除独立的富文本编辑按钮，整合到文本框工具中
           // ✅ 背景纸模式选择
           _buildBackgroundPatternSelector(),
+                // ✅ 页面管理按钮
+                if (onTogglePageManager != null) ...[
+                  _buildDivider(),
+                  _buildPageManagerButton(context),
+                ],
                 if (onToggleFullWindow != null) ...[
                   _buildDivider(),
                   _buildFullWindowButton(context),
@@ -296,6 +305,39 @@ class HandwritingSaberToolbar extends StatelessWidget {
             color: theme.colorScheme.onSurface,
           ),
           onPressed: onToggleFullWindow,
+        ),
+      ),
+    );
+  }
+  
+  /// ✅ 构建页面管理器切换按钮
+  Widget _buildPageManagerButton(BuildContext context) {
+    final theme = Theme.of(context);
+    return Tooltip(
+      message: showPageManager ? '隐藏页面管理器' : '显示页面管理器',
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: showPageManager
+              ? theme.colorScheme.primaryContainer
+              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IconButton(
+          icon: Icon(
+            Icons.layers_outlined,
+            color: showPageManager
+                ? theme.colorScheme.onPrimaryContainer
+                : theme.colorScheme.onSurface,
+          ),
+          onPressed: onTogglePageManager,
         ),
       ),
     );

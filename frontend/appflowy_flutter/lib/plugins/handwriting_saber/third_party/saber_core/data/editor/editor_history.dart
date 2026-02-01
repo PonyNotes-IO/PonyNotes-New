@@ -48,15 +48,46 @@ class EditorHistory {
     _past.clear();
     _future.clear();
   }
+  
+  // ============================================================
+  // ✅ 页面操作历史记录方法
+  // ============================================================
+  
+  /// 记录插入页面操作
+  void recordPageInsert(int pageIndex, EditorPage page) {
+    recordChange(EditorHistoryItem.insertPage(
+      pageIndex: pageIndex,
+      page: page,
+    ));
+  }
+  
+  /// 记录删除页面操作
+  void recordPageDelete(int pageIndex, EditorPage page) {
+    recordChange(EditorHistoryItem.deletePage(
+      pageIndex: pageIndex,
+      page: page,
+    ));
+  }
+  
+  /// 记录擦除笔迹操作（简化版本，不需要pageIndex）
+  void recordErase(List<Stroke> strokes) {
+    if (strokes.isEmpty) return;
+    recordChange(EditorHistoryItem.erase(
+      pageIndex: 0, // 简化处理
+      deletedStrokes: strokes,
+    ));
+  }
 }
 
 /// 历史记录项类型
 enum EditorHistoryItemType {
-  draw,      // 绘制笔迹
-  erase,     // 擦除笔迹
-  delete,    // 删除对象（笔迹、文本框等）
-  add,       // 添加对象（文本框等）
-  modify,    // 修改对象
+  draw,        // 绘制笔迹
+  erase,       // 擦除笔迹
+  delete,      // 删除对象（笔迹、文本框等）
+  add,         // 添加对象（文本框等）
+  modify,      // 修改对象
+  insertPage,  // 插入页面
+  deletePage,  // 删除页面
 }
 
 /// 历史记录项
@@ -68,6 +99,7 @@ class EditorHistoryItem {
     this.textBoxes,
     this.deletedStrokes,
     this.deletedTextBoxes,
+    this.page,  // ✅ 页面数据（用于页面操作）
   });
 
   final EditorHistoryItemType type;
@@ -76,6 +108,7 @@ class EditorHistoryItem {
   final List<saber_text.TextBox>? textBoxes;  // 操作的文本框列表
   final List<Stroke>? deletedStrokes;  // 删除的笔迹（用于恢复）
   final List<saber_text.TextBox>? deletedTextBoxes;  // 删除的文本框（用于恢复）
+  final EditorPage? page;  // ✅ 页面数据（用于页面插入/删除操作的撤销恢复）
 
   /// 创建绘制操作的历史记录
   factory EditorHistoryItem.draw({
@@ -128,6 +161,32 @@ class EditorHistoryItem {
       pageIndex: pageIndex,
       strokes: strokes ?? [],
       textBoxes: textBoxes,
+    );
+  }
+  
+  /// ✅ 创建插入页面操作的历史记录
+  factory EditorHistoryItem.insertPage({
+    required int pageIndex,
+    required EditorPage page,
+  }) {
+    return EditorHistoryItem(
+      type: EditorHistoryItemType.insertPage,
+      pageIndex: pageIndex,
+      strokes: [],
+      page: page,
+    );
+  }
+  
+  /// ✅ 创建删除页面操作的历史记录
+  factory EditorHistoryItem.deletePage({
+    required int pageIndex,
+    required EditorPage page,
+  }) {
+    return EditorHistoryItem(
+      type: EditorHistoryItemType.deletePage,
+      pageIndex: pageIndex,
+      strokes: [],
+      page: page,
     );
   }
 }
