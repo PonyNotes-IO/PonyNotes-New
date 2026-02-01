@@ -511,43 +511,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       child: Row(
         children: [
           const Spacer(),
-          // 导入 / 导出
-          Tooltip(
-            message: '导入 Excalidraw 文件',
-            child: TextButton.icon(
-              icon: const Icon(Icons.file_download_outlined, size: 18),
-              label: const Text('导入'),
-              onPressed: _importWhiteboard,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Tooltip(
-            message: '导出白板',
-            child: PopupMenuButton<String>(
-              position: PopupMenuPosition.under,
-              onSelected: _exportWhiteboard,
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: 'ponynotes',
-                  child: Text('导出ponynotes文件'),
-                ),
-                PopupMenuItem(
-                  value: 'png',
-                  child: Text('导出为 PNG 图片'),
-                ),
-                PopupMenuItem(
-                  value: 'svg',
-                  child: Text('导出为 SVG 图片'),
-                ),
-              ],
-              child: TextButton.icon(
-                icon: const Icon(Icons.file_upload_outlined, size: 18),
-                label: const Text('导出'),
-                onPressed: null,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
+          // 收藏、分享、更多、全窗口按钮
           if (FeatureFlag.syncDocument.isOn) ...[
             DocumentCollaborators(
               key: ValueKey('collaborators_${widget.view.id}'),

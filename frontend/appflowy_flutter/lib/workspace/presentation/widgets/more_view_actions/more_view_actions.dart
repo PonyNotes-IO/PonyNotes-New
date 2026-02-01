@@ -4,6 +4,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/handwriting_saber/presentation/handwriting_export_action.dart';
+import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_export_action.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
@@ -145,6 +146,9 @@ class _MoreViewActionsState extends State<MoreViewActions> {
     // ✅ 检测是否是手写笔记类型
     final isHandwriting = isHandwritingNote(widget.view);
     
+    // ✅ 检测是否是白板类型
+    final isWhiteboard = isWhiteboardView(widget.view);
+    
     final actions = [
       ...widget.customActions,
       // ✅ 手写笔记不显示字体大小选项
@@ -175,6 +179,19 @@ class _MoreViewActionsState extends State<MoreViewActions> {
           view: view,
         ),
         HandwritingImportAction(
+          view: view,
+        ),
+        ViewAction(
+          type: ViewMoreActionType.divider,
+          view: view,
+          mutex: popoverMutex,
+        ),
+      ] else if (isWhiteboard) ...[
+        // ✅ 白板使用专用的导出/导入组件
+        WhiteboardImportAction(
+          view: view,
+        ),
+        WhiteboardExportAction(
           view: view,
         ),
         ViewAction(
