@@ -1214,16 +1214,15 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
         }
       }
       
-      // 3. 在"我的空间"下创建文档
-      // 注意：parentViewId 应该是工作空间ID，而不是空间ID
-      // section 参数决定了视图在哪个区域（Public/"我的空间"）
+      // 3. 在"我的空间"（私有空间）下创建文档
+      // 注意：使用私有空间的ID作为parentViewId，section设为Private
       final result = await ViewBackendService.createView(
         layoutType: ViewLayoutPB.Document,
-        parentViewId: workspaceId, // 使用工作空间ID作为parentViewId
+        parentViewId: privateSpace!.id, // 使用私有空间ID作为parentViewId
         name: '', // 空标题，会显示为"未命名页面"
         openAfterCreate: false, // 先不自动打开，我们手动打开
         index: 0,
-        section: ViewSectionPB.Public, // "我的空间"显示的是Public区域
+        section: ViewSectionPB.Private, // 放在"我的空间"（Private区域）
       );
       
       final createdView = result.fold(
