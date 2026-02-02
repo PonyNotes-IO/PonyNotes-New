@@ -297,29 +297,34 @@ class AIChatViewService {
 
   /// 准备图片路径列表
   /// 将ChatImage转换为可存储的文件路径
+  /// 使用永久存储目录（getApplicationDocumentsDirectory）而非临时目录，
+  /// 确保图片在应用重启后仍然存在
   static Future<List<String>> _prepareImagePaths(List<ChatImage> images) async {
     final paths = <String>[];
+    final appDir = await getApplicationDocumentsDirectory();
+    final storageDir = Directory('${appDir.path}/ai_chat_images');
+    
+    // 确保目录存在
+    if (!await storageDir.exists()) {
+      await storageDir.create(recursive: true);
+    }
     
     for (final image in images) {
       if (image.filePath != null) {
         // 已经有文件路径，直接使用
         paths.add(image.filePath!);
       } else if (image.bytes != null) {
-        // bytes数据，保存为临时文件
+        // bytes数据，保存为永久文件
         try {
-          final tempDir = await getTemporaryDirectory();
           final fileName = image.name ?? 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
-          final tempFile = File('${tempDir.path}/ai_chat_images/$fileName');
-          
-          // 确保目录存在
-          await tempFile.parent.create(recursive: true);
+          final imageFile = File('${storageDir.path}/$fileName');
           
           // 写入文件
-          await tempFile.writeAsBytes(image.bytes!);
-          paths.add(tempFile.path);
-          Log.info('✅ 图片bytes保存为临时文件: ${tempFile.path}');
+          await imageFile.writeAsBytes(image.bytes!);
+          paths.add(imageFile.path);
+          Log.info('✅ 图片保存为永久文件: ${imageFile.path}');
         } catch (e) {
-          Log.error('❌ 保存图片临时文件失败: $e');
+          Log.error('❌ 保存图片文件失败: $e');
         }
       } else if (image.url != null) {
         // URL图片，暂时跳过（可以考虑下载后保存）

@@ -73,7 +73,7 @@ class _ChatFilePreviewState extends State<ChatFilePreview> {
             child: Stack(
               children: [
                 Container(
-                  margin: const EdgeInsetsDirectional.only(top: 6, end: 6),
+                  margin: const EdgeInsetsDirectional.only(top: 4, end: 4),
                   constraints: const BoxConstraints(maxWidth: 240),
                   decoration: BoxDecoration(
                     border: Border.all(
@@ -81,7 +81,7 @@ class _ChatFilePreviewState extends State<ChatFilePreview> {
                     ),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  padding: const EdgeInsets.all(8.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -90,30 +90,33 @@ class _ChatFilePreviewState extends State<ChatFilePreview> {
                           color: AFThemeExtension.of(context).tint1,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        height: 32,
-                        width: 32,
+                        height: 28,
+                        width: 28,
                         child: Center(
                           child: FlowySvg(
                             FlowySvgs.page_m,
-                            size: const Size.square(16),
+                            size: const Size.square(14),
                             color: Theme.of(context).hintColor,
                           ),
                         ),
                       ),
-                      const HSpace(8),
-                      Flexible(
+                      const HSpace(6),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 180),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             FlowyText(
                               widget.file.fileName,
-                              fontSize: 12.0,
+                              fontSize: 11.0,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
                             ),
                             FlowyText(
                               widget.file.fileType.name,
                               color: Theme.of(context).hintColor,
-                              fontSize: 12.0,
+                              fontSize: 10.0,
                             ),
                           ],
                         ),
