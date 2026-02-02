@@ -303,35 +303,51 @@ class AIChatViewService {
     final paths = <String>[];
     final appDir = await getApplicationDocumentsDirectory();
     final storageDir = Directory('${appDir.path}/ai_chat_images');
-    
+
     // 确保目录存在
     if (!await storageDir.exists()) {
       await storageDir.create(recursive: true);
     }
-    
+
     for (final image in images) {
-      if (image.filePath != null) {
-        // 已经有文件路径，直接使用
-        paths.add(image.filePath!);
-      } else if (image.bytes != null) {
-        // bytes数据，保存为永久文件
-        try {
+      try {
+        String? finalPath;
+
+        // 优先从 bytes 创建（最可靠的方式）
+        if (image.bytes != null) {
           final fileName = image.name ?? 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
           final imageFile = File('${storageDir.path}/$fileName');
-          
-          // 写入文件
           await imageFile.writeAsBytes(image.bytes!);
-          paths.add(imageFile.path);
-          Log.info('✅ 图片保存为永久文件: ${imageFile.path}');
-        } catch (e) {
-          Log.error('❌ 保存图片文件失败: $e');
+          finalPath = imageFile.path;
+          Log.info('✅ 图片从bytes保存到永久目录: ${imageFile.path}');
         }
-      } else if (image.url != null) {
-        // URL图片，暂时跳过（可以考虑下载后保存）
-        Log.warn('⚠️  URL图片暂不支持: ${image.url}');
+        // 如果没有bytes，尝试从filePath读取并复制
+        else if (image.filePath != null) {
+          final sourceFile = File(image.filePath!);
+          if (await sourceFile.exists()) {
+            final fileName = image.name ?? '${DateTime.now().millisecondsSinceEpoch}_${image.filePath!.split('/').last}';
+            final imageFile = File('${storageDir.path}/$fileName');
+            // 复制文件到永久目录
+            await sourceFile.copy(imageFile.path);
+            finalPath = imageFile.path;
+            Log.info('✅ 图片从filePath复制到永久目录: ${imageFile.path}');
+          } else {
+            Log.warn('⚠️  源图片文件不存在: ${image.filePath}');
+          }
+        }
+        // URL图片，暂时跳过
+        else if (image.url != null) {
+          Log.warn('⚠️  URL图片暂不支持: ${image.url}');
+        }
+
+        if (finalPath != null) {
+          paths.add(finalPath);
+        }
+      } catch (e) {
+        Log.error('❌ 处理图片失败: $e');
       }
     }
-    
+
     return paths;
   }
 }

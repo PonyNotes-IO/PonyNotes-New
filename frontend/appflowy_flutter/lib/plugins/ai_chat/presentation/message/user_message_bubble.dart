@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -20,12 +21,14 @@ class ChatUserMessageBubble extends StatelessWidget {
     required this.child,
     this.files = const [],
     this.images = const [],
+    this.imagePaths = const [], // 新增：图片文件路径列表
   });
 
   final Message message;
   final Widget child;
   final List<ChatFile> files;
   final List<String> images; // base64编码的图片列表
+  final List<String> imagePaths; // 图片文件路径列表
 
   @override
   Widget build(BuildContext context) {
@@ -40,10 +43,13 @@ class ChatUserMessageBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           // 显示图片缩略图
-          if (images.isNotEmpty) ...[
+          if (images.isNotEmpty || imagePaths.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.only(right: 32),
-              child: _MessageImageList(images: images),
+              child: _MessageImageList(
+                images: images,
+                imagePaths: imagePaths,
+              ),
             ),
             const VSpace(6),
           ],
@@ -172,22 +178,35 @@ class _MessageFile extends StatelessWidget {
 
 /// 图片缩略图列表组件
 class _MessageImageList extends StatelessWidget {
-  const _MessageImageList({required this.images});
+  const _MessageImageList({required this.images, this.imagePaths = const []});
 
-  final List<String> images;
+  final List<String> images; // base64 图片
+  final List<String> imagePaths; // 文件路径图片
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> children = [];
+
+    // 添加 base64 图片
+    for (final image in images) {
+      children.add(_MessageImage(imageBase64: image));
+    }
+
+    // 添加文件路径图片
+    for (final path in imagePaths) {
+      children.add(_MessageImageFromPath(filePath: path));
+    }
+
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.end,
       spacing: 8,
       runSpacing: 8,
-      children: images.map((image) => _MessageImage(imageBase64: image)).toList(),
+      children: children,
     );
   }
 }
 
-/// 单个图片缩略图组件
+/// 单个图片缩略图组件（从base64加载）
 class _MessageImage extends StatelessWidget {
   const _MessageImage({required this.imageBase64});
 
@@ -204,9 +223,12 @@ class _MessageImage extends StatelessWidget {
       imageBytes = null;
     }
 
+    return _buildImageWidget(context, imageBytes);
+  }
+
+  Widget _buildImageWidget(BuildContext context, Uint8List? imageBytes) {
     return GestureDetector(
       onTap: () {
-        // 点击查看大图
         if (imageBytes != null) {
           _showFullImage(context, imageBytes);
         }
@@ -245,6 +267,190 @@ class _MessageImage extends StatelessWidget {
         Icons.image_not_supported_outlined,
         color: Theme.of(context).hintColor,
         size: 32,
+      ),
+    );
+  }
+
+  void _showFullImage(BuildContext context, Uint8List imageBytes) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(
+                  imageBytes,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 从文件路径加载图片的组件
+class _MessageImageFromPath extends StatefulWidget {
+  const _MessageImageFromPath({required this.filePath});
+
+  final String filePath;
+
+  @override
+  State<_MessageImageFromPath> createState() => _MessageImageFromPathState();
+}
+
+class _MessageImageFromPathState extends State<_MessageImageFromPath> {
+  Uint8List? _imageBytes;
+  bool _isLoading = true;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImage();
+  }
+
+  Future<void> _loadImage() async {
+    try {
+      final file = File(widget.filePath);
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        if (mounted) {
+          setState(() {
+            _imageBytes = bytes;
+            _isLoading = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _error = true;
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = true;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Container(
+        width: 80,
+        height: 80,
+        constraints: const BoxConstraints(
+          maxWidth: 120,
+          maxHeight: 120,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+          ),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    if (_error || _imageBytes == null) {
+      return GestureDetector(
+        onTap: () {},
+        child: Container(
+          width: 80,
+          height: 80,
+          constraints: const BoxConstraints(
+            maxWidth: 120,
+            maxHeight: 120,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+            ),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          ),
+          child: Icon(
+            Icons.image_not_supported_outlined,
+            color: Theme.of(context).hintColor,
+            size: 32,
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () {
+        _showFullImage(context, _imageBytes!);
+      },
+      child: Container(
+        constraints: const BoxConstraints(
+          maxWidth: 120,
+          maxHeight: 120,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Image.memory(
+          _imageBytes!,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              width: 80,
+              height: 80,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Icon(
+                Icons.image_not_supported_outlined,
+                color: Theme.of(context).hintColor,
+                size: 32,
+              ),
+            );
+          },
+        ),
       ),
     );
   }

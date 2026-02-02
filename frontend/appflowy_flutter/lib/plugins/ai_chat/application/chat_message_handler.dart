@@ -53,10 +53,11 @@ class ChatMessageHandler {
   Message createTextMessage(ChatMessagePB message) {
     String messageId = message.messageId.toString();
     String originalMessageId = messageId;
-    
+
     // 用于保存从临时消息中复制的图片数据
     List<String>? preservedImages;
     bool? preservedHasImages;
+    List<String>? preservedImagePaths; // 新增：保存图片路径
 
     /// If the message id is in the temporary map, we will use the previous fake message id
     if (_temporaryMessageIDMap.containsKey(messageId)) {
@@ -64,7 +65,7 @@ class ChatMessageHandler {
       Log.info('🔄 MessageHandler.createTextMessage: 使用映射ID');
       Log.info('   - 真实ID: $originalMessageId');
       Log.info('   - 映射ID: $mappedId');
-      
+
       // 【关键修复】从临时消息中复制图片数据
       final existingMessage = chatController.messages.firstWhereOrNull(
         (m) => m.id == mappedId,
@@ -78,14 +79,19 @@ class ChatMessageHandler {
         if (existingMeta['has_images'] != null) {
           preservedHasImages = existingMeta['has_images'] as bool;
         }
+        // 新增：复制图片路径
+        if (existingMeta['image_paths'] != null && existingMeta['image_paths'] is List) {
+          preservedImagePaths = (existingMeta['image_paths'] as List).cast<String>();
+          Log.info('📸 MessageHandler: 从临时消息复制 ${preservedImagePaths.length} 个图片路径');
+        }
       }
-      
+
       messageId = mappedId;
     } else {
       Log.info('ℹ️ MessageHandler.createTextMessage: 未找到映射');
       Log.info('   - 消息ID: $messageId');
       Log.info('   - 当前映射表: $_temporaryMessageIDMap');
-      
+
       // 【关键修复】即使没有映射，也尝试从现有消息中查找相同ID的消息，获取图片数据
       // 这可以处理从服务器加载历史消息时的情况
       final existingMessage = chatController.messages.firstWhereOrNull(
@@ -100,11 +106,16 @@ class ChatMessageHandler {
         if (existingMeta['has_images'] != null) {
           preservedHasImages = existingMeta['has_images'] as bool;
         }
+        // 新增：复制图片路径
+        if (existingMeta['image_paths'] != null && existingMeta['image_paths'] is List) {
+          preservedImagePaths = (existingMeta['image_paths'] as List).cast<String>();
+          Log.info('📸 MessageHandler: 从现有消息复制 ${preservedImagePaths.length} 个图片路径（无映射情况）');
+        }
       }
     }
     // 处理metadata：如果为空或'null'，使用空对象字符串
-    final metadata = (message.metadata.isEmpty || message.metadata == 'null') 
-        ? '{}' 
+    final metadata = (message.metadata.isEmpty || message.metadata == 'null')
+        ? '{}'
         : message.metadata;
     Log.info('📋 MessageHandler: 原始metadata字符串: ${metadata.length > 200 ? metadata.substring(0, 200) + "..." : metadata}');
     Log.info('📋 MessageHandler: 消息ID: $messageId, 作者ID: ${message.authorId}');
@@ -112,6 +123,8 @@ class ChatMessageHandler {
     // 尝试从metadata字符串中解析图片数据
     List<String>? serverImages;
     bool? serverHasImages;
+    List<String>? serverImagePaths; // 新增：服务器返回的图片路径
+
     try {
       final metadataJson = jsonDecode(metadata);
       Log.info('📋 MessageHandler: 解析后的metadata类型: ${metadataJson.runtimeType}');
@@ -131,6 +144,11 @@ class ChatMessageHandler {
         }
         if (metadataJson['has_images'] != null) {
           serverHasImages = metadataJson['has_images'] as bool;
+        }
+        // 新增：提取图片路径
+        if (metadataJson['image_paths'] != null && metadataJson['image_paths'] is List) {
+          serverImagePaths = (metadataJson['image_paths'] as List).cast<String>();
+          Log.info('📸 MessageHandler: 从metadata提取到 ${serverImagePaths.length} 个图片路径');
         }
       } else if (metadataJson is List) {
         Log.info('📋 MessageHandler: metadata是List类型（可能是旧格式），尝试查找图片数据');
@@ -156,7 +174,7 @@ class ChatMessageHandler {
     final finalMetadata = <String, dynamic>{
       messageRefSourceJsonStringKey: metadata,
     };
-    
+
     // 优先使用从临时消息中保留的图片数据，如果没有则使用从服务器解析的图片数据
     if (preservedImages != null && preservedImages.isNotEmpty) {
       finalMetadata['images'] = preservedImages;
@@ -166,6 +184,15 @@ class ChatMessageHandler {
       finalMetadata['images'] = serverImages;
       finalMetadata['has_images'] = serverHasImages ?? true;
       Log.info('📸 MessageHandler: 图片数据已保留到最终消息（从服务器metadata）');
+    }
+
+    // 新增：保留图片路径
+    if (preservedImagePaths != null && preservedImagePaths.isNotEmpty) {
+      finalMetadata['image_paths'] = preservedImagePaths;
+      Log.info('📸 MessageHandler: 图片路径已保留到最终消息（从临时消息）');
+    } else if (serverImagePaths != null && serverImagePaths.isNotEmpty) {
+      finalMetadata['image_paths'] = serverImagePaths;
+      Log.info('📸 MessageHandler: 图片路径已保留到最终消息（从服务器metadata）');
     }
 
     return TextMessage(

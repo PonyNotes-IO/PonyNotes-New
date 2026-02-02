@@ -825,16 +825,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       
       // 准备metadata（包含图片）
       final metadata = <String, dynamic>{};
-      
+
       // 处理初始图片
       if (initialImagePaths != null && initialImagePaths!.isNotEmpty) {
         Log.info('📸 ChatBloc: 准备发送 ${initialImagePaths!.length} 张图片');
+
+        // 1. 转换图片为base64（用于发送到服务器）
         final imageBase64List = await _convertImagesToBase64(initialImagePaths!);
         if (imageBase64List.isNotEmpty && !isClosed) {
           metadata['images'] = imageBase64List;
           metadata['has_images'] = true;
-          Log.info('✅ ChatBloc: 已添加 ${imageBase64List.length} 张图片到metadata');
+          Log.info('✅ ChatBloc: 已添加 ${imageBase64List.length} 张图片(base64)到metadata');
         }
+
+        // 2. 同时保存图片文件路径（作为备用，用于本地持久化）
+        // 这样即使base64数据在存储过程中丢失，也能从文件路径恢复图片
+        metadata['image_paths'] = initialImagePaths;
+        Log.info('✅ ChatBloc: 已添加 ${initialImagePaths!.length} 张图片路径到metadata');
       }
       
       // 发送消息

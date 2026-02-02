@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:appflowy/plugins/ai_chat/application/chat_entity.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_message_service.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_message_stream.dart';
@@ -35,6 +37,7 @@ class ChatUserMessageWidget extends StatelessWidget {
         message: message,
         files: _getFiles(),
         images: _getImages(),
+        imagePaths: _getImagePaths(),
         child: BlocBuilder<ChatUserMessageBloc, ChatUserMessageState>(
           builder: (context, state) {
             return Opacity(
@@ -74,16 +77,30 @@ class ChatUserMessageWidget extends StatelessWidget {
 
     Log.info('📸 UserTextMessage: 检查metadata中的图片数据');
     Log.info('   - metadata键列表: ${message.metadata!.keys.toList()}');
-    
+
     final imagesData = message.metadata!['images'];
     Log.info('   - images字段类型: ${imagesData.runtimeType}');
     Log.info('   - images字段值: ${imagesData is List ? "List(${(imagesData as List).length})" : imagesData}');
-    
+
     if (imagesData is List && imagesData.isNotEmpty) {
-      Log.info('📸 UserTextMessage: 找到 ${imagesData.length} 张图片');
+      Log.info('📸 UserTextMessage: 找到 ${imagesData.length} 张图片(base64)');
       return imagesData.cast<String>();
     }
-    Log.info('📸 UserTextMessage: 没有找到图片数据');
+    Log.info('📸 UserTextMessage: 没有找到base64图片数据');
+    return const [];
+  }
+
+  /// 获取消息中的图片文件路径列表（备用方案）
+  List<String> _getImagePaths() {
+    if (message.metadata == null) {
+      return const [];
+    }
+
+    final pathsData = message.metadata!['image_paths'];
+    if (pathsData is List && pathsData.isNotEmpty) {
+      Log.info('📸 UserTextMessage: 找到 ${pathsData.length} 张图片路径');
+      return pathsData.cast<String>();
+    }
     return const [];
   }
 }
