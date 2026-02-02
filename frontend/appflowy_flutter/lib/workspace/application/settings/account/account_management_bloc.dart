@@ -281,17 +281,21 @@ class AccountManagementBloc
     return userProfile.id.toString();
   }
 
-
+  /// 接口 plan_code 与会员级别对应：fmb=免费, standard=Stand, professor=Pro, hiclass=Hiclass
   WorkspacePlanPB? _mapPlanCodeToPb(String code) {
-    switch (code) {
-      case 'free_local':
+    final lower = code.toLowerCase();
+    switch (lower) {
+      case 'mfb':
+      case 'fmb':
         return WorkspacePlanPB.FreePlan;
-      case 'student':
-        return WorkspacePlanPB.StudentPlan;
       case 'standard':
-        return WorkspacePlanPB.StandardPlan;
-      case 'team':
-        return WorkspacePlanPB.TeamPlan;
+      case 'stand':
+        return WorkspacePlanPB.StandPlan;
+      case 'professor':
+      case 'pro':
+        return WorkspacePlanPB.ProPlan;
+      case 'hiclass':
+        return WorkspacePlanPB.HiclassPlan;
       default:
         return null;
     }
@@ -317,7 +321,7 @@ class AccountManagementBloc
 
     WorkspacePlanPB? selectedPlan;
     if (currentPlan == WorkspacePlanPB.FreePlan) {
-      selectedPlan = WorkspacePlanPB.StudentPlan;
+      selectedPlan = WorkspacePlanPB.ProPlan;
     } else {
       selectedPlan = currentPlan;
     }
@@ -1042,9 +1046,9 @@ class AccountManagementBloc
     switch (plan) {
       case WorkspacePlanPB.FreePlan:
         return allAddons.where((addon) => addon.isAiToken == true).toList();
-      case WorkspacePlanPB.StudentPlan:
-      case WorkspacePlanPB.StandardPlan:
-      case WorkspacePlanPB.TeamPlan:
+      case WorkspacePlanPB.StandPlan:
+      case WorkspacePlanPB.ProPlan:
+      case WorkspacePlanPB.HiclassPlan:
         return allAddons;
       default:
         return allAddons.where((addon) => addon.isAiToken == true).toList();
@@ -1839,15 +1843,15 @@ class AccountManagementBloc
             addonIdValue = null;
           }
 
-          // 1. 获取当前云端配置（拿到 serverUrl）
-          final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-          final baseUrl = cloudEnv.appflowyCloudConfig.base_web_domain;
-
           if(!PaymentDevConfig.enableTestMode) {
+            // 1. 获取当前云端配置（拿到 serverUrl）
+            final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+            final baseUrl = cloudEnv.appflowyCloudConfig.base_web_domain;
+            // final baseUrl = "https://www.xiaomabiji.com";
             //price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
             final userUuid = _getUserUuid();
             String payUrl =
-                "$baseUrl/price?planId=${planIdValue ?? ''}&billingType=$billingType&userInfo=${userUuid}";
+                "$baseUrl/price?planId=${planIdValue ?? ''}&billingType=$billingType&userInfo=$userUuid";
             // 使用浏览器打开支付链接
             await PaymentUtil.webPay(payUrl);
 
@@ -1944,10 +1948,13 @@ class AccountManagementBloc
         required bool isProcessingPayment,
       String? error,
       String? paymentResult}) async {
+    // 这里同样使用用户 UUID 作为 userInfo，保持与网页支付入口一致
+    final userUuid = _getUserUuid();
+
     final createRequest = PaymentCreateRequest(
         amount: Decimal.parse(selectedPrice.toString()).toString(),
         paymentType: paymentType,
-        userInfo: userProfile.id.toString(),
+        userInfo: userUuid,
         // 必传：JSON 字符串格式
         // productName: planConfig.planNameCn.isNotEmpty
         //     ? planConfig.planNameCn
@@ -2135,14 +2142,9 @@ class AccountManagementBloc
             selectedDuration == PurchaseDurationOption.monthly ? 0 : 1;
 
         // 1. 获取当前云端配置（拿到 serverUrl）
-        final cloudConfigResult = await UserEventGetCloudConfig().send();
-        final cloudConfig = cloudConfigResult.fold(
-          (config) => config,
-          (error) => throw error,
-        );
-
-        // final baseUrl = cloudConfig.serverUrl;
-        final baseUrl = "https://www.xiaomabiji.com";
+        final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+        final baseUrl = cloudEnv.appflowyCloudConfig.base_web_domain;
+        // final baseUrl = "https://www.xiaomabiji.com";
 
         final payUrl =
             "$baseUrl/price?planId=&billingType=$billingType";

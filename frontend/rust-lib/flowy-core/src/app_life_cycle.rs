@@ -1,5 +1,5 @@
 use anyhow::Context;
-use client_api::entity::billing_dto::SubscriptionPlan;
+use flowy_user::entities::SubscriptionPlan;
 use std::sync::{Arc, Weak};
 use tracing::{error, event, info, instrument};
 
@@ -489,7 +489,7 @@ impl AppLifeCycle for AppLifeCycleImpl {
     let mut storage_plan_changed = false;
     for plan in &plans {
       match plan {
-        SubscriptionPlan::Pro | SubscriptionPlan::Team => storage_plan_changed = true,
+        SubscriptionPlan::Pro | SubscriptionPlan::Hiclass => storage_plan_changed = true,
         _ => {},
       }
     }

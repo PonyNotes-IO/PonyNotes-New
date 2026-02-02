@@ -157,8 +157,7 @@ class SettingsBillingBloc
               );
             }
 
-            if (plan == WorkspacePlanPB.StandardPlan &&
-                value.plan == WorkspacePlanPB.StandardPlan) {
+            if (plan.value == 1 && value.plan.value == 1) {
               value.plan = WorkspacePlanPB.FreePlan;
               value.planSubscription.freeze();
               value.planSubscription = value.planSubscription.rebuild((sub) {

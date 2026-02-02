@@ -259,7 +259,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
         subscription.planCode!.isNotEmpty) {
       // 检查计划代码是否为免费版
       final planCode = subscription.planCode!.toLowerCase();
-      if (planCode == 'free' || planCode == 'freeplan') {
+      if (planCode == 'free' || planCode == 'freeplan' || planCode == 'fmb') {
         return CloudSyncMembershipStatus.notSubscribed;
       }
 

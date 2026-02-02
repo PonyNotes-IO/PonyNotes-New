@@ -131,7 +131,7 @@ class SettingsPlanBloc extends Bloc<SettingsPlanEvent, SettingsPlanState> {
           // on the Plan page
           final result = await _userService.cancelSubscription(
             workspaceId,
-            SubscriptionPlanPB.Standard,
+            SubscriptionPlanPB.Stand,
             reason,
           );
 

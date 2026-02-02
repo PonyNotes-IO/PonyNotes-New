@@ -1,4 +1,4 @@
-use client_api::entity::billing_dto::SubscriptionPlan;
+use crate::entities::SubscriptionPlan;
 use flowy_derive::{Flowy_Event, ProtoBuf_Enum};
 use flowy_error::FlowyResult;
 use flowy_user_pub::cloud::UserCloudConfig;

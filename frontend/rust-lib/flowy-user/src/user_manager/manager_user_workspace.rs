@@ -766,11 +766,13 @@ impl UserManager {
     .await?;
 
     trace!("Current plans: {:?}", plans);
+    let local_plans: Vec<crate::entities::SubscriptionPlan> =
+      plans.into_iter().map(Into::into).collect();
     self
       .app_life_cycle
       .read()
       .await
-      .on_subscription_plans_updated(plans);
+      .on_subscription_plans_updated(local_plans);
     Ok(())
   }
 }

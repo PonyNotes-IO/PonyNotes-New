@@ -63,16 +63,17 @@ class _SettingsMenuState extends State<SettingsMenu> {
     );
   }
 
-  // 根据订阅计划返回对应的版本名称
-  String _getPlanName(WorkspacePlanPB plan) {
-    switch (plan) {
-      case WorkspacePlanPB.FreePlan:
+  // 按枚举数值判断，兼容旧/新生成的 Dart 枚举名。0=Free, 1=Stand/Standard, 2=Pro/Student, 3=Hiclass/Team
+  String _getPlanName(WorkspacePlanPB? plan) {
+    if (plan == null) return '免费版';
+    switch (plan.value) {
+      case 0:
         return '免费版';
-      case WorkspacePlanPB.StudentPlan:
-        return '学生版';
-      case WorkspacePlanPB.StandardPlan:
+      case 1:
         return '标准版';
-      case WorkspacePlanPB.TeamPlan:
+      case 2:
+        return '学生版';
+      case 3:
         return '团队版';
       default:
         return '免费版';
@@ -263,7 +264,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     final planDetails = sub?.planDetails;
 
     final currentPlan =
-        _subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
+        _subscriptionInfo?.plan;
     final planName = summary?.planNameCn?.isNotEmpty == true
         ? summary!.planNameCn!
         : (summary?.planCode?.isNotEmpty == true
@@ -274,7 +275,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
     final hasValidity = summary?.endDate != null ||
         (_subscriptionInfo?.planSubscription.endDate != null &&
-            currentPlan != WorkspacePlanPB.FreePlan);
+            (currentPlan?.value ?? 0) != 0);
 
     Widget buildAvatar() {
       final double size = 48;

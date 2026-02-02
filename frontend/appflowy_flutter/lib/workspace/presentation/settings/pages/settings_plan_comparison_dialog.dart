@@ -180,14 +180,12 @@ class _SettingsPlanComparisonDialogState
                                 .settings_comparePlanDialog_freePlan_priceInfo
                                 .tr(),
                             cells: _freeLabels,
-                            isCurrent:
-                                currentInfo.plan == WorkspacePlanPB.FreePlan,
+                            isCurrent: currentInfo.plan.value == 0,
                             buttonType: WorkspacePlanPB.FreePlan.buttonTypeFor(
                               currentInfo.plan,
                             ),
                             onSelected: () async {
-                              if (currentInfo.plan ==
-                                      WorkspacePlanPB.FreePlan ||
+                              if (currentInfo.plan.value == 0 ||
                                   currentInfo.isCanceled) {
                                 return;
                               }
@@ -225,15 +223,14 @@ class _SettingsPlanComparisonDialogState
                             price: '¥30/年',
                             priceInfo: '或 ¥3/月',
                             cells: _studentLabels,
-                            isCurrent:
-                                currentInfo.plan == WorkspacePlanPB.StudentPlan,
-                            buttonType: WorkspacePlanPB.StudentPlan.buttonTypeFor(
+                            isCurrent: currentInfo.plan.value == 2,
+                            buttonType: WorkspacePlanPB.ProPlan.buttonTypeFor(
                               currentInfo.plan,
                             ),
                             onSelected: () =>
                                 context.read<SettingsPlanBloc>().add(
                                       const SettingsPlanEvent.addSubscription(
-                                        SubscriptionPlanPB.Student,
+                                        SubscriptionPlanPB.Pro,
                                       ),
                                     ),
                           ),
@@ -243,15 +240,14 @@ class _SettingsPlanComparisonDialogState
                             price: '¥80/年',
                             priceInfo: '或 ¥8/月',
                             cells: _standardLabels,
-                            isCurrent:
-                                currentInfo.plan == WorkspacePlanPB.StandardPlan,
-                            buttonType: WorkspacePlanPB.StandardPlan.buttonTypeFor(
+                            isCurrent: currentInfo.plan.value == 1,
+                            buttonType: WorkspacePlanPB.StandPlan.buttonTypeFor(
                               currentInfo.plan,
                             ),
                             onSelected: () =>
                                 context.read<SettingsPlanBloc>().add(
                                       const SettingsPlanEvent.addSubscription(
-                                        SubscriptionPlanPB.Standard,
+                                        SubscriptionPlanPB.Stand,
                                       ),
                                     ),
                           ),
@@ -261,15 +257,14 @@ class _SettingsPlanComparisonDialogState
                             price: '¥180/年',
                             priceInfo: '或 ¥18/月',
                             cells: _teamLabels,
-                            isCurrent:
-                                currentInfo.plan == WorkspacePlanPB.TeamPlan,
-                            buttonType: WorkspacePlanPB.TeamPlan.buttonTypeFor(
+                            isCurrent: currentInfo.plan.value == 3,
+                            buttonType: WorkspacePlanPB.HiclassPlan.buttonTypeFor(
                               currentInfo.plan,
                             ),
                             onSelected: () =>
                                 context.read<SettingsPlanBloc>().add(
                                       const SettingsPlanEvent.addSubscription(
-                                        SubscriptionPlanPB.Team,
+                                        SubscriptionPlanPB.Hiclass,
                                       ),
                                     ),
                           ),
@@ -306,7 +301,7 @@ extension _ButtonTypeFrom on WorkspacePlanPB {
       return _PlanButtonType.none;
     }
 
-    // Compare plan levels: Free=0, Student=1, Standard=2, Team=3
+    // Compare plan levels: Free=0, Stand=1, Pro=2, Hiclass=3
     final thisLevel = _planLevel(this);
     final otherLevel = _planLevel(other);
 
@@ -320,16 +315,10 @@ extension _ButtonTypeFrom on WorkspacePlanPB {
   }
 }
 
-/// Returns the numeric level of a plan for comparison
-/// Free=0, Student=1, Standard=2, Team=3
+/// 按枚举数值返回等级，兼容旧/新生成的 Dart 枚举名。Free=0, Stand/Standard=1, Pro/Student=2, Hiclass/Team=3
 int _planLevel(WorkspacePlanPB plan) {
-  return switch (plan) {
-    WorkspacePlanPB.FreePlan => 0,
-    WorkspacePlanPB.StudentPlan => 1,
-    WorkspacePlanPB.StandardPlan => 2,
-    WorkspacePlanPB.TeamPlan => 3,
-    _ => 0, // Default to Free plan level for unknown plans
-  };
+  final v = plan.value;
+  return (v >= 0 && v <= 3) ? v : 0;
 }
 
 class _PlanTable extends StatelessWidget {

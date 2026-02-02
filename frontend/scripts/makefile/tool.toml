@@ -83,6 +83,26 @@ script = ["""
   """]
 script_runner = "@duckscript"
 
+# 强制重新生成 Dart Protobuf（含 workspace.pb.dart、SubscriptionPlanPB/WorkspacePlanPB 等），
+# 使 Dart 枚举与 Rust (Free/Stand/Pro/Hiclass) 一致。请在 frontend 目录下执行：cargo make regenerate-dart-protobuf
+[tasks.regenerate-dart-protobuf]
+description = "Regenerate Dart protobuf from current Rust (SubscriptionPlanPB etc). Clean then build. Run from frontend."
+env = { "dart_flowy_sdk_path" = "./appflowy_flutter/packages/appflowy_backend/" }
+dependencies = ["rm_dart_generated_protobuf_files"]
+script = ["""
+  set -e
+  # 确保 build 时能生成 Dart：必须设置 CARGO_MAKE_WORKING_DIRECTORY 与 FLUTTER_FLOWY_SDK_PATH
+  export CARGO_MAKE_WORKING_DIRECTORY="${CARGO_MAKE_WORKING_DIRECTORY:-$(pwd)}"
+  export FLUTTER_FLOWY_SDK_PATH="${FLUTTER_FLOWY_SDK_PATH:-appflowy_flutter/packages/appflowy_backend}"
+  cd rust-lib
+  rm -rf flowy-user/resources/proto
+  rm -rf build-tool/flowy-codegen/.cache 2>/dev/null || true
+  cargo clean -p flowy-user -q 2>/dev/null || true
+  cargo build -vv --package=dart-ffi --features "${FLUTTER_DESKTOP_FEATURES}"
+  cd ..
+  """]
+script_runner = "@shell"
+
 
 [tasks.remove_files_with_pattern]
 private = true

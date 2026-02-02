@@ -43,7 +43,7 @@ class SidebarToast extends StatelessWidget {
           storageLimitHit: () => PlanIndicator(
             planName: SubscriptionPlanPB.Free.label,
             text: LocaleKeys.sideBar_upgradeToPro.tr(),
-            onTap: () => _handleOnTap(context, SubscriptionPlanPB.Standard),
+            onTap: () => _handleOnTap(context, SubscriptionPlanPB.Stand),
             reason: LocaleKeys.sideBar_storageLimitDialogTitle.tr(),
           ),
           aiMaxiLimitHit: () => PlanIndicator(
@@ -66,7 +66,7 @@ class SidebarToast extends StatelessWidget {
             LocaleKeys.settings_comparePlanDialog_actions_upgrade.tr(),
         onConfirm: (_) {
           WidgetsBinding.instance.addPostFrameCallback(
-            (_) => _handleOnTap(context, SubscriptionPlanPB.Standard),
+            (_) => _handleOnTap(context, SubscriptionPlanPB.Stand),
           );
         },
       );
@@ -80,7 +80,7 @@ class SidebarToast extends StatelessWidget {
             LocaleKeys.settings_comparePlanDialog_actions_upgrade.tr(),
         onConfirm: (_) {
           WidgetsBinding.instance.addPostFrameCallback(
-            (_) => _handleOnTap(context, SubscriptionPlanPB.Standard),
+            (_) => _handleOnTap(context, SubscriptionPlanPB.Stand),
           );
         },
       );

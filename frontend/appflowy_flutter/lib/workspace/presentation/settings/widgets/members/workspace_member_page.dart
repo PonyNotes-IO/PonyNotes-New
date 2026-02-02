@@ -88,7 +88,8 @@ class _WorkspaceMembersPageState extends State<WorkspaceMembersPage> {
                                   (sub.planCode?.isNotEmpty ?? false)) {
                                 final planCode = sub.planCode!.toLowerCase();
                                 if (planCode != 'free' &&
-                                    planCode != 'freeplan') {
+                                    planCode != 'freeplan' &&
+                                    planCode != 'fmb') {
                                   final end = uwState.currentSubscription
                                       ?.subscription?.endDate;
                                   if (end == null ||

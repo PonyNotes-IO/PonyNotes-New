@@ -9,14 +9,14 @@ use std::fmt;
 use std::str::FromStr;
 use validator::Validate;
 
-// Local definition of SubscriptionPlan to support Basic variant
-// This mirrors the backend definition but is independent to avoid version conflicts
+// Local definition of SubscriptionPlan.
+// 统一使用：Free=0, Stand=1(标准版/standard), Pro=2(专业版/professor), Hiclass=3(团队版/hiclass)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SubscriptionPlan {
-  Free = 0,
-  Basic = 1,
-  Pro = 2,
-  Team = 3,
+  Free = 0,    // 接口: fmb
+  Stand = 1,   // 接口: standard (标准版)
+  Pro = 2,     // 接口: professor (专业版)
+  Hiclass = 3, // 接口: hiclass (团队版)
   AiMax = 4,
   AiLocal = 5,
 }
@@ -82,9 +82,9 @@ impl From<client_api::entity::billing_dto::SubscriptionPlan> for SubscriptionPla
     use client_api::entity::billing_dto::SubscriptionPlan as CloudPlan;
     match plan {
       CloudPlan::Free => SubscriptionPlan::Free,
-      CloudPlan::Basic => SubscriptionPlan::Free, // Basic plan maps to Free
+      CloudPlan::Basic => SubscriptionPlan::Stand,
       CloudPlan::Pro => SubscriptionPlan::Pro,
-      CloudPlan::Team => SubscriptionPlan::Team,
+      CloudPlan::Team => SubscriptionPlan::Hiclass,
       CloudPlan::AiMax => SubscriptionPlan::AiMax,
       CloudPlan::AiLocal => SubscriptionPlan::AiLocal,
     }
@@ -98,12 +98,13 @@ impl Default for SubscriptionPlan {
 }
 
 impl fmt::Display for SubscriptionPlan {
+  /// 输出与接口一致的 plan_code：fmb, standard, professor, hiclass
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      SubscriptionPlan::Free => write!(f, "free"),
-      SubscriptionPlan::Basic => write!(f, "basic"),
-      SubscriptionPlan::Pro => write!(f, "pro"),
-      SubscriptionPlan::Team => write!(f, "team"),
+      SubscriptionPlan::Free => write!(f, "fmb"),
+      SubscriptionPlan::Stand => write!(f, "standard"),
+      SubscriptionPlan::Pro => write!(f, "professor"),
+      SubscriptionPlan::Hiclass => write!(f, "hiclass"),
       SubscriptionPlan::AiMax => write!(f, "ai_max"),
       SubscriptionPlan::AiLocal => write!(f, "ai_local"),
     }
@@ -113,12 +114,13 @@ impl fmt::Display for SubscriptionPlan {
 impl FromStr for SubscriptionPlan {
   type Err = String;
 
+  /// 接口 plan_code 与枚举对应：fmb=Free, standard=Stand, professor=Pro, hiclass=Hiclass
   fn from_str(s: &str) -> Result<Self, Self::Err> {
     match s.to_lowercase().as_str() {
-      "free" => Ok(SubscriptionPlan::Free),
-      "basic" => Ok(SubscriptionPlan::Basic),
-      "pro" => Ok(SubscriptionPlan::Pro),
-      "team" => Ok(SubscriptionPlan::Team),
+      "free" | "fmb" => Ok(SubscriptionPlan::Free),
+      "stand" | "standard" => Ok(SubscriptionPlan::Stand),
+      "pro" | "professor" => Ok(SubscriptionPlan::Pro),
+      "hiclass" => Ok(SubscriptionPlan::Hiclass),
       "ai_max" => Ok(SubscriptionPlan::AiMax),
       "ai_local" => Ok(SubscriptionPlan::AiLocal),
       _ => Err(format!("Unknown subscription plan: {}", s)),
@@ -132,9 +134,9 @@ impl TryFrom<i16> for SubscriptionPlan {
   fn try_from(value: i16) -> Result<Self, Self::Error> {
     match value {
       0 => Ok(SubscriptionPlan::Free),
-      1 => Ok(SubscriptionPlan::Basic),
+      1 => Ok(SubscriptionPlan::Stand),
       2 => Ok(SubscriptionPlan::Pro),
-      3 => Ok(SubscriptionPlan::Team),
+      3 => Ok(SubscriptionPlan::Hiclass),
       4 => Ok(SubscriptionPlan::AiMax),
       5 => Ok(SubscriptionPlan::AiLocal),
       _ => Err(format!("Unknown subscription plan value: {}", value)),
@@ -642,13 +644,14 @@ impl From<RecurringInterval> for RecurringIntervalPB {
   }
 }
 
+/// Protobuf 枚举，统一使用 Free=0, Stand=1, Pro=2, Hiclass=3，与本地 SubscriptionPlan 一致。
 #[derive(ProtoBuf_Enum, Clone, Default, Debug, Serialize, Deserialize)]
 pub enum SubscriptionPlanPB {
   #[default]
   Free = 0,
-  Student = 1,
-  Standard = 2,
-  Team = 3,
+  Stand = 1,   // 标准版 / 接口 standard
+  Pro = 2,     // 专业版 / 接口 professor
+  Hiclass = 3, // 团队版 / 接口 hiclass
 
   // Add-ons
   AiMax = 4,
@@ -659,9 +662,9 @@ impl From<WorkspacePlanPB> for SubscriptionPlanPB {
   fn from(value: WorkspacePlanPB) -> Self {
     match value {
       WorkspacePlanPB::FreePlan => SubscriptionPlanPB::Free,
-      WorkspacePlanPB::StudentPlan => SubscriptionPlanPB::Student,
-      WorkspacePlanPB::StandardPlan => SubscriptionPlanPB::Standard,
-      WorkspacePlanPB::TeamPlan => SubscriptionPlanPB::Team,
+      WorkspacePlanPB::StandPlan => SubscriptionPlanPB::Stand,
+      WorkspacePlanPB::ProPlan => SubscriptionPlanPB::Pro,
+      WorkspacePlanPB::HiclassPlan => SubscriptionPlanPB::Hiclass,
     }
   }
 }
@@ -670,9 +673,9 @@ impl From<SubscriptionPlanPB> for SubscriptionPlan {
   fn from(value: SubscriptionPlanPB) -> Self {
     match value {
       SubscriptionPlanPB::Free => SubscriptionPlan::Free,
-      SubscriptionPlanPB::Student => SubscriptionPlan::Basic,
-      SubscriptionPlanPB::Standard => SubscriptionPlan::Pro,
-      SubscriptionPlanPB::Team => SubscriptionPlan::Team,
+      SubscriptionPlanPB::Stand => SubscriptionPlan::Stand,
+      SubscriptionPlanPB::Pro => SubscriptionPlan::Pro,
+      SubscriptionPlanPB::Hiclass => SubscriptionPlan::Hiclass,
       SubscriptionPlanPB::AiMax => SubscriptionPlan::AiMax,
       SubscriptionPlanPB::AiLocal => SubscriptionPlan::AiLocal,
     }
@@ -683,9 +686,9 @@ impl From<SubscriptionPlan> for SubscriptionPlanPB {
   fn from(value: SubscriptionPlan) -> Self {
     match value {
       SubscriptionPlan::Free => SubscriptionPlanPB::Free,
-      SubscriptionPlan::Basic => SubscriptionPlanPB::Student,
-      SubscriptionPlan::Pro => SubscriptionPlanPB::Standard,
-      SubscriptionPlan::Team => SubscriptionPlanPB::Team,
+      SubscriptionPlan::Stand => SubscriptionPlanPB::Stand,
+      SubscriptionPlan::Pro => SubscriptionPlanPB::Pro,
+      SubscriptionPlan::Hiclass => SubscriptionPlanPB::Hiclass,
       SubscriptionPlan::AiMax => SubscriptionPlanPB::AiMax,
       SubscriptionPlan::AiLocal => SubscriptionPlanPB::AiLocal,
     }
@@ -697,9 +700,9 @@ impl From<SubscriptionPlanPB> for client_api::entity::billing_dto::SubscriptionP
     use client_api::entity::billing_dto::SubscriptionPlan as CloudPlan;
     match value {
       SubscriptionPlanPB::Free => CloudPlan::Free,
-      SubscriptionPlanPB::Student => CloudPlan::Pro, // Map Student to Pro for cloud
-      SubscriptionPlanPB::Standard => CloudPlan::Pro,
-      SubscriptionPlanPB::Team => CloudPlan::Team,
+      SubscriptionPlanPB::Stand => CloudPlan::Basic,
+      SubscriptionPlanPB::Pro => CloudPlan::Pro,
+      SubscriptionPlanPB::Hiclass => CloudPlan::Team,
       SubscriptionPlanPB::AiMax => CloudPlan::AiMax,
       SubscriptionPlanPB::AiLocal => CloudPlan::AiLocal,
     }
@@ -711,9 +714,9 @@ impl From<client_api::entity::billing_dto::SubscriptionPlan> for SubscriptionPla
     use client_api::entity::billing_dto::SubscriptionPlan as CloudPlan;
     match value {
       CloudPlan::Free => SubscriptionPlanPB::Free,
-      CloudPlan::Basic => SubscriptionPlanPB::Free, // Basic plan maps to Free
-      CloudPlan::Pro => SubscriptionPlanPB::Standard,
-      CloudPlan::Team => SubscriptionPlanPB::Team,
+      CloudPlan::Basic => SubscriptionPlanPB::Stand,
+      CloudPlan::Pro => SubscriptionPlanPB::Pro,
+      CloudPlan::Team => SubscriptionPlanPB::Hiclass,
       CloudPlan::AiMax => SubscriptionPlanPB::AiMax,
       CloudPlan::AiLocal => SubscriptionPlanPB::AiLocal,
     }
@@ -878,16 +881,16 @@ impl From<Vec<WorkspaceSubscriptionStatus>> for WorkspaceSubscriptionInfoPB {
         SubscriptionPlan::Free => {
           plan = WorkspacePlanPB::FreePlan;
         },
-        SubscriptionPlan::Basic => {
-          plan = WorkspacePlanPB::StudentPlan;
+        SubscriptionPlan::Stand => {
+          plan = WorkspacePlanPB::StandPlan;
           plan_subscription = sub.into();
         },
         SubscriptionPlan::Pro => {
-          plan = WorkspacePlanPB::StandardPlan;
+          plan = WorkspacePlanPB::ProPlan;
           plan_subscription = sub.into();
         },
-        SubscriptionPlan::Team => {
-          plan = WorkspacePlanPB::TeamPlan;
+        SubscriptionPlan::Hiclass => {
+          plan = WorkspacePlanPB::HiclassPlan;
         },
         SubscriptionPlan::AiMax => {
           if plan_subscription.workspace_id.is_empty() {
@@ -926,9 +929,9 @@ impl From<Vec<WorkspaceSubscriptionStatus>> for WorkspaceSubscriptionInfoPB {
 pub enum WorkspacePlanPB {
   #[default]
   FreePlan = 0,
-  StudentPlan = 1,
-  StandardPlan = 2,
-  TeamPlan = 3,
+  StandPlan = 1,
+  ProPlan = 2,
+  HiclassPlan = 3,
 }
 
 impl From<WorkspacePlanPB> for i64 {
@@ -941,9 +944,9 @@ impl From<i64> for WorkspacePlanPB {
   fn from(value: i64) -> Self {
     match value {
       0 => WorkspacePlanPB::FreePlan,
-      1 => WorkspacePlanPB::StudentPlan,
-      2 => WorkspacePlanPB::StandardPlan,
-      3 => WorkspacePlanPB::TeamPlan,
+      1 => WorkspacePlanPB::StandPlan,
+      2 => WorkspacePlanPB::ProPlan,
+      3 => WorkspacePlanPB::HiclassPlan,
       _ => WorkspacePlanPB::FreePlan,
     }
   }

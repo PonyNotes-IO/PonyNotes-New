@@ -328,7 +328,6 @@ class PaymentApi {
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
       final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-
       // 2. 获取当前用户 Profile（包含 token）
       // final userProfileResult = await UserBackendService.getCurrentUserProfile();
       // final UserProfilePB userProfile = userProfileResult.fold(
@@ -544,7 +543,6 @@ class PaymentApi {
       // 1. 获取当前云端配置（拿到 serverUrl）
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
       final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-
       // 2. 获取当前用户 Profile（包含 token）
       final userProfileResult = await UserBackendService.getCurrentUserProfile();
       final UserProfilePB userProfile = userProfileResult.fold(

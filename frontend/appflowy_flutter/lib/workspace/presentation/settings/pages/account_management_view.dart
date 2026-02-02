@@ -766,14 +766,15 @@ class _AccountManagementViewState extends State<AccountManagementView>
                               width: cardWidth - 50,
                               padding: EdgeInsets.symmetric(vertical: 12),
                               decoration: BoxDecoration(
-                                  color: colorPriceInit(config?.planNameCn),
+                                  color: colorPriceInit(config?.planCode),
                                   borderRadius:
                                       BorderRadius.all(Radius.circular(16))),
                               child: Column(
                                 children: [
                                   FlowyText.regular(
                                     raw,
-                                    color: config?.planNameCn == "学生版"
+                                    color: config?.planCode?.contains("stand") == true ||
+                                        config?.planCode?.contains("standard") == true
                                         ? Colors.white
                                         : Color(0xFFF9D8A7),
                                     fontSize: 18,
@@ -784,7 +785,8 @@ class _AccountManagementViewState extends State<AccountManagementView>
                                             PurchaseDurationOption.monthly
                                         ? "按月支付"
                                         : "按年支付",
-                                    color: config?.planNameCn == "学生版"
+                                    color: config?.planCode?.contains("stand") == true ||
+                                        config?.planCode?.contains("standard") == true
                                         ? Colors.white
                                         : Color(0x99F9D8A7),
                                     fontSize: 12,
@@ -925,9 +927,11 @@ class _AccountManagementViewState extends State<AccountManagementView>
   }
 
   Color colorPriceInit(id) {
-    if (id == "学生版") {
+    if (id == "stand") {
       return Color(0xFF2EACB2);
-    } else if (id == "标准版") {
+    } else if (id == "standard") {
+      return Color(0xFF2EACB2);
+    } else if (id == "profersor") {
       return Color(0xFF343543);
     } else {
       return Color(0xFF371A0D);

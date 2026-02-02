@@ -54,6 +54,11 @@ pub fn dart_gen(crate_name: &str) {
         file_names.push(file_name);
       }
     }
+    // 无 .proto 文件时跳过 protoc，避免空输入导致失败
+    if proto_file_paths.is_empty() {
+      continue;
+    }
+
     let protoc_bin_path = protoc_bin_vendored::protoc_bin_path().unwrap();
 
     // 2. generate the protobuf files(Dart)
@@ -249,6 +254,32 @@ fn generate_ts_protobuf_files(
   }
 }
 
+/// 若未设置 CARGO_MAKE_WORKING_DIRECTORY / FLUTTER_FLOWY_SDK_PATH，则从 CARGO_MANIFEST_DIR
+/// 向上查找包含 appflowy_flutter 的目录作为 frontend 根，使直接 cargo build 也能生成 Dart。
+#[cfg(feature = "dart")]
+fn resolve_dart_output_base() -> Option<(PathBuf, String)> {
+  let from_work = std::env::var("CARGO_MAKE_WORKING_DIRECTORY").ok();
+  let from_sdk = std::env::var("FLUTTER_FLOWY_SDK_PATH").ok();
+  if let (Some(work), Some(sdk)) = (from_work, from_sdk) {
+    return Some((PathBuf::from(&work), sdk));
+  }
+  let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").ok()?;
+  let mut dir = PathBuf::from(manifest_dir);
+  let sdk_subpath = "appflowy_flutter/packages/appflowy_backend";
+  loop {
+    if dir.join("appflowy_flutter").exists() {
+      if let Ok(canon) = dir.canonicalize() {
+        return Some((canon, sdk_subpath.to_string()));
+      }
+      return Some((dir, sdk_subpath.to_string()));
+    }
+    if !dir.pop() {
+      break;
+    }
+  }
+  None
+}
+
 #[cfg(feature = "dart")]
 fn generate_dart_protobuf_files(
   name: &str,
@@ -257,19 +288,20 @@ fn generate_dart_protobuf_files(
   file_names: &Vec<String>,
   protoc_bin_path: &Path,
 ) {
-  if std::env::var("CARGO_MAKE_WORKING_DIRECTORY").is_err() {
-    log::error!("CARGO_MAKE_WORKING_DIRECTORY was not set, skip generate dart pb");
-    return;
-  }
-
-  if std::env::var("FLUTTER_FLOWY_SDK_PATH").is_err() {
-    log::error!("FLUTTER_FLOWY_SDK_PATH was not set, skip generate dart pb");
-    return;
-  }
+  let (working_dir, sdk_path) = match resolve_dart_output_base() {
+    Some(p) => p,
+    None => {
+      log::error!(
+        "Dart pb output unknown: set CARGO_MAKE_WORKING_DIRECTORY and FLUTTER_FLOWY_SDK_PATH, \
+         or run from frontend (directory containing appflowy_flutter). Skip generate dart pb."
+      );
+      return;
+    },
+  };
 
   let mut output = PathBuf::new();
-  output.push(std::env::var("CARGO_MAKE_WORKING_DIRECTORY").unwrap());
-  output.push(std::env::var("FLUTTER_FLOWY_SDK_PATH").unwrap());
+  output.push(working_dir);
+  output.push(&sdk_path);
   output.push("lib");
   output.push("protobuf");
   output.push(name);
@@ -277,7 +309,10 @@ fn generate_dart_protobuf_files(
   if !output.as_path().exists() {
     std::fs::create_dir_all(&output).unwrap();
   }
-  check_pb_dart_plugin();
+  if !check_pb_dart_plugin() {
+    log::warn!("Skip Dart pb generation: protoc-gen-dart not in PATH. Install with: dart pub global activate protoc_plugin");
+    return;
+  }
   let protoc_bin_path = protoc_bin_path.to_str().unwrap().to_owned();
   paths.iter().for_each(|path| {
     let result = cmd_lib::run_cmd! {
@@ -315,47 +350,24 @@ fn generate_dart_protobuf_files(
   }
 }
 
-pub fn check_pb_dart_plugin() {
+/// 检查 protoc-gen-dart 是否在 PATH 中。返回 true 表示可用，false 则跳过 Dart 生成（不 panic，便于构建通过）。
+pub fn check_pb_dart_plugin() -> bool {
   if cfg!(target_os = "windows") {
-    //Command::new("cmd")
-    //    .arg("/C")
-    //    .arg(cmd)
-    //    .status()
-    //    .expect("failed to execute process");
-    //panic!("{}", format!("\n❌ The protoc-gen-dart was not installed correctly."))
+    true
   } else {
     let exit_result = Command::new("sh")
       .arg("-c")
       .arg("command -v protoc-gen-dart")
-      .status()
-      .expect("failed to execute process");
+      .status();
 
-    if !exit_result.success() {
-      let mut msg = "\n❌ Can't find protoc-gen-dart in $PATH:\n".to_string();
-      let output = Command::new("sh").arg("-c").arg("echo $PATH").output();
-      let paths = String::from_utf8(output.unwrap().stdout)
-        .unwrap()
-        .split(':')
-        .map(|s| s.to_string())
-        .collect::<Vec<String>>();
-
-      paths.iter().for_each(|s| msg.push_str(&format!("{}\n", s)));
-
-      if let Ok(output) = Command::new("sh")
-        .arg("-c")
-        .arg("which protoc-gen-dart")
-        .output()
-      {
-        msg.push_str(&format!(
-          "Installed protoc-gen-dart path: {:?}\n",
-          String::from_utf8(output.stdout).unwrap()
-        ));
-      }
-
-      msg.push_str("✅ You can fix that by adding:");
-      msg.push_str("\n\texport PATH=\"$PATH\":\"$HOME/.pub-cache/bin\"\n");
-      msg.push_str("to your shell's config file.(.bashrc, .bash, .profile, .zshrc etc.)");
-      panic!("{}", msg)
+    match exit_result {
+      Ok(s) if s.success() => true,
+      _ => {
+        log::warn!(
+          "protoc-gen-dart not in PATH. Add: export PATH=\"$PATH\":\"$HOME/.pub-cache/bin\""
+        );
+        false
+      },
     }
   }
 }

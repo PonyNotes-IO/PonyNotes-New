@@ -233,20 +233,23 @@ class _Description extends StatelessWidget {
       int memberLimit = 0;
       String upgradeToPlan = '';
       
-      switch (subscriptionInfo.plan) {
-        case WorkspacePlanPB.FreePlan:
-          // Free plan for local use, no cloud member limit
+      // 按枚举数值判断，兼容旧/新生成的 Dart 枚举名。0=Free, 1=Stand/Standard, 2=Pro/Student, 3=Hiclass/Team
+      switch (subscriptionInfo.plan.value) {
+        case 0:
           break;
-        case WorkspacePlanPB.StudentPlan:
+        case 1:
+          memberLimit = 5;
+          upgradeToPlan = '标准版';
+          break;
+        case 2:
           memberLimit = 2;
           upgradeToPlan = '标准版';
           break;
-        case WorkspacePlanPB.StandardPlan:
-          memberLimit = 5;
+        case 3:
+          memberLimit = 10;
           upgradeToPlan = '团队版';
           break;
-        case WorkspacePlanPB.TeamPlan:
-          memberLimit = 10;
+        default:
           break;
       }
       

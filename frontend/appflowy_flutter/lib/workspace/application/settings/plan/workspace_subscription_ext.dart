@@ -4,33 +4,26 @@ import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pbserver.dart';
 import 'package:easy_localization/easy_localization.dart';
 
+/// 按枚举数值判断，兼容旧/新生成的 Dart 枚举名（StudentPlan/StandardPlan/TeamPlan 或 StandPlan/ProPlan/HiclassPlan）
 extension SubscriptionInfoHelpers on WorkspaceSubscriptionInfoPB {
-  String get label => switch (plan) {
-        WorkspacePlanPB.FreePlan =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_freeTitle.tr(),
-        WorkspacePlanPB.StudentPlan =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_studentTitle.tr(),
-        WorkspacePlanPB.StandardPlan =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_standardTitle.tr(),
-        WorkspacePlanPB.TeamPlan =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_teamTitle.tr(),
+  String get label => switch (plan.value) {
+        0 => LocaleKeys.settings_planPage_planUsage_currentPlan_freeTitle.tr(),
+        1 => LocaleKeys.settings_planPage_planUsage_currentPlan_standardTitle.tr(),
+        2 => LocaleKeys.settings_planPage_planUsage_currentPlan_studentTitle.tr(),
+        3 => LocaleKeys.settings_planPage_planUsage_currentPlan_teamTitle.tr(),
         _ => 'N/A',
       };
 
-  String get info => switch (plan) {
-        WorkspacePlanPB.FreePlan =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_freeInfo.tr(),
-        WorkspacePlanPB.StudentPlan =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_studentInfo.tr(),
-        WorkspacePlanPB.StandardPlan =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_standardInfo.tr(),
-        WorkspacePlanPB.TeamPlan =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_teamInfo.tr(),
+  String get info => switch (plan.value) {
+        0 => LocaleKeys.settings_planPage_planUsage_currentPlan_freeInfo.tr(),
+        1 => LocaleKeys.settings_planPage_planUsage_currentPlan_standardInfo.tr(),
+        2 => LocaleKeys.settings_planPage_planUsage_currentPlan_studentInfo.tr(),
+        3 => LocaleKeys.settings_planPage_planUsage_currentPlan_teamInfo.tr(),
         _ => 'N/A',
       };
 
   bool get isBillingPortalEnabled {
-    if (plan != WorkspacePlanPB.FreePlan || addOns.isNotEmpty) {
+    if (plan.value != 0 || addOns.isNotEmpty) {
       return true;
     }
 
@@ -38,20 +31,15 @@ extension SubscriptionInfoHelpers on WorkspaceSubscriptionInfoPB {
   }
 }
 
+/// 按枚举数值判断，兼容旧/新生成的 Dart 枚举名。Free=0, Stand/Standard=1, Pro/Student=2, Hiclass/Team=3
 extension AllSubscriptionLabels on SubscriptionPlanPB {
-  String get label => switch (this) {
-        SubscriptionPlanPB.Free =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_freeTitle.tr(),
-        SubscriptionPlanPB.Student =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_studentTitle.tr(),
-        SubscriptionPlanPB.Standard =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_standardTitle.tr(),
-        SubscriptionPlanPB.Team =>
-          LocaleKeys.settings_planPage_planUsage_currentPlan_teamTitle.tr(),
-        SubscriptionPlanPB.AiMax =>
-          LocaleKeys.settings_billingPage_addons_aiMax_label.tr(),
-        SubscriptionPlanPB.AiLocal =>
-          LocaleKeys.settings_billingPage_addons_aiOnDevice_label.tr(),
+  String get label => switch (value) {
+        0 => LocaleKeys.settings_planPage_planUsage_currentPlan_freeTitle.tr(),
+        1 => LocaleKeys.settings_planPage_planUsage_currentPlan_standardTitle.tr(),
+        2 => LocaleKeys.settings_planPage_planUsage_currentPlan_studentTitle.tr(),
+        3 => LocaleKeys.settings_planPage_planUsage_currentPlan_teamTitle.tr(),
+        4 => LocaleKeys.settings_billingPage_addons_aiMax_label.tr(),
+        5 => LocaleKeys.settings_billingPage_addons_aiOnDevice_label.tr(),
         _ => 'N/A',
       };
 }
@@ -71,44 +59,37 @@ extension WorkspaceAddonsExt on WorkspaceSubscriptionInfoPB {
 
 /// These have to match [SubscriptionSuccessListenable.subscribedPlan] labels
 extension ToRecognizable on SubscriptionPlanPB {
-  String? toRecognizable() => switch (this) {
-        SubscriptionPlanPB.Free => 'free',
-        SubscriptionPlanPB.Student => 'student',
-        SubscriptionPlanPB.Standard => 'standard',
-        SubscriptionPlanPB.Team => 'team',
-        SubscriptionPlanPB.AiMax => 'ai_max',
-        SubscriptionPlanPB.AiLocal => 'ai_local',
+  String? toRecognizable() => switch (value) {
+        0 => 'free',
+        1 => 'standard',
+        2 => 'professor',
+        3 => 'hiclass',
+        4 => 'ai_max',
+        5 => 'ai_local',
         _ => null,
       };
 }
 
 extension PlanHelper on SubscriptionPlanPB {
-  /// Returns true if the plan is an add-on and not
-  /// a workspace plan.
-  ///
-  bool get isAddOn => switch (this) {
-        SubscriptionPlanPB.AiMax => true,
-        SubscriptionPlanPB.AiLocal => true,
-        _ => false,
-      };
+  bool get isAddOn => value == 4 || value == 5;
 
-  String get priceMonthBilling => switch (this) {
-        SubscriptionPlanPB.Free => '¥0',
-        SubscriptionPlanPB.Student => '¥3',
-        SubscriptionPlanPB.Standard => '¥8',
-        SubscriptionPlanPB.Team => '¥18',
-        SubscriptionPlanPB.AiMax => '¥10',
-        SubscriptionPlanPB.AiLocal => '¥10',
+  String get priceMonthBilling => switch (value) {
+        0 => '¥0',
+        1 => '¥8',
+        2 => '¥3',
+        3 => '¥18',
+        4 => '¥10',
+        5 => '¥10',
         _ => '¥0',
       };
 
-  String get priceAnnualBilling => switch (this) {
-        SubscriptionPlanPB.Free => '¥0',
-        SubscriptionPlanPB.Student => '¥30',
-        SubscriptionPlanPB.Standard => '¥80',
-        SubscriptionPlanPB.Team => '¥180',
-        SubscriptionPlanPB.AiMax => '¥96',
-        SubscriptionPlanPB.AiLocal => '¥96',
+  String get priceAnnualBilling => switch (value) {
+        0 => '¥0',
+        1 => '¥80',
+        2 => '¥30',
+        3 => '¥180',
+        4 => '¥96',
+        5 => '¥96',
         _ => '¥0',
       };
 }

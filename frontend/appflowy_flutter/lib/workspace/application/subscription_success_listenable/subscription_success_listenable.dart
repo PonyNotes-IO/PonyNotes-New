@@ -8,15 +8,17 @@ class SubscriptionSuccessListenable extends ChangeNotifier {
 
   String? _plan;
 
-  SubscriptionPlanPB? get subscribedPlan => switch (_plan) {
+  SubscriptionPlanPB? get subscribedPlan => switch (_plan?.toLowerCase()) {
         'free' => SubscriptionPlanPB.Free,
-        'student' => SubscriptionPlanPB.Student,
-        'standard' => SubscriptionPlanPB.Standard,
-        'team' => SubscriptionPlanPB.Team,
+        'fmb' => SubscriptionPlanPB.Free,
+        'standard' => SubscriptionPlanPB.Stand,
+        'stand' => SubscriptionPlanPB.Stand,
+        'professor' => SubscriptionPlanPB.Pro,
+        'pro' => SubscriptionPlanPB.Pro,
+        'hiclass' => SubscriptionPlanPB.Hiclass,
+        'team' => SubscriptionPlanPB.Hiclass,
         'ai_max' => SubscriptionPlanPB.AiMax,
         'ai_local' => SubscriptionPlanPB.AiLocal,
-        // Legacy support: map 'pro' to 'standard' for backward compatibility
-        'pro' => SubscriptionPlanPB.Standard,
         _ => null,
       };
 
