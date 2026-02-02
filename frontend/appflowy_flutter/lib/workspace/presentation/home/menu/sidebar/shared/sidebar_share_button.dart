@@ -287,10 +287,14 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       final timestampRaw = entry['created_at'] ?? entry['createdAt'];
       final createdSeconds = _parseTimestampSeconds(timestampRaw);
 
-      // 创建基本的 ViewPB，标题稍后通过异步加载获取
+      // 获取视图名称，如果 API 返回了 name 字段则使用，否则使用临时标题
+      final name = (entry['name'] ?? '').toString();
+      final displayName = name.isNotEmpty ? name : '加载中...';
+
+      // 创建基本的 ViewPB
       final view = ViewPB()
         ..id = oid
-        ..name = '加载中...' // 临时标题，稍后更新
+        ..name = displayName
         ..createTime = fixnum.Int64(createdSeconds);
       views.add(view);
     }
