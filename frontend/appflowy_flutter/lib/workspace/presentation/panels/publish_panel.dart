@@ -11,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 
 import '../../application/view/view_service.dart';
+import '../widgets/dialogs.dart';
 
 class PublishPanel extends StatefulWidget {
   const PublishPanel({super.key});
@@ -111,7 +112,14 @@ class _PublishPanelState extends State<PublishPanel> {
             final viewOrErr = await ViewBackendService.getView(item.info.viewId);
             viewOrErr.fold(
               (view) => context.read<TabsBloc>().openPlugin(view),
-              (e) => Log.error('open published view failed: $e'),
+              (e) {
+                Log.error('open published view failed: $e');
+                // 显示错误提示
+                showToastNotification(
+                  message: '打开发布笔记失败: ${e.msg}',
+                  type: ToastificationType.error,
+                );
+              },
             );
           },
         );

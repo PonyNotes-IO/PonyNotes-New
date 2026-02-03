@@ -13,6 +13,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../../application/tabs/tabs_bloc.dart';
 import '../../../../../application/view/view_service.dart';
 import '../../../../../application/view/view_publish_service.dart';
+import '../../../../widgets/dialogs.dart';
 
 class SidebarPublishButton extends StatefulWidget {
   const SidebarPublishButton({super.key});
@@ -161,7 +162,14 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
             final viewOrErr = await ViewBackendService.getView(item.info.viewId);
             viewOrErr.fold(
               (view) => context.read<TabsBloc>().openPlugin(view),
-              (e) => Log.error('open published view failed: $e'),
+              (e) {
+                Log.error('open published view failed: $e');
+                // 显示错误提示
+                showToastNotification(
+                  message: '打开发布笔记失败: ${e.msg}',
+                  type: ToastificationType.error,
+                );
+              },
             );
           },
         );
