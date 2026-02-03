@@ -782,13 +782,13 @@ class _AccountManagementViewState extends State<AccountManagementView>
                                   ),
                                   VSpace(8),
                                   FlowyText(
-                                    "每月${config?.cloudStorageGb}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}",
+                                    "工作区限制${config?.collaborativeWorkspaceLimit}个",
                                     fontSize: 12,
                                     color: theme.textColorScheme.secondary,
                                   ),
                                   VSpace(8),
                                   FlowyText(
-                                    "每月${config?.cloudStorageGb}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}",
+                                    "每月AI对话额度${config?.aiChatCountPerMonth}次",
                                     fontSize: 12,
                                     color: theme.textColorScheme.secondary,
                                   ),
