@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -21,6 +22,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:equatable/equatable.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:http/http.dart' as http;
+
+import '../../subscription_success_listenable/subscription_success_listenable.dart';
 
 part 'account_management_bloc.freezed.dart';
 
@@ -203,6 +206,15 @@ class AccountManagementBloc
     required this.userProfile,
     required this.currentSubscription,
   }) : super(const AccountManagementState.initial()) {
+    // 初始化订阅成功监听器
+    _subscriptionSuccessListenable = getIt<SubscriptionSuccessListenable>();
+    _subscriptionSuccessListener = () {
+      // 支付成功后刷新订阅信息
+      add(const AccountManagementEvent.loadSubscriptionInfo());
+      add(const AccountManagementEvent.loadSubscriptionPlans());
+    };
+    _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
+    
     on<AccountManagementEvent>((event, emit) async {
       await event.when(
         initial: () async => _initial(emit),
@@ -233,6 +245,8 @@ class AccountManagementBloc
 
   Timer? _paymentPollingTimer;
   String? _currentPollingOrderNo; // 当前正在轮询的订单号
+  late final SubscriptionSuccessListenable _subscriptionSuccessListenable;
+  late final VoidCallback _subscriptionSuccessListener;
 
   String? _extractAccessToken(String? rawToken) {
     if (rawToken == null || rawToken.isEmpty) {
@@ -1899,15 +1913,13 @@ class AccountManagementBloc
             // final baseUrl = "https://www.xiaomabiji.com";
             //price 通过这个路径进行数据拼接参数，然后打开浏览器处理当前业务，后续代码不走了。
             final userUuid = _getUserUuid();
-            String payUrl =
+            String payUrl = 
                 "$baseUrl/price?planId=${planIdValue ?? ''}&billingType=$billingType&userInfo=$userUuid";
             // 使用浏览器打开支付链接
             await PaymentUtil.webPay(payUrl);
 
-            // 设置状态，触发显示弹框（不启动轮询）
-            // 注意：轮询接口逻辑保留，但不自动执行
-            final promptToken =
-                'BROWSER_OPENED|ts=${DateTime.now().millisecondsSinceEpoch}';
+            // 移除支付弹框显示，直接等待H5支付链接调用appScheme处理
+            // 支付成功后会通过 PaymentDeepLinkHandler 处理
             state.maybeWhen(
               orElse: () {},
               ready: (
@@ -1940,8 +1952,8 @@ class AccountManagementBloc
                     isLoadingPlans: isLoadingPlans,
                     isLoadingAddons: isLoadingAddons,
                     isProcessingPayment: false,
-                    error: error,
-                    paymentResult: promptToken, // 特殊标记（带时间戳，确保每次点击都触发）
+                    error: null,
+                    paymentResult: 'PAYMENT_INITIATED', // 标记支付已初始化
                   ),
                 );
               },
@@ -2382,6 +2394,10 @@ class AccountManagementBloc
 
   @override
   Future<void> close() {
+    // 清理订阅成功监听器
+    _subscriptionSuccessListenable.removeListener(_subscriptionSuccessListener);
+    // 停止支付轮询
+    _stopPaymentPolling();
     _paymentPollingTimer?.cancel();
     _paymentPollingTimer = null;
     return super.close();

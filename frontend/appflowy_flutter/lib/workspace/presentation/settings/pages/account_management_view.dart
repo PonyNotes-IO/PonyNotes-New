@@ -9,7 +9,6 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/settings/account/account_management_bloc.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/application/payment/payment_util.dart';
-import 'package:appflowy/workspace/presentation/settings/pages/payment_status_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/email_binding_dialog.dart';
@@ -237,88 +236,31 @@ class _AccountManagementViewState extends State<AccountManagementView>
                 );
               }
               if (paymentResult != null && paymentResult.isNotEmpty) {
-                // 避免同一条 paymentResult 多次触发弹框/提示
+                // 避免同一条 paymentResult 多次触发提示
                 if (_lastHandledPaymentResult == paymentResult) {
                   return;
                 }
 
-                // 订阅按钮点击后已跳转浏览器：需要用弹框提示，不要走底部提示
-                if (paymentResult.startsWith('BROWSER_OPENED')) {
-                  // 只在“用户点击开通订阅按钮”后弹框；切换 tab 等状态刷新不弹
-                  if (!_expectSubscribePaymentDialog) {
-                    return;
-                  }
-                  _clearExpectSubscribeDialog();
+                // 处理支付初始化标记
+                if (paymentResult == 'PAYMENT_INITIATED') {
+                  // 支付已初始化，通过浏览器打开支付链接
+                  // 支付成功后会通过 appScheme 回调自动处理
                   _lastHandledPaymentResult = paymentResult;
-                  showPaymentStatusDialog(
-                    context,
-                    orderNo: '',
-                    onClose: () {
-                      _resetPaymentPromptDedup();
-                      _refreshSubscriptionInfo(context);
-                    },
-                  );
                   return;
                 }
 
-                // 检查是否是支付 URL（需要显示支付弹框）
-                if (paymentResult.startsWith('PAYMENT_URL:')) {
-                  // 同样：只在用户主动触发支付后才弹框
-                  if (!_expectSubscribePaymentDialog) {
-                    return;
-                  }
-                  _clearExpectSubscribeDialog();
-                  // 解析支付信息
-                  final parts = paymentResult.split('|');
-                  String? payUrl;
-                  String? orderNo;
-                  String? expireTime;
-
-                  // 原有的支付结果处理逻辑（保留兼容性）
-                  for (final part in parts) {
-                    if (part.startsWith('PAYMENT_URL:')) {
-                      payUrl = part.substring('PAYMENT_URL:'.length);
-                    } else if (part.startsWith('orderNo:')) {
-                      orderNo = part.substring('orderNo:'.length);
-                    } else if (part.startsWith('expireTime:')) {
-                      expireTime = part.substring('expireTime:'.length);
-                    }
-                  }
-
-                  if (payUrl != null && payUrl.isNotEmpty) {
-                    _lastHandledPaymentResult = paymentResult;
-                    // 使用浏览器打开支付链接
-                    PaymentUtil.webPay(payUrl);
-
-                    // 显示支付结果查询弹框
-                    if (orderNo != null && orderNo.isNotEmpty) {
-                      showPaymentStatusDialog(
-                        context,
-                        orderNo: orderNo,
-                        onPaymentSuccess: () {
-                          _resetPaymentPromptDedup();
-                          _refreshSubscriptionInfo(context);
-                        },
-                        onClose: () {
-                          _resetPaymentPromptDedup();
-                          _refreshSubscriptionInfo(context);
-                        },
-                      );
-                    }
-                  }
-                } else {
-                  _lastHandledPaymentResult = paymentResult;
-                  // 普通消息提示
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(paymentResult),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                  // 支付成功后刷新订阅信息
-                  if (paymentResult.contains('成功')) {
-                    _refreshSubscriptionInfo(context);
-                  }
+                // 普通消息提示
+                _lastHandledPaymentResult = paymentResult;
+                // 普通消息提示
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(paymentResult),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+                // 支付成功后刷新订阅信息
+                if (paymentResult.contains('成功')) {
+                  _refreshSubscriptionInfo(context);
                 }
               }
             },
