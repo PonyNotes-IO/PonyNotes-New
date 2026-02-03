@@ -686,9 +686,27 @@ class _AccountManagementViewState extends State<AccountManagementView>
     );
 
     final plans = planConfigs.entries
-        .where((e) => e.value.isActive && e.key != WorkspacePlanPB.FreePlan)
+        .where((e) => e.value.isActive)
         .map((e) => e.key)
         .toList();
+    
+    // 按照要求的顺序排序：标准版 > 专业版 > 高级版 > 免费版
+    plans.sort((a, b) {
+      final order = {
+        WorkspacePlanPB.FreePlan: 1,
+        WorkspacePlanPB.StandPlan: 2,
+        WorkspacePlanPB.ProPlan: 3,
+        WorkspacePlanPB.HiclassPlan: 4,
+      };
+      return (order[a] ?? 999).compareTo(order[b] ?? 999);
+    });
+    
+    // 过滤掉免费版（如果需要）
+    final filteredPlans = plans.where((e) => e != WorkspacePlanPB.FreePlan).toList();
+    if (filteredPlans.isNotEmpty) {
+      plans.clear();
+      plans.addAll(filteredPlans);
+    }
 
     final effectivePlan = state.effectivePlan;
     if (effectivePlan == null || plans.isEmpty) {

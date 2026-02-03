@@ -37,31 +37,17 @@ done
 
 echo "🌍 Start generating language files."
 
-# Determine flutter/dart commands (prefer FVM)
-# Check if fvm exists and can actually run (not just found in PATH)
-FVM_AVAILABLE=false
-if command -v fvm >/dev/null 2>&1; then
-    # Try to run fvm to check if it's the correct architecture
-    if fvm --version >/dev/null 2>&1; then
-        FVM_AVAILABLE=true
-    fi
+# Directly use system flutter/dart command
+if ! command -v flutter >/dev/null 2>&1; then
+    echo "❌ flutter command not found. Install Flutter first."
+    exit 1
 fi
-
-if [ "$FVM_AVAILABLE" = true ]; then
-    FLUTTER_CMD="fvm flutter"
-    DART_CMD="fvm dart"
-else
-    if ! command -v flutter >/dev/null 2>&1; then
-        echo "❌ flutter command not found. Install Flutter or FVM first."
-        exit 1
-    fi
-    if ! command -v dart >/dev/null 2>&1; then
-        echo "❌ dart command not found. Install Dart or FVM first."
-        exit 1
-    fi
-    FLUTTER_CMD="flutter"
-    DART_CMD="dart"
+if ! command -v dart >/dev/null 2>&1; then
+    echo "❌ dart command not found. Install Dart first."
+    exit 1
 fi
+FLUTTER_CMD="flutter"
+DART_CMD="dart"
 
 # Store the current working directory
 original_dir=$(pwd)

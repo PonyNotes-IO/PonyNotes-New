@@ -36,15 +36,8 @@ echo -e "${YELLOW}设备架构: ${NC}${MACHINE_ARCH}"
 # =============================================================================
 # 2. 检测Flutter运行模式
 # =============================================================================
-# 尝试多种方式获取Flutter信息
-FLUTTER_CMD=""
-if command -v flutter &> /dev/null; then
-    FLUTTER_CMD="flutter"
-elif [ -x "$HOME/fvm/default/bin/flutter" ]; then
-    FLUTTER_CMD="$HOME/fvm/default/bin/flutter"
-elif [ -x "$HOME/fvm/versions/3.27.4/bin/flutter" ]; then
-    FLUTTER_CMD="$HOME/fvm/versions/3.27.4/bin/flutter"
-fi
+# 直接使用系统Flutter命令
+FLUTTER_CMD="flutter"
 
 FLUTTER_ARCH=""
 

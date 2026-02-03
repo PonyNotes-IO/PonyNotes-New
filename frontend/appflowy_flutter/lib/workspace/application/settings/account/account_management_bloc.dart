@@ -478,7 +478,7 @@ class AccountManagementBloc
         return;
       }
 
-      final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/plans');
+      final uri = Uri.parse(baseUrl).replace(path: 'api/subscription/plans');
       final response = await http.get(
         uri,
         headers: {
@@ -622,13 +622,62 @@ class AccountManagementBloc
       }
 
       final Map<WorkspacePlanPB, RemotePlan> configs = {};
+      Log.info('开始处理订阅计划数据，原始数据条数：${data.length}');
+      int processed = 0;
+      int skippedType = 0;
+      int skippedCode = 0;
+      int skippedMap = 0;
+      
       for (final item in data) {
-        if (item is! Map<String, dynamic>) continue;
+        processed++;
+        if (item is! Map<String, dynamic>) {
+          skippedType++;
+          Log.warn('跳过非Map类型数据：${item.runtimeType}');
+          continue;
+        }
+        
         final codeStr = item['plan_code'] as String? ?? '';
+        if (codeStr.isEmpty) {
+          skippedCode++;
+          Log.warn('跳过plan_code为空的数据：$item');
+          continue;
+        }
+        
         final mappedPlan = _mapPlanCodeToPb(codeStr);
-        if (mappedPlan == null) continue;
-        configs[mappedPlan] = RemotePlan.fromJson(item);
+        if (mappedPlan == null) {
+          skippedMap++;
+          Log.warn('无法映射的plan_code：$codeStr');
+          // 尝试添加默认映射逻辑
+          if (codeStr.toLowerCase().contains('free')) {
+            configs[WorkspacePlanPB.FreePlan] = RemotePlan.fromJson(item);
+            Log.info('已将 $codeStr 映射为 FreePlan');
+          } else if (codeStr.toLowerCase().contains('standard') || codeStr.toLowerCase().contains('stand')) {
+            configs[WorkspacePlanPB.StandPlan] = RemotePlan.fromJson(item);
+            Log.info('已将 $codeStr 映射为 StandPlan');
+          } else if (codeStr.toLowerCase().contains('pro')) {
+            configs[WorkspacePlanPB.ProPlan] = RemotePlan.fromJson(item);
+            Log.info('已将 $codeStr 映射为 ProPlan');
+          } else if (codeStr.toLowerCase().contains('hiclass') || codeStr.toLowerCase().contains('hi-class')) {
+            configs[WorkspacePlanPB.HiclassPlan] = RemotePlan.fromJson(item);
+            Log.info('已将 $codeStr 映射为 HiclassPlan');
+          } else {
+            continue;
+          }
+        } else {
+          configs[mappedPlan] = RemotePlan.fromJson(item);
+          Log.info('成功映射 plan_code: $codeStr → $mappedPlan');
+        }
       }
+      
+      Log.info('订阅计划数据处理完成：');
+      Log.info('- 原始数据：${data.length} 条');
+      Log.info('- 处理数据：$processed 条');
+      Log.info('- 跳过非Map类型：$skippedType 条');
+      Log.info('- 跳过空plan_code：$skippedCode 条');
+      Log.info('- 跳过无法映射：$skippedMap 条');
+      Log.info('- 最终配置：${configs.length} 条');
+      Log.info('- 配置详情：${configs.keys}');
+
 
       state.maybeWhen(
         orElse: () {},
