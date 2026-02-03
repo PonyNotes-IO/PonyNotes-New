@@ -33,18 +33,22 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   bool _isExpanded = false;
   List<ViewPB> _userSharedNotes = [];
   bool _isLoading = false;
+  bool _isRefreshing = false;
   late SharedSectionBloc _sharedSectionBloc;
   String _workspaceId = '';
+  DateTime _lastRefreshTime = DateTime.now();
+  final Duration _minRefreshInterval = const Duration(seconds: 2);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _workspaceId =
+    _workspaceId = 
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ??
             '';
     _sharedSectionBloc = _createSharedSectionBloc(_workspaceId);
-    _loadUserSharedNotes();
+    // 初始化时不显示加载状态，直接加载数据
+    _loadUserSharedNotes(showLoading: false);
   }
 
   @override
@@ -84,6 +88,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       _workspaceId = newWorkspaceId;
       _isExpanded = false;
       _isLoading = false;
+      _isRefreshing = false;
       _userSharedNotes = [];
       _sharedSectionBloc = _createSharedSectionBloc(newWorkspaceId);
     });
@@ -91,12 +96,31 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   }
 
   void _refreshSharedData() {
-    _loadUserSharedNotes();
+    // 限流：避免短时间内频繁刷新
+    final now = DateTime.now();
+    if (now.difference(_lastRefreshTime) < _minRefreshInterval) {
+      return;
+    }
+    _lastRefreshTime = now;
+    
+    // 只有在展开状态时才刷新数据，避免不必要的网络请求
+    if (_isExpanded) {
+      _loadUserSharedNotes(showLoading: false);
+    }
     _sharedSectionBloc.add(const SharedSectionRefreshEvent());
   }
 
-  Future<void> _loadUserSharedNotes() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadUserSharedNotes({bool showLoading = true}) async {
+    // 避免重复加载
+    if (_isLoading || _isRefreshing) {
+      return;
+    }
+
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    } else {
+      setState(() => _isRefreshing = true);
+    }
     
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
@@ -149,19 +173,25 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       if (!mounted) {
         return;
       }
-      
-          setState(() {
-        _userSharedNotes = combined;
-            _isLoading = false;
-          });
 
-      // 异步加载每个笔记的详细信息（包括标题）
-      await _loadViewDetails(combined);
+      // 加载详细信息（包括标题）
+      final updatedViews = await _loadViewDetails(combined);
+      
+      if (!mounted) {
+        return;
+      }
+      
+      setState(() {
+        _userSharedNotes = updatedViews;
+        _isLoading = false;
+        _isRefreshing = false;
+      });
     } catch (e) {
       Log.error('Exception in _loadUserSharedNotes: $e');
       setState(() {
         _userSharedNotes = [];
         _isLoading = false;
+        _isRefreshing = false;
       });
     }
   }
@@ -303,13 +333,12 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   }
 
   /// 异步加载笔记的详细信息（包括标题）
-  Future<void> _loadViewDetails(List<ViewPB> views) async {
-    if (views.isEmpty || !mounted) {
-      return;
+  Future<List<ViewPB>> _loadViewDetails(List<ViewPB> views) async {
+    if (views.isEmpty) {
+      return views;
     }
 
     final updatedViews = <ViewPB>[];
-    bool hasUpdate = false;
 
     for (final view in views) {
       if (view.id.isEmpty) {
@@ -325,7 +354,6 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
             // 如果成功获取到详细信息，使用真实的标题
             if (detailedView.name.isNotEmpty) {
               updatedViews.add(detailedView);
-              hasUpdate = true;
             } else {
               // 如果标题为空，保持原视图
               updatedViews.add(view);
@@ -342,12 +370,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       }
     }
 
-    // 如果有更新，更新 UI
-    if (hasUpdate && mounted) {
-      setState(() {
-        _userSharedNotes = updatedViews;
-      });
-    }
+    return updatedViews;
   }
 
   int _parseTimestampSeconds(dynamic raw) {
@@ -411,7 +434,8 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
                             onTap: () {
                               setState(() => _isExpanded = !_isExpanded);
                               if (_isExpanded) {
-                                _loadUserSharedNotes(); // 展开时刷新
+                                // 展开时加载数据，但不显示加载状态
+                                _loadUserSharedNotes(showLoading: false);
                               }
                             },
                             padding: const EdgeInsets.symmetric(
@@ -460,7 +484,9 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   }
 
   Widget _buildUserSharedNotesList(BuildContext context) {
-    if (_isLoading) {
+    // 始终显示笔记列表，即使正在加载数据，避免 UI 闪烁
+    // 只有在首次加载且数据为空时才显示加载指示器
+    if (_isLoading && _userSharedNotes.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(8.0),
         child: Center(child: CircularProgressIndicator.adaptive()),

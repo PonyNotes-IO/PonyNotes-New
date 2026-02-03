@@ -674,7 +674,22 @@ class SpacePages extends StatelessWidget {
                     rightIconsBuilder: rightIconsBuilder,
                     onSelected: onSelected,
                     onTertiarySelected: onTertiarySelected,
-                    shouldIgnoreView: shouldIgnoreView,
+                    shouldIgnoreView: (targetView) {
+                      // 空间列表中，只能在space文件中移动，不能在普通文档中间位置添加
+                      // 如果有自定义的shouldIgnoreView，先使用它
+                      if (shouldIgnoreView != null) {
+                        final result = shouldIgnoreView!(targetView);
+                        if (result != IgnoreViewType.none) {
+                          return result;
+                        }
+                      }
+                      // 检查目标视图是否是space文件
+                      if (!targetView.isSpace) {
+                        // 普通文档，不允许在中间位置添加
+                        return IgnoreViewType.disable;
+                      }
+                      return IgnoreViewType.none;
+                    },
                   ),
                 )
                 .toList(),
