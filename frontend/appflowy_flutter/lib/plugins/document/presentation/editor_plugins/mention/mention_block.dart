@@ -1,5 +1,6 @@
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_date_block.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_page_block.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_user_block.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:collection/collection.dart';
@@ -12,13 +13,15 @@ enum MentionType {
   page,
   date,
   externalLink,
-  childPage;
+  childPage,
+  user;
 
   static MentionType fromString(String value) => switch (value) {
         'page' => page,
         'date' => date,
         'externalLink' => externalLink,
         'childPage' => childPage,
+        'user' => user,
         // Backwards compatibility
         'reminder' => date,
         _ => throw UnimplementedError(),
@@ -59,6 +62,11 @@ class MentionBlockKeys {
   static const reminderId = 'reminder_id'; // ReminderID
   static const reminderOption = 'reminder_option';
 
+  // Related to User mention blocks
+  static const userId = 'user_id'; // User email as identifier
+  static const userName = 'user_name';
+  static const avatarUrl = 'avatar_url';
+
   static const mentionChar = '\$';
 
   static Map<String, dynamic> buildMentionPageAttributes({
@@ -89,6 +97,23 @@ class MentionBlockKeys {
         if (reminderId != null) MentionBlockKeys.reminderId: reminderId,
         if (reminderOption != null)
           MentionBlockKeys.reminderOption: reminderOption,
+      },
+    };
+  }
+
+  /// Build attributes for @user mention
+  static Map<String, dynamic> buildMentionUserAttributes({
+    required String userId,
+    required String userName,
+    String? avatarUrl,
+  }) {
+    return {
+      MentionBlockKeys.mention: {
+        MentionBlockKeys.type: MentionType.user.name,
+        MentionBlockKeys.userId: userId,
+        MentionBlockKeys.userName: userName,
+        if (avatarUrl != null && avatarUrl.isNotEmpty)
+          MentionBlockKeys.avatarUrl: avatarUrl,
       },
     };
   }
@@ -172,6 +197,25 @@ class MentionBlock extends StatelessWidget {
           editorState: editorState,
           node: node,
           index: index,
+        );
+      case MentionType.user:
+        final String? userId = mention[MentionBlockKeys.userId] as String?;
+        final String? userName = mention[MentionBlockKeys.userName] as String?;
+        if (userId == null || userName == null) {
+          return const SizedBox.shrink();
+        }
+        final String? avatarUrl =
+            mention[MentionBlockKeys.avatarUrl] as String?;
+
+        return MentionUserBlock(
+          key: ValueKey(userId),
+          editorState: editorState,
+          userId: userId,
+          userName: userName,
+          avatarUrl: avatarUrl,
+          node: node,
+          index: index,
+          textStyle: textStyle,
         );
     }
   }
