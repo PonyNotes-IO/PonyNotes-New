@@ -166,14 +166,8 @@ class _Draggable<T extends Object> extends StatelessWidget {
             feedback: feedback,
             childWhenDragging: childWhenDragging,
             onDragUpdate: onDragUpdate,
-            onDragEnd: (details) {
-              // 确保拖拽结束时清理所有状态
-              onDragEnd?.call(details);
-            },
-            onDraggableCanceled: (velocity, offset) {
-              // 确保拖拽取消时清理所有状态
-              onDraggableCanceled?.call(velocity, offset);
-            },
+            onDragEnd: onDragEnd,
+            onDraggableCanceled: onDraggableCanceled,
             child: child,
           );
   }

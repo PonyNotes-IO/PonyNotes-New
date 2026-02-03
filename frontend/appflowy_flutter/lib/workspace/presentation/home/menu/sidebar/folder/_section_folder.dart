@@ -273,6 +273,7 @@ class _SectionFolderState extends State<SectionFolder> {
           leftPadding: HomeSpaceViewSizes.leftPadding,
           isFeedback: false,
           isHovered: isHovered,
+          isDraggable: false,
           enableRightClickContext: true,
           shouldRenderChildren: !isSpace, // 空间类型不渲染子视图
           shouldLoadChildViews: !isSpace, // 空间类型不加载子视图

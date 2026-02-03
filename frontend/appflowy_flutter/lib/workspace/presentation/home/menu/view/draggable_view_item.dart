@@ -60,43 +60,18 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
 
     return DraggableItem<ViewPB>(
       data: widget.view,
-      onDragging: (isDragging) {
-        widget.onDragging?.call(isDragging);
-        // 确保拖拽结束时清理位置状态
-        if (!isDragging) {
-          _updatePosition(DraggableHoverPosition.none);
-        }
-      },
-      onWillAcceptWithDetails: (data) {
-        // 只在有效的列表项区域内接受拖拽
-        return _shouldAccept(data.data, DraggableHoverPosition.center);
-      },
+      onDragging: widget.onDragging,
+      onWillAcceptWithDetails: (data) => true,
       onMove: (data) {
         final renderBox = context.findRenderObject() as RenderBox;
         final offset = renderBox.globalToLocal(data.offset);
-        final size = renderBox.size;
 
-        // 检查是否在列表项的有效区域内（不在列表中间的空隙）
-        if (offset.dx > size.width || offset.dx < 0) {
-          _updatePosition(DraggableHoverPosition.none);
+        if (offset.dx > renderBox.size.width) {
           return;
         }
 
-        // 只在列表项的中心区域接受拖拽，不允许在列表中间位置
-        // 使用更严格的阈值，确保只在列表项主体区域内接受
-        final threshold = size.height / 3.0;
-        final isInCenterArea = offset.dy >= -threshold && offset.dy <= size.height + threshold;
-        
-        if (!isInCenterArea) {
-          // 不在列表项的有效区域内，不显示拖拽指示器
-          _updatePosition(DraggableHoverPosition.none);
-          return;
-        }
-
-        // 只在中心位置接受拖拽（不允许 top 和 bottom）
-        final position = DraggableHoverPosition.center;
+        final position = _computeHoverPosition(offset, renderBox.size);
         if (!_shouldAccept(data.data, position)) {
-          _updatePosition(DraggableHoverPosition.none);
           return;
         }
         _updatePosition(position);
@@ -299,7 +274,13 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
   }
 
   ViewSectionPB? getViewSection(ViewPB view) {
-    return context.read<SidebarSectionsBloc>().getViewSection(view);
+    try {
+      return context.read<SidebarSectionsBloc>().getViewSection(view);
+    } catch (_) {
+      // 如果找不到 SidebarSectionsBloc，返回 null
+      // 这通常发生在文件夹内部使用 DraggableViewItem 时
+      return null;
+    }
   }
 }
 
