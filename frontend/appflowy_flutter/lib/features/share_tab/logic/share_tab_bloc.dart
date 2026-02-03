@@ -60,7 +60,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     }
 
     final trimmedToken = token.trim();
-    
+
     // 检查是否是 JSON 格式（以 { 开头）
     if (trimmedToken.startsWith('{')) {
       try {
@@ -78,14 +78,14 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         return null;
       }
     }
-    
+
     // 如果不是 JSON，直接返回 token
     return trimmedToken;
   }
 
   @override
   Future<void> close() async {
-      await _folderNotificationListener?.stop();
+    await _folderNotificationListener?.stop();
     await super.close();
   }
 
@@ -332,32 +332,34 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       }
 
       // accessLevel 映射到 role：fullAccess -> Owner，其它 -> Member
-      final role = accessLevel == ShareAccessLevel.fullAccess ? 'Owner' : 'Member';
+      final role =
+          accessLevel == ShareAccessLevel.fullAccess ? 'Owner' : 'Member';
 
       final uri = Uri.parse(baseUrl).replace(
         path: '/api/workspace/$workspaceId/member',
       );
 
-      Log.info('Updating workspace member role: $uri, email=$email, role=$role');
+      Log.info(
+          'Updating workspace member role: $uri, email=$email, role=$role');
 
       final response = await http
           .put(
-            uri,
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $accessToken',
-            },
-            body: jsonEncode({
-              'email': email,
-              'role': role,
-            }),
-          )
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: jsonEncode({
+          'email': email,
+          'role': role,
+        }),
+      )
           .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              throw Exception('Request timeout');
-            },
-          );
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
 
       if (response.statusCode == 200) {
         // 尝试解析 code 字段（如果有）
@@ -366,7 +368,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
             final body = jsonDecode(response.body) as Map<String, dynamic>;
             final code = body['code'] as int?;
             if (code != null && code != 0) {
-              Log.error('Update member role failed, code: $code, body: ${response.body}');
+              Log.error(
+                  'Update member role failed, code: $code, body: ${response.body}');
               return false;
             }
           } catch (_) {
@@ -375,7 +378,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         }
         return true;
       } else {
-        Log.error('Update member role failed: HTTP ${response.statusCode}, body: ${response.body}');
+        Log.error(
+            'Update member role failed: HTTP ${response.statusCode}, body: ${response.body}');
         return false;
       }
     } catch (e, stackTrace) {
@@ -504,8 +508,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       final userResult = await UserBackendService.getCurrentUserProfile();
       final userProfile = userResult.fold(
-            (user) => user,
-            (error) {
+        (user) => user,
+        (error) {
           Log.error('Failed to get user profile: $error');
           return null;
         },
@@ -529,12 +533,12 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         return state.users;
       }
 
-      // 构建 API URL: GET /api/workspace/{workspace_id}/member
+      // 构建 API URL: GET /api/workspace/{workspace_id}/collab/{object_id}/members
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/workspace/$workspaceId/member',
+        path: '/api/workspace/$workspaceId/collab/$pageId/members',
       );
 
-      Log.info('Fetching workspace members: $uri');
+      Log.info('Fetching collab members: $uri');
 
       // 发送 GET 请求
       final response = await http.get(
@@ -550,11 +554,12 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         },
       );
 
-      Log.info('Get workspace members response: ${response.statusCode}');
+      Log.info('Get collab members response: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         try {
-          final responseBody = jsonDecode(response.body) as Map<String, dynamic>;
+          final responseBody =
+              jsonDecode(response.body) as Map<String, dynamic>;
 
           // 检查 code 字段，0 表示成功
           final code = responseBody['code'] as int?;
@@ -573,32 +578,34 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           // 将 API 返回的成员列表转换为 SharedUsers
           final users = data.map((member) {
             final memberMap = member as Map<String, dynamic>;
+            final uuid = memberMap['uuid'] as String?;
             final email = memberMap['email'] as String? ?? '';
             final name = memberMap['name'] as String? ?? email;
-            final roleStr = memberMap['role'] as String? ?? 'Member';
             final avatarUrl = memberMap['avatar_url'] as String?;
+            final permissionId = memberMap['permission_id'] as int? ?? 1;
 
-            // 将 API 返回的 role 字符串转换为 ShareRole 枚举
-            ShareRole role;
-            switch (roleStr.toLowerCase()) {
-              case 'owner':
-                role = ShareRole.owner;
+            // 将 permission_id 转换为 ShareAccessLevel
+            // 1=readOnly, 2=readAndComment, 3=readAndWrite, 4=fullAccess
+            ShareAccessLevel accessLevel;
+            switch (permissionId) {
+              case 1:
+                accessLevel = ShareAccessLevel.readOnly;
                 break;
-              case 'member':
-                role = ShareRole.member;
+              case 2:
+                accessLevel = ShareAccessLevel.readAndComment;
                 break;
-              case 'guest':
-                role = ShareRole.guest;
+              case 3:
+                accessLevel = ShareAccessLevel.readAndWrite;
+                break;
+              case 4:
+                accessLevel = ShareAccessLevel.fullAccess;
                 break;
               default:
-                role = ShareRole.member;
+                accessLevel = ShareAccessLevel.readOnly;
             }
 
-            // API 响应中没有 accessLevel，根据 role 设置默认值
-            // Owner 默认 fullAccess，Member 默认 readOnly
-            final accessLevel = role == ShareRole.owner
-                ? ShareAccessLevel.fullAccess
-                : ShareAccessLevel.readOnly;
+            // 根据权限大致判断角色，4 为 Owner/FullAccess
+            final role = permissionId == 4 ? ShareRole.owner : ShareRole.member;
 
             return SharedUser(
               email: email,
@@ -606,11 +613,11 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
               role: role,
               accessLevel: accessLevel,
               avatarUrl: avatarUrl?.isNotEmpty == true ? avatarUrl : null,
-              userId: null, // API 响应中没有 userId
+              userId: uuid,
             );
           }).toList();
 
-          Log.info('Successfully fetched ${users.length} workspace members');
+          Log.info('Successfully fetched ${users.length} collab members');
 
           return users;
         } catch (e, stackTrace) {
@@ -618,7 +625,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           return state.users;
         }
       } else {
-        Log.error('Failed to get workspace members: HTTP ${response.statusCode}');
+        Log.error('Failed to get collab members: HTTP ${response.statusCode}');
         return state.users;
       }
     } catch (e, stackTrace) {
@@ -696,8 +703,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         state.copyWith(
           errorMessage: '无法获取用户ID，请确保用户已注册',
           updateAccessLevelResult: FlowyFailure(
-            FlowyError()
-              ..msg = '无法获取用户ID，请确保用户已注册',
+            FlowyError()..msg = '无法获取用户ID，请确保用户已注册',
           ),
         ),
       );
@@ -754,8 +760,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         state.copyWith(
           errorMessage: '无法获取用户ID，请确保用户已注册',
           addCollaboratorResult: FlowyFailure(
-            FlowyError()
-              ..msg = '无法获取用户ID，请确保用户已注册',
+            FlowyError()..msg = '无法获取用户ID，请确保用户已注册',
           ),
         ),
       );
@@ -783,8 +788,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         state.copyWith(
           errorMessage: '添加协作用户失败',
           addCollaboratorResult: FlowyFailure(
-            FlowyError()
-              ..msg = '添加协作用户失败',
+            FlowyError()..msg = '添加协作用户失败',
           ),
         ),
       );
@@ -835,7 +839,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       // 构建 API URL: /api/{workspace_id}/collab/{object_id}/members/{member_user_id}
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/workspace/$workspaceId/collab/$objectId/members/$memberUserId',
+        path:
+            '/api/workspace/$workspaceId/collab/$objectId/members/$memberUserId',
       );
 
       Log.info('Adding collaborator: $uri');
@@ -915,14 +920,16 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       // 构建 API URL: PATCH /api/workspace/{workspace_id}/collab/{object_id}/members/{member_user_id}
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/workspace/$workspaceId/collab/$objectId/members/$memberUserId',
+        path:
+            '/api/workspace/$workspaceId/collab/$objectId/members/$memberUserId',
       );
 
       Log.info('Updating member permission: $uri');
       Log.info('Permission ID: $permissionId');
 
       // 发送 PATCH 请求
-      final response = await http.patch(
+      final response = await http
+          .patch(
         uri,
         headers: {
           'Content-Type': 'application/json',
@@ -931,7 +938,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         body: jsonEncode({
           'permission_id': permissionId,
         }),
-      ).timeout(
+      )
+          .timeout(
         const Duration(seconds: 10),
         onTimeout: () {
           throw Exception('Request timeout');
@@ -945,16 +953,19 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         return (true, '');
       } else {
         String errorMessage = '更新权限失败: HTTP ${response.statusCode}';
-        
+
         // 尝试解析响应体
         if (response.body.isNotEmpty) {
           Log.error('Response body: ${response.body}');
-          
+
           try {
             // 尝试解析为 JSON
-            final errorBody = jsonDecode(response.body) as Map<String, dynamic>?;
+            final errorBody =
+                jsonDecode(response.body) as Map<String, dynamic>?;
             if (errorBody != null) {
-              final msg = errorBody['message'] ?? errorBody['msg'] ?? errorBody['error'];
+              final msg = errorBody['message'] ??
+                  errorBody['msg'] ??
+                  errorBody['error'];
               if (msg != null && msg.toString().isNotEmpty) {
                 errorMessage = '更新权限失败: $msg';
               }
@@ -963,18 +974,19 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
             // 如果不是 JSON，尝试直接使用响应体作为错误信息
             final bodyText = response.body.trim();
             if (bodyText.isNotEmpty) {
-              if (bodyText.contains('fail to decode token') || 
+              if (bodyText.contains('fail to decode token') ||
                   bodyText.contains('Base64 error') ||
                   bodyText.contains('token') ||
                   bodyText.contains('error')) {
                 errorMessage = '更新权限失败: $bodyText';
               } else {
-                errorMessage = '更新权限失败: HTTP ${response.statusCode} - $bodyText';
+                errorMessage =
+                    '更新权限失败: HTTP ${response.statusCode} - $bodyText';
               }
             }
           }
         }
-        
+
         Log.error(errorMessage);
         return (false, errorMessage);
       }

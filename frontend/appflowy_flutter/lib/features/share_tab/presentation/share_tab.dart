@@ -127,7 +127,6 @@ class _ShareTabState extends State<ShareTab> {
             //   ),
             // ],
 
-
             // general access
             // if (state.sectionType == SharedSectionType.public) ...[
             //   VSpace(theme.spacing.m),
@@ -156,8 +155,8 @@ class _ShareTabState extends State<ShareTab> {
     return PeopleWithAccessSectionCallbacks(
       onSelectAccessLevel: (user, accessLevel) {
         context.read<ShareTabBloc>().add(
-              ShareTabEvent.updateUserAccessLevel(
-                email: user.email,
+              ShareTabEvent.updateMemberPermission(
+                user: user,
                 accessLevel: accessLevel,
               ),
             );
@@ -339,9 +338,8 @@ class _ShareTabState extends State<ShareTab> {
     return Container(
       padding: EdgeInsets.all(theme.spacing.l),
       decoration: BoxDecoration(
-        color: isDark
-            ? theme.surfaceContainerColorScheme.layer01
-            : Colors.white,
+        color:
+            isDark ? theme.surfaceContainerColorScheme.layer01 : Colors.white,
         borderRadius: BorderRadius.circular(theme.spacing.l),
         border: Border.all(
           color: theme.borderColorScheme.primary.withValues(alpha: 0.15),
@@ -522,9 +520,7 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
             },
             (error) {
               showToastNotification(
-                message: error.msg.isNotEmpty
-                    ? error.msg
-                    : '添加协作用户失败',
+                message: error.msg.isNotEmpty ? error.msg : '添加协作用户失败',
                 type: ToastificationType.error,
               );
             },
@@ -635,8 +631,8 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                     callbacks: AccessLevelListCallbacks(
                                       onSelectAccessLevel: (accessLevel) {
                                         _bloc.add(
-                                          ShareTabEvent.updateUserAccessLevel(
-                                            email: user.email,
+                                          ShareTabEvent.updateMemberPermission(
+                                            user: user,
                                             accessLevel: accessLevel,
                                           ),
                                         );
@@ -654,16 +650,19 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                         if (removingSelf) {
                                           showConfirmDialog(
                                             context: context,
-                                            title: LocaleKeys.shareAction_removeOwnAccess.tr(),
-                                            titleStyle: theme.textStyle.body
-                                                .standard(
-                                              color: theme
-                                                  .textColorScheme.primary,
+                                            title: LocaleKeys
+                                                .shareAction_removeOwnAccess
+                                                .tr(),
+                                            titleStyle:
+                                                theme.textStyle.body.standard(
+                                              color:
+                                                  theme.textColorScheme.primary,
                                             ),
                                             description: '',
-                                            style: ConfirmPopupStyle
-                                                .cancelAndOk,
-                                            confirmLabel: LocaleKeys.button_delete.tr(),
+                                            style:
+                                                ConfirmPopupStyle.cancelAndOk,
+                                            confirmLabel:
+                                                LocaleKeys.button_delete.tr(),
                                             onConfirm: (_) {
                                               _bloc.add(
                                                 ShareTabEvent.removeUsers(
@@ -735,7 +734,7 @@ class _UserSearchFieldState extends State<_UserSearchField> {
     if (!mounted) {
       return;
     }
-    
+
     // 只有当搜索结果真正变化时才更新 overlay
     if (oldWidget.availableUsers != widget.availableUsers) {
       try {
@@ -766,15 +765,15 @@ class _UserSearchFieldState extends State<_UserSearchField> {
   void dispose() {
     // Remove overlay entry
     _removeOverlay();
-    
+
     // Cancel any pending timers first
     _debounceTimer?.cancel();
     _debounceTimer = null;
-    
+
     // Remove focus listener and unfocus before disposing
     // This must be done before removing controller listener to prevent callbacks
     try {
-    _focusNode.removeListener(_onFocusChanged);
+      _focusNode.removeListener(_onFocusChanged);
       // Unfocus synchronously to prevent any async callbacks
       if (_focusNode.hasFocus) {
         _focusNode.unfocus();
@@ -782,21 +781,21 @@ class _UserSearchFieldState extends State<_UserSearchField> {
     } catch (e) {
       // Focus node may have issues, ignore
     }
-    
+
     // Dispose focus node before controller to prevent focus callbacks
     try {
-    _focusNode.dispose();
+      _focusNode.dispose();
     } catch (e) {
       // Focus node may have already been disposed, ignore
     }
-    
+
     // Remove controller listener last
     try {
       widget.controller.removeListener(_onTextChanged);
     } catch (e) {
       // Controller may have already been disposed, ignore
     }
-    
+
     super.dispose();
   }
 
@@ -840,7 +839,7 @@ class _UserSearchFieldState extends State<_UserSearchField> {
       // Controller 可能已被销毁
       return;
     }
-    
+
     if (searchText.isEmpty) {
       return;
     }
@@ -854,14 +853,14 @@ class _UserSearchFieldState extends State<_UserSearchField> {
         if (!mounted) {
           return const SizedBox.shrink();
         }
-        
+
         // 使用最新的 widget 数据，确保每次 builder 执行时都获取最新数据
         final theme = AppFlowyTheme.of(context);
         final controller = widget.controller;
         final availableUsers = widget.availableUsers; // 使用最新的 widget 数据
         final existingUsers = widget.existingUsers; // 使用最新的 widget 数据
         final onUserSelected = widget.onUserSelected;
-        
+
         // 再次检查输入框内容（可能已改变）
         String currentText;
         try {
@@ -869,33 +868,34 @@ class _UserSearchFieldState extends State<_UserSearchField> {
         } catch (e) {
           return const SizedBox.shrink();
         }
-        
+
         if (currentText.isEmpty) {
           return const SizedBox.shrink();
         }
-        
+
         // 过滤用户列表 - 使用最新的数据
         // 注意：这里使用 name 来过滤，因为用户修改了代码使用 name 而不是 email
         final existingNames = existingUsers.map((u) => u.name).toSet();
         final filteredUsers = availableUsers
             .where((user) => !existingNames.contains(user.name))
             .toList();
-        
+
         // 添加调试日志，确保数据正确
-        LogUtils.info('Overlay builder: searchText=$currentText, availableUsers=${availableUsers.length}, filteredUsers=${filteredUsers.length}');
-        
+        LogUtils.info(
+            'Overlay builder: searchText=$currentText, availableUsers=${availableUsers.length}, filteredUsers=${filteredUsers.length}');
+
         // 计算弹框宽度：对话框最大宽度 500，减去左右 padding (20*2)，等于输入框宽度
         final screenWidth = MediaQuery.of(overlayContext).size.width;
         final dialogMaxWidth = 500.0;
         final dialogInsetPadding = 24.0 * 2; // Dialog 的 insetPadding 左右各 24px
         final dialogInternalPadding = 20.0 * 2; // Dialog 内部的 padding 左右各 20px
         final inputFieldWidth = dialogMaxWidth - dialogInternalPadding; // 460px
-        
+
         // 计算弹框宽度：如果屏幕宽度足够，使用输入框宽度；否则使用屏幕宽度减去所有间距
         final popupWidth = screenWidth >= dialogMaxWidth + dialogInsetPadding
             ? inputFieldWidth
             : screenWidth - dialogInsetPadding - dialogInternalPadding;
-        
+
         return Positioned(
           width: popupWidth,
           child: CompositedTransformFollower(
@@ -917,7 +917,8 @@ class _UserSearchFieldState extends State<_UserSearchField> {
                         itemCount: filteredUsers.length,
                         separatorBuilder: (_, __) => Divider(
                           height: 1,
-                          color: theme.borderColorScheme.primary.withValues(alpha: 0.15),
+                          color: theme.borderColorScheme.primary
+                              .withValues(alpha: 0.15),
                         ),
                         itemBuilder: (overlayContext, index) {
                           final user = filteredUsers[index];
@@ -939,7 +940,8 @@ class _UserSearchFieldState extends State<_UserSearchField> {
                                   // Avatar
                                   CircleAvatar(
                                     radius: 16,
-                                    backgroundColor: theme.surfaceContainerColorScheme.layer02,
+                                    backgroundColor: theme
+                                        .surfaceContainerColorScheme.layer02,
                                     child: user.avatarUrl != null
                                         ? ClipOval(
                                             child: Image.network(
@@ -947,7 +949,8 @@ class _UserSearchFieldState extends State<_UserSearchField> {
                                               width: 32,
                                               height: 32,
                                               fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) => _buildAvatarFallback(user),
+                                              errorBuilder: (_, __, ___) =>
+                                                  _buildAvatarFallback(user),
                                             ),
                                           )
                                         : _buildAvatarFallback(user),
@@ -956,7 +959,8 @@ class _UserSearchFieldState extends State<_UserSearchField> {
                                   // Name and email
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         FlowyText.medium(
@@ -967,7 +971,8 @@ class _UserSearchFieldState extends State<_UserSearchField> {
                                           FlowyText.regular(
                                             user.email,
                                             fontSize: 12,
-                                            color: theme.textColorScheme.secondary,
+                                            color:
+                                                theme.textColorScheme.secondary,
                                           ),
                                       ],
                                     ),
@@ -1005,9 +1010,9 @@ class _UserSearchFieldState extends State<_UserSearchField> {
     if (!mounted) {
       return;
     }
-    
+
     _debounceTimer?.cancel();
-    
+
     // Check if controller is still valid before using it
     String query;
     try {
@@ -1020,7 +1025,7 @@ class _UserSearchFieldState extends State<_UserSearchField> {
       // If still mounted but controller is disposed, it's a real error
       return;
     }
-    
+
     LogUtils.info('search user: $query');
     if (query.isNotEmpty) {
       // 防抖处理，延迟150ms后执行搜索
@@ -1052,9 +1057,9 @@ class _UserSearchFieldState extends State<_UserSearchField> {
     } else {
       if (mounted) {
         try {
-      widget.onSearch('');
+          widget.onSearch('');
           if (mounted) {
-          _removeOverlay();
+            _removeOverlay();
           }
         } catch (e) {
           if (!mounted) {
@@ -1069,7 +1074,7 @@ class _UserSearchFieldState extends State<_UserSearchField> {
     if (!mounted) {
       return;
     }
-    
+
     // Check if focus node is still valid
     bool hasFocus;
     try {
@@ -1081,7 +1086,7 @@ class _UserSearchFieldState extends State<_UserSearchField> {
       }
       return;
     }
-    
+
     if (!hasFocus) {
       // 延迟隐藏，以便点击结果时能触发
       Future.delayed(const Duration(milliseconds: 200), () {
@@ -1091,8 +1096,8 @@ class _UserSearchFieldState extends State<_UserSearchField> {
         // Check again if focus node is still valid
         try {
           if (!_focusNode.hasFocus && mounted) {
-          _removeOverlay();
-        }
+            _removeOverlay();
+          }
         } catch (e) {
           // Focus node or controller may have been disposed, ignore
           if (!mounted) {

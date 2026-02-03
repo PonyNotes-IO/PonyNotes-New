@@ -164,6 +164,7 @@ class SharedUserWidget extends StatelessWidget {
       final supportedAccessLevels = [
         ShareAccessLevel.readOnly,
         ShareAccessLevel.readAndWrite,
+        ShareAccessLevel.fullAccess,
       ];
       return editAccessWidget(supportedAccessLevels);
     }

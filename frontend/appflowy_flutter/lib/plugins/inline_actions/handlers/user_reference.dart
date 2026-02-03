@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_block.dart';
@@ -9,10 +11,12 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/user/user_workspace_bloc.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 /// 用于在文档中@用户的内联操作服务
 /// InlineUserReferenceService allows users to mention other workspace members
@@ -166,6 +170,9 @@ class InlineUserReferenceService extends InlineActionsDelegate {
       return;
     }
 
+    // Get block ID for the mention
+    final blockId = node.id;
+
     // Insert @user mention block
     final transaction = editorState.transaction
       ..replaceText(
@@ -182,7 +189,81 @@ class InlineUserReferenceService extends InlineActionsDelegate {
 
     await editorState.apply(transaction);
 
-    // TODO: Trigger notification creation for the mentioned user
-    // This will be implemented in the next phase
+    // Trigger notification creation for the mentioned user
+    await _triggerPageMentionNotification(
+      workspaceId: _currentWorkspaceId ?? '',
+      viewId: currentViewId,
+      personId: member.id.toString(),
+      blockId: blockId,
+      viewName: node.attributes['name'] ?? 'Untitled',
+    );
+  }
+
+  /// 调用 update_page_mention API 创建提及通知
+  /// Calls the update_page_mention API to create a mention notification
+  Future<void> _triggerPageMentionNotification({
+    required String workspaceId,
+    required String viewId,
+    required String personId,
+    required String blockId,
+    required String viewName,
+  }) async {
+    if (workspaceId.isEmpty || personId.isEmpty) {
+      Log.warn('[InlineUserReference] Cannot trigger mention notification: missing workspaceId or personId');
+      return;
+    }
+
+    try {
+      // Get server URL from configuration
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+
+      if (baseUrl.isEmpty) {
+        Log.warn('[InlineUserReference] Cannot trigger mention notification: baseUrl is empty');
+        return;
+      }
+
+      // Get access token
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final rawToken = userResult.fold(
+        (user) => user.token,
+        (error) {
+          Log.error('[InlineUserReference] Failed to get user profile: $error');
+          return '';
+        },
+      );
+
+      if (rawToken.isEmpty) {
+        Log.warn('[InlineUserReference] Cannot trigger mention notification: token is empty');
+        return;
+      }
+
+      // Make API call
+      final uri = Uri.parse('$baseUrl/api/workspace/$workspaceId/page-view/$viewId/page-mention');
+      
+      final body = jsonEncode({
+        'person_id': personId,
+        'block_id': blockId,
+        'view_name': viewName,
+        'require_notification': true,
+      });
+
+      final response = await http.put(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $rawToken',
+        },
+        body: body,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        Log.info('[InlineUserReference] Successfully triggered mention notification for person: $personId');
+      } else {
+        Log.error('[InlineUserReference] Failed to trigger mention notification: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      Log.error('[InlineUserReference] Error triggering mention notification: $e');
+    }
   }
 }
