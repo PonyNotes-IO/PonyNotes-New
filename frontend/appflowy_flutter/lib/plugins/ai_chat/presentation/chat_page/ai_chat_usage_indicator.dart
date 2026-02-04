@@ -65,10 +65,11 @@ class AIChatUsageIndicator extends StatelessWidget {
   }
 
   String _getDisplayText(int used, int total, int remaining) {
+    // PonyNotes: 只显示剩余可用次数，不显示已用/总数
     if (remaining <= 0) {
-      return '$used/$total 0次可用';
+      return '0次可用';
     }
-    return '$used/$total $remaining次可用';
+    return '$remaining次可用';
   }
 
   Color _getTextColor(BuildContext context, int remaining) {

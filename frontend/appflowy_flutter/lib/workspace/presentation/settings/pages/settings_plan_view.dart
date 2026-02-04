@@ -93,47 +93,7 @@ class _SettingsPlanViewState extends State<SettingsPlanView> {
                 ),
                 const VSpace(16),
                 _CurrentPlanBox(subscriptionInfo: state.subscriptionInfo),
-                const VSpace(16),
-                FlowyText(
-                  LocaleKeys.settings_planPage_planUsage_addons_title.tr(),
-                  fontSize: 18,
-                  color: AFThemeExtension.of(context).strongText,
-                  fontWeight: FontWeight.w600,
-                ),
-                const VSpace(8),
-                Row(
-                  children: [
-                    Flexible(
-                      child: _AddOnBox(
-                        title: LocaleKeys
-                            .settings_planPage_planUsage_addons_aiMax_title
-                            .tr(),
-                        description: LocaleKeys
-                            .settings_planPage_planUsage_addons_aiMax_description
-                            .tr(),
-                        price: LocaleKeys
-                            .settings_planPage_planUsage_addons_aiMax_price
-                            .tr(
-                          args: [SubscriptionPlanPB.AiMax.priceAnnualBilling],
-                        ),
-                        priceInfo: LocaleKeys
-                            .settings_planPage_planUsage_addons_aiMax_priceInfo
-                            .tr(),
-                        recommend: '',
-                        buttonText: state.subscriptionInfo.hasAIMax
-                            ? LocaleKeys
-                                .settings_planPage_planUsage_addons_activeLabel
-                                .tr()
-                            : LocaleKeys
-                                .settings_planPage_planUsage_addons_addLabel
-                                .tr(),
-                        isActive: state.subscriptionInfo.hasAIMax,
-                        plan: SubscriptionPlanPB.AiMax,
-                      ),
-                    ),
-                    const HSpace(8),
-                  ],
-                ),
+                // 注意：附加包(Addon)功能已移除，不再显示
               ],
             ),
           );
@@ -380,22 +340,7 @@ class _PlanUsageSummary extends StatelessWidget {
                 },
               ),
             ],
-            if (!subscriptionInfo.hasAIMax && !usage.aiResponsesUnlimited) ...[
-              _ToggleMore(
-                value: false,
-                label: LocaleKeys.settings_planPage_planUsage_aiMaxToggle.tr(),
-                badgeLabel:
-                    LocaleKeys.settings_planPage_planUsage_proBadge.tr(),
-                onTap: () async {
-                  context.read<SettingsPlanBloc>().add(
-                        const SettingsPlanEvent.addSubscription(
-                          SubscriptionPlanPB.AiMax,
-                        ),
-                      );
-                  await Future.delayed(const Duration(seconds: 2), () {});
-                },
-              ),
-            ],
+            // 注意：AI Max Addon 功能已移除
           ],
         ),
       ],
