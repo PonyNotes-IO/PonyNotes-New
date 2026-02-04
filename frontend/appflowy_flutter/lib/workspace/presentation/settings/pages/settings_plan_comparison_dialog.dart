@@ -220,8 +220,8 @@ class _SettingsPlanComparisonDialogState
                           _PlanTable(
                             title: '学生版',
                             description: '适合学生使用的经济实惠方案',
-                            price: '¥30/年',
-                            priceInfo: '或 ¥3/月',
+                            price: '¥50/年',
+                            priceInfo: '或 ¥5/月',
                             cells: _studentLabels,
                             isCurrent: currentInfo.plan.value == 2,
                             buttonType: WorkspacePlanPB.ProPlan.buttonTypeFor(
@@ -237,8 +237,8 @@ class _SettingsPlanComparisonDialogState
                           _PlanTable(
                             title: '标准版',
                             description: '适合个人和小团队的标准方案',
-                            price: '¥80/年',
-                            priceInfo: '或 ¥8/月',
+                            price: '¥99/年',
+                            priceInfo: '或 ¥9/月',
                             cells: _standardLabels,
                             isCurrent: currentInfo.plan.value == 1,
                             buttonType: WorkspacePlanPB.StandPlan.buttonTypeFor(
@@ -252,11 +252,28 @@ class _SettingsPlanComparisonDialogState
                                     ),
                           ),
                           _PlanTable(
-                            title: '团队版',
-                            description: '适合团队协作的专业方案',
-                            price: '¥180/年',
-                            priceInfo: '或 ¥18/月',
-                            cells: _teamLabels,
+                            title: '专业版',
+                            description: '适合专业用户的增强方案',
+                            price: '¥158/年',
+                            priceInfo: '或 ¥15/月',
+                            cells: _proLabels,
+                            isCurrent: currentInfo.plan.value == 2,
+                            buttonType: WorkspacePlanPB.ProPlan.buttonTypeFor(
+                              currentInfo.plan,
+                            ),
+                            onSelected: () =>
+                                context.read<SettingsPlanBloc>().add(
+                                      const SettingsPlanEvent.addSubscription(
+                                        SubscriptionPlanPB.Pro,
+                                      ),
+                                    ),
+                          ),
+                          _PlanTable(
+                            title: '高级版',
+                            description: '适合团队和企业的终极方案',
+                            price: '¥298/年',
+                            priceInfo: '或 ¥29/月',
+                            cells: _hiclassLabels,
                             isCurrent: currentInfo.plan.value == 3,
                             buttonType: WorkspacePlanPB.HiclassPlan.buttonTypeFor(
                               currentInfo.plan,
@@ -688,18 +705,18 @@ class _CellItem {
 
 final List<_CellItem> _freeLabels = [
   const _CellItem(label: '无限制'),  // 页面/块数量
-  const _CellItem(label: '-'),       // 云存储
+  const _CellItem(label: '300 MB'),  // 云存储 - 更新为300MB
   const _CellItem(icon: FlowySvgs.check_m),  // 导入与导出
   const _CellItem(label: '-'),       // 收件箱
   const _CellItem(label: '-'),       // 多端同步
   const _CellItem(label: '-'),       // 支持 API
   const _CellItem(label: '-'),       // 版本历史
-  const _CellItem(label: '-'),       // AI对话
+  const _CellItem(label: '20次/月'),  // AI对话 - 更新为20次
   const _CellItem(label: '-'),       // 图片生成
   const _CellItem(label: '-'),       // 分享链接
   const _CellItem(label: '-'),       // 发布
   const _CellItem(label: '-'),       // 工作区成员
-  const _CellItem(label: '-'),       // 协作工作区
+  const _CellItem(label: '2'),       // 协作工作区 - 更新为2个
   const _CellItem(label: '-'),       // 页面权限管理
   const _CellItem(label: '-'),       // 空间/成员管理
   const _CellItem(label: '-'),       // 空间/成员分组
@@ -707,18 +724,18 @@ final List<_CellItem> _freeLabels = [
 
 final List<_CellItem> _studentLabels = [
   const _CellItem(label: '无限制'),  // 页面/块数量
-  const _CellItem(label: '2GB'),      // 云存储
+  const _CellItem(label: '1GB'),      // 云存储 - 学生版调整为1GB
   const _CellItem(icon: FlowySvgs.check_m),  // 导入与导出
   const _CellItem(label: '-'),        // 收件箱
   const _CellItem(icon: FlowySvgs.check_m),  // 多端同步
   const _CellItem(label: '-'),        // 支持 API
   const _CellItem(label: '7天'),      // 版本历史
-  const _CellItem(label: '10次/月'),  // AI对话
+  const _CellItem(label: '50次/月'),  // AI对话 - 更新为50次
   const _CellItem(label: '-'),        // 图片生成
   const _CellItem(icon: FlowySvgs.check_m),  // 分享链接
   const _CellItem(icon: FlowySvgs.check_m),  // 发布
   const _CellItem(label: '2'),        // 工作区成员
-  const _CellItem(label: '仅限1个'),  // 协作工作区
+  const _CellItem(label: '3'),        // 协作工作区 - 更新为3个
   const _CellItem(label: '仅查看'),   // 页面权限管理
   const _CellItem(icon: FlowySvgs.check_m),  // 空间/成员管理
   const _CellItem(label: '-'),        // 空间/成员分组
@@ -732,7 +749,7 @@ final List<_CellItem> _standardLabels = [
   const _CellItem(icon: FlowySvgs.check_m),  // 多端同步
   const _CellItem(icon: FlowySvgs.check_m),  // 支持 API
   const _CellItem(label: '7天'),      // 版本历史
-  const _CellItem(label: '40次/月'),  // AI对话
+  const _CellItem(label: '300次/月'),  // AI对话 - 更新为300次
   const _CellItem(label: '10张/月'),  // 图片生成
   const _CellItem(icon: FlowySvgs.check_m),  // 分享链接
   const _CellItem(icon: FlowySvgs.check_m),  // 发布
@@ -743,21 +760,40 @@ final List<_CellItem> _standardLabels = [
   const _CellItem(label: '-'),        // 空间/成员分组
 ];
 
-final List<_CellItem> _teamLabels = [
+final List<_CellItem> _proLabels = [
   const _CellItem(label: '无限制'),  // 页面/块数量
-  const _CellItem(label: '20GB'),     // 云存储
+  const _CellItem(label: '50GB'),     // 云存储 - 专业版50GB
+  const _CellItem(icon: FlowySvgs.check_m),  // 导入与导出
+  const _CellItem(icon: FlowySvgs.check_m),  // 收件箱
+  const _CellItem(icon: FlowySvgs.check_m),  // 多端同步
+  const _CellItem(icon: FlowySvgs.check_m),  // 支持 API
+  const _CellItem(label: '30天'),     // 版本历史 - 专业版30天
+  const _CellItem(label: '1200次/月'), // AI对话 - 更新为1200次
+  const _CellItem(label: '30张/月'),  // 图片生成 - 专业版30张
+  const _CellItem(icon: FlowySvgs.check_m),  // 分享链接
+  const _CellItem(icon: FlowySvgs.check_m),  // 发布
+  const _CellItem(label: '10'),       // 工作区成员 - 专业版10个
+  const _CellItem(icon: FlowySvgs.check_m),  // 协作工作区
+  const _CellItem(label: '20个访客编辑'),  // 页面权限管理
+  const _CellItem(icon: FlowySvgs.check_m),  // 空间/成员管理
+  const _CellItem(label: '-'),        // 空间/成员分组
+];
+
+final List<_CellItem> _hiclassLabels = [
+  const _CellItem(label: '无限制'),  // 页面/块数量
+  const _CellItem(label: '150GB'),    // 云存储 - 高级版150GB
   const _CellItem(icon: FlowySvgs.check_m),  // 导入与导出
   const _CellItem(icon: FlowySvgs.check_m),  // 收件箱
   const _CellItem(icon: FlowySvgs.check_m),  // 多端同步
   const _CellItem(icon: FlowySvgs.check_m),  // 支持 API
   const _CellItem(label: '30天'),     // 版本历史
-  const _CellItem(label: '120次/月'), // AI对话
-  const _CellItem(label: '20张/月'),  // 图片生成
+  const _CellItem(label: '3000次/月'), // AI对话 - 更新为3000次
+  const _CellItem(label: '50张/月'),  // 图片生成 - 高级版50张
   const _CellItem(icon: FlowySvgs.check_m),  // 分享链接
   const _CellItem(icon: FlowySvgs.check_m),  // 发布
-  const _CellItem(label: '10'),       // 工作区成员
+  const _CellItem(label: '18'),       // 工作区成员 - 高级版18个
   const _CellItem(icon: FlowySvgs.check_m),  // 协作工作区
   const _CellItem(label: '50个访客编辑'),  // 页面权限管理
   const _CellItem(icon: FlowySvgs.check_m),  // 空间/成员管理
-  const _CellItem(icon: FlowySvgs.check_m),  // 空间/成员分组
+  const _CellItem(icon: FlowySvgs.check_m),  // 空间/成员分组 - 高级版支持
 ];
