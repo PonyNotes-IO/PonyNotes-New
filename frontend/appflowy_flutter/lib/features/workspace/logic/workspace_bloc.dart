@@ -764,7 +764,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     final currentSubscription = await SubscriptionService().getCurrentSubscription(
       userProfile: state.userProfile,
-      forceRefresh: true,
+      forceRefresh: false, // 不再总是强制刷新，让缓存机制生效
     );
     if (!isClosed) {
       add(

@@ -23,6 +23,7 @@ import 'package:equatable/equatable.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../subscription/subscription_service.dart';
 import '../../subscription_success_listenable/subscription_success_listenable.dart';
 
 part 'account_management_bloc.freezed.dart';
@@ -327,9 +328,69 @@ class AccountManagementBloc
 
   Future<void> _loadSubscriptionInfo(
       Emitter<AccountManagementState> emit) async {
-    // 使用从SettingsDialogBloc传入的currentSubscription
+    // 先更新状态为加载中
+    state.maybeWhen(
+      orElse: () {
+        emit(const AccountManagementState.loading());
+      },
+      ready: (
+        subscriptionInfo,
+        planConfigs,
+        addons,
+        selectedPlan,
+        selectedDuration,
+        selectedTab,
+        selectedAddonIndex,
+        agreedProtocols,
+        isLoadingSubscription,
+        isLoadingPlans,
+        isLoadingAddons,
+        isProcessingPayment,
+        error,
+        paymentResult,
+      ) {
+        emit(
+          AccountManagementState.ready(
+            subscriptionInfo: subscriptionInfo,
+            planConfigs: planConfigs,
+            addons: addons,
+            selectedPlan: selectedPlan,
+            selectedDuration: selectedDuration,
+            selectedTab: selectedTab,
+            selectedAddonIndex: selectedAddonIndex,
+            agreedProtocols: agreedProtocols,
+            isLoadingSubscription: true, // 标记为加载中
+            isLoadingPlans: isLoadingPlans,
+            isLoadingAddons: isLoadingAddons,
+            isProcessingPayment: isProcessingPayment,
+            error: error,
+            paymentResult: paymentResult,
+          ),
+        );
+      },
+    );
+
+    // 从服务器重新获取订阅信息
+    try {
+      final currentSubscription = await SubscriptionService().getCurrentSubscription(
+        userProfile: userProfile,
+        forceRefresh: true, // 不再总是强制刷新，让缓存机制生效
+      );
+      _emitSubscriptionInfo(emit, currentSubscription);
+    } catch (e, stackTrace) {
+      Log.error('Error fetching subscription info: $e', stackTrace);
+      _emitSubscriptionInfo(emit, currentSubscription);
+    }
+  }
+
+  // 辅助方法：根据订阅信息更新状态
+  void _emitSubscriptionInfo(
+    Emitter<AccountManagementState> emit,
+    CurrentSubscription? subscription,
+  ) {
+    // 使用获取到的订阅信息
     final planCode =
-        currentSubscription?.subscription?.planCode ?? 'free_local';
+        subscription?.subscription?.planCode ?? 'free_local';
     final mappedPlan = _mapPlanCodeToPb(planCode);
     final currentPlan = mappedPlan ?? WorkspacePlanPB.FreePlan;
 
@@ -340,7 +401,7 @@ class AccountManagementBloc
       selectedPlan = currentPlan;
     }
 
-    // 创建一个基于currentSubscription的WorkspaceSubscriptionInfoPB
+    // 创建一个基于订阅信息的WorkspaceSubscriptionInfoPB
     final info = WorkspaceSubscriptionInfoPB()..plan = currentPlan;
 
     state.maybeWhen(

@@ -70,11 +70,13 @@ class SubscriptionService {
       }
     }
 
-    // 更新缓存
+    // 更新缓存，即使获取失败也更新缓存时间，避免频繁重试
+    _lastFetchTime = DateTime.now();
     if (subscription != null) {
       _cachedSubscription = subscription;
-      _lastFetchTime = DateTime.now();
       Log.info('Successfully fetched subscription info');
+    } else {
+      Log.warn('Failed to fetch subscription info, using cached value if available');
     }
 
     return subscription;

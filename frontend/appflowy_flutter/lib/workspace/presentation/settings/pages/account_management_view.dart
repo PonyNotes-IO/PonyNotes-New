@@ -49,21 +49,11 @@ class AccountManagementView extends StatefulWidget {
 class _AccountManagementViewState extends State<AccountManagementView>
     with WidgetsBindingObserver {
   String? _lastHandledPaymentResult;
-  bool _expectSubscribePaymentDialog = false;
-
   // TapGestureRecognizer 实例，用于在 dispose 时释放
   final List<TapGestureRecognizer> _gestureRecognizers = [];
 
   void _resetPaymentPromptDedup() {
     _lastHandledPaymentResult = null;
-  }
-
-  void _markExpectSubscribeDialog() {
-    _expectSubscribePaymentDialog = true;
-  }
-
-  void _clearExpectSubscribeDialog() {
-    _expectSubscribePaymentDialog = false;
   }
 
   @override
@@ -454,7 +444,6 @@ class _AccountManagementViewState extends State<AccountManagementView>
                     ),
             onPressed: () {
               // 仅在用户点击“确认协议开通”时，允许后续弹出支付提示弹框
-              _markExpectSubscribeDialog();
               context
                   .read<AccountManagementBloc>()
                   .add(const AccountManagementEvent.handleUpgradePay());
