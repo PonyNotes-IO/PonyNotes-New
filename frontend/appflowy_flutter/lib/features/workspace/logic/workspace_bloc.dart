@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui';
 
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/workspace/data/repositories/workspace_repository.dart';
@@ -9,6 +10,7 @@ import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/user/application/user_listener.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
@@ -47,7 +49,16 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     required this.userProfile,
     this.initialWorkspaceId,
   })  : _listener = UserListener(userProfile: userProfile),
+        _subscriptionSuccessListenable = getIt<SubscriptionSuccessListenable>(),
         super(UserWorkspaceState.initial(userProfile)) {
+    _subscriptionSuccessListener = () {
+      if (isClosed) {
+        return;
+      }
+      _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
+    };
+    _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
+    
     on<WorkspaceEventInitialize>(_onInitialize);
     on<WorkspaceEventFetchWorkspaces>(_onFetchWorkspaces);
     on<WorkspaceEventCreateWorkspace>(_onCreateWorkspace);
@@ -75,10 +86,13 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   final WorkspaceRepository repository;
   final UserProfilePB userProfile;
   final UserListener _listener;
+  final SubscriptionSuccessListenable _subscriptionSuccessListenable;
+  late final VoidCallback _subscriptionSuccessListener;
   FolderSyncStateListener? _folderSyncStateListener;
 
   @override
   Future<void> close() {
+    _subscriptionSuccessListenable.removeListener(_subscriptionSuccessListener);
     _listener.stop();
     _folderSyncStateListener?.stop();
     return super.close();

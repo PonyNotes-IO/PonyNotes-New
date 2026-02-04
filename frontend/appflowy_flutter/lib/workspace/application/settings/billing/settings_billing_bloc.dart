@@ -151,12 +151,6 @@ class SettingsBillingBloc
 
           subscriptionInfo.freeze();
           final newInfo = subscriptionInfo.rebuild((value) {
-            if (plan.isAddOn) {
-              value.addOns.removeWhere(
-                (addon) => addon.addOnSubscription.subscriptionPlan == plan,
-              );
-            }
-
             if (plan.value == 1 && value.plan.value == 1) {
               value.plan = WorkspacePlanPB.FreePlan;
               value.planSubscription.freeze();
@@ -317,7 +311,6 @@ class SettingsBillingState extends Equatable with _$SettingsBillingState {
           billingPortal,
           plan,
           isLoading,
-          ...subscription.addOns,
         ],
       );
 }

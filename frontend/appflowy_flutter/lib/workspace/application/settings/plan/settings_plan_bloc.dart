@@ -174,10 +174,7 @@ class SettingsPlanBloc extends Bloc<SettingsPlanEvent, SettingsPlanState> {
 
           usage.freeze();
           final newUsage = usage.rebuild((value) {
-            if (!newInfo.hasAIMax) {
-              value.aiResponsesUnlimited = false;
-            }
-
+            value.aiResponsesUnlimited = false;
             value.storageBytesUnlimited = false;
           });
 

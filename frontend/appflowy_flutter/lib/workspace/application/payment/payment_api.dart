@@ -56,9 +56,6 @@ class PaymentCreateRequest {
   /// 计费类型（如按次/包月/包年等，传参值按业务枚举定义）- 可选
   final String? billingType;
   
-  /// 附加项ID（增值服务/附加功能唯一标识）- 可选
-  final String? addonId;
-  
   /// 微信开放ID（微信支付场景必传，非微信支付可空）- 可选
   /// 注意：接口字段名为 openid（小写d）
   final String? openid;
@@ -73,7 +70,6 @@ class PaymentCreateRequest {
     this.productName,
     this.planId,
     this.billingType,
-    this.addonId,
     this.openid,
     this.url,
   });
@@ -96,9 +92,6 @@ class PaymentCreateRequest {
     }
     if (billingType != null && billingType!.isNotEmpty) {
       json['billingType'] = billingType;
-    }
-    if (addonId != null && addonId!.isNotEmpty) {
-      json['addonId'] = addonId;
     }
     if (openid != null && openid!.isNotEmpty) {
       json['openid'] = openid; // 注意：字段名是小写 openid
@@ -296,7 +289,6 @@ class PaymentApi {
       _mockOrderInfo[mockOrderNo] = {
         'planId': request.planId ?? '',
         'billingType': request.billingType ?? 'monthly',
-        'addonId': request.addonId ?? '',
         'amount': request.amount,
       };
       
@@ -392,9 +384,6 @@ class PaymentApi {
       }
       if (payload['billingType'] != null && (payload['billingType'] as String).isNotEmpty) {
         formData['billingType'] = payload['billingType'] as String;
-      }
-      if (payload['addonId'] != null && (payload['addonId'] as String).isNotEmpty) {
-        formData['addonId'] = payload['addonId'] as String;
       }
       if (payload['openid'] != null && (payload['openid'] as String).isNotEmpty) {
         formData['openid'] = payload['openid'] as String;
@@ -509,26 +498,14 @@ class PaymentApi {
       if (orderInfo != null) {
         final planId = orderInfo['planId'] ?? '';
         final billingType = orderInfo['billingType'] ?? 'monthly';
-        final addonId = orderInfo['addonId'] ?? '';
         
-        // 根据订单类型调用不同的后端接口更新会员权益
-        if (planId.isNotEmpty) {
-          // 会员升级
-          Log.info('[PaymentApi] 测试模式：调用后端更新会员订阅 planId=$planId, billingType=$billingType');
-          final subscribeResult = await _updateSubscriptionInTestMode(planId, billingType);
-          if (subscribeResult.isFailure) {
-            final error = subscribeResult.fold((_) => null, (e) => e);
-            Log.error('[PaymentApi] 测试模式：更新会员订阅失败 ${error?.msg}');
-            // 即使更新失败，也返回支付成功，让用户可以重新刷新
-          }
-        } else if (addonId.isNotEmpty) {
-          // 空间补充包
-          Log.info('[PaymentApi] 测试模式：调用后端购买补充包 addonId=$addonId');
-          final purchaseResult = await _purchaseAddonInTestMode(addonId);
-          if (purchaseResult.isFailure) {
-            final error = purchaseResult.fold((_) => null, (e) => e);
-            Log.error('[PaymentApi] 测试模式：购买补充包失败 ${error?.msg}');
-          }
+        // 会员升级
+        Log.info('[PaymentApi] 测试模式：调用后端更新会员订阅 planId=$planId, billingType=$billingType');
+        final subscribeResult = await _updateSubscriptionInTestMode(planId, billingType);
+        if (subscribeResult.isFailure) {
+          final error = subscribeResult.fold((_) => null, (e) => e);
+          Log.error('[PaymentApi] 测试模式：更新会员订阅失败 ${error?.msg}');
+          // 即使更新失败，也返回支付成功，让用户可以重新刷新
         }
         
         // 清理订单信息
@@ -724,93 +701,5 @@ class PaymentApi {
     }
   }
 
-  /// 测试模式：调用后端接口购买补充包
-  /// 
-  /// [addonId] 补充包 ID
-  static Future<FlowyResult<void, FlowyError>> _purchaseAddonInTestMode(
-    String addonId,
-  ) async {
-    try {
-      // 获取云端配置
-      final cloudConfigResult = await UserEventGetCloudConfig().send();
-      final cloudConfig = cloudConfigResult.fold(
-        (config) => config,
-        (error) => throw error,
-      );
 
-      final baseUrl = cloudConfig.serverUrl;
-      if (baseUrl.isEmpty) {
-        Log.error('[PaymentApi] 测试模式：serverUrl 为空');
-        return FlowyResult.failure(
-          FlowyError()
-            ..code = ErrorCode.Internal
-            ..msg = 'Server URL is empty',
-        );
-      }
-
-      // 获取当前用户 Profile（包含 token）
-      final userProfileResult = await UserBackendService.getCurrentUserProfile();
-      final UserProfilePB userProfile = userProfileResult.fold(
-        (profile) => profile,
-        (error) => throw error,
-      );
-
-      // 从 userProfile.token 中提取真正的 access_token
-      final accessToken = _extractAccessToken(userProfile.token);
-      if (accessToken == null || accessToken.isEmpty) {
-        Log.error('[PaymentApi] 测试模式：无法提取 access_token');
-        return FlowyResult.failure(
-          FlowyError()
-            ..code = ErrorCode.Internal
-            ..msg = 'Failed to extract access token',
-        );
-      }
-
-      // 调用后端的 purchase addon 接口
-      // POST /api/subscription/addon/purchase
-      // Body: { "addon_id": 1, "quantity": 1 }
-      final uri = Uri.parse('$baseUrl/api/subscription/addon/purchase');
-      Log.info('[PaymentApi] 测试模式：调用 $uri');
-
-      final requestBody = jsonEncode({
-        'addon_id': int.tryParse(addonId) ?? 1,
-        'quantity': 1,
-      });
-      Log.info('[PaymentApi] 测试模式：请求体 $requestBody');
-
-      final response = await http.post(
-        uri,
-        headers: <String, String>{
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken',
-        },
-        body: requestBody,
-      );
-
-      Log.info('[PaymentApi] 测试模式：响应状态 ${response.statusCode}');
-      Log.info('[PaymentApi] 测试模式：响应内容 ${response.body}');
-
-      if (response.statusCode == 200) {
-        Log.info('[PaymentApi] 测试模式：购买补充包成功！');
-        return FlowyResult.success(null);
-      } else {
-        final errorMsg = response.body.isNotEmpty
-            ? response.body
-            : 'Failed to purchase addon (HTTP ${response.statusCode})';
-        Log.error('[PaymentApi] 测试模式：购买补充包失败 $errorMsg');
-        return FlowyResult.failure(
-          FlowyError()
-            ..code = ErrorCode.Internal
-            ..msg = errorMsg,
-        );
-      }
-    } catch (e, s) {
-      Log.error('[PaymentApi] 测试模式：购买补充包异常 $e\n$s');
-      return FlowyResult.failure(
-        FlowyError()
-          ..code = ErrorCode.Internal
-          ..msg = 'Failed to purchase addon: $e',
-      );
-    }
-  }
 }

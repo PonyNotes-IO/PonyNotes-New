@@ -15,6 +15,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:http/http.dart' as http;
 
 import 'account/account_management_bloc.dart';
+import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 
 part 'settings_dialog_bloc.freezed.dart';
 
@@ -40,7 +41,6 @@ enum SettingsPage {
   ai,
   cloud,
   featureFlags,
-  addonPurchaseRecords,
 }
 
 class SettingsDialogBloc
@@ -50,16 +50,27 @@ class SettingsDialogBloc
     this.currentWorkspaceMemberRole, {
     SettingsPage? initPage,
   })  : _userListener = UserListener(userProfile: userProfile),
+        _subscriptionSuccessListenable = getIt<SubscriptionSuccessListenable>(),
         super(SettingsDialogState.initial(userProfile, initPage)) {
+    _subscriptionSuccessListener = () {
+      if (isClosed) {
+        return;
+      }
+      add(const SettingsDialogEvent.initial());
+    };
+    _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
     _dispatch();
   }
 
   final AFRolePB? currentWorkspaceMemberRole;
   final UserListener _userListener;
+  final SubscriptionSuccessListenable _subscriptionSuccessListenable;
+  late final VoidCallback _subscriptionSuccessListener;
   bool _listenerStarted = false;
 
   @override
   Future<void> close() async {
+    _subscriptionSuccessListenable.removeListener(_subscriptionSuccessListener);
     await _userListener.stop();
     await super.close();
   }

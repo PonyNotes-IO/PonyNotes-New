@@ -23,7 +23,7 @@ extension SubscriptionInfoHelpers on WorkspaceSubscriptionInfoPB {
       };
 
   bool get isBillingPortalEnabled {
-    if (plan.value != 0 || addOns.isNotEmpty) {
+    if (plan.value != 0) {
       return true;
     }
 
@@ -38,8 +38,6 @@ extension AllSubscriptionLabels on SubscriptionPlanPB {
         1 => LocaleKeys.settings_planPage_planUsage_currentPlan_standardTitle.tr(),
         2 => LocaleKeys.settings_planPage_planUsage_currentPlan_studentTitle.tr(),
         3 => LocaleKeys.settings_planPage_planUsage_currentPlan_teamTitle.tr(),
-        4 => LocaleKeys.settings_billingPage_addons_aiMax_label.tr(),
-        5 => LocaleKeys.settings_billingPage_addons_aiOnDevice_label.tr(),
         _ => 'N/A',
       };
 }
@@ -49,13 +47,7 @@ extension WorkspaceSubscriptionStatusExt on WorkspaceSubscriptionInfoPB {
       planSubscription.status == WorkspaceSubscriptionStatusPB.Canceled;
 }
 
-extension WorkspaceAddonsExt on WorkspaceSubscriptionInfoPB {
-  bool get hasAIMax =>
-      addOns.any((addon) => addon.type == WorkspaceAddOnPBType.AddOnAiMax);
 
-  bool get hasAIOnDevice =>
-      addOns.any((addon) => addon.type == WorkspaceAddOnPBType.AddOnAiLocal);
-}
 
 /// These have to match [SubscriptionSuccessListenable.subscribedPlan] labels
 extension ToRecognizable on SubscriptionPlanPB {
@@ -64,22 +56,16 @@ extension ToRecognizable on SubscriptionPlanPB {
         1 => 'standard',
         2 => 'professor',
         3 => 'hiclass',
-        4 => 'ai_max',
-        5 => 'ai_local',
         _ => null,
       };
 }
 
 extension PlanHelper on SubscriptionPlanPB {
-  bool get isAddOn => value == 4 || value == 5;
-
   String get priceMonthBilling => switch (value) {
         0 => '¥0',
         1 => '¥8',
         2 => '¥3',
         3 => '¥18',
-        4 => '¥10',
-        5 => '¥10',
         _ => '¥0',
       };
 
@@ -88,8 +74,6 @@ extension PlanHelper on SubscriptionPlanPB {
         1 => '¥80',
         2 => '¥30',
         3 => '¥180',
-        4 => '¥96',
-        5 => '¥96',
         _ => '¥0',
       };
 }

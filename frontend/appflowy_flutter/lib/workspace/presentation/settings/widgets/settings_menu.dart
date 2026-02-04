@@ -46,6 +46,21 @@ class _SettingsMenuState extends State<SettingsMenu> {
     _loadSubscriptionInfo();
   }
 
+  @override
+  void didUpdateWidget(SettingsMenu oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 当currentSubscription发生变化时，重新构建组件
+    if (oldWidget.currentSubscription != widget.currentSubscription) {
+      setState(() {
+        // 触发组件重新构建，_buildUserInfoCard方法会使用新的widget.currentSubscription值
+      });
+    }
+    // 当workspaceId发生变化时，重新加载订阅信息
+    if (oldWidget.workspaceId != widget.workspaceId) {
+      _loadSubscriptionInfo();
+    }
+  }
+
   Future<void> _loadSubscriptionInfo() async {
     final result = await UserBackendService.getWorkspaceSubscriptionInfo(widget.workspaceId);
     

@@ -35,7 +35,6 @@ enum PurchaseDurationOption {
 
 enum MembershipTab {
   upgrade,
-  addon,
 }
 
 class RemotePlan {
@@ -130,76 +129,6 @@ class RemotePlan {
   }
 }
 
-class AddonPlan {
-  final int? id;
-  final String addonCode;
-  final String addonType;
-  final String name;
-  final double? priceYuan;
-  final int? storageGb;
-  final int? aiChatCount;
-  final int? aiImageCount;
-  final bool? isActive;
-
-  const AddonPlan({
-    required this.id,
-    required this.addonCode,
-    required this.addonType,
-    required this.name,
-    required this.priceYuan,
-    required this.storageGb,
-    required this.aiChatCount,
-    required this.aiImageCount,
-    required this.isActive,
-  });
-
-  String get priceYuanStr =>
-      priceYuan == null ? '0' : priceYuan!.toStringAsFixed(2);
-
-  bool get isStorage => addonType == 'storage';
-
-  bool get isAiToken => addonType == 'ai_token';
-
-  String get storageLabel =>
-      storageGb == null ? '存储空间 --' : '存储空间 ${storageGb}G';
-
-  String get tokensLabel {
-    if (aiChatCount == null && aiImageCount == null) return 'AI Token --';
-    final chatStr = aiChatCount == null ? '' : '对话${aiChatCount}次';
-    final imageStr = aiImageCount == null ? '' : ' 图片${aiImageCount}张';
-    final merged = [chatStr, imageStr].where((e) => e.isNotEmpty).join(' ');
-    return merged.isEmpty ? 'AI Token --' : 'AI Token $merged';
-  }
-
-  factory AddonPlan.fromJson(Map<String, dynamic> json) {
-    double? _parseDouble(dynamic v) {
-      if (v == null) return null;
-      if (v is num) return v.toDouble();
-      return double.tryParse(v.toString());
-    }
-
-    int? _parseInt(dynamic v) {
-      if (v == null) return null;
-      if (v is num) return v.toInt();
-      return int.tryParse(v.toString());
-    }
-
-    return AddonPlan(
-      id: _parseInt(json['id']),
-      addonCode: (json['addon_code'] as String?) ?? '',
-      addonType: (json['addon_type'] as String?) ?? '',
-      name: (json['addon_name_cn'] as String?) ??
-          (json['addon_name'] as String?) ??
-          '补充包',
-      priceYuan: _parseDouble(json['price_yuan']),
-      storageGb: _parseInt(json['storage_gb']),
-      aiChatCount: _parseInt(json['ai_chat_count']),
-      aiImageCount: _parseInt(json['ai_image_count']),
-      isActive: json['is_active'] as bool? ?? true,
-    );
-  }
-}
-
 class AccountManagementBloc
     extends Bloc<AccountManagementEvent, AccountManagementState> {
   AccountManagementBloc({
@@ -221,16 +150,13 @@ class AccountManagementBloc
         initial: () async => _initial(emit),
         loadSubscriptionInfo: () async => _loadSubscriptionInfo(emit),
         loadSubscriptionPlans: () async => _loadSubscriptionPlans(emit),
-        loadAddons: () async => _loadAddons(emit),
         selectPlan: (plan) async => _selectPlan(plan, emit),
         selectDuration: (duration) async => _selectDuration(duration, emit),
-        selectAddon: (index) async => _selectAddon(index, emit),
         setAgreedProtocols: (agreed) async => _setAgreedProtocols(agreed, emit),
         switchTab: (tab) async => _switchTab(tab, emit),
         createOrUpdateSubscription: (planId, billingType) async =>
             _createOrUpdateSubscription(planId, billingType, emit),
         handleUpgradePay: () async => _handleUpgradePay(emit),
-        handleAddonPay: () async => _handleAddonPay(emit),
         // 临时注释：等待 freezed 重新生成后取消注释
         startPaymentPolling: (orderNo) async =>
             _startPaymentPolling(orderNo, emit),
@@ -321,9 +247,8 @@ class AccountManagementBloc
     // 1. 先获取当前会员信息，确保后续接口都能拿到最新的订阅计划
     await _loadSubscriptionInfo(emit);
 
-    // 2. 再去拉会员计划列表和空间补充包列表
+    // 2. 再去拉会员计划列表
     add(const AccountManagementEvent.loadSubscriptionPlans());
-    add(const AccountManagementEvent.loadAddons());
   }
 
   Future<void> _loadSubscriptionInfo(
@@ -336,15 +261,12 @@ class AccountManagementBloc
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
         selectedPlan,
         selectedDuration,
         selectedTab,
-        selectedAddonIndex,
         agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,
@@ -353,15 +275,12 @@ class AccountManagementBloc
           AccountManagementState.ready(
             subscriptionInfo: subscriptionInfo,
             planConfigs: planConfigs,
-            addons: addons,
             selectedPlan: selectedPlan,
             selectedDuration: selectedDuration,
             selectedTab: selectedTab,
-            selectedAddonIndex: selectedAddonIndex,
             agreedProtocols: agreedProtocols,
             isLoadingSubscription: true, // 标记为加载中
             isLoadingPlans: isLoadingPlans,
-            isLoadingAddons: isLoadingAddons,
             isProcessingPayment: isProcessingPayment,
             error: error,
             paymentResult: paymentResult,
@@ -410,30 +329,24 @@ class AccountManagementBloc
           AccountManagementState.ready(
             subscriptionInfo: info,
             planConfigs: const {},
-            addons: const [],
             selectedPlan: selectedPlan,
             selectedDuration: PurchaseDurationOption.monthly,
             selectedTab: MembershipTab.upgrade,
-            selectedAddonIndex: 0,
             agreedProtocols: false,
             isLoadingSubscription: false,
             isLoadingPlans: true,
-            isLoadingAddons: true,
           ),
         );
       },
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
         currentSelectedPlan,
         selectedDuration,
         selectedTab,
-        selectedAddonIndex,
         agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,
@@ -443,15 +356,12 @@ class AccountManagementBloc
           AccountManagementState.ready(
             subscriptionInfo: info,
             planConfigs: planConfigs,
-            addons: addons,
             selectedPlan: finalSelectedPlan,
             selectedDuration: selectedDuration,
             selectedTab: selectedTab,
-            selectedAddonIndex: selectedAddonIndex,
             agreedProtocols: agreedProtocols,
             isLoadingSubscription: false,
             isLoadingPlans: isLoadingPlans,
-            isLoadingAddons: isLoadingAddons,
             isProcessingPayment: isProcessingPayment,
             error: error,
             paymentResult: paymentResult,
@@ -473,15 +383,12 @@ class AccountManagementBloc
           ready: (
             subscriptionInfo,
             planConfigs,
-            addons,
             selectedPlan,
             selectedDuration,
             selectedTab,
-            selectedAddonIndex,
             agreedProtocols,
             isLoadingSubscription,
-            _,
-            isLoadingAddons,
+            isLoadingPlans,
             isProcessingPayment,
             error,
             paymentResult,
@@ -490,15 +397,12 @@ class AccountManagementBloc
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: false,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: isProcessingPayment,
                 error: error,
                 paymentResult: paymentResult,
@@ -517,15 +421,12 @@ class AccountManagementBloc
           ready: (
             subscriptionInfo,
             planConfigs,
-            addons,
             selectedPlan,
             selectedDuration,
             selectedTab,
-            selectedAddonIndex,
             agreedProtocols,
             isLoadingSubscription,
-            _,
-            isLoadingAddons,
+            isLoadingPlans,
             isProcessingPayment,
             error,
             paymentResult,
@@ -534,15 +435,12 @@ class AccountManagementBloc
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: false,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: isProcessingPayment,
                 error: error,
                 paymentResult: paymentResult,
@@ -570,15 +468,12 @@ class AccountManagementBloc
           ready: (
             subscriptionInfo,
             planConfigs,
-            addons,
             selectedPlan,
             selectedDuration,
             selectedTab,
-            selectedAddonIndex,
             agreedProtocols,
             isLoadingSubscription,
-            _,
-            isLoadingAddons,
+            isLoadingPlans,
             isProcessingPayment,
             error,
             paymentResult,
@@ -587,15 +482,12 @@ class AccountManagementBloc
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: false,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: isProcessingPayment,
                 error: error,
                 paymentResult: paymentResult,
@@ -616,15 +508,12 @@ class AccountManagementBloc
           ready: (
             subscriptionInfo,
             planConfigs,
-            addons,
             selectedPlan,
             selectedDuration,
             selectedTab,
-            selectedAddonIndex,
             agreedProtocols,
             isLoadingSubscription,
-            _,
-            isLoadingAddons,
+            isLoadingPlans,
             isProcessingPayment,
             error,
             paymentResult,
@@ -633,15 +522,12 @@ class AccountManagementBloc
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: false,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: isProcessingPayment,
                 error: error,
                 paymentResult: paymentResult,
@@ -660,15 +546,12 @@ class AccountManagementBloc
           ready: (
             subscriptionInfo,
             planConfigs,
-            addons,
             selectedPlan,
             selectedDuration,
             selectedTab,
-            selectedAddonIndex,
             agreedProtocols,
             isLoadingSubscription,
-            _,
-            isLoadingAddons,
+            isLoadingPlans,
             isProcessingPayment,
             error,
             paymentResult,
@@ -677,15 +560,12 @@ class AccountManagementBloc
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: false,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: isProcessingPayment,
                 error: error,
                 paymentResult: paymentResult,
@@ -759,15 +639,12 @@ class AccountManagementBloc
         ready: (
           subscriptionInfo,
           planConfigs,
-          addons,
           selectedPlan,
           selectedDuration,
           selectedTab,
-          selectedAddonIndex,
           agreedProtocols,
           isLoadingSubscription,
           isLoadingPlans,
-          isLoadingAddons,
           isProcessingPayment,
           error,
           paymentResult,
@@ -776,15 +653,12 @@ class AccountManagementBloc
             AccountManagementState.ready(
               subscriptionInfo: subscriptionInfo,
               planConfigs: configs,
-              addons: addons,
               selectedPlan: selectedPlan,
               selectedDuration: selectedDuration,
               selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
               agreedProtocols: agreedProtocols,
               isLoadingSubscription: isLoadingSubscription,
               isLoadingPlans: false,
-              isLoadingAddons: isLoadingAddons,
               isProcessingPayment: isProcessingPayment,
               error: error,
               paymentResult: paymentResult,
@@ -799,15 +673,12 @@ class AccountManagementBloc
         ready: (
           subscriptionInfo,
           planConfigs,
-          addons,
           selectedPlan,
           selectedDuration,
           selectedTab,
-          selectedAddonIndex,
           agreedProtocols,
           isLoadingSubscription,
           isLoadingPlans,
-          isLoadingAddons,
           isProcessingPayment,
           error,
           paymentResult,
@@ -816,15 +687,12 @@ class AccountManagementBloc
             AccountManagementState.ready(
               subscriptionInfo: subscriptionInfo,
               planConfigs: planConfigs,
-              addons: addons,
               selectedPlan: selectedPlan,
               selectedDuration: selectedDuration,
               selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
               agreedProtocols: agreedProtocols,
               isLoadingSubscription: isLoadingSubscription,
               isLoadingPlans: false,
-              isLoadingAddons: isLoadingAddons,
               isProcessingPayment: isProcessingPayment,
               error: error,
               paymentResult: paymentResult,
@@ -835,349 +703,7 @@ class AccountManagementBloc
     }
   }
 
-  Future<void> _loadAddons(Emitter<AccountManagementState> emit) async {
-    try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-      if (baseUrl.isEmpty) {
-        Log.warn('补充包接口 baseUrl 为空');
-        state.maybeWhen(
-          orElse: () {},
-          ready: (
-            subscriptionInfo,
-            planConfigs,
-            _,
-            selectedPlan,
-            selectedDuration,
-            selectedTab,
-            selectedAddonIndex,
-            agreedProtocols,
-            isLoadingSubscription,
-            isLoadingPlans,
-            isLoadingAddons,
-            isProcessingPayment,
-            error,
-            paymentResult,
-          ) {
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: subscriptionInfo,
-                planConfigs: planConfigs,
-                addons: const [],
-                selectedPlan: selectedPlan,
-                selectedDuration: selectedDuration,
-                selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
-                agreedProtocols: agreedProtocols,
-                isLoadingSubscription: isLoadingSubscription,
-                isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: false,
-                isProcessingPayment: isProcessingPayment,
-                error: error,
-                paymentResult: paymentResult,
-              ),
-            );
-          },
-        );
-        return;
-      }
 
-      final accessToken = _extractAccessToken(userProfile.token);
-      if (accessToken == null || accessToken.isEmpty) {
-        Log.warn('补充包接口缺少 access_token');
-        state.maybeWhen(
-          orElse: () {},
-          ready: (
-            subscriptionInfo,
-            planConfigs,
-            _,
-            selectedPlan,
-            selectedDuration,
-            selectedTab,
-            selectedAddonIndex,
-            agreedProtocols,
-            isLoadingSubscription,
-            isLoadingPlans,
-            isLoadingAddons,
-            isProcessingPayment,
-            error,
-            paymentResult,
-          ) {
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: subscriptionInfo,
-                planConfigs: planConfigs,
-                addons: const [],
-                selectedPlan: selectedPlan,
-                selectedDuration: selectedDuration,
-                selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
-                agreedProtocols: agreedProtocols,
-                isLoadingSubscription: isLoadingSubscription,
-                isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: false,
-                isProcessingPayment: isProcessingPayment,
-                error: error,
-                paymentResult: paymentResult,
-              ),
-            );
-          },
-        );
-        return;
-      }
-
-      final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/addons');
-      final response = await http.get(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-      );
-
-      if (response.statusCode != 200) {
-        Log.warn(
-            '补充包接口返回非 200: ${response.statusCode}, body: ${response.body}');
-        state.maybeWhen(
-          orElse: () {},
-          ready: (
-            subscriptionInfo,
-            planConfigs,
-            _,
-            selectedPlan,
-            selectedDuration,
-            selectedTab,
-            selectedAddonIndex,
-            agreedProtocols,
-            isLoadingSubscription,
-            isLoadingPlans,
-            isLoadingAddons,
-            isProcessingPayment,
-            error,
-            paymentResult,
-          ) {
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: subscriptionInfo,
-                planConfigs: planConfigs,
-                addons: const [],
-                selectedPlan: selectedPlan,
-                selectedDuration: selectedDuration,
-                selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
-                agreedProtocols: agreedProtocols,
-                isLoadingSubscription: isLoadingSubscription,
-                isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: false,
-                isProcessingPayment: isProcessingPayment,
-                error: error,
-                paymentResult: paymentResult,
-              ),
-            );
-          },
-        );
-        return;
-      }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final code = decoded['code'] as int? ?? -1;
-      if (code != 0) {
-        Log.warn('补充包接口 code!=0: code=$code, message=${decoded['message']}');
-        state.maybeWhen(
-          orElse: () {},
-          ready: (
-            subscriptionInfo,
-            planConfigs,
-            _,
-            selectedPlan,
-            selectedDuration,
-            selectedTab,
-            selectedAddonIndex,
-            agreedProtocols,
-            isLoadingSubscription,
-            isLoadingPlans,
-            isLoadingAddons,
-            isProcessingPayment,
-            error,
-            paymentResult,
-          ) {
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: subscriptionInfo,
-                planConfigs: planConfigs,
-                addons: const [],
-                selectedPlan: selectedPlan,
-                selectedDuration: selectedDuration,
-                selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
-                agreedProtocols: agreedProtocols,
-                isLoadingSubscription: isLoadingSubscription,
-                isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: false,
-                isProcessingPayment: isProcessingPayment,
-                error: error,
-                paymentResult: paymentResult,
-              ),
-            );
-          },
-        );
-        return;
-      }
-
-      final data = decoded['data'];
-      if (data is! List) {
-        Log.warn('补充包接口 data 不是数组');
-        state.maybeWhen(
-          orElse: () {},
-          ready: (
-            subscriptionInfo,
-            planConfigs,
-            _,
-            selectedPlan,
-            selectedDuration,
-            selectedTab,
-            selectedAddonIndex,
-            agreedProtocols,
-            isLoadingSubscription,
-            isLoadingPlans,
-            isLoadingAddons,
-            isProcessingPayment,
-            error,
-            paymentResult,
-          ) {
-            emit(
-              AccountManagementState.ready(
-                subscriptionInfo: subscriptionInfo,
-                planConfigs: planConfigs,
-                addons: const [],
-                selectedPlan: selectedPlan,
-                selectedDuration: selectedDuration,
-                selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
-                agreedProtocols: agreedProtocols,
-                isLoadingSubscription: isLoadingSubscription,
-                isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: false,
-                isProcessingPayment: isProcessingPayment,
-                error: error,
-                paymentResult: paymentResult,
-              ),
-            );
-          },
-        );
-        return;
-      }
-
-      final List<AddonPlan> allAddons = [];
-      for (final item in data) {
-        if (item is! Map<String, dynamic>) continue;
-        final plan = AddonPlan.fromJson(item);
-        if (plan.isActive == true) {
-          allAddons.add(plan);
-        }
-      }
-
-      state.maybeWhen(
-        orElse: () {},
-        ready: (
-          subscriptionInfo,
-          planConfigs,
-          _,
-          selectedPlan,
-          selectedDuration,
-          selectedTab,
-          selectedAddonIndex,
-          agreedProtocols,
-          isLoadingSubscription,
-          isLoadingPlans,
-          isLoadingAddons,
-          isProcessingPayment,
-          error,
-          paymentResult,
-        ) {
-          final planFromSubscription =
-              subscriptionInfo?.plan ?? WorkspacePlanPB.FreePlan;
-          final filteredAddons =
-              _filterAddonsByPlan(allAddons, planFromSubscription);
-
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: filteredAddons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: 0,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: false,
-              isProcessingPayment: isProcessingPayment,
-              error: error,
-              paymentResult: paymentResult,
-            ),
-          );
-        },
-      );
-    } catch (e, stackTrace) {
-      Log.error('补充包接口请求异常: $e', e, stackTrace);
-      state.maybeWhen(
-        orElse: () {},
-        ready: (
-          subscriptionInfo,
-          planConfigs,
-          addons,
-          selectedPlan,
-          selectedDuration,
-          selectedTab,
-          selectedAddonIndex,
-          agreedProtocols,
-          isLoadingSubscription,
-          isLoadingPlans,
-          isLoadingAddons,
-          isProcessingPayment,
-          error,
-          paymentResult,
-        ) {
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: const [],
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: false,
-              isProcessingPayment: isProcessingPayment,
-              error: error,
-              paymentResult: paymentResult,
-            ),
-          );
-        },
-      );
-    }
-  }
-
-  List<AddonPlan> _filterAddonsByPlan(
-    List<AddonPlan> allAddons,
-    WorkspacePlanPB plan,
-  ) {
-    switch (plan) {
-      case WorkspacePlanPB.FreePlan:
-        return allAddons.where((addon) => addon.isAiToken == true).toList();
-      case WorkspacePlanPB.StandPlan:
-      case WorkspacePlanPB.ProPlan:
-      case WorkspacePlanPB.HiclassPlan:
-        return allAddons;
-      default:
-        return allAddons.where((addon) => addon.isAiToken == true).toList();
-    }
-  }
 
   void _selectPlan(WorkspacePlanPB plan, Emitter<AccountManagementState> emit) {
     state.maybeWhen(
@@ -1185,15 +711,12 @@ class AccountManagementBloc
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
-        _,
+        selectedPlan,
         selectedDuration,
         selectedTab,
-        selectedAddonIndex,
         agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,
@@ -1202,15 +725,12 @@ class AccountManagementBloc
           AccountManagementState.ready(
             subscriptionInfo: subscriptionInfo,
             planConfigs: planConfigs,
-            addons: addons,
             selectedPlan: plan,
             selectedDuration: selectedDuration,
             selectedTab: selectedTab,
-            selectedAddonIndex: selectedAddonIndex,
             agreedProtocols: agreedProtocols,
             isLoadingSubscription: isLoadingSubscription,
             isLoadingPlans: isLoadingPlans,
-            isLoadingAddons: isLoadingAddons,
             isProcessingPayment: isProcessingPayment,
             error: error,
             paymentResult: paymentResult,
@@ -1227,15 +747,12 @@ class AccountManagementBloc
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
         selectedPlan,
-        _,
+        selectedDuration,
         selectedTab,
-        selectedAddonIndex,
         agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,
@@ -1244,15 +761,12 @@ class AccountManagementBloc
           AccountManagementState.ready(
             subscriptionInfo: subscriptionInfo,
             planConfigs: planConfigs,
-            addons: addons,
             selectedPlan: selectedPlan,
             selectedDuration: duration,
             selectedTab: selectedTab,
-            selectedAddonIndex: selectedAddonIndex,
             agreedProtocols: agreedProtocols,
             isLoadingSubscription: isLoadingSubscription,
             isLoadingPlans: isLoadingPlans,
-            isLoadingAddons: isLoadingAddons,
             isProcessingPayment: isProcessingPayment,
             error: error,
             paymentResult: paymentResult,
@@ -1262,46 +776,7 @@ class AccountManagementBloc
     );
   }
 
-  void _selectAddon(int index, Emitter<AccountManagementState> emit) {
-    state.maybeWhen(
-      orElse: () {},
-      ready: (
-        subscriptionInfo,
-        planConfigs,
-        addons,
-        selectedPlan,
-        selectedDuration,
-        selectedTab,
-        _,
-        agreedProtocols,
-        isLoadingSubscription,
-        isLoadingPlans,
-        isLoadingAddons,
-        isProcessingPayment,
-        error,
-        paymentResult,
-      ) {
-        emit(
-          AccountManagementState.ready(
-            subscriptionInfo: subscriptionInfo,
-            planConfigs: planConfigs,
-            addons: addons,
-            selectedPlan: selectedPlan,
-            selectedDuration: selectedDuration,
-            selectedTab: selectedTab,
-            selectedAddonIndex: index,
-            agreedProtocols: agreedProtocols,
-            isLoadingSubscription: isLoadingSubscription,
-            isLoadingPlans: isLoadingPlans,
-            isLoadingAddons: isLoadingAddons,
-            isProcessingPayment: isProcessingPayment,
-            error: error,
-            paymentResult: paymentResult,
-          ),
-        );
-      },
-    );
-  }
+
 
   void _setAgreedProtocols(bool agreed, Emitter<AccountManagementState> emit) {
     state.maybeWhen(
@@ -1309,15 +784,12 @@ class AccountManagementBloc
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
         selectedPlan,
         selectedDuration,
         selectedTab,
-        selectedAddonIndex,
-        _,
+        agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,
@@ -1326,15 +798,12 @@ class AccountManagementBloc
           AccountManagementState.ready(
             subscriptionInfo: subscriptionInfo,
             planConfigs: planConfigs,
-            addons: addons,
             selectedPlan: selectedPlan,
             selectedDuration: selectedDuration,
             selectedTab: selectedTab,
-            selectedAddonIndex: selectedAddonIndex,
             agreedProtocols: agreed,
             isLoadingSubscription: isLoadingSubscription,
             isLoadingPlans: isLoadingPlans,
-            isLoadingAddons: isLoadingAddons,
             isProcessingPayment: isProcessingPayment,
             error: error,
             paymentResult: paymentResult,
@@ -1350,15 +819,12 @@ class AccountManagementBloc
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
         selectedPlan,
         selectedDuration,
-        _,
-        selectedAddonIndex,
+        selectedTab,
         agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,
@@ -1366,12 +832,6 @@ class AccountManagementBloc
         // 切换 Tab 时按需刷新对应的数据列表
         if (tab == MembershipTab.upgrade) {
           add(const AccountManagementEvent.loadSubscriptionPlans());
-        } else if (tab == MembershipTab.addon) {
-          // 先确保已经拿到当前会员信息，再拉取空间补充包列表
-          if (subscriptionInfo == null) {
-            add(const AccountManagementEvent.loadSubscriptionInfo());
-          }
-          add(const AccountManagementEvent.loadAddons());
         }
 
         // 切换 Tab 时重置“同意协议”开关和支付状态，避免误操作
@@ -1381,15 +841,12 @@ class AccountManagementBloc
           AccountManagementState.ready(
             subscriptionInfo: subscriptionInfo,
             planConfigs: planConfigs,
-            addons: addons,
             selectedPlan: selectedPlan,
             selectedDuration: selectedDuration,
             selectedTab: tab,
-            selectedAddonIndex: selectedAddonIndex,
             agreedProtocols: resetAgreedProtocols,
             isLoadingSubscription: isLoadingSubscription,
             isLoadingPlans: isLoadingPlans,
-            isLoadingAddons: isLoadingAddons,
             isProcessingPayment: false,
             error: error,
             paymentResult: paymentResult,
@@ -1415,32 +872,26 @@ class AccountManagementBloc
           ready: (
             subscriptionInfo,
             planConfigs,
-            addons,
             selectedPlan,
             selectedDuration,
             selectedTab,
-            selectedAddonIndex,
             agreedProtocols,
             isLoadingSubscription,
             isLoadingPlans,
-            isLoadingAddons,
             isProcessingPayment,
-            _,
+            error,
             paymentResult,
           ) {
             emit(
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: isProcessingPayment,
                 error: '无法创建订阅：服务地址为空',
                 paymentResult: paymentResult,
@@ -1459,32 +910,26 @@ class AccountManagementBloc
           ready: (
             subscriptionInfo,
             planConfigs,
-            addons,
             selectedPlan,
             selectedDuration,
             selectedTab,
-            selectedAddonIndex,
             agreedProtocols,
             isLoadingSubscription,
             isLoadingPlans,
-            isLoadingAddons,
             isProcessingPayment,
-            _,
+            error,
             paymentResult,
           ) {
             emit(
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: isProcessingPayment,
                 error: '无法创建订阅：未登录或 token 失效',
                 paymentResult: paymentResult,
@@ -1518,32 +963,26 @@ class AccountManagementBloc
           ready: (
             subscriptionInfo,
             planConfigs,
-            addons,
             selectedPlan,
             selectedDuration,
             selectedTab,
-            selectedAddonIndex,
             agreedProtocols,
             isLoadingSubscription,
             isLoadingPlans,
-            isLoadingAddons,
             isProcessingPayment,
-            _,
+            error,
             paymentResult,
           ) {
             emit(
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: isProcessingPayment,
                 error: '创建订阅失败：HTTP ${response.statusCode}',
                 paymentResult: paymentResult,
@@ -1563,32 +1002,26 @@ class AccountManagementBloc
           ready: (
             subscriptionInfo,
             planConfigs,
-            addons,
             selectedPlan,
             selectedDuration,
             selectedTab,
-            selectedAddonIndex,
             agreedProtocols,
             isLoadingSubscription,
             isLoadingPlans,
-            isLoadingAddons,
             isProcessingPayment,
-            _,
+            error,
             paymentResult,
           ) {
             emit(
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: isProcessingPayment,
                 error: msg,
                 paymentResult: paymentResult,
@@ -1605,32 +1038,26 @@ class AccountManagementBloc
         ready: (
           subscriptionInfo,
           planConfigs,
-          addons,
           selectedPlan,
           selectedDuration,
           selectedTab,
-          selectedAddonIndex,
           agreedProtocols,
           isLoadingSubscription,
           isLoadingPlans,
-          isLoadingAddons,
           isProcessingPayment,
-          _,
+          error,
           paymentResult,
         ) {
           emit(
             AccountManagementState.ready(
               subscriptionInfo: subscriptionInfo,
               planConfigs: planConfigs,
-              addons: addons,
               selectedPlan: selectedPlan,
               selectedDuration: selectedDuration,
               selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
               agreedProtocols: agreedProtocols,
               isLoadingSubscription: isLoadingSubscription,
               isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
               isProcessingPayment: isProcessingPayment,
               error: null,
               paymentResult: paymentResult,
@@ -1645,32 +1072,26 @@ class AccountManagementBloc
         ready: (
           subscriptionInfo,
           planConfigs,
-          addons,
           selectedPlan,
           selectedDuration,
           selectedTab,
-          selectedAddonIndex,
           agreedProtocols,
           isLoadingSubscription,
           isLoadingPlans,
-          isLoadingAddons,
           isProcessingPayment,
-          _,
+          error,
           paymentResult,
         ) {
           emit(
             AccountManagementState.ready(
               subscriptionInfo: subscriptionInfo,
               planConfigs: planConfigs,
-              addons: addons,
               selectedPlan: selectedPlan,
               selectedDuration: selectedDuration,
               selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
               agreedProtocols: agreedProtocols,
               isLoadingSubscription: isLoadingSubscription,
               isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
               isProcessingPayment: isProcessingPayment,
               error: '创建订阅异常',
               paymentResult: paymentResult,
@@ -1687,15 +1108,12 @@ class AccountManagementBloc
         ready: (
           subscriptionInfo,
           planConfigs,
-          addons,
           selectedPlan,
           selectedDuration,
           selectedTab,
-          selectedAddonIndex,
           agreedProtocols,
           isLoadingSubscription,
           isLoadingPlans,
-          isLoadingAddons,
           isProcessingPayment,
           error,
           paymentResult,
@@ -1709,15 +1127,12 @@ class AccountManagementBloc
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: false,
                 error: '无法获取计划ID，暂无法订阅',
                 paymentResult: paymentResult,
@@ -1742,15 +1157,12 @@ class AccountManagementBloc
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: false,
                 error: '无法获取计划配置',
                 paymentResult: paymentResult,
@@ -1764,15 +1176,12 @@ class AccountManagementBloc
               AccountManagementState.ready(
                 subscriptionInfo: subscriptionInfo,
                 planConfigs: planConfigs,
-                addons: addons,
                 selectedPlan: selectedPlan,
                 selectedDuration: selectedDuration,
                 selectedTab: selectedTab,
-                selectedAddonIndex: selectedAddonIndex,
                 agreedProtocols: agreedProtocols,
                 isLoadingSubscription: isLoadingSubscription,
                 isLoadingPlans: isLoadingPlans,
-                isLoadingAddons: isLoadingAddons,
                 isProcessingPayment: false,
                 error: '无法获取计划ID，暂无法订阅',
                 paymentResult: paymentResult,
@@ -1789,15 +1198,12 @@ class AccountManagementBloc
             AccountManagementState.ready(
               subscriptionInfo: subscriptionInfo,
               planConfigs: planConfigs,
-              addons: addons,
               selectedPlan: selectedPlan,
               selectedDuration: selectedDuration,
               selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
               agreedProtocols: agreedProtocols,
               isLoadingSubscription: isLoadingSubscription,
               isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
               isProcessingPayment: true,
               error: null,
               paymentResult: paymentResult,
@@ -1812,18 +1218,15 @@ class AccountManagementBloc
           final checkError = checkState.maybeWhen(
             orElse: () => '状态错误',
             ready: (
-              _,
-              __,
-              ___,
-              ____,
-              _____,
-              ______,
-              _______,
-              ________,
-              _________,
-              __________,
-              ___________,
-              ____________,
+              subscriptionInfo,
+              planConfigs,
+              selectedPlan,
+              selectedDuration,
+              selectedTab,
+              agreedProtocols,
+              isLoadingSubscription,
+              isLoadingPlans,
+              isProcessingPayment,
               error,
               paymentResult,
             ) =>
@@ -1836,15 +1239,12 @@ class AccountManagementBloc
               ready: (
                 subscriptionInfo,
                 planConfigs,
-                addons,
                 selectedPlan,
                 selectedDuration,
                 selectedTab,
-                selectedAddonIndex,
                 agreedProtocols,
                 isLoadingSubscription,
                 isLoadingPlans,
-                isLoadingAddons,
                 isProcessingPayment,
                 error,
                 paymentResult,
@@ -1853,15 +1253,12 @@ class AccountManagementBloc
                   AccountManagementState.ready(
                     subscriptionInfo: subscriptionInfo,
                     planConfigs: planConfigs,
-                    addons: addons,
                     selectedPlan: selectedPlan,
                     selectedDuration: selectedDuration,
                     selectedTab: selectedTab,
-                    selectedAddonIndex: selectedAddonIndex,
                     agreedProtocols: agreedProtocols,
                     isLoadingSubscription: isLoadingSubscription,
                     isLoadingPlans: isLoadingPlans,
-                    isLoadingAddons: isLoadingAddons,
                     isProcessingPayment: false,
                     error: checkError,
                     paymentResult: paymentResult,
@@ -1888,15 +1285,12 @@ class AccountManagementBloc
               ready: (
                 subscriptionInfo,
                 planConfigs,
-                addons,
                 selectedPlan,
                 selectedDuration,
                 selectedTab,
-                selectedAddonIndex,
                 agreedProtocols,
                 isLoadingSubscription,
                 isLoadingPlans,
-                isLoadingAddons,
                 isProcessingPayment,
                 error,
                 paymentResult,
@@ -1905,15 +1299,12 @@ class AccountManagementBloc
                   AccountManagementState.ready(
                     subscriptionInfo: subscriptionInfo,
                     planConfigs: planConfigs,
-                    addons: addons,
                     selectedPlan: selectedPlan,
                     selectedDuration: selectedDuration,
                     selectedTab: selectedTab,
-                    selectedAddonIndex: selectedAddonIndex,
                     agreedProtocols: agreedProtocols,
                     isLoadingSubscription: isLoadingSubscription,
                     isLoadingPlans: isLoadingPlans,
-                    isLoadingAddons: isLoadingAddons,
                     isProcessingPayment: false,
                     error: '当前平台暂不支持支付功能',
                     paymentResult: paymentResult,
@@ -1941,31 +1332,8 @@ class AccountManagementBloc
           //   'email': userProfile.email,
           // });
 
-          // 根据选中的标签页设置参数
-          // 如果是会员升级（upgrade），设置 planId，addonId 为 null
-          // 如果是空间补充包（addon），设置 addonId，planId 为 null
-          String? planIdValue;
-          String? addonIdValue;
-
-          if (selectedTab == MembershipTab.upgrade) {
-            // 会员升级：设置 planId（planId 在前面已经检查过不为 null）
-            planIdValue = '$planId';
-            addonIdValue = null;
-          } else if (selectedTab == MembershipTab.addon) {
-            // 空间补充包：设置 addonId
-            planIdValue = null;
-            if (selectedAddonIndex >= 0 &&
-                selectedAddonIndex < addons.length &&
-                addons[selectedAddonIndex].id != null) {
-              addonIdValue = '${addons[selectedAddonIndex].id}';
-            } else {
-              addonIdValue = null;
-            }
-          } else {
-            // 默认情况：会员升级
-            planIdValue = '$planId';
-            addonIdValue = null;
-          }
+          // 设置会员升级参数
+          String? planIdValue = '$planId';
 
           if(!PaymentDevConfig.enableTestMode) {
             // 1. 获取当前云端配置（拿到 serverUrl）
@@ -1986,15 +1354,12 @@ class AccountManagementBloc
               ready: (
                   subscriptionInfo,
                   planConfigs,
-                  addons,
                   selectedPlan,
                   selectedDuration,
                   selectedTab,
-                  selectedAddonIndex,
                   agreedProtocols,
                   isLoadingSubscription,
                   isLoadingPlans,
-                  isLoadingAddons,
                   isProcessingPayment,
                   error,
                   paymentResult,
@@ -2003,15 +1368,12 @@ class AccountManagementBloc
                   AccountManagementState.ready(
                     subscriptionInfo: subscriptionInfo,
                     planConfigs: planConfigs,
-                    addons: addons,
                     selectedPlan: selectedPlan,
                     selectedDuration: selectedDuration,
                     selectedTab: selectedTab,
-                    selectedAddonIndex: selectedAddonIndex,
                     agreedProtocols: agreedProtocols,
                     isLoadingSubscription: isLoadingSubscription,
                     isLoadingPlans: isLoadingPlans,
-                    isLoadingAddons: isLoadingAddons,
                     isProcessingPayment: false,
                     error: null,
                     paymentResult: 'PAYMENT_INITIATED', // 标记支付已初始化
@@ -2027,19 +1389,15 @@ class AccountManagementBloc
               paymentType: paymentType,
               workspaceId: workspaceId,
               planIdValue: planIdValue,
-              addonIdValue: addonIdValue,
               billingType: billingType,
               subscriptionInfo: subscriptionInfo,
               planConfigs: planConfigs,
-              addons: addons,
               selectedPlan: selectedPlan,
               selectedDuration: selectedDuration,
               selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
               agreedProtocols: agreedProtocols,
               isLoadingSubscription: isLoadingSubscription,
               isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
               isProcessingPayment: isProcessingPayment,
               error: error,
               paymentResult: paymentResult,
@@ -2054,19 +1412,15 @@ class AccountManagementBloc
       required String paymentType,
       String? workspaceId,
       String? planIdValue,
-      String? addonIdValue,
       int? billingType,
       WorkspaceSubscriptionInfoPB? subscriptionInfo,
         required Map<WorkspacePlanPB, RemotePlan> planConfigs,
-        required List<AddonPlan> addons,
         WorkspacePlanPB? selectedPlan,
         required PurchaseDurationOption selectedDuration,
         required MembershipTab selectedTab,
-        required int selectedAddonIndex,
         required bool agreedProtocols,
         required bool isLoadingSubscription,
         required bool isLoadingPlans,
-        required bool isLoadingAddons,
         required bool isProcessingPayment,
       String? error,
       String? paymentResult}) async {
@@ -2087,8 +1441,6 @@ class AccountManagementBloc
         // 可选：微信支付场景必传
         planId: planIdValue,
         // 会员升级时设置
-        addonId: addonIdValue,
-        // 空间补充包时设置
         billingType: billingType == 0 ? 'monthly' : 'yearly' );
 
     final orderResult = await PaymentApi.createPaymentOrder(createRequest);
@@ -2108,15 +1460,12 @@ class AccountManagementBloc
         AccountManagementState.ready(
           subscriptionInfo: subscriptionInfo,
           planConfigs: planConfigs,
-          addons: addons,
           selectedPlan: selectedPlan,
           selectedDuration: selectedDuration,
           selectedTab: selectedTab,
-          selectedAddonIndex: selectedAddonIndex,
           agreedProtocols: agreedProtocols,
           isLoadingSubscription: isLoadingSubscription,
           isLoadingPlans: isLoadingPlans,
-          isLoadingAddons: isLoadingAddons,
           isProcessingPayment: false,
           error: errorMessage,
           paymentResult: paymentResult,
@@ -2134,15 +1483,12 @@ class AccountManagementBloc
         AccountManagementState.ready(
           subscriptionInfo: subscriptionInfo,
           planConfigs: planConfigs,
-          addons: addons,
           selectedPlan: selectedPlan,
           selectedDuration: selectedDuration,
           selectedTab: selectedTab,
-          selectedAddonIndex: selectedAddonIndex,
           agreedProtocols: agreedProtocols,
           isLoadingSubscription: isLoadingSubscription,
           isLoadingPlans: isLoadingPlans,
-          isLoadingAddons: isLoadingAddons,
           isProcessingPayment: false,
           error: '创建支付订单失败',
           paymentResult: paymentResult,
@@ -2171,15 +1517,12 @@ class AccountManagementBloc
       AccountManagementState.ready(
         subscriptionInfo: subscriptionInfo,
         planConfigs: planConfigs,
-        addons: addons,
         selectedPlan: selectedPlan,
         selectedDuration: selectedDuration,
         selectedTab: selectedTab,
-        selectedAddonIndex: selectedAddonIndex,
         agreedProtocols: agreedProtocols,
         isLoadingSubscription: isLoadingSubscription,
         isLoadingPlans: isLoadingPlans,
-        isLoadingAddons: isLoadingAddons,
         isProcessingPayment: false,
         error: null,
         paymentResult: paymentResultMessage,
@@ -2192,112 +1535,7 @@ class AccountManagementBloc
     }
   }
 
-  Future<void> _handleAddonPay(Emitter<AccountManagementState> emit) async {
-    await state.maybeWhen(
-      orElse: () async {},
-      ready: (
-        subscriptionInfo,
-        planConfigs,
-        addons,
-        selectedPlan,
-        selectedDuration,
-        selectedTab,
-        selectedAddonIndex,
-        agreedProtocols,
-        isLoadingSubscription,
-        isLoadingPlans,
-        isLoadingAddons,
-        isProcessingPayment,
-        error,
-        paymentResult,
-      ) async {
-        if (addons.isEmpty ||
-            selectedAddonIndex < 0 ||
-            selectedAddonIndex >= addons.length) {
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: '无法获取补充包信息',
-              paymentResult: paymentResult,
-            ),
-          );
-          return;
-        }
 
-        final selectedAddon = addons[selectedAddonIndex];
-        final addonId = selectedAddon.id;
-        if (addonId == null) {
-          emit(
-            AccountManagementState.ready(
-              subscriptionInfo: subscriptionInfo,
-              planConfigs: planConfigs,
-              addons: addons,
-              selectedPlan: selectedPlan,
-              selectedDuration: selectedDuration,
-              selectedTab: selectedTab,
-              selectedAddonIndex: selectedAddonIndex,
-              agreedProtocols: agreedProtocols,
-              isLoadingSubscription: isLoadingSubscription,
-              isLoadingPlans: isLoadingPlans,
-              isLoadingAddons: isLoadingAddons,
-              isProcessingPayment: false,
-              error: '无法获取补充包信息',
-              paymentResult: paymentResult,
-            ),
-          );
-          return;
-        }
-
-        // 空间补充包也走 H5 支付（跳转浏览器），不走接口直购逻辑
-        final billingType =
-            selectedDuration == PurchaseDurationOption.monthly ? 0 : 1;
-
-        // 1. 获取当前云端配置（拿到 serverUrl）
-        final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-        final baseUrl = cloudEnv.appflowyCloudConfig.base_web_domain;
-        // final baseUrl = "https://www.xiaomabiji.com";
-
-        final payUrl =
-            "$baseUrl/price?planId=&billingType=$billingType";
-
-        await PaymentUtil.webPay(payUrl);
-
-        // 触发前端弹框提示（不启动轮询）
-        final promptToken =
-            'BROWSER_OPENED|ts=${DateTime.now().millisecondsSinceEpoch}';
-        emit(
-          AccountManagementState.ready(
-            subscriptionInfo: subscriptionInfo,
-            planConfigs: planConfigs,
-            addons: addons,
-            selectedPlan: selectedPlan,
-            selectedDuration: selectedDuration,
-            selectedTab: selectedTab,
-            selectedAddonIndex: selectedAddonIndex,
-            agreedProtocols: agreedProtocols,
-            isLoadingSubscription: isLoadingSubscription,
-            isLoadingPlans: isLoadingPlans,
-            isLoadingAddons: isLoadingAddons,
-            isProcessingPayment: false,
-            error: null,
-            paymentResult: promptToken,
-          ),
-        );
-        return;
-      },
-    );
-  }
 
   /// 启动支付结果轮询
   ///
@@ -2360,15 +1598,12 @@ class AccountManagementBloc
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
         selectedPlan,
         selectedDuration,
         selectedTab,
-        selectedAddonIndex,
         agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,
@@ -2400,15 +1635,12 @@ class AccountManagementBloc
                   AccountManagementState.ready(
                     subscriptionInfo: subscriptionInfo,
                     planConfigs: planConfigs,
-                    addons: addons,
                     selectedPlan: selectedPlan,
                     selectedDuration: selectedDuration,
                     selectedTab: selectedTab,
-                    selectedAddonIndex: selectedAddonIndex,
                     agreedProtocols: agreedProtocols,
                     isLoadingSubscription: isLoadingSubscription,
                     isLoadingPlans: isLoadingPlans,
-                    isLoadingAddons: isLoadingAddons,
                     isProcessingPayment: false,
                     error: null,
                     paymentResult: '支付成功',
@@ -2425,15 +1657,12 @@ class AccountManagementBloc
                   AccountManagementState.ready(
                     subscriptionInfo: subscriptionInfo,
                     planConfigs: planConfigs,
-                    addons: addons,
                     selectedPlan: selectedPlan,
                     selectedDuration: selectedDuration,
                     selectedTab: selectedTab,
-                    selectedAddonIndex: selectedAddonIndex,
                     agreedProtocols: agreedProtocols,
                     isLoadingSubscription: isLoadingSubscription,
                     isLoadingPlans: isLoadingPlans,
-                    isLoadingAddons: isLoadingAddons,
                     isProcessingPayment: false,
                     error: status == 'expired' ? '订单已过期' : '支付失败',
                     paymentResult: paymentResult,
@@ -2475,21 +1704,14 @@ class AccountManagementEvent with _$AccountManagementEvent {
   const factory AccountManagementEvent.loadSubscriptionPlans() =
       _LoadSubscriptionPlans;
 
-  const factory AccountManagementEvent.loadAddons() = _LoadAddons;
-
-  const factory AccountManagementEvent.selectPlan(WorkspacePlanPB plan) =
-      _SelectPlan;
+  const factory AccountManagementEvent.selectPlan(WorkspacePlanPB plan) = _SelectPlan;
 
   const factory AccountManagementEvent.selectDuration(
       PurchaseDurationOption duration) = _SelectDuration;
 
-  const factory AccountManagementEvent.selectAddon(int index) = _SelectAddon;
+  const factory AccountManagementEvent.setAgreedProtocols(bool agreed) = _SetAgreedProtocols;
 
-  const factory AccountManagementEvent.setAgreedProtocols(bool agreed) =
-      _SetAgreedProtocols;
-
-  const factory AccountManagementEvent.switchTab(MembershipTab tab) =
-      _SwitchTab;
+  const factory AccountManagementEvent.switchTab(MembershipTab tab) = _SwitchTab;
 
   const factory AccountManagementEvent.createOrUpdateSubscription(
     int planId,
@@ -2497,8 +1719,6 @@ class AccountManagementEvent with _$AccountManagementEvent {
   ) = _CreateOrUpdateSubscription;
 
   const factory AccountManagementEvent.handleUpgradePay() = _HandleUpgradePay;
-
-  const factory AccountManagementEvent.handleAddonPay() = _HandleAddonPay;
 
   // 临时注释：等待 freezed 重新生成后取消注释
   const factory AccountManagementEvent.startPaymentPolling(String orderNo) =
@@ -2526,16 +1746,13 @@ class AccountManagementState extends Equatable with _$AccountManagementState {
   const factory AccountManagementState.ready({
     required WorkspaceSubscriptionInfoPB? subscriptionInfo,
     required Map<WorkspacePlanPB, RemotePlan> planConfigs,
-    required List<AddonPlan> addons,
     @Default(null) WorkspacePlanPB? selectedPlan,
     @Default(PurchaseDurationOption.monthly)
     PurchaseDurationOption selectedDuration,
     @Default(MembershipTab.upgrade) MembershipTab selectedTab,
-    @Default(0) int selectedAddonIndex,
     @Default(false) bool agreedProtocols,
     @Default(true) bool isLoadingSubscription,
     @Default(true) bool isLoadingPlans,
-    @Default(true) bool isLoadingAddons,
     @Default(false) bool isProcessingPayment,
     @Default(null) String? error,
     @Default(null) String? paymentResult,
@@ -2548,15 +1765,12 @@ class AccountManagementState extends Equatable with _$AccountManagementState {
         ready: (
           subscriptionInfo,
           planConfigs,
-          addons,
           selectedPlan,
           selectedDuration,
           selectedTab,
-          selectedAddonIndex,
           agreedProtocols,
           isLoadingSubscription,
           isLoadingPlans,
-          isLoadingAddons,
           isProcessingPayment,
           error,
           paymentResult,
@@ -2564,15 +1778,12 @@ class AccountManagementState extends Equatable with _$AccountManagementState {
             [
           subscriptionInfo,
           planConfigs,
-          addons,
           selectedPlan,
           selectedDuration,
           selectedTab,
-          selectedAddonIndex,
           agreedProtocols,
           isLoadingSubscription,
           isLoadingPlans,
-          isLoadingAddons,
           isProcessingPayment,
           error,
           paymentResult,
@@ -2587,20 +1798,17 @@ extension AccountManagementStateExtension on AccountManagementState {
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
         selectedPlan,
         selectedDuration,
         selectedTab,
-        selectedAddonIndex,
         agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,
       ) =>
-          isLoadingSubscription || isLoadingPlans || isLoadingAddons,
+          isLoadingSubscription || isLoadingPlans,
     );
   }
 
@@ -2610,15 +1818,12 @@ extension AccountManagementStateExtension on AccountManagementState {
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
         selectedPlan,
         selectedDuration,
         selectedTab,
-        selectedAddonIndex,
         agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,
@@ -2649,15 +1854,12 @@ extension AccountManagementStateExtension on AccountManagementState {
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
         selectedPlan,
         selectedDuration,
         selectedTab,
-        selectedAddonIndex,
         agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,
@@ -2665,29 +1867,7 @@ extension AccountManagementStateExtension on AccountManagementState {
         if (plan == null) return null;
         final remote = planConfigs[plan];
         if (remote != null) {
-          // final monthly = remote.monthlyPriceYuan ?? 0.0;
-          // final yearly = remote.yearlyPriceYuan ?? monthly * 12;
-          // String formatCurrency(double value) {
-          //   if (value == value.truncateToDouble()) {
-          //     return value.toInt().toString();
-          //   }
-          //   return value.toStringAsFixed(2);
-          // }
-          //
-          // final price =
-          //     selectedDuration == PurchaseDurationOption.monthly ? monthly : yearly;
           return remote;
-          // return {
-          //   'title': remote.planNameCn.isNotEmpty
-          //       ? remote.planNameCn
-          //       : remote.planName,
-          //   // 改版：根据顶部月付/年付切换，动态展示价格
-          //   'price': '¥${formatCurrency(price)}',
-          //   'tag':
-          //       "每月${remote.cloudStorageGb}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}",
-          //   'monthlyPrice': monthly,
-          //   'yearlyPrice': yearly,
-          // };
         }
         return null;
       },
@@ -2700,15 +1880,12 @@ extension AccountManagementStateExtension on AccountManagementState {
       ready: (
         subscriptionInfo,
         planConfigs,
-        addons,
         selectedPlan,
         selectedDuration,
         selectedTab,
-        selectedAddonIndex,
         agreedProtocols,
         isLoadingSubscription,
         isLoadingPlans,
-        isLoadingAddons,
         isProcessingPayment,
         error,
         paymentResult,

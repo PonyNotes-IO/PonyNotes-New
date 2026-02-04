@@ -55,19 +55,11 @@ class SubscriptionService {
     
     // 尝试获取订阅信息，带重试机制
     CurrentSubscription? subscription;
-    for (int attempt = 1; attempt <= _maxRetries; attempt++) {
-      try {
-        subscription = await _fetchCurrentSubscriptionData(userProfile);
-        if (subscription != null) {
-          break;
-        }
-      } catch (e) {
-        Log.error('Attempt $attempt failed to fetch subscription info: $e');
-        if (attempt < _maxRetries) {
-          Log.info('Retrying in $_retryDelay...');
-          await Future.delayed(_retryDelay);
-        }
-      }
+    try {
+      subscription = await _fetchCurrentSubscriptionData(userProfile);
+    } catch (e) {
+        Log.info('Retrying in $_retryDelay...');
+        await Future.delayed(_retryDelay);
     }
 
     // 更新缓存，即使获取失败也更新缓存时间，避免频繁重试
