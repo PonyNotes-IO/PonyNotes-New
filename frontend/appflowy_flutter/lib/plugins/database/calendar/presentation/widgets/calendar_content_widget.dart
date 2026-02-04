@@ -3,12 +3,15 @@
 import 'package:appflowy/plugins/database/calendar/presentation/widgets/schedule_sidebar_content.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
+import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../../workspace/application/sidebar/folder/folder_bloc.dart';
 import '../../../../../workspace/application/view/view_listener.dart';
 import '../../../../../workspace/application/view/view_service.dart';
 import '../../../../../workspace/application/view/view_ext.dart';
+import '../../../../../workspace/presentation/home/menu/view/view_item.dart';
 import '../../application/calendar_content_cubit.dart';
 import '../../models/schedule_model.dart';
 
@@ -18,6 +21,7 @@ class CalendarContent extends StatefulWidget {
   final Function(ScheduleItem)? onScheduleTap; // 点击日程的回调
   final Function(ViewPB)? onNoteTap; // 点击笔记的回调
   final String? selectedNoteId; // 当前选中的笔记ID
+  final FolderSpaceType spaceType; // 空间类型
   // 使用Bloc触发刷新，移除refreshTick
 
   const CalendarContent({
@@ -27,6 +31,7 @@ class CalendarContent extends StatefulWidget {
     this.onScheduleTap,
     this.onNoteTap,
     this.selectedNoteId,
+    required this.spaceType,
   }) : super(key: key);
 
   @override
@@ -253,7 +258,7 @@ class _CalendarContentState extends State<CalendarContent> {
           // 显示所有Document类型的视图，包括孤儿视图和我的空间中的文档
           final documentViews = allViews.items
               .where((view) =>
-          view.layout == ViewLayoutPB.Document &&
+              !view.isSpace &&
               // 显示所有文档，包括有父视图的（我的空间）和孤儿视图（日历创建）
               view.name.isNotEmpty && // 只过滤掉名称为空的文档
               // 排除系统视图，如"Workspace"等
@@ -312,74 +317,41 @@ class _CalendarContentState extends State<CalendarContent> {
   Widget _buildNoteItem(ViewPB note) {
     final isSelected = widget.selectedNoteId == note.id;
 
-    return FlowyHover(
-      style: HoverStyle(hoverColor: Theme.of(context).colorScheme.secondary),
-      builder: (_, onHover) => GestureDetector(
-        onTap: () {
-          // 点击笔记时调用回调函数
-          if (widget.onNoteTap != null) {
-            widget.onNoteTap!(note);
-          }
-        },
-        child: Container(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primary.withOpacity(0.1)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(4),
-            border: isSelected
-                ? Border.all(
-              color:
-              Theme.of(context).colorScheme.primary.withOpacity(0.3),
-              width: 1,
-            )
-                : null,
+    return ViewItem(
+      key: ValueKey(note.id),
+      view: note,
+      spaceType: widget.spaceType,
+      level: 0,
+      leftPadding: 0,
+      onSelected: (context, view) {
+        // 点击笔记时调用回调函数
+        if (widget.onNoteTap != null) {
+          widget.onNoteTap!(view);
+        }
+      },
+      isFeedback: false,
+      height: 32,
+      isDraggable: false,
+      isHoverEnabled: true,
+      shouldRenderChildren: false,
+      disableSelectedStatus: false,
+      leftIconBuilder: (context, view) {
+        return const SizedBox(width: 16);
+      },
+      rightIconsBuilder: (context, view) {
+        return [
+          Text(
+            _formatCreateTime(view.createTime.toInt()),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary.withOpacity(0.7)
+                  : Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+              fontSize: 11,
+            ),
           ),
-          child: Row(
-            children: [
-              Icon(
-                isSelected ? Icons.description : Icons.description_outlined,
-                size: 16,
-                color: isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  note.name,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight:
-                    isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              Text(
-                _formatCreateTime(note.createTime.toInt()),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: isSelected
-                      ? Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withOpacity(0.7)
-                      : Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withOpacity(0.5),
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+          const HSpace(8),
+        ];
+      },
     );
   }
 

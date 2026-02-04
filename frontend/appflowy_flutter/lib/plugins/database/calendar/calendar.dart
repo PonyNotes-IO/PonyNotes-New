@@ -5,34 +5,35 @@ import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 // removed unused: easy_localization
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/date_picker.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy_popover/appflowy_popover.dart';
-// removed unused: flowy_infra_ui, hover
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
-// removed unused: view_listener
 import 'package:appflowy/plugins/document/document_page.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy_backend/log.dart';
-// removed unused: toggle, schedule_sidebar_content
 import 'package:flowy_infra/uuid.dart';
 import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
+import '../../../features/workspace/logic/workspace_bloc.dart';
 import '../../../generated/locale_keys.g.dart';
+import '../../../workspace/application/sidebar/folder/folder_bloc.dart';
 import '../../../workspace/application/sidebar/space/space_bloc.dart';
 import '../../../workspace/application/view/view_ext.dart';
+import '../../../workspace/presentation/home/home_sizes.dart';
 import 'presentation/new_event_page.dart';
 import 'presentation/edit_event_page.dart';
 import 'models/schedule_model.dart';
-// removed unused document/editor related imports
 import 'application/calendar_content_cubit.dart';
 
 // 添加日历事件类
@@ -156,6 +157,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   // 通过Bloc触发子组件刷新
   bool _isSubscribeSystemCalendar = false;
   late CalendarContentCubit _calendarContentCubit; // 保存CalendarContentCubit实例的引用
+  
+  // 笔记页面缓存，避免重复创建DocumentPage实例
+  Map<String, Widget> _notePageCache = {};
+  // 加载状态
+  bool _isLoadingNote = false;
 
   // 添加状态管理变量
   late bool _isLoadingContent;
@@ -599,6 +605,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       } else {
         // 否则选中新笔记
         _selectedNote = note;
+        // 显示加载状态
+        _isLoadingNote = true;
       }
       _showNewEventPage = false;
       _showEditEventPage = false;
@@ -836,54 +844,64 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // 左侧日历导航区
-        AnimatedContainer(
-          duration: Duration(milliseconds: 300),
-          width: _isSidebarExpanded ? 300 : 60,
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          clipBehavior: Clip.hardEdge,
-          child: OverflowBox(
-            alignment: Alignment.topLeft,
-            minWidth: 0,
-            maxWidth: _isSidebarExpanded ? 300 : 60,
-            child: Column(
-              children: [
-                // 顶部工具栏，包含收起/展开按钮和其他操作按钮
-                _buildTopWidget(),
-                // 右侧工具栏 - 已移除三个按钮
-                // 侧边栏内容
-                Expanded(
-                  child: _isSidebarExpanded
-                      ? _buildExpandedSidebar()
-                      : _buildCollapsedSidebar(),
+    // 全窗口模式：隐藏左侧日历导航区
+    return ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 左侧日历导航区
+            Visibility(
+              visible: !isFullWindow,
+              child: AnimatedContainer(
+                duration: Duration(milliseconds: 300),
+                width: _isSidebarExpanded ? 300 : 60,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                clipBehavior: Clip.hardEdge,
+                child: OverflowBox(
+                  alignment: Alignment.topLeft,
+                  minWidth: 0,
+                  maxWidth: _isSidebarExpanded ? 300 : 60,
+                  child: Column(
+                    children: [
+                      // 顶部工具栏，包含收起/展开按钮和其他操作按钮
+                      _buildTopWidget(),
+                      // 右侧工具栏 - 已移除三个按钮
+                      // 侧边栏内容
+                      Expanded(
+                        child: _isSidebarExpanded
+                            ? _buildExpandedSidebar()
+                            : _buildCollapsedSidebar(),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-        // 右侧详情区 - 分为日历视图和编辑区域
-        Expanded(
-          child: _selectedNote != null ||
-                  _showNewEventPage ||
-                  _showEditEventPage
-              ? Container(
-                  width: double.infinity,
-                  height: double.infinity,
-                  margin: EdgeInsets.only(left: 1, right: 1, bottom: 1),
-                  color: Theme.of(context).colorScheme.surface, // 添加背景色设置
-                  child: _showNewEventPage
-                      ? _buildNewEventView()
-                      : _showEditEventPage && _editingSchedule != null
-                          ? _buildEditEventView()
-                          : _selectedNote != null
-                              ? _buildNoteEditArea()
-                              : Container(),
-                )
-              : _buildDefaultView(),
-        ),
-      ],
+            // 右侧详情区 - 分为日历视图和编辑区域
+            Expanded(
+              child: _selectedNote != null ||
+                      _showNewEventPage ||
+                      _showEditEventPage
+                  ? Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      margin: EdgeInsets.only(left: 1, right: 1, bottom: 1),
+                      color: Theme.of(context).colorScheme.surface, // 添加背景色设置
+                      child: _showNewEventPage
+                          ? _buildNewEventView()
+                          : _showEditEventPage && _editingSchedule != null
+                              ? _buildEditEventView()
+                              : _selectedNote != null
+                                  ? _buildNoteEditArea()
+                                  : Container(),
+                    )
+                  : _buildDefaultView(),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -982,6 +1000,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 onScheduleTap: _onScheduleTap,
                 onNoteTap: _onNoteTap,
                 selectedNoteId: _selectedNote?.id,
+                spaceType: FolderSpaceType.private,
             ),
           ),
         ),
@@ -1355,8 +1374,74 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Widget _buildNoteEditAreaForNote(ViewPB note) {
+    final noteId = note.id;
+    
+    // 检查缓存中是否已有该笔记的页面
+    if (!_notePageCache.containsKey(noteId)) {
+      // 使用插件系统创建对应文件类型的页面
+      try {
+        final plugin = note.plugin();
+        plugin.init();
+        
+        // 获取 userProfile - 某些插件可能需要用户信息
+        UserProfilePB? userProfile;
+        try {
+          final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+          userProfile = userWorkspaceBloc.state.userProfile;
+        } catch (e) {
+          debugPrint('[Calendar] Failed to get userProfile: $e');
+        }
+        
+        final pageWidget = plugin.widgetBuilder.buildWidget(
+          context: PluginContext(
+            onDeleted: (view, index) {
+              // 当文档被删除时，刷新默认视图并从缓存中移除
+              setState(() {
+                _notePageCache.remove(noteId);
+              });
+            },
+            userProfile: userProfile,
+          ),
+          shrinkWrap: false,
+        );
+        
+        // 将新创建的页面添加到缓存
+        _notePageCache[noteId] = pageWidget;
+      } catch (e, stackTrace) {
+        debugPrint('[Calendar] Error loading view ${note.name} (${note.id}): $e');
+        debugPrint('[Calendar] Stack trace: $stackTrace');
+        
+        // 创建错误提示页面
+        final errorWidget = Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '无法加载视图: ${note.name}',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 14,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '错误: ${e.toString()}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).hintColor,
+                ),
+              ),
+            ],
+          ),
+        );
+        
+        _notePageCache[noteId] = errorWidget;
+      }
+    }
+
+    // 返回缓存中的页面
     return MultiBlocProvider(
-      key: ValueKey('bloc_provider_${note.id}'),
+      key: ValueKey('bloc_provider_${noteId}'),
       providers: [
         BlocProvider<PageAccessLevelBloc>(
           create: (context) => PageAccessLevelBloc(view: note)
@@ -1367,16 +1452,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             ..add(const ViewInfoEvent.started()),
         ),
       ],
-      child: DocumentPage(
-        key: ValueKey(note.id),
-        view: note,
-        onDeleted: () {
-          // 当文档被删除时，刷新默认视图
-          setState(() {});
-        },
-        tabs: [],
-        showShareAndFavorite: true, // 从日历笔记列表打开，显示分享和收藏工具栏
-      ),
+      child: _notePageCache[noteId]!,
     );
   }
 
@@ -1609,30 +1685,100 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       return Container();
     }
 
-    return MultiBlocProvider(
-            key: ValueKey('bloc_provider_${_selectedNote!.id}'), // 添加key强制重建
-            providers: [
-              BlocProvider<PageAccessLevelBloc>(
-                create: (context) => PageAccessLevelBloc(view: _selectedNote!)
-                  ..add(const PageAccessLevelEvent.initial()),
+    // 显示加载状态
+    if (_isLoadingNote) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('加载笔记中...'),
+          ],
+        ),
+      );
+    }
+
+    final noteId = _selectedNote!.id;
+    
+    // 检查缓存中是否已有该笔记的页面
+    if (!_notePageCache.containsKey(noteId)) {
+      // 使用插件系统创建对应文件类型的页面
+      try {
+        final plugin = _selectedNote!.plugin();
+        plugin.init();
+        
+        // 获取 userProfile - 某些插件可能需要用户信息
+        UserProfilePB? userProfile;
+        try {
+          final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+          userProfile = userWorkspaceBloc.state.userProfile;
+        } catch (e) {
+          debugPrint('[Calendar] Failed to get userProfile: $e');
+        }
+        
+        final pageWidget = plugin.widgetBuilder.buildWidget(
+          context: PluginContext(
+            onDeleted: (view, index) {
+              // 当文档被删除时，关闭编辑区域并从缓存中移除
+              setState(() {
+                _selectedNote = null;
+                _notePageCache.remove(noteId);
+              });
+            },
+            userProfile: userProfile,
+          ),
+          shrinkWrap: false,
+        );
+        
+        // 将新创建的页面添加到缓存
+        _notePageCache[noteId] = pageWidget;
+      } catch (e, stackTrace) {
+        debugPrint('[Calendar] Error loading view ${_selectedNote!.name} (${_selectedNote!.id}): $e');
+        debugPrint('[Calendar] Stack trace: $stackTrace');
+        
+        // 创建错误提示页面
+        final errorWidget = Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '无法加载视图: ${_selectedNote!.name}',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 14,
+                ),
               ),
-              BlocProvider<ViewInfoBloc>(
-                create: (context) => ViewInfoBloc(view: _selectedNote!)
-                  ..add(const ViewInfoEvent.started()),
+              SizedBox(height: 8),
+              Text(
+                '错误: ${e.toString()}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).hintColor,
+                ),
               ),
             ],
-            child: DocumentPage(
-              key: ValueKey(_selectedNote!.id), // 添加key强制重建
-              view: _selectedNote!,
-              onDeleted: () {
-                // 当文档被删除时，关闭编辑区域
-                setState(() {
-                  _selectedNote = null;
-                });
-              },
-              tabs: [], // 空的tabs列表
-              showShareAndFavorite: true, // 从日历笔记列表打开，显示分享和收藏工具栏
-            ),
+          ),
+        );
+        
+        _notePageCache[noteId] = errorWidget;
+      }
+    }
+
+    // 返回缓存中的页面
+    return MultiBlocProvider(
+      key: ValueKey('bloc_provider_${noteId}'), // 添加key强制重建
+      providers: [
+        BlocProvider<PageAccessLevelBloc>(
+          create: (context) => PageAccessLevelBloc(view: _selectedNote!)
+            ..add(const PageAccessLevelEvent.initial()),
+        ),
+        BlocProvider<ViewInfoBloc>(
+          create: (context) => ViewInfoBloc(view: _selectedNote!)
+            ..add(const ViewInfoEvent.started()),
+        ),
+      ],
+      child: _notePageCache[noteId]!,
     );
   }
 
