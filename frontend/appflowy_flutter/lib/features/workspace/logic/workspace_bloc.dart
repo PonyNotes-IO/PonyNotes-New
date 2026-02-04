@@ -12,6 +12,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/user/application/user_listener.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -761,7 +762,10 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventFetchCurrentSubscription event,
     Emitter<UserWorkspaceState> emit,
   ) async {
-    final currentSubscription = await _fetchCurrentSubscriptionData(state.userProfile);
+    final currentSubscription = await SubscriptionService().getCurrentSubscription(
+      userProfile: state.userProfile,
+      forceRefresh: true,
+    );
     if (!isClosed) {
       add(
         UserWorkspaceEvent.updateCurrentSubscription(
@@ -781,68 +785,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     );
   }
 
-  /// 获取当前订阅信息（包含使用量）
-  Future<CurrentSubscription?> _fetchCurrentSubscriptionData(
-    UserProfilePB userProfile,
-  ) async {
-    try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-      if (baseUrl.isEmpty) {
-        return null;
-      }
 
-      final accessToken = _extractAccessToken(userProfile.token);
-      if (accessToken == null || accessToken.isEmpty) {
-        return null;
-      }
-
-      final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/current');
-      final response = await http.get(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
-      ).timeout(
-        const Duration(seconds: 30), // 增加超时时间到 30 秒，避免页面启动时网络未准备好导致超时
-        onTimeout: () {
-          // 不抛出异常，而是返回 null，避免影响应用启动流程
-          // 后续可以通过手动刷新或延迟重试来获取订阅信息
-          return http.Response('', 408); // 返回 408 Request Timeout 状态码
-        },
-      );
-
-      // 处理超时情况（408 Request Timeout）
-      if (response.statusCode == 408) {
-        return null;
-      }
-
-      if (response.statusCode == 404) {
-        return null;
-      }
-
-      if (response.statusCode != 200) {
-        return null;
-      }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final code = decoded['code'] as int? ?? -1;
-      if (code != 0) {
-        return null;
-      }
-
-      final data = decoded['data'];
-      if (data == null || data is! Map<String, dynamic>) {
-        return null;
-      }
-
-      final subscription = CurrentSubscription.fromJson(data);
-      return subscription;
-    } catch (e, stackTrace) {
-      return null;
-    }
-  }
 
   Future<void> _onUpdateCloudSyncEnabled(
     WorkspaceEventUpdateCloudSyncEnabled event,
@@ -892,24 +835,5 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     }
     
     emit(state.copyWith(folderSyncState: newSyncState));
-  }
-
-  String? _extractAccessToken(String? rawToken) {
-    if (rawToken == null || rawToken.isEmpty) {
-      return null;
-    }
-    try {
-      final decoded = jsonDecode(rawToken);
-      if (decoded is Map<String, dynamic>) {
-        final accessToken = decoded['access_token'] as String?;
-        if (accessToken != null && accessToken.isNotEmpty) {
-          return accessToken;
-        }
-      }
-    } catch (_) {
-      // 非 JSON，直接使用原始 token
-      return rawToken;
-    }
-    return null;
   }
 }

@@ -14,6 +14,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:http/http.dart' as http;
 
+import 'account/account_management_bloc.dart';
+
 part 'settings_dialog_bloc.freezed.dart';
 
 enum SettingsPage {
@@ -285,7 +287,7 @@ class CurrentSubscription {
   });
 
   final SubscriptionSummary? subscription;
-  final PlanDetails? planDetails;
+  final RemotePlan? planDetails;
   final UsageDetails? usage;
 
   factory CurrentSubscription.fromJson(Map<String, dynamic> json) {
@@ -293,8 +295,8 @@ class CurrentSubscription {
       subscription: SubscriptionSummary.fromJson(
         json['subscription'] as Map<String, dynamic>?,
       ),
-      planDetails: PlanDetails.fromJson(
-        json['plan_details'] as Map<String, dynamic>?,
+      planDetails: RemotePlan.fromJson(
+        json['plan_details'],
       ),
       usage: UsageDetails.fromJson(
         json['usage'] as Map<String, dynamic>?,
@@ -342,49 +344,6 @@ class SubscriptionSummary {
       status: json['status'] as String?,
       startDate: _parseDate(json['start_date'] as String?),
       endDate: _parseDate(json['end_date'] as String?),
-    );
-  }
-}
-
-@immutable
-class PlanDetails {
-  const PlanDetails({
-    required this.planCode,
-    required this.planNameCn,
-    required this.monthlyPriceYuan,
-    required this.yearlyPriceYuan,
-    required this.cloudStorageGb,
-  });
-
-  final String? planCode;
-  final String? planNameCn;
-  final double? monthlyPriceYuan;
-  final double? yearlyPriceYuan;
-  final int? cloudStorageGb;
-
-  factory PlanDetails.fromJson(Map<String, dynamic>? json) {
-    if (json == null) {
-      return const PlanDetails(
-        planCode: null,
-        planNameCn: null,
-        monthlyPriceYuan: null,
-        yearlyPriceYuan: null,
-        cloudStorageGb: null,
-      );
-    }
-
-    double? _parseDouble(dynamic v) {
-      if (v == null) return null;
-      if (v is num) return v.toDouble();
-      return double.tryParse(v.toString());
-    }
-
-    return PlanDetails(
-      planCode: json['plan_code'] as String?,
-      planNameCn: json['plan_name_cn'] as String?,
-      monthlyPriceYuan: _parseDouble(json['monthly_price_yuan']),
-      yearlyPriceYuan: _parseDouble(json['yearly_price_yuan']),
-      cloudStorageGb: json['cloud_storage_gb'] as int?,
     );
   }
 }
