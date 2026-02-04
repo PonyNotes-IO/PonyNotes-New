@@ -765,7 +765,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   FlowyText(
-                                    "每月${config?.cloudStorageGb}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}",
+                                    _initStorage(config?.cloudStorageGb),
                                     fontSize: 12,
                                     color: theme.textColorScheme.secondary,
                                   ),
@@ -885,5 +885,16 @@ class _AccountManagementViewState extends State<AccountManagementView>
     } else {
       return Color(0xFF371A0D);
     }
+  }
+
+  String _initStorage(int? cloudStorageGb) {
+    if(cloudStorageGb != null){
+      if(cloudStorageGb > 1024){
+        return "每月${(cloudStorageGb/1024).toInt()}GB${LocaleKeys.settings_billingPage_storageSpace.tr()}";
+      } else {
+        return "每月${cloudStorageGb}MB${LocaleKeys.settings_billingPage_storageSpace.tr()}";
+      }
+    }
+    return "";
   }
 }

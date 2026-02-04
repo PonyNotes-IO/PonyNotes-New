@@ -244,6 +244,9 @@ class _AccountQuickActionsSection extends StatelessWidget {
       return '';
     }
 
+    double remainingGb = totalGb - usedGb;
+    if (remainingGb < 0) remainingGb = 0;
+
     String fmt(double gb) {
       if (gb < 1) {
         final mb = gb * 1024;
@@ -252,7 +255,7 @@ class _AccountQuickActionsSection extends StatelessWidget {
       return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
     }
 
-    return '${fmt(usedGb)}/${fmt(totalGb)}';
+    return '${fmt(remainingGb)}/${fmt(totalGb)}';
   }
 
   void _showEmailVerificationDialog(BuildContext context) {

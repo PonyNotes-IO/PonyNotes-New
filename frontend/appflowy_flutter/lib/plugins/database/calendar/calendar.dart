@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'dart:convert';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/database/calendar/presentation/widgets/calendar_content_widget.dart';
@@ -8,7 +7,6 @@ import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
-// removed unused: easy_localization
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
@@ -31,7 +29,11 @@ import '../../../generated/locale_keys.g.dart';
 import '../../../workspace/application/sidebar/folder/folder_bloc.dart';
 import '../../../workspace/application/sidebar/space/space_bloc.dart';
 import '../../../workspace/application/view/view_ext.dart';
+import '../../../workspace/application/view/view_listener.dart';
 import '../../../workspace/presentation/home/home_sizes.dart';
+import '../../../workspace/presentation/widgets/favorite_button.dart';
+import '../../../workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
+import '../../../plugins/shared/share/share_button.dart';
 import 'presentation/new_event_page.dart';
 import 'presentation/edit_event_page.dart';
 import 'models/schedule_model.dart';
@@ -88,18 +90,60 @@ class CalendarPluginBuilder extends PluginBuilder {
 
 // 新增主日历插件
 class CalendarMainPlugin extends Plugin {
+  CalendarMainPlugin() {
+    // 创建一个默认的日历视图
+    _defaultView = ViewPB(
+      id: fixedUuid(12345, UuidType.privateSpace),
+      name: '日历',
+      layout: ViewLayoutPB.Calendar,
+    );
+    
+    // 初始化blocs
+    _viewInfoBloc = ViewInfoBloc(view: _defaultView)
+      ..add(const ViewInfoEvent.started());
+    _pageAccessLevelBloc = PageAccessLevelBloc(view: _defaultView)
+      ..add(const PageAccessLevelEvent.initial());
+  }
+
+  late final ViewPB _defaultView;
+  late final ViewInfoBloc _viewInfoBloc;
+  late final PageAccessLevelBloc _pageAccessLevelBloc;
+  final ValueNotifier<ViewPB?> _selectedViewNotifier = ValueNotifier<ViewPB?>(null);
+
   @override
   PluginType get pluginType => PluginType.calendar;
 
   @override
-  PluginWidgetBuilder get widgetBuilder => CalendarMainWidgetBuilder();
+  PluginWidgetBuilder get widgetBuilder => CalendarMainWidgetBuilder(
+        viewInfoBloc: _viewInfoBloc,
+        pageAccessLevelBloc: _pageAccessLevelBloc,
+        selectedViewNotifier: _selectedViewNotifier,
+      );
 
   @override
   PluginId get id =>
       fixedUuid(12345, UuidType.privateSpace); // 使用与ScheduleModel相同的固定ID
+
+  @override
+  void dispose() {
+    _viewInfoBloc.close();
+    _pageAccessLevelBloc.close();
+    _selectedViewNotifier.dispose();
+    super.dispose();
+  }
 }
 
-class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
+class CalendarMainWidgetBuilder extends PluginWidgetBuilder with NavigationItem {
+  CalendarMainWidgetBuilder({
+    required this.viewInfoBloc,
+    required this.pageAccessLevelBloc,
+    required this.selectedViewNotifier,
+  });
+
+  final ViewInfoBloc viewInfoBloc;
+  final PageAccessLevelBloc pageAccessLevelBloc;
+  final ValueNotifier<ViewPB?> selectedViewNotifier;
+
   @override
   String? get viewName => '日历'; // 显示标题
 
@@ -107,7 +151,35 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
   Widget get leftBarItem => const FlowyText.medium('日历'); // 显示左侧标题
 
   @override
-  Widget? get rightBarItem => null; // 暂时不展示右侧工具菜单栏，以解决日程展示问题
+  Widget? get rightBarItem {
+    // 当有选中文档时，返回该文档的右侧工具栏
+    // 参考SpaceHubPluginWidgetBuilder的实现方式
+    return ValueListenableBuilder<ViewPB?>(
+      valueListenable: selectedViewNotifier,
+      builder: (context, selectedView, _) {
+        if (selectedView == null) {
+          return const SizedBox.shrink();
+        }
+
+        try {
+          final plugin = selectedView.plugin();
+          plugin.init();
+          final widgetBuilder = plugin.widgetBuilder;
+
+          // PluginWidgetBuilder 已经 mixin 了 NavigationItem，直接访问 rightBarItem
+          final toolbar = widgetBuilder.rightBarItem;
+          if (toolbar != null) {
+            return toolbar;
+          }
+        } catch (e) {
+          debugPrint('[Calendar] Error getting rightBarItem for ${selectedView.name}: $e');
+        }
+
+        // 没有可用的工具栏时，返回一个空占位，避免报错
+        return const SizedBox.shrink();
+      },
+    );
+  }
 
   @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
@@ -125,11 +197,23 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    // 不依赖context.userProfile，避免触发GET_VIEW_PB查询
-    // 直接返回日历面板，避免视图查找错误
-    return BlocProvider<CalendarContentCubit>(
-      create: (_) => CalendarContentCubit(),
-      child: CalendarMainPanel(),
+    // 使用 Builder 获取外层 context
+    return Builder(
+      builder: (outerContext) {
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider<ViewInfoBloc>.value(value: viewInfoBloc),
+            BlocProvider<PageAccessLevelBloc>.value(value: pageAccessLevelBloc),
+            BlocProvider<CalendarContentCubit>(
+              create: (_) => CalendarContentCubit(),
+            ),
+          ],
+          child: CalendarMainPanel(
+            selectedViewNotifier: selectedViewNotifier,
+            onDeleted: context.onDeleted,
+          ),
+        );
+      },
     );
   }
 }
@@ -138,7 +222,12 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
 class CalendarMainPanel extends StatefulWidget {
   const CalendarMainPanel({
     super.key,
+    required this.selectedViewNotifier,
+    this.onDeleted,
   });
+
+  final ValueNotifier<ViewPB?> selectedViewNotifier;
+  final Function(ViewPB, int?)? onDeleted;
 
   @override
   State<CalendarMainPanel> createState() => _CalendarMainPanelState();
@@ -163,10 +252,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   bool _isSubscribeSystemCalendar = false;
   late CalendarContentCubit _calendarContentCubit; // 保存CalendarContentCubit实例的引用
   
-  // 笔记页面缓存，避免重复创建DocumentPage实例，限制缓存大小为20个
-  // 使用LinkedHashMap保持插入顺序，以便在缓存超过限制时移除最早添加的项
-  final LinkedHashMap<String, Widget> _notePageCache = LinkedHashMap<String, Widget>();
-  static const int _maxCacheSize = 20;
   // 加载状态
   bool _isLoadingNote = false;
 
@@ -174,6 +259,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   late bool _isLoadingContent;
   late Map<String, dynamic>? _cachedContent;
   late DateTime? _lastLoadedDate;
+  late ViewListener? _viewListener;
 
   @override
   void initState() {
@@ -202,6 +288,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     // 初始化时尝试创建或获取日历视图
     _initializeCalendarView();
 
+    // 初始化视图监听器，监听视图删除事件
+    _setupViewListener();
+
     // 初始化 CalendarContentCubit 实例
     // 注意：这里需要在 Widget 树构建完成后才能访问 context
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -211,6 +300,29 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     });
 
     // 调试输出已移除以减少运行时噪声
+  }
+
+  // 设置视图监听器，监听视图删除事件
+  void _setupViewListener() {
+    // 监听工作空间级别的视图变化
+    _viewListener = ViewListener(viewId: 'workspace');
+    _viewListener?.start(
+      onViewDeleted: (result) {
+        // 当视图删除时，刷新日历数据
+        if (mounted) {
+          final selectedDate = _selectedDay ?? _focusedDay;
+          _loadContentForDate(selectedDate);
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _viewListener?.stop();
+    // 确保释放资源
+    _scheduleModel.dispose();
+    super.dispose();
   }
 
   // 月份切换：delta为-1上一月，1下一月
@@ -609,9 +721,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       // 如果点击的是当前选中的笔记，则取消选中
       if (_selectedNote?.id == note.id) {
         _selectedNote = null;
+        widget.selectedViewNotifier.value = null;
       } else {
         // 否则选中新笔记
         _selectedNote = note;
+        widget.selectedViewNotifier.value = note;
         // 显示加载状态
         _isLoadingNote = true;
       }
@@ -897,23 +1011,28 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             ),
             // 右侧详情区 - 分为日历视图和编辑区域
             Expanded(
-              child: _selectedNote != null ||
-                      _showNewEventPage ||
-                      _showEditEventPage
-                  ? Container(
-                      width: double.infinity,
-                      height: double.infinity,
-                      margin: EdgeInsets.only(left: 1, right: 1, bottom: 1),
-                      color: Theme.of(context).colorScheme.surface, // 添加背景色设置
-                      child: _showNewEventPage
-                          ? _buildNewEventView()
-                          : _showEditEventPage && _editingSchedule != null
-                              ? _buildEditEventView()
-                              : _selectedNote != null
-                                  ? _buildNoteEditArea()
-                                  : Container(),
-                    )
-                  : _buildDefaultView(),
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding,
+                ),
+                child: _selectedNote != null ||
+                        _showNewEventPage ||
+                        _showEditEventPage
+                    ? Container(
+                        width: double.infinity,
+                        height: double.infinity,
+                        margin: EdgeInsets.only(left: 1, right: 1, bottom: 1),
+                        color: Theme.of(context).colorScheme.surface, // 添加背景色设置
+                        child: _showNewEventPage
+                            ? _buildNewEventView()
+                            : _showEditEventPage && _editingSchedule != null
+                                ? _buildEditEventView()
+                                : _selectedNote != null
+                                    ? _buildNoteEditArea()
+                                    : Container(),
+                      )
+                    : _buildDefaultView(),
+              ),
             ),
           ],
         );
@@ -1400,96 +1519,65 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   Widget _buildNoteEditAreaForNote(ViewPB note) {
-    final noteId = note.id;
-    
-    // 检查缓存中是否已有该笔记的页面
-    if (!_notePageCache.containsKey(noteId)) {
-      // 使用插件系统创建对应文件类型的页面
+    // 根据 view 的类型创建对应的插件并展示
+    try {
+      final plugin = note.plugin();
+      // 确保插件已初始化
+      plugin.init();
+      
+      // 获取 userProfile - 某些插件可能需要用户信息
+      UserProfilePB? userProfile;
       try {
-        final plugin = note.plugin();
-        plugin.init();
-        
-        // 获取 userProfile - 某些插件可能需要用户信息
-        UserProfilePB? userProfile;
-        try {
-          final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
-          userProfile = userWorkspaceBloc.state.userProfile;
-        } catch (e) {
-          debugPrint('[Calendar] Failed to get userProfile: $e');
-        }
-        
-        final pageWidget = plugin.widgetBuilder.buildWidget(
-          context: PluginContext(
-            onDeleted: (view, index) {
-              // 当文档被删除时，刷新默认视图并从缓存中移除
-              setState(() {
-                _notePageCache.remove(noteId);
-                // 如果被删除的是当前选中的笔记，更新选中状态
-                if (_selectedNote?.id == noteId) {
-                  _selectedNote = null;
-                }
-              });
-            },
-            userProfile: userProfile,
-          ),
-          shrinkWrap: false,
-        );
-        
-        // 将新创建的页面添加到缓存
-        _notePageCache[noteId] = pageWidget;
-        
-        // 如果缓存大小超过限制，移除最早添加的项
-        if (_notePageCache.length > _maxCacheSize) {
-          final firstKey = _notePageCache.keys.first;
-          _notePageCache.remove(firstKey);
-        }
-      } catch (e, stackTrace) {
-        debugPrint('[Calendar] Error loading view ${note.name} (${note.id}): $e');
-        debugPrint('[Calendar] Stack trace: $stackTrace');
-        
-        // 创建错误提示页面
-        final errorWidget = Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '无法加载视图: ${note.name}',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                  fontSize: 14,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                '错误: ${e.toString()}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).hintColor,
-                ),
-              ),
-            ],
-          ),
-        );
-        
-        _notePageCache[noteId] = errorWidget;
+        final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+        userProfile = userWorkspaceBloc.state.userProfile;
+      } catch (e) {
+        debugPrint('[Calendar] Failed to get userProfile: $e');
       }
+      
+      return plugin.widgetBuilder.buildWidget(
+        context: PluginContext(
+          onDeleted: (view, index) {
+            // 当文档被删除时，刷新默认视图
+            setState(() {
+              // 如果被删除的是当前选中的笔记，更新选中状态
+              if (_selectedNote?.id == view.id) {
+                _selectedNote = null;
+              }
+            });
+            // 刷新日历内容，重新加载当前日期的文档列表
+            final selectedDate = _selectedDay ?? _focusedDay;
+            _loadContentForDate(selectedDate);
+          },
+          userProfile: userProfile,  // 传入用户配置
+        ),
+        shrinkWrap: false,
+      );
+    } catch (e, stackTrace) {
+      debugPrint('[Calendar] Error loading view ${note.name} (${note.id}): $e');
+      debugPrint('[Calendar] Stack trace: $stackTrace');
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '无法加载视图: ${note.name}',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 14,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              '错误: ${e.toString()}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).hintColor,
+              ),
+            ),
+          ],
+        ),
+      );
     }
-
-    // 返回缓存中的页面
-    return MultiBlocProvider(
-      key: ValueKey('bloc_provider_${noteId}'),
-      providers: [
-        BlocProvider<PageAccessLevelBloc>(
-          create: (context) => PageAccessLevelBloc(view: note)
-            ..add(const PageAccessLevelEvent.initial()),
-        ),
-        BlocProvider<ViewInfoBloc>(
-          create: (context) => ViewInfoBloc(view: note)
-            ..add(const ViewInfoEvent.started()),
-        ),
-      ],
-      child: _notePageCache[noteId]!,
-    );
   }
 
   Widget _buildScheduleEditArea(ScheduleItem schedule) {
@@ -1735,87 +1823,65 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       );
     }
 
-    final noteId = _selectedNote!.id;
-    
-    // 检查缓存中是否已有该笔记的页面
-    if (!_notePageCache.containsKey(noteId)) {
-      // 使用插件系统创建对应文件类型的页面
+    // 根据 view 的类型创建对应的插件并展示
+    try {
+      final plugin = _selectedNote!.plugin();
+      // 确保插件已初始化
+      plugin.init();
+      
+      // 获取 userProfile - 某些插件可能需要用户信息
+      UserProfilePB? userProfile;
       try {
-        final plugin = _selectedNote!.plugin();
-        plugin.init();
-        
-        // 获取 userProfile - 某些插件可能需要用户信息
-        UserProfilePB? userProfile;
-        try {
-          final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
-          userProfile = userWorkspaceBloc.state.userProfile;
-        } catch (e) {
-          debugPrint('[Calendar] Failed to get userProfile: $e');
-        }
-        
-        final pageWidget = plugin.widgetBuilder.buildWidget(
-          context: PluginContext(
-            onDeleted: (view, index) {
-              // 当文档被删除时，关闭编辑区域并从缓存中移除
-              setState(() {
-                _selectedNote = null;
-                _notePageCache.remove(noteId);
-              });
-            },
-            userProfile: userProfile,
-          ),
-          shrinkWrap: false,
-        );
-        
-        // 将新创建的页面添加到缓存
-        _notePageCache[noteId] = pageWidget;
-      } catch (e, stackTrace) {
-        debugPrint('[Calendar] Error loading view ${_selectedNote!.name} (${_selectedNote!.id}): $e');
-        debugPrint('[Calendar] Stack trace: $stackTrace');
-        
-        // 创建错误提示页面
-        final errorWidget = Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '无法加载视图: ${_selectedNote!.name}',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                  fontSize: 14,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                '错误: ${e.toString()}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).hintColor,
-                ),
-              ),
-            ],
-          ),
-        );
-        
-        _notePageCache[noteId] = errorWidget;
+        final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+        userProfile = userWorkspaceBloc.state.userProfile;
+      } catch (e) {
+        debugPrint('[Calendar] Failed to get userProfile: $e');
       }
+      
+      return plugin.widgetBuilder.buildWidget(
+        context: PluginContext(
+          onDeleted: (view, index) {
+            // 当文档被删除时，关闭编辑区域并通知父组件
+            setState(() {
+              _selectedNote = null;
+              widget.selectedViewNotifier.value = null;
+            });
+            // 调用父组件的onDeleted回调
+            widget.onDeleted?.call(view, index);
+            // 刷新日历内容，重新加载当前日期的文档列表
+            final selectedDate = _selectedDay ?? _focusedDay;
+            _loadContentForDate(selectedDate);
+          },
+          userProfile: userProfile,  // 传入用户配置
+        ),
+        shrinkWrap: false,
+      );
+    } catch (e, stackTrace) {
+      debugPrint('[Calendar] Error loading view ${_selectedNote!.name} (${_selectedNote!.id}): $e');
+      debugPrint('[Calendar] Stack trace: $stackTrace');
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              '无法加载视图: ${_selectedNote!.name}',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 14,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              '错误: ${e.toString()}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).hintColor,
+              ),
+            ),
+          ],
+        ),
+      );
     }
-
-    // 返回缓存中的页面
-    return MultiBlocProvider(
-      key: ValueKey('bloc_provider_${noteId}'), // 添加key强制重建
-      providers: [
-        BlocProvider<PageAccessLevelBloc>(
-          create: (context) => PageAccessLevelBloc(view: _selectedNote!)
-            ..add(const PageAccessLevelEvent.initial()),
-        ),
-        BlocProvider<ViewInfoBloc>(
-          create: (context) => ViewInfoBloc(view: _selectedNote!)
-            ..add(const ViewInfoEvent.started()),
-        ),
-      ],
-      child: _notePageCache[noteId]!,
-    );
   }
 
   Widget _buildTopWidget() {
@@ -1924,14 +1990,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-    // 确保释放资源
-    _scheduleModel.dispose();
-
   }
 
   Future<ViewPB> _buildCalendarSpace(WorkspaceService workspaceService) async {

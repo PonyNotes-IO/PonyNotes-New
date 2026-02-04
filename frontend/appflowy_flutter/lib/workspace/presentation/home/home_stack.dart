@@ -134,7 +134,8 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                             final pm = state.pageManagers[currentIndex];
                             final pluginType = pm.plugin.pluginType;
                             if (pluginType != PluginType.fileLibrary &&
-                                pluginType != PluginType.folder) {
+                                pluginType != PluginType.folder &&
+                                pluginType != PluginType.calendar) {
                               return const SizedBox.shrink();
                             }
 

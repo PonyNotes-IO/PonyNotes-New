@@ -72,9 +72,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
       case 1:
         return '标准版';
       case 2:
-        return '学生版';
+        return '专业版';
       case 3:
-        return '团队版';
+        return '高级版';
       default:
         return '免费版';
     }
