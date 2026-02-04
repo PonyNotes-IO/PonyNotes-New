@@ -752,7 +752,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       ),
     );
 
-    // 如果用户没有 userId，先尝试通过 email 查找
+    // 如果用户没有 userId，先提示错误
     String? memberUserId = event.user.userId;
 
     if (memberUserId == null || memberUserId.isEmpty) {
@@ -767,7 +767,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       return;
     }
 
-    // 调用协作接口添加成员
+    // 1. 调用协作接口添加成员 (后端默认 ReadOnly)
     final success = await _addCollaborator(
       workspaceId: workspaceId,
       objectId: pageId,
@@ -775,6 +775,23 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     );
 
     if (success) {
+      // 2. 如果指定的权限不是 ReadOnly，则更新权限
+      if (event.accessLevel != ShareAccessLevel.readOnly) {
+        final (updateSuccess, updateError) = await _updateMemberPermission(
+          workspaceId: workspaceId,
+          objectId: pageId,
+          memberUserId: memberUserId,
+          permissionId: _accessLevelToPermissionId(event.accessLevel),
+        );
+
+        if (!updateSuccess) {
+          Log.error(
+              'Failed to update permission after adding collaborator: $updateError');
+          // 这里即使更新权限失败，用户其实已经添加成功了（虽然是 ReadOnly），
+          // 所以我们还是算成功，但记录日志或提示。
+        }
+      }
+
       // 刷新共享用户列表
       final users = await _getSharedUsers();
       emit(

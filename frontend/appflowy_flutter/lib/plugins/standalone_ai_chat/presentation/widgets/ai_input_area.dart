@@ -32,8 +32,9 @@ class AIInputArea extends StatefulWidget {
 
   /// 发送消息的回调（使用AIModel系统）
   /// 参数：message - 消息内容, model - 选择的模型, images - 图片列表, enableDeepThinking - 是否启用深度思考, enableWebSearch - 是否启用全网搜索
-  final Function(String message, AIModel? model, List<ChatImage>? images, bool enableDeepThinking, bool enableWebSearch)? onMessageSent;
-  
+  final Function(String message, AIModel? model, List<ChatImage>? images,
+      bool enableDeepThinking, bool enableWebSearch)? onMessageSent;
+
   /// 点击聊天记录按钮的回调（若提供，则在工具栏显示图标按钮）
   final VoidCallback? onChatHistoryTap;
   final double? customWidth; // 可选的自定义宽度
@@ -49,23 +50,23 @@ class _AIInputAreaState extends State<AIInputArea> {
   final TextEditingController _textController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final GlobalKey _selectorKey = GlobalKey(); // 用于获取模型选择器位置
-  
+
   // 模型选择相关状态
   AIModel? _selectedModel; // 初始化为null，显示"选择模型"
   bool _isDropdownOpen = false;
   List<AIModel> _availableModels = [];
   OverlayEntry? _overlayEntry;
-  
+
   // 图片选择相关状态
   final List<ChatImage> _selectedImages = [];
   final ChatImageService _imageService = ChatImageService.instance;
-  
+
   // 附件列表（包含图片和文件）
   final List<_AttachmentItem> _attachments = [];
-  
+
   // 功能开关状态
-  bool _isDeepThinkingEnabled = false;  // 深度思考开关
-  bool _isWebSearchEnabled = false;     // 全网搜索开关
+  bool _isDeepThinkingEnabled = false; // 深度思考开关
+  bool _isWebSearchEnabled = false; // 全网搜索开关
   // 文本长度限制与计数
   static const int _kMaxMessageLength = 120;
   int _currentCharCount = 0;
@@ -173,10 +174,15 @@ class _AIInputAreaState extends State<AIInputArea> {
     _textController.clear();
     final images = List<ChatImage>.from(_selectedImages);
     _selectedImages.clear();
-    
+
     // 调用回调，使用AIModel系统，传递深度思考和全网搜索状态
-    widget.onMessageSent?.call(text, _selectedModel, images.isNotEmpty ? images : null, _isDeepThinkingEnabled, _isWebSearchEnabled);
-    
+    widget.onMessageSent?.call(
+        text,
+        _selectedModel,
+        images.isNotEmpty ? images : null,
+        _isDeepThinkingEnabled,
+        _isWebSearchEnabled);
+
     // 发送后收起键盘
     FocusScope.of(context).unfocus();
   }
@@ -185,15 +191,15 @@ class _AIInputAreaState extends State<AIInputArea> {
   Widget build(BuildContext context) {
     return Focus(
       canRequestFocus: false, // 防止与TextField的焦点冲突
-      skipTraversal: true,    // 跳过焦点遍历
+      skipTraversal: true, // 跳过焦点遍历
       includeSemantics: false, // 不包含在语义树中
       onKeyEvent: (node, event) {
         // 监听 Ctrl+V 或 Cmd+V 粘贴图片，但不拦截事件（让TextField也能处理）
         if (event is KeyDownEvent) {
-          final isControlPressed = HardwareKeyboard.instance.isControlPressed || 
-                                   HardwareKeyboard.instance.isMetaPressed;
+          final isControlPressed = HardwareKeyboard.instance.isControlPressed ||
+              HardwareKeyboard.instance.isMetaPressed;
           final isVPressed = event.logicalKey == LogicalKeyboardKey.keyV;
-          
+
           if (isControlPressed && isVPressed) {
             // 异步检查剪贴板是否有图片
             _pasteImageFromClipboard();
@@ -215,8 +221,8 @@ class _AIInputAreaState extends State<AIInputArea> {
           constraints: BoxConstraints(
             minHeight: AIWelcomeTheme.inputContainerHeight,
             // 有附件时允许高度扩展，最大高度增加到原来的1.5倍
-            maxHeight: _attachments.isNotEmpty 
-                ? AIWelcomeTheme.inputContainerHeight * 1.5 
+            maxHeight: _attachments.isNotEmpty
+                ? AIWelcomeTheme.inputContainerHeight * 1.5
                 : AIWelcomeTheme.inputContainerHeight,
           ),
           decoration: AIWelcomeTheme.inputContainerDecoration(context),
@@ -252,7 +258,8 @@ class _AIInputAreaState extends State<AIInputArea> {
               ),
               // 工具栏区域（对应 group_2）
               Container(
-                margin: widget.customToolbarPadding ?? AIWelcomeTheme.toolbarPadding,
+                margin: widget.customToolbarPadding ??
+                    AIWelcomeTheme.toolbarPadding,
                 width: widget.customToolbarWidth ?? AIWelcomeTheme.toolbarWidth,
                 height: AIWelcomeTheme.toolbarHeight,
                 child: Row(
@@ -267,7 +274,7 @@ class _AIInputAreaState extends State<AIInputArea> {
                     _buildWebSearchButton(),
                     const Spacer(),
                     // 功能图标按钮组
-                    
+
                     // 聊天记录图标按钮（仅图标）
                     if (widget.onChatHistoryTap != null) ...[
                       const SizedBox(width: 22),
@@ -319,7 +326,8 @@ class _AIInputAreaState extends State<AIInputArea> {
   bool get _hasFeatureEnabled => _isDeepThinkingEnabled || _isWebSearchEnabled;
 
   /// 获取按钮文字颜色（适配深色模式和禁用状态）
-  Color _getButtonTextColor(BuildContext context, bool isEnabled, {bool isDisabled = false}) {
+  Color _getButtonTextColor(BuildContext context, bool isEnabled,
+      {bool isDisabled = false}) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     if (isDisabled) {
       return isDarkMode ? const Color(0xFF666666) : const Color(0xFFB0B0B0);
@@ -331,7 +339,8 @@ class _AIInputAreaState extends State<AIInputArea> {
   }
 
   /// 获取按钮边框颜色（适配深色模式和禁用状态）
-  Color _getButtonBorderColor(BuildContext context, bool isEnabled, {bool isDisabled = false}) {
+  Color _getButtonBorderColor(BuildContext context, bool isEnabled,
+      {bool isDisabled = false}) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     if (isDisabled) {
       return isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0);
@@ -343,7 +352,8 @@ class _AIInputAreaState extends State<AIInputArea> {
   }
 
   /// 获取按钮背景颜色（适配深色模式和禁用状态）
-  Color _getButtonBackgroundColor(BuildContext context, {bool isDisabled = false}) {
+  Color _getButtonBackgroundColor(BuildContext context,
+      {bool isDisabled = false}) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     if (isDisabled) {
       return isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5);
@@ -425,7 +435,7 @@ class _AIInputAreaState extends State<AIInputArea> {
   /// 切换下拉框状态
   void _toggleDropdown() {
     if (_availableModels.isEmpty) return;
-    
+
     if (_isDropdownOpen) {
       _closeDropdown();
     } else {
@@ -436,15 +446,16 @@ class _AIInputAreaState extends State<AIInputArea> {
   /// 打开下拉框
   void _openDropdown() {
     if (_availableModels.isEmpty) return;
-    
+
     setState(() {
       _isDropdownOpen = true;
     });
 
     // 使用GlobalKey获取模型选择器的准确位置
-    final RenderBox? selectorRenderBox = _selectorKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? selectorRenderBox =
+        _selectorKey.currentContext?.findRenderObject() as RenderBox?;
     if (selectorRenderBox == null) return;
-    
+
     final selectorSize = selectorRenderBox.size;
     final selectorOffset = selectorRenderBox.localToGlobal(Offset.zero);
 
@@ -470,7 +481,7 @@ class _AIInputAreaState extends State<AIInputArea> {
                   final isFirst = index == 0;
                   final isLast = index == _availableModels.length - 1;
                   final isSelected = _selectedModel?.id == model.id;
-                  
+
                   return InkWell(
                     onTap: () => _selectModel(model),
                     borderRadius: BorderRadius.vertical(
@@ -479,7 +490,8 @@ class _AIInputAreaState extends State<AIInputArea> {
                     ),
                     child: Container(
                       width: double.infinity,
-                      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 4),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 8,
@@ -499,7 +511,8 @@ class _AIInputAreaState extends State<AIInputArea> {
                             style: TextStyle(
                               fontSize: 12,
                               color: isSelected
-                                  ? AIWelcomeTheme.selectedItemTextColor(context)
+                                  ? AIWelcomeTheme.selectedItemTextColor(
+                                      context)
                                   : AIWelcomeTheme.primaryTextColor(context),
                               fontWeight: isSelected
                                   ? FontWeight.w500
@@ -513,8 +526,11 @@ class _AIInputAreaState extends State<AIInputArea> {
                               style: TextStyle(
                                 fontSize: 10,
                                 color: isSelected
-                                    ? AIWelcomeTheme.selectedItemTextColor(context).withOpacity(0.7)
-                                    : AIWelcomeTheme.secondaryTextColor(context),
+                                    ? AIWelcomeTheme.selectedItemTextColor(
+                                            context)
+                                        .withOpacity(0.7)
+                                    : AIWelcomeTheme.secondaryTextColor(
+                                        context),
                               ),
                             ),
                           ],
@@ -556,14 +572,14 @@ class _AIInputAreaState extends State<AIInputArea> {
     if (_isDropdownOpen) {
       _closeDropdown();
     }
-    
+
     // 直接从文件系统选择图片，不显示选择对话框
     final image = await _imageService.pickImageFromFile();
     if (image != null) {
       setState(() {
         _selectedImages.add(image);
       });
-      
+
       // 选择图片后自动聚焦到输入框，确保用户可以继续输入文字
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
@@ -618,7 +634,8 @@ class _AIInputAreaState extends State<AIInputArea> {
             color: _getButtonBackgroundColor(context, isDisabled: isDisabled),
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: _getButtonBorderColor(context, isEnabled, isDisabled: isDisabled),
+              color: _getButtonBorderColor(context, isEnabled,
+                  isDisabled: isDisabled),
               width: 1,
             ),
           ),
@@ -628,7 +645,8 @@ class _AIInputAreaState extends State<AIInputArea> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: _getButtonTextColor(context, isEnabled, isDisabled: isDisabled),
+                color: _getButtonTextColor(context, isEnabled,
+                    isDisabled: isDisabled),
                 fontFamily: 'PingFangSC-Medium',
               ),
             ),
@@ -646,14 +664,17 @@ class _AIInputAreaState extends State<AIInputArea> {
     final isDisabledReason = isDisabled ? '开启深度思考或联网搜索后不支持上传附件' : null;
 
     return FlowyTooltip(
-      message: isDisabledReason ?? (hasAttachments ? '已添加 ${_attachments.length} 个附件' : '上传附件（支持图片和文件）'),
+      message: isDisabledReason ??
+          (hasAttachments ? '已添加 ${_attachments.length} 个附件' : '上传附件（支持图片和文件）'),
       child: GestureDetector(
         onTap: isDisabled ? null : _handleAttachmentTap,
         child: Container(
           width: AIWelcomeTheme.iconSize,
           height: AIWelcomeTheme.iconSize,
           decoration: BoxDecoration(
-            color: hasAttachments ? AIWelcomeTheme.selectedItemColor(context) : Colors.transparent,
+            color: hasAttachments
+                ? AIWelcomeTheme.selectedItemColor(context)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Stack(
@@ -664,8 +685,10 @@ class _AIInputAreaState extends State<AIInputArea> {
                   isDisabled
                       ? const FlowySvgData('assets/flowy_icons/32x/askAHBU.svg')
                       : hasAttachments
-                          ? const FlowySvgData('assets/flowy_icons/32x/askAHBU.svg')
-                          : const FlowySvgData('assets/flowy_icons/32x/askNAU.svg'),
+                          ? const FlowySvgData(
+                              'assets/flowy_icons/32x/askAHBU.svg')
+                          : const FlowySvgData(
+                              'assets/flowy_icons/32x/askNAU.svg'),
                   size: Size.square(AIWelcomeTheme.iconSize * 0.8),
                   // 禁用时使用灰色（通过 color 参数设置）
                   color: isDisabled
@@ -679,7 +702,10 @@ class _AIInputAreaState extends State<AIInputArea> {
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface.withOpacity(0.3),
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surface
+                          .withOpacity(0.3),
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -697,7 +723,7 @@ class _AIInputAreaState extends State<AIInputArea> {
     if (_isDropdownOpen) {
       _closeDropdown();
     }
-    
+
     try {
       // 直接打开系统文件浏览器，支持所有文件类型
       final result = await FilePicker.platform.pickFiles(
@@ -705,29 +731,39 @@ class _AIInputAreaState extends State<AIInputArea> {
         type: FileType.any, // 支持所有文件类型
         withData: false, // 大文件不直接加载到内存
       );
-      
+
       if (result == null || result.files.isEmpty) {
         return;
       }
-      
+
       // 支持的图片扩展名
-      const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff'];
-      
+      const imageExtensions = [
+        'jpg',
+        'jpeg',
+        'png',
+        'gif',
+        'bmp',
+        'webp',
+        'svg',
+        'ico',
+        'tiff'
+      ];
+
       // 处理选中的文件
       final List<_AttachmentItem> newAttachments = [];
       final List<ChatImage> newImages = [];
-      
+
       for (final pickedFile in result.files) {
         final filePath = pickedFile.path;
         if (filePath == null || filePath.isEmpty) continue;
-        
+
         final file = File(filePath);
         if (!file.existsSync()) continue;
-        
+
         final extension = pickedFile.extension?.toLowerCase() ?? '';
         final isImage = imageExtensions.contains(extension);
         final fileSize = file.lengthSync();
-        
+
         if (isImage) {
           // 如果是图片，创建ChatImage对象并添加到图片列表
           try {
@@ -765,7 +801,7 @@ class _AIInputAreaState extends State<AIInputArea> {
           ));
         }
       }
-      
+
       // 批量更新状态
       if (mounted && (newImages.isNotEmpty || newAttachments.isNotEmpty)) {
         setState(() {
@@ -773,7 +809,7 @@ class _AIInputAreaState extends State<AIInputArea> {
           _attachments.addAll(newAttachments);
         });
       }
-      
+
       // 选择后自动聚焦到输入框
       Future.delayed(const Duration(milliseconds: 100), () {
         if (mounted) {
@@ -792,7 +828,7 @@ class _AIInputAreaState extends State<AIInputArea> {
       }
     }
   }
-  
+
   /// 构建AI使用次数显示
   Widget _buildAIUsageIndicator() {
     return FutureBuilder<FlowyResult<WorkspaceUsagePB?, FlowyError>>(
@@ -834,7 +870,9 @@ class _AIInputAreaState extends State<AIInputArea> {
             }
 
             final remaining = total - used;
-            final textColor = remaining <= 0 ? Colors.red : Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+            final textColor = remaining <= 0
+                ? Colors.red
+                : Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
 
             // 仅显示“X 次可用”的提示，放在字数与附件之间
             return Text(
@@ -869,14 +907,15 @@ class _AIInputAreaState extends State<AIInputArea> {
       ),
     );
   }
- 
+
   /// 合并显示：字符计数 + 剩余可用次数，样式为轻灰圆角 pill，与设计图保持一致
   Widget _buildCountAndRemainingIndicator() {
     return FutureBuilder<FlowyResult<WorkspaceUsagePB?, FlowyError>>(
       future: _loadUsage(),
       builder: (context, snapshot) {
         String remainingText = '';
-        Color remainingColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+        Color remainingColor =
+            Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
 
         if (!snapshot.hasData) {
           // 尚未加载到数据时显示占位（仅字符计数）
@@ -904,7 +943,8 @@ class _AIInputAreaState extends State<AIInputArea> {
             if (remaining <= 0) {
               remainingColor = Colors.red;
             } else {
-              remainingColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
+              remainingColor =
+                  Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
             }
           }, (error) {
             remainingText = '';
@@ -924,25 +964,7 @@ class _AIInputAreaState extends State<AIInputArea> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '$_currentCharCount/$_kMaxMessageLength',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: _currentCharCount >= _kMaxMessageLength ? Colors.red : Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              if (remainingText.isNotEmpty) ...[
-                const SizedBox(width: 8),
-                Text(
-                  '|',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.12),
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(width: 6),
+              if (remainingText.isNotEmpty)
                 Text(
                   remainingText,
                   style: TextStyle(
@@ -951,14 +973,13 @@ class _AIInputAreaState extends State<AIInputArea> {
                     color: remainingColor,
                   ),
                 ),
-              ],
             ],
           ),
         );
       },
     );
   }
-  
+
   /// 加载使用情况
   Future<FlowyResult<WorkspaceUsagePB?, FlowyError>> _loadUsage() async {
     try {
@@ -967,25 +988,25 @@ class _AIInputAreaState extends State<AIInputArea> {
       if (workspaceId == null || workspaceId.isEmpty) {
         return FlowyResult.success(null);
       }
-      
+
       final service = WorkspaceService(
         workspaceId: workspaceId,
         userId: fixnum.Int64.ZERO,
       );
-      
+
       return service.getWorkspaceUsage();
     } catch (e) {
       return FlowyResult.failure(FlowyError(msg: e.toString()));
     }
   }
-  
+
   String _getUsageDisplayText(int used, int total, int remaining) {
     if (remaining <= 0) {
       return '$used/$total 0次可用';
     }
     return '$used/$total $remaining次可用';
   }
-  
+
   Color _getUsageTextColor(int remaining) {
     if (remaining <= 0) {
       return Colors.red;
@@ -995,7 +1016,7 @@ class _AIInputAreaState extends State<AIInputArea> {
       return Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
     }
   }
-  
+
   /// 构建附件预览区域（包含图片和文件）
   /// 显示在工具栏下方
   Widget _buildAttachmentPreviewArea() {
@@ -1013,21 +1034,24 @@ class _AIInputAreaState extends State<AIInputArea> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: _attachments.map((attachment) => _buildAttachmentItem(attachment)).toList(),
+          children: _attachments
+              .map((attachment) => _buildAttachmentItem(attachment))
+              .toList(),
         ),
       ),
     );
   }
-  
+
   /// 构建单个附件项
   /// 使用小图标，紧凑布局，文件名过长时用...显示
   Widget _buildAttachmentItem(_AttachmentItem attachment) {
     // 获取文件扩展名用于显示文件类型
     final extension = attachment.name.split('.').last.toLowerCase();
     final fileType = _getFileTypeDisplay(extension);
-    
+
     return Container(
-      width: 220, // larger card so ~4 cards fit per row in typical toolbar width
+      width:
+          220, // larger card so ~4 cards fit per row in typical toolbar width
       margin: const EdgeInsets.only(right: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -1058,112 +1082,118 @@ class _AIInputAreaState extends State<AIInputArea> {
           _openAttachment(attachment);
         },
         child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 小图标（放大一点）
-              Icon(
-                attachment.type == _AttachmentType.image
-                    ? Icons.image
-                    : _getFileIcon(extension),
-                size: 20,
-                color: attachment.type == _AttachmentType.image
-                    ? Colors.red
-                    : Colors.blue,
-              ),
-              const SizedBox(width: 10),
-              // 文件名和大小
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                // 文件名（限制宽度，过长用...显示）
-                // reserve right padding so top-right delete button doesn't overlap title
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.only(right: 36),
-                  child: Text(
-                    attachment.name,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AIWelcomeTheme.primaryTextColor(context),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+          clipBehavior: Clip.none,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 小图标（放大一点）
+                Icon(
+                  attachment.type == _AttachmentType.image
+                      ? Icons.image
+                      : _getFileIcon(extension),
+                  size: 20,
+                  color: attachment.type == _AttachmentType.image
+                      ? Colors.red
+                      : Colors.blue,
                 ),
-                    const SizedBox(height: 4),
-                    // 文件类型和大小
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          fileType,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.65),
-                          ),
-                        ),
-                        if (attachment.size != null) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            _formatFileSize(attachment.size!),
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.65),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    // 上传失败提示
-                    if (attachment.uploadStatus == _UploadStatus.failed)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6.0),
+                const SizedBox(width: 10),
+                // 文件名和大小
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 文件名（限制宽度，过长用...显示）
+                      // reserve right padding so top-right delete button doesn't overlap title
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.only(right: 36),
                         child: Text(
-                          '上传失败',
+                          attachment.name,
                           style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.red,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AIWelcomeTheme.primaryTextColor(context),
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                  ],
+                      const SizedBox(height: 4),
+                      // 文件类型和大小
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            fileType,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withOpacity(0.65),
+                            ),
+                          ),
+                          if (attachment.size != null) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              _formatFileSize(attachment.size!),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withOpacity(0.65),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      // 上传失败提示
+                      if (attachment.uploadStatus == _UploadStatus.failed)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6.0),
+                          child: Text(
+                            '上传失败',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.red,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          // 删除按钮放在卡片右上角
-          Positioned(
-            top: -8,
-            right: -8,
-            child: GestureDetector(
-              onTap: () => _removeAttachment(attachment),
-              child: Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.close,
-                  size: 14,
-                  color: Colors.white,
+              ],
+            ),
+            // 删除按钮放在卡片右上角
+            Positioned(
+              top: -8,
+              right: -8,
+              child: GestureDetector(
+                onTap: () => _removeAttachment(attachment),
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    size: 14,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
   }
-  
+
   /// 根据文件扩展名获取文件类型显示文本
   String _getFileTypeDisplay(String extension) {
     switch (extension.toLowerCase()) {
@@ -1191,7 +1221,7 @@ class _AIInputAreaState extends State<AIInputArea> {
         return extension.toUpperCase();
     }
   }
-  
+
   /// 根据文件扩展名获取文件图标
   IconData _getFileIcon(String extension) {
     switch (extension.toLowerCase()) {
@@ -1212,7 +1242,7 @@ class _AIInputAreaState extends State<AIInputArea> {
         return Icons.insert_drive_file;
     }
   }
-  
+
   /// 格式化文件大小
   String _formatFileSize(int bytes) {
     if (bytes < 1024) {
@@ -1223,13 +1253,14 @@ class _AIInputAreaState extends State<AIInputArea> {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
     }
   }
-  
+
   /// 移除附件
   void _removeAttachment(_AttachmentItem attachment) {
     setState(() {
       _attachments.remove(attachment);
       // 如果是图片，也从图片列表中移除
-      if (attachment.type == _AttachmentType.image && attachment.image != null) {
+      if (attachment.type == _AttachmentType.image &&
+          attachment.image != null) {
         _selectedImages.remove(attachment.image);
       }
     });
@@ -1246,7 +1277,8 @@ class _AIInputAreaState extends State<AIInputArea> {
           // show different svg based on input content
           _currentCharCount > 0
               ? const FlowySvgData('assets/flowy_icons/32x/askSendContent.svg')
-              : const FlowySvgData('assets/flowy_icons/32x/askSendNoContent.svg'),
+              : const FlowySvgData(
+                  'assets/flowy_icons/32x/askSendNoContent.svg'),
           size: Size.square(AIWelcomeTheme.sendButtonSize),
           blendMode: null,
         ),
@@ -1270,7 +1302,8 @@ class _AIInputAreaState extends State<AIInputArea> {
                 setState(() {
                   _isDeepThinkingEnabled = !_isDeepThinkingEnabled;
                 });
-                debugPrint('🔍 深度思考按钮: ${_isDeepThinkingEnabled ? "开启" : "关闭"}');
+                debugPrint(
+                    '🔍 深度思考按钮: ${_isDeepThinkingEnabled ? "开启" : "关闭"}');
               },
         child: Container(
           height: 30,
@@ -1279,7 +1312,8 @@ class _AIInputAreaState extends State<AIInputArea> {
             color: _getButtonBackgroundColor(context, isDisabled: isDisabled),
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: _getButtonBorderColor(context, isEnabled, isDisabled: isDisabled),
+              color: _getButtonBorderColor(context, isEnabled,
+                  isDisabled: isDisabled),
               width: 1,
             ),
           ),
@@ -1292,7 +1326,8 @@ class _AIInputAreaState extends State<AIInputArea> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: _getButtonTextColor(context, isEnabled, isDisabled: isDisabled),
+                    color: _getButtonTextColor(context, isEnabled,
+                        isDisabled: isDisabled),
                     fontFamily: 'PingFangSC-Medium',
                   ),
                 ),
@@ -1314,7 +1349,9 @@ class _AIInputAreaState extends State<AIInputArea> {
           width: AIWelcomeTheme.iconSize,
           height: AIWelcomeTheme.iconSize,
           decoration: BoxDecoration(
-            color: _selectedImages.isNotEmpty ? AIWelcomeTheme.selectedItemColor(context) : Colors.transparent,
+            color: _selectedImages.isNotEmpty
+                ? AIWelcomeTheme.selectedItemColor(context)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Stack(
@@ -1323,7 +1360,9 @@ class _AIInputAreaState extends State<AIInputArea> {
                 child: Icon(
                   Icons.image,
                   size: AIWelcomeTheme.iconSize,
-                  color: _selectedImages.isNotEmpty ? AIWelcomeTheme.selectedItemTextColor(context) : AIWelcomeTheme.secondaryTextColor(context),
+                  color: _selectedImages.isNotEmpty
+                      ? AIWelcomeTheme.selectedItemTextColor(context)
+                      : AIWelcomeTheme.secondaryTextColor(context),
                 ),
               ),
               if (_selectedImages.isNotEmpty)
@@ -1365,7 +1404,9 @@ class _AIInputAreaState extends State<AIInputArea> {
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
-        children: _selectedImages.map((image) => _buildImagePreviewItem(image)).toList(),
+        children: _selectedImages
+            .map((image) => _buildImagePreviewItem(image))
+            .toList(),
       ),
     );
   }
@@ -1453,8 +1494,10 @@ class _AIInputAreaState extends State<AIInputArea> {
         } else if (image.bytes != null) {
           // write bytes to temp file with the original name if possible
           final tempDir = Directory.systemTemp;
-          final sanitizedName = attachment.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-          final tempFile = File('${tempDir.path}${Platform.pathSeparator}$sanitizedName');
+          final sanitizedName =
+              attachment.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+          final tempFile =
+              File('${tempDir.path}${Platform.pathSeparator}$sanitizedName');
           await tempFile.writeAsBytes(image.bytes!);
           targetFile = tempFile;
         }
@@ -1501,13 +1544,13 @@ class _AIInputAreaState extends State<AIInputArea> {
 /// 附件类型枚举
 enum _AttachmentType {
   image, // 图片
-  file,  // 文件
+  file, // 文件
 }
 
 /// 上传状态枚举
 enum _UploadStatus {
   success, // 成功
-  failed,  // 失败
+  failed, // 失败
   // uploading, // 上传中（预留，未来使用）
 }
 
@@ -1521,7 +1564,7 @@ class _AttachmentItem {
   final _UploadStatus uploadStatus;
   // 是否被选中（用于点击高亮）
   bool isSelected;
-  
+
   _AttachmentItem({
     required this.type,
     required this.name,
@@ -1532,4 +1575,3 @@ class _AttachmentItem {
     this.isSelected = false,
   });
 }
-
