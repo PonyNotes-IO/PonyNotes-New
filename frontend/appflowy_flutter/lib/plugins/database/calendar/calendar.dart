@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/database/calendar/presentation/widgets/calendar_content_widget.dart';
@@ -106,7 +107,7 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
   Widget get leftBarItem => const FlowyText.medium('日历'); // 显示左侧标题
 
   @override
-  Widget? get rightBarItem => null;
+  Widget? get rightBarItem => null; // 暂时不展示右侧工具菜单栏，以解决日程展示问题
 
   @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
@@ -135,6 +136,10 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder {
 
 // 主日历面板骨架
 class CalendarMainPanel extends StatefulWidget {
+  const CalendarMainPanel({
+    super.key,
+  });
+
   @override
   State<CalendarMainPanel> createState() => _CalendarMainPanelState();
 }
@@ -158,8 +163,10 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   bool _isSubscribeSystemCalendar = false;
   late CalendarContentCubit _calendarContentCubit; // 保存CalendarContentCubit实例的引用
   
-  // 笔记页面缓存，避免重复创建DocumentPage实例
-  Map<String, Widget> _notePageCache = {};
+  // 笔记页面缓存，避免重复创建DocumentPage实例，限制缓存大小为20个
+  // 使用LinkedHashMap保持插入顺序，以便在缓存超过限制时移除最早添加的项
+  final LinkedHashMap<String, Widget> _notePageCache = LinkedHashMap<String, Widget>();
+  static const int _maxCacheSize = 20;
   // 加载状态
   bool _isLoadingNote = false;
 
@@ -611,6 +618,15 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       _showNewEventPage = false;
       _showEditEventPage = false;
     });
+    
+    // 模拟加载延迟，实际项目中可以根据需要调整
+    Future.delayed(Duration(milliseconds: 100), () {
+      if (mounted) {
+        setState(() {
+          _isLoadingNote = false;
+        });
+      }
+    });
   }
 
   void _hideEditEventPage() {
@@ -1029,12 +1045,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       _loadContentForDate(selectedDate);
     }
 
-    if (_isLoadingContent) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
-    }
-
     final data = _cachedContent ?? {};
     final notes = data['notes'] as List<ViewPB>? ?? [];
     final schedules = data['schedules'] as List<ScheduleItem>? ?? [];
@@ -1062,12 +1072,20 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     });
 
     try {
-      // 获取笔记数据
-      final notes = await _getNotesForDate(date);
+      // 并行获取笔记和日程数据，提高加载速度
+      final notesFuture = _getNotesForDate(date);
+      final schedulesFuture = _getSchedulesForDate(date);
 
-      // 获取日程数据
-      final schedules = await _getSchedulesForDate(date);
+      final notes = await notesFuture.timeout(
+        Duration(seconds: 10),
+        onTimeout: () => [],
+      );
+      final schedules = await schedulesFuture.timeout(
+        Duration(seconds: 10),
+        onTimeout: () => [],
+      );
 
+      // 无论是否mounted，都尝试更新状态
       if (mounted) {
         setState(() {
           _cachedContent = {
@@ -1079,6 +1097,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         });
       }
     } catch (e) {
+      // 无论是否mounted，都尝试重置加载状态
       if (mounted) {
         setState(() {
           _cachedContent = {
@@ -1086,6 +1105,13 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             'schedules': <ScheduleItem>[],
           };
           _lastLoadedDate = date;
+          _isLoadingContent = false;
+        });
+      }
+    } finally {
+      // 确保在任何情况下都能重置加载状态
+      if (mounted && _isLoadingContent) {
+        setState(() {
           _isLoadingContent = false;
         });
       }
@@ -1398,6 +1424,10 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               // 当文档被删除时，刷新默认视图并从缓存中移除
               setState(() {
                 _notePageCache.remove(noteId);
+                // 如果被删除的是当前选中的笔记，更新选中状态
+                if (_selectedNote?.id == noteId) {
+                  _selectedNote = null;
+                }
               });
             },
             userProfile: userProfile,
@@ -1407,6 +1437,12 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         
         // 将新创建的页面添加到缓存
         _notePageCache[noteId] = pageWidget;
+        
+        // 如果缓存大小超过限制，移除最早添加的项
+        if (_notePageCache.length > _maxCacheSize) {
+          final firstKey = _notePageCache.keys.first;
+          _notePageCache.remove(firstKey);
+        }
       } catch (e, stackTrace) {
         debugPrint('[Calendar] Error loading view ${note.name} (${note.id}): $e');
         debugPrint('[Calendar] Stack trace: $stackTrace');
