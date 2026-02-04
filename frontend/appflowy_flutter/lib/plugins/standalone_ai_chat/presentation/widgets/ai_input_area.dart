@@ -315,28 +315,57 @@ class _AIInputAreaState extends State<AIInputArea> {
     );
   }
 
-  /// 获取按钮背景颜色（适配深色模式）
-  Color _getButtonBackgroundColor(BuildContext context) {
+  /// 判断是否有功能开关开启（深度思考或联网搜索）
+  bool get _hasFeatureEnabled => _isDeepThinkingEnabled || _isWebSearchEnabled;
+
+  /// 获取按钮文字颜色（适配深色模式和禁用状态）
+  Color _getButtonTextColor(BuildContext context, bool isEnabled, {bool isDisabled = false}) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    return isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+    if (isDisabled) {
+      return isDarkMode ? const Color(0xFF666666) : const Color(0xFFB0B0B0);
+    }
+    if (isEnabled) {
+      return const Color(0xFFE94618); // 启用状态始终使用主题橙色
+    }
+    return isDarkMode ? const Color(0xFFB0B0B0) : const Color(0xFF636363);
   }
 
-  /// 获取按钮边框颜色（适配深色模式）
-  Color _getButtonBorderColor(BuildContext context, bool isEnabled) {
+  /// 获取按钮边框颜色（适配深色模式和禁用状态）
+  Color _getButtonBorderColor(BuildContext context, bool isEnabled, {bool isDisabled = false}) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    if (isDisabled) {
+      return isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0);
+    }
     if (isEnabled) {
       return const Color(0xFFE94618); // 启用状态始终使用主题橙色
     }
     return isDarkMode ? const Color(0xFF4A4A4A) : const Color(0xFFCDCDCD);
   }
 
-  /// 获取按钮文字颜色（适配深色模式）
-  Color _getButtonTextColor(BuildContext context, bool isEnabled) {
+  /// 获取按钮背景颜色（适配深色模式和禁用状态）
+  Color _getButtonBackgroundColor(BuildContext context, {bool isDisabled = false}) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    if (isEnabled) {
-      return const Color(0xFFE94618); // 启用状态始终使用主题橙色
+    if (isDisabled) {
+      return isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5);
     }
-    return isDarkMode ? const Color(0xFFB0B0B0) : const Color(0xFF636363);
+    return isDarkMode ? const Color(0xFF2C2C2C) : Colors.white;
+  }
+
+  /// 显示互斥提示弹窗
+  void _showMutualExclusionDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('提示'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 构建模型选择下拉框
@@ -567,33 +596,41 @@ class _AIInputAreaState extends State<AIInputArea> {
   /// 构建全网搜索按钮
   Widget _buildWebSearchButton() {
     final isEnabled = _isWebSearchEnabled;
-    
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _isWebSearchEnabled = !_isWebSearchEnabled;
-        });
-        debugPrint('🌐 联网搜索按钮: ${_isWebSearchEnabled ? "开启" : "关闭"}');
-      },
-      child: Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: _getButtonBackgroundColor(context),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: _getButtonBorderColor(context, isEnabled),
-            width: 1,
+    // 有附件时禁用
+    final isDisabled = _attachments.isNotEmpty;
+    final isDisabledReason = isDisabled ? '附件模式下不支持联网搜索' : null;
+
+    return FlowyTooltip(
+      message: isDisabledReason ?? (isEnabled ? '关闭联网搜索' : '开启联网搜索'),
+      child: GestureDetector(
+        onTap: isDisabled
+            ? null
+            : () {
+                setState(() {
+                  _isWebSearchEnabled = !_isWebSearchEnabled;
+                });
+                debugPrint('🌐 联网搜索按钮: ${_isWebSearchEnabled ? "开启" : "关闭"}');
+              },
+        child: Container(
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: _getButtonBackgroundColor(context, isDisabled: isDisabled),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _getButtonBorderColor(context, isEnabled, isDisabled: isDisabled),
+              width: 1,
+            ),
           ),
-        ),
-        child: Center(
-          child: Text(
-            '联网搜索',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: _getButtonTextColor(context, isEnabled),
-              fontFamily: 'PingFangSC-Medium',
+          child: Center(
+            child: Text(
+              '联网搜索',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: _getButtonTextColor(context, isEnabled, isDisabled: isDisabled),
+                fontFamily: 'PingFangSC-Medium',
+              ),
             ),
           ),
         ),
@@ -604,11 +641,14 @@ class _AIInputAreaState extends State<AIInputArea> {
   /// 构建合并后的附件上传按钮（包含图片和附件上传功能）
   Widget _buildAttachmentButton() {
     final hasAttachments = _attachments.isNotEmpty;
-    
+    // 有功能开关开启时禁用附件上传
+    final isDisabled = _hasFeatureEnabled;
+    final isDisabledReason = isDisabled ? '开启深度思考或联网搜索后不支持上传附件' : null;
+
     return FlowyTooltip(
-      message: '上传附件（支持图片和文件）',
+      message: isDisabledReason ?? (hasAttachments ? '已添加 ${_attachments.length} 个附件' : '上传附件（支持图片和文件）'),
       child: GestureDetector(
-        onTap: _handleAttachmentTap,
+        onTap: isDisabled ? null : _handleAttachmentTap,
         child: Container(
           width: AIWelcomeTheme.iconSize,
           height: AIWelcomeTheme.iconSize,
@@ -620,16 +660,30 @@ class _AIInputAreaState extends State<AIInputArea> {
             children: [
               Center(
                 child: FlowySvg(
-                  // show uploaded / not-uploaded variants
-                  hasAttachments
+                  // 根据禁用状态显示不同图标
+                  isDisabled
                       ? const FlowySvgData('assets/flowy_icons/32x/askAHBU.svg')
-                      : const FlowySvgData('assets/flowy_icons/32x/askNAU.svg'),
+                      : hasAttachments
+                          ? const FlowySvgData('assets/flowy_icons/32x/askAHBU.svg')
+                          : const FlowySvgData('assets/flowy_icons/32x/askNAU.svg'),
                   size: Size.square(AIWelcomeTheme.iconSize * 0.8),
-                  // keep original svg colors
-                  blendMode: null,
+                  // 禁用时使用灰色（通过 color 参数设置）
+                  color: isDisabled
+                      ? Theme.of(context).colorScheme.onSurface.withOpacity(0.4)
+                      : null,
+                  blendMode: isDisabled ? BlendMode.srcIn : null,
                 ),
               ),
-              // badge removed — do not display attachment count on the icon
+              // 禁用状态遮罩
+              if (isDisabled)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -1203,33 +1257,46 @@ class _AIInputAreaState extends State<AIInputArea> {
   /// 构建深度思考按钮
   Widget _buildDeepThinkingButton() {
     final isEnabled = _isDeepThinkingEnabled;
-    
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _isDeepThinkingEnabled = !_isDeepThinkingEnabled;
-        });
-        debugPrint('🔍 深度思考按钮: ${_isDeepThinkingEnabled ? "开启" : "关闭"}');
-      },
-      child: Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: _getButtonBackgroundColor(context),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: _getButtonBorderColor(context, isEnabled),
-            width: 1,
+    // 有附件时禁用
+    final isDisabled = _attachments.isNotEmpty;
+    final isDisabledReason = isDisabled ? '附件模式下不支持深度思考' : null;
+
+    return FlowyTooltip(
+      message: isDisabledReason ?? (isEnabled ? '关闭深度思考' : '开启深度思考'),
+      child: GestureDetector(
+        onTap: isDisabled
+            ? null
+            : () {
+                setState(() {
+                  _isDeepThinkingEnabled = !_isDeepThinkingEnabled;
+                });
+                debugPrint('🔍 深度思考按钮: ${_isDeepThinkingEnabled ? "开启" : "关闭"}');
+              },
+        child: Container(
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: _getButtonBackgroundColor(context, isDisabled: isDisabled),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _getButtonBorderColor(context, isEnabled, isDisabled: isDisabled),
+              width: 1,
+            ),
           ),
-        ),
-        child: Center(
-          child: Text(
-            '深度思考',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: _getButtonTextColor(context, isEnabled),
-              fontFamily: 'PingFangSC-Medium',
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '深度思考',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: _getButtonTextColor(context, isEnabled, isDisabled: isDisabled),
+                    fontFamily: 'PingFangSC-Medium',
+                  ),
+                ),
+              ],
             ),
           ),
         ),

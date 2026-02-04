@@ -783,29 +783,42 @@ class _PromptBottomActions extends StatelessWidget {
 
   /// PonyNotes: 构建附件上传按钮（支持图片和文件）
   Widget _buildAttachmentButton(BuildContext context) {
+    // 有附件时显示选中状态
+    final hasAttachments = context.select<AIPromptInputBloc, bool>(
+      (bloc) => bloc.state.attachedFiles.isNotEmpty,
+    );
+    // 有功能开关开启时禁用附件上传
+    final isDisabled = context.select<AIPromptInputBloc, bool>(
+      (bloc) => bloc.state.enableDeepThinking || bloc.state.enableWebSearch,
+    );
+
     return FlowyTooltip(
-      message: '上传附件（支持图片和文件）',
+      message: isDisabled
+          ? '开启深度思考或联网搜索后不支持上传附件'
+          : (hasAttachments ? '已添加附件' : '上传附件'),
       child: GestureDetector(
-        onTap: () async {
-          // 打开文件选择器，支持所有文件类型
-          final result = await getIt<FilePickerService>().pickFiles(
-            dialogTitle: '选择附件',
-            type: FileType.any, // 支持所有文件类型
-            allowMultiple: true,
-          );
-          
-          if (result == null || result.files.isEmpty) {
-            return;
-          }
-          
-          for (final file in result.files) {
-            if (file.path != null && context.mounted) {
-              context
-                  .read<AIPromptInputBloc>()
-                  .add(AIPromptInputEvent.attachFile(file.path!, file.name));
-            }
-          }
-        },
+        onTap: isDisabled
+            ? null
+            : () async {
+                // 打开文件选择器，支持所有文件类型
+                final result = await getIt<FilePickerService>().pickFiles(
+                  dialogTitle: '选择附件',
+                  type: FileType.any, // 支持所有文件类型
+                  allowMultiple: true,
+                );
+
+                if (result == null || result.files.isEmpty) {
+                  return;
+                }
+
+                for (final file in result.files) {
+                  if (file.path != null && context.mounted) {
+                    context
+                        .read<AIPromptInputBloc>()
+                        .add(AIPromptInputEvent.attachFile(file.path!, file.name));
+                  }
+                }
+              },
         child: Container(
           width: 28,
           height: 28,
@@ -814,9 +827,11 @@ class _PromptBottomActions extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
           ),
           child: Icon(
-            Icons.attach_file,
+            isDisabled ? Icons.attach_file : Icons.attach_file,
             size: 20,
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            color: isDisabled
+                ? Theme.of(context).colorScheme.onSurface.withOpacity(0.4)
+                : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
           ),
         ),
       ),
@@ -826,44 +841,57 @@ class _PromptBottomActions extends StatelessWidget {
   /// PonyNotes: 构建深度思考按钮（适配深色模式）
   Widget _buildDeepThinkingButton(BuildContext context, AIPromptInputState state) {
     final isEnabled = state.enableDeepThinking;
+    // 有附件时禁用
+    final isDisabled = state.attachedFiles.isNotEmpty;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final borderColor = isEnabled
-        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
+    final borderColor = isDisabled
+        ? isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0)
+        : isEnabled
+            ? const Color(0xFFE94618)
+            : isDarkMode
+                ? const Color(0xFF4A4A4A)
+                : const Color(0xFFCDCDCD);
+    final textColor = isDisabled
+        ? isDarkMode ? const Color(0xFF666666) : const Color(0xFFB0B0B0)
+        : isEnabled
+            ? const Color(0xFFE94618)
+            : isDarkMode
+                ? const Color(0xFFB0B0B0)
+                : const Color(0xFF636363);
+    final backgroundColor = isDisabled
+        ? isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5)
         : isDarkMode
-            ? const Color(0xFF4A4A4A) // 深色模式下灰色边框
-            : const Color(0xFFCDCDCD); // 浅色模式下灰色边框
-    final textColor = isEnabled
-        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
-        : isDarkMode
-            ? const Color(0xFFB0B0B0) // 深色模式下浅灰色文字
-            : const Color(0xFF636363); // 浅色模式下深灰色文字
-    final backgroundColor = isDarkMode
-        ? const Color(0xFF2A2A2A) // 深色模式下深色背景
-        : Colors.white; // 浅色模式下白色背景
+            ? const Color(0xFF2A2A2A)
+            : Colors.white;
 
-    return GestureDetector(
-      onTap: () {
-        context.read<AIPromptInputBloc>().add(const AIPromptInputEvent.toggleDeepThinking());
-      },
-      child: Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: borderColor,
-            width: 1,
+    return FlowyTooltip(
+      message: isDisabled ? '附件模式下不支持深度思考' : (isEnabled ? '关闭深度思考' : '开启深度思考'),
+      child: GestureDetector(
+        onTap: isDisabled
+            ? null
+            : () {
+                context.read<AIPromptInputBloc>().add(const AIPromptInputEvent.toggleDeepThinking());
+              },
+        child: Container(
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: borderColor,
+              width: 1,
+            ),
           ),
-        ),
-        child: Center(
-          child: Text(
-            '深度思考',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: textColor,
-              fontFamily: 'PingFangSC-Medium',
+          child: Center(
+            child: Text(
+              '深度思考',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: textColor,
+                fontFamily: 'PingFangSC-Medium',
+              ),
             ),
           ),
         ),
@@ -874,44 +902,57 @@ class _PromptBottomActions extends StatelessWidget {
   /// PonyNotes: 构建联网搜索按钮（适配深色模式）
   Widget _buildWebSearchButton(BuildContext context, AIPromptInputState state) {
     final isEnabled = state.enableWebSearch;
+    // 有附件时禁用
+    final isDisabled = state.attachedFiles.isNotEmpty;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final borderColor = isEnabled
-        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
+    final borderColor = isDisabled
+        ? isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0)
+        : isEnabled
+            ? const Color(0xFFE94618)
+            : isDarkMode
+                ? const Color(0xFF4A4A4A)
+                : const Color(0xFFCDCDCD);
+    final textColor = isDisabled
+        ? isDarkMode ? const Color(0xFF666666) : const Color(0xFFB0B0B0)
+        : isEnabled
+            ? const Color(0xFFE94618)
+            : isDarkMode
+                ? const Color(0xFFB0B0B0)
+                : const Color(0xFF636363);
+    final backgroundColor = isDisabled
+        ? isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5)
         : isDarkMode
-            ? const Color(0xFF4A4A4A) // 深色模式下灰色边框
-            : const Color(0xFFCDCDCD); // 浅色模式下灰色边框
-    final textColor = isEnabled
-        ? const Color(0xFFE94618) // rgba(233, 70, 24, 1)
-        : isDarkMode
-            ? const Color(0xFFB0B0B0) // 深色模式下浅灰色文字
-            : const Color(0xFF636363); // 浅色模式下深灰色文字
-    final backgroundColor = isDarkMode
-        ? const Color(0xFF2A2A2A) // 深色模式下深色背景
-        : Colors.white; // 浅色模式下白色背景
+            ? const Color(0xFF2A2A2A)
+            : Colors.white;
 
-    return GestureDetector(
-      onTap: () {
-        context.read<AIPromptInputBloc>().add(const AIPromptInputEvent.toggleWebSearch());
-      },
-      child: Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: borderColor,
-            width: 1,
+    return FlowyTooltip(
+      message: isDisabled ? '附件模式下不支持联网搜索' : (isEnabled ? '关闭联网搜索' : '开启联网搜索'),
+      child: GestureDetector(
+        onTap: isDisabled
+            ? null
+            : () {
+                context.read<AIPromptInputBloc>().add(const AIPromptInputEvent.toggleWebSearch());
+              },
+        child: Container(
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: borderColor,
+              width: 1,
+            ),
           ),
-        ),
-        child: Center(
-          child: Text(
-            '联网搜索',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: textColor,
-              fontFamily: 'PingFangSC-Medium',
+          child: Center(
+            child: Text(
+              '联网搜索',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: textColor,
+                fontFamily: 'PingFangSC-Medium',
+              ),
             ),
           ),
         ),
