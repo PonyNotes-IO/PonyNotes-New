@@ -57,8 +57,8 @@ class _CalendarContentState extends State<CalendarContent> {
 
   // 设置视图监听器，监听视图变化
   void _setupViewListener() {
-    // 监听工作空间级别的视图变化
-    _viewListener = ViewListener(viewId: 'workspace');
+    // 不指定 viewId，这样可以监听所有视图的变化，包括文档删除
+    _viewListener = ViewListener(viewId: null);
     _viewListener?.start(
       onViewUpdated: (view) {
         // 当视图更新时，刷新日历数据
