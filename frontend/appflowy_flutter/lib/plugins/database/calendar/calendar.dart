@@ -157,7 +157,10 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder{
   
   // 设置是否正在查看日程视图
   void setIsViewingSchedule(bool value) {
-    _isViewingSchedule.value = value;
+    // 使用 Future.microtask 延迟更新，避免在构建过程中触发重建
+    Future.microtask(() {
+      _isViewingSchedule.value = value;
+    });
   }
 
   @override
@@ -326,6 +329,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _calendarContentCubit = context.read<CalendarContentCubit>();
+        // 初始化完成后加载当前日期的内容
+        _loadContentForDate(_selectedDay ?? _focusedDay);
       }
     });
 
@@ -1153,6 +1158,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   _cachedContent = null;
                   _lastLoadedDate = null;
                 });
+                
+                // 加载新日期的内容
+                _loadContentForDate(selected);
               },
               onPageChanged: (focusedDay) {
                 setState(() {
@@ -1202,13 +1210,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   Widget _buildContentBasedOnDate() {
     final selectedDate = _selectedDay ?? _focusedDay;
 
-    // 检查是否需要重新加载数据
-    if (_lastLoadedDate == null ||
-        !_isSameDay(_lastLoadedDate!, selectedDate) ||
-        _cachedContent == null) {
-      _loadContentForDate(selectedDate);
-    }
-
+    // 检查是否需要重新加载数据，但不在构建过程中调用 _loadContentForDate
+    // 而是在日期选择时触发加载
     final data = _cachedContent ?? {};
     final notes = data['notes'] as List<ViewPB>? ?? [];
     final schedules = data['schedules'] as List<ScheduleItem>? ?? [];
