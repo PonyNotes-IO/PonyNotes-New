@@ -109,16 +109,24 @@ class CalendarMainPlugin extends Plugin {
   late final ViewInfoBloc _viewInfoBloc;
   late final PageAccessLevelBloc _pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> _selectedViewNotifier = ValueNotifier<ViewPB?>(null);
+  late final CalendarMainWidgetBuilder _widgetBuilder;
 
   @override
   PluginType get pluginType => PluginType.calendar;
 
   @override
-  PluginWidgetBuilder get widgetBuilder => CalendarMainWidgetBuilder(
-        viewInfoBloc: _viewInfoBloc,
-        pageAccessLevelBloc: _pageAccessLevelBloc,
-        selectedViewNotifier: _selectedViewNotifier,
-      );
+  void init() {
+    super.init();
+    // 初始化widgetBuilder实例
+    _widgetBuilder = CalendarMainWidgetBuilder(
+      viewInfoBloc: _viewInfoBloc,
+      pageAccessLevelBloc: _pageAccessLevelBloc,
+      selectedViewNotifier: _selectedViewNotifier,
+    );
+  }
+
+  @override
+  PluginWidgetBuilder get widgetBuilder => _widgetBuilder;
 
   @override
   PluginId get id =>
@@ -133,7 +141,7 @@ class CalendarMainPlugin extends Plugin {
   }
 }
 
-class CalendarMainWidgetBuilder extends PluginWidgetBuilder with NavigationItem {
+class CalendarMainWidgetBuilder extends PluginWidgetBuilder{
   CalendarMainWidgetBuilder({
     required this.viewInfoBloc,
     required this.pageAccessLevelBloc,
@@ -143,6 +151,14 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder with NavigationItem 
   final ViewInfoBloc viewInfoBloc;
   final PageAccessLevelBloc pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
+  
+  // 状态变量：跟踪是否正在查看日程视图
+  final ValueNotifier<bool> _isViewingSchedule = ValueNotifier<bool>(false);
+  
+  // 设置是否正在查看日程视图
+  void setIsViewingSchedule(bool value) {
+    _isViewingSchedule.value = value;
+  }
 
   @override
   String? get viewName => '日历'; // 显示标题
@@ -153,30 +169,41 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder with NavigationItem 
   @override
   Widget? get rightBarItem {
     // 当有选中文档时，返回该文档的右侧工具栏
-    // 参考SpaceHubPluginWidgetBuilder的实现方式
-    return ValueListenableBuilder<ViewPB?>(
-      valueListenable: selectedViewNotifier,
-      builder: (context, selectedView, _) {
-        if (selectedView == null) {
+    // 当正在查看日程视图时，隐藏右侧工具栏
+    return ValueListenableBuilder<bool>(
+      valueListenable: _isViewingSchedule,
+      builder: (context, isViewingSchedule, _) {
+        // 如果正在查看日程视图，隐藏右侧工具栏
+        if (isViewingSchedule) {
           return const SizedBox.shrink();
         }
+        
+        // 否则，显示选中文档的右侧工具栏
+        return ValueListenableBuilder<ViewPB?>(
+          valueListenable: selectedViewNotifier,
+          builder: (context, selectedView, _) {
+            if (selectedView == null) {
+              return const SizedBox.shrink();
+            }
 
-        try {
-          final plugin = selectedView.plugin();
-          plugin.init();
-          final widgetBuilder = plugin.widgetBuilder;
+            try {
+              final plugin = selectedView.plugin();
+              plugin.init();
+              final widgetBuilder = plugin.widgetBuilder;
 
-          // PluginWidgetBuilder 已经 mixin 了 NavigationItem，直接访问 rightBarItem
-          final toolbar = widgetBuilder.rightBarItem;
-          if (toolbar != null) {
-            return toolbar;
-          }
-        } catch (e) {
-          debugPrint('[Calendar] Error getting rightBarItem for ${selectedView.name}: $e');
-        }
+              // PluginWidgetBuilder 已经 mixin 了 NavigationItem，直接访问 rightBarItem
+              final toolbar = widgetBuilder.rightBarItem;
+              if (toolbar != null) {
+                return toolbar;
+              }
+            } catch (e) {
+              debugPrint('[Calendar] Error getting rightBarItem for ${selectedView.name}: $e');
+            }
 
-        // 没有可用的工具栏时，返回一个空占位，避免报错
-        return const SizedBox.shrink();
+            // 没有可用的工具栏时，返回一个空占位，避免报错
+            return const SizedBox.shrink();
+          },
+        );
       },
     );
   }
@@ -211,6 +238,7 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder with NavigationItem 
           child: CalendarMainPanel(
             selectedViewNotifier: selectedViewNotifier,
             onDeleted: context.onDeleted,
+            calendarWidgetBuilder: this, // 传递自己的引用
           ),
         );
       },
@@ -224,10 +252,12 @@ class CalendarMainPanel extends StatefulWidget {
     super.key,
     required this.selectedViewNotifier,
     this.onDeleted,
+    required this.calendarWidgetBuilder,
   });
 
   final ValueNotifier<ViewPB?> selectedViewNotifier;
   final Function(ViewPB, int?)? onDeleted;
+  final CalendarMainWidgetBuilder calendarWidgetBuilder;
 
   @override
   State<CalendarMainPanel> createState() => _CalendarMainPanelState();
@@ -685,6 +715,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   void _showCreateScheduleDialog() {
+    // 当新建日程时，隐藏右侧工具栏
+    widget.calendarWidgetBuilder.setIsViewingSchedule(true);
+    
     setState(() {
       _showNewEventPage = true;
       _selectedNote = null; // 清除当前选中的笔记
@@ -695,6 +728,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   void _hideNewEventPage() {
+    // 当关闭新建日程页面时，恢复显示右侧工具栏
+    widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+    
     setState(() {
       _showNewEventPage = false;
       _saveEventCallback = null; // 关闭时重置回调
@@ -704,6 +740,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   // 处理点击日程
   void _onScheduleTap(ScheduleItem schedule) {
     // 调试输出已移除: _onScheduleTap info
+    
+    // 当点击日程时，隐藏右侧工具栏
+    widget.calendarWidgetBuilder.setIsViewingSchedule(true);
     
     setState(() {
       _showEditEventPage = true;
@@ -717,6 +756,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   // 处理点击笔记
   void _onNoteTap(ViewPB note) {
+    // 当点击文档时，显示右侧工具栏
+    widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+    
     setState(() {
       // 如果点击的是当前选中的笔记，则取消选中
       if (_selectedNote?.id == note.id) {
@@ -744,6 +786,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   void _hideEditEventPage() {
+    // 当离开日程编辑页面时，恢复显示右侧工具栏
+    widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+    
     setState(() {
       _showEditEventPage = false;
       _editingSchedule = null;
