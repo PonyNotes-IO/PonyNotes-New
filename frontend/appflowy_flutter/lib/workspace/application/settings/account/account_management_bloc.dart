@@ -294,6 +294,7 @@ class AccountManagementBloc
       final currentSubscription = await SubscriptionService().getCurrentSubscription(
         userProfile: userProfile,
         forceRefresh: true, // 不再总是强制刷新，让缓存机制生效
+        caller: 'AccountManagementBloc._loadSubscriptionInfo',
       );
       _emitSubscriptionInfo(emit, currentSubscription);
     } catch (e, stackTrace) {

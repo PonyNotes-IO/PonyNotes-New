@@ -55,7 +55,14 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       if (isClosed) {
         return;
       }
+      // 支付成功后刷新订阅信息
       _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
+      
+      // 检查云同步状态，如果关闭则开启
+      if (!state.isCloudSyncEnabled) {
+        Log.info('Cloud sync is disabled, enabling it after payment success');
+        _safeAdd(UserWorkspaceEvent.updateCloudSyncEnabled(enabled: true));
+      }
     };
     _subscriptionSuccessListenable.addListener(_subscriptionSuccessListener);
     
@@ -608,8 +615,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     emit(
       state.copyWith(userProfile: event.userProfile),
     );
-    // 用户信息更新时，也更新会员信息
-    _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
   }
 
   Future<void> _onEmitCurrentWorkspace(
@@ -778,7 +783,8 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     final currentSubscription = await SubscriptionService().getCurrentSubscription(
       userProfile: state.userProfile,
-      forceRefresh: false, // 不再总是强制刷新，让缓存机制生效
+      forceRefresh: true, // 不再总是强制刷新，让缓存机制生效
+      caller: 'UserWorkspaceBloc._onFetchCurrentSubscription',
     );
     if (!isClosed) {
       add(

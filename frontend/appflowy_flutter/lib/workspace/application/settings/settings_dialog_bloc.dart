@@ -14,6 +14,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:http/http.dart' as http;
 
+import '../subscription/subscription_service.dart';
 import 'account/account_management_bloc.dart';
 import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 
@@ -166,96 +167,16 @@ class SettingsDialogBloc
     );
 
     try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-      if (baseUrl.isEmpty) {
-        Log.warn('订阅信息接口 baseUrl 为空，跳过请求');
-        emit(
-          state.copyWith(
-            isLoadingCurrentSubscription: false,
-            currentSubscription: null,
-          ),
-        );
-        return;
-      }
-
-      final accessToken = _extractAccessToken(userProfile.token);
-      if (accessToken == null || accessToken.isEmpty) {
-        Log.warn('订阅信息接口缺少 access_token，跳过请求');
-        emit(
-          state.copyWith(
-            isLoadingCurrentSubscription: false,
-            currentSubscription: null,
-          ),
-        );
-        return;
-      }
-
-      final uri = Uri.parse(baseUrl).replace(path: '/api/subscription/current');
-      final response = await http.get(
-        uri,
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'application/json',
-        },
+      // 使用 SubscriptionService 获取订阅信息，利用缓存机制
+      final currentSubscription = await SubscriptionService().getCurrentSubscription(
+        userProfile: userProfile,
+        forceRefresh: false,
+        caller: 'SettingsDialogBloc._fetchCurrentSubscription',
       );
-
-      if (response.statusCode == 404) {
-        Log.info('订阅信息接口返回 404，无订阅');
-        emit(
-          state.copyWith(
-            isLoadingCurrentSubscription: false,
-            currentSubscription: null,
-          ),
-        );
-        return;
-      }
-
-      if (response.statusCode != 200) {
-        Log.warn(
-          '订阅信息接口返回非 200: ${response.statusCode}, body: ${response.body}',
-        );
-        emit(
-          state.copyWith(
-            isLoadingCurrentSubscription: false,
-            currentSubscription: null,
-          ),
-        );
-        return;
-      }
-
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final code = decoded['code'] as int? ?? -1;
-      if (code != 0) {
-        Log.warn(
-          '订阅信息接口 code!=0: code=$code, message=${decoded['message']}',
-        );
-        emit(
-          state.copyWith(
-            isLoadingCurrentSubscription: false,
-            currentSubscription: null,
-          ),
-        );
-        return;
-      }
-
-      final data = decoded['data'];
-      if (data == null || data is! Map<String, dynamic>) {
-        Log.warn('订阅信息接口 data 为空或格式错误');
-        emit(
-          state.copyWith(
-            isLoadingCurrentSubscription: false,
-            currentSubscription: null,
-          ),
-        );
-        return;
-      }
-
-      final current = CurrentSubscription.fromJson(data);
       emit(
         state.copyWith(
           isLoadingCurrentSubscription: false,
-          currentSubscription: current,
+          currentSubscription: currentSubscription,
         ),
       );
     } catch (e, stackTrace) {

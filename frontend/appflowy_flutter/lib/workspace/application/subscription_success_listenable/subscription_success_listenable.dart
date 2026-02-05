@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart';
 
@@ -23,7 +25,7 @@ class SubscriptionSuccessListenable extends ChangeNotifier {
       };
 
   void onPaymentSuccess(String? plan) {
-    Log.info("Payment success: $plan");
+    Log.info("Payment success: generated random plan: $plan");
     _plan = plan;
     notifyListeners();
   }

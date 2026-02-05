@@ -41,34 +41,46 @@ class SubscriptionService {
   /// 
   /// [userProfile] 用户信息
   /// [forceRefresh] 是否强制刷新，忽略缓存
+  /// [caller] 调用来源，用于日志追踪
   Future<CurrentSubscription?> getCurrentSubscription({
     required UserProfilePB userProfile,
     bool forceRefresh = false,
+    String? caller,
   }) async {
+    final callerInfo = caller != null ? ' (from: $caller)' : '';
+    
     // 检查缓存是否有效
     if (!forceRefresh && _isCacheValid()) {
-      Log.info('Using cached subscription info');
+      Log.info('Using cached subscription info$callerInfo');
+      Log.info('Cache age: ${DateTime.now().difference(_lastFetchTime!).inSeconds}s');
       return _cachedSubscription;
     }
 
-    Log.info('Fetching current subscription info');
+    Log.info('Fetching current subscription info$callerInfo');
+    Log.info('Force refresh: $forceRefresh, Cache valid: ${_isCacheValid()}');
+    Log.info('Last fetch time: $_lastFetchTime');
+    Log.info('Current time: ${DateTime.now()}');
     
     // 尝试获取订阅信息，带重试机制
     CurrentSubscription? subscription;
     try {
       subscription = await _fetchCurrentSubscriptionData(userProfile);
-    } catch (e) {
-        Log.info('Retrying in $_retryDelay...');
-        await Future.delayed(_retryDelay);
+    } catch (e, stackTrace) {
+      Log.error('Error fetching subscription info: $e', e, stackTrace);
+      Log.info('Retrying in $_retryDelay...');
+      await Future.delayed(_retryDelay);
     }
 
     // 更新缓存，即使获取失败也更新缓存时间，避免频繁重试
     _lastFetchTime = DateTime.now();
     if (subscription != null) {
       _cachedSubscription = subscription;
-      Log.info('Successfully fetched subscription info');
+      Log.info('Successfully fetched subscription info$callerInfo');
+      Log.info('Subscription plan: ${subscription.subscription?.planCode}');
+      Log.info('Subscription status: ${subscription.subscription?.status}');
     } else {
-      Log.warn('Failed to fetch subscription info, using cached value if available');
+      Log.warn('Failed to fetch subscription info, using cached value if available$callerInfo');
+      Log.info('Cached subscription available: ${_cachedSubscription != null}');
     }
 
     return subscription;
@@ -78,17 +90,26 @@ class SubscriptionService {
   /// 
   /// [workspaceId] 工作区ID
   /// [forceRefresh] 是否强制刷新，忽略缓存
+  /// [caller] 调用来源，用于日志追踪
   Future<WorkspaceSubscriptionInfoPB?> getWorkspaceSubscriptionInfo({
     required String workspaceId,
     bool forceRefresh = false,
+    String? caller,
   }) async {
+    final callerInfo = caller != null ? ' (from: $caller)' : '';
+    
     // 检查缓存是否有效
     if (!forceRefresh && _isCacheValid() && _cachedWorkspaceSubscriptionInfo != null) {
-      Log.info('Using cached workspace subscription info');
+      Log.info('Using cached workspace subscription info for workspace: $workspaceId$callerInfo');
+      Log.info('Cache age: ${DateTime.now().difference(_lastFetchTime!).inSeconds}s');
       return _cachedWorkspaceSubscriptionInfo;
     }
 
-    Log.info('Fetching workspace subscription info for workspace: $workspaceId');
+    Log.info('Fetching workspace subscription info for workspace: $workspaceId$callerInfo');
+    Log.info('Force refresh: $forceRefresh, Cache valid: ${_isCacheValid()}');
+    Log.info('Cached workspace subscription info available: ${_cachedWorkspaceSubscriptionInfo != null}');
+    Log.info('Last fetch time: $_lastFetchTime');
+    Log.info('Current time: ${DateTime.now()}');
     
     // 尝试获取工作区订阅信息，带重试机制
     WorkspaceSubscriptionInfoPB? subscriptionInfo;
@@ -125,11 +146,17 @@ class SubscriptionService {
   }
 
   /// 刷新所有订阅信息
+  /// 
+  /// [userProfile] 用户信息
+  /// [workspaceId] 工作区ID
+  /// [caller] 调用来源，用于日志追踪
   Future<void> refreshAllSubscriptionInfo({
     required UserProfilePB userProfile,
     String? workspaceId,
+    String? caller,
   }) async {
-    Log.info('Refreshing all subscription info');
+    final callerInfo = caller != null ? ' (from: $caller)' : '';
+    Log.info('Refreshing all subscription info$callerInfo');
     
     // 并行获取订阅信息
     final futures = <Future>[];
@@ -137,18 +164,20 @@ class SubscriptionService {
     futures.add(getCurrentSubscription(
       userProfile: userProfile,
       forceRefresh: true,
+      caller: 'refreshAllSubscriptionInfo$callerInfo',
     ));
     
     if (workspaceId != null) {
       futures.add(getWorkspaceSubscriptionInfo(
         workspaceId: workspaceId,
         forceRefresh: true,
+        caller: 'refreshAllSubscriptionInfo$callerInfo',
       ));
     }
     
     await Future.wait(futures);
     
-    Log.info('All subscription info refreshed');
+    Log.info('All subscription info refreshed$callerInfo');
   }
 
   /// 检查缓存是否有效
@@ -210,6 +239,7 @@ class SubscriptionService {
 
       // 解析响应
       final json = jsonDecode(response.body);
+      if(json['data'] == null) return null;
       final subscription = CurrentSubscription.fromJson(json['data']);
       return subscription;
     } catch (e, stackTrace) {
