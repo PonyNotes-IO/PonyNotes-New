@@ -606,7 +606,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
         .map((e) => e.key)
         .toList();
     
-    // 按照要求的顺序排序：标准版 > 专业版 > 高级版 > 免费版
+    // 按照要求的顺序排序：免费 > 标准 > 专业 > 高级
     plans.sort((a, b) {
       final order = {
         WorkspacePlanPB.FreePlan: 1,

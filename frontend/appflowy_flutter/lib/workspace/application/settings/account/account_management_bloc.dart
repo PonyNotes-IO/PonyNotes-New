@@ -316,7 +316,7 @@ class AccountManagementBloc
 
     WorkspacePlanPB? selectedPlan;
     if (currentPlan == WorkspacePlanPB.FreePlan) {
-      selectedPlan = WorkspacePlanPB.ProPlan;
+      selectedPlan = WorkspacePlanPB.StandPlan;
     } else {
       selectedPlan = currentPlan;
     }
@@ -1844,7 +1844,12 @@ extension AccountManagementStateExtension on AccountManagementState {
             planConfigs.containsKey(subscriptionInfo.plan)) {
           return subscriptionInfo.plan;
         }
-        return availablePlans.first;
+        // 优先选择标准版计划，如果没有则返回第一个可用计划
+        final standPlan = availablePlans.firstWhere(
+          (plan) => plan == WorkspacePlanPB.StandPlan,
+          orElse: () => availablePlans.first,
+        );
+        return standPlan;
       },
     );
   }
