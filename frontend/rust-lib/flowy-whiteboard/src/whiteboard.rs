@@ -4,6 +4,7 @@ use collab::core::collab::DataSource;
 use collab::preclude::{Collab, CollabBuilder, Map, MapRef};
 use collab::util::MapExt;
 use collab_entity::EncodedCollab;
+use collab_entity::define::DOCUMENT_ROOT;
 use serde::{Deserialize, Serialize};
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
@@ -26,6 +27,13 @@ impl Whiteboard {
   pub fn create(mut collab: Collab) -> Result<Self, Error> {
     // 使用可变事务初始化和设置数据
     let mut txn = collab.context.transact_mut();
+
+    // ✅ 关键修复：初始化 Document 根节点
+    // 白板使用 CollabType::Document 类型，需要确保有 DOCUMENT_ROOT 根节点
+    // 这样 RocksDB 插件才能正确验证和保存数据
+    let _document_root = collab.data.get_or_init_map(&mut txn, DOCUMENT_ROOT);
+
+    // 初始化白板数据 Map
     let data = collab.data.get_or_init_map(&mut txn, Self::DATA_KEY);
     drop(txn);
     Ok(Self { collab, data })
@@ -63,8 +71,7 @@ impl Whiteboard {
 
   /// 从完整的 Excalidraw JSON 更新（直接从 Map/对象结构）
   pub fn update_from_json(&mut self, json_str: &str) -> Result<(), Error> {
-    tracing::info!("[Whiteboard] Whiteboard.update_from_json called");
-    tracing::info!("[Whiteboard] JSON string length: {} bytes", json_str.len());
+    tracing::trace!("[Whiteboard] update_from_json called, len: {}", json_str.len());
 
     #[derive(Serialize, Deserialize)]
     struct UpdateData {
@@ -72,26 +79,22 @@ impl Whiteboard {
       data: String,
     }
 
-    tracing::info!("[Whiteboard] Starting transaction...");
-    let mut txn = self.collab.context.transact_mut();
-    tracing::info!("[Whiteboard] ✅ Transaction started");
-
     let update_data = serde_json::from_str::<UpdateData>(json_str)?;
     let data_map = serde_json::from_str::<HashMap<String, serde_json::Value>>(&update_data.data)
       .map_err(|e| anyhow!("Failed to parse JSON into map: {}", e))?;
+
+    let mut txn = self.collab.context.transact_mut();
     match update_data.r#type.as_str() {
       "update" => {
         for (key, value) in data_map.iter() {
           let json = serde_json::to_string(value)
             .map_err(|e| anyhow!("Failed to serialize field '{}': {}", key, e))?;
           self.data.insert(&mut txn, key.as_str(), json.as_str());
-          tracing::info!("[Whiteboard] ✅ Updated field: {}, {}", key, value);
         }
       },
       "delete" => {
         for (key, _value) in data_map.iter() {
           self.data.remove(&mut txn, key.as_str());
-          tracing::info!("[Whiteboard] ✅ Remove field: {}", key);
         }
       },
       _ => {

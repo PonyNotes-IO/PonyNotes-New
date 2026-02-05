@@ -757,19 +757,19 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 key: localStorageKey,
                 value: jsonValue,
               );
-              print('💾 localStorage set: $localStorageKey = $jsonValue');
+              Log.debug('💾 localStorage set: $localStorageKey = $jsonValue');
             });
-            print('🌐 [ExcalidrawWebView] WebView created');
+            Log.debug('🌐 [ExcalidrawWebView] WebView created');
           },
 
           shouldOverrideUrlLoading: (controller, navigationAction) async {
             // 允许加载本地服务器的所有资源
             final url = navigationAction.request.url.toString();
             if (url.startsWith('http://localhost:') || url.startsWith('http://127.0.0.1:')) {
-              print('✅ [ExcalidrawWebView] Allowing navigation to: $url');
+              Log.debug('✅ [ExcalidrawWebView] Allowing navigation to: $url');
               return NavigationActionPolicy.ALLOW;
             }
-            print('⚠️ [ExcalidrawWebView] Blocking navigation to: $url');
+            Log.debug('⚠️ [ExcalidrawWebView] Blocking navigation to: $url');
             return NavigationActionPolicy.CANCEL;
           },
 
@@ -781,7 +781,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 _pageLoaded = false;
               });
             }
-            print('🔄 [ExcalidrawWebView] Loading started: $url');
+            Log.debug('🔄 [ExcalidrawWebView] Loading started: $url');
           },
 
           onLoadStop: (controller, url) async {
@@ -792,7 +792,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               });
               await _initializeExcalidraw();
             }
-            print('✅ [ExcalidrawWebView] Loading finished: $url');
+            Log.debug('✅ [ExcalidrawWebView] Loading finished: $url');
           },
 
           onProgressChanged: (controller, progress) {
@@ -807,7 +807,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 _loadingError = message;
               });
             }
-            print('❌ [ExcalidrawWebView] Load error: $message (code: $code)');
+            Log.error('❌ [ExcalidrawWebView] Load error: $message (code: $code)');
             widget.onError?.call('WebView加载错误: $message');
           },
 
@@ -818,12 +818,22 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 _loadingError = 'HTTP错误 $statusCode: $description';
               });
             }
-            print('❌ [ExcalidrawWebView] HTTP error: $statusCode - $description');
+            Log.error('❌ [ExcalidrawWebView] HTTP error: $statusCode - $description');
           },
 
           onConsoleMessage: (controller, consoleMessage) {
             // 打印 WebView 控制台消息（用于调试）
-            // Log.debug('[WebView Console] ${consoleMessage.message}');
+            // 只打印关键日志，避免刷屏
+            final message = consoleMessage.message;
+            // 只打印包含特定关键词的日志
+            if (message.contains('[PonyNotes]') ||
+                message.contains('Error') ||
+                message.contains('error') ||
+                message.contains('Failed') ||
+                message.contains('❌') ||
+                message.contains('✅')) {
+              Log.debug('[WebView Console] $message');
+            }
           },
         ),
 

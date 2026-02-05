@@ -94,8 +94,9 @@
             return originalLocalStorage.key(index);
         },
 
+        // ✅ 修复：返回正确的 length 值，而不是每次都清空数据
         get length() {
-            originalLocalStorage.clear();
+            return originalLocalStorage.length;
         }
     };
 
