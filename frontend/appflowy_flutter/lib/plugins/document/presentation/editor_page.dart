@@ -12,6 +12,7 @@ import 'package:appflowy/plugins/inline_actions/handlers/child_page.dart';
 import 'package:appflowy/plugins/inline_actions/handlers/date_reference.dart';
 import 'package:appflowy/plugins/inline_actions/handlers/inline_page_reference.dart';
 import 'package:appflowy/plugins/inline_actions/handlers/reminder_reference.dart';
+import 'package:appflowy/plugins/inline_actions/handlers/user_reference.dart';
 import 'package:appflowy/plugins/inline_actions/inline_actions_service.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
@@ -85,6 +86,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
       InlinePageReferenceService(currentViewId: documentBloc.documentId),
       DateReferenceService(context),
       ReminderReferenceService(context),
+      InlineUserReferenceService(currentViewId: documentBloc.documentId),
     ],
   );
 

@@ -2567,7 +2567,9 @@
     "createPage": "Create \"{}\" sub-page",
     "docReference": "Document reference",
     "gridReference": "Grid reference",
-    "recentPages": "Recent pages"
+    "recentPages": "Recent pages",
+    "mentionUser": "提及用户",
+    "noUsers": "没有找到用户"
   },
   "datePicker": {
     "dateTimeFormatTooltip": "在设置中更改日期和时间格式",

@@ -1,4 +1,5 @@
 import 'package:appflowy/mobile/presentation/inline_actions/mobile_inline_actions_menu.dart';
+import 'package:appflowy/plugins/inline_actions/handlers/user_reference.dart';
 import 'package:appflowy/plugins/inline_actions/inline_actions_menu.dart';
 import 'package:appflowy/plugins/inline_actions/inline_actions_result.dart';
 import 'package:appflowy/plugins/inline_actions/inline_actions_service.dart';
@@ -44,7 +45,10 @@ Future<bool> inlineActionsCommandHandler(
 
   final List<InlineActionsResult> initialResults = [];
   for (final handler in service.handlers) {
-    final group = await handler.search(null);
+    // 对于用户提及，强制刷新缓存以获取最新成员列表
+    final group = await (handler is InlineUserReferenceService 
+        ? handler.search(null, true) 
+        : handler.search(null));
 
     if (group.results.isNotEmpty) {
       initialResults.add(group);
