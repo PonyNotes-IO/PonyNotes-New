@@ -49,7 +49,6 @@ class UserWorkspaceState {
     this.currentSubscription,
     this.isCloudSyncEnabled = true, // 云同步开关状态，默认开启
     this.folderSyncState, // 文件夹同步状态
-    this.isStorageFull = false, // 存储是否已满
   });
 
   final UserWorkspacePB? currentWorkspace;
@@ -61,7 +60,6 @@ class UserWorkspaceState {
   final CurrentSubscription? currentSubscription;
   final bool isCloudSyncEnabled; // 云同步开关状态
   final FolderSyncStatePB? folderSyncState; // 文件夹同步状态
-  final bool isStorageFull; // 存储是否已满
 
   UserWorkspaceState copyWith({
     UserWorkspacePB? currentWorkspace,
@@ -73,7 +71,6 @@ class UserWorkspaceState {
     CurrentSubscription? currentSubscription,
     bool? isCloudSyncEnabled,
     FolderSyncStatePB? folderSyncState,
-    bool? isStorageFull,
   }) {
     return UserWorkspaceState(
       currentWorkspace: currentWorkspace ?? this.currentWorkspace,
@@ -85,7 +82,6 @@ class UserWorkspaceState {
       currentSubscription: currentSubscription ?? this.currentSubscription,
       isCloudSyncEnabled: isCloudSyncEnabled ?? this.isCloudSyncEnabled,
       folderSyncState: folderSyncState ?? this.folderSyncState,
-      isStorageFull: isStorageFull ?? this.isStorageFull,
     );
   }
 
@@ -101,8 +97,7 @@ class UserWorkspaceState {
         other.workspaceSubscriptionInfo == workspaceSubscriptionInfo &&
         other.currentSubscription == currentSubscription &&
         other.isCloudSyncEnabled == isCloudSyncEnabled &&
-        other.folderSyncState == folderSyncState &&
-        other.isStorageFull == isStorageFull;
+        other.folderSyncState == folderSyncState;
   }
 
   @override
@@ -117,12 +112,11 @@ class UserWorkspaceState {
       currentSubscription,
       isCloudSyncEnabled,
       folderSyncState,
-      isStorageFull,
     );
   }
 
   @override
   String toString() {
-    return 'WorkspaceState(currentWorkspace: $currentWorkspace, workspaces: $workspaces, actionResult: $actionResult, isCollabWorkspaceOn: $isCollabWorkspaceOn, userProfile: $userProfile, workspaceSubscriptionInfo: $workspaceSubscriptionInfo, currentSubscription: $currentSubscription, isCloudSyncEnabled: $isCloudSyncEnabled, folderSyncState: $folderSyncState, isStorageFull: $isStorageFull)';
+    return 'WorkspaceState(currentWorkspace: $currentWorkspace, workspaces: $workspaces, actionResult: $actionResult, isCollabWorkspaceOn: $isCollabWorkspaceOn, userProfile: $userProfile, workspaceSubscriptionInfo: $workspaceSubscriptionInfo, currentSubscription: $currentSubscription, isCloudSyncEnabled: $isCloudSyncEnabled, folderSyncState: $folderSyncState)';
   }
 }

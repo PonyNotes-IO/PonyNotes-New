@@ -29,6 +29,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:http/http.dart' as http;
 import 'package:protobuf/protobuf.dart';
 
+import '../../../user/application/user_service.dart';
+import '../../../workspace/application/subscription/membership_checker_service.dart';
+
 export 'workspace_event.dart';
 export 'workspace_state.dart';
 
@@ -877,31 +880,21 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       // 检查存储限制（只有当间隔大于5分钟后才检查）
       if (_shouldCheckStorage()) {
         try {
-          final subscriptionService = SubscriptionService();
-          final currentSubscription = await subscriptionService.getCurrentSubscription(
-            userProfile: state.userProfile,
-            caller: 'UserWorkspaceBloc._onUpdateFolderSyncState',
+          final userResult = await UserBackendService.getCurrentUserProfile();
+          final userProfile = userResult.fold(
+                (user) => user,
+                (error) => throw Exception('Failed to get user profile: ${error.msg}'),
           );
-          
-          final storageUsedGb = currentSubscription?.usage?.storageUsedGb ?? 0;
-          final storageTotalGb = currentSubscription?.usage?.storageTotalGb ?? 0;
-          
-          // 更新上次检查时间
-          _lastStorageCheckTime = DateTime.now();
-          
-          // 检查空间是否已满
-          if (storageUsedGb >= storageTotalGb) {
-            // 存储已满，更新状态
-            Log.info('Storage is full, updating state');
-            emit(state.copyWith(isStorageFull: true));
-          } else {
-            // 存储未满，确保状态为 false
-            if (state.isStorageFull) {
-              emit(state.copyWith(isStorageFull: false));
-            }
+
+          final canUseAI = await MembershipCheckerService().checkStorageLimit(userProfile: userProfile,requiredStorageMB: 0);
+          if (!canUseAI) {
+            Log.info('❌ ChatBloc: AI聊天次数已达上限，停止发送消息');
+            return;
           }
         } catch (e) {
-          Log.error('Failed to check storage limit: $e');
+          Log.error('Failed to check AI chat limit: $e');
+          // 如果检查失败，默认允许使用AI
+          return;
         }
       } else {
         Log.info('Storage check skipped, interval not reached');

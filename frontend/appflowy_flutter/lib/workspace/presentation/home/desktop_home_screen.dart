@@ -607,22 +607,7 @@ class _WorkspaceLifecycleRefresherState
   }
 
   @override
-  Widget build(BuildContext context) {
-    // 监听 UserWorkspaceBloc 的 isStorageFull 状态
-    return BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
-      listener: (context, state) {
-        // 存储已满，调用 checkAndHandleCloudSyncStorageLimit
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) {
-            context.checkAndHandleCloudSyncStorageLimit(
-              workspaceId: state.currentWorkspace?.workspaceId,
-            );
-          }
-        });
-      },
-      child: widget.child,
-    );
-  }
+  Widget build(BuildContext context) => widget.child;
 }
 
 class DesktopHomeScreenStackAdaptor extends HomeStackDelegate {
