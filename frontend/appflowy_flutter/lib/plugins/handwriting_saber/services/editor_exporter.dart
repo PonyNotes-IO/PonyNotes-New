@@ -180,67 +180,62 @@ abstract class EditorExporter {
   ) async {
     try {
       debugPrint('📄[EditorExporter] 开始渲染PDF背景: ${pdfImage.pdfFilePath}, 页面: ${pdfImage.pdfPageIndex}');
-      
+
       // 加载PDF文档
       final pdfDocument = await pdfrx.PdfDocument.openFile(pdfImage.pdfFilePath);
-      
+
       // 检查页面索引有效性
       if (pdfImage.pdfPageIndex < 0 || pdfImage.pdfPageIndex >= pdfDocument.pages.length) {
         debugPrint('⚠️ [EditorExporter] PDF页面索引无效: ${pdfImage.pdfPageIndex}');
         pdfDocument.dispose();
         return;
       }
-      
+
       // 获取PDF页面
       final pdfPage = pdfDocument.pages[pdfImage.pdfPageIndex];
-      
-      // 计算渲染尺寸（保持宽高比，适应页面大小）
-      final pdfWidth = pdfPage.width;
-      final pdfHeight = pdfPage.height;
-      final scale = _calculateFitScale(pdfWidth, pdfHeight, pageSize.width, pageSize.height);
-      
-      final renderWidth = (pdfWidth * scale * exportPixelRatio).toInt();
-      final renderHeight = (pdfHeight * scale * exportPixelRatio).toInt();
-      
-      debugPrint('📄[EditorExporter] PDF页面尺寸: ${pdfWidth}x$pdfHeight, 渲染尺寸: ${renderWidth}x$renderHeight');
-      
+
+      // ✅ 关键修复：使用 dstRect 来确定PDF的绘制位置和大小
+      // 保持与导入时一致的坐标系（左上角对齐）
+      final dstRect = pdfImage.dstRect ?? Rect.fromLTWH(0, 0, pageSize.width, pageSize.height);
+
+      // 计算渲染尺寸
+      // dstRect 的宽高已经包含了缩放比例，所以按原比例渲染
+      final renderWidth = (dstRect.width * exportPixelRatio).toInt();
+      final renderHeight = (dstRect.height * exportPixelRatio).toInt();
+
+      debugPrint('📄[EditorExporter] PDF页面尺寸: ${pdfPage.width}x${pdfPage.height}, dstRect: $dstRect, 渲染尺寸: ${renderWidth}x$renderHeight');
+
       // 渲染PDF页面为图片
       final pdfPageImage = await pdfPage.render(
         width: renderWidth,
         height: renderHeight,
         backgroundColor: Colors.white,
       );
-      
+
       if (pdfPageImage == null) {
         debugPrint('⚠️ [EditorExporter] PDF页面渲染失败');
         pdfDocument.dispose();
         return;
       }
-      
+
       // 转换为ui.Image
       final uiImage = await pdfPageImage.createImage();
-      
-      // 计算居中位置
-      final destWidth = pdfWidth * scale;
-      final destHeight = pdfHeight * scale;
-      final offsetX = (pageSize.width - destWidth) / 2;
-      final offsetY = (pageSize.height - destHeight) / 2;
-      
-      // 绘制到Canvas
+
+      // ✅ 绘制到Canvas（左上角对齐，与导入时一致）
       canvas.drawImageRect(
         uiImage,
         Rect.fromLTWH(0, 0, uiImage.width.toDouble(), uiImage.height.toDouble()),
-        Rect.fromLTWH(offsetX, offsetY, destWidth, destHeight),
+        dstRect,
         Paint(),
       );
-      
+
       debugPrint('📄[EditorExporter] PDF背景渲染完成');
-      
+
       // 清理资源
       uiImage.dispose();
       pdfPageImage.dispose();
       pdfDocument.dispose();
-      
+
     } catch (e) {
       debugPrint('❌ [EditorExporter] 绘制PDF背景失败: $e');
       // 不抛出异常，继续渲染其他内容
