@@ -22,17 +22,19 @@ class EditorPageManager extends StatefulWidget {
     required this.clearPage,
     required this.deletePage,
     this.width = 200,
+    this.constraints,
   });
 
   final EditorCoreInfo coreInfo;
   final int? currentPageIndex;
   final VoidCallback redrawAndSave;
-  final void Function(int pageIndex) scrollToPage;
+  final void Function(int pageIndex, {BoxConstraints? constraints}) scrollToPage;
   final void Function(int pageIndex) insertPageAfter;
   final void Function(int pageIndex) duplicatePage;
   final void Function(int pageIndex) clearPage;
   final void Function(int pageIndex) deletePage;
   final double width;
+  final BoxConstraints? constraints;
 
   @override
   State<EditorPageManager> createState() => _EditorPageManagerState();
@@ -125,23 +127,23 @@ class _EditorPageManagerState extends State<EditorPageManager> {
                     page.backgroundImage == null;
                 
                 return _PageItem(
-                  key: ValueKey('page_$pageIndex'),
+                  key: ObjectKey(page), // ✅ 使用ObjectKey替代ValueKey，基于页面对象本身，确保列表变化时组件状态正确
                   pageIndex: pageIndex,
                   totalPages: widget.coreInfo.pages.length,
                   coreInfo: widget.coreInfo,
                   isCurrentPage: isCurrentPage,
                   isEmptyLastPage: isEmptyLastPage,
-                  onTap: () => widget.scrollToPage(pageIndex),
+                  onTap: () => widget.scrollToPage(pageIndex, constraints: widget.constraints),
                   onInsert: () {
                     widget.insertPageAfter(pageIndex);
                     Future.delayed(const Duration(milliseconds: 100), () {
-                      widget.scrollToPage(pageIndex + 1);
+                      widget.scrollToPage(pageIndex + 1, constraints: widget.constraints);
                     });
                   },
                   onDuplicate: () {
                     widget.duplicatePage(pageIndex);
                     Future.delayed(const Duration(milliseconds: 100), () {
-                      widget.scrollToPage(pageIndex + 1);
+                      widget.scrollToPage(pageIndex + 1, constraints: widget.constraints);
                     });
                   },
                   onClear: isEmptyLastPage ? null : () {
@@ -152,7 +154,7 @@ class _EditorPageManagerState extends State<EditorPageManager> {
                     // 如果删除当前页，滚动到前一页
                     if (isCurrentPage && pageIndex > 0) {
                       Future.delayed(const Duration(milliseconds: 100), () {
-                        widget.scrollToPage(pageIndex - 1);
+                        widget.scrollToPage(pageIndex - 1, constraints: widget.constraints);
                       });
                     }
                   },
