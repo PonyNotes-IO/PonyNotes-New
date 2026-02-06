@@ -35,7 +35,7 @@ class ShareConstants {
       queryParams['workspaceId'] = workspaceId;
     }
     final query = Uri(queryParameters: queryParams).query;
-    return '$host/#/noteshare?$query';
+    return '$host/share?$query';
   }
 
   static String buildShareUrl({
