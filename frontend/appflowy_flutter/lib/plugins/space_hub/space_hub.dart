@@ -19,6 +19,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -28,6 +29,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../workspace/application/tabs/tabs_bloc.dart';
 
 /// SpaceHubPluginBuilder 用于创建空间统一页面插件
 /// 左侧显示空间下的文档/文件夹列表，右侧显示选中文档的详情
@@ -394,18 +397,27 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               child: SizedBox(
                 width: _leftPanelWidth,
                 child: _SpaceDocumentList(
-                  spaceView: widget.spaceView,
-                  selectedView: _selectedView,
-                  onViewSelected: (view) {
-                    debugPrint(
-                        '[SpaceHub] View selected: ${view.name} (${view.id})');
-                    setState(() {
-                      _selectedView = view;
-                    });
-                    // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-                    widget.selectedViewNotifier.value = view;
-                  },
-                ),
+                    spaceView: widget.spaceView,
+                    selectedView: _selectedView,
+                    onViewSelected: (view) {
+                      debugPrint(
+                          '[SpaceHub] View selected: ${view.name} (${view.id})');
+                      setState(() {
+                        _selectedView = view;
+                      });
+                      // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+                      widget.selectedViewNotifier.value = view;
+                    },
+                    onViewCreated: (view) {
+                      debugPrint(
+                          '[SpaceHub] View created: ${view.name} (${view.id})');
+                      setState(() {
+                        _selectedView = view;
+                      });
+                      // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+                      widget.selectedViewNotifier.value = view;
+                    },
+                  ),
               ),
             ),
             // 可拖动分隔线 - 增强对比度并支持拖动调整大小
@@ -525,16 +537,18 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 }
 
 /// 空间文档列表组件（左侧）
-class _SpaceDocumentList extends StatelessWidget {
-  const _SpaceDocumentList({
-    required this.spaceView,
-    required this.selectedView,
-    required this.onViewSelected,
-  });
+  class _SpaceDocumentList extends StatelessWidget {
+    const _SpaceDocumentList({
+      required this.spaceView,
+      required this.selectedView,
+      required this.onViewSelected,
+      required this.onViewCreated,
+    });
 
-  final ViewPB spaceView;
-  final ViewPB? selectedView;
-  final ValueChanged<ViewPB> onViewSelected;
+    final ViewPB spaceView;
+    final ViewPB? selectedView;
+    final ValueChanged<ViewPB> onViewSelected;
+    final ValueChanged<ViewPB> onViewCreated;
 
   @override
   Widget build(BuildContext context) {
@@ -594,30 +608,40 @@ class _SpaceDocumentList extends StatelessWidget {
               parentViewId: spaceView.id,
               onEditing: (_) {},
               onSelected: (pluginBuilder, name, initialDataBytes,
-                  openAfterCreated, createNewView) {
-                final layout = pluginBuilder.layoutType;
-                if (layout == null) return;
+                    openAfterCreated, createNewView) async {
+                  final layout = pluginBuilder.layoutType;
+                  if (layout == null) return;
 
-                if (spaceBloc != null) {
-                  // 使用 SpaceBloc 创建文档
-                  spaceBloc.add(
-                    SpaceEvent.createPage(
+                  if (spaceBloc != null) {
+                    // 使用 SpaceBloc 创建文档
+                    final result = await ViewBackendService.createView(
                       name: name ?? layout.defaultName,
-                      layout: layout,
+                      layoutType: layout,
+                      parentViewId: spaceView.id,
                       index: 0,
-                      openAfterCreate: false, // 不自动打开，由左侧列表选中触发
-                    ),
-                  );
-                } else {
-                  // Fallback: 直接创建文档
-                  ViewBackendService.createView(
-                    layoutType: layout,
-                    parentViewId: spaceView.id,
-                    name: name ?? layout.defaultName,
-                    openAfterCreate: false,
-                  );
-                }
-              },
+                      openAfterCreate: false, // 不自动打开新标签页
+                    );
+                    result.fold(
+                      (view) {
+                        // 刷新空间文档列表
+                        spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                        // 通知父组件新文档已创建，以便自动选中并显示
+                        onViewCreated(view);
+                      },
+                      (error) {
+                        Log.error('Failed to create view: $error');
+                      },
+                    );
+                  } else {
+                    // Fallback: 直接创建文档
+                    await ViewBackendService.createView(
+                      layoutType: layout,
+                      parentViewId: spaceView.id,
+                      name: name ?? layout.defaultName,
+                      openAfterCreate: false, // 不自动打开新标签页
+                    );
+                  }
+                },
               tooltipText: '新增文档',
             ),
           ),
@@ -839,15 +863,23 @@ class _SpaceDocumentList extends StatelessWidget {
   }
 
   /// 新建笔记页
-  void _createNewNote(BuildContext context) {
-    // 使用 SpaceBloc 创建新文档
-    context.read<SpaceBloc>().add(
-          SpaceEvent.createPage(
-            name: ViewLayoutPB.Document.defaultName,
-            layout: ViewLayoutPB.Document,
-            index: 0,
-            openAfterCreate: true,
-          ),
-        );
+  Future<void> _createNewNote(BuildContext context) async {
+    final result = await ViewBackendService.createView(
+      layoutType: ViewLayoutPB.Document,
+      parentViewId: spaceView.id,
+      name: ViewLayoutPB.Document.defaultName,
+      openAfterCreate: false,
+    );
+    result.fold(
+      (view) {
+        // 刷新空间文档列表
+        context.read<SpaceBloc>().add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+        // 通知父组件新文档已创建，以便自动选中并显示
+        onViewCreated(view);
+      },
+      (error) {
+        Log.error('Failed to create new note: $error');
+      },
+    );
   }
 }
