@@ -170,7 +170,6 @@ class SettingsDialogBloc
       // 使用 SubscriptionService 获取订阅信息，利用缓存机制
       final currentSubscription = await SubscriptionService().getCurrentSubscription(
         userProfile: userProfile,
-        forceRefresh: false,
         caller: 'SettingsDialogBloc._fetchCurrentSubscription',
       );
       emit(

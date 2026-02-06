@@ -44,23 +44,9 @@ class SubscriptionService {
   /// [caller] 调用来源，用于日志追踪
   Future<CurrentSubscription?> getCurrentSubscription({
     required UserProfilePB userProfile,
-    bool forceRefresh = false,
     String? caller,
   }) async {
     final callerInfo = caller != null ? ' (from: $caller)' : '';
-    
-    // 检查缓存是否有效
-    if (!forceRefresh && _isCacheValid()) {
-      Log.info('Using cached subscription info$callerInfo');
-      Log.info('Cache age: ${DateTime.now().difference(_lastFetchTime!).inSeconds}s');
-      return _cachedSubscription;
-    }
-
-    Log.info('Fetching current subscription info$callerInfo');
-    Log.info('Force refresh: $forceRefresh, Cache valid: ${_isCacheValid()}');
-    Log.info('Last fetch time: $_lastFetchTime');
-    Log.info('Current time: ${DateTime.now()}');
-    
     // 尝试获取订阅信息，带重试机制
     CurrentSubscription? subscription;
     try {
@@ -163,7 +149,6 @@ class SubscriptionService {
     
     futures.add(getCurrentSubscription(
       userProfile: userProfile,
-      forceRefresh: true,
       caller: 'refreshAllSubscriptionInfo$callerInfo',
     ));
     

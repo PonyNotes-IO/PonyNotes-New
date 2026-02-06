@@ -783,7 +783,6 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   ) async {
     final currentSubscription = await SubscriptionService().getCurrentSubscription(
       userProfile: state.userProfile,
-      forceRefresh: true, // 不再总是强制刷新，让缓存机制生效
       caller: 'UserWorkspaceBloc._onFetchCurrentSubscription',
     );
     if (!isClosed) {
@@ -855,5 +854,11 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     }
     
     emit(state.copyWith(folderSyncState: newSyncState));
+    
+    // 当同步完成时，更新订阅信息
+    if (newSyncState != null && newSyncState.isFinish && !newSyncState.isSyncing) {
+      // 同步完成，更新订阅信息
+      _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
+    }
   }
 }
