@@ -22,7 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/shared/settings/show_settings.dart' as settings;
-import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import '../../../../../application/subscription/membership_checker_service.dart';
 import '_sidebar_import_notion.dart';
 
 @visibleForTesting
@@ -585,12 +585,13 @@ class _CreateWorkspaceButton extends StatelessWidget {
           
           // 先获取最新的订阅信息
           context.read<UserWorkspaceBloc>().add(UserWorkspaceEvent.fetchCurrentSubscription());
-          
+
           // 检查工作区数量限制
-          if (!_checkWorkspaceLimit(context)) {
+          final canCreate = await _checkWorkspaceLimit(context);
+          if (!canCreate) {
+            PopoverContainer.of(context).closeAll();
             return;
           }
-          
           PopoverContainer.of(context).closeAll();
           // 等待一个微任务，确保 popover 关闭完成
           await Future.delayed(Duration.zero);
@@ -614,7 +615,7 @@ class _CreateWorkspaceButton extends StatelessWidget {
   }
 
   // 检查工作区数量限制
-  bool _checkWorkspaceLimit(BuildContext context) {
+  Future<bool> _checkWorkspaceLimit(BuildContext context) async {
     try {
       final workspaceBloc = context.read<UserWorkspaceBloc>();
       final state = workspaceBloc.state;
@@ -622,33 +623,13 @@ class _CreateWorkspaceButton extends StatelessWidget {
       // 获取当前工作区数量
       final currentWorkspaceCount = state.workspaces.length;
       Log.info('Current workspace count: $currentWorkspaceCount');
-      
-      // 获取订阅信息
-      final subscriptionInfo = state.currentSubscription;
-      final workspaceSubscriptionInfo = state.workspaceSubscriptionInfo;
-      
-      // 默认工作区数量限制
-      int workspaceLimit = 1; // 免费版默认限制
-      
-      // 根据订阅信息更新限制
-      if (subscriptionInfo != null) {
-        // 这里需要根据实际的订阅信息结构来获取工作区数量限制
-        workspaceLimit = subscriptionInfo.planDetails?.collaborativeWorkspaceLimit ?? 1;
-        Log.info('Current subscription: ${subscriptionInfo.planDetails?.collaborativeWorkspaceLimit}');
-      }
 
-      // 检查是否超过限制
-      if (currentWorkspaceCount >= workspaceLimit) {
-        // 显示错误提示
-        showToastNotification(
-          message: '您已达到工作区数量限制，无法创建更多工作区',
-          type: ToastificationType.error,
-        );
-        Log.info('Workspace limit exceeded: current $currentWorkspaceCount, limit $workspaceLimit');
-        return false;
-      }
-      
-      return true;
+      // 检查是否有权限创建更多工作区
+      final canCreate = await context.checkAndHandleWorkspaceCreation(
+          workspaceId: state.currentWorkspace?.workspaceId,
+          currentWorkspaceCount: currentWorkspaceCount,
+      );
+      return canCreate;
     } catch (e) {
       Log.error('Error checking workspace limit: $e');
       // 如果检查失败，默认允许创建工作区
