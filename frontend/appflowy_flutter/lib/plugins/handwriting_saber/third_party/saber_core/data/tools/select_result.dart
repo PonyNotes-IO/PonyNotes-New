@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../editor/page.dart';
 import '../tools/tool.dart';
 import '../../components/canvas/image/pdf_editor_image.dart';
+import '../../components/canvas/image/editor_image.dart';
 import '../../components/canvas/webview/webview_editor_element.dart';
 import '../editor/text_box.dart' as saber_text;
 
@@ -12,6 +13,7 @@ class SelectResult {
     required this.pageIndex,
     required this.strokes,
     required this.images,
+    required this.regularImages,
     required this.webViews,
     required this.selectionPath,
     List<saber_text.TextBox>? textBoxes,
@@ -22,30 +24,35 @@ class SelectResult {
 
   int pageIndex; // 页面索引
   List<Stroke> strokes; // 选中的笔迹列表（可修改）
-  List<PdfEditorImage> images; // 选中的图片列表（可修改）
+  List<PdfEditorImage> images; // 选中的图片列表（针对 PDF 背景图片，可修改）
+  List<EditorImage> regularImages; // ✅ 选中的常规图片列表（PNG/SVG，可修改）
   List<WebViewEditorElement> webViews; // 选中的WebView列表（可修改）
   List<saber_text.TextBox> textBoxes = []; // ✅ 选中的文本框列表（可修改）
   Path selectionPath; // 选择区域的路径（用于套索模式）
-  
+
   /// ✅ 新增：选择模式
   SelectMode selectMode;
-  
+
   /// ✅ 新增：选择起点（用于矩形框选）
   Offset? selectionStartPoint;
-  
+
   /// ✅ 新增：选择终点（用于矩形框选）
   Offset? selectionEndPoint;
 
-  bool get isEmpty => strokes.isEmpty && images.isEmpty && webViews.isEmpty && textBoxes.isEmpty;
-  
+  bool get isEmpty =>
+      strokes.isEmpty &&
+      images.isEmpty &&
+      webViews.isEmpty &&
+      textBoxes.isEmpty;
+
   /// ✅ 获取矩形选择框（用于矩形框选模式）
   Rect? getSelectionRect() {
-    if (selectMode != SelectMode.rectangle || 
-        selectionStartPoint == null || 
+    if (selectMode != SelectMode.rectangle ||
+        selectionStartPoint == null ||
         selectionEndPoint == null) {
       return null;
     }
-    
+
     return Rect.fromPoints(selectionStartPoint!, selectionEndPoint!);
   }
 
@@ -132,4 +139,3 @@ class SelectResult {
     return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 }
-

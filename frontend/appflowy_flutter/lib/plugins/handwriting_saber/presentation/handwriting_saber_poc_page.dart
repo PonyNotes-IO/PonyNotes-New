@@ -40,6 +40,14 @@ import '../services/pdf_text_extraction_service.dart';
 import '../services/editor_exporter.dart'; // ✅ PDF导出器
 import '../../../util/log_utils.dart';
 
+/// ✅ 层级调整动作枚举
+enum ReorderAction {
+  bringToFront,
+  bringForward,
+  sendBackward,
+  sendToBack,
+}
+
 /// PoC 页面：暂时只展示占位 UI，并在本地创建一个占位的 .sbn2 文件。
 ///
 /// 后续会在此处嵌入从 Saber 抽取的编辑器与画布。
@@ -135,6 +143,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// ✅ 剪贴板数据（存储复制的对象）
   List<Stroke>? _clipboardStrokes;
   List<PdfEditorImage>? _clipboardImages;
+  List<EditorImage>? _clipboardRegularImages; // ✅ 新增：常规图片剪贴板
   int? _clipboardSourcePageIndex;
 
   /// ✅ 当前正在编辑的文本框ID（使用ValueNotifier避免全局setState）
@@ -933,6 +942,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             pageIndex: pageIdx,
             strokes: [],
             images: [],
+            regularImages: [],
             webViews: [],
             textBoxes: [clickedTextBox],
             selectionPath: Path(), // 点击选择不需要路径
@@ -952,6 +962,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             pageIndex: pageIdx,
             strokes: [clickedStroke],
             images: [],
+            regularImages: [],
             webViews: [],
             textBoxes: [],
             selectionPath: Path(), // 点击选择不需要路径
@@ -972,6 +983,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         pageIndex: pageIdx,
         strokes: [],
         images: [],
+        regularImages: [],
         webViews: [],
         textBoxes: [],
         selectionPath: selectMode == SelectMode.lasso
@@ -1500,7 +1512,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // ✅ 三角形工具：一笔绘制，像自由多边形一样添加点
       stroke.points.add(position);
       originalPoints = List<Offset>.from(stroke.points);
-      // 如果是激光笔，记录点间时间
+      // 如果是激光笔，记录点间延迟与计时器
       if (stroke.toolId == ToolId.laserPointer &&
           _laserStrokeStopwatches.containsKey(stroke)) {
         final sw = _laserStrokeStopwatches[stroke]!;
@@ -1771,15 +1783,131 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       final offset = position - _selectStartPosition!;
       if (offset.distance > 1.0) {
         // 只有移动距离大于1像素才移动
+        final int oldPageIndex = _selectResult!.pageIndex;
         _selectResult!.move(offset);
         _selectStartPosition = position;
-        // 只通知受影响页面的 notifier，避免触发父级全量重建导致 PDF 闪烁
+
+        // ✅ 跨页检测：检查选中对象的中心点是否已经移出当前页面
+        final boundingBox = _selectResult!.getBoundingBox();
+        if (boundingBox != null) {
+          final center = boundingBox.center;
+          // 检查是否移出了当前页面边界 (0..pageWidth, 0..pageHeight)
+          final currentPage = _coreInfo.pages[oldPageIndex];
+          if (center.dy < 0 ||
+              center.dy > currentPage.size.height ||
+              center.dx < 0 ||
+              center.dx > currentPage.size.width) {
+            // 中心点移出了当前页面，计算全局偏移量
+            // 获取当前页面在整个滚动视图中的 top 偏移
+            double oldPageTop = 0;
+            for (int i = 0; i < oldPageIndex; i++) {
+              oldPageTop += _coreInfo.pages[i].size.height + 16;
+            }
+
+            final globalY = oldPageTop + center.dy;
+
+            // 寻找新页面
+            int newPageIndex = -1;
+            double accumulatedHeight = 0;
+            for (int i = 0; i < _coreInfo.pages.length; i++) {
+              final h = _coreInfo.pages[i].size.height;
+              if (globalY >= accumulatedHeight &&
+                  globalY <= accumulatedHeight + h) {
+                newPageIndex = i;
+                break;
+              }
+              accumulatedHeight += h + 16;
+            }
+
+            // 如果找到了新页面，且不是当前页面，则执行跨页移动
+            if (newPageIndex != -1 && newPageIndex != oldPageIndex) {
+              debugPrint(
+                  '🦋[HandwritingSaber] Cross-page movement detected: $oldPageIndex -> $newPageIndex');
+
+              final oldPage = _coreInfo.pages[oldPageIndex];
+              final newPage = _coreInfo.pages[newPageIndex];
+
+              // 计算从旧页面到新页面的坐标转换偏移
+              double newPageTop = 0;
+              for (int i = 0; i < newPageIndex; i++) {
+                newPageTop += _coreInfo.pages[i].size.height + 16;
+              }
+              final pageToPageOffset = Offset(0, oldPageTop - newPageTop);
+
+              // 1. 从旧页面移除对象并添加到新页面
+              // 处理笔迹
+              for (final stroke in _selectResult!.strokes) {
+                oldPage.strokes.remove(stroke);
+                // 转换坐标到新页面
+                for (int i = 0; i < stroke.points.length; i++) {
+                  stroke.points[i] += pageToPageOffset;
+                }
+                newPage.strokes.add(stroke);
+              }
+
+              // 处理常规图片
+              for (final image in _selectResult!.regularImages) {
+                oldPage.images.remove(image);
+                if (image.dstRect != null) {
+                  image.dstRect = image.dstRect!.shift(pageToPageOffset);
+                }
+                newPage.images.add(image);
+              }
+
+              // 处理 PDF 背景图片
+              for (final image in _selectResult!.images) {
+                if (oldPage.backgroundImage == image) {
+                  // 背景图在 EditorPage 中通常是 final 或特有字段，
+                  // 跨页移动背景图可能需要更复杂的逻辑，这里暂时支持其坐标转换
+                  if (image.dstRect != null) {
+                    image.dstRect = image.dstRect!.shift(pageToPageOffset);
+                  }
+                  // 注意：EditorPage 的 backgroundImage 可能需要特殊处理
+                }
+              }
+
+              // 处理 WebView
+              for (final webView in _selectResult!.webViews) {
+                oldPage.webViews.remove(webView);
+                webView.dstRect = webView.dstRect.shift(pageToPageOffset);
+                newPage.webViews.add(webView);
+              }
+
+              // 处理文本框
+              for (final textBox in _selectResult!.textBoxes) {
+                oldPage.textBoxes.remove(textBox);
+                textBox.move(pageToPageOffset);
+                newPage.textBoxes.add(textBox);
+              }
+
+              // 2. 更新选择结果的页面索引和路径
+              _selectResult!.pageIndex = newPageIndex;
+              _selectResult!.selectionPath =
+                  _selectResult!.selectionPath.shift(pageToPageOffset);
+
+              // 3. 更新 notifier
+              _pageNotifiers[oldPageIndex].updatePage(oldPage);
+              _pageNotifiers[newPageIndex].updatePage(newPage);
+
+              // 4. 更新 _selectStartPosition 以适应新页面的坐标系
+              _selectStartPosition = _selectStartPosition! + pageToPageOffset;
+            }
+          }
+        }
+
+        // 只通知受影响页面的 notifier
         final int targetPageIndex = _selectResult!.pageIndex;
         if (targetPageIndex < _pageNotifiers.length) {
           _pageNotifiers[targetPageIndex]
               .updatePage(_coreInfo.pages[targetPageIndex]);
         }
-        // 使用防抖保存，避免频繁磁盘写入导致 UI 卡顿
+        // 如果跨页了，还需要更新旧页面
+        if (oldPageIndex != targetPageIndex &&
+            oldPageIndex < _pageNotifiers.length) {
+          _pageNotifiers[oldPageIndex]
+              .updatePage(_coreInfo.pages[oldPageIndex]);
+        }
+
         _scheduleSave();
       }
       return;
@@ -1873,7 +2001,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     });
   }
 
-  /// ✅ 删除选中的对象（笔迹、图片、文本框等）
   void _deleteSelectedObjects() {
     if (_selectResult == null || _selectResult!.isEmpty) {
       debugPrint('🦋[HandwritingSaber] _deleteSelectedObjects: 没有选中的对象');
@@ -1885,35 +2012,45 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
     final page = _coreInfo.pages[pageIndex];
     final deletedStrokes = List<Stroke>.from(_selectResult!.strokes);
-    final deletedImages = List<PdfEditorImage>.from(_selectResult!.images);
+    final deletedPdfImages = List<PdfEditorImage>.from(_selectResult!.images);
+    final deletedRegularImages =
+        List<EditorImage>.from(_selectResult!.regularImages); // ✅ 常规图片
     final deletedTextBoxes =
         List<saber_text.TextBox>.from(_selectResult!.textBoxes); // ✅ 删除的文本框列表
+
+    bool pageStructureChanged = false;
 
     // 删除笔迹
     for (final stroke in deletedStrokes) {
       page.strokes.remove(stroke);
     }
 
-    // 删除图片（注意：SelectResult 中的 images 是 PdfEditorImage 类型）
-    // 由于 backgroundImage 是 final，需要创建新页面对象
+    // 删除常规图片
+    for (final image in deletedRegularImages) {
+      page.images.remove(image);
+      pageStructureChanged = true;
+    }
+
+    // 删除 PDF 背景图片
     PdfEditorImage? newBackgroundImage = page.backgroundImage;
-    for (final image in deletedImages) {
-      // 如果是背景图片，清除背景
+    for (final image in deletedPdfImages) {
       if (page.backgroundImage == image) {
         newBackgroundImage = null;
+        pageStructureChanged = true;
       }
     }
 
     // ✅ 删除文本框
     for (final textBox in deletedTextBoxes) {
       page.textBoxes.remove(textBox);
-      // 释放文本框资源
       textBox.dispose();
+      pageStructureChanged = true;
     }
 
-    // 如果背景图片被删除或文本框被删除，创建新的页面对象
-    if (newBackgroundImage != page.backgroundImage ||
-        deletedTextBoxes.isNotEmpty) {
+    // 如果背景图片、常规图片或文本框被删除，触发页面重构（如果 EditorPage 是不可变的）
+    // 这里的实现根据 EditorPage 是否允许直接修改列表而定。
+    // 如果需要创建新页面对象：
+    if (pageStructureChanged) {
       final updatedPage = EditorPage(
         size: page.size,
         strokes: page.strokes,
@@ -1947,7 +2084,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _scheduleSave();
 
     // 显示提示
-    final deletedCount = deletedStrokes.length + deletedImages.length;
+    final deletedCount = deletedStrokes.length +
+        deletedPdfImages.length +
+        deletedRegularImages.length +
+        deletedTextBoxes.length;
     if (mounted && deletedCount > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('已删除 $deletedCount 个对象')),
@@ -1955,7 +2095,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
 
     debugPrint(
-        '🦋[HandwritingSaber] _deleteSelectedObjects: 删除了 ${deletedStrokes.length} 个笔迹，${deletedImages.length} 个图片');
+        '🦋[HandwritingSaber] _deleteSelectedObjects: 删除了 ${deletedStrokes.length} 笔迹, ${deletedPdfImages.length} PDF背景, ${deletedRegularImages.length} 常规图片, ${deletedTextBoxes.length} 文本框');
   }
 
   /// ✅ 复制选中的对象到剪贴板
@@ -1978,8 +2118,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       );
     }).toList();
 
-    // 深拷贝图片到剪贴板（暂时只支持引用复制）
+    // 深拷贝图片到剪贴板
     _clipboardImages = List<PdfEditorImage>.from(_selectResult!.images);
+    _clipboardRegularImages =
+        List<EditorImage>.from(_selectResult!.regularImages); // ✅ 复制常规图片
 
     // 记录源页面索引
     _clipboardSourcePageIndex = _selectResult!.pageIndex;
@@ -1998,7 +2140,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 粘贴剪贴板中的对象
   void _pasteObjects() {
-    if (_clipboardStrokes == null && _clipboardImages == null) {
+    if (_clipboardStrokes == null &&
+        _clipboardImages == null &&
+        _clipboardRegularImages == null) {
       debugPrint('🦋[HandwritingSaber] _pasteObjects: 剪贴板为空');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2038,8 +2182,35 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       }
     }
 
-    // 粘贴图片（暂不支持，因为需要处理图片数据复制）
-    // TODO: 实现图片粘贴
+    // 粘贴常规图片
+    if (_clipboardRegularImages != null) {
+      for (final image in _clipboardRegularImages!) {
+        // 克隆图片并平移
+        EditorImage? pastedImage;
+        if (image is PngEditorImage) {
+          pastedImage = PngEditorImage(
+            id: DateTime.now().millisecondsSinceEpoch.toString() + image.id,
+            imageBytes: image.imageBytes,
+            extension: image.extension,
+            pageIndex: targetPageIndex,
+            pageSize: page.size,
+            dstRect: image.dstRect?.shift(pasteOffset),
+          );
+        } else if (image is SvgEditorImage) {
+          pastedImage = SvgEditorImage(
+            id: DateTime.now().millisecondsSinceEpoch.toString() + image.id,
+            svgString: image.svgString,
+            pageIndex: targetPageIndex,
+            pageSize: page.size,
+            dstRect: image.dstRect?.shift(pasteOffset),
+          );
+        }
+
+        if (pastedImage != null) {
+          page.images.add(pastedImage);
+        }
+      }
+    }
 
     if (pastedStrokes.isNotEmpty) {
       // 记录到历史
@@ -2087,6 +2258,47 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       ),
       items: [
         const PopupMenuItem<String>(
+          value: 'bring_to_front',
+          child: Row(
+            children: [
+              Icon(Icons.vertical_align_top, size: 20),
+              SizedBox(width: 8),
+              Text('置于顶层'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'bring_forward',
+          child: Row(
+            children: [
+              Icon(Icons.arrow_upward, size: 20),
+              SizedBox(width: 8),
+              Text('上移一层'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'send_backward',
+          child: Row(
+            children: [
+              Icon(Icons.arrow_downward, size: 20),
+              SizedBox(width: 8),
+              Text('下移一层'),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'send_to_back',
+          child: Row(
+            children: [
+              Icon(Icons.vertical_align_bottom, size: 20),
+              SizedBox(width: 8),
+              Text('置于底层'),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(
           value: 'copy',
           child: Row(
             children: [
@@ -2132,7 +2344,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       ],
     );
 
-    if (result == 'copy') {
+    if (result == 'bring_to_front') {
+      _reorderSelectedObjects(ReorderAction.bringToFront);
+    } else if (result == 'bring_forward') {
+      _reorderSelectedObjects(ReorderAction.bringForward);
+    } else if (result == 'send_backward') {
+      _reorderSelectedObjects(ReorderAction.sendBackward);
+    } else if (result == 'send_to_back') {
+      _reorderSelectedObjects(ReorderAction.sendToBack);
+    } else if (result == 'copy') {
       _copySelectedObjects();
     } else if (result == 'paste') {
       _pasteObjects();
@@ -2532,163 +2752,220 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
 
   /// ✅ 检测选择区域内的对象
-  void _detectObjectsInSelection(SelectResult selectResult) {
-    if (_coreInfo.pages.isEmpty) {
-      return;
-    }
-
-    final pageIndex = selectResult.pageIndex;
-    if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) {
-      return;
-    }
+  void _detectObjectsInSelection(SelectResult result) {
+    final int pageIndex = result.pageIndex;
+    if (pageIndex >= _coreInfo.pages.length) return;
 
     final page = _coreInfo.pages[pageIndex];
-    final selectedStrokes = <Stroke>[];
-    final selectedImages = <PdfEditorImage>[];
-    final selectedTextBoxes = <saber_text.TextBox>[]; // ✅ 选中的文本框列表
+    result.strokes.clear();
+    result.images.clear();
+    result.webViews.clear();
+    result.textBoxes.clear();
 
-    // ✅ 根据选择模式使用不同的检测方法
-    if (selectResult.selectMode == SelectMode.rectangle) {
-      // ✅ 矩形框选模式
-      final selectionRect = selectResult.getSelectionRect();
-      if (selectionRect == null) return;
-
-      // 检测笔迹
-      for (final stroke in page.strokes) {
-        int pointsInside = 0;
-        for (final point in stroke.points) {
-          if (selectionRect.contains(point)) {
-            pointsInside++;
-          }
-        }
-        // 如果70%以上的点在选择区域内，则认为被选中
-        if (stroke.points.isNotEmpty &&
-            pointsInside / stroke.points.length >= 0.7) {
-          selectedStrokes.add(stroke);
-        }
-      }
-
-      // 检测图片
-      if (page.backgroundImage != null) {
-        final image = page.backgroundImage!;
-        if (image.dstRect != null) {
-          final rect = image.dstRect!;
-          // 检查矩形的四个角是否在选择区域内
-          int cornersInside = 0;
-          final corners = [
-            Offset(rect.left, rect.top),
-            Offset(rect.right, rect.top),
-            Offset(rect.right, rect.bottom),
-            Offset(rect.left, rect.bottom),
-          ];
-          for (final corner in corners) {
-            if (selectionRect.contains(corner)) {
-              cornersInside++;
-            }
-          }
-          // 如果至少3个角在选择区域内，则认为被选中
-          if (cornersInside >= 3) {
-            selectedImages.add(image);
-          }
-        }
-      }
-
-      // ✅ 检测文本框
-      for (final textBox in page.textBoxes) {
-        final rect = textBox.rect;
-        // 检查文本框的四个角是否在选择区域内
-        int cornersInside = 0;
-        final corners = [
-          Offset(rect.left, rect.top),
-          Offset(rect.right, rect.top),
-          Offset(rect.right, rect.bottom),
-          Offset(rect.left, rect.bottom),
-        ];
-        for (final corner in corners) {
-          if (selectionRect.contains(corner)) {
-            cornersInside++;
-          }
-        }
-        // 如果至少3个角在选择区域内，则认为被选中
-        if (cornersInside >= 3) {
-          selectedTextBoxes.add(textBox);
-        }
-      }
-    } else if (selectResult.selectMode == SelectMode.lasso) {
-      // ✅ 套索选择模式
-      final selectionPath = selectResult.selectionPath;
+    if (result.selectMode == SelectMode.rectangle) {
+      final rect = result.getSelectionRect();
+      if (rect == null) return;
 
       // 检测笔迹
       for (final stroke in page.strokes) {
-        int pointsInside = 0;
-        for (final point in stroke.points) {
-          if (selectionPath.contains(point)) {
-            pointsInside++;
+        // 检查任一点是否在矩形内
+        for (final p in stroke.points) {
+          if (rect.contains(p)) {
+            result.strokes.add(stroke);
+            break;
           }
-        }
-        // 如果70%以上的点在选择区域内，则认为被选中
-        if (stroke.points.isNotEmpty &&
-            pointsInside / stroke.points.length >= 0.7) {
-          selectedStrokes.add(stroke);
         }
       }
 
-      // 检测图片
+      // 检测图片 (PDF背景图片)
+      if (page.backgroundImage != null) {
+        final image = page.backgroundImage!;
+        if (image.dstRect != null && rect.overlaps(image.dstRect!)) {
+          result.images.add(image);
+        }
+      }
+
+      // 检测常规图片
+      for (final image in page.images) {
+        if (image.dstRect != null && rect.overlaps(image.dstRect!)) {
+          result.regularImages.add(image);
+        }
+      }
+
+      // 检测 WebView
+      for (final webView in page.webViews) {
+        if (rect.overlaps(webView.dstRect)) {
+          result.webViews.add(webView);
+        }
+      }
+
+      // 检测文本框
+      for (final textBox in page.textBoxes) {
+        if (rect.overlaps(textBox.rect)) {
+          result.textBoxes.add(textBox);
+        }
+      }
+    } else if (result.selectMode == SelectMode.lasso) {
+      // 套索模式：使用 selectionPath 检测
+      final path = result.selectionPath;
+
+      // 检测笔迹
+      for (final stroke in page.strokes) {
+        for (final p in stroke.points) {
+          if (path.contains(p)) {
+            result.strokes.add(stroke);
+            break;
+          }
+        }
+      }
+
+      // 检测图片 (PDF背景图片)
       if (page.backgroundImage != null) {
         final image = page.backgroundImage!;
         if (image.dstRect != null) {
-          final rect = image.dstRect!;
-          // 检查矩形的四个角是否在选择区域内
-          int cornersInside = 0;
-          final corners = [
-            Offset(rect.left, rect.top),
-            Offset(rect.right, rect.top),
-            Offset(rect.right, rect.bottom),
-            Offset(rect.left, rect.bottom),
-          ];
-          for (final corner in corners) {
-            if (selectionPath.contains(corner)) {
-              cornersInside++;
-            }
-          }
-          // 如果至少3个角在选择区域内，则认为被选中
-          if (cornersInside >= 3) {
-            selectedImages.add(image);
+          final r = image.dstRect!;
+          if (path.contains(r.topLeft) ||
+              path.contains(r.topRight) ||
+              path.contains(r.bottomLeft) ||
+              path.contains(r.bottomRight)) {
+            result.images.add(image);
           }
         }
       }
 
-      // ✅ 检测文本框
-      for (final textBox in page.textBoxes) {
-        final rect = textBox.rect;
-        // 检查文本框的四个角是否在选择区域内
-        int cornersInside = 0;
-        final corners = [
-          Offset(rect.left, rect.top),
-          Offset(rect.right, rect.top),
-          Offset(rect.right, rect.bottom),
-          Offset(rect.left, rect.bottom),
-        ];
-        for (final corner in corners) {
-          if (selectionPath.contains(corner)) {
-            cornersInside++;
+      // 检测常规图片
+      for (final image in page.images) {
+        if (image.dstRect != null) {
+          final r = image.dstRect!;
+          if (path.contains(r.topLeft) ||
+              path.contains(r.topRight) ||
+              path.contains(r.bottomLeft) ||
+              path.contains(r.bottomRight)) {
+            result.regularImages.add(image);
           }
         }
-        // 如果至少3个角在选择区域内，则认为被选中
-        if (cornersInside >= 3) {
-          selectedTextBoxes.add(textBox);
+      }
+
+      // 检测 WebView
+      for (final webView in page.webViews) {
+        final r = webView.dstRect;
+        if (path.contains(r.topLeft) ||
+            path.contains(r.topRight) ||
+            path.contains(r.bottomLeft) ||
+            path.contains(r.bottomRight)) {
+          result.webViews.add(webView);
+        }
+      }
+
+      // 检测文本框
+      for (final textBox in page.textBoxes) {
+        final r = textBox.rect;
+        if (path.contains(r.topLeft) ||
+            path.contains(r.topRight) ||
+            path.contains(r.bottomLeft) ||
+            path.contains(r.bottomRight)) {
+          result.textBoxes.add(textBox);
         }
       }
     }
+  }
 
-    setState(() {
-      selectResult.strokes.clear();
-      selectResult.strokes.addAll(selectedStrokes);
-      selectResult.images.clear();
-      selectResult.images.addAll(selectedImages);
-      selectResult.textBoxes.clear();
-      selectResult.textBoxes.addAll(selectedTextBoxes); // ✅ 添加选中的文本框
-    });
+  /// ✅ 调整选中对象的层级
+  void _reorderSelectedObjects(ReorderAction action) {
+    if (_selectResult == null || _selectResult!.isEmpty) return;
+
+    final int pageIndex = _selectResult!.pageIndex;
+    if (pageIndex >= _coreInfo.pages.length) return;
+
+    final page = _coreInfo.pages[pageIndex];
+
+    // 分别处理笔迹和其它对象（图片、WebView、文本框）
+    // 当前笔迹层在所有其它对象之上，所以只能在各自层级内调整
+
+    // 1. 调整笔迹顺序
+    if (_selectResult!.strokes.isNotEmpty) {
+      final selectedStrokes = Set<Stroke>.from(_selectResult!.strokes);
+      final list = List<Stroke>.from(page.strokes);
+
+      _reorderInList(list, selectedStrokes, action);
+      page.strokes.clear();
+      page.strokes.addAll(list);
+    }
+
+    // 2. 调整常规图片顺序
+    if (_selectResult!.regularImages.isNotEmpty) {
+      final selectedImages =
+          Set<EditorImage>.from(_selectResult!.regularImages);
+      final list = List<EditorImage>.from(page.images);
+
+      _reorderInList(list, selectedImages, action);
+      page.images.clear();
+      page.images.addAll(list);
+    }
+
+    // 3. 调整 WebView 顺序
+    if (_selectResult!.webViews.isNotEmpty) {
+      final selectedWebViews =
+          Set<WebViewEditorElement>.from(_selectResult!.webViews);
+      final list = List<WebViewEditorElement>.from(page.webViews);
+
+      _reorderInList(list, selectedWebViews, action);
+      page.webViews.clear();
+      page.webViews.addAll(list);
+    }
+
+    // 4. 调整文本框顺序
+    if (_selectResult!.textBoxes.isNotEmpty) {
+      final selectedTextBoxes =
+          Set<saber_text.TextBox>.from(_selectResult!.textBoxes);
+      final list = List<saber_text.TextBox>.from(page.textBoxes);
+
+      _reorderInList(list, selectedTextBoxes, action);
+      page.textBoxes.clear();
+      page.textBoxes.addAll(list);
+    }
+
+    // 更新UI
+    _pageNotifiers[pageIndex].updatePage(page);
+    _scheduleSave();
+  }
+
+  /// 通用的列表重排序逻辑
+  void _reorderInList<T>(List<T> list, Set<T> selected, ReorderAction action) {
+    if (selected.isEmpty) return;
+
+    switch (action) {
+      case ReorderAction.bringToFront:
+        final selectedItems =
+            list.where((item) => selected.contains(item)).toList();
+        list.removeWhere((item) => selected.contains(item));
+        list.addAll(selectedItems); // 移动到末尾（顶层）
+        break;
+      case ReorderAction.sendToBack:
+        final selectedItems =
+            list.where((item) => selected.contains(item)).toList();
+        list.removeWhere((item) => selected.contains(item));
+        list.insertAll(0, selectedItems); // 移动到开头（底层）
+        break;
+      case ReorderAction.bringForward:
+        // 从后往前遍历，寻找可以选中的对象并上移
+        for (int i = list.length - 2; i >= 0; i--) {
+          if (selected.contains(list[i]) && !selected.contains(list[i + 1])) {
+            final item = list.removeAt(i);
+            list.insert(i + 1, item);
+          }
+        }
+        break;
+      case ReorderAction.sendBackward:
+        // 从前往后遍历，下移
+        for (int i = 1; i < list.length; i++) {
+          if (selected.contains(list[i]) && !selected.contains(list[i - 1])) {
+            final item = list.removeAt(i);
+            list.insert(i - 1, item);
+          }
+        }
+        break;
+    }
   }
 
   Future<void> _endStroke() async {
@@ -3402,7 +3679,29 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           height: pageDisplayHeight,
           child: Stack(
             children: [
-              // ✅ 画布层
+              // debug: 输出当前页面与背景信息（使用受控日志，默认静默）
+              Builder(builder: (context) {
+                LogUtils.debug(
+                    '🦋[HandwritingSaber] _buildSinglePageCanvas: pageIndex=$pageIndex, page.backgroundImage=${page.backgroundImage != null}, coreInfo.backgroundPattern=${_coreInfo.backgroundPattern}, currentBackgroundPattern=$_currentBackgroundPattern, page.strokes=${page.strokes.length}');
+                return const SizedBox.shrink();
+              }),
+              // ✅ 图片层
+              if (page.images.isNotEmpty)
+                ...page.images.map((image) => _buildImageWidget(
+                      image,
+                      pageIndex,
+                      pageDisplayWidth,
+                      pageDisplayHeight,
+                      scale,
+                    )),
+              // ✅ WebView层
+              if (page.webViews.isNotEmpty)
+                ...page.webViews.map((webView) => _buildWebViewWidget(
+                      webView,
+                      pageIndex,
+                      scale,
+                    )),
+              // ✅ 画布层 (笔迹层) - 移动到图片和 WebView 之上，以便笔迹能覆盖在图片上
               ValueListenableBuilder<String?>(
                 valueListenable: _editingTextBoxIdNotifier,
                 builder: (context, editingTextBoxId, _) {
@@ -3419,15 +3718,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                           laserStrokes: _coreInfo.laserStrokes, // ✅ 直接传递引用，不复制！
                         ),
                         // ✅ 关键修复：只有当绘制在当前页面时，才监听实时笔迹
-                        // 解决“画布缩小后，在其中一个页面编辑，其他能看到的页面也在同步编辑”的问题
-                        // 同时使用 ValueListenableBuilder 监听 _currentPageIndexNotifier
-                        // 确保在 _startStroke 中设置值后，Canvas 能立即感知并显示笔迹
                         currentStrokeListenable: currentPageIndex == pageIndex
                             ? _currentStrokeNotifier
                             : null,
-                        // ✅ 关键修复：合并 _repaintTick 和 _laserStrokesNotifier
-                        // 当 _laserStrokesNotifier 变化时，会触发 Widget rebuild，从而创建新的 Painter
-                        // 这样 Canvas 就能看到最新的激光笔笔迹状态
                         repaintListenable: Listenable.merge(
                             [_repaintTick, _laserStrokesNotifier]),
                         selectResult: _selectResult != null &&
@@ -3448,28 +3741,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                   );
                 },
               ),
-              // debug: 输出当前页面与背景信息（使用受控日志，默认静默）
-              Builder(builder: (context) {
-                LogUtils.debug(
-                    '🦋[HandwritingSaber] _buildSinglePageCanvas: pageIndex=$pageIndex, page.backgroundImage=${page.backgroundImage != null}, coreInfo.backgroundPattern=${_coreInfo.backgroundPattern}, currentBackgroundPattern=$_currentBackgroundPattern, page.strokes=${page.strokes.length}');
-                return const SizedBox.shrink();
-              }),
-              // ✅ 图片层（在画布和文本框之间）
-              if (page.images.isNotEmpty)
-                ...page.images.map((image) => _buildImageWidget(
-                      image,
-                      pageIndex,
-                      pageDisplayWidth,
-                      pageDisplayHeight,
-                      scale,
-                    )),
-              // ✅ WebView层（在图片和文本框之间）
-              if (page.webViews.isNotEmpty)
-                ...page.webViews.map((webView) => _buildWebViewWidget(
-                      webView,
-                      pageIndex,
-                      scale,
-                    )),
               // ✅ 文本框编辑层（直接在画布上编辑，使用ValueListenableBuilder避免全局重建）
               ValueListenableBuilder<String?>(
                 valueListenable: _editingTextBoxIdNotifier,
@@ -3662,8 +3933,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       if (result == null || result.files.isEmpty) return;
 
-      // 获取当前页面索引（默认第一页）
-      final currentPageIndex = 0;
+      // 获取当前查看的页面索引
+      final currentPageIndex = _viewingPageIndexNotifier.value;
       if (currentPageIndex >= _coreInfo.pages.length) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -4108,6 +4379,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         pageIndex: webView.pageIndex,
         strokes: [],
         images: [],
+        regularImages: [],
         webViews: [webView],
         selectionPath: Path(),
       );
@@ -4128,6 +4400,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           pageIndex: pageIndex,
           strokes: [],
           images: [],
+          regularImages: [],
           webViews: [],
           selectionPath: Path(),
         );
