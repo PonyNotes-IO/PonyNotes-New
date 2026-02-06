@@ -45,6 +45,9 @@ import 'home_stack.dart';
 import 'full_window_controller.dart';
 import 'menu/sidebar/slider_menu_hover_trigger.dart';
 import 'menu/sidebar/space/shared_widget.dart';
+import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
+import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 
 class DesktopHomeScreen extends StatefulWidget {
   const DesktopHomeScreen({super.key});
@@ -551,9 +554,25 @@ class _WorkspaceLifecycleRefresherState
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             _refreshWorkspaceList();
+            _checkMembershipStatus();
           }
         });
       }
+    }
+  }
+
+  /// 检查会员状态和存储限制，如果过期或存储不足则打开会员订阅页面
+  Future<void> _checkMembershipStatus() async {
+    try {
+      // 获取当前工作区ID
+      final workspaceId = context.read<UserWorkspaceBloc?>()?.state.currentWorkspace?.workspaceId;
+      // 检查会员状态
+      await context.checkMembershipStatus(workspaceId: workspaceId);
+      
+      // 检查存储限制
+      await context.checkAndHandleCloudSyncStorageLimit(workspaceId: workspaceId);
+    } catch (e) {
+      Log.error('Failed to check membership status: $e');
     }
   }
 
@@ -588,7 +607,22 @@ class _WorkspaceLifecycleRefresherState
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    // 监听 UserWorkspaceBloc 的 isStorageFull 状态
+    return BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+      listener: (context, state) {
+        // 存储已满，调用 checkAndHandleCloudSyncStorageLimit
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) {
+            context.checkAndHandleCloudSyncStorageLimit(
+              workspaceId: state.currentWorkspace?.workspaceId,
+            );
+          }
+        });
+      },
+      child: widget.child,
+    );
+  }
 }
 
 class DesktopHomeScreenStackAdaptor extends HomeStackDelegate {

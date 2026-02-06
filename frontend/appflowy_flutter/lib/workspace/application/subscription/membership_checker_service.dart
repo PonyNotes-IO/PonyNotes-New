@@ -16,40 +16,12 @@ import 'package:appflowy/workspace/presentation/settings/settings_dialog.dart' a
 import '../settings/settings_dialog_bloc.dart';
 
 
-/// 会员等级枚举
-enum MembershipTier {
-  free, // 免费版
-  standard, // 标准版
-  professional, // 专业版
-  premium, // 高级版
-}
-
-/// 根据计划代码获取会员等级
-MembershipTier getTierByPlanCode(String? planCode) {
-  if (planCode == null) return MembershipTier.free;
-  
-  final code = planCode.toLowerCase();
-  if (code.contains('free') || code == 'mfb') {
-    return MembershipTier.free;
-  } else if (code.contains('standard')) {
-    return MembershipTier.standard;
-  } else if (code.contains('professional') || code == 'pro') {
-    return MembershipTier.professional;
-  } else if (code.contains('premium') || code == 'hiclass') {
-    return MembershipTier.premium;
-  } else {
-    return MembershipTier.free;
-  }
-}
-
 /// 会员状态枚举
 enum MembershipStatus {
   active, // 会员有效
   expired, // 会员已过期
   notSubscribed, // 未订阅
   storageFull, // 存储空间已满
-  workspaceLimitReached, // 工作区数量达到限制
-  aiChatLimitReached, // AI对话次数达到限制
 }
 
 /// 付费功能枚举
@@ -75,25 +47,8 @@ class MembershipCheckerService {
 
   MembershipCheckerService._internal();
 
-  /// 获取用户会员等级
-  Future<MembershipTier> getMembershipTier({required UserProfilePB userProfile}) async {
-    try {
-      final subscriptionService = SubscriptionService();
-      final currentSubscription = await subscriptionService.getCurrentSubscription(
-        userProfile: userProfile,
-        caller: 'MembershipCheckerService.getMembershipTier',
-      );
-
-      final planCode = currentSubscription?.subscription?.planCode;
-      return getTierByPlanCode(planCode);
-    } catch (e) {
-      Log.error('Failed to get membership tier: $e');
-      return MembershipTier.free;
-    }
-  }
-
-  /// 检查会员状态
-  Future<MembershipStatus> checkMembershipStatus({required UserProfilePB userProfile}) async {
+  /// 检查会员状态是否过期
+  Future<bool> checkMembershipStatus({required UserProfilePB userProfile, required BuildContext context, String? workspaceId}) async {
     try {
       final subscriptionService = SubscriptionService();
       final currentSubscription = await subscriptionService.getCurrentSubscription(
@@ -101,37 +56,25 @@ class MembershipCheckerService {
         caller: 'MembershipCheckerService.checkMembershipStatus',
       );
 
-      if (currentSubscription == null || currentSubscription.subscription == null) {
-        return MembershipStatus.notSubscribed;
-      }
-
-      final subscription = currentSubscription.subscription!;
-      final usage = currentSubscription.usage;
+      final subscription = currentSubscription?.subscription;
+      final usage = currentSubscription?.usage;
 
       // 检查是否已到期
-      final endDate = subscription.endDate;
+      final endDate = subscription?.endDate;
       if (endDate != null && endDate.isBefore(DateTime.now())) {
-        return MembershipStatus.expired;
+          // 跳转到升级页面
+          await navigateToUpgradePage(
+            context,
+            userProfile: userProfile,
+            workspaceId: workspaceId,
+            featureName: '创建工作区',
+          );
+          return false;
       }
-
-      // 检查空间是否已满
-      final storageUsedGb = usage?.storageUsedGb ?? 0;
-      final storageTotalGb = usage?.storageTotalGb ?? 0;
-      if (storageUsedGb >= storageTotalGb) {
-        return MembershipStatus.storageFull;
-      }
-
-      // 检查AI对话次数是否达到限制
-      final aiChatRemaining = usage?.aiChatRemaining ?? 0;
-      if (aiChatRemaining <= 0) {
-        return MembershipStatus.aiChatLimitReached;
-      }
-
-      // 会员有效中
-      return MembershipStatus.active;
+      return true;
     } catch (e) {
       Log.error('Failed to check membership status: $e');
-      return MembershipStatus.notSubscribed;
+      return false;
     }
   }
 
@@ -223,14 +166,6 @@ class MembershipCheckerService {
     int? spaceNum,
   }) async {
     try {
-      final status = await checkMembershipStatus(userProfile: userProfile);
-      
-      // 如果会员已过期或未订阅，检查是否是免费版可用功能
-      if (status == MembershipStatus.expired || status == MembershipStatus.notSubscribed) {
-        // 免费版只能使用基本功能
-        return false;
-      }
-
       // 检查具体功能权限
       switch (feature) {
         case PremiumFeature.cloudSync:
@@ -361,27 +296,29 @@ class MembershipCheckerService {
 
   /// 检查并处理存储限制
   /// 
-  /// 专门用于处理文件上传时的存储限制检查
+  /// 用于处理文件上传、云同步等场景的存储限制检查
   /// 
   /// [context] 上下文
   /// [userProfile] 用户信息
-  /// [fileSizeMB] 文件大小（MB）
+  /// [requiredStorageMB] 所需存储空间（MB），默认为0表示只检查当前存储状态
   /// [workspaceId] 工作区ID
   /// [showToast] 是否显示提示信息
+  /// [featureName] 功能名称（用于提示信息）
   /// 
   /// 返回 true 表示有足够空间，false 表示空间不足并已处理（跳转到升级页面或显示提示）
   Future<bool> checkAndHandleStorageLimit({
     required BuildContext context,
     required UserProfilePB userProfile,
-    required int fileSizeMB,
+    int requiredStorageMB = 0,
     String? workspaceId,
     bool showToast = true,
+    String? featureName = '存储空间',
   }) async {
     try {
       // 检查是否有足够空间
       final hasEnoughSpace = await checkStorageLimit(
         userProfile: userProfile,
-        requiredStorageMB: fileSizeMB,
+        requiredStorageMB: requiredStorageMB,
       );
       
       if (!hasEnoughSpace) {
@@ -407,7 +344,7 @@ class MembershipCheckerService {
           context,
           userProfile: userProfile,
           workspaceId: workspaceId,
-          featureName: '文件上传',
+          featureName: featureName,
         );
         
         return false;
@@ -416,7 +353,7 @@ class MembershipCheckerService {
       return true;
     } catch (e) {
       Log.error('Error checking storage limit: $e');
-      // 如果检查失败，默认允许上传
+      // 如果检查失败，默认允许操作
       return true;
     }
   }
@@ -474,7 +411,7 @@ class MembershipCheckerService {
 /// 为 BuildContext 添加会员状态检查方法
 extension MembershipCheckerExtension on BuildContext {
   /// 检查会员状态
-  Future<MembershipStatus> checkMembershipStatus() async {
+  Future<bool> checkMembershipStatus({String? workspaceId}) async {
     try {
       final userResult = await UserBackendService.getCurrentUserProfile();
       final userProfile = userResult.fold(
@@ -482,54 +419,10 @@ extension MembershipCheckerExtension on BuildContext {
         (error) => throw Exception('Failed to get user profile: ${error.msg}'),
       );
 
-      return await MembershipCheckerService().checkMembershipStatus(userProfile: userProfile);
+      return await MembershipCheckerService().checkMembershipStatus(context: this,userProfile: userProfile,workspaceId: workspaceId);
     } catch (e) {
       Log.error('Failed to check membership status: $e');
-      return MembershipStatus.notSubscribed;
-    }
-  }
-
-  /// 获取用户会员等级
-  Future<MembershipTier> getMembershipTier() async {
-    try {
-      final userResult = await UserBackendService.getCurrentUserProfile();
-      final userProfile = userResult.fold(
-        (user) => user,
-        (error) => throw Exception('Failed to get user profile: ${error.msg}'),
-      );
-
-      return await MembershipCheckerService().getMembershipTier(userProfile: userProfile);
-    } catch (e) {
-      Log.error('Failed to get membership tier: $e');
-      return MembershipTier.free;
-    }
-  }
-
-  /// 检查并处理付费功能访问
-  Future<bool> checkAndHandlePremiumFeatureAccess({
-    required PremiumFeature feature,
-    String? featureName,
-    String? workspaceId,
-    int? spaceNum
-  }) async {
-    try {
-      final userResult = await UserBackendService.getCurrentUserProfile();
-      final userProfile = userResult.fold(
-        (user) => user,
-        (error) => throw Exception('Failed to get user profile: ${error.msg}'),
-      );
-
-      return await MembershipCheckerService().checkAndHandlePremiumFeatureAccess(
-        context: this,
-        userProfile: userProfile,
-        feature: feature,
-        featureName: featureName,
-        workspaceId: workspaceId,
-        spaceNum:spaceNum
-      );
-    } catch (e) {
-      Log.error('Failed to check premium feature access: $e');
-      return false;
+      return true;
     }
   }
 
@@ -561,9 +454,10 @@ extension MembershipCheckerExtension on BuildContext {
 
   /// 检查并处理存储限制
   Future<bool> checkAndHandleStorageLimit({
-    required int fileSizeMB,
+    int requiredStorageMB = 0,
     String? workspaceId,
-    bool showToast = true,
+    bool showToast = false,
+    String? featureName = '存储空间',
   }) async {
     try {
       final userResult = await UserBackendService.getCurrentUserProfile();
@@ -575,12 +469,31 @@ extension MembershipCheckerExtension on BuildContext {
       return await MembershipCheckerService().checkAndHandleStorageLimit(
         context: this,
         userProfile: userProfile,
-        fileSizeMB: fileSizeMB,
+        requiredStorageMB: requiredStorageMB,
         workspaceId: workspaceId,
         showToast: showToast,
+        featureName: featureName,
       );
     } catch (e) {
       Log.error('Failed to check storage limit: $e');
+      return true;
+    }
+  }
+
+  /// 检查并处理云同步存储限制
+  Future<bool> checkAndHandleCloudSyncStorageLimit({
+    String? workspaceId,
+    bool showToast = false,
+  }) async {
+    try {
+      return await checkAndHandleStorageLimit(
+        requiredStorageMB: 0, // 只检查当前存储状态
+        workspaceId: workspaceId,
+        showToast: showToast,
+        featureName: '云同步存储',
+      );
+    } catch (e) {
+      Log.error('Failed to check cloud sync storage limit: $e');
       return true;
     }
   }

@@ -9,6 +9,7 @@ import 'package:appflowy/features/workspace/logic/workspace_event.dart';
 import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/feature_flags.dart';
+import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/subscription_success_listenable/subscription_success_listenable.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
@@ -96,6 +97,19 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   final SubscriptionSuccessListenable _subscriptionSuccessListenable;
   late final VoidCallback _subscriptionSuccessListener;
   FolderSyncStateListener? _folderSyncStateListener;
+  DateTime? _lastStorageCheckTime; // 上次检查存储的时间
+  static const Duration _storageCheckInterval = Duration(minutes: 5); // 存储检查间隔
+
+  /// 判断是否应该检查存储
+  /// 
+  /// 如果上次检查时间为null，或者与当前时间的间隔大于5分钟，则返回true
+  bool _shouldCheckStorage() {
+    if (_lastStorageCheckTime == null) {
+      return true;
+    }
+    final now = DateTime.now();
+    return now.difference(_lastStorageCheckTime!) > _storageCheckInterval;
+  }
 
   @override
   Future<void> close() {
@@ -855,10 +869,43 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     
     emit(state.copyWith(folderSyncState: newSyncState));
     
-    // 当同步完成时，更新订阅信息
+    // 当同步完成时，更新订阅信息并检查存储限制
     if (newSyncState != null && newSyncState.isFinish && !newSyncState.isSyncing) {
       // 同步完成，更新订阅信息
       _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
+      
+      // 检查存储限制（只有当间隔大于5分钟后才检查）
+      if (_shouldCheckStorage()) {
+        try {
+          final subscriptionService = SubscriptionService();
+          final currentSubscription = await subscriptionService.getCurrentSubscription(
+            userProfile: state.userProfile,
+            caller: 'UserWorkspaceBloc._onUpdateFolderSyncState',
+          );
+          
+          final storageUsedGb = currentSubscription?.usage?.storageUsedGb ?? 0;
+          final storageTotalGb = currentSubscription?.usage?.storageTotalGb ?? 0;
+          
+          // 更新上次检查时间
+          _lastStorageCheckTime = DateTime.now();
+          
+          // 检查空间是否已满
+          if (storageUsedGb >= storageTotalGb) {
+            // 存储已满，更新状态
+            Log.info('Storage is full, updating state');
+            emit(state.copyWith(isStorageFull: true));
+          } else {
+            // 存储未满，确保状态为 false
+            if (state.isStorageFull) {
+              emit(state.copyWith(isStorageFull: false));
+            }
+          }
+        } catch (e) {
+          Log.error('Failed to check storage limit: $e');
+        }
+      } else {
+        Log.info('Storage check skipped, interval not reached');
+      }
     }
   }
 }
