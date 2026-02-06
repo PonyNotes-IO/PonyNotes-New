@@ -11,7 +11,9 @@ import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
+import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/widgets.dart';
@@ -324,7 +326,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   // Message sending handlers
-  void _handleSendMessage(
+  Future<void> _handleSendMessage(
     String message,
     PredefinedFormat? format,
     Map<String, dynamic>? metadata,
@@ -334,7 +336,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     // PonyNotes: 联网搜索开关（可选，为null时使用ChatBloc初始设置）
     bool? enableWebSearchOverride,
     Emitter<ChatState> emit,
-  ) {
+  ) async {
+    // 检查AI聊天限制
+    try {
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold(
+        (user) => user,
+        (error) => throw Exception('Failed to get user profile: ${error.msg}'),
+      );
+      
+      final canUseAI = await MembershipCheckerService().checkAIChatLimit(userProfile: userProfile);
+      if (!canUseAI) {
+        Log.info('❌ ChatBloc: AI聊天次数已达上限，停止发送消息');
+        return;
+      }
+    } catch (e) {
+      Log.error('Failed to check AI chat limit: $e');
+      // 如果检查失败，默认允许使用AI
+      return;
+    }
+
     _messageHandler.clearErrorMessages();
     emit(state.copyWith(clearErrorMessages: !state.clearErrorMessages));
 
@@ -386,12 +407,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   // Answer regeneration handler
-  void _handleRegenerateAnswer(
+  Future<void> _handleRegenerateAnswer(
     String id,
     PredefinedFormat? format,
     AIModelPB? model,
     Emitter<ChatState> emit,
-  ) {
+  ) async {
+    // 检查AI聊天限制
+    try {
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold(
+        (user) => user,
+        (error) => throw Exception('Failed to get user profile: ${error.msg}'),
+      );
+      
+      final canUseAI = await MembershipCheckerService().checkAIChatLimit(userProfile: userProfile);
+      if (!canUseAI) {
+        Log.info('❌ ChatBloc: AI聊天次数已达上限，停止重新生成答案');
+        return;
+      }
+    } catch (e) {
+      Log.error('Failed to check AI chat limit: $e');
+      // 如果检查失败，默认允许使用AI
+      return;
+    }
+
     _messageHandler.clearRelatedQuestions();
     _regenerateAnswer(id, format, model);
     lastSentMessage = null;

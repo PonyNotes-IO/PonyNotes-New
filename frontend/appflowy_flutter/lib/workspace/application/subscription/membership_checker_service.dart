@@ -501,7 +501,7 @@ extension MembershipCheckerExtension on BuildContext {
   /// 检查并处理AI对话限制
   Future<bool> checkAndHandleAIChatLimit({
     String? workspaceId,
-    bool showToast = true,
+    bool showToast = false,
   }) async {
     try {
       final userResult = await UserBackendService.getCurrentUserProfile();

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
+import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/ai_chat_usage_indicator.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
@@ -142,7 +143,7 @@ class _AIInputAreaState extends State<AIInputArea> {
     );
   }
 
-  void _sendMessage() {
+  void _sendMessage() async {
     final text = _textController.text.trim();
     if (text.isEmpty && _selectedImages.isEmpty) return;
 
@@ -161,6 +162,12 @@ class _AIInputAreaState extends State<AIInputArea> {
         // TODO: 显示错误提示，需要配置AI模型
         return;
       }
+    }
+
+    // 检查AI对话限制
+    final canUseAI = await context.checkAndHandleAIChatLimit();
+    if (!canUseAI) {
+      return;
     }
 
     debugPrint('📤 AIInputArea: 准备发送消息');
