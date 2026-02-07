@@ -360,8 +360,7 @@ fn spawn_ws_conn(
 /// Attempts to reconnect a WebSocket client with a randomized delay to mitigate the thundering herd problem.
 ///
 /// This function cancels any existing reconnection attempt, sets up a new cancellation token, and then
-/// attempts to reconnect after a randomized delay. The delay is set between a specified minimum and
-/// that minimum plus 10 seconds.
+/// attempts to reconnect after a randomized delay. Reduced delay for better user experience.
 ///
 async fn attempt_reconnect(
   ws_client: &Arc<WSClient>,
@@ -372,7 +371,10 @@ async fn attempt_reconnect(
   let new_cancel_token = CancellationToken::new();
   cancellation_token.store(Arc::new(new_cancel_token.clone()));
 
-  let delay_seconds = rand::thread_rng().gen_range(minimum_delay_in_secs..10);
+  // 缩短延迟：0-3秒随机延迟（原来是2-10秒），提高响应速度
+  let delay_seconds = rand::thread_rng().gen_range(minimum_delay_in_secs.saturating_sub(1)..3);
+  // 确保至少延迟100ms
+  let delay_ms = std::cmp::max(delay_seconds * 1000, 100);
   let ws_client_clone = ws_client.clone();
   tokio::spawn(async move {
     select! {
@@ -380,7 +382,7 @@ async fn attempt_reconnect(
         _ = new_cancel_token.cancelled() => {
             tracing::trace!("🟢 websocket reconnection attempt cancelled.");
         },
-        _ = tokio::time::sleep(Duration::from_secs(delay_seconds)) => {
+        _ = tokio::time::sleep(Duration::from_millis(delay_ms)) => {
             if let Err(e) = ws_client_clone.connect().await {
                 error!("❌ Failed to reconnect websocket: {}", e);
             } else {

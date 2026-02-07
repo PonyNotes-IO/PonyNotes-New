@@ -194,38 +194,48 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   /// 🔧 FIX: Retry mechanism for workspace setting request
   /// This handles the "folder is not initialized" error that occurs during workspace switching
+  /// Added overall timeout to prevent indefinite waiting
   Future<void> _requestWorkspaceSettingWithRetry(String workspaceId) async {
     const maxRetries = 10; // 增加重试次数
     const retryDelay = Duration(milliseconds: 500); // 增加重试间隔
-    
+    const totalTimeout = Duration(seconds: 10); // 总超时时间10秒
+
+    final stopwatch = Stopwatch()..start();
+
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      // Check if overall timeout exceeded
+      if (stopwatch.elapsed > totalTimeout) {
+        Log.warn('[HOME_BLOC] ⏰ Overall timeout exceeded (${totalTimeout.inSeconds}s), stopping retries');
+        break;
+      }
+
       // Log.info('[HOME_BLOC] 🔄 Requesting workspace setting (attempt $attempt/$maxRetries)'); // PonyNotes: 关闭非白板日志
-      
+
       final result = await FolderEventReadCurrentWorkspace().send();
-      
+
       final success = result.fold(
         (workspace) {
           // Log.info('[HOME_BLOC] ✅ Retrieved workspace setting for: ${workspace.id}'); // PonyNotes: 关闭非白板日志
-          
+
           // 🔧 FIX: Check if BLoC is still open before emitting
           if (isClosed) {
             Log.warn('[HOME_BLOC] ⚠️ BLoC is closed, skipping state emission');
             return true;
           }
-          
+
           final workspaceSetting = WorkspaceLatestPB()
             ..workspaceId = workspace.id
             ..latestView = ViewPB(); // Will be updated by the listener
-          
+
           // Use add instead of emit to trigger proper event handling
           add(HomeEvent.didReceiveWorkspaceSetting(workspaceSetting));
           return true;
         },
         (error) {
           final errorMsg = error.toString();
-          
+
           if (errorMsg.contains('folder is not initialized') && attempt < maxRetries) {
-            Log.warn('[HOME_BLOC] ⏳ Folder not initialized yet (attempt $attempt/$maxRetries), retrying in ${retryDelay.inMilliseconds}ms...');
+            Log.warn('[HOME_BLOC] ⏳ Folder not initialized yet (attempt $attempt/$maxRetries), retrying in ${retryDelay.inMilliseconds}ms... (elapsed: ${stopwatch.elapsed.inMilliseconds}ms)');
             return false; // Continue retrying
           } else {
             Log.error('[HOME_BLOC] ❌ Failed to get workspace setting: $error');
@@ -233,16 +243,18 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           }
         },
       );
-      
+
       if (success) {
         break;
       }
-      
+
       // Wait before retry
       if (attempt < maxRetries) {
         await Future.delayed(retryDelay);
       }
     }
+
+    Log.info('[HOME_BLOC] ✅ Workspace setting request completed in ${stopwatch.elapsed.inMilliseconds}ms');
   }
 }
 

@@ -436,11 +436,22 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   // 等待系统初始化完成
+  // 🔧 FIX: 添加总超时时间，防止无限等待
   Future<void> _waitForSystemInitialization() async {
-    int maxRetries = 10;
+    const maxRetries = 10;
+    const retryDelay = Duration(milliseconds: 500);
+    const totalTimeout = Duration(seconds: 10); // 总超时10秒
+
+    final stopwatch = Stopwatch()..start();
     int retryCount = 0;
 
     while (retryCount < maxRetries) {
+      // 检查总超时
+      if (stopwatch.elapsed > totalTimeout) {
+        Log.warn('[Calendar] ⏰ 系统初始化总超时 (${totalTimeout.inSeconds}秒)，停止重试');
+        throw Exception('系统初始化超时，请稍后重试');
+      }
+
       try {
         // 尝试获取所有视图来检查系统是否已初始化
         final result = await ViewBackendService.getAllViews();
@@ -448,18 +459,18 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         await result.fold(
           (views) async {
             // 系统已初始化，可以继续
+            Log.info('[Calendar] ✅ 系统初始化成功 (${stopwatch.elapsed.inMilliseconds}ms)');
             return;
           },
           (error) async {
             // 如果系统未初始化，等待一段时间后重试
             if (error.msg.contains('Folder not initialized') ||
                 error.msg.contains('not initialized')) {
-              await Future.delayed(Duration(milliseconds: 500));
+              Log.warn('[Calendar] ⏳ 系统未初始化 (重试 $retryCount/$maxRetries)，等待 ${retryDelay.inMilliseconds}ms...');
+              await Future.delayed(retryDelay);
               retryCount++;
-              if (retryCount < maxRetries) {
-                await _waitForSystemInitialization();
-              } else {
-                throw Exception('系统初始化超时，请稍后重试');
+              if (retryCount >= maxRetries) {
+                throw Exception('系统初始化重试次数耗尽，请稍后重试');
               }
             } else {
               throw Exception('系统初始化失败: ${error.msg}');
@@ -468,10 +479,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         );
         break; // 成功则跳出循环
       } catch (e) {
-        if (retryCount >= maxRetries - 1) {
+        if (retryCount >= maxRetries - 1 || stopwatch.elapsed > totalTimeout) {
+          Log.error('[Calendar] ❌ 系统初始化最终失败: $e');
           throw Exception('系统初始化失败: $e');
         }
-        await Future.delayed(Duration(milliseconds: 500));
+        await Future.delayed(retryDelay);
         retryCount++;
       }
     }

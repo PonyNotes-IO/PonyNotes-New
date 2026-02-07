@@ -102,6 +102,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   CanvasBackgroundPattern _currentBackgroundPattern =
       EditorCoreInfo.empty().backgroundPattern;
 
+  /// ✅ 上一次布局的约束（用于在 _scrollToPage 中精确计算宽度）
+  BoxConstraints? _lastCanvasConstraints;
+
   /// ✅ 当前填充颜色（用于形状工具） - 使用 ValueNotifier 避免父级 setState 导致整页重建
   final ValueNotifier<Color?> _currentFillColorNotifier =
       ValueNotifier<Color?>(null);
@@ -542,9 +545,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// ✅ 滚动到指定页面
   /// @param pageIndex 目标页面索引
-  /// @param constraints 布局约束（用于计算准确的滚动位置，与渲染保持一致）
+  /// @param constraints 布局约束（这里通常不需要传入，使用 _lastCanvasConstraints 更准确）
   void _scrollToPage(int pageIndex, {BoxConstraints? constraints}) async {
-    debugPrint('📜 [PageManager] _scrollToPage called: pageIndex=$pageIndex');
+    debugPrint(
+        '📜 [PageManager] _scrollToPage called: pageIndex=$pageIndex, currentPageIndex=${_currentPageIndexNotifier.value}, viewingPageIndex=${_viewingPageIndexNotifier.value}');
 
     if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) {
       debugPrint('📜 [PageManager] Invalid pageIndex, returning');
@@ -554,19 +558,20 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // ✅ 设置程序滚动标记，防止滚动事件更新索引
     _isProgrammaticScrolling = true;
 
+    // ✅ 立即同步更新两个索引，确保状态一致
+    _currentPageIndexNotifier.value = pageIndex;
+    _viewingPageIndexNotifier.value = pageIndex;
+    debugPrint(
+        '📜 [PageManager] Updated both notifiers: currentPageIndex=$pageIndex, viewingPageIndex=$pageIndex');
+
     // 计算目标滚动位置
     double targetOffset = 0;
 
-    // ✅ 获取实际可用宽度（使用与渲染时一致的计算方式）
-    // 如果传入了 constraints，使用 constraints.maxWidth，否则回退到 MediaQuery
+    // ✅ 获取实际可用宽度（优先使用上次渲染时的约束，确保一致性）
     double availableWidth;
-    if (constraints != null) {
-      // 使用 LayoutBuilder 的约束（与渲染时一致）
-      availableWidth = constraints.maxWidth;
-      // 如果页面管理器显示中，减去页面管理器的宽度
-      if (_showPageManagerNotifier.value) {
-        availableWidth -= 200.0;
-      }
+    if (_lastCanvasConstraints != null &&
+        _lastCanvasConstraints!.maxWidth.isFinite) {
+      availableWidth = _lastCanvasConstraints!.maxWidth;
     } else {
       // 回退到原来的计算方式
       final mediaQueryWidth = MediaQuery.of(context).size.width;
@@ -587,9 +592,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       targetOffset += pageHeight + _gapBetweenPages;
     }
 
-    // ✅ 立即更新当前查看的页面索引（确保UI反馈）
-    _viewingPageIndexNotifier.value = pageIndex;
-
     debugPrint(
         '📜 [PageManager] targetOffset=$targetOffset, hasClients=${_pageScrollController.hasClients}');
 
@@ -608,13 +610,19 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       // ✅ 确保最终滚动位置准确
       if ((_pageScrollController.position.pixels - targetOffset).abs() > 1) {
+        debugPrint('📜 [PageManager] Adjusting scroll position');
         _pageScrollController.jumpTo(targetOffset);
       }
 
-      // ✅ 确保最终页面索引正确
+      // ✅ 再次确认两个索引正确
+      if (_currentPageIndexNotifier.value != pageIndex) {
+        debugPrint(
+            '📜 [PageManager] Fixing currentPageIndex: was ${_currentPageIndexNotifier.value}, setting to $pageIndex');
+        _currentPageIndexNotifier.value = pageIndex;
+      }
       if (_viewingPageIndexNotifier.value != pageIndex) {
         debugPrint(
-            '📜 [PageManager] Fixing pageIndex: was ${_viewingPageIndexNotifier.value}, setting to $pageIndex');
+            '📜 [PageManager] Fixing viewingPageIndex: was ${_viewingPageIndexNotifier.value}, setting to $pageIndex');
         _viewingPageIndexNotifier.value = pageIndex;
       }
 
@@ -639,14 +647,21 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           await Future.delayed(const Duration(milliseconds: 50));
 
           // ✅ 确保滚动位置准确
-          if ((_pageScrollController.position.pixels - targetOffset).abs() > 1) {
+          if ((_pageScrollController.position.pixels - targetOffset).abs() >
+              1) {
+            debugPrint('📜 [PageManager] Adjusting scroll position (delayed)');
             _pageScrollController.jumpTo(targetOffset);
           }
 
-          // ✅ 确保最终页面索引正确
+          // ✅ 再次确认两个索引正确
+          if (_currentPageIndexNotifier.value != pageIndex) {
+            debugPrint(
+                '📜 [PageManager] Fixing currentPageIndex (delayed): was ${_currentPageIndexNotifier.value}, setting to $pageIndex');
+            _currentPageIndexNotifier.value = pageIndex;
+          }
           if (_viewingPageIndexNotifier.value != pageIndex) {
             debugPrint(
-                '📜 [PageManager] Fixing pageIndex (delayed): was ${_viewingPageIndexNotifier.value}, setting to $pageIndex');
+                '📜 [PageManager] Fixing viewingPageIndex (delayed): was ${_viewingPageIndexNotifier.value}, setting to $pageIndex');
             _viewingPageIndexNotifier.value = pageIndex;
           }
 
@@ -855,12 +870,22 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
     double currentPageTop = 0;
 
+    // ✅ 获取实际可用宽度（优先使用上次渲染时的约束，确保一致性）
+    double availableWidth;
+    if (_lastCanvasConstraints != null &&
+        _lastCanvasConstraints!.maxWidth.isFinite) {
+      availableWidth = _lastCanvasConstraints!.maxWidth;
+    } else {
+      final mediaQueryWidth = MediaQuery.of(context).size.width;
+      final pageManagerWidth = _showPageManagerNotifier.value ? 200.0 : 0.0;
+      availableWidth = mediaQueryWidth - pageManagerWidth;
+    }
+
     for (int i = 0; i < _coreInfo.pages.length; i++) {
       final page = _coreInfo.pages[i];
-      final screenWidth = MediaQuery.of(context).size.width -
-          (_showPageManagerNotifier.value ? 200 : 0);
+      // ✅ 使用与页面渲染时一致的计算方式
+      final baseScale = availableWidth / page.size.width;
       final zoomLevel = _zoomLevelNotifier.value;
-      final baseScale = screenWidth / page.size.width;
       final effectiveScale = baseScale * zoomLevel;
       final pageHeight = page.size.height * effectiveScale;
 
@@ -3145,7 +3170,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // 同步到激光笔 notifier（用于局部重绘）
       _laserStrokesNotifier.value =
           List<Stroke>.from(_laserStrokesNotifier.value)..add(laserStroke);
-      // 从记录的点延迟中获取用于淡出的 timing（参考 Saber）
+      // 从记录的点延迟中获取用于淡出的 timing（参考 Saber 的实现）
       final recordedDelays = _laserStrokePointDelays[stroke];
       // 清理临时记录（不再需要）
       _laserStrokePointDelays.remove(stroke);
@@ -4937,6 +4962,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                 child: LayoutBuilder(
                                   builder: (BuildContext context,
                                       BoxConstraints constraints) {
+                                    // ✅ 保存最新的布局约束，供滚动计算使用
+                                    _lastCanvasConstraints = constraints;
+
                                     // ✅ 支持多页滚动显示
                                     if (_coreInfo.pages.isEmpty) {
                                       return const Center(
