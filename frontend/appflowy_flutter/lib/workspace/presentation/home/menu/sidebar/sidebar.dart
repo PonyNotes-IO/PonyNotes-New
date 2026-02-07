@@ -430,13 +430,13 @@ class _SidebarState extends State<_Sidebar> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // top menu (hide on Windows)
-            if (!Platform.isWindows)
-              Padding(
+            !Platform.isWindows
+             ? Padding(
                 padding: menuHorizontalInset,
                 child: SidebarTopMenu(
                   isSidebarOnHover: _isHovered,
                 ),
-              ),
+              ): HSpace(12),
             // PonyNotes custom header
             Container(
               height: Platform.isWindows
