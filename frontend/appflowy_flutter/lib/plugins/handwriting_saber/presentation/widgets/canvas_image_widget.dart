@@ -13,6 +13,8 @@ class CanvasImageWidget extends StatefulWidget {
     required this.selected,
     required this.onImageChanged,
     required this.onImageDeleted,
+    this.onDragStart,
+    this.onDragEnd,
   });
 
   final EditorImage image;
@@ -22,6 +24,8 @@ class CanvasImageWidget extends StatefulWidget {
   final bool selected;
   final VoidCallback onImageChanged;
   final VoidCallback onImageDeleted;
+  final VoidCallback? onDragStart;
+  final VoidCallback? onDragEnd;
 
   @override
   State<CanvasImageWidget> createState() => _CanvasImageWidgetState();
@@ -93,6 +97,7 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
                 onPanStart: widget.selected
                     ? (details) {
                         _panStartRect = image.dstRect!;
+                        widget.onDragStart?.call();
                       }
                     : null,
                 onPanUpdate: widget.selected
@@ -100,13 +105,13 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
                         setState(() {
                           // 将屏幕坐标的 delta 转换为页面坐标
                           final pageDelta = details.delta / widget.scale;
-                          
+
                           // 限制在页面范围内
                           final fivePercent = math.min(
                             widget.pageSize.width * 0.05,
                             widget.pageSize.height * 0.05,
                           );
-                          
+
                           image.dstRect = Rect.fromLTWH(
                             (image.dstRect!.left + pageDelta.dx)
                                 .clamp(
@@ -132,6 +137,7 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
                           widget.onImageChanged();
                         }
                         _panStartRect = Rect.zero;
+                        widget.onDragEnd?.call();
                       }
                     : null,
                 child: Container(
@@ -151,31 +157,29 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
               // 调整大小手柄（只在选中时显示）
               if (widget.selected) ...[
                 _buildResizeHandle(context, const Offset(-1, -1)), // 左上
-                _buildResizeHandle(context, const Offset(1, -1)),  // 右上
-                _buildResizeHandle(context, const Offset(-1, 1)),  // 左下
-                _buildResizeHandle(context, const Offset(1, 1)),   // 右下
-                _buildResizeHandle(context, const Offset(0, -1)),  // 上
-                _buildResizeHandle(context, const Offset(0, 1)),   // 下
-                _buildResizeHandle(context, const Offset(-1, 0)),  // 左
-                _buildResizeHandle(context, const Offset(1, 0)),   // 右
+                _buildResizeHandle(context, const Offset(1, -1)), // 右上
+                _buildResizeHandle(context, const Offset(-1, 1)), // 左下
+                _buildResizeHandle(context, const Offset(1, 1)), // 右下
+                _buildResizeHandle(context, const Offset(0, -1)), // 上
+                _buildResizeHandle(context, const Offset(0, 1)), // 下
+                _buildResizeHandle(context, const Offset(-1, 0)), // 左
+                _buildResizeHandle(context, const Offset(1, 0)), // 右
               ],
               // 删除按钮（只在选中时显示）
-              if (widget.selected)
-                _buildDeleteButton(context),
+              if (widget.selected) _buildDeleteButton(context),
               // 旋转按钮（只在选中时显示）
-              if (widget.selected)
-                _buildRotateButton(context),
+              if (widget.selected) _buildRotateButton(context),
             ],
           ),
         ),
       ),
     );
   }
-  
+
   /// 构建旋转按钮
   Widget _buildRotateButton(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Positioned(
       left: -10,
       top: -10,
@@ -204,23 +208,23 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
       ),
     );
   }
-  
+
   /// 旋转图片 90 度
   void _rotateImage() {
     if (widget.image.dstRect == null) return;
-    
+
     final rect = widget.image.dstRect!;
-    
+
     // 交换宽度和高度（旋转 90 度）
     final newWidth = rect.height;
     final newHeight = rect.width;
-    
+
     // 保持中心点不变
     final centerX = rect.left + rect.width / 2;
     final centerY = rect.top + rect.height / 2;
     final newLeft = centerX - newWidth / 2;
     final newTop = centerY - newHeight / 2;
-    
+
     setState(() {
       widget.image.dstRect = Rect.fromLTWH(
         newLeft,
@@ -229,14 +233,14 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
         newHeight,
       );
     });
-    
+
     widget.onImageChanged();
   }
 
   /// 构建调整大小手柄
   Widget _buildResizeHandle(BuildContext context, Offset position) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Positioned(
       left: (position.dx.sign + 1) / 2 * screenWidth - 10,
       top: (position.dy.sign + 1) / 2 * screenHeight - 10,
@@ -251,12 +255,12 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
           onPanUpdate: (details) {
             final delta = details.localPosition - _panStartPosition;
             final pageDelta = delta / widget.scale;
-            
+
             double newWidth = _panStartRect.width;
             double newHeight = _panStartRect.height;
             double newLeft = _panStartRect.left;
             double newTop = _panStartRect.top;
-            
+
             // 根据手柄位置计算新尺寸
             if (position.dx < 0) {
               // 左边
@@ -266,7 +270,7 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
               // 右边
               newWidth = _panStartRect.width + pageDelta.dx;
             }
-            
+
             if (position.dy < 0) {
               // 上边
               newHeight = _panStartRect.height - pageDelta.dy;
@@ -275,10 +279,10 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
               // 下边
               newHeight = _panStartRect.height + pageDelta.dy;
             }
-            
+
             // 限制最小尺寸
             if (newWidth < 50 || newHeight < 50) return;
-            
+
             // 保持宽高比（对角线拖拽时）
             if (position.dx != 0 && position.dy != 0) {
               final aspectRatio = _panStartRect.width / _panStartRect.height;
@@ -287,7 +291,7 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
               } else {
                 newWidth = newHeight * aspectRatio;
               }
-              
+
               // 重新计算 left 和 top
               if (position.dx < 0) {
                 newLeft = _panStartRect.right - newWidth;
@@ -296,7 +300,7 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
                 newTop = _panStartRect.bottom - newHeight;
               }
             }
-            
+
             setState(() {
               widget.image.dstRect = Rect.fromLTWH(
                 newLeft,
@@ -361,7 +365,7 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
   /// 构建删除按钮
   Widget _buildDeleteButton(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     return Positioned(
       right: -10,
       top: -10,
@@ -418,4 +422,3 @@ class _CanvasImageWidgetState extends State<CanvasImageWidget> {
   double get screenWidth => (widget.image.dstRect?.width ?? 0) * widget.scale;
   double get screenHeight => (widget.image.dstRect?.height ?? 0) * widget.scale;
 }
-

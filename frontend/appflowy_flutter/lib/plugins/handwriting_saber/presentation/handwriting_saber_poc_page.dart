@@ -143,6 +143,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   final ValueNotifier<String?> _selectedImageIdNotifier =
       ValueNotifier<String?>(null);
 
+  /// ✅ 是否正在操作图片（拖动/缩放/旋转）
+  bool _isImageOperationInProgress = false;
+
   /// ✅ 剪贴板数据（存储复制的对象）
   List<Stroke>? _clipboardStrokes;
   List<PdfEditorImage>? _clipboardImages;
@@ -3742,6 +3745,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       },
       onPanStart: (DragStartDetails details) {
+        // ✅ 如果正在操作图片，不处理
+        if (_isImageOperationInProgress) {
+          debugPrint('🦋[HandwritingSaber] onPanStart: 图片操作中，跳过');
+          return;
+        }
+
         // ✅ 只处理当前页面的触摸事件
         if (!isPointInPage(details.localPosition)) {
           // ✅ 点击在页面外，取消选择
@@ -3753,6 +3762,29 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         final pagePos = toPageCoordinates(details.localPosition);
         debugPrint(
             '🦋[HandwritingSaber] onPanStart: local=${details.localPosition}, pagePos=$pagePos, pageIndex=$pageIndex, tool=${_currentToolNotifier.value.toolId}');
+
+        // ✅ 检查是否点击在图片上
+        final clickedImage = _findImageAtPosition(pagePos, pageIndex);
+        if (clickedImage != null) {
+          // ✅ 自动切换到选择工具
+          if (_currentToolNotifier.value.toolId != ToolId.select) {
+            _onToolChanged(const SelectTool(selectMode: SelectMode.click));
+          }
+
+          if (_selectedImageIdNotifier.value == clickedImage.id) {
+            // 点击在已选中的图片上，让 CanvasImageWidget 处理拖动
+            debugPrint(
+                '🦋[HandwritingSaber] onPanStart: 点击已选中图片，交给 CanvasImageWidget 处理');
+            _isImageOperationInProgress = true;
+          } else {
+            // 点击在未选中的图片上，选中该图片
+            debugPrint('🦋[HandwritingSaber] onPanStart: 点击未选中图片，自动选中');
+            _selectedImageIdNotifier.value = clickedImage.id;
+            _isImageOperationInProgress = true;
+          }
+          return;
+        }
+
         if (pagePos.dx.isFinite && pagePos.dy.isFinite) {
           // ✅ 如果点击在空白区域，结束文本框编辑
           if (_editingTextBoxIdNotifier.value != null) {
@@ -3807,6 +3839,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       },
       onPanUpdate: (DragUpdateDetails details) {
+        // ✅ 如果正在操作图片，不处理
+        if (_isImageOperationInProgress) {
+          return;
+        }
         // ✅ 只处理当前页面的触摸事件
         if (!isPointInPage(details.localPosition)) {
           return;
@@ -3818,7 +3854,14 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           _updateStroke(pagePos);
         }
       },
-      onPanEnd: (DragEndDetails details) => _endStroke(),
+      onPanEnd: (DragEndDetails details) {
+        // ✅ 如果正在操作图片，重置状态
+        if (_isImageOperationInProgress) {
+          _isImageOperationInProgress = false;
+          return;
+        }
+        _endStroke();
+      },
       child: Container(
         width: screenWidth,
         height: pageDisplayHeight,
@@ -4013,7 +4056,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             if (_currentToolNotifier.value.toolId != ToolId.select) {
               _onToolChanged(const SelectTool(selectMode: SelectMode.click));
             }
-            
+
             // 切换选中状态
             if (_selectedImageIdNotifier.value == image.id) {
               // 如果已选中，取消选中
@@ -4028,6 +4071,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           onImageDeleted: () {
             // 删除图片
             _deleteImage(image, pageIndex);
+          },
+          onDragStart: () {
+            // ✅ 开始图片操作
+            _isImageOperationInProgress = true;
+          },
+          onDragEnd: () {
+            // ✅ 结束图片操作
+            _isImageOperationInProgress = false;
+            _scheduleSave();
           },
         );
       },
