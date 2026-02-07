@@ -54,17 +54,23 @@ class MentionUserBlock extends StatelessWidget {
         children: [
           _buildAvatar(),
           const SizedBox(width: 4),
-          Text(
-            '@$userName',
-            style: textStyle?.copyWith(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w500,
-                ) ??
-                TextStyle(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
+          Flexible(
+            fit: FlexFit.loose,
+            child: Text(
+              '@$userName',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: textStyle?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w500,
+                  ) ??
+                  TextStyle(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+            ),
           ),
         ],
       ),

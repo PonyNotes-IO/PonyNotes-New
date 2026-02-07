@@ -17,6 +17,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_p
 import 'package:appflowy/startup/tasks/app_widget.dart' show AppGlobals;
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart' show showToastNotification;
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart' show SettingsPage;
+import 'package:appflowy/startup/tasks/appflowy_cloud_task.dart' show appflowyDeepLinkSchema;
 
 /// Handles deep links like: appflowy://invite?code=...&ws=...
 class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
@@ -26,6 +27,10 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
 
   @override
   bool canHandle(Uri uri) {
+    // Check if the scheme is correct
+    if (uri.scheme != appflowyDeepLinkSchema) {
+      return false;
+    }
     final hostMatch = uri.host == inviteHost;
     final pathMatch = uri.pathSegments.isNotEmpty && uri.pathSegments.first == inviteHost;
     final hasParams =
@@ -103,7 +108,7 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
         final context = AppGlobals.rootNavKey.currentState?.context;
         if (context != null) {
           // show confirmation dialog
-          showDialog(
+          await showDialog(
             context: context,
             builder: (dialogCtx) {
               return AlertDialog(
@@ -147,7 +152,7 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
         final context = AppGlobals.rootNavKey.currentState?.context;
         if (context != null) {
           // copy invite code helper
-          showDialog(
+          await showDialog(
             context: context,
             builder: (dialogCtx) {
               return AlertDialog(
