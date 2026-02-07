@@ -3,13 +3,17 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/notification_service.dart';
 
+import '../../user/application/reminder/notification_settings_service.dart';
+
 class NotificationServiceTask extends LaunchTask {
   const NotificationServiceTask();
 
   @override
   Future<void> initialize(LaunchContext context) async {
     LogUtils.info('NotificationServiceTask: Initializing notification service...');
-    
+    // 检查是否已经显示过并且用户点击了取消
+
+
     try {
       // 初始化通知服务
       final notificationService = NotificationService();
@@ -21,8 +25,8 @@ class NotificationServiceTask extends LaunchTask {
       if (!hasPermission) {
         LogUtils.warning('NotificationServiceTask: Notification permission not granted');
         // 这里可以添加逻辑，在应用启动后显示一个提示，引导用户开启权限
-
-        await notificationService.openNotificationSettings();
+        final notificationSettingsService = const NotificationSettingsService();
+        await notificationSettingsService.resetNotificationPermissionStatus();
       }
 
       LogUtils.info('NotificationServiceTask: Notification service initialized successfully');

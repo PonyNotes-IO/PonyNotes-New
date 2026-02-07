@@ -30,6 +30,7 @@ import 'package:time/time.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../../user/presentation/reminder/notification_permission_banner.dart';
 import 'home_layout.dart';
 import 'full_window_controller.dart';
 
@@ -66,32 +67,34 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
         builder: (context, state) => ValueListenableBuilder<bool>(
           valueListenable: FullWindowController.isFullWindow,
           builder: (context, isFullWindow, _) {
-            return Column(
+            return Stack(
               children: [
-                if (UniversalPlatform.isWindows)
-                  WindowTitleBar(leftChildren: [_buildToggleMenuButton(context)]),
-                Padding(
-                  padding: EdgeInsets.only(left: widget.layout.menuSpacing),
-                  child: TabsManager(
-                    onIndexChanged: (index) {
-                      if (selectedIndex != index) {
-                        // Unfocus editor to hide selection toolbar
-                        FocusScope.of(context).unfocus();
+                Column(
+                  children: [
+                    if (UniversalPlatform.isWindows)
+                      WindowTitleBar(leftChildren: [_buildToggleMenuButton(context)]),
+                    Padding(
+                      padding: EdgeInsets.only(left: widget.layout.menuSpacing),
+                      child: TabsManager(
+                        onIndexChanged: (index) {
+                          if (selectedIndex != index) {
+                            // Unfocus editor to hide selection toolbar
+                            FocusScope.of(context).unfocus();
 
-                        context.read<TabsBloc>().add(TabsEvent.selectTab(index));
-                        setState(() => selectedIndex = index);
-                      }
-                    },
-                  ),
-                ),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      IndexedStack(
-                        index: selectedIndex,
-                        children: state.pageManagers
-                            .map(
-                              (pm) => LayoutBuilder(
+                            context.read<TabsBloc>().add(TabsEvent.selectTab(index));
+                            setState(() => selectedIndex = index);
+                          }
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          IndexedStack(
+                            index: selectedIndex,
+                            children: state.pageManagers
+                                .map(
+                                  (pm) => LayoutBuilder(
                                 builder: (context, constraints) {
                                   return Row(
                                     children: [
@@ -113,49 +116,56 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                                         SecondaryView(
                                           pageManager: pm,
                                           adaptedPercentageWidth:
-                                              constraints.maxWidth * 3 / 7,
+                                          constraints.maxWidth * 3 / 7,
                                         ),
                                     ],
                                   );
                                 },
                               ),
                             )
-                            .toList(),
-                      ),
-                      // Overlay original right-side actions for folder/fileLibrary plugins
-                      if (state.pageManagers.isNotEmpty)
-                        Builder(
-                          builder: (ctx) {
-                            final currentIndex = state.currentIndex;
-                            if (currentIndex < 0 ||
-                                currentIndex >= state.pageManagers.length) {
-                              return const SizedBox.shrink();
-                            }
-                            final pm = state.pageManagers[currentIndex];
-                            final pluginType = pm.plugin.pluginType;
-                            if (pluginType != PluginType.fileLibrary &&
-                                pluginType != PluginType.folder &&
-                                pluginType != PluginType.calendar) {
-                              return const SizedBox.shrink();
-                            }
+                                .toList(),
+                          ),
+                          // Overlay original right-side actions for folder/fileLibrary plugins
+                          if (state.pageManagers.isNotEmpty)
+                            Builder(
+                              builder: (ctx) {
+                                final currentIndex = state.currentIndex;
+                                if (currentIndex < 0 ||
+                                    currentIndex >= state.pageManagers.length) {
+                                  return const SizedBox.shrink();
+                                }
+                                final pm = state.pageManagers[currentIndex];
+                                final pluginType = pm.plugin.pluginType;
+                                if (pluginType != PluginType.fileLibrary &&
+                                    pluginType != PluginType.folder &&
+                                    pluginType != PluginType.calendar) {
+                                  return const SizedBox.shrink();
+                                }
 
-                            return Positioned(
-                              top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding - (HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding) /*0*/,
-                              right: HomeInsets.topBarTitleHorizontalPadding,
-                              child: ChangeNotifierProvider.value(
-                                value: pm.notifier,
-                                child: Consumer<PageNotifier>(
-                                  builder: (_, notifier, __) =>
+                                return Positioned(
+                                  top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding - (HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding) /*0*/,
+                                  right: HomeInsets.topBarTitleHorizontalPadding,
+                                  child: ChangeNotifierProvider.value(
+                                    value: pm.notifier,
+                                    child: Consumer<PageNotifier>(
+                                      builder: (_, notifier, __) =>
                                       notifier.plugin.widgetBuilder.rightBarItem ??
-                                      const SizedBox.shrink(),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                    ],
-                  ),
+                                          const SizedBox.shrink(),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
+                Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: NotificationPermissionBanner())
               ],
             );
           },

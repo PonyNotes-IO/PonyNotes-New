@@ -92,7 +92,7 @@ class NotificationService {
           );
           await _notificationsPlugin.show(
             0,
-            '权限请求',
+            '通知权限请求',
             'PonyNotes 需要通知权限来提醒您的日程安排',
             platformDetails,
           );
