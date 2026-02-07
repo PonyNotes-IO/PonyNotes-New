@@ -1059,6 +1059,29 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         return;
       }
 
+      // ✅ 检查图片（图片在文本框下层，笔迹上层）
+      final clickedImage = _findImageAtPosition(position, pageIdx);
+      if (clickedImage != null) {
+        // 点击选中了单个图片
+        setState(() {
+          _selectResult = SelectResult(
+            pageIndex: pageIdx,
+            strokes: [],
+            images: [],
+            regularImages: [clickedImage],
+            webViews: [],
+            textBoxes: [],
+            selectionPath: Path(), // 点击选择不需要路径
+            selectMode: selectMode,
+          );
+          _isSelecting = false;
+          _selectStartPosition = position;
+          // ✅ 同步图片选中状态
+          _selectedImageIdNotifier.value = clickedImage.id;
+        });
+        return;
+      }
+
       final clickedStroke = _findStrokeAtPosition(position, pageIdx);
       if (clickedStroke != null) {
         // 点击选中了单个笔迹
@@ -1100,6 +1123,27 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         selectionEndPoint: selectMode == SelectMode.rectangle ? position : null,
       );
     });
+  }
+
+  /// ✅ 在指定位置查找图片（用于点击选择）
+  EditorImage? _findImageAtPosition(Offset position, int pageIndex) {
+    if (_coreInfo.pages.isEmpty ||
+        pageIndex < 0 ||
+        pageIndex >= _coreInfo.pages.length) {
+      return null;
+    }
+
+    final page = _coreInfo.pages[pageIndex];
+
+    // ✅ 从后往前查找（最上层的图片优先）
+    for (int i = page.images.length - 1; i >= 0; i--) {
+      final image = page.images[i];
+      if (image.dstRect != null && image.dstRect!.contains(position)) {
+        return image;
+      }
+    }
+
+    return null;
   }
 
   /// ✅ 在指定位置查找笔迹（用于点击选择）
@@ -3965,6 +4009,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           readOnly: false,
           selected: selectedImageId == image.id,
           onImageChanged: () {
+            // ✅ 自动切换到选择工具
+            if (_currentToolNotifier.value.toolId != ToolId.select) {
+              _onToolChanged(const SelectTool(selectMode: SelectMode.click));
+            }
+            
             // 切换选中状态
             if (_selectedImageIdNotifier.value == image.id) {
               // 如果已选中，取消选中
