@@ -11,6 +11,7 @@ export 'load_plugin.dart';
 export 'localization.dart';
 export 'media_kit_task.dart';
 export 'memory_leak_detector.dart';
+export 'notification_service_task.dart';
 export 'platform_error_catcher.dart';
 export 'platform_service.dart';
 export 'recent_service_task.dart';

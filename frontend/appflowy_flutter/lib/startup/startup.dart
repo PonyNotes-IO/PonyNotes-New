@@ -162,6 +162,9 @@ class FlowyRunner {
         const WhiteboardPreloadTask(),
         // Load Baidu Cloud configuration
         const BaiduCloudConfigTask(),
+        
+        // Initialize notification service and check permissions
+        const NotificationServiceTask(),
 
         // init the app widget
         // ignore in test mode
