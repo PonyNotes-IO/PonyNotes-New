@@ -588,7 +588,7 @@ class WorkspaceMemberBloc
       // by client-side landing page logic.
       final encodedCode = Uri.encodeComponent(inviteCode);
       final encodedWs = Uri.encodeComponent(workspaceId);
-      return '$baseUrl/app/invited/$encodedCode?ws=$encodedWs';
+      return '$baseUrl/invited?q=$encodedCode&ws=$encodedWs';
     }
     return '';
   }
