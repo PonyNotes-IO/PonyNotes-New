@@ -22,7 +22,7 @@ import 'package:appflowy/startup/tasks/appflowy_cloud_task.dart' show appflowyDe
 /// Handles deep links like: appflowy://invite?code=...&ws=...
 class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
   static const inviteHost = 'invite';
-  static const paramCode = 'code';
+  static const paramCode = 'q';
   static const paramWs = 'ws';
 
   @override
