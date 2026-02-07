@@ -114,6 +114,7 @@ dependencies:
   # TODO: Consider implementing custom package
   # to gather notification handling for all platforms
   local_notifier: ^0.1.5
+  flutter_local_notifications: ^17.2.3
   markdown_widget: ^2.3.2+8
   mime: ^2.0.0
   nanoid: ^1.0.0

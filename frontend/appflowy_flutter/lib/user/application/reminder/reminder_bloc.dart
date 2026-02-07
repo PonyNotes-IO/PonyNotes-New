@@ -6,6 +6,7 @@ import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_block.dart';
 import 'package:appflowy/shared/list_extension.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/reminder/notification_service.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
 import 'package:appflowy/user/application/reminder/reminder_service.dart';
 import 'package:appflowy/util/int64_extension.dart';
@@ -178,6 +179,9 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                   Log.info('After adding reminder: ${reminders.length}');
                   emit(state.copyWith(reminders: reminders));
                 }
+                
+                // 安排系统通知
+                await NotificationService().scheduleReminderNotification(reminder);
               },
               (error) {
                 Log.error('Failed to add reminder: $error');
@@ -470,7 +474,14 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
   }) async {
     /// check if schedule time is coming
     final scheduledAt = reminder.scheduledAt.toDateTime();
-    if (!DateTime.now().isAfter(scheduledAt) && !reminder.isRead) {
+    
+    // 修正逻辑：当当前时间已到或超过提醒时间，并且提醒未读时，返回true
+    if (!DateTime.now().isAfter(scheduledAt)) {
+      return false;
+    }
+    
+    // 只有未读的提醒才显示
+    if (reminder.isRead) {
       return false;
     }
 
@@ -525,8 +536,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       final textInserts = node.delta?.whereType<TextInsert>();
       if (textInserts == null) return false;
       for (final text in textInserts) {
-        final mention =
-            text.attributes?[MentionBlockKeys.mention] as Map<String, dynamic>?;
+        final mention = text.attributes?[MentionBlockKeys.mention] as Map<String, dynamic>?;
         final reminderId = mention?[MentionBlockKeys.reminderId] as String?;
         if (reminderIds.contains(reminderId)) {
           return true;
@@ -659,7 +669,7 @@ class ReminderUpdate {
       id: a.id,
       objectId: a.objectId,
       scheduledAt: scheduledAt != null
-          ? Int64(scheduledAt!.millisecondsSinceEpoch ~/ 1000)
+          ? Int64(scheduledAt!.millisecondsSinceEpoch)
           : a.scheduledAt,
       isAck: isAcknowledged,
       isRead: isRead ?? a.isRead,

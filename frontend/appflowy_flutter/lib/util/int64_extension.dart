@@ -1,5 +1,5 @@
-import 'package:fixnum/fixnum.dart';
+import 'package:fixnum/fixnum.dart' as $fixnum;
 
-extension DateConversion on Int64 {
-  DateTime toDateTime() => DateTime.fromMillisecondsSinceEpoch(toInt() * 1000);
+extension DateConversion on $fixnum.Int64 {
+  DateTime toDateTime() => DateTime.fromMillisecondsSinceEpoch(toInt());
 }

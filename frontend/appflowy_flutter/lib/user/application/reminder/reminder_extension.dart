@@ -8,6 +8,8 @@ class ReminderMetaKeys {
   static String isArchived = "is_archived";
   static String date = "date";
   static String notificationType = "notification_type";
+  static String isRecurring = "is_recurring";
+  static String recurrenceInstanceId = "recurrence_instance_id";
 }
 
 enum ReminderType {

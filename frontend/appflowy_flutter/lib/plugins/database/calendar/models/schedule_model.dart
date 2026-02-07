@@ -1088,45 +1088,112 @@ class ScheduleModel extends ChangeNotifier {
     }
 
     final reminderBloc = getIt<ReminderBloc>();
-    final baseTime = schedule.isAllDay ? schedule.startTime.withoutTime : schedule.startTime;
-    final scheduledAt = reminderOption.getNotificationDateTime(baseTime);
+    
+    // 处理单次日程
+    if (schedule.repeatType == 0) {
+      final baseTime = schedule.isAllDay ? schedule.startTime.withoutTime : schedule.startTime;
+      final scheduledAt = reminderOption.getNotificationDateTime(baseTime);
 
-    if (existingReminderId == null || existingReminderId.isEmpty) {
-      // 创建新提醒
-      final reminderId = nanoid();
-      if (dateService != null) {
-        await dateService.update(reminderId: reminderId);
-      }
+      if (existingReminderId == null || existingReminderId.isEmpty) {
+        // 创建新提醒
+        final reminderId = nanoid();
+        if (dateService != null) {
+          await dateService.update(reminderId: reminderId);
+        }
 
-      reminderBloc.add(
-        ReminderEvent.addById(
-          reminderId: reminderId,
-          objectId: viewId,
-          meta: {
-            ReminderMetaKeys.includeTime: (!schedule.isAllDay).toString(),
-            ReminderMetaKeys.rowId: rowId,
-            ReminderMetaKeys.date: baseTime.millisecondsSinceEpoch.toString(),
-            ReminderMetaKeys.notificationType: 'reminder',
-          },
-          scheduledAt: Int64(scheduledAt.millisecondsSinceEpoch ~/ 1000),
-        ),
-      );
-
-      await _waitReminderUpdated(reminderId, scheduledAt);
-    } else {
-      // 更新现有提醒
-      reminderBloc.add(
-        ReminderEvent.update(
-          ReminderUpdate(
-            id: existingReminderId,
-            scheduledAt: scheduledAt,
-            includeTime: !schedule.isAllDay,
-            date: schedule.startTime,
+        reminderBloc.add(
+          ReminderEvent.addById(
+            reminderId: reminderId,
+            objectId: viewId,
+            meta: {
+              ReminderMetaKeys.includeTime: (!schedule.isAllDay).toString(),
+              ReminderMetaKeys.rowId: rowId,
+              ReminderMetaKeys.date: baseTime.millisecondsSinceEpoch.toString(),
+              ReminderMetaKeys.notificationType: 'reminder',
+            },
+            scheduledAt: Int64(scheduledAt.millisecondsSinceEpoch),
           ),
-        ),
-      );
+        );
 
-      await _waitReminderUpdated(existingReminderId, scheduledAt);
+        await _waitReminderUpdated(reminderId, scheduledAt);
+      } else {
+        // 更新现有提醒
+        reminderBloc.add(
+          ReminderEvent.update(
+            ReminderUpdate(
+              id: existingReminderId,
+              scheduledAt: scheduledAt,
+              includeTime: !schedule.isAllDay,
+              date: schedule.startTime,
+            ),
+          ),
+        );
+
+        await _waitReminderUpdated(existingReminderId, scheduledAt);
+      }
+    } else {
+      // 处理重复日程，为未来N个实例创建提醒
+      await _handleRecurringScheduleReminders(
+        viewId: viewId,
+        rowId: rowId,
+        schedule: schedule,
+        reminderOption: reminderOption,
+      );
+    }
+  }
+
+  // 处理重复日程的提醒
+  Future<void> _handleRecurringScheduleReminders({
+    required String viewId,
+    required String rowId,
+    required ScheduleItem schedule,
+    required ReminderOption reminderOption,
+  }) async {
+    final reminderBloc = getIt<ReminderBloc>();
+    final recurrenceRule = RecurrenceRule(
+      repeatType: schedule.repeatType,
+      repeatRuleJson: schedule.repeatRuleJson,
+      startDate: schedule.startTime,
+    );
+
+    // 生成未来30天的提醒
+    final now = DateTime.now();
+    final endDate = now.add(Duration(days: 30));
+    DateTime currentDate = schedule.startTime;
+    int instanceCount = 0;
+
+    while (currentDate.isBefore(endDate) && instanceCount < 10) { // 限制最多10个实例
+      if (recurrenceRule.matchesDate(currentDate)) {
+        final baseTime = schedule.isAllDay ? currentDate.withoutTime : currentDate;
+        final scheduledAt = reminderOption.getNotificationDateTime(baseTime);
+        
+        if (scheduledAt.isAfter(now)) {
+          // 为每个重复实例创建单独的提醒
+          final reminderId = '${nanoid()}_${currentDate.millisecondsSinceEpoch}';
+          
+          reminderBloc.add(
+            ReminderEvent.addById(
+              reminderId: reminderId,
+              objectId: viewId,
+              meta: {
+                ReminderMetaKeys.includeTime: (!schedule.isAllDay).toString(),
+                ReminderMetaKeys.rowId: rowId,
+                ReminderMetaKeys.date: baseTime.millisecondsSinceEpoch.toString(),
+                ReminderMetaKeys.notificationType: 'reminder',
+                ReminderMetaKeys.isRecurring: 'true',
+                ReminderMetaKeys.recurrenceInstanceId: currentDate.millisecondsSinceEpoch.toString(),
+              },
+              scheduledAt: Int64(scheduledAt.millisecondsSinceEpoch),
+            ),
+          );
+          
+          await _waitReminderUpdated(reminderId, scheduledAt);
+          instanceCount++;
+        }
+      }
+      
+      // 下一天
+      currentDate = currentDate.add(Duration(days: 1));
     }
   }
 
