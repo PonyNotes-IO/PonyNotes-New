@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:appflowy/core/notification/folder_notification.dart';
 import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
@@ -8,7 +10,10 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-notification/protobuf.dart';
+import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_result/appflowy_result.dart';
@@ -208,13 +213,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         return;
       }
 
-      // 获取用户ID
-      final userId = userProfile.id.toString();
-      if (userId.isEmpty) {
-        Log.warn('📝 [OpenNoteDeepLinkHandler] 用户ID为空，跳过添加协作');
-        return;
-      }
-
       // 获取 auth token
       final authToken = userProfile.authToken;
       if (authToken == null || authToken.isEmpty) {
@@ -222,6 +220,12 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         return;
       }
 
+      // 获取用户ID
+      final userId = _getUserId(authToken);
+      if (userId == null || userId.isEmpty) {
+        Log.warn('📝 [OpenNoteDeepLinkHandler] 用户ID为空，跳过添加协作');
+        return;
+      }
       // 获取 base URL
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
       final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
@@ -236,13 +240,12 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         path: '/api/workspace/$workspaceId/collab/$viewId/members/$userId',
       );
 
-
       // 发送 POST 请求
       final response = await http.post(
         uri,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
+          'Authorization': 'Bearer ${_extractAccessToken(authToken)}',
         },
       ).timeout(
         const Duration(seconds: 10),
@@ -252,7 +255,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // Success
+        // Success 刷新共享列表处理
+        Log.info('[OpenNoteDeepLinkHandler] 添加协作成功');
       } else if (response.statusCode == 409) {
         // 409 表示用户已经在协作中，这是正常情况，不需要报错
       } else {
@@ -266,5 +270,46 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       );
     }
   }
+
+  String? _extractAccessToken(String? rawToken) {
+    if (rawToken == null || rawToken.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(rawToken);
+      if (decoded is Map<String, dynamic>) {
+        final accessToken = decoded['access_token'] as String?;
+        if (accessToken != null && accessToken.isNotEmpty) {
+          return accessToken;
+        }
+      }
+    } catch (_) {
+      // 非 JSON，直接使用原始 token
+      return rawToken;
+    }
+    return null;
+  }
+
+  String? _getUserId(String? rawToken) {
+    if (rawToken == null || rawToken.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(rawToken);
+      if (decoded is Map<String, dynamic>) {
+        final user = decoded['user'];
+        if (user is Map<String, dynamic>) {
+          return user['id'];
+        }else {
+          return null;
+        }
+      }
+    } catch (_) {
+      // 非 JSON，直接使用原始 token
+      return rawToken;
+    }
+    return null;
+  }
+
 }
 

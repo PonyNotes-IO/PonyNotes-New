@@ -146,7 +146,7 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
 
         final context = AppGlobals.rootNavKey.currentState?.context;
         if (context != null) {
-          showDialog(
+          await showDialog(
             context: context,
             builder: (dialogCtx) {
               return AlertDialog(

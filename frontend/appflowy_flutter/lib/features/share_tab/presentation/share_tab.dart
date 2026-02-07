@@ -22,6 +22,7 @@ import 'package:appflowy/plugins/shared/share/share_bloc.dart';
 
 import '../../../util/log_utils.dart';
 import '../../../workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
+import '../data/repositories/rust_share_with_user_repository_impl.dart';
 import 'build_users_list_with_owner.dart';
 import '../data/models/share_access_level.dart';
 
@@ -320,8 +321,12 @@ class _ShareTabState extends State<ShareTab> {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        return BlocProvider.value(
-          value: shareTabBloc,
+        return BlocProvider(
+          create: (context) => ShareTabBloc(
+            repository: RustShareWithUserRepositoryImpl(),
+            pageId: widget.pageId,
+            workspaceId: widget.workspaceId,
+          )..add(ShareTabEvent.initialize()),
           child: _CollaboratorsDialog(
             workspaceId: widget.workspaceId,
             pageId: widget.pageId,
