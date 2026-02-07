@@ -3790,7 +3790,23 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                     '🦋[HandwritingSaber] _buildSinglePageCanvas: pageIndex=$pageIndex, page.backgroundImage=${page.backgroundImage != null}, coreInfo.backgroundPattern=${_coreInfo.backgroundPattern}, currentBackgroundPattern=$_currentBackgroundPattern, page.strokes=${page.strokes.length}');
                 return const SizedBox.shrink();
               }),
-              // ✅ 图片层
+
+              // ✅ [第1层] 背景层 (只绘制背景色、背景纹理或PDF背景)
+              SaberCoreCanvas(
+                coreInfo: EditorCoreInfo(
+                  pages: [page], // ✅ 只传递当前页面
+                  backgroundColor: _coreInfo.backgroundColor,
+                  backgroundPattern: _currentBackgroundPattern,
+                  lineHeight: _coreInfo.lineHeight,
+                  lineThickness: _coreInfo.lineThickness,
+                  laserStrokes: [], // 背景层不需要激光笔
+                ),
+                drawBackground: true,
+                drawStrokes: false, // ❌ 不绘制笔迹
+                // 不需要监听任何变化，只显示静态背景
+              ),
+
+              // ✅ [第2层] 图片层
               if (page.images.isNotEmpty)
                 ...page.images.map((image) => _buildImageWidget(
                       image,
@@ -3799,14 +3815,16 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                       pageDisplayHeight,
                       scale,
                     )),
-              // ✅ WebView层
+
+              // ✅ [第3层] WebView层
               if (page.webViews.isNotEmpty)
                 ...page.webViews.map((webView) => _buildWebViewWidget(
                       webView,
                       pageIndex,
                       scale,
                     )),
-              // ✅ 画布层 (笔迹层) - 移动到图片和 WebView 之上，以便笔迹能覆盖在图片上
+
+              // ✅ [第4层] 画布层 (笔迹层) - 移动到图片和 WebView 之上
               ValueListenableBuilder<String?>(
                 valueListenable: _editingTextBoxIdNotifier,
                 builder: (context, editingTextBoxId, _) {
@@ -3841,6 +3859,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                             : null,
                         editingTextBoxId:
                             editingTextBoxId, // ✅ 传递正在编辑的文本框ID，避免重影
+                        drawBackground: false, // ❌ 不绘制背景（已经在底层绘制了）
+                        drawStrokes: true, // ✅ 绘制笔迹
                       );
                     },
                   );
