@@ -1,5 +1,6 @@
 import 'page.dart';
 import 'text_box.dart' as saber_text;
+import '../../components/canvas/image/editor_image.dart'; // ✅ 引入图片定义
 
 /// 编辑器历史记录管理器（参考 Saber 的 EditorHistory 实现）
 class EditorHistory {
@@ -77,6 +78,14 @@ class EditorHistory {
       deletedStrokes: strokes,
     ));
   }
+
+  /// ✅ 记录图片变更（导入/删除/移动/缩放）
+  void recordImageChange(int pageIndex, List<EditorImage> images) {
+    recordChange(EditorHistoryItem.imageChange(
+      pageIndex: pageIndex,
+      images: List.from(images), // 存储当前时刻的克隆快照
+    ));
+  }
 }
 
 /// 历史记录项类型
@@ -88,10 +97,15 @@ enum EditorHistoryItemType {
   modify,      // 修改对象
   insertPage,  // 插入页面
   deletePage,  // 删除页面
+  imageChange, // ✅ 图片变更
 }
 
 /// 历史记录项
-class EditorHistoryItem {
+  final List<Stroke>? deletedStrokes;  // 删除的笔迹（用于恢复）
+  final List<saber_text.TextBox>? deletedTextBoxes;  // 删除的文本框（用于恢复）
+  final List<EditorImage>? images; // ✅ 操作后的图片列表快照
+  final EditorPage? page;  // ✅ 页面数据（用于页面插入/删除操作的撤销恢复）
+
   EditorHistoryItem({
     required this.type,
     required this.pageIndex,
@@ -99,16 +113,9 @@ class EditorHistoryItem {
     this.textBoxes,
     this.deletedStrokes,
     this.deletedTextBoxes,
-    this.page,  // ✅ 页面数据（用于页面操作）
+    this.images, // ✅
+    this.page,
   });
-
-  final EditorHistoryItemType type;
-  final int pageIndex;
-  final List<Stroke> strokes;  // 操作的笔迹列表
-  final List<saber_text.TextBox>? textBoxes;  // 操作的文本框列表
-  final List<Stroke>? deletedStrokes;  // 删除的笔迹（用于恢复）
-  final List<saber_text.TextBox>? deletedTextBoxes;  // 删除的文本框（用于恢复）
-  final EditorPage? page;  // ✅ 页面数据（用于页面插入/删除操作的撤销恢复）
 
   /// 创建绘制操作的历史记录
   factory EditorHistoryItem.draw({
@@ -187,6 +194,19 @@ class EditorHistoryItem {
       pageIndex: pageIndex,
       strokes: [],
       page: page,
+    );
+  }
+
+  /// ✅ 创建图片操作的历史记录（快照式）
+  factory EditorHistoryItem.imageChange({
+    required int pageIndex,
+    required List<EditorImage> images,
+  }) {
+    return EditorHistoryItem(
+      type: EditorHistoryItemType.imageChange,
+      pageIndex: pageIndex,
+      strokes: [],
+      images: images,
     );
   }
 }

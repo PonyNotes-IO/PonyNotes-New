@@ -416,9 +416,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
               size: EditorPage.defaultSize,
               strokes: page.strokes,
               backgroundImage: page.backgroundImage,
+              images: page.images, // ✅ 补充：保留图片数据
+              webViews: page.webViews, // ✅ 补充：保留 WebView 数据
               textBoxes: page.textBoxes,
               listBoxes: page.listBoxes,
               taskListBoxes: page.taskListBoxes,
+              quill: page.quill, // ✅ 补充：保留 Quill 富文本
             );
             needsRepair = true;
           }
@@ -3538,6 +3541,18 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           _pageNotifiers[item.pageIndex].updatePage(page);
         }
         break;
+      case EditorHistoryItemType.imageChange:
+        // ✅ 恢复图片变更：重新恢复快照
+        if (item.images != null) {
+          final page = _coreInfo.pages[item.pageIndex];
+          page.images.clear();
+          page.images.addAll(item.images!);
+          // 更新页面 notifier
+          if (item.pageIndex < _pageNotifiers.length) {
+            _pageNotifiers[item.pageIndex].updatePage(page);
+          }
+        }
+        break;
       default:
         break;
     }
@@ -4075,6 +4090,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     if (pageIndex < 0 || pageIndex >= _coreInfo.pages.length) return;
 
     final page = _coreInfo.pages[pageIndex];
+    // ✅ 记录历史记录（删除前记录快照）
+    _history.recordImageChange(pageIndex, page.images);
+
     page.images.remove(image);
 
     // 取消选中
@@ -4082,11 +4100,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       _selectedImageIdNotifier.value = null;
     }
 
-    // 记录到历史
-    _history.recordChange(EditorHistoryItem.erase(
-      pageIndex: pageIndex,
-      deletedStrokes: [], // 图片删除不涉及笔迹
-    ));
     _updateUndoRedoState();
 
     // 更新UI
@@ -4137,6 +4150,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       final page = _coreInfo.pages[currentPageIndex];
       int imagesAdded = 0;
 
+      // ✅ 记录历史记录（导入前记录快照）
+      _history.recordImageChange(currentPageIndex, page.images);
+
       for (final file in result.files) {
         if (file.bytes == null || file.extension == null) continue;
 
@@ -4165,11 +4181,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       }
 
       if (imagesAdded > 0) {
-        // 记录到历史
-        _history.recordChange(EditorHistoryItem.draw(
-          pageIndex: currentPageIndex,
-          strokes: [],
-        ));
+        // 记录到历史 (已在循环前记录 recordImageChange，此处不再重复记录 draw)
+        _updateUndoRedoState();
         _updateUndoRedoState();
 
         // 更新UI

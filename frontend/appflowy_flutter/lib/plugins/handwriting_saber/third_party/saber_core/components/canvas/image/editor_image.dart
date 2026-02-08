@@ -1,3 +1,4 @@
+import 'dart:convert'; // ✅ 引入 base64 支持
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
@@ -78,7 +79,8 @@ class PngEditorImage extends EditorImage {
     return {
       'type': imageType,
       'id': id,
-      'imageBytes': imageBytes.toList(), // 转换为 List<int> 以便序列化
+      // ✅ 优化：改用 Base64 存储，比原始 List<int> 效率更高，JSON 尺寸更小
+      'imageBytesBase64': base64Encode(imageBytes),
       'extension': extension,
       'pageIndex': pageIndex,
       'pageSize': {
@@ -97,10 +99,25 @@ class PngEditorImage extends EditorImage {
   }
 
   factory PngEditorImage.fromJson(Map<String, dynamic> json) {
-    final List<dynamic>? imageBytesList = json['imageBytes'] as List<dynamic>?;
-    final Uint8List imageBytes = imageBytesList != null
-        ? Uint8List.fromList(imageBytesList.cast<int>())
-        : Uint8List(0);
+    Uint8List imageBytes = Uint8List(0);
+
+    // ✅ 向下兼容逻辑：优先读取 Base64，如果不存在则回退到旧的 List<int> 格式
+    if (json.containsKey('imageBytesBase64')) {
+      final String? base64Str = json['imageBytesBase64'] as String?;
+      if (base64Str != null && base64Str.isNotEmpty) {
+        try {
+          imageBytes = base64Decode(base64Str);
+        } catch (e) {
+          debugPrint('Failed to decode image Base64: $e');
+        }
+      }
+    } else if (json.containsKey('imageBytes')) {
+      final List<dynamic>? imageBytesList =
+          json['imageBytes'] as List<dynamic>?;
+      if (imageBytesList != null) {
+        imageBytes = Uint8List.fromList(imageBytesList.cast<int>());
+      }
+    }
 
     final pageSizeJson = json['pageSize'] as Map<String, dynamic>?;
     final pageSize = pageSizeJson != null
@@ -198,12 +215,3 @@ class SvgEditorImage extends EditorImage {
     );
   }
 }
-
-
-
-
-
-
-
-
-
