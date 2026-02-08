@@ -3745,11 +3745,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       },
       onPanStart: (DragStartDetails details) {
-        // ✅ 如果正在操作图片，不处理
-        if (_isImageOperationInProgress) {
-          debugPrint('🦋[HandwritingSaber] onPanStart: 图片操作中，跳过');
-          return;
-        }
+        // ✅ 移除图片操作检查：让 CanvasImageWidget 完全处理图片手势
+        // 父组件不再处理图片区域的手势
 
         // ✅ 只处理当前页面的触摸事件
         if (!isPointInPage(details.localPosition)) {
@@ -3764,24 +3761,14 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             '🦋[HandwritingSaber] onPanStart: local=${details.localPosition}, pagePos=$pagePos, pageIndex=$pageIndex, tool=${_currentToolNotifier.value.toolId}');
 
         // ✅ 检查是否点击在图片上
+        // ⚠️ 重要：这里只检测点击，不再设置 _isImageOperationInProgress
+        // 图片的手势完全由 CanvasImageWidget 处理，父组件不干预
         final clickedImage = _findImageAtPosition(pagePos, pageIndex);
         if (clickedImage != null) {
-          // ✅ 自动切换到选择工具
-          if (_currentToolNotifier.value.toolId != ToolId.select) {
-            _onToolChanged(const SelectTool(selectMode: SelectMode.click));
-          }
-
-          if (_selectedImageIdNotifier.value == clickedImage.id) {
-            // 点击在已选中的图片上，让 CanvasImageWidget 处理拖动
-            debugPrint(
-                '🦋[HandwritingSaber] onPanStart: 点击已选中图片，交给 CanvasImageWidget 处理');
-            _isImageOperationInProgress = true;
-          } else {
-            // 点击在未选中的图片上，选中该图片
-            debugPrint('🦋[HandwritingSaber] onPanStart: 点击未选中图片，自动选中');
-            _selectedImageIdNotifier.value = clickedImage.id;
-            _isImageOperationInProgress = true;
-          }
+          // ✅ 检测到点击在图片上，直接返回，让 CanvasImageWidget 处理
+          // 不再自动切换工具或设置状态，交给图片组件自己处理
+          debugPrint(
+              '🦋[HandwritingSaber] onPanStart: 点击在图片上，交给 CanvasImageWidget 处理');
           return;
         }
 
@@ -3839,10 +3826,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       },
       onPanUpdate: (DragUpdateDetails details) {
-        // ✅ 如果正在操作图片，不处理
-        if (_isImageOperationInProgress) {
-          return;
-        }
+        // ✅ 移除图片操作检查：让 CanvasImageWidget 完全处理图片手势
+        // 父组件不再处理图片区域的手势
+
         // ✅ 只处理当前页面的触摸事件
         if (!isPointInPage(details.localPosition)) {
           return;
@@ -3855,11 +3841,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       },
       onPanEnd: (DragEndDetails details) {
-        // ✅ 如果正在操作图片，重置状态
-        if (_isImageOperationInProgress) {
-          _isImageOperationInProgress = false;
-          return;
-        }
+        // ✅ 移除图片操作检查：让 CanvasImageWidget 完全处理图片手势
         _endStroke();
       },
       child: Container(
@@ -4035,6 +4017,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   }
 
   /// ✅ 构建图片 Widget（使用可交互组件）
+  /// 关键：图片的手势完全由 CanvasImageWidget 独立处理，父组件不干预
   Widget _buildImageWidget(
     EditorImage image,
     int pageIndex,
@@ -4042,46 +4025,27 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     double pageDisplayHeight,
     double scale,
   ) {
-    return ValueListenableBuilder<String?>(
-      valueListenable: _selectedImageIdNotifier,
-      builder: (context, selectedImageId, _) {
-        return CanvasImageWidget(
-          image: image,
-          pageSize: _coreInfo.pages[pageIndex].size,
-          scale: scale,
-          readOnly: false,
-          selected: selectedImageId == image.id,
-          onImageChanged: () {
-            // ✅ 自动切换到选择工具
-            if (_currentToolNotifier.value.toolId != ToolId.select) {
-              _onToolChanged(const SelectTool(selectMode: SelectMode.click));
-            }
-
-            // 切换选中状态
-            if (_selectedImageIdNotifier.value == image.id) {
-              // 如果已选中，取消选中
-              _selectedImageIdNotifier.value = null;
-            } else {
-              // 选中这张图片
-              _selectedImageIdNotifier.value = image.id;
-            }
-            // 保存更改
-            _scheduleSave();
-          },
-          onImageDeleted: () {
-            // 删除图片
-            _deleteImage(image, pageIndex);
-          },
-          onDragStart: () {
-            // ✅ 开始图片操作
-            _isImageOperationInProgress = true;
-          },
-          onDragEnd: () {
-            // ✅ 结束图片操作
-            _isImageOperationInProgress = false;
-            _scheduleSave();
-          },
-        );
+    return CanvasImageWidget(
+      image: image,
+      pageSize: _coreInfo.pages[pageIndex].size,
+      scale: scale,
+      readOnly: false,
+      selected: _selectedImageIdNotifier.value == image.id,
+      onImageChanged: () {
+        // ✅ 图片点击时切换选中状态
+        if (_selectedImageIdNotifier.value == image.id) {
+          // 如果已选中，取消选中
+          _selectedImageIdNotifier.value = null;
+        } else {
+          // 选中这张图片
+          _selectedImageIdNotifier.value = image.id;
+        }
+        // 保存更改
+        _scheduleSave();
+      },
+      onImageDeleted: () {
+        // 删除图片
+        _deleteImage(image, pageIndex);
       },
     );
   }
