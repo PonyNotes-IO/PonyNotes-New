@@ -9,7 +9,7 @@ import 'package:appflowy/workspace/application/settings/share/import_service.dar
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:path/path.dart' as p;
 import 'package:markdown_widget/markdown_widget.dart';
-import 'aliyun_doc_parse_processor.dart';
+import 'processor/aliyun_doc_parse_processor.dart';
 
 /// 增强的Word导入对话框，提供实时预览和解析状态
 class EnhancedWordImportDialog extends StatefulWidget {

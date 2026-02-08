@@ -130,14 +130,14 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
               ),
             ),
             const SizedBox(width: 30),
-            // Expanded(
-            //   child: ImportFileCard(
-            //     icon: Icons.picture_as_pdf,
-            //     title: "PDF",
-            //     onTap: () => _handleFileImport('pdf'),
-            //   ),
-            // ),
-            // const SizedBox(width: 30),
+            Expanded(
+              child: ImportFileCard(
+                icon: Icons.picture_as_pdf,
+                title: "PDF",
+                onTap: () => _handleFileImport('pdf'),
+              ),
+            ),
+            const SizedBox(width: 30),
             Expanded(
               child: ImportFileCard(
                 icon: Icons.text_snippet,
@@ -145,7 +145,13 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
                 onTap: () => _handleFileImport('markdown'),
               ),
             ),
-            const SizedBox(width: 30),
+          ],
+        ),
+        const SizedBox(height: 30),
+        //
+        // // Second row: HTML, Word
+        Row(
+          children: [
             Expanded(
               child: ImportFileCard(
                 icon: Icons.code,
@@ -153,20 +159,6 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
                 onTap: () => _handleFileImport('html'),
               ),
             ),
-          ],
-        ),
-        // const SizedBox(height: 30),
-        //
-        // // Second row: HTML, Word
-        // Row(
-        //   children: [
-        //     Expanded(
-        //       child: ImportFileCard(
-        //         icon: Icons.code,
-        //         title: "HTML",
-        //         onTap: () => _handleFileImport('html'),
-        //       ),
-        //     ),
         //     const SizedBox(width: 30),
         //     Expanded(
         //       child: ImportFileCard(
@@ -175,10 +167,12 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
         //         onTap: () => _handleFileImport('word'),
         //       ),
         //     ),
-        //     const SizedBox(width: 30),
-        //     const Expanded(child: SizedBox()), // Empty space for alignment
-        //   ],
-        // ),
+            const SizedBox(width: 30),
+            const Expanded(child: SizedBox()),
+            const SizedBox(width: 30),
+            const Expanded(child: SizedBox()), // Empty space for alignment
+          ],
+        ),
       ],
     );
   }

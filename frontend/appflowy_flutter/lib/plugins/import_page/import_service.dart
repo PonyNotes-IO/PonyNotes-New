@@ -6,7 +6,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
-import 'aliyun_doc_parse_processor.dart';
+import 'processor/aliyun_doc_parse_processor.dart';
 
 class PdfMetadata {
   const PdfMetadata({

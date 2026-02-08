@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:appflowy/plugins/import_page/processor/custom_pdf_processor.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:appflowy_backend/log.dart';
@@ -11,7 +13,7 @@ import 'package:appflowy/plugins/document/application/document_data_pb_extension
 import 'package:path/path.dart' as p;
 import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:markdown_widget/markdown_widget.dart';
-import 'aliyun_doc_parse_processor.dart';
+import 'processor/aliyun_doc_parse_processor.dart';
 
 /// 增强的PDF导入对话框，提供多种处理模式和实时预览
 class EnhancedPdfImportDialog extends StatefulWidget {
@@ -487,15 +489,18 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     });
 
     try {
-      String content;
+      String? content;
       
       // 使用阿里云API处理PDF
       // 注意：阿里云API会自动处理所有模式，不需要指定mode、language等参数
-      content = await AliyunDocParseProcessor.processPdfFile(
-            _selectedFile!,
-            cancellationToken: _cancellationToken,
-          );
-
+      // content = await AliyunDocParseProcessor.processPdfFile(
+      //       _selectedFile!,
+      //       cancellationToken: _cancellationToken,
+      //     );
+      final content1 = await CustomPdfProcessor.extractTextOcr(_selectedFile!,cancellationToken: _cancellationToken);
+      if(content1 != null){
+        content = content1['text'];
+      }
       // 检查是否已取消
       if (_cancellationToken?.isCancelled ?? false) {
         if (mounted) {
@@ -508,7 +513,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       }
 
       // 验证内容是否为空
-      if (content.trim().isEmpty) {
+      if (content == null || content.isEmpty) {
         Log.warn('Extracted content is empty');
         if (mounted) {
           setState(() {
@@ -609,6 +614,7 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       }
     }
   }
+
 }
 
 enum PdfImportMode {

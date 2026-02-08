@@ -10,7 +10,7 @@ import 'package:appflowy/workspace/application/settings/share/import_service.dar
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:path/path.dart' as p;
 import 'package:markdown_widget/markdown_widget.dart';
-import 'aliyun_doc_parse_processor.dart' show CancellationToken;
+import 'processor/aliyun_doc_parse_processor.dart' show CancellationToken;
 import 'professional_html_parser.dart';
 
 /// 增强的HTML导入对话框，使用阿里云解析
