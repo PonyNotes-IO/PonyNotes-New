@@ -177,7 +177,8 @@ abstract class EditorExporter {
   }
 
   /// ✅ 绘制PDF背景图
-  /// 关键修复：正确处理PDF页面缩放，确保与页面坐标系对齐
+  /// 关键修复：PDF必须填充整个页面区域（0,0 到 pageSize），不能居中
+  /// 因为笔迹坐标是相对于页面(0,0)记录的，如果PDF居中会导致笔迹与PDF错位
   static Future<void> _drawPdfBackground(
     Canvas canvas,
     PdfEditorImage pdfImage,
@@ -204,31 +205,19 @@ abstract class EditorExporter {
       final pdfPageWidth = pdfPage.width;
       final pdfPageHeight = pdfPage.height;
 
-      // 获取目标矩形
-      // ✅ 修复：强制使用页面尺寸作为目标区域，忽略 pdfImage.dstRect
-      // 屏幕上的渲染逻辑（SaberCoreCanvas -> _PdfBackground）总是填满整个页面区域（BoxFit.contain）
-      // 使用 pdfImage.dstRect 会导致导出时与屏幕显示不一致（偏移或缩放错误）
-      final dstRect = Rect.fromLTWH(0, 0, pageSize.width, pageSize.height);
+      debugPrint(
+          '📄[EditorExporter] PDF原始尺寸: ${pdfPageWidth}x${pdfPageHeight}, 页面尺寸: $pageSize');
 
-      // ✅ 关键修复：正确计算缩放比例
-      // PDF页面需要缩放以适应dstRect（类似BoxFit.contain）
-      // 使用最小缩放比例，确保整个PDF页面都能显示在目标区域内
-      final scaleX = dstRect.width / pdfPageWidth;
-      final scaleY = dstRect.height / pdfPageHeight;
-      final scale = scaleX < scaleY ? scaleX : scaleY;
-
-      // 计算渲染尺寸（基于缩放后的尺寸）
-      final scaledWidth = pdfPageWidth * scale;
-      final scaledHeight = pdfPageHeight * scale;
-      final renderWidth = (scaledWidth * exportPixelRatio).toInt();
-      final renderHeight = (scaledHeight * exportPixelRatio).toInt();
+      // ✅ 关键修复：直接使用页面尺寸渲染PDF，填充整个页面区域
+      // 不进行居中处理，确保PDF从(0,0)开始绘制到(pageSize.width, pageSize.height)
+      // 这样笔迹坐标与PDF坐标系完全对齐
+      final renderWidth = (pageSize.width * exportPixelRatio).toInt();
+      final renderHeight = (pageSize.height * exportPixelRatio).toInt();
 
       debugPrint(
-          '📄[EditorExporter] PDF原始尺寸: ${pdfPageWidth}x${pdfPageHeight}, dstRect: $dstRect');
-      debugPrint(
-          '📄[EditorExporter] 缩放比例: $scale, 缩放后尺寸: ${scaledWidth}x${scaledHeight}, 渲染尺寸: ${renderWidth}x$renderHeight');
+          '📄[EditorExporter] 渲染尺寸: ${renderWidth}x$renderHeight (填充整个页面)');
 
-      // 渲染PDF页面为图片
+      // 渲染PDF页面为图片（让PDF库自动缩放到目标尺寸）
       final pdfPageImage = await pdfPage.render(
         width: renderWidth,
         height: renderHeight,
@@ -244,24 +233,19 @@ abstract class EditorExporter {
       // 转换为ui.Image
       final uiImage = await pdfPageImage.createImage();
 
-      // ✅ 正确绘制到dstRect（保持与Saber原版预览一致的行为）
-      // 计算居中偏移
-      final offsetX = dstRect.left + (dstRect.width - scaledWidth) / 2;
-      final offsetY = dstRect.top + (dstRect.height - scaledHeight) / 2;
-
-      // 创建正确的目标矩形
-      final alignedDstRect =
-          Rect.fromLTWH(offsetX, offsetY, scaledWidth, scaledHeight);
+      // ✅ 关键修复：PDF绘制到整个页面区域(0,0)到(pageSize)
+      // 不进行居中偏移，直接填充
+      final dstRect = Rect.fromLTWH(0, 0, pageSize.width, pageSize.height);
 
       canvas.drawImageRect(
         uiImage,
         Rect.fromLTWH(
             0, 0, uiImage.width.toDouble(), uiImage.height.toDouble()),
-        alignedDstRect,
+        dstRect,
         Paint(),
       );
 
-      debugPrint('📄[EditorExporter] PDF背景渲染完成，绘制位置: $alignedDstRect');
+      debugPrint('📄[EditorExporter] PDF背景渲染完成，绘制位置: $dstRect (填充整个页面)');
 
       // 清理资源
       uiImage.dispose();
