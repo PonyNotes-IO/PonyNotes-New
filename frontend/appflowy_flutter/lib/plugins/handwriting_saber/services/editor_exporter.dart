@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
+import 'dart:io'; // Required for File access in Syncfusion logic
 
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdfrx/pdfrx.dart' as pdfrx;
+import 'package:syncfusion_flutter_pdf/pdf.dart' as syncfusion;
 
 import '../third_party/saber_core/components/canvas/canvas_background_pattern.dart';
 import '../third_party/saber_core/components/canvas/image/editor_image.dart';
@@ -180,236 +182,104 @@ abstract class EditorExporter {
   /// 说明：由于导入PDF时，pageSize已经按PDF宽高比计算
   /// (pageSize.height = defaultWidth * pdfPage.height / pdfPage.width)
   /// 所以PDF应该完美填充整个pageSize区域
+  /// 绘制 PDF 背景
   static Future<void> _drawPdfBackground(
-    Canvas canvas,
+    ui.Canvas canvas,
     PdfEditorImage pdfImage,
     Size pageSize,
   ) async {
+    final String pdfFilePath = pdfImage.pdfFilePath;
+    final int pdfPageIndex = pdfImage.pdfPageIndex;
+
+    debugPrint(
+        '📄[EditorExporter] Drawing PDF background: $pdfFilePath (Page $pdfPageIndex) to fit $pageSize');
+
+    // 1. 加载 pdfrx 文档用于渲染图像
+    final pdfrxDoc = await pdfrx.PdfDocument.openFile(pdfFilePath);
     try {
-      debugPrint(
-          '📄[EditorExporter] 开始渲染PDF背景: ${pdfImage.pdfFilePath}, 页面: ${pdfImage.pdfPageIndex}');
+      final pdfrxPage = pdfrxDoc.pages[pdfPageIndex];
 
-      // 加载PDF文档
-      final pdfDocument =
-          await pdfrx.PdfDocument.openFile(pdfImage.pdfFilePath);
+      // 2. 加载 Syncfusion 文档获取几何信息 (CropBox/MediaBox)
+      Rect? mediaBoxRect;
+      Rect? cropBoxRect;
 
-      // 检查页面索引有效性
-      if (pdfImage.pdfPageIndex < 0 ||
-          pdfImage.pdfPageIndex >= pdfDocument.pages.length) {
-        debugPrint('⚠️ [EditorExporter] PDF页面索引无效: ${pdfImage.pdfPageIndex}');
-        pdfDocument.dispose();
-        return;
-      }
-
-      // 获取PDF页面
-      final pdfPage = pdfDocument.pages[pdfImage.pdfPageIndex];
-      final pdfPageWidth = pdfPage.width;
-      final pdfPageHeight = pdfPage.height;
-
-      // 🔍 探测 PDF 页面属性（CropBox/MediaBox）
       try {
-        // 使用 dynamic 访问潜在的未公开属性，用于调试
-        dynamic p = pdfPage;
-        // 尝试打印所有可能的属性
-        debugPrint('🔍[EditorExporter] Probing PdfPage properties:');
+        final File file = File(pdfFilePath);
+        final List<int> bytes = await file.readAsBytes();
+        final syncfusion.PdfDocument syncDoc =
+            syncfusion.PdfDocument(inputBytes: bytes);
         try {
-          debugPrint(' - x: ${p.x}');
-        } catch (_) {}
-        try {
-          debugPrint(' - y: ${p.y}');
-        } catch (_) {}
-        try {
-          debugPrint(' - cropBox: ${p.cropBox}');
-        } catch (_) {}
-        try {
-          debugPrint(' - mediaBox: ${p.mediaBox}');
-        } catch (_) {}
-        try {
-          debugPrint(' - viewRect: ${p.viewRect}');
-        } catch (_) {}
-      } catch (e) {
-        debugPrint('🔍[EditorExporter] Property probe failed: $e');
-      }
+          final syncfusion.PdfPage syncPage = syncDoc.pages[pdfPageIndex];
+          final Size syncSize = syncPage.size;
 
-      // 🔍 策略改进：
-      // 1. 尝试动态获取 cropBox (如果 pdfrx 支持)
-      // 2. 强制使用 BoxFit.contain 计算目标区域，杜绝变形
+          // Syncfusion 的 page.size 通常反映了 CropBox (如果是被裁剪过的)
+          // 我们这里主要用它来确认逻辑尺寸
+          debugPrint('📄[EditorExporter] Syncfusion geometry check: $syncSize');
 
-      Rect? cropRect;
-      try {
-        // 尝试反射获取名为 cropBox 或 visibleRect 的属性
-        dynamic p = pdfPage;
-        // 常见的 PDF 库 cropBox 可能叫 cropBox, visibleRect, mediaBox 等
-        // 这里尝试几个可能的名称
-        final dynamic box =
-            _tryGetProperty(p, 'cropBox') ?? _tryGetProperty(p, 'viewRect');
-        if (box != null && box.toString().contains('Rect')) {
-          // 假设是 Rect 类型 (left, top, width, height)
-          // 我们能否直接转为 Rect? 依赖于具体实现，这里做保守处理
-          // 如果能拿到 x, y, w, h 就太好了
-          debugPrint('✅ [EditorExporter] Found cropBox/viewRect: $box');
-          // 暂无法确定类型，仅作为日志。若 pdfrx 更新支持我们会用到。
-          // 如果 box 是具体对象，可以尝试提取 left/top/width/height
+          // 如果 Syncfusion 的 size 和 pdfrx 的 size 一致，说明它们对 CropBox 的理解一致
+        } finally {
+          syncDoc.dispose();
         }
       } catch (e) {
-        debugPrint('⚠️ [EditorExporter] CropBox probe error: $e');
+        debugPrint('⚠️ [EditorExporter] Syncfusion check failed: $e');
       }
 
-      // 计算目标渲染尺寸：
-      // 我们希望最终绘制的图片宽度能填满 pageSize.width * pixelRatio
-      final int renderWidth = (pageSize.width * exportPixelRatio).toInt();
+      // 3. 渲染高分辨率图像
+      // 策略：直接使用 pdfrx 渲染到指定的像素尺寸。
+      // 为解决白边问题，我们显式指定 fullWidth/fullHeight 为目标逻辑尺寸。
+      // 这样 pdfrx 应该会正确地将可视区域(CropBox)缩放到目标像素尺寸。
 
-      // 执行渲染
-      // 如果 pdfrx 的 render 方法支持 x, y, width, height 为源裁剪区域
-      // 我们目前无法确知，所以使用标准 render
-      final pdfPageImage = await pdfPage.render(
+      final double exportScale = 2.0;
+      final int renderWidth = (pageSize.width * exportScale).toInt();
+      final int renderHeight = (pageSize.height * exportScale).toInt();
+
+      final pdfrx.PdfImage? renderedImage = await pdfrxPage.render(
+        x: 0,
+        y: 0,
         width: renderWidth,
-        // height auto
+        height: renderHeight,
+        fullWidth: pageSize.width * exportScale,
+        fullHeight: pageSize.height * exportScale,
         backgroundColor: Colors.white,
       );
 
-      if (pdfPageImage == null) {
-        debugPrint('⚠️ [EditorExporter] PDF页面渲染失败');
-        pdfDocument.dispose();
+      if (renderedImage == null) {
+        debugPrint('❌ [EditorExporter] Failed to render PDF page');
         return;
       }
 
-      // 转换为ui.Image
-      final uiImage = await pdfPageImage.createImage();
+      final ui.Image uiImage = await renderedImage.createImage();
+      renderedImage.dispose();
 
       debugPrint(
-          '📄[EditorExporter] 渲染结果实际尺寸: ${uiImage.width}x${uiImage.height}');
+          '📄[EditorExporter] Generated Image: ${uiImage.width}x${uiImage.height}');
 
-      // 4. 绘制逻辑：基于 CropBox 的精确裁剪
-      // 核心假设：屏幕上的 PdfPageView 渲染的是 CropBox，而导出渲染的是 MediaBox
-      // 我们必须找到 CropBox，并只绘制这部分内容
-
-      Rect? cropRect;
-      // Rect? cropRect; // This was the duplicate declaration, removed.
-      try {
-        // [Probe] 尝试获取 CropBox
-        // pdfrx 可能使用 unsafe c++ binding，或者属性名可能是 cropBox / viewRect
-        // 我们尝试获取 left, top, right, bottom 或者 rect 对象
-        dynamic p = pdfPage;
-
-        // 尝试1: 直接获取 cropBox
-        dynamic box = _tryGetProperty(p, 'cropBox');
-        if (box == null) box = _tryGetProperty(p, 'viewRect'); // fallback
-        if (box == null) box = _tryGetProperty(p, 'visibleRect'); // fallback
-
-        if (box != null) {
-          // 假设 box 是 PdfRect 或类似结构，尝试访问 left, top, width, height
-          final double? l = _castToDouble(
-              _tryGetProperty(box, 'left') ?? _tryGetProperty(box, 'x'));
-          final double? t = _castToDouble(
-              _tryGetProperty(box, 'top') ?? _tryGetProperty(box, 'y'));
-          final double? w = _castToDouble(
-              _tryGetProperty(box, 'width') ?? _tryGetProperty(box, 'w'));
-          final double? h = _castToDouble(
-              _tryGetProperty(box, 'height') ?? _tryGetProperty(box, 'h'));
-
-          if (l != null && t != null && w != null && h != null) {
-            cropRect = Rect.fromLTWH(l, t, w, h);
-            debugPrint('✅ [EditorExporter] Detected CropBox: $cropRect');
-          }
-        }
-
-        // 尝试2: 如果没有 cropBox 对象，直接在 page 上找 cropX, cropY 等
-        if (cropRect == null) {
-          final double? x = _castToDouble(_tryGetProperty(p, 'cropX'));
-          final double? y = _castToDouble(_tryGetProperty(p, 'cropY'));
-          final double? w = _castToDouble(_tryGetProperty(p, 'cropW'));
-          final double? h = _castToDouble(_tryGetProperty(p, 'cropH'));
-          if (x != null && y != null && w != null && h != null) {
-            cropRect = Rect.fromLTWH(x, y, w, h);
-            debugPrint(
-                '✅ [EditorExporter] Detected Crop properties: $cropRect');
-          }
-        }
-      } catch (e) {
-        debugPrint('⚠️ [EditorExporter] CropBox detection failed: $e');
-      }
-
-      // 准备绘制源/目标
-      Rect srcRect;
-      Rect dstRect;
-
-      if (cropRect != null) {
-        // --- 方案 A: 使用探测到的 CropBox ---
-        // render() 产生的是 MediaBox 图像 (naturalImage尺寸)
-        // 我们需要从 MediaBox 图像中切出 CropBox 区域
-
-        // 坐标转换：PDF坐标 (points) -> 渲染图像坐标 (pixels)
-        // scaleFactor = renderWidth / pdfPageWidth (assuming pdfPageWidth is MediaBox width)
-        // 如果 pdfPageWidth 是 CropBox width, 那么我们需要用 naturalWidth / MediaBoxWidth?
-        // 我们已知 uiImage.width 是 renderWidth
-        // 假设 pdfPageWidth/Height 是 MediaBox 尺寸 (因为之前推断 ratio=1)
-
-        final double imageWidth = uiImage.width.toDouble();
-        final double imageHeight = uiImage.height.toDouble();
-
-        final double scaleX = imageWidth / pdfPageWidth;
-        final double scaleY =
-            imageHeight / pdfPageHeight; // 如果 pdfPageHeight 是 MediaBox
-
-        // 如果 pdfPage.* 是 MediaBox，那么 cropRect 是相对于 MediaBox 的
-        srcRect = Rect.fromLTWH(cropRect.left * scaleX, cropRect.top * scaleY,
-            cropRect.width * scaleX, cropRect.height * scaleY);
-
-        // 目标：填满 pageSize (CropBox 比例)
-        dstRect = Rect.fromLTWH(0, 0, pageSize.width, pageSize.height);
-
-        debugPrint(
-            '📄[EditorExporter] Application CropBox: PDF=$cropRect -> Pixels=$srcRect');
-      } else {
-        // --- 方案 B: 无法探测 CropBox (Fallback) ---
-        // 使用 BoxFit.contain 保证不变形，居中显示
-        // 这是之前的防御性策略
-
-        final double imageWidth = uiImage.width.toDouble();
-        final double imageHeight = uiImage.height.toDouble();
-
-        final Size srcSize = Size(imageWidth, imageHeight);
-        final Size dstSize = Size(pageSize.width, pageSize.height);
-
-        final FittedSizes fittedSizes =
-            applyBoxFit(BoxFit.contain, srcSize, dstSize);
-
-        dstRect = Alignment.center.inscribe(
-          fittedSizes.destination,
-          Rect.fromLTWH(0, 0, dstSize.width, dstSize.height),
-        );
-
-        srcRect = Rect.fromLTWH(0, 0, imageWidth, imageHeight);
-
-        debugPrint(
-            '⚠️ [EditorExporter] No CropBox found. Using Fallback BoxFit.contain');
-      }
-
-      debugPrint('📄[EditorExporter] 绘制: Source=$srcRect -> Dest=$dstRect');
+      // 4. 绘制到 Canvas
+      final Rect srcRect = Rect.fromLTWH(
+          0, 0, uiImage.width.toDouble(), uiImage.height.toDouble());
+      final Rect dstRect = Rect.fromLTWH(0, 0, pageSize.width, pageSize.height);
 
       canvas.drawImageRect(
         uiImage,
         srcRect,
         dstRect,
-        Paint(),
+        Paint()..filterQuality = FilterQuality.high,
       );
-
-      debugPrint('📄[EditorExporter] PDF背景绘制完成');
-
-      // 清理资源
-      uiImage.dispose();
-      pdfPageImage.dispose();
-      pdfDocument.dispose();
     } catch (e) {
-      debugPrint('❌ [EditorExporter] 绘制PDF背景失败: $e');
+      debugPrint('❌ [EditorExporter] Error drawing PDF background: $e');
+    } finally {
+      // pdfrxDoc.dispose(); // Leave managed by pdfrx internal cache or GC if not explicitly blocked
     }
   }
 
   static double? _castToDouble(dynamic value) {
     if (value == null) return null;
     if (value is num) return value.toDouble();
-    return null;
+    try {
+      return double.parse(value.toString());
+    } catch (_) {
+      return null;
+    }
   }
 
   static dynamic _tryGetProperty(Object obj, String name) {
