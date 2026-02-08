@@ -177,8 +177,9 @@ abstract class EditorExporter {
   }
 
   /// ✅ 绘制PDF背景图
-  /// 关键修复：PDF必须填充整个页面区域（0,0 到 pageSize），不能居中
-  /// 因为笔迹坐标是相对于页面(0,0)记录的，如果PDF居中会导致笔迹与PDF错位
+  /// 说明：由于导入PDF时，pageSize已经按PDF宽高比计算
+  /// (pageSize.height = defaultWidth * pdfPage.height / pdfPage.width)
+  /// 所以PDF应该完美填充整个pageSize区域
   static Future<void> _drawPdfBackground(
     Canvas canvas,
     PdfEditorImage pdfImage,
@@ -205,19 +206,24 @@ abstract class EditorExporter {
       final pdfPageWidth = pdfPage.width;
       final pdfPageHeight = pdfPage.height;
 
-      debugPrint(
-          '📄[EditorExporter] PDF原始尺寸: ${pdfPageWidth}x${pdfPageHeight}, 页面尺寸: $pageSize');
+      // ✅ 验证宽高比是否匹配
+      final pdfRatio = pdfPageWidth / pdfPageHeight;
+      final pageRatio = pageSize.width / pageSize.height;
+      final ratioDiff = (pdfRatio - pageRatio).abs();
 
-      // ✅ 关键修复：直接使用页面尺寸渲染PDF，填充整个页面区域
-      // 不进行居中处理，确保PDF从(0,0)开始绘制到(pageSize.width, pageSize.height)
-      // 这样笔迹坐标与PDF坐标系完全对齐
+      debugPrint(
+          '📄[EditorExporter] PDF原始: ${pdfPageWidth}x${pdfPageHeight} (ratio: $pdfRatio)');
+      debugPrint(
+          '📄[EditorExporter] 页面: ${pageSize.width}x${pageSize.height} (ratio: $pageRatio)');
+      debugPrint('📄[EditorExporter] 宽高比差异: $ratioDiff');
+
+      // 计算高分辨率渲染尺寸
       final renderWidth = (pageSize.width * exportPixelRatio).toInt();
       final renderHeight = (pageSize.height * exportPixelRatio).toInt();
 
-      debugPrint(
-          '📄[EditorExporter] 渲染尺寸: ${renderWidth}x$renderHeight (填充整个页面)');
+      debugPrint('📄[EditorExporter] 渲染尺寸: ${renderWidth}x$renderHeight');
 
-      // 渲染PDF页面为图片（让PDF库自动缩放到目标尺寸）
+      // 渲染PDF页面为图片
       final pdfPageImage = await pdfPage.render(
         width: renderWidth,
         height: renderHeight,
@@ -233,8 +239,9 @@ abstract class EditorExporter {
       // 转换为ui.Image
       final uiImage = await pdfPageImage.createImage();
 
-      // ✅ 关键修复：PDF绘制到整个页面区域(0,0)到(pageSize)
-      // 不进行居中偏移，直接填充
+      debugPrint('📄[EditorExporter] 渲染结果: ${uiImage.width}x${uiImage.height}');
+
+      // PDF直接填充整个页面区域
       final dstRect = Rect.fromLTWH(0, 0, pageSize.width, pageSize.height);
 
       canvas.drawImageRect(
@@ -245,7 +252,7 @@ abstract class EditorExporter {
         Paint(),
       );
 
-      debugPrint('📄[EditorExporter] PDF背景渲染完成，绘制位置: $dstRect (填充整个页面)');
+      debugPrint('📄[EditorExporter] PDF绘制完成: $dstRect');
 
       // 清理资源
       uiImage.dispose();
@@ -253,7 +260,6 @@ abstract class EditorExporter {
       pdfDocument.dispose();
     } catch (e) {
       debugPrint('❌ [EditorExporter] 绘制PDF背景失败: $e');
-      // 不抛出异常，继续渲染其他内容
     }
   }
 
