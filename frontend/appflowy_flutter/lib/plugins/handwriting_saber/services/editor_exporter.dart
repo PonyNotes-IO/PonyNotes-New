@@ -206,27 +206,71 @@ abstract class EditorExporter {
       final pdfPageWidth = pdfPage.width;
       final pdfPageHeight = pdfPage.height;
 
-      // ✅ 验证宽高比是否匹配
-      final pdfRatio = pdfPageWidth / pdfPageHeight;
-      final pageRatio = pageSize.width / pageSize.height;
-      final ratioDiff = (pdfRatio - pageRatio).abs();
+      // 🔍 探测 PDF 页面属性（CropBox/MediaBox）
+      try {
+        // 使用 dynamic 访问潜在的未公开属性，用于调试
+        dynamic p = pdfPage;
+        // 尝试打印所有可能的属性
+        debugPrint('🔍[EditorExporter] Probing PdfPage properties:');
+        try {
+          debugPrint(' - x: ${p.x}');
+        } catch (_) {}
+        try {
+          debugPrint(' - y: ${p.y}');
+        } catch (_) {}
+        try {
+          debugPrint(' - cropBox: ${p.cropBox}');
+        } catch (_) {}
+        try {
+          debugPrint(' - mediaBox: ${p.mediaBox}');
+        } catch (_) {}
+        try {
+          debugPrint(' - viewRect: ${p.viewRect}');
+        } catch (_) {}
+      } catch (e) {
+        debugPrint('🔍[EditorExporter] Property probe failed: $e');
+      }
+
+      // 🔍 策略：探测自然渲染尺寸以解决 CropBox vs MediaBox 问题
+      // 1. 先按默认参数渲染（通常是 natural size / 72 DPI）
+      final naturalImage = await pdfPage.render(
+        backgroundColor: Colors.white,
+      );
+
+      if (naturalImage == null) {
+        debugPrint('⚠️ [EditorExporter] PDF自然尺寸探测失败');
+        pdfDocument.dispose();
+        return;
+      }
+
+      final double naturalWidth = naturalImage.width.toDouble();
+      final double naturalHeight = naturalImage.height.toDouble();
+      naturalImage.dispose(); // 立即释放
+
+      debugPrint('📄[EditorExporter] 自然渲染尺寸: ${naturalWidth}x${naturalHeight}');
+      debugPrint('📄[EditorExporter] 逻辑页面尺寸: ${pdfPageWidth}x${pdfPageHeight}');
+
+      // 2. 计算缩放比例
+      // 如果 render() 渲染的是 MediaBox (比如 612)，而 pdfPage.width 是 CropBox (比如 595)
+      // 则 naturalWidth > pdfPageWidth。
+      // 我们需要的高分辨率渲染目标是对齐 CropBox 的尺寸。
+
+      // 计算 MediaBox 相对于 CropBox 的比例因子
+      final widthRatio = naturalWidth / pdfPageWidth;
+
+      // 目标：我们希望 CropBox 部分的宽度 等于 pageSize.width * exportPixelRatio
+      // 但 render() 只能控制整体宽度（MediaBox）。
+      // 所以我们需要把整体渲染宽度放大 widthRatio 倍。
+      final int targetRenderWidth =
+          (pageSize.width * exportPixelRatio * widthRatio).toInt();
 
       debugPrint(
-          '📄[EditorExporter] PDF原始: ${pdfPageWidth}x${pdfPageHeight} (ratio: $pdfRatio)');
-      debugPrint(
-          '📄[EditorExporter] 页面: ${pageSize.width}x${pageSize.height} (ratio: $pageRatio)');
-      debugPrint('📄[EditorExporter] 宽高比差异: $ratioDiff');
+          '📄[EditorExporter] 调整后的渲染宽度: $targetRenderWidth (Ratio: $widthRatio)');
 
-      // 计算高分辨率渲染尺寸
-      final renderWidth = (pageSize.width * exportPixelRatio).toInt();
-      final renderHeight = (pageSize.height * exportPixelRatio).toInt();
-
-      debugPrint('📄[EditorExporter] 渲染尺寸: ${renderWidth}x$renderHeight');
-
-      // 渲染PDF页面为图片
+      // 3. 执行高分辨率渲染
       final pdfPageImage = await pdfPage.render(
-        width: renderWidth,
-        height: renderHeight,
+        width: targetRenderWidth,
+        // height: auto
         backgroundColor: Colors.white,
       );
 
@@ -239,20 +283,49 @@ abstract class EditorExporter {
       // 转换为ui.Image
       final uiImage = await pdfPageImage.createImage();
 
-      debugPrint('📄[EditorExporter] 渲染结果: ${uiImage.width}x${uiImage.height}');
+      debugPrint(
+          '📄[EditorExporter] 渲染结果实际尺寸: ${uiImage.width}x${uiImage.height}');
 
-      // PDF直接填充整个页面区域
+      // 4. 绘制逻辑：Top-Left 裁剪 (0,0 Alignment)
+      // 用户反馈 "Markings shifted Right" implies background shifted Left.
+      // 这意味着之前的 Center Crop 切到了太右边的内容。
+      // 说明实际的 CropBox 偏左（通常是 0,0）。
+
+      final double imageWidth = uiImage.width.toDouble();
+      final double imageHeight = uiImage.height.toDouble();
+
+      // 计算 CropBox 在渲染图中的大小
+      // srcCropWidth = pageSize.width * exportPixelRatio * (imageWidth / targetRenderWidth)
+      // 简化：imageWidth 约等于 targetRenderWidth
+      final double srcCropWidth = imageWidth / widthRatio;
+
+      // 高度比例：假设 MediaBox 的宽高比可能与 CropBox 不同
+      // naturalHeight 是 MediaBox 高度，pdfPageHeight 是 CropBox 高度
+      final double heightRatio = naturalHeight / pdfPageHeight;
+      final double srcCropHeight = imageHeight / heightRatio;
+
+      // 修正：强制使用 Top-Left (0,0) 对齐
+      // 假设 CropBox 位于 MediaBox 的 (0,0)
+      const double srcLeft = 0.0;
+      const double srcTop = 0.0;
+
+      final srcRect =
+          Rect.fromLTWH(srcLeft, srcTop, srcCropWidth, srcCropHeight);
+
+      // 目标矩形：填满 pageSize
+      // 由于 Import 逻辑保证了 pageSize 是 CropBox 比例，直接全填充
       final dstRect = Rect.fromLTWH(0, 0, pageSize.width, pageSize.height);
+
+      debugPrint('📄[EditorExporter] 绘制: Source=$srcRect -> Dest=$dstRect');
 
       canvas.drawImageRect(
         uiImage,
-        Rect.fromLTWH(
-            0, 0, uiImage.width.toDouble(), uiImage.height.toDouble()),
+        srcRect,
         dstRect,
         Paint(),
       );
 
-      debugPrint('📄[EditorExporter] PDF绘制完成: $dstRect');
+      debugPrint('📄[EditorExporter] PDF背景绘制完成');
 
       // 清理资源
       uiImage.dispose();
