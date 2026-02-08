@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
@@ -11,6 +12,7 @@ import '../third_party/saber_core/components/canvas/image/editor_image.dart';
 import '../third_party/saber_core/components/canvas/image/pdf_editor_image.dart';
 import '../third_party/saber_core/data/editor/editor_core_info.dart';
 import '../third_party/saber_core/data/editor/page.dart';
+import '../third_party/saber_core/data/editor/shape_strokes.dart';
 import '../third_party/saber_core/data/tools/tool.dart';
 
 /// PDF导出器 - 高性能版本（包含PDF背景支持）
@@ -367,6 +369,26 @@ abstract class EditorExporter {
     for (final stroke in strokes) {
       if (stroke.points.isEmpty) continue;
 
+      // ✅ 检查是否是形状笔迹
+      if (stroke is LineStroke || stroke is ArrowLineStroke) {
+        _drawLineStroke(canvas, stroke);
+        continue;
+      } else if (stroke is RectangleStroke) {
+        _drawRectangleStroke(canvas, stroke);
+        continue;
+      } else if (stroke is CircleStroke) {
+        _drawCircleStroke(canvas, stroke);
+        continue;
+      } else if (stroke is TriangleStroke) {
+        _drawTriangleStroke(canvas, stroke);
+        continue;
+      } else if (stroke is DiamondStroke) {
+        _drawDiamondStroke(canvas, stroke);
+        continue;
+      } else if (stroke is FreePolygonStroke) {
+        // 自由多边形使用普通绘制逻辑
+      }
+
       final paint = Paint()
         ..color = stroke.color
         ..strokeWidth = stroke.strokeWidth
@@ -376,8 +398,10 @@ abstract class EditorExporter {
 
       // 处理荧光笔
       if (stroke.toolId == ToolId.highlighter) {
-        paint.color = stroke.color.withValues(alpha: 0.5);
+        paint.color =
+            stroke.color.withValues(alpha: 0.32); // ✅ 使用与屏幕一致的透明度 0.5 -> 0.32
         paint.strokeWidth = stroke.strokeWidth * 2;
+        // 荧光笔通常没有strokeCap.round，或者使用butt，这里保持round但调整透明度
       }
 
       if (stroke.points.length == 1) {
@@ -390,7 +414,7 @@ abstract class EditorExporter {
             ..style = PaintingStyle.fill,
         );
       } else {
-        // 绘制路径
+        // 绘制普通笔迹路径
         final path = Path();
         path.moveTo(stroke.points.first.dx, stroke.points.first.dy);
 
@@ -401,6 +425,303 @@ abstract class EditorExporter {
         canvas.drawPath(path, paint);
       }
     }
+  }
+
+  /// ✅ 绘制直线和箭头
+  static void _drawLineStroke(Canvas canvas, Stroke stroke) {
+    final LineStroke lineStroke =
+        stroke is LineStroke ? stroke : (stroke as ArrowLineStroke);
+
+    final start = lineStroke.startPoint;
+    final end = lineStroke.endPoint;
+
+    final paint = Paint()
+      ..color = lineStroke.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = lineStroke.strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    // ✅ 根据虚线样式绘制
+    if (lineStroke.dashStyle != DashStyle.solid) {
+      final path = Path();
+      path.moveTo(start.dx, start.dy);
+      path.lineTo(end.dx, end.dy);
+      _drawDashedPath(canvas, path, paint, lineStroke.dashStyle);
+    } else {
+      canvas.drawLine(start, end, paint);
+    }
+
+    // ✅ 绘制箭头
+    if (stroke is ArrowLineStroke) {
+      if (stroke.arrowStyle == ArrowStyle.doubleArrow) {
+        _drawSingleArrow(canvas, start, end, lineStroke.strokeWidth,
+            lineStroke.color, ArrowStyle.filled,
+            isEndArrow: true);
+        _drawSingleArrow(canvas, start, end, lineStroke.strokeWidth,
+            lineStroke.color, ArrowStyle.filled,
+            isEndArrow: false);
+      } else {
+        _drawSingleArrow(canvas, start, end, lineStroke.strokeWidth,
+            lineStroke.color, stroke.arrowStyle,
+            isEndArrow: true);
+      }
+    }
+  }
+
+  /// ✅ 绘制单个箭头
+  static void _drawSingleArrow(Canvas canvas, Offset start, Offset end,
+      double strokeWidth, Color color, ArrowStyle arrowStyle,
+      {required bool isEndArrow}) {
+    final arrowSize = strokeWidth * 2.5;
+    final arrowAngle = math.pi / 6;
+
+    final dx = end.dx - start.dx;
+    final dy = end.dy - start.dy;
+    final length = math.sqrt(dx * dx + dy * dy);
+
+    if (length < 0.1) return;
+
+    final unitX = dx / length;
+    final unitY = dy / length;
+
+    final arrowTip = isEndArrow ? end : start;
+    final arrowBase = Offset(
+      arrowTip.dx - unitX * arrowSize * 0.3 * (isEndArrow ? 1 : -1),
+      arrowTip.dy - unitY * arrowSize * 0.3 * (isEndArrow ? 1 : -1),
+    );
+
+    final cosAngle = math.cos(arrowAngle);
+    final sinAngle = math.sin(arrowAngle);
+    final directionMultiplier = isEndArrow ? -1.0 : 1.0;
+
+    final arrowLeft = Offset(
+      arrowBase.dx +
+          directionMultiplier *
+              arrowSize *
+              (unitX * cosAngle - unitY * sinAngle),
+      arrowBase.dy +
+          directionMultiplier *
+              arrowSize *
+              (unitY * cosAngle + unitX * sinAngle),
+    );
+
+    final arrowRight = Offset(
+      arrowBase.dx +
+          directionMultiplier *
+              arrowSize *
+              (unitX * cosAngle + unitY * sinAngle),
+      arrowBase.dy +
+          directionMultiplier *
+              arrowSize *
+              (unitY * cosAngle - unitX * sinAngle),
+    );
+
+    switch (arrowStyle) {
+      case ArrowStyle.filled:
+        final arrowPath = Path()
+          ..moveTo(arrowTip.dx, arrowTip.dy)
+          ..lineTo(arrowLeft.dx, arrowLeft.dy)
+          ..lineTo(arrowRight.dx, arrowRight.dy)
+          ..close();
+        final filledPaint = Paint()
+          ..color = color
+          ..style = PaintingStyle.fill;
+        canvas.drawPath(arrowPath, filledPaint);
+        break;
+      case ArrowStyle.hollow:
+        final arrowPath = Path()
+          ..moveTo(arrowTip.dx, arrowTip.dy)
+          ..lineTo(arrowLeft.dx, arrowLeft.dy)
+          ..lineTo(arrowRight.dx, arrowRight.dy)
+          ..close();
+        final hollowPaint = Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round;
+        canvas.drawPath(arrowPath, hollowPaint);
+        break;
+      case ArrowStyle.line:
+        final linePaint = Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(arrowTip, arrowLeft, linePaint);
+        canvas.drawLine(arrowTip, arrowRight, linePaint);
+        break;
+      case ArrowStyle.doubleArrow:
+        break;
+    }
+  }
+
+  /// ✅ 绘制矩形
+  static void _drawRectangleStroke(Canvas canvas, RectangleStroke stroke) {
+    if (stroke.rect.isEmpty) return;
+
+    // 填充
+    if (stroke.fillColor != null) {
+      final fillPaint = Paint()
+        ..color = stroke.fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawRect(stroke.rect, fillPaint);
+    }
+
+    // 描边
+    final paint = Paint()
+      ..color = stroke.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke.strokeWidth;
+
+    if (stroke.dashStyle != DashStyle.solid) {
+      final path = Path()..addRect(stroke.rect);
+      _drawDashedPath(canvas, path, paint, stroke.dashStyle);
+    } else {
+      canvas.drawRect(stroke.rect, paint);
+    }
+  }
+
+  /// ✅ 绘制圆形/椭圆
+  static void _drawCircleStroke(Canvas canvas, CircleStroke stroke) {
+    if (stroke.points.length < 2) return;
+
+    final left = stroke.points.map((p) => p.dx).reduce(math.min);
+    final top = stroke.points.map((p) => p.dy).reduce(math.min);
+    final right = stroke.points.map((p) => p.dx).reduce(math.max);
+    final bottom = stroke.points.map((p) => p.dy).reduce(math.max);
+    final rect = Rect.fromLTRB(left, top, right, bottom);
+
+    if (stroke.fillColor != null) {
+      final fillPaint = Paint()
+        ..color = stroke.fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawOval(rect, fillPaint);
+    }
+
+    final paint = Paint()
+      ..color = stroke.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke.strokeWidth;
+
+    if (stroke.dashStyle != DashStyle.solid) {
+      final path = Path()..addOval(rect);
+      _drawDashedPath(canvas, path, paint, stroke.dashStyle);
+    } else {
+      canvas.drawOval(rect, paint);
+    }
+  }
+
+  /// ✅ 绘制三角形
+  static void _drawTriangleStroke(Canvas canvas, TriangleStroke stroke) {
+    if (stroke.points.length < 3) return;
+
+    final path = Path()
+      ..moveTo(stroke.points[0].dx, stroke.points[0].dy)
+      ..lineTo(stroke.points[1].dx, stroke.points[1].dy)
+      ..lineTo(stroke.points[2].dx, stroke.points[2].dy)
+      ..close();
+
+    if (stroke.fillColor != null) {
+      final fillPaint = Paint()
+        ..color = stroke.fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(path, fillPaint);
+    }
+
+    final paint = Paint()
+      ..color = stroke.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke.strokeWidth;
+
+    if (stroke.dashStyle != DashStyle.solid) {
+      _drawDashedPath(canvas, path, paint, stroke.dashStyle);
+    } else {
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  /// ✅ 绘制菱形
+  static void _drawDiamondStroke(Canvas canvas, DiamondStroke stroke) {
+    if (stroke.points.length < 4) return;
+
+    final path = Path();
+    path.moveTo(stroke.points[0].dx, stroke.points[0].dy);
+    for (int i = 1; i < stroke.points.length; i++) {
+      path.lineTo(stroke.points[i].dx, stroke.points[i].dy);
+    }
+    path.close();
+
+    if (stroke.fillColor != null) {
+      final fillPaint = Paint()
+        ..color = stroke.fillColor!
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(path, fillPaint);
+    }
+
+    final paint = Paint()
+      ..color = stroke.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke.strokeWidth;
+
+    if (stroke.dashStyle != DashStyle.solid) {
+      _drawDashedPath(canvas, path, paint, stroke.dashStyle);
+    } else {
+      canvas.drawPath(path, paint);
+    }
+  }
+
+  /// ✅ 绘制虚线路径
+  static void _drawDashedPath(
+      Canvas canvas, Path path, Paint paint, DashStyle dashStyle) {
+    // 简单的DashPath实现，或者提取metric
+    // 由于Canvas没有直接drawDashedPath，需要手动计算
+    final Path dashedPath = Path();
+
+    double dashLength = 10.0;
+    double gapLength = 5.0;
+
+    switch (dashStyle) {
+      case DashStyle.dot:
+        dashLength = 2.0;
+        gapLength = 3.0;
+        break;
+      case DashStyle.shortDash:
+        dashLength = 5.0;
+        gapLength = 3.0;
+        break;
+      case DashStyle.longDash:
+        dashLength = 10.0;
+        gapLength = 5.0;
+        break;
+      case DashStyle.dashDot:
+        dashLength = 10.0;
+        gapLength = 5.0;
+        // 简化处理，暂不支持复杂的点划线逻辑，统一用长虚线代替
+        break;
+      case DashStyle.solid:
+        canvas.drawPath(path, paint);
+        return;
+    }
+
+    final metrics = path.computeMetrics();
+    for (final metric in metrics) {
+      double distance = 0.0;
+      bool draw = true;
+      while (distance < metric.length) {
+        final length = draw ? dashLength : gapLength;
+        if (draw) {
+          dashedPath.addPath(
+            metric.extractPath(distance, distance + length),
+            Offset.zero,
+          );
+        }
+        distance += length;
+        draw = !draw;
+      }
+    }
+
+    canvas.drawPath(dashedPath, paint);
   }
 
   /// 绘制文本框

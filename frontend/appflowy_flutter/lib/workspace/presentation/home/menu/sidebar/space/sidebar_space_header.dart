@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
+import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/manage_space_popup.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
@@ -151,7 +153,35 @@ class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
                   initialDataBytes,
                   openAfterCreated,
                   createNewView,
-                ) {
+                ) async {
+                  // ✅ 检测是否是手写笔记类型
+                  if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+                    // 手写笔记使用 Document layout，但需要通过 extra 字段标识
+                    final ext = {'view_type': 'handwriting_saber'};
+                    
+                    final result = await ViewBackendService.createView(
+                      name: '',
+                      layoutType: ViewLayoutPB.Document,
+                      parentViewId: widget.space.id,
+                      index: 0,
+                      openAfterCreate: true,
+                      ext: ext.map((k, v) => MapEntry(k, v.toString())),
+                    );
+                    
+                    result.fold(
+                      (view) {
+                        // 展开空间
+                        context.read<SpaceBloc>().add(
+                          SpaceEvent.expand(widget.space, true),
+                        );
+                      },
+                      (error) {
+                        Log.error('Failed to create handwriting saber page: $error');
+                      },
+                    );
+                    return;
+                  }
+                  
                   if (pluginBuilder.layoutType == ViewLayoutPB.Document) {
                     name = '';
                   }
