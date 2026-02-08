@@ -17,8 +17,8 @@ const _lightShader6 = Color(0xffd8d6fc);
 const _lightMain1 = Color(0xffaba9e7);
 const _lightTint9 = Color(0xffe1fbff);
 
-const _darkShader1 = Color(0xff131720);
-const _darkShader2 = Color(0xff1A202C);
+const _darkShader1 = Color(0xff191919);
+const _darkShader2 = Color(0xff202020);
 const _darkShader3 = Color(0xff363D49);
 const _darkShader5 = Color(0xffBBC3CD);
 const _darkShader6 = Color(0xffF2F2F2);
@@ -87,7 +87,7 @@ class LavenderColorScheme extends FlowyColorScheme {
 
   const LavenderColorScheme.dark()
       : super(
-          surface: const Color(0xFF1B1A1D),
+          surface: _darkShader1,
           hover: _darkMain1,
           selector: _darkShader2,
           red: const Color(0xfffb006d),
@@ -115,7 +115,7 @@ class LavenderColorScheme extends FlowyColorScheme {
           tint9: const Color(0x4d0029FF),
           main1: _darkMain1,
           main2: _darkMain1,
-          shadow: const Color(0xff0F131C),
+          shadow: _darkShader1,
           sidebarBg: const Color(0xff2D223B),
           divider: _darkShader3,
           topbarBg: _darkShader1,

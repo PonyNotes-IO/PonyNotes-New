@@ -14,8 +14,8 @@ const _lightDandelionYellow = Color(0xffffcb00);
 const _lightDandelionLightYellow = Color(0xffffdf66);
 const _lightTint9 = Color(0xffe1fbff);
 
-const _darkShader1 = Color(0xff131720);
-const _darkShader2 = Color(0xff1A202C);
+const _darkShader1 = Color(0xff191919);
+const _darkShader2 = Color(0xff202020);
 const _darkShader3 = Color(0xff363D49);
 const _darkShader5 = Color(0xffBBC3CD);
 const _darkShader6 = Color(0xffF2F2F2);
@@ -93,7 +93,7 @@ class LemonadeColorScheme extends FlowyColorScheme {
 
   const LemonadeColorScheme.dark()
       : super(
-            surface: const Color(0xff292929),
+            surface: _darkShader1,
             hover: const Color(0xff1f1f1f),
             selector: _darkShader2,
             red: const Color(0xfffb006d),
@@ -121,8 +121,8 @@ class LemonadeColorScheme extends FlowyColorScheme {
             tint9: const Color(0x4d0029FF),
             main1: _darkMain1,
             main2: _darkMain1,
-            shadow: _black,
-            sidebarBg: const Color(0xff232B38),
+            shadow: _darkShader1,
+            sidebarBg: const Color(0xff202020),
             divider: _darkShader3,
             topbarBg: _darkShader1,
             icon: _darkShader5,

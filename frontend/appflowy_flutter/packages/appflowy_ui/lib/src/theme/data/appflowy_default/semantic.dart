@@ -423,13 +423,13 @@ class AppFlowyDefaultTheme implements AppFlowyThemeBuilder {
     );
 
     final surfaceContainerColorScheme = AppFlowySurfaceContainerColorScheme(
-      layer01: AppFlowyPrimitiveTokens.neutral900,
+      layer01: AppFlowyPrimitiveTokens.neutralBlack20,
       layer02: AppFlowyPrimitiveTokens.neutral800,
       layer03: AppFlowyPrimitiveTokens.neutral700,
     );
 
     final backgroundColorScheme = AppFlowyBackgroundColorScheme(
-      primary: AppFlowyPrimitiveTokens.neutral1000,
+      primary: AppFlowyPrimitiveTokens.neutralBlack19,
     );
 
     final badgeColorScheme = AppFlowyBadgeColorScheme(

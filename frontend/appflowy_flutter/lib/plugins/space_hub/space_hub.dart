@@ -394,7 +394,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             // 左侧：空间文档列表
             Visibility(
               visible: !isFullWindow,
-              child: SizedBox(
+              child: Container(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 width: _leftPanelWidth,
                 child: _SpaceDocumentList(
                     spaceView: widget.spaceView,

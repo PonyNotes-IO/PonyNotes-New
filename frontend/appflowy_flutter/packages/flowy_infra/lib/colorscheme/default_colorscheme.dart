@@ -14,8 +14,8 @@ class ColorSchemeConstants {
   static const lightShader6 = Color(0xFFf2f2f2);
   static const lightMain1 = Color(0xFFFF3800);
   static const lightTint9 = Color(0xFFFFE8E1);
-  static const darkShader1 = Color(0xFF131720);
-  static const darkShader2 = Color(0xFF1A202C);
+  static const darkShader1 = Color(0xFF191919);
+  static const darkShader2 = Color(0xFF202020);
   static const darkShader3 = Color(0xFF363D49);
   static const darkShader5 = Color(0xFFBBC3CD);
   static const darkShader6 = Color(0xFFF2F2F2);
@@ -24,6 +24,8 @@ class ColorSchemeConstants {
   static const darkInput = Color(0xFF282E3A);
   static const lightBorderColor = Color(0xFFEDEDEE);
   static const darkBorderColor = Color(0xFF3A3F49);
+  static const darkBg1 = Color(0xFF191919);
+  static const darkBg2 = Color(0x0F202020);
 }
 
 class DefaultColorScheme extends FlowyColorScheme {
@@ -57,7 +59,7 @@ class DefaultColorScheme extends FlowyColorScheme {
           tint9: ColorSchemeConstants.lightTint9,
           main1: ColorSchemeConstants.lightMain1,
           main2: const Color(0xFFE63200),
-          shadow: const Color.fromRGBO(0, 0, 0, 0.15),
+          shadow: ColorSchemeConstants.lightShader1,
           sidebarBg: ColorSchemeConstants.lightBg1,
           divider: ColorSchemeConstants.lightShader6,
           topbarBg: ColorSchemeConstants.white,
@@ -88,7 +90,7 @@ class DefaultColorScheme extends FlowyColorScheme {
 
   const DefaultColorScheme.dark()
       : super(
-          surface: ColorSchemeConstants.darkShader2,
+          surface: ColorSchemeConstants.darkShader1,
           hover: ColorSchemeConstants.darkMain1,
           selector: ColorSchemeConstants.darkShader2,
           red: const Color(0xFFfb006d),
@@ -101,8 +103,8 @@ class DefaultColorScheme extends FlowyColorScheme {
           shader5: ColorSchemeConstants.darkShader5,
           shader6: ColorSchemeConstants.darkShader6,
           shader7: ColorSchemeConstants.white,
-          bg1: const Color(0xFF1A202C),
-          bg2: const Color(0xFFEDEEF2),
+          bg1: ColorSchemeConstants.darkBg1,
+          bg2: ColorSchemeConstants.darkBg2,
           bg3: ColorSchemeConstants.darkMain1,
           bg4: const Color(0xFF2C144B),
           tint1: const Color(0x4D502FD6),
@@ -116,8 +118,8 @@ class DefaultColorScheme extends FlowyColorScheme {
           tint9: const Color(0x4DFF3800),
           main1: ColorSchemeConstants.darkMain2,
           main2: const Color(0xFFE63200),
-          shadow: const Color(0xFF0F131C),
-          sidebarBg: const Color(0xFF232B38),
+          shadow: ColorSchemeConstants.darkShader1,
+          sidebarBg: ColorSchemeConstants.darkShader2,
           divider: ColorSchemeConstants.darkShader3,
           topbarBg: ColorSchemeConstants.darkShader1,
           icon: ColorSchemeConstants.darkShader5,

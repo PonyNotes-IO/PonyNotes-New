@@ -52,90 +52,93 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildHeader(context,widget.currentWorkspace),
-        const VSpace(6.0),
-        // user email
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: FlowyText.medium(
-                  _getUserInfo(),
-                  fontSize: 12.0,
-                  overflow: TextOverflow.ellipsis,
-                  color: Theme.of(context).hintColor,
-                ),
-              ),
-              const HSpace(4.0),
-              WorkspaceMoreButton(
-                popoverMutex: popoverMutex,
-              ),
-              const HSpace(8.0),
-            ],
-          ),
-        ),
-        // const Padding(
-        //   padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 6.0),
-        //   child: Divider(height: 1.0),
-        // ),
-        // workspace list
-        Flexible(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    return Container(
+      color: AppFlowyTheme.of(context).backgroundColorScheme.primary,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildHeader(context,widget.currentWorkspace),
+          const VSpace(6.0),
+          // user email
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+            child: Row(
               children: [
-                for (final workspace in widget.workspaces) ...[
-                  WorkspaceMenuItem(
-                    key: ValueKey(workspace.workspaceId),
-                    workspace: workspace,
-                    userProfile: widget.userProfile,
-                    isSelected: workspace.workspaceId ==
-                        widget.currentWorkspace.workspaceId,
-                    popoverMutex: popoverMutex,
+                Expanded(
+                  child: FlowyText.medium(
+                    _getUserInfo(),
+                    fontSize: 12.0,
+                    overflow: TextOverflow.ellipsis,
+                    color: Theme.of(context).hintColor,
                   ),
-                  const VSpace(6.0),
-                ],
+                ),
+                const HSpace(4.0),
+                WorkspaceMoreButton(
+                  popoverMutex: popoverMutex,
+                ),
+                const HSpace(8.0),
               ],
             ),
           ),
-        ),
-        // add new workspace
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12.0),
-          child: _CreateWorkspaceButton(),
-        ),
-
-        // if (UniversalPlatform.isDesktop) ...[
-        //   const Padding(
-        //     padding: EdgeInsets.only(left: 6.0, top: 6.0, right: 6.0),
-        //     child: _ImportNotionButton(),
-        //   ),
-        // ],
-
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 20.0),
-          child: Divider(height: 1.0),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(left: 8.0, bottom: 8, right: 8),
-          child: FlowyButton(
-            margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 7.0),
-            leftIcon: const FlowySvg(FlowySvgs.workspace_logout_s),
-            iconPadding: 10.0,
-            text: FlowyText.regular(LocaleKeys.button_logout.tr()),
-            onTap: () async {
-              await getIt<AuthService>().signOut();
-              await runAppFlowy();
-            },
+          // const Padding(
+          //   padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 6.0),
+          //   child: Divider(height: 1.0),
+          // ),
+          // workspace list
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final workspace in widget.workspaces) ...[
+                    WorkspaceMenuItem(
+                      key: ValueKey(workspace.workspaceId),
+                      workspace: workspace,
+                      userProfile: widget.userProfile,
+                      isSelected: workspace.workspaceId ==
+                          widget.currentWorkspace.workspaceId,
+                      popoverMutex: popoverMutex,
+                    ),
+                    const VSpace(6.0),
+                  ],
+                ],
+              ),
+            ),
           ),
-        )
-      ],
+          // add new workspace
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12.0),
+            child: _CreateWorkspaceButton(),
+          ),
+
+          // if (UniversalPlatform.isDesktop) ...[
+          //   const Padding(
+          //     padding: EdgeInsets.only(left: 6.0, top: 6.0, right: 6.0),
+          //     child: _ImportNotionButton(),
+          //   ),
+          // ],
+
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 20.0),
+            child: Divider(height: 1.0),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: 8.0, bottom: 8, right: 8),
+            child: FlowyButton(
+              margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 7.0),
+              leftIcon: const FlowySvg(FlowySvgs.workspace_logout_s),
+              iconPadding: 10.0,
+              text: FlowyText.regular(LocaleKeys.button_logout.tr()),
+              onTap: () async {
+                await getIt<AuthService>().signOut();
+                await runAppFlowy();
+              },
+            ),
+          )
+        ],
+      ),
     );
   }
 
@@ -156,7 +159,7 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
     final memberCount = widget.currentWorkspace.memberCount.toInt();
     return Container(
       decoration: BoxDecoration(
-        color: theme.surfaceColorScheme.layer01Hover,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.only(
             topLeft: Radius.circular(theme.borderRadius.l),
             topRight: Radius.circular(theme.borderRadius.l)),
