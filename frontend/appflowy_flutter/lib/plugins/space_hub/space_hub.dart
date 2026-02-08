@@ -60,8 +60,10 @@ class SpaceHubPlugin extends Plugin {
   SpaceHubPlugin({
     required this.view,
   })  : notifier = ViewPluginNotifier(view: view),
-        _viewInfoBloc = ViewInfoBloc(view: view)..add(const ViewInfoEvent.started()),
-        _pageAccessLevelBloc = PageAccessLevelBloc(view: view)..add(const PageAccessLevelEvent.initial()),
+        _viewInfoBloc = ViewInfoBloc(view: view)
+          ..add(const ViewInfoEvent.started()),
+        _pageAccessLevelBloc = PageAccessLevelBloc(view: view)
+          ..add(const PageAccessLevelEvent.initial()),
         _selectedViewNotifier = ValueNotifier<ViewPB?>(null);
 
   final ViewPB view;
@@ -143,7 +145,8 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
             return toolbar;
           }
         } catch (e) {
-          debugPrint('[SpaceHub] Error getting rightBarItem for ${selectedView.name}: $e');
+          debugPrint(
+              '[SpaceHub] Error getting rightBarItem for ${selectedView.name}: $e');
         }
 
         // 没有可用的工具栏时，返回一个空占位，避免报错
@@ -263,12 +266,14 @@ class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
       _spaceBloc!.add(const SpaceEvent.initial(openFirstPage: false));
       _lastWorkspaceId = workspaceId;
       _lastSpaceViewId = spaceViewId;
-      debugPrint('[SpaceHub] Created SpaceBloc once for workspace: $workspaceId, space: ${widget.spaceView.name}');
+      debugPrint(
+          '[SpaceHub] Created SpaceBloc once for workspace: $workspaceId, space: ${widget.spaceView.name}');
     }
 
     final providers = <BlocProvider>[
       BlocProvider<ViewInfoBloc>.value(value: widget.bloc),
-      BlocProvider<PageAccessLevelBloc>.value(value: widget.pageAccessLevelBloc),
+      BlocProvider<PageAccessLevelBloc>.value(
+          value: widget.pageAccessLevelBloc),
     ];
     if (_spaceBloc != null) {
       providers.add(BlocProvider<SpaceBloc>.value(value: _spaceBloc!));
@@ -303,20 +308,21 @@ class _SpaceHubContent extends StatefulWidget {
 
 class _SpaceHubContentState extends State<_SpaceHubContent> {
   ViewPB? _selectedView;
-  
+
   /// 左侧文档列表的宽度
   double _leftPanelWidth = 260.0;
-  
+
   /// 左侧面板最小宽度
   static const double _minLeftWidth = 200.0;
-  
+
   /// 左侧面板最大宽度
   static const double _maxLeftWidth = 450.0;
 
   @override
   void initState() {
     super.initState();
-    debugPrint('[SpaceHub] _SpaceHubContentState initState, spaceView: ${widget.spaceView.name} (${widget.spaceView.id})');
+    debugPrint(
+        '[SpaceHub] _SpaceHubContentState initState, spaceView: ${widget.spaceView.name} (${widget.spaceView.id})');
     // 尝试从 SpaceBloc 获取当前空间的第一个文档作为默认选中
     _trySelectFirstDocument();
   }
@@ -326,7 +332,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     super.didUpdateWidget(oldWidget);
     // 如果空间切换了，重置选中文档状态
     if (oldWidget.spaceView.id != widget.spaceView.id) {
-      debugPrint('[SpaceHub] Space changed from ${oldWidget.spaceView.name} to ${widget.spaceView.name}, resetting selected view');
+      debugPrint(
+          '[SpaceHub] Space changed from ${oldWidget.spaceView.name} to ${widget.spaceView.name}, resetting selected view');
       setState(() {
         _selectedView = null;
       });
@@ -342,7 +349,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       try {
         final spaceBloc = context.read<SpaceBloc>();
         final currentSpace = spaceBloc.state.currentSpace;
-        debugPrint('[SpaceHub] _trySelectFirstDocument: currentSpace=${currentSpace?.id}, targetSpace=${widget.spaceView.id}');
+        debugPrint(
+            '[SpaceHub] _trySelectFirstDocument: currentSpace=${currentSpace?.id}, targetSpace=${widget.spaceView.id}');
         if (currentSpace?.id == widget.spaceView.id &&
             currentSpace!.childViews.isNotEmpty &&
             _selectedView == null) {
@@ -371,8 +379,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       spaceBloc = null;
     }
 
-    debugPrint('[SpaceHub] _SpaceHubContent building, selectedView: ${_selectedView?.name}');
-    
+    debugPrint(
+        '[SpaceHub] _SpaceHubContent building, selectedView: ${_selectedView?.name}');
+
     final rightPanel = Expanded(
       child: Padding(
         padding: EdgeInsets.only(
@@ -398,42 +407,42 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 width: _leftPanelWidth,
                 child: _SpaceDocumentList(
-                    spaceView: widget.spaceView,
-                    selectedView: _selectedView,
-                    onViewSelected: (view) {
-                      debugPrint(
-                          '[SpaceHub] View selected: ${view.name} (${view.id})');
-                      setState(() {
-                        _selectedView = view;
-                      });
-                      // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-                      widget.selectedViewNotifier.value = view;
-                    },
-                    onViewCreated: (view) {
-                      debugPrint(
-                          '[SpaceHub] View created: ${view.name} (${view.id})');
-                      setState(() {
-                        _selectedView = view;
-                      });
-                      // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-                      widget.selectedViewNotifier.value = view;
-                    },
-                  ),
+                  spaceView: widget.spaceView,
+                  selectedView: _selectedView,
+                  onViewSelected: (view) {
+                    debugPrint(
+                        '[SpaceHub] View selected: ${view.name} (${view.id})');
+                    setState(() {
+                      _selectedView = view;
+                    });
+                    // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+                    widget.selectedViewNotifier.value = view;
+                  },
+                  onViewCreated: (view) {
+                    debugPrint(
+                        '[SpaceHub] View created: ${view.name} (${view.id})');
+                    setState(() {
+                      _selectedView = view;
+                    });
+                    // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+                    widget.selectedViewNotifier.value = view;
+                  },
+                ),
               ),
             ),
             // 可拖动分隔线 - 增强对比度并支持拖动调整大小
             Visibility(
-            visible: !isFullWindow,
-            child: ResizableDivider(
-              initialLeftWidth: _leftPanelWidth,
-              minLeftWidth: _minLeftWidth,
-              maxLeftWidth: _maxLeftWidth,
-              onResize: (newWidth) {
-                setState(() {
-                  _leftPanelWidth = newWidth;
-                });
-              },
-            )),
+                visible: !isFullWindow,
+                child: ResizableDivider(
+                  initialLeftWidth: _leftPanelWidth,
+                  minLeftWidth: _minLeftWidth,
+                  maxLeftWidth: _maxLeftWidth,
+                  onResize: (newWidth) {
+                    setState(() {
+                      _leftPanelWidth = newWidth;
+                    });
+                  },
+                )),
             rightPanel,
           ],
         );
@@ -474,7 +483,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       final plugin = view.plugin();
       // 确保插件已初始化
       plugin.init();
-      
+
       // 获取 userProfile - AI Chat 等插件需要用户信息
       UserProfilePB? userProfile;
       try {
@@ -483,11 +492,11 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       } catch (e) {
         debugPrint('[SpaceHub] Failed to get userProfile: $e');
       }
-      
+
       return plugin.widgetBuilder.buildWidget(
         context: PluginContext(
           onDeleted: widget.onDeleted,
-          userProfile: userProfile,  // 传入用户配置
+          userProfile: userProfile, // 传入用户配置
         ),
         shrinkWrap: false,
       );
@@ -538,18 +547,18 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 }
 
 /// 空间文档列表组件（左侧）
-  class _SpaceDocumentList extends StatelessWidget {
-    const _SpaceDocumentList({
-      required this.spaceView,
-      required this.selectedView,
-      required this.onViewSelected,
-      required this.onViewCreated,
-    });
+class _SpaceDocumentList extends StatelessWidget {
+  const _SpaceDocumentList({
+    required this.spaceView,
+    required this.selectedView,
+    required this.onViewSelected,
+    required this.onViewCreated,
+  });
 
-    final ViewPB spaceView;
-    final ViewPB? selectedView;
-    final ValueChanged<ViewPB> onViewSelected;
-    final ValueChanged<ViewPB> onViewCreated;
+  final ViewPB spaceView;
+  final ViewPB? selectedView;
+  final ValueChanged<ViewPB> onViewSelected;
+  final ValueChanged<ViewPB> onViewCreated;
 
   @override
   Widget build(BuildContext context) {
@@ -562,7 +571,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     }
 
     // 调试信息
-    debugPrint('[SpaceHub] _SpaceDocumentList building, spaceBloc: ${spaceBloc != null}, spaceView: ${spaceView.name} (${spaceView.id})');
+    debugPrint(
+        '[SpaceHub] _SpaceDocumentList building, spaceBloc: ${spaceBloc != null}, spaceView: ${spaceView.name} (${spaceView.id})');
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -609,40 +619,60 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               parentViewId: spaceView.id,
               onEditing: (_) {},
               onSelected: (pluginBuilder, name, initialDataBytes,
-                    openAfterCreated, createNewView) async {
-                  final layout = pluginBuilder.layoutType;
-                  if (layout == null) return;
+                  openAfterCreated, createNewView) async {
+                final layout = pluginBuilder.layoutType;
+                if (layout == null) return;
 
-                  if (spaceBloc != null) {
-                    // 使用 SpaceBloc 创建文档
-                    final result = await ViewBackendService.createView(
-                      name: name ?? layout.defaultName,
-                      layoutType: layout,
-                      parentViewId: spaceView.id,
-                      index: 0,
-                      openAfterCreate: false, // 不自动打开新标签页
-                    );
-                    result.fold(
-                      (view) {
-                        // 刷新空间文档列表
-                        spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
-                        // 通知父组件新文档已创建，以便自动选中并显示
-                        onViewCreated(view);
-                      },
-                      (error) {
-                        Log.error('Failed to create view: $error');
-                      },
-                    );
-                  } else {
-                    // Fallback: 直接创建文档
-                    await ViewBackendService.createView(
-                      layoutType: layout,
-                      parentViewId: spaceView.id,
-                      name: name ?? layout.defaultName,
-                      openAfterCreate: false, // 不自动打开新标签页
-                    );
+                // 准备 extra 参数
+                Map<String, String> ext = {};
+                String finalName = name ?? layout.defaultName;
+
+                if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+                  ext['view_type'] = 'handwriting_saber';
+                  if (name == null || name.isEmpty) {
+                    finalName = '未命名手记';
                   }
-                },
+                }
+
+                if (spaceBloc != null) {
+                  // 使用 SpaceBloc 创建文档
+                  final result = await ViewBackendService.createView(
+                    name: finalName,
+                    layoutType: layout,
+                    parentViewId: spaceView.id,
+                    index: 0,
+                    openAfterCreate: false, // 不自动打开新标签页
+                    ext: ext,
+                  );
+                  result.fold(
+                    (view) {
+                      // 刷新空间文档列表
+                      spaceBloc.add(
+                          const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                      // 通知父组件新文档已创建，以便自动选中并显示
+                      onViewCreated(view);
+                    },
+                    (error) {
+                      Log.error('Failed to create view: $error');
+                    },
+                  );
+                } else {
+                  // Fallback: 直接创建文档
+                  final result = await ViewBackendService.createView(
+                    layoutType: layout,
+                    parentViewId: spaceView.id,
+                    name: finalName,
+                    openAfterCreate: false, // 不自动打开新标签页
+                    ext: ext,
+                  );
+                  result.fold((view) {
+                    // Fallback create success
+                    onViewCreated(view);
+                  }, (error) {
+                    Log.error('Failed to create view (fallback): $error');
+                  });
+                }
+              },
               tooltipText: '新增文档',
             ),
           ),
@@ -659,8 +689,10 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         // 监听初始化完成，或者当前空间变化，或者子视图列表变化
         final initialized = !prev.isInitialized && curr.isInitialized;
         final spaceChanged = prev.currentSpace?.id != curr.currentSpace?.id;
-        final childViewsChanged = prev.currentSpace?.childViews.length != curr.currentSpace?.childViews.length ||
-            prev.currentSpace?.childViews.map((v) => v.id).join(',') != curr.currentSpace?.childViews.map((v) => v.id).join(',');
+        final childViewsChanged = prev.currentSpace?.childViews.length !=
+                curr.currentSpace?.childViews.length ||
+            prev.currentSpace?.childViews.map((v) => v.id).join(',') !=
+                curr.currentSpace?.childViews.map((v) => v.id).join(',');
         return initialized || spaceChanged || childViewsChanged;
       },
       listener: (context, state) {
@@ -668,22 +700,27 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         if (state.isInitialized) {
           final currentSpace = state.currentSpace;
           if (currentSpace?.id != spaceView.id) {
-            debugPrint('[SpaceHub] SpaceBloc initialized, opening target space: ${spaceView.name} (${spaceView.id}), currentSpace=${currentSpace?.id}');
+            debugPrint(
+                '[SpaceHub] SpaceBloc initialized, opening target space: ${spaceView.name} (${spaceView.id}), currentSpace=${currentSpace?.id}');
             // 使用 Future.microtask 确保在下一帧执行，避免在 listener 中直接修改状态
             Future.microtask(() {
               if (!spaceBloc.isClosed) {
                 final currentState = spaceBloc.state;
                 // 再次检查，避免重复打开
-                if (currentState.isInitialized && currentState.currentSpace?.id != spaceView.id) {
-                  debugPrint('[SpaceHub] Dispatching SpaceEvent.open for ${spaceView.name}');
+                if (currentState.isInitialized &&
+                    currentState.currentSpace?.id != spaceView.id) {
+                  debugPrint(
+                      '[SpaceHub] Dispatching SpaceEvent.open for ${spaceView.name}');
                   spaceBloc.add(SpaceEvent.open(space: spaceView));
                 } else {
-                  debugPrint('[SpaceHub] Skipping open event, currentSpace already matches or SpaceBloc closed');
+                  debugPrint(
+                      '[SpaceHub] Skipping open event, currentSpace already matches or SpaceBloc closed');
                 }
               }
             });
           } else {
-            debugPrint('[SpaceHub] Current space already matches target space: ${spaceView.name}');
+            debugPrint(
+                '[SpaceHub] Current space already matches target space: ${spaceView.name}');
           }
         }
       },
@@ -693,44 +730,44 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           // 检查当前空间是否匹配目标空间
           final currSpace = current.currentSpace;
           final prevSpace = previous.currentSpace;
-          
+
           // 只关注与当前空间相关的变化
           if (currSpace?.id != spaceView.id && prevSpace?.id != spaceView.id) {
             // 两个状态都与目标空间无关，不需要重建
             return false;
           }
-          
+
           // 检查空间ID是否变化
           if (prevSpace?.id != currSpace?.id) {
             return true;
           }
-          
+
           // 检查子视图数量是否变化
           final prevCount = prevSpace?.childViews.length ?? 0;
           final currCount = currSpace?.childViews.length ?? 0;
           if (prevCount != currCount) {
             return true;
           }
-          
+
           // 检查子视图ID列表是否变化（使用 Set 比较，忽略顺序）
           final prevIds = prevSpace?.childViews.map((v) => v.id).toSet();
           final currIds = currSpace?.childViews.map((v) => v.id).toSet();
           if (prevIds != currIds) {
             return true;
           }
-          
+
           // 检查初始化状态是否变化
           if (previous.isInitialized != current.isInitialized) {
             return true;
           }
-          
+
           // 默认不重建（避免不必要的重建）
           return false;
         },
         builder: (context, state) {
           // 确保当前空间已加载，如果没有则触发加载
           final currentSpace = state.currentSpace;
-          
+
           // 如果 SpaceBloc 还未初始化，显示加载中
           if (!state.isInitialized) {
             return const Center(
@@ -874,7 +911,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     result.fold(
       (view) {
         // 刷新空间文档列表
-        context.read<SpaceBloc>().add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+        context
+            .read<SpaceBloc>()
+            .add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
         // 通知父组件新文档已创建，以便自动选中并显示
         onViewCreated(view);
       },
