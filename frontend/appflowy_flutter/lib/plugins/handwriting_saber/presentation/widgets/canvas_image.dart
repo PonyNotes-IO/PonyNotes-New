@@ -178,13 +178,8 @@ class _CanvasImageState extends State<CanvasImage> {
       ),
     );
 
-    // ✅ 使用 AnimatedPositioned，并确保拖动时无动画
-    return AnimatedPositioned(
-      // ✅ 拖动时或选中时无动画
-      duration: (panStartRect != Rect.zero || widget.selected)
-          ? Duration.zero
-          : const Duration(milliseconds: 300),
-      curve: Curves.fastLinearToSlowEaseIn,
+    // ✅ 直接使用 Positioned，移除 AnimatedPositioned 避免拖动时的动画冲突
+    return Positioned(
       left: screenLeft,
       top: screenTop,
       width: screenWidth,
@@ -354,10 +349,18 @@ class _CanvasImageState extends State<CanvasImage> {
                           newHeight = panStartRect.height + delta.dy;
                         }
 
-                        // 限制最小尺寸
-                        if (newWidth < CanvasImage.minImageSize ||
-                            newHeight < CanvasImage.minImageSize) {
-                          return;
+                        // ✅ 限制最小尺寸（防止抖动：如果尺寸太小，逐步限制而不是直接返回）
+                        if (newWidth < CanvasImage.minImageSize) {
+                          newWidth = CanvasImage.minImageSize;
+                          if (x < 0) {
+                            left = panStartRect.right - newWidth;
+                          }
+                        }
+                        if (newHeight < CanvasImage.minImageSize) {
+                          newHeight = CanvasImage.minImageSize;
+                          if (y < 0) {
+                            top = panStartRect.bottom - newHeight;
+                          }
                         }
 
                         // 保持宽高比（对角线拖拽时）
