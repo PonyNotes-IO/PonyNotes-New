@@ -49,10 +49,11 @@ class LineStroke extends Stroke {
       final isDashed = json['isDashed'] as bool? ?? false;
       dashStyle = isDashed ? DashStyle.longDash : DashStyle.solid;
     }
-    
+
     if (stroke.points.length < 2) {
       return LineStroke(
-        startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
+        startPoint:
+            stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
         endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
@@ -102,7 +103,7 @@ class ArrowLineStroke extends LineStroke {
 
   factory ArrowLineStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
-    
+
     // ✅ 兼容旧版本：如果有 isDashed 字段，转换为 dashStyle
     DashStyle dashStyle = DashStyle.solid;
     if (json.containsKey('dashStyle')) {
@@ -115,7 +116,7 @@ class ArrowLineStroke extends LineStroke {
       final isDashed = json['isDashed'] as bool? ?? false;
       dashStyle = isDashed ? DashStyle.longDash : DashStyle.solid;
     }
-    
+
     // ✅ 读取箭头样式
     ArrowStyle arrowStyle = ArrowStyle.filled;
     if (json.containsKey('arrowStyle')) {
@@ -125,10 +126,11 @@ class ArrowLineStroke extends LineStroke {
         orElse: () => ArrowStyle.filled,
       );
     }
-    
+
     if (stroke.points.length < 2) {
       return ArrowLineStroke(
-        startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
+        startPoint:
+            stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
         endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
@@ -166,7 +168,7 @@ class RectangleStroke extends Stroke {
           toolId: toolId ?? ToolId.rectangle,
           pressureEnabled: false,
         );
-  
+
   final Color? fillColor; // ✅ 填充颜色（null表示不填充）
   final DashStyle dashStyle; // ✅ 虚线样式
 
@@ -175,13 +177,13 @@ class RectangleStroke extends Stroke {
     final top = min(start.dy, end.dy);
     final right = max(start.dx, end.dx);
     final bottom = max(start.dy, end.dy);
-    
+
     return [
-      Offset(left, top),      // 左上
-      Offset(right, top),     // 右上
-      Offset(right, bottom),  // 右下
-      Offset(left, bottom),   // 左下
-      Offset(left, top),      // 闭合
+      Offset(left, top), // 左上
+      Offset(right, top), // 右上
+      Offset(right, bottom), // 右下
+      Offset(left, bottom), // 左下
+      Offset(left, top), // 闭合
     ];
   }
 
@@ -208,10 +210,9 @@ class RectangleStroke extends Stroke {
   factory RectangleStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
     final fillColorValue = json['fillColor'] as int?;
-    final fillColor = fillColorValue != null 
-        ? Color(fillColorValue) 
-        : null; // ✅ 读取填充颜色
-    
+    final fillColor =
+        fillColorValue != null ? Color(fillColorValue) : null; // ✅ 读取填充颜色
+
     // ✅ 读取虚线样式
     DashStyle dashStyle = DashStyle.solid;
     if (json.containsKey('dashStyle')) {
@@ -221,11 +222,12 @@ class RectangleStroke extends Stroke {
         orElse: () => DashStyle.solid,
       );
     }
-    
-    if (stroke.points.length < 2) {
+
+    // ✅ 修复：计算所有点的边界框，确保无论点的顺序如何都能正确重建矩形
+    if (stroke.points.isEmpty) {
       return RectangleStroke(
-        startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
-        endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
+        startPoint: Offset.zero,
+        endPoint: Offset.zero,
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
         toolId: stroke.toolId,
@@ -233,9 +235,22 @@ class RectangleStroke extends Stroke {
         dashStyle: dashStyle,
       );
     }
+
+    double minX = double.infinity;
+    double minY = double.infinity;
+    double maxX = double.negativeInfinity;
+    double maxY = double.negativeInfinity;
+
+    for (final point in stroke.points) {
+      if (point.dx < minX) minX = point.dx;
+      if (point.dy < minY) minY = point.dy;
+      if (point.dx > maxX) maxX = point.dx;
+      if (point.dy > maxY) maxY = point.dy;
+    }
+
     return RectangleStroke(
-      startPoint: stroke.points.first,
-      endPoint: stroke.points[stroke.points.length - 2], // 倒数第二个点（最后一个点是闭合点）
+      startPoint: Offset(minX, minY), // 左上角
+      endPoint: Offset(maxX, maxY), // 右下角
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,
@@ -262,7 +277,7 @@ class CircleStroke extends Stroke {
           toolId: toolId ?? ToolId.circle,
           pressureEnabled: false,
         );
-  
+
   final Color? fillColor; // ✅ 填充颜色（null表示不填充）
   final DashStyle dashStyle; // ✅ 虚线样式
 
@@ -276,7 +291,7 @@ class CircleStroke extends Stroke {
     final height = (end.dy - start.dy).abs();
     final radiusX = width / 2;
     final radiusY = height / 2;
-    
+
     // 生成椭圆点（24个点）
     final points = <Offset>[];
     for (int i = 0; i <= 24; i++) {
@@ -316,10 +331,9 @@ class CircleStroke extends Stroke {
   factory CircleStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
     final fillColorValue = json['fillColor'] as int?;
-    final fillColor = fillColorValue != null 
-        ? Color(fillColorValue) 
-        : null; // ✅ 读取填充颜色
-    
+    final fillColor =
+        fillColorValue != null ? Color(fillColorValue) : null; // ✅ 读取填充颜色
+
     // ✅ 读取虚线样式
     DashStyle dashStyle = DashStyle.solid;
     if (json.containsKey('dashStyle')) {
@@ -329,10 +343,11 @@ class CircleStroke extends Stroke {
         orElse: () => DashStyle.solid,
       );
     }
-    
+
     if (stroke.points.length < 2) {
       return CircleStroke(
-        startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
+        startPoint:
+            stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
         endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
@@ -367,7 +382,8 @@ class TriangleStroke extends Stroke {
     this.fillColor, // ✅ 填充颜色（可选）
     this.dashStyle = DashStyle.solid, // ✅ 虚线样式
   }) : super(
-          points: _optimizeToTriangle(points, isShiftPressed: isShiftPressed), // ✅ 优化为三角形（三个顶点）
+          points: _optimizeToTriangle(points,
+              isShiftPressed: isShiftPressed), // ✅ 优化为三角形（三个顶点）
           color: color,
           strokeWidth: strokeWidth,
           toolId: toolId ?? ToolId.triangle,
@@ -379,35 +395,41 @@ class TriangleStroke extends Stroke {
   final DashStyle dashStyle; // ✅ 虚线样式
 
   // ✅ 从绘制路径优化为三角形：提取三个关键点
-  static List<Offset> _optimizeToTriangle(List<Offset> inputPoints, {bool isShiftPressed = false}) {
+  static List<Offset> _optimizeToTriangle(List<Offset> inputPoints,
+      {bool isShiftPressed = false}) {
     if (inputPoints.isEmpty) {
       return [];
     }
     if (inputPoints.length == 1) {
-      return [inputPoints[0], inputPoints[0], inputPoints[0], inputPoints[0]]; // 闭合
+      return [
+        inputPoints[0],
+        inputPoints[0],
+        inputPoints[0],
+        inputPoints[0]
+      ]; // 闭合
     }
     if (inputPoints.length == 2) {
       // 只有两个点，添加第三个点形成三角形
       final p1 = inputPoints[0];
       final p2 = inputPoints[1];
-      
+
       if (isShiftPressed) {
         // ✅ 按住Shift：绘制正三角形或等腰三角形
         // 计算两点之间的距离
         final dx = p2.dx - p1.dx;
         final dy = p2.dy - p1.dy;
         final distance = sqrt(dx * dx + dy * dy);
-        
+
         // 计算中点
         final midX = (p1.dx + p2.dx) / 2;
         final midY = (p1.dy + p2.dy) / 2;
-        
+
         // 正三角形：第三个点在垂直平分线上，距离为边长的√3/2
         final height = distance * sqrt(3) / 2;
         // 垂直方向向量（归一化）
         final perpX = -dy / distance;
         final perpY = dx / distance;
-        
+
         // 第三个点（可以选择上方或下方，这里选择上方）
         final p3 = Offset(midX + perpX * height, midY + perpY * height);
         return [p1, p2, p3, p1]; // 闭合
@@ -422,26 +444,26 @@ class TriangleStroke extends Stroke {
         return [p1, p2, p3, p1]; // 闭合
       }
     }
-    
+
     // ✅ 从多个点中提取三个关键点
     final startPoint = inputPoints.first;
     final endPoint = inputPoints.last;
-    
+
     if (isShiftPressed) {
       // ✅ 按住Shift：绘制正三角形或等腰三角形
       // 计算两点之间的距离
       final dx = endPoint.dx - startPoint.dx;
       final dy = endPoint.dy - startPoint.dy;
       final distance = sqrt(dx * dx + dy * dy);
-      
+
       // 计算中点
       final midX = (startPoint.dx + endPoint.dx) / 2;
       final midY = (startPoint.dy + endPoint.dy) / 2;
-      
+
       // 找到距离起始点和结束点连线最远的点
       double maxDistance = 0;
       Offset farthestPoint = endPoint;
-      
+
       for (int i = 1; i < inputPoints.length - 1; i++) {
         final point = inputPoints[i];
         final distance = _pointToLineDistance(point, startPoint, endPoint);
@@ -450,7 +472,7 @@ class TriangleStroke extends Stroke {
           farthestPoint = point;
         }
       }
-      
+
       // 如果最远点距离太小，使用正三角形的第三个点
       if (maxDistance < 10) {
         // 正三角形：第三个点在垂直平分线上
@@ -464,20 +486,21 @@ class TriangleStroke extends Stroke {
         final perpY = dx / distance;
         final height = maxDistance;
         // 判断最远点在线的哪一侧
-        final side = (farthestPoint.dx - midX) * perpX + (farthestPoint.dy - midY) * perpY;
+        final side = (farthestPoint.dx - midX) * perpX +
+            (farthestPoint.dy - midY) * perpY;
         farthestPoint = Offset(
           midX + perpX * height * (side >= 0 ? 1 : -1),
           midY + perpY * height * (side >= 0 ? 1 : -1),
         );
       }
-      
+
       return [startPoint, farthestPoint, endPoint, startPoint]; // 闭合三角形
     } else {
       // ✅ 不按Shift：任意三角形
       // 找到距离起始点和结束点连线最远的点
       double maxDistance = 0;
       Offset farthestPoint = endPoint;
-      
+
       for (int i = 1; i < inputPoints.length - 1; i++) {
         final point = inputPoints[i];
         // 计算点到起始点和结束点连线的距离
@@ -487,7 +510,7 @@ class TriangleStroke extends Stroke {
           farthestPoint = point;
         }
       }
-      
+
       // 如果最远点距离太小，使用中点
       if (maxDistance < 10) {
         final midX = (startPoint.dx + endPoint.dx) / 2;
@@ -496,25 +519,26 @@ class TriangleStroke extends Stroke {
         final dy = endPoint.dy - startPoint.dy;
         farthestPoint = Offset(midX - dy, midY + dx);
       }
-      
+
       return [startPoint, farthestPoint, endPoint, startPoint]; // 闭合三角形
     }
   }
 
   // ✅ 计算点到直线的距离
-  static double _pointToLineDistance(Offset point, Offset lineStart, Offset lineEnd) {
+  static double _pointToLineDistance(
+      Offset point, Offset lineStart, Offset lineEnd) {
     final A = point.dx - lineStart.dx;
     final B = point.dy - lineStart.dy;
     final C = lineEnd.dx - lineStart.dx;
     final D = lineEnd.dy - lineStart.dy;
-    
+
     final dot = A * C + B * D;
     final lenSq = C * C + D * D;
     if (lenSq == 0) {
       // 线段退化为点
       return sqrt(A * A + B * B);
     }
-    
+
     final param = dot / lenSq;
     Offset closestPoint;
     if (param < 0) {
@@ -527,7 +551,7 @@ class TriangleStroke extends Stroke {
         lineStart.dy + param * D,
       );
     }
-    
+
     final dx = point.dx - closestPoint.dx;
     final dy = point.dy - closestPoint.dy;
     return sqrt(dx * dx + dy * dy);
@@ -552,10 +576,9 @@ class TriangleStroke extends Stroke {
   factory TriangleStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
     final fillColorValue = json['fillColor'] as int?;
-    final fillColor = fillColorValue != null 
-        ? Color(fillColorValue) 
-        : null; // ✅ 读取填充颜色
-    
+    final fillColor =
+        fillColorValue != null ? Color(fillColorValue) : null; // ✅ 读取填充颜色
+
     // ✅ 读取虚线样式
     DashStyle dashStyle = DashStyle.solid;
     if (json.containsKey('dashStyle')) {
@@ -565,7 +588,7 @@ class TriangleStroke extends Stroke {
         orElse: () => DashStyle.solid,
       );
     }
-    
+
     // ✅ 从保存的点列表创建三角形（会自动优化为三个顶点）
     return TriangleStroke(
       points: stroke.points,
@@ -596,7 +619,7 @@ class DiamondStroke extends Stroke {
           toolId: toolId ?? ToolId.diamond,
           pressureEnabled: false,
         );
-  
+
   final Color? fillColor; // ✅ 填充颜色（null表示不填充）
   final DashStyle dashStyle; // ✅ 虚线样式
 
@@ -607,13 +630,13 @@ class DiamondStroke extends Stroke {
     );
     final width = (end.dx - start.dx).abs() / 2;
     final height = (end.dy - start.dy).abs() / 2;
-    
+
     // 菱形的四个顶点
     final top = Offset(center.dx, center.dy - height);
     final right = Offset(center.dx + width, center.dy);
     final bottom = Offset(center.dx, center.dy + height);
     final left = Offset(center.dx - width, center.dy);
-    
+
     return [top, right, bottom, left, top]; // 闭合
   }
 
@@ -631,10 +654,9 @@ class DiamondStroke extends Stroke {
   factory DiamondStroke.fromJson(Map<String, dynamic> json) {
     final stroke = Stroke.fromJson(json);
     final fillColorValue = json['fillColor'] as int?;
-    final fillColor = fillColorValue != null 
-        ? Color(fillColorValue) 
-        : null; // ✅ 读取填充颜色
-    
+    final fillColor =
+        fillColorValue != null ? Color(fillColorValue) : null; // ✅ 读取填充颜色
+
     // ✅ 读取虚线样式
     DashStyle dashStyle = DashStyle.solid;
     if (json.containsKey('dashStyle')) {
@@ -644,10 +666,11 @@ class DiamondStroke extends Stroke {
         orElse: () => DashStyle.solid,
       );
     }
-    
+
     if (stroke.points.length < 4) {
       return DiamondStroke(
-        startPoint: stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
+        startPoint:
+            stroke.points.isNotEmpty ? stroke.points.first : Offset.zero,
         endPoint: stroke.points.isNotEmpty ? stroke.points.last : Offset.zero,
         color: stroke.color,
         strokeWidth: stroke.strokeWidth,
@@ -703,4 +726,3 @@ class FreePolygonStroke extends Stroke {
     );
   }
 }
-

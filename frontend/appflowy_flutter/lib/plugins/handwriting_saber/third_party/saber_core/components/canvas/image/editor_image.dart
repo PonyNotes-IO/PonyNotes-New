@@ -1,5 +1,5 @@
-import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 /// ✅ 编辑器图片基类
@@ -23,15 +23,30 @@ abstract class EditorImage extends ChangeNotifier {
 
   Rect _dstRect;
   Rect get dstRect => _dstRect;
+  static const double minImageSize = 10; // ✅ 最小图片尺寸（与 CanvasImage.minImageSize 保持一致）
+  
   set dstRect(Rect value) {
-    if (_dstRect != value) {
+    // ✅ 确保最小尺寸限制（参考 Saber 原版实现）
+    if (value.width < minImageSize ||
+        value.height < minImageSize) {
+      final scale = math.max(
+        minImageSize / value.width,
+        minImageSize / value.height,
+      );
+      _dstRect = Rect.fromLTWH(
+        value.left,
+        value.top,
+        value.width * scale,
+        value.height * scale,
+      );
+    } else {
       _dstRect = value;
-      // 通知监听器（图片位置已更改）
-      try {
-        notifyListeners();
-      } catch (e) {
-        // 忽略通知错误
-      }
+    }
+    // 通知监听器（图片位置或尺寸已更改）
+    try {
+      notifyListeners();
+    } catch (e) {
+      // 忽略通知错误
     }
   }
 
