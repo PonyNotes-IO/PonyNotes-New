@@ -164,11 +164,11 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
           {'category': FileLibraryCategory.video, 'name': '视频文件', 'icon': FlowySvgs.dl_video_s},
         ];
 
-        final cloudDrives = [
-          {'name': '百度云盘', 'icon': FlowySvgs.baidu_cloud_disk_s},
-          {'name': '阿里云盘', 'icon': FlowySvgs.aliyun_drive_s},
-          {'name': '坚果云云盘', 'icon': FlowySvgs.nuts_cloud_disk_s},
-        ];
+        // final cloudDrives = [
+        //   {'name': '百度云盘', 'icon': FlowySvgs.baidu_cloud_disk_s},
+        //   {'name': '阿里云盘', 'icon': FlowySvgs.aliyun_drive_s},
+        //   {'name': '坚果云云盘', 'icon': FlowySvgs.nuts_cloud_disk_s},
+        // ];
 
         return ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -183,18 +183,18 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
               );
             }),
             // 分割线
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              height: 1,
-              color: Theme.of(context).dividerColor.withOpacity(0.8),
-            ),
+            // Container(
+            //   margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            //   height: 1,
+            //   color: Theme.of(context).dividerColor.withOpacity(0.8),
+            // ),
             // 云盘分类（点击弹出对话框）
-            ...cloudDrives.map((driveData) {
-              return _buildCloudDriveItem(
-                driveData['name'] as String,
-                driveData['icon'] as FlowySvgData,
-              );
-            }),
+            // ...cloudDrives.map((driveData) {
+            //   return _buildCloudDriveItem(
+            //     driveData['name'] as String,
+            //     driveData['icon'] as FlowySvgData,
+            //   );
+            // }),
           ],
         );
       },
