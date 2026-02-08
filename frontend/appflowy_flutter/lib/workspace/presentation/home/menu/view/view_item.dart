@@ -175,7 +175,8 @@ class ViewItem extends StatelessWidget {
           if (isHandwriting) {
             context.read<TabsBloc>().openPlugin(created);
           } else {
-            Log.info('🔵 [VIEW_ITEM] Skipping auto-open for created view ${created.id}, extra=$extra');
+            Log.info(
+                '🔵 [VIEW_ITEM] Skipping auto-open for created view ${created.id}, extra=$extra');
           }
         },
         builder: (context, state) {
@@ -550,7 +551,10 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       style: HoverStyle(hoverColor: Theme.of(context).colorScheme.secondary),
       resetHoverOnRebuild: widget.showActions || !isIconPickerOpened,
       buildWhenOnHover: () =>
-          !widget.showActions && !_isDragging && !isIconPickerOpened && !isRenaming,
+          !widget.showActions &&
+          !_isDragging &&
+          !isIconPickerOpened &&
+          !isRenaming,
       isSelected: () => widget.showActions || isSelected,
       builder: (_, onHover) => _buildViewItem(onHover, isSelected),
     );
@@ -558,8 +562,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
   Widget _buildViewItem(bool onHover, [bool isSelected = false]) {
     // 构建名称部分 - 内联编辑或普通文本
-    final nameWidget = isRenaming ? _buildInlineRenameField() : _buildNameText();
-    
+    final nameWidget =
+        isRenaming ? _buildInlineRenameField() : _buildNameText();
+
     final children = [
       const HSpace(2),
       // expand icon or placeholder
@@ -734,7 +739,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     return KeyboardListener(
       focusNode: FocusNode(),
       onKeyEvent: (event) {
-        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
           _cancelRenaming();
         }
       },
@@ -750,11 +756,13 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
           decoration: InputDecoration(
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(4.0),
-              borderSide: BorderSide(color: Theme.of(context).colorScheme.primary),
+              borderSide:
+                  BorderSide(color: Theme.of(context).colorScheme.primary),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(4.0),
-              borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 2.0),
+              borderSide: BorderSide(
+                  color: Theme.of(context).colorScheme.primary, width: 2.0),
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 6.0),
             isDense: true,
@@ -781,7 +789,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _renameFocusNode.requestFocus();
     });
-    
+
     // 监听焦点丢失事件
     _renameFocusNode.addListener(_onFocusChange);
   }
@@ -849,13 +857,14 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     // debug logs removed
     final viewBloc = context.read<ViewBloc>();
     // 如果是 HandwritingSaberPluginBuilder，使用"未命名手记"作为默认名称
-    final isHandwritingSaber = pluginBuilder is HandwritingSaberPluginBuilder;
-    final viewName = isHandwritingSaber 
-        ? '未命名手记' 
+    final isHandwritingSaber =
+        pluginBuilder.pluginType == PluginType.handwritingSaber;
+    final viewName = isHandwritingSaber
+        ? '未命名手记'
         : (pluginBuilder.layoutType?.defaultName ?? '');
-    
+
     // debug logs removed
-    
+
     // 如果是 Saber 手写视图，需要先创建视图，然后立即更新 extra 字段
     // 否则，直接通过 ViewBloc 创建视图
     if (isHandwritingSaber) {
@@ -879,7 +888,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
 
       // If the widget has been unmounted while waiting for createView, skip further UI actions.
       if (!context.mounted) {
-        Log.error('🔵 [VIEW_ITEM] Widget unmounted after createView returned, skipping UI open actions');
+        Log.error(
+            '🔵 [VIEW_ITEM] Widget unmounted after createView returned, skipping UI open actions');
         // Still ensure ViewBloc state is updated with created view if possible
         await result.fold(
           (createdView) async {
@@ -923,7 +933,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                 try {
                   getIt<TabsBloc>().openPlugin(createdView);
                 } catch (e) {
-                Log.error('🔵 [VIEW_ITEM] Failed to open plugin globally for ${createdView.id}: $e');
+                  Log.error(
+                      '🔵 [VIEW_ITEM] Failed to open plugin globally for ${createdView.id}: $e');
                 }
               }
             },
@@ -943,7 +954,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                 try {
                   getIt<TabsBloc>().openPlugin(createdView);
                 } catch (e) {
-                  Log.warn('🔵 [VIEW_ITEM] Failed to open plugin globally for ${createdView.id}: $e');
+                  Log.warn(
+                      '🔵 [VIEW_ITEM] Failed to open plugin globally for ${createdView.id}: $e');
                 }
               }
             },
@@ -977,7 +989,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
     try {
       // 尝试从外层 context 获取 SpaceBloc
       SpaceBloc? spaceBloc;
-      
+
       // 方法1: 尝试从当前 context 读取（可能是外层提供的）
       try {
         spaceBloc = context.read<SpaceBloc>();
@@ -991,7 +1003,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
           // 根 context 也没有 SpaceBloc，忽略
         }
       }
-      
+
       if (spaceBloc != null && !spaceBloc.isClosed) {
         spaceBloc.add(const SpaceEvent.didReceiveSpaceUpdate());
       }
@@ -1015,7 +1027,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
       try {
         final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
         final userProfile = userWorkspaceBloc.state.userProfile;
-        final workspaceId = userWorkspaceBloc.state.currentWorkspace?.workspaceId ?? '';
+        final workspaceId =
+            userWorkspaceBloc.state.currentWorkspace?.workspaceId ?? '';
         if (workspaceId.isNotEmpty) {
           outerSpaceBloc = SpaceBloc(
             userProfile: userProfile,
@@ -1026,50 +1039,51 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         // 无法创建 SpaceBloc
       }
     }
-    
+
     Widget child = BlocListener<ViewBloc, ViewState>(
-        listenWhen: (prev, curr) {
-          // 只在删除状态变化或操作成功时触发
-          return prev.isDeleted != curr.isDeleted || 
-                 (prev.successOrFailure.isFailure && curr.successOrFailure.isSuccess);
-        },
-        listener: (context, state) {
-          // 监听删除成功状态，刷新 SpaceBloc
-          if (state.isDeleted) {
-            // 延迟一下，确保后端删除操作完成
-            // 增加延迟时间，确保最后一条文档删除后也能刷新
-            Future.delayed(const Duration(milliseconds: 500), () {
+      listenWhen: (prev, curr) {
+        // 只在删除状态变化或操作成功时触发
+        return prev.isDeleted != curr.isDeleted ||
+            (prev.successOrFailure.isFailure &&
+                curr.successOrFailure.isSuccess);
+      },
+      listener: (context, state) {
+        // 监听删除成功状态，刷新 SpaceBloc
+        if (state.isDeleted) {
+          // 延迟一下，确保后端删除操作完成
+          // 增加延迟时间，确保最后一条文档删除后也能刷新
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (context.mounted) {
+              _refreshSpaceBlocIfNeeded(context);
+            }
+          });
+        }
+        // 监听视图更新（重命名、复制等），刷新 SpaceBloc
+        // 使用 fold 检查操作是否成功
+        state.successOrFailure.fold(
+          (success) {
+            // 操作成功，刷新列表
+            // 延迟一下，确保后端操作完成
+            Future.delayed(const Duration(milliseconds: 300), () {
               if (context.mounted) {
                 _refreshSpaceBlocIfNeeded(context);
               }
             });
-          }
-          // 监听视图更新（重命名、复制等），刷新 SpaceBloc
-          // 使用 fold 检查操作是否成功
-          state.successOrFailure.fold(
-            (success) {
-              // 操作成功，刷新列表
-              // 延迟一下，确保后端操作完成
-              Future.delayed(const Duration(milliseconds: 300), () {
-                if (context.mounted) {
-                  _refreshSpaceBlocIfNeeded(context);
-                }
-              });
-            },
-            (error) {
-              // 操作失败，不刷新
-            },
-          );
-        },
-        child: ViewMoreActionPopover(
-          view: widget.view,
-          controller: controller,
-          isExpanded: widget.isExpanded,
-          spaceType: widget.spaceType,
-          onEditing: (value) =>
-              context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
-          buildChild: buildChild,
-          onAction: (action, data) async {
+          },
+          (error) {
+            // 操作失败，不刷新
+          },
+        );
+      },
+      child: ViewMoreActionPopover(
+        view: widget.view,
+        controller: controller,
+        isExpanded: widget.isExpanded,
+        spaceType: widget.spaceType,
+        onEditing: (value) =>
+            context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
+        buildChild: buildChild,
+        onAction: (action, data) async {
           switch (action) {
             case ViewMoreActionType.favorite:
             case ViewMoreActionType.unFavorite:
@@ -1114,7 +1128,8 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                     ?.workspaceId;
                 if (workspaceId != null) {
                   context.read<UserWorkspaceBloc>().add(
-                        UserWorkspaceEvent.leaveWorkspace(workspaceId: workspaceId),
+                        UserWorkspaceEvent.leaveWorkspace(
+                            workspaceId: workspaceId),
                       );
                 }
               }
@@ -1178,7 +1193,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               }
               break;
             case ViewMoreActionType.duplicateToMySpace:
-              context.read<ViewBloc>().add(const ViewEvent.duplicateToMySpace());
+              context
+                  .read<ViewBloc>()
+                  .add(const ViewEvent.duplicateToMySpace());
               // 复制后刷新列表（通过 BlocListener 监听成功）
               break;
             case ViewMoreActionType.openInNewTab:
@@ -1200,12 +1217,14 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               if (widget.view.isSpace) {
                 if (data.type == FlowyIconType.icon) {
                   try {
-                    final iconsData = IconsData.fromJson(jsonDecode(data.emoji));
+                    final iconsData =
+                        IconsData.fromJson(jsonDecode(data.emoji));
                     if (context.mounted) {
                       context.read<SpaceBloc>().add(
                             SpaceEvent.changeIcon(
                               space: widget.view,
-                              icon: '${iconsData.groupName}/${iconsData.iconName}',
+                              icon:
+                                  '${iconsData.groupName}/${iconsData.iconName}',
                               iconColor: iconsData.color,
                             ),
                           );
@@ -1277,7 +1296,7 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         },
       ),
     );
-    
+
     // 如果有外层的 SpaceBloc，使用 BlocProvider.value 传递；否则直接返回
     if (outerSpaceBloc != null) {
       return BlocProvider<SpaceBloc>.value(

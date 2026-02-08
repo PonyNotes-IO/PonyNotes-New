@@ -75,12 +75,12 @@ class _SectionFolderState extends State<SectionFolder> {
     // 获取当前工作空间ID作为parentViewId
     final parentViewId =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
-    
+
     // 根据 spaceType 判断是否显示创建空间按钮
     // private 和 public 都支持创建空间
     final showCreateSpaceButton = widget.spaceType == FolderSpaceType.private ||
         widget.spaceType == FolderSpaceType.public;
-    
+
     return FolderHeader(
       title: widget.title,
       isExpanded: context.watch<FolderBloc>().state.isExpanded,
@@ -105,7 +105,8 @@ class _SectionFolderState extends State<SectionFolder> {
       parentViewId: parentViewId,
       onViewSelected: _onViewSelected,
       showCreateSpaceButton: showCreateSpaceButton,
-      onCreateSpace: showCreateSpaceButton ? () => _showCreateSpaceDialog(context) : null,
+      onCreateSpace:
+          showCreateSpaceButton ? () => _showCreateSpaceDialog(context) : null,
     );
   }
 
@@ -114,7 +115,7 @@ class _SectionFolderState extends State<SectionFolder> {
     final initialPermission = widget.spaceType == FolderSpaceType.private
         ? SpacePermission.private
         : SpacePermission.publicToAll;
-    
+
     final spaceBloc = context.read<SpaceBloc>();
     showDialog(
       context: context,
@@ -143,7 +144,7 @@ class _SectionFolderState extends State<SectionFolder> {
     // 获取当前工作空间ID作为parentViewId
     final parentViewId =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId;
-    
+
     if (parentViewId == null) return;
 
     // 视图默认名称
@@ -158,7 +159,10 @@ class _SectionFolderState extends State<SectionFolder> {
     try {
       // 准备 extra 参数
       Map<String, String> ext = {};
-      
+      if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+        ext['view_type'] = 'handwriting_saber';
+      }
+
       // 使用ViewBackendService创建指定类型的视图
       final result = await ViewBackendService.createView(
         layoutType: pluginBuilder.layoutType!,
@@ -175,24 +179,13 @@ class _SectionFolderState extends State<SectionFolder> {
         (view) async {
           // 创建成功，展开文件夹以显示新创建的视图
 
-          // 如果是 Saber 手写笔记，创建后需要在 extra 中写入 view_type，供 ViewExtension.plugin() 识别
-          if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
-            const extraJson = '{"view_type": "handwriting_saber"}';
-            final updateResult = await ViewBackendService.updateView(
-              viewId: view.id,
-              extra: extraJson,
-            );
-            updateResult.fold(
-              (_) => null,
-              (error) => null,
-            );
-          }
+          // 创建成功，展开文件夹以显示新创建的视图
 
           // 创建成功，展开文件夹以显示新创建的视图
           context
               .read<FolderBloc>()
               .add(const FolderEvent.expandOrUnExpand(isExpanded: true));
-          
+
           // 为 Folder、Notebook、手写笔记等设置 extra 字段和默认图标
           if (pluginBuilder.layoutType == ViewLayoutPB.Folder) {
             // 设置文件夹的 extra 字段
@@ -217,7 +210,7 @@ class _SectionFolderState extends State<SectionFolder> {
               viewIcon: EmojiIconData.emoji('📓'),
             );
           }
-          
+
           // 不需要手动刷新，系统会自动更新侧边栏
         },
         (error) {
@@ -279,7 +272,8 @@ class _SectionFolderState extends State<SectionFolder> {
           shouldLoadChildViews: !isSpace, // 空间类型不加载子视图
           // 为空间类型提供自定义左侧图标，不显示展开/折叠图标
           leftIconBuilder: isSpace
-              ? (context, view) => SizedBox(width: HomeSpaceViewSizes.leftPadding)
+              ? (context, view) =>
+                  SizedBox(width: HomeSpaceViewSizes.leftPadding)
               : null,
           onSelected: (viewContext, view) {
             // 如果是 Space 类型，打开空间统一页面（SpaceHubPlugin）
@@ -287,7 +281,7 @@ class _SectionFolderState extends State<SectionFolder> {
               // 使用 SpaceBloc 打开空间（加载空间下的文档列表）
               final spaceBloc = context.read<SpaceBloc>();
               spaceBloc.add(SpaceEvent.open(space: view));
-              
+
               // 打开空间统一页面插件
               if (HardwareKeyboard.instance.isControlPressed) {
                 viewContext.read<TabsBloc>().openTab(view);
@@ -296,7 +290,7 @@ class _SectionFolderState extends State<SectionFolder> {
               }
               return;
             }
-            
+
             // 文档类型的点击处理
             if (HardwareKeyboard.instance.isControlPressed) {
               context.read<TabsBloc>().openTab(view);
