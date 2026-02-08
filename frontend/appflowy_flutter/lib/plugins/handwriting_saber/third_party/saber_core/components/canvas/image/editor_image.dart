@@ -1,21 +1,39 @@
-import 'dart:convert'; // ✅ 引入 base64 支持
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 /// ✅ 编辑器图片基类
 /// 支持 PNG、JPG、SVG 等格式的图片
-abstract class EditorImage {
+/// 已修改为继承自 ChangeNotifier 以支持图片位置变化的监听
+abstract class EditorImage extends ChangeNotifier {
   EditorImage({
     required this.id,
     required this.pageIndex,
     required this.pageSize,
-    this.dstRect,
-  });
+    this.newImage = true,
+    Rect? dstRect,
+  }) : _dstRect = dstRect ?? Rect.zero;
 
   final String id; // 图片唯一标识符
   final int pageIndex; // 所在页面索引
   final Size pageSize; // 页面大小
-  Rect? dstRect; // 目标位置和大小
+
+  /// 如果是新图片，加载时将处于 [active] 状态（可拖动）
+  bool newImage;
+
+  Rect _dstRect;
+  Rect get dstRect => _dstRect;
+  set dstRect(Rect value) {
+    if (_dstRect != value) {
+      _dstRect = value;
+      // 通知监听器（图片位置已更改）
+      try {
+        notifyListeners();
+      } catch (e) {
+        // 忽略通知错误
+      }
+    }
+  }
 
   /// 获取图片类型
   String get imageType;
@@ -36,21 +54,17 @@ abstract class EditorImage {
 
   /// 移动图片
   void move(Offset offset) {
-    if (dstRect != null) {
-      dstRect = dstRect!.translate(offset.dx, offset.dy);
-    }
+    dstRect = dstRect.translate(offset.dx, offset.dy);
   }
 
   /// 调整图片大小
   void resize(Size newSize) {
-    if (dstRect != null) {
-      dstRect = Rect.fromLTWH(
-        dstRect!.left,
-        dstRect!.top,
-        newSize.width,
-        newSize.height,
-      );
-    }
+    dstRect = Rect.fromLTWH(
+      dstRect.left,
+      dstRect.top,
+      newSize.width,
+      newSize.height,
+    );
   }
 }
 
@@ -62,6 +76,7 @@ class PngEditorImage extends EditorImage {
     required this.extension,
     required super.pageIndex,
     required super.pageSize,
+    super.newImage = true,
     super.dstRect,
   });
 
@@ -79,8 +94,7 @@ class PngEditorImage extends EditorImage {
     return {
       'type': imageType,
       'id': id,
-      // ✅ 优化：改用 Base64 存储，比原始 List<int> 效率更高，JSON 尺寸更小
-      'imageBytesBase64': base64Encode(imageBytes),
+      'imageBytes': imageBytes.toList(), // 转换为 List<int> 以便序列化
       'extension': extension,
       'pageIndex': pageIndex,
       'pageSize': {
@@ -99,25 +113,10 @@ class PngEditorImage extends EditorImage {
   }
 
   factory PngEditorImage.fromJson(Map<String, dynamic> json) {
-    Uint8List imageBytes = Uint8List(0);
-
-    // ✅ 向下兼容逻辑：优先读取 Base64，如果不存在则回退到旧的 List<int> 格式
-    if (json.containsKey('imageBytesBase64')) {
-      final String? base64Str = json['imageBytesBase64'] as String?;
-      if (base64Str != null && base64Str.isNotEmpty) {
-        try {
-          imageBytes = base64Decode(base64Str);
-        } catch (e) {
-          debugPrint('Failed to decode image Base64: $e');
-        }
-      }
-    } else if (json.containsKey('imageBytes')) {
-      final List<dynamic>? imageBytesList =
-          json['imageBytes'] as List<dynamic>?;
-      if (imageBytesList != null) {
-        imageBytes = Uint8List.fromList(imageBytesList.cast<int>());
-      }
-    }
+    final List<dynamic>? imageBytesList = json['imageBytes'] as List<dynamic>?;
+    final Uint8List imageBytes = imageBytesList != null
+        ? Uint8List.fromList(imageBytesList.cast<int>())
+        : Uint8List(0);
 
     final pageSizeJson = json['pageSize'] as Map<String, dynamic>?;
     final pageSize = pageSizeJson != null
@@ -156,6 +155,7 @@ class SvgEditorImage extends EditorImage {
     required this.svgString,
     required super.pageIndex,
     required super.pageSize,
+    super.newImage = true,
     super.dstRect,
   });
 

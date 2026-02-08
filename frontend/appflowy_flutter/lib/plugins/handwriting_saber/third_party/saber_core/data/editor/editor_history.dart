@@ -1,6 +1,6 @@
 import 'page.dart';
 import 'text_box.dart' as saber_text;
-import '../../components/canvas/image/editor_image.dart'; // ✅ 引入图片定义
+import '../../components/canvas/image/editor_image.dart';
 
 /// 编辑器历史记录管理器（参考 Saber 的 EditorHistory 实现）
 class EditorHistory {
@@ -40,7 +40,7 @@ class EditorHistory {
     if (_past.length > maxHistoryLength) {
       _past.removeAt(0);
     }
-    // 记录新操作时，清空恢复栈
+    /// 记录新操作时，清空恢复栈
     _future.clear();
   }
 
@@ -51,7 +51,7 @@ class EditorHistory {
   }
   
   // ============================================================
-  // ✅ 页面操作历史记录方法
+  // 页面操作历史记录方法
   // ============================================================
   
   /// 记录插入页面操作
@@ -74,37 +74,42 @@ class EditorHistory {
   void recordErase(List<Stroke> strokes) {
     if (strokes.isEmpty) return;
     recordChange(EditorHistoryItem.erase(
-      pageIndex: 0, // 简化处理
+      pageIndex: 0,
       deletedStrokes: strokes,
     ));
   }
 
-  /// ✅ 记录图片变更（导入/删除/移动/缩放）
+  /// 记录图片变更（导入/删除/移动/缩放）
   void recordImageChange(int pageIndex, List<EditorImage> images) {
     recordChange(EditorHistoryItem.imageChange(
       pageIndex: pageIndex,
-      images: List.from(images), // 存储当前时刻的克隆快照
+      images: List.from(images),
     ));
   }
 }
 
 /// 历史记录项类型
 enum EditorHistoryItemType {
-  draw,        // 绘制笔迹
-  erase,       // 擦除笔迹
-  delete,      // 删除对象（笔迹、文本框等）
-  add,         // 添加对象（文本框等）
-  modify,      // 修改对象
-  insertPage,  // 插入页面
-  deletePage,  // 删除页面
-  imageChange, // ✅ 图片变更
+  draw,
+  erase,
+  delete,
+  add,
+  modify,
+  insertPage,
+  deletePage,
+  imageChange,
 }
 
 /// 历史记录项
-  final List<Stroke>? deletedStrokes;  // 删除的笔迹（用于恢复）
-  final List<saber_text.TextBox>? deletedTextBoxes;  // 删除的文本框（用于恢复）
-  final List<EditorImage>? images; // ✅ 操作后的图片列表快照
-  final EditorPage? page;  // ✅ 页面数据（用于页面插入/删除操作的撤销恢复）
+class EditorHistoryItem {
+  final EditorHistoryItemType type;
+  final int pageIndex;
+  final List<Stroke> strokes;
+  final List<saber_text.TextBox>? textBoxes;
+  final List<Stroke>? deletedStrokes;
+  final List<saber_text.TextBox>? deletedTextBoxes;
+  final List<EditorImage>? images;
+  final EditorPage? page;
 
   EditorHistoryItem({
     required this.type,
@@ -113,7 +118,7 @@ enum EditorHistoryItemType {
     this.textBoxes,
     this.deletedStrokes,
     this.deletedTextBoxes,
-    this.images, // ✅
+    this.images,
     this.page,
   });
 
@@ -171,7 +176,7 @@ enum EditorHistoryItemType {
     );
   }
   
-  /// ✅ 创建插入页面操作的历史记录
+  /// 创建插入页面操作的历史记录
   factory EditorHistoryItem.insertPage({
     required int pageIndex,
     required EditorPage page,
@@ -184,7 +189,7 @@ enum EditorHistoryItemType {
     );
   }
   
-  /// ✅ 创建删除页面操作的历史记录
+  /// 创建删除页面操作的历史记录
   factory EditorHistoryItem.deletePage({
     required int pageIndex,
     required EditorPage page,
@@ -197,7 +202,7 @@ enum EditorHistoryItemType {
     );
   }
 
-  /// ✅ 创建图片操作的历史记录（快照式）
+  /// 创建图片操作的历史记录（快照式）
   factory EditorHistoryItem.imageChange({
     required int pageIndex,
     required List<EditorImage> images,
@@ -210,4 +215,3 @@ enum EditorHistoryItemType {
     );
   }
 }
-

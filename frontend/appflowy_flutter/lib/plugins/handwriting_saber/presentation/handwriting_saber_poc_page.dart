@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
+import 'package:defer_pointer/defer_pointer.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -24,12 +25,13 @@ import '../third_party/saber_core/data/editor/quill_styles.dart';
 import '../third_party/saber_core/data/editor/quill_struct.dart'; // ✅ 导入 QuillStruct
 import '../third_party/saber_core/data/editor/shape_strokes.dart';
 import '../third_party/saber_core/data/editor/stroke_extensions.dart'; // ✅ 导入扩展方法
+import '../third_party/saber_core/data/extensions/change_notifier_extensions.dart'; // ✅ 导入 ChangeNotifier 扩展
 import '../third_party/saber_core/data/editor/text_box.dart'
     as saber_text; // ✅ 导入文本框（使用别名避免与Flutter的TextBox冲突）
 import '../third_party/saber_core/data/tools/select_result.dart';
 import '../third_party/saber_core/data/tools/tool.dart';
 import 'handwriting_saber_toolbar.dart';
-import 'widgets/canvas_image_widget.dart';
+import 'widgets/canvas_image.dart'; // ✅ 使用从Saber移植的CanvasImage组件
 import 'widgets/canvas_preview.dart'; // ✅ 导入页面预览组件
 import 'widgets/editor_page_manager.dart'; // ✅ 导入页面管理器组件
 import '../third_party/saber_core/components/canvas/webview/webview_editor_element.dart';
@@ -142,9 +144,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// ✅ 当前选中的图片ID（使用ValueNotifier避免全局setState）
   final ValueNotifier<String?> _selectedImageIdNotifier =
       ValueNotifier<String?>(null);
-
-  /// ✅ 是否正在操作图片（拖动/缩放/旋转）
-  bool _isImageOperationInProgress = false;
 
   /// ✅ 剪贴板数据（存储复制的对象）
   List<Stroke>? _clipboardStrokes;
@@ -934,6 +933,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   Offset? _shapeStartPoint;
 
   void _startStroke(Offset position, {int? pageIndex}) {
+    // ✅ 绘制开始时取消所有图片的激活状态（防止手势冲突）
+    CanvasImage.activeListener.notifyListenersPlease();
+
     // ✅ 设置当前页面索引
     _currentPageIndexNotifier.value = pageIndex ?? 0;
     debugPrint(
@@ -3749,7 +3751,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
 
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+      behavior: HitTestBehavior.translucent, // ✅ 关键修复：允许子组件参与手势竞技场
       // ✅ 添加右键菜单支持
       onSecondaryTapDown: (TapDownDetails details) {
         // 只在选择工具且有选中对象时显示菜单
@@ -3775,17 +3777,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         debugPrint(
             '🦋[HandwritingSaber] onPanStart: local=${details.localPosition}, pagePos=$pagePos, pageIndex=$pageIndex, tool=${_currentToolNotifier.value.toolId}');
 
-        // ✅ 检查是否点击在图片上
-        // ⚠️ 重要：这里只检测点击，不再设置 _isImageOperationInProgress
-        // 图片的手势完全由 CanvasImageWidget 处理，父组件不干预
-        final clickedImage = _findImageAtPosition(pagePos, pageIndex);
-        if (clickedImage != null) {
-          // ✅ 检测到点击在图片上，直接返回，让 CanvasImageWidget 处理
-          // 不再自动切换工具或设置状态，交给图片组件自己处理
-          debugPrint(
-              '🦋[HandwritingSaber] onPanStart: 点击在图片上，交给 CanvasImageWidget 处理');
-          return;
-        }
+        // ✅ 重要：参考Saber实现，不再检测点击是否在图片上
+        // 图片的点击和拖动手势完全由 CanvasImage 的 GestureDetector 处理
+        // 父组件不干预图片区域的事件传递
 
         if (pagePos.dx.isFinite && pagePos.dy.isFinite) {
           // ✅ 如果点击在空白区域，结束文本框编辑
@@ -3866,8 +3860,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         child: SizedBox(
           width: pageDisplayWidth,
           height: pageDisplayHeight,
-          child: Stack(
-            children: [
+          // ✅ 使用 DeferredPointerHandler 包裹 Stack，为 DeferPointer 提供上下文
+          child: DeferredPointerHandler(
+            child: Stack(
+              children: [
               // debug: 输出当前页面与背景信息（使用受控日志，默认静默）
               Builder(builder: (context) {
                 LogUtils.debug(
@@ -3977,6 +3973,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -4031,8 +4028,18 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     );
   }
 
-  /// ✅ 构建图片 Widget（使用可交互组件）
-  /// 关键：图片的手势完全由 CanvasImageWidget 独立处理，父组件不干预
+  /// ✅ 构建图片 Widget（使用从Saber移植的CanvasImage组件）
+  /// 
+  /// 🔧 核心修复：解决图片无法拖动、缩放、旋转、删除的问题
+  /// 关键点：
+  /// 1. CanvasImage 内部使用 _active 状态控制手势响应
+  /// 2. 只有 _active = true 时，拖动(onPanStart/Update/End)、长按(onLongPress)、缩放手柄(onPan*)才生效
+  /// 3. _selectedImageIdNotifier 和 _active 是两个独立的状态，需要同步
+  /// 
+  /// 修复策略：
+  /// 1. 添加 shouldActivate 参数，当选中图片时自动激活
+  /// 2. 点击图片时切换激活状态
+  /// 3. 使用 StatefulBuilder 避免整个页面重建
   Widget _buildImageWidget(
     EditorImage image,
     int pageIndex,
@@ -4040,27 +4047,51 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     double pageDisplayHeight,
     double scale,
   ) {
-    return CanvasImageWidget(
+    // ✅ 参考 saber 实现：只有选择工具激活时图片才可交互
+    // 使用 toolId 判断当前是否为选择工具
+    final bool isSelectTool = _currentToolNotifier.value.toolId == ToolId.select;
+    
+    // ✅ 判断当前图片是否应该被激活
+    // 激活条件：图片被选中 且 在选择工具模式下
+    final bool shouldActivate = _selectedImageIdNotifier.value == image.id && isSelectTool;
+    
+    return CanvasImage(
+      key: ValueKey('image_${image.id}'),
       image: image,
       pageSize: _coreInfo.pages[pageIndex].size,
-      scale: scale,
-      readOnly: false,
       selected: _selectedImageIdNotifier.value == image.id,
-      onImageChanged: () {
-        // ✅ 图片点击时切换选中状态
-        if (_selectedImageIdNotifier.value == image.id) {
-          // 如果已选中，取消选中
-          _selectedImageIdNotifier.value = null;
+      // readOnly 为 true 时会忽略所有手势
+      readOnly: !isSelectTool,
+      // ✅ shouldActivate：当图片被选中时自动激活
+      shouldActivate: shouldActivate,
+      onTap: () {
+        // ✅ 点击图片时切换选中状态
+        if (isSelectTool) {
+          debugPrint('🦋[HandwritingSaber] _buildImageWidget onTap: 开始处理');
+          setState(() {
+            if (_selectedImageIdNotifier.value == image.id) {
+              // 如果已经选中，则取消选中（同时取消激活）
+              _selectedImageIdNotifier.value = null;
+              debugPrint('🦋[HandwritingSaber] 图片取消选中: ${image.id}');
+            } else {
+              // 如果未选中，则选中该图片（会自动激活）
+              _selectedImageIdNotifier.value = image.id;
+              debugPrint('🦋[HandwritingSaber] 图片选中: ${image.id}');
+            }
+          });
         } else {
-          // 选中这张图片
-          _selectedImageIdNotifier.value = image.id;
+          debugPrint('🦋[HandwritingSaber] _buildImageWidget onTap: 不是选择工具，isSelectTool=$isSelectTool');
         }
-        // 保存更改
+      },
+      onMoveImage: (img, offset) {
+        // 图片移动后的回调
+        debugPrint('🦋[HandwritingSaber] 图片移动: ${img.id}, offset=$offset');
         _scheduleSave();
       },
-      onImageDeleted: () {
+      onDeleteImage: (img) {
         // 删除图片
-        _deleteImage(image, pageIndex);
+        debugPrint('🦋[HandwritingSaber] 删除图片: ${img.id}');
+        _deleteImage(img, pageIndex);
       },
     );
   }
