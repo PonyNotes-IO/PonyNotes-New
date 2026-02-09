@@ -10,6 +10,9 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../../../env/cloud_env.dart';
+import '../../../../../../startup/startup.dart';
+
 class ContinueWithEmailAndPassword extends StatefulWidget {
   const ContinueWithEmailAndPassword({super.key});
 
@@ -585,22 +588,26 @@ class _ContinueWithEmailAndPasswordState
   // }
 
   void _navigateToUserAgreement(BuildContext context) {
+    final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+    final base_web_domain = cloudEnv.appflowyCloudConfig.base_web_domain;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => LegalDocumentScreen(
           title: '用户协议',
-          content: '这里是用户协议的内容...\n\n请根据实际需求填写完整的用户协议。',
+          url: '$base_web_domain/agreement',
         ),
       ),
     );
   }
 
   void _navigateToPrivacyPolicy(BuildContext context) {
+    final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+    final base_web_domain = cloudEnv.appflowyCloudConfig.base_web_domain;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => LegalDocumentScreen(
           title: '隐私政策',
-          content: '这里是隐私政策的内容...\n\n请根据实际需求填写完整的隐私政策。',
+          url: '$base_web_domain/privacy',
         ),
       ),
     );

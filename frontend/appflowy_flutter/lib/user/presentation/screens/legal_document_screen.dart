@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 class LegalDocumentScreen extends StatelessWidget {
   const LegalDocumentScreen({
     super.key,
     required this.title,
-    required this.content,
+    this.url,
+    this.content
   });
 
   final String title;
-  final String content;
+  final String? url;
+  final String? content;
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +23,13 @@ class LegalDocumentScreen extends StatelessWidget {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: LayoutBuilder(
+      body: url != null && url?.isNotEmpty == true ? InAppWebView(
+        initialUrlRequest: URLRequest(url: WebUri(url ?? "")),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          supportZoom: true,
+        ),
+      ) : LayoutBuilder(
         builder: (context, constraints) {
           return SizedBox(
             width: constraints.maxWidth,
@@ -33,7 +42,7 @@ class LegalDocumentScreen extends StatelessWidget {
                 ),
                 padding: const EdgeInsets.all(16.0),
                 child: SelectableText(
-                  content,
+                  content ?? '',
                   style: const TextStyle(fontSize: 14, height: 1.6),
                 ),
               ),

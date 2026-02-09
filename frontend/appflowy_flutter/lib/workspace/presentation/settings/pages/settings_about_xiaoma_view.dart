@@ -7,6 +7,8 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/startup/startup.dart';
+import '../../../../env/cloud_env.dart';
 
 class SettingsAboutXiaomaView extends StatefulWidget {
   const SettingsAboutXiaomaView({super.key});
@@ -434,22 +436,26 @@ class _SettingsAboutXiaomaViewState extends State<SettingsAboutXiaomaView> {
   }
 
   void _navigateToServiceTerms(BuildContext context) {
+    final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+    final base_web_domain = cloudEnv.appflowyCloudConfig.base_web_domain;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => LegalDocumentScreen(
           title: LocaleKeys.legal_serviceTerms.tr(),
-          content: LocaleKeys.legal_serviceTermsContent.tr(),
+          url: "$base_web_domain/agreement",
         ),
       ),
     );
   }
 
   void _navigateToPrivacyPolicy(BuildContext context) {
+    final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+    final base_web_domain = cloudEnv.appflowyCloudConfig.base_web_domain;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => LegalDocumentScreen(
           title: LocaleKeys.legal_privacyPolicy.tr(),
-          content: LocaleKeys.legal_privacyPolicyContent.tr(),
+          url: "$base_web_domain/privacy",
         ),
       ),
     );

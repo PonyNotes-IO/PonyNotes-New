@@ -23,6 +23,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../env/cloud_env.dart';
 import '../../../../generated/locale_keys.g.dart';
 import '../../../../user/presentation/screens/legal_document_screen.dart';
 
@@ -513,13 +514,14 @@ class _AccountManagementViewState extends State<AccountManagementView>
                     recognizer: () {
                       final recognizer = TapGestureRecognizer()
                         ..onTap = () {
+                          final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+                          final base_web_domain = cloudEnv.appflowyCloudConfig.base_web_domain;
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => LegalDocumentScreen(
                                 title: LocaleKeys.sidebar_appName.tr() +
                                     LocaleKeys.legal_userAgreement.tr(),
-                                content:
-                                    LocaleKeys.legal_userAgreementContent.tr(),
+                                url: "$base_web_domain/agreement",
                               ),
                             ),
                           );
@@ -537,12 +539,13 @@ class _AccountManagementViewState extends State<AccountManagementView>
                     recognizer: () {
                       final recognizer = TapGestureRecognizer()
                         ..onTap = () {
+                          final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+                          final base_web_domain = cloudEnv.appflowyCloudConfig.base_web_domain;
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => LegalDocumentScreen(
                                 title: LocaleKeys.legal_privacyPolicy.tr(),
-                                content:
-                                    LocaleKeys.legal_privacyPolicyContent.tr(),
+                                url: "$base_web_domain/privacy",
                               ),
                             ),
                           );

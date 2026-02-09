@@ -450,6 +450,8 @@ class _TermsAndConditionsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+    final base_web_domain = cloudEnv.appflowyCloudConfig.base_web_domain;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -486,12 +488,13 @@ class _TermsAndConditionsSection extends StatelessWidget {
                   mouseCursor: SystemMouseCursors.click,
                   recognizer: TapGestureRecognizer()
                     ..onTap = () {
+
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (context) => LegalDocumentScreen(
                             title: LocaleKeys.sidebar_appName.tr() +
                                 LocaleKeys.legal_userAgreement.tr(),
-                            content: LocaleKeys.legal_userAgreementContent.tr(),
+                            url: "$base_web_domain/agreement",
                           ),
                         ),
                       );
@@ -510,7 +513,7 @@ class _TermsAndConditionsSection extends StatelessWidget {
                         MaterialPageRoute(
                           builder: (context) => LegalDocumentScreen(
                             title: LocaleKeys.legal_privacyPolicy.tr(),
-                            content: LocaleKeys.legal_privacyPolicyContent.tr(),
+                            url: "$base_web_domain/privacy",
                           ),
                         ),
                       );
