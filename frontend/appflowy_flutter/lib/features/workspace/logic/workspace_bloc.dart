@@ -859,9 +859,10 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventUpdateFolderSyncState event,
     Emitter<UserWorkspaceState> emit,
   ) async {
-    // 检查新状态是否与旧状态相同，如果相同则跳过更新
     final oldSyncState = state.folderSyncState;
     final newSyncState = event.syncState;
+    
+    Log.info('[WorkspaceBloc] 更新同步状态: old=${oldSyncState?.isSyncing}/${oldSyncState?.isFinish}, new=${newSyncState.isSyncing}/${newSyncState.isFinish}');
     
     if (oldSyncState != null && 
         oldSyncState.isSyncing == newSyncState.isSyncing && 
@@ -873,7 +874,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     emit(state.copyWith(folderSyncState: newSyncState));
     
     // 当同步完成时，更新订阅信息并检查存储限制
-    if (newSyncState != null && newSyncState.isFinish && !newSyncState.isSyncing) {
+    if (newSyncState.isFinish && !newSyncState.isSyncing) {
       // 同步完成，更新订阅信息
       _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
       

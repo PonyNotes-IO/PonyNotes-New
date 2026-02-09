@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:appflowy/core/notification/folder_notification.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-notification/subject.pb.dart';
@@ -45,6 +46,7 @@ class FolderSyncStateListener {
         result.map(
           (r) {
             final value = FolderSyncStatePB.fromBuffer(r);
+            Log.info('[FolderSyncStateListener] 收到同步状态更新: isSyncing=${value.isSyncing}, isFinish=${value.isFinish}');
             didReceiveSyncState?.call(value);
           },
         );

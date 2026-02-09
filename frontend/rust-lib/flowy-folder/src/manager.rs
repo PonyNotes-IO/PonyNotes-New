@@ -791,7 +791,12 @@ impl FolderManager {
 
     match folder.get_view(&view_id) {
       None => {
-        error!("Can't find the view with id: {}", view_id);
+        // 使用 warn 级别，因为这是一个常见的场景（如视图已被删除或尚未同步完成）
+        // 不应该用 error 级别来记录这类情况
+        tracing::warn!(
+          "View not found: {} (this is normal if the view was deleted or hasn't synced yet)",
+          view_id
+        );
         Err(FlowyError::record_not_found())
       },
       Some(view) => {
