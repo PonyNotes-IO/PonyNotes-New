@@ -583,24 +583,6 @@ class _MemberListHeader extends StatelessWidget {
           ),
         ),
         Expanded(
-          flex: 2,
-          child: Text(
-            LocaleKeys.settings_appearance_members_role.tr(),
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.secondary,
-            ),
-          ),
-        ),
-        Expanded(
-          flex: 2,
-          child: Text(
-            '群组',
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.secondary,
-            ),
-          ),
-        ),
-        Expanded(
           flex: 3,
           child: Text(
             '团队协作区',
@@ -609,6 +591,24 @@ class _MemberListHeader extends StatelessWidget {
             ),
           ),
         ),
+        Expanded(
+          flex: 2,
+          child: Text(
+            LocaleKeys.settings_appearance_members_role.tr(),
+            style: theme.textStyle.body.standard(
+              color: theme.textColorScheme.secondary,
+            ),
+          ),
+        ),
+        // Expanded(
+        //   flex: 2,
+        //   child: Text(
+        //     '群组',
+        //     style: theme.textStyle.body.standard(
+        //       color: theme.textColorScheme.secondary,
+        //     ),
+        //   ),
+        // ),
         // email column removed per design
         SizedBox(width: 24.0),
       ],
@@ -734,9 +734,27 @@ class _MemberItemState extends State<_MemberItem> {
             ],
           ),
         ),
+        // 团队协作区 列
+        Expanded(
+          flex: 3,
+          child: Builder(
+            builder: (context) {
+              final currentWorkspace = context.watch<UserWorkspaceBloc>().state.currentWorkspace;
+              final workspaceName = currentWorkspace?.name ?? '—';
+              return Text(
+                workspaceName,
+                style: theme.textStyle.body.standard(
+                  color: theme.textColorScheme.primary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              );
+            },
+          ),
+        ),
         Expanded(
           flex: 2,
-          child: member.role.isOwner || !myRole.canUpdate
+          child: !member.role.isOwner
               ? Text(
                   member.role.description,
                   style: theme.textStyle.body.standard(
@@ -748,32 +766,20 @@ class _MemberItemState extends State<_MemberItem> {
                 ),
         ),
         // 群组 列（placeholder，目前 backend 未提供 group 字段）
-        Expanded(
-          flex: 2,
-          child: Text(
-            '—',
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.primary,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        // 团队协作区 列（placeholder）
-        Expanded(
-          flex: 3,
-          child: Text(
-            '—',
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.primary,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
+        // Expanded(
+        //   flex: 2,
+        //   child: Text(
+        //     '—',
+        //     style: theme.textStyle.body.standard(
+        //       color: theme.textColorScheme.primary,
+        //     ),
+        //     maxLines: 1,
+        //     overflow: TextOverflow.ellipsis,
+        //   ),
+        // ),
         // email column removed per design; keep member.email available for internal logic (e.g., delete check)
-        myRole.canDelete &&
-                member.email != userProfile.email // can't delete self
+        myRole == AFRolePB.Owner &&
+                member.name != userProfile.name // can't delete self
             ? _MemberMoreActionList(member: member)
             : SizedBox(width: 24.0),
       ],
@@ -889,7 +895,7 @@ class _MemberRoleActionListState extends State<_MemberRoleActionList> {
       child: DropdownButton<AFRolePB>(
         value: _currentRole,
         items: [
-          DropdownMenuItem(value: AFRolePB.Owner, child: Text('工作空间管理者')),
+          DropdownMenuItem(value: AFRolePB.Owner, child: Text('工作空间所有者')),
           DropdownMenuItem(value: AFRolePB.Member, child: Text('成员')),
           DropdownMenuItem(value: AFRolePB.Guest, child: Text('受限成员')),
         ],
