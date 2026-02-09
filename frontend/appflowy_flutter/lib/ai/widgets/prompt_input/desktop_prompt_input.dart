@@ -6,6 +6,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+
 // PonyNotes: 添加使用次数相关的protobuf导入
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -14,6 +15,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
 // PonyNotes: 添加使用次数相关导入
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -21,6 +23,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
 
+import '../../../plugins/ai_chat/application/chat_bloc.dart';
 import 'browse_prompts_button.dart';
 
 typedef OnPromptInputSubmitted = void Function(
@@ -489,7 +492,8 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
     return EdgeInsets.only(
       left: basePadding.horizontal / 2,
       right: basePadding.horizontal / 2,
-      top: top, // top padding 设置为0（当showPredefinedFormats为false时）或predefinedFormatButtonHeight
+      top: top,
+      // top padding 设置为0（当showPredefinedFormats为false时）或predefinedFormatButtonHeight
       bottom: bottom,
     );
   }
@@ -813,9 +817,8 @@ class _PromptBottomActions extends StatelessWidget {
 
                 for (final file in result.files) {
                   if (file.path != null && context.mounted) {
-                    context
-                        .read<AIPromptInputBloc>()
-                        .add(AIPromptInputEvent.attachFile(file.path!, file.name));
+                    context.read<AIPromptInputBloc>().add(
+                        AIPromptInputEvent.attachFile(file.path!, file.name));
                   }
                 }
               },
@@ -839,27 +842,34 @@ class _PromptBottomActions extends StatelessWidget {
   }
 
   /// PonyNotes: 构建深度思考按钮（适配深色模式）
-  Widget _buildDeepThinkingButton(BuildContext context, AIPromptInputState state) {
+  Widget _buildDeepThinkingButton(
+      BuildContext context, AIPromptInputState state) {
     final isEnabled = state.enableDeepThinking;
     // 有附件时禁用
     final isDisabled = state.attachedFiles.isNotEmpty;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final borderColor = isDisabled
-        ? isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0)
+        ? isDarkMode
+            ? const Color(0xFF333333)
+            : const Color(0xFFE0E0E0)
         : isEnabled
             ? const Color(0xFFE94618)
             : isDarkMode
                 ? const Color(0xFF4A4A4A)
                 : const Color(0xFFCDCDCD);
     final textColor = isDisabled
-        ? isDarkMode ? const Color(0xFF666666) : const Color(0xFFB0B0B0)
+        ? isDarkMode
+            ? const Color(0xFF666666)
+            : const Color(0xFFB0B0B0)
         : isEnabled
             ? const Color(0xFFE94618)
             : isDarkMode
                 ? const Color(0xFFB0B0B0)
                 : const Color(0xFF636363);
     final backgroundColor = isDisabled
-        ? isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5)
+        ? isDarkMode
+            ? const Color(0xFF1A1A1A)
+            : const Color(0xFFF5F5F5)
         : isDarkMode
             ? const Color(0xFF2A2A2A)
             : Colors.white;
@@ -870,7 +880,9 @@ class _PromptBottomActions extends StatelessWidget {
         onTap: isDisabled
             ? null
             : () {
-                context.read<AIPromptInputBloc>().add(const AIPromptInputEvent.toggleDeepThinking());
+                context
+                    .read<AIPromptInputBloc>()
+                    .add(const AIPromptInputEvent.toggleDeepThinking());
               },
         child: Container(
           height: 30,
@@ -906,21 +918,27 @@ class _PromptBottomActions extends StatelessWidget {
     final isDisabled = state.attachedFiles.isNotEmpty;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final borderColor = isDisabled
-        ? isDarkMode ? const Color(0xFF333333) : const Color(0xFFE0E0E0)
+        ? isDarkMode
+            ? const Color(0xFF333333)
+            : const Color(0xFFE0E0E0)
         : isEnabled
             ? const Color(0xFFE94618)
             : isDarkMode
                 ? const Color(0xFF4A4A4A)
                 : const Color(0xFFCDCDCD);
     final textColor = isDisabled
-        ? isDarkMode ? const Color(0xFF666666) : const Color(0xFFB0B0B0)
+        ? isDarkMode
+            ? const Color(0xFF666666)
+            : const Color(0xFFB0B0B0)
         : isEnabled
             ? const Color(0xFFE94618)
             : isDarkMode
                 ? const Color(0xFFB0B0B0)
                 : const Color(0xFF636363);
     final backgroundColor = isDisabled
-        ? isDarkMode ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5)
+        ? isDarkMode
+            ? const Color(0xFF1A1A1A)
+            : const Color(0xFFF5F5F5)
         : isDarkMode
             ? const Color(0xFF2A2A2A)
             : Colors.white;
@@ -931,7 +949,9 @@ class _PromptBottomActions extends StatelessWidget {
         onTap: isDisabled
             ? null
             : () {
-                context.read<AIPromptInputBloc>().add(const AIPromptInputEvent.toggleWebSearch());
+                context
+                    .read<AIPromptInputBloc>()
+                    .add(const AIPromptInputEvent.toggleWebSearch());
               },
         child: Container(
           height: 30,
@@ -969,129 +989,44 @@ class _PromptBottomActions extends StatelessWidget {
 /// PonyNotes: AI使用次数显示组件（需要异步加载数据）
 class _AIUsageIndicatorWidget extends StatefulWidget {
   @override
-  State<_AIUsageIndicatorWidget> createState() => _AIUsageIndicatorWidgetState();
+  State<_AIUsageIndicatorWidget> createState() =>
+      _AIUsageIndicatorWidgetState();
 }
 
 class _AIUsageIndicatorWidgetState extends State<_AIUsageIndicatorWidget> {
-  WorkspaceUsagePB? _usage;
-  bool _isLoading = true;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUsage();
-  }
-
-  Future<void> _loadUsage() async {
-    try {
-      final workspaceBloc = context.read<UserWorkspaceBloc?>();
-      final workspaceId = workspaceBloc?.state.currentWorkspace?.workspaceId;
-      if (workspaceId == null || workspaceId.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _usage = null;
-          });
-        }
-        return;
-      }
-      
-      final service = WorkspaceService(
-        workspaceId: workspaceId,
-        userId: fixnum.Int64.ZERO,
-      );
-      
-      final result = await service.getWorkspaceUsage();
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          result.fold(
-            (usage) => _usage = usage,
-            (err) => _error = err.msg,
-          );
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString();
-        });
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const SizedBox.shrink();
-    }
-    
-    if (_error != null || _usage == null) {
-      return const SizedBox.shrink();
-    }
-    
-    final usage = _usage!;
-    
-    // 如果无限制，不显示
-    if (usage.aiResponsesUnlimited) {
-      return const SizedBox.shrink();
-    }
-    
-    final used = usage.aiResponsesCount.toInt();
-    final total = usage.aiResponsesCountLimit.toInt();
-    
-    // 检测未订阅状态：total == -1 表示用户未订阅
-    if (total == -1) {
+    return BlocBuilder<ChatBloc, ChatState>(builder: (context, state) {
+      // 根据剩余次数选择颜色
+      final textColor = _getUsageTextColor(
+          context, (state.usageInfo?.aiResponsesCountLimit.toInt() ?? 0) - (state.usageInfo?.aiResponsesCount.toInt() ?? 0)
+      );
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.errorContainer,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
-          '未订阅，不可用',
+          _getUsageDisplayText(
+              state.usageInfo?.aiResponsesCount.toInt() ?? 0,
+              state.usageInfo?.aiResponsesCountLimit.toInt() ?? 0,
+              ),
           style: TextStyle(
             fontSize: 12,
-            color: Theme.of(context).colorScheme.error,
+            color: textColor,
           ),
         ),
       );
-    }
-    
-    final remaining = total - used;
-    
-    // 验证数据有效性
-    if (total == 0) {
-      return const SizedBox.shrink();
-    }
-    
-    // 根据剩余次数选择颜色
-    final textColor = _getUsageTextColor(context, remaining);
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        _getUsageDisplayText(used, total, remaining),
-        style: TextStyle(
-          fontSize: 12,
-          color: textColor,
-        ),
-      ),
-    );
+    });
   }
 
-  String _getUsageDisplayText(int used, int total, int remaining) {
+  String _getUsageDisplayText(int used, int total) {
     // PonyNotes: 只显示剩余可用次数，不显示已用/总数
-    if (remaining <= 0) {
+    if ((total - used) <= 0) {
       return '0次可用';
     }
-    return '$remaining次可用';
+    return '${total - used}次可用';
   }
 
   Color _getUsageTextColor(BuildContext context, int remaining) {
