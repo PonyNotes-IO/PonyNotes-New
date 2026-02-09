@@ -814,9 +814,9 @@ class _AIInputAreaState extends State<AIInputArea> {
           width: AIWelcomeTheme.iconSize,
           height: AIWelcomeTheme.iconSize,
           decoration: BoxDecoration(
-            color: hasAttachments
-                ? AIWelcomeTheme.selectedItemColor(context)
-                : Colors.transparent,
+            // color: hasAttachments
+            //     ? AIWelcomeTheme.selectedItemColor(context)
+            //     : Colors.transparent,
             borderRadius: BorderRadius.circular(4),
           ),
           child: Stack(
