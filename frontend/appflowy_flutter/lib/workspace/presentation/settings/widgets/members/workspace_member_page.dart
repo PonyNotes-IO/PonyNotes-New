@@ -803,8 +803,9 @@ class _MemberMoreActionList extends StatelessWidget {
       buildChild: (controller) {
         return FlowyButton(
           useIntrinsicWidth: true,
-          text: const FlowySvg(
-            FlowySvgs.three_dots_s,
+          text: FlowyText.regular(LocaleKeys.settings_appearance_members_removeMember.tr(),
+            color: Theme.of(context).colorScheme.primary,
+            fontSize: 12,
           ),
           onTap: () {
             controller.show();
