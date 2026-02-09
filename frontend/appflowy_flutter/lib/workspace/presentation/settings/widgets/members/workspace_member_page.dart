@@ -888,7 +888,7 @@ class _MemberRoleActionListState extends State<_MemberRoleActionList> {
       child: DropdownButton<AFRolePB>(
         value: _currentRole,
         items: [
-          DropdownMenuItem(value: AFRolePB.Owner, child: Text('工作空间所有者')),
+          DropdownMenuItem(value: AFRolePB.Owner, child: Text('工作空间管理者')),
           DropdownMenuItem(value: AFRolePB.Member, child: Text('成员')),
           DropdownMenuItem(value: AFRolePB.Guest, child: Text('受限成员')),
         ],

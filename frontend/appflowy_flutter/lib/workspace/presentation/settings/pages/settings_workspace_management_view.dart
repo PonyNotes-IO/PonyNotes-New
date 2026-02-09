@@ -1760,9 +1760,9 @@ class _WorkspaceMoreActionList extends StatelessWidget {
           case _WorkspaceMoreAction.delete:
             showCancelAndConfirmDialog(
               context: context,
-              title: LocaleKeys.settings_appearance_members_removeMember.tr(),
+              title: LocaleKeys.settings_workspacePage_deleteWorkspacePrompt_title.tr(),
               description: LocaleKeys
-                  .settings_appearance_members_areYouSureToRemoveMember
+                  .settings_workspacePage_deleteWorkspacePrompt_content
                   .tr(),
               confirmLabel: LocaleKeys.button_yes.tr(),
               onConfirm: (_) => context.read<SpaceBloc>().add(
@@ -1787,7 +1787,7 @@ class _WorkspaceMoreActionWrapper extends ActionCell {
   String get name {
     switch (inner) {
       case _WorkspaceMoreAction.delete:
-        return LocaleKeys.settings_appearance_members_removeFromWorkspace.tr();
+        return LocaleKeys.settings_workspacePage_deleteWorkspacePrompt_title.tr();
     }
   }
 }
