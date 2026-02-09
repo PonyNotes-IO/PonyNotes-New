@@ -2695,12 +2695,11 @@ impl FolderManager {
                       .collect()
                   });
                   // Set workspace_id on the view itself
-                  view_pb.workspace_id = shared_view.workspace_id.as_ref().map(|id| id.to_string());
-                  let workspace_id_str = shared_view.workspace_id.map(|id| id.to_string());
+                  let workspace_id_str = cloud_workspace_id.to_string();
                   Some(SharedViewPB {
                     view: view_pb,
                     access_level: AFAccessLevelPB::from(access_level),
-                    workspace_id: workspace_id_str,
+                    workspace_id: Some(workspace_id_str),
                   })
                 })
                 .collect(),
