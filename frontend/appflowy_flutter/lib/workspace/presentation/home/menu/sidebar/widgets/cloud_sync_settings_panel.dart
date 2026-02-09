@@ -50,7 +50,7 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    
+
     return Container(
       width: 320,
       padding: const EdgeInsets.all(16),
@@ -83,35 +83,38 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
                 fontWeight: FontWeight.w500,
                 color: theme.textColorScheme.primary,
               ),
-              _buildToggleSwitch(theme,context),
+              _buildToggleSwitch(theme, context),
             ],
           ),
           const SizedBox(height: 16),
           // 根据会员状态显示不同内容
-          _buildContentByMembershipStatus(theme,context),
+          _buildContentByMembershipStatus(theme, context),
         ],
       ),
     );
   }
 
-  Widget _buildContentByMembershipStatus(AppFlowyThemeData theme, BuildContext context) {
+  Widget _buildContentByMembershipStatus(
+      AppFlowyThemeData theme, BuildContext context) {
     switch (widget.membershipStatus) {
       case CloudSyncMembershipStatus.notSubscribed:
-        return _buildNotSubscribedContent(theme,context);
+        return _buildNotSubscribedContent(theme, context);
       case CloudSyncMembershipStatus.active:
-        return _buildActiveContent(theme,context);
+        return _buildActiveContent(theme, context);
       case CloudSyncMembershipStatus.expired:
       case CloudSyncMembershipStatus.storageFull:
-        return _buildExpiredOrFullContent(theme,context);
+        return _buildExpiredOrFullContent(theme, context);
     }
   }
 
   /// 未开通会员的内容
-  Widget _buildNotSubscribedContent(AppFlowyThemeData theme, BuildContext context) {
+  Widget _buildNotSubscribedContent(
+      AppFlowyThemeData theme, BuildContext context) {
     final usage = widget.currentSubscription?.usage;
     final storageUsedGb = usage?.storageUsedGb ?? 0.0;
     final storageTotalGb = usage?.storageTotalGb ?? 0.0;
-    final remainingGb = (storageTotalGb - storageUsedGb).clamp(0.0, double.infinity);
+    final remainingGb =
+        (storageTotalGb - storageUsedGb).clamp(0.0, double.infinity);
 
     String fmt(double gb) {
       if (gb < 1) {
@@ -167,8 +170,9 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
     final usage = widget.currentSubscription?.usage;
     final storageUsedGb = usage?.storageUsedGb ?? 0.0;
     final storageTotalGb = usage?.storageTotalGb ?? 0.0;
-    final remainingGb = (storageTotalGb - storageUsedGb).clamp(0.0, double.infinity);
-    
+    final remainingGb =
+        (storageTotalGb - storageUsedGb).clamp(0.0, double.infinity);
+
     String fmt(double gb) {
       if (gb < 1) {
         final mb = gb * 1024;
@@ -179,6 +183,8 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
 
     final subscription = widget.currentSubscription?.subscription;
     final planName = subscription?.planNameCn ?? '会员';
+    final planCode = subscription?.planCode?.toLowerCase() ?? '';
+    final isFreePlan = planCode == 'mfb' || planCode.contains('free');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,13 +228,25 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
           fontSize: 12,
           color: theme.textColorScheme.secondary,
         ),
+        if (isFreePlan) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: AFFilledTextButton.primary(
+              text: '升级空间',
+              onTap: widget.onUpgrade ?? () {},
+            ),
+          ),
+        ],
       ],
     );
   }
 
   /// 已到期或空间使用满的内容
-  Widget _buildExpiredOrFullContent(AppFlowyThemeData theme, BuildContext context) {
-    final isExpired = widget.membershipStatus == CloudSyncMembershipStatus.expired;
+  Widget _buildExpiredOrFullContent(
+      AppFlowyThemeData theme, BuildContext context) {
+    final isExpired =
+        widget.membershipStatus == CloudSyncMembershipStatus.expired;
     final usage = widget.currentSubscription?.usage;
     final storageUsedGb = usage?.storageUsedGb ?? 0.0;
     final storageTotalGb = usage?.storageTotalGb ?? 0.0;
@@ -257,7 +275,7 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
                 child: FlowyText(
                   isExpired ? '会员已到期' : '空间使用已满',
                   fontSize: 12,
-                  color: Theme.of(context).colorScheme.primary ,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
             ],
@@ -293,8 +311,8 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: _isEnabled
-            ? Theme.of(context).colorScheme.primary // 红色激活状态
-            : const Color(0xFFE0E0E0), // 灰色未激活状态
+              ? Theme.of(context).colorScheme.primary // 红色激活状态
+              : const Color(0xFFE0E0E0), // 灰色未激活状态
         ),
         child: AnimatedAlign(
           duration: const Duration(milliseconds: 200),

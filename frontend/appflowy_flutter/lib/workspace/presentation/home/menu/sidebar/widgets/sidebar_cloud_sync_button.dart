@@ -257,12 +257,6 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     if (subscription != null &&
         subscription.planCode != null &&
         subscription.planCode!.isNotEmpty) {
-      // 检查计划代码是否为免费版
-      final planCode = subscription.planCode!.toLowerCase();
-      if (planCode == 'free' || planCode == 'freeplan' || planCode == 'mfb') {
-        return CloudSyncMembershipStatus.notSubscribed;
-      }
-
       // 检查是否已到期
       final endDate = subscription.endDate;
       if (endDate != null && endDate.isBefore(DateTime.now())) {
@@ -278,21 +272,17 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
         return CloudSyncMembershipStatus.storageFull;
       }
 
-      // 会员有效中
+      // 会员有效中（包含免费版 mfb）
       return CloudSyncMembershipStatus.active;
     }
 
     // 如果 currentSubscription 没有数据，使用 subscriptionInfo 判断（降级方案）
     if (subscriptionInfo != null) {
-      if (subscriptionInfo.plan == WorkspacePlanPB.FreePlan) {
-        return CloudSyncMembershipStatus.notSubscribed;
-      }
-      // subscriptionInfo 有数据但不是免费版，认为会员有效中
-      // 注意：subscriptionInfo 不包含到期时间和使用量信息，所以无法判断过期和空间满
+      // 这里的 subscriptionInfo 只要有值，就认为是有效状态（包括免费版）
       return CloudSyncMembershipStatus.active;
     }
 
-    // 两个数据源都没有，认为未开通会员
+    // 两个数据源都没有，或者没有明确的计划信息，认为未登录或未开通
     return CloudSyncMembershipStatus.notSubscribed;
   }
 
@@ -385,8 +375,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
                 minWidth: 20.0,
                 maxHeight: 14.0,
               ),
-              padding:
-                  const EdgeInsets.only(left: 5.0, top: 2.0,right: 5.0,bottom: 1.0),
+              padding: const EdgeInsets.only(
+                  left: 5.0, top: 2.0, right: 5.0, bottom: 1.0),
               decoration: BoxDecoration(
                 color: labelColor,
                 borderRadius: BorderRadius.circular(7.0),
