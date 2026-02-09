@@ -54,7 +54,7 @@ impl FolderOperationHandler for NotebookFolderOperation {
   async fn open_view(&self, view_id: &Uuid) -> Result<(), FlowyError> {
     info!("[NotebookFolderOperation] Opening notebook view: {}", view_id);
     // Notebook 使用 Document 的底层实现来存储其元数据
-    self.document_manager()?.open_document(view_id).await?;
+    self.document_manager()?.open_document(view_id, None).await?;
     Ok(())
   }
 

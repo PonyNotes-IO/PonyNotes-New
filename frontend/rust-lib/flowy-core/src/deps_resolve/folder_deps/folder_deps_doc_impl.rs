@@ -67,7 +67,7 @@ impl FolderOperationHandler for DocumentFolderOperation {
   }
 
   async fn open_view(&self, view_id: &Uuid) -> Result<(), FlowyError> {
-    self.document_manager()?.open_document(view_id).await?;
+    self.document_manager()?.open_document(view_id, None).await?;
     Ok(())
   }
 

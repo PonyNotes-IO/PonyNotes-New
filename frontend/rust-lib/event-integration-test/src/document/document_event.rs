@@ -53,6 +53,7 @@ impl DocumentEventTest {
     let core = &self.event_test;
     let payload = OpenDocumentPayloadPB {
       document_id: doc_id.to_string(),
+      workspace_id: String::new(),
     };
     EventBuilder::new(core.clone())
       .event(DocumentEvent::GetDocEncodedCollab)
@@ -236,6 +237,7 @@ impl DocumentEventTest {
     let core = &self.event_test;
     let payload = OpenDocumentPayloadPB {
       document_id: doc_id.to_string(),
+      workspace_id: String::new(),
     };
     EventBuilder::new(core.clone())
       .event(DocumentEvent::GetDocumentSnapshotMeta)

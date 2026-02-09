@@ -50,6 +50,7 @@ impl EventIntegrationTest {
 
     let payload = OpenDocumentPayloadPB {
       document_id: view.id.clone(),
+      workspace_id: String::new(),
     };
 
     let _ = EventBuilder::new(self.clone())
@@ -65,6 +66,7 @@ impl EventIntegrationTest {
   pub async fn open_document(&self, doc_id: String) -> OpenDocumentData {
     let payload = OpenDocumentPayloadPB {
       document_id: doc_id.clone(),
+      workspace_id: String::new(),
     };
     let data = EventBuilder::new(self.clone())
       .event(DocumentEvent::OpenDocument)
@@ -86,6 +88,7 @@ impl EventIntegrationTest {
       .event(DocumentEvent::GetDocumentData)
       .payload(OpenDocumentPayloadPB {
         document_id: view_id.to_string(),
+        workspace_id: String::new(),
       })
       .async_send()
       .await

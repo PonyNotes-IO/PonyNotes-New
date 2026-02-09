@@ -131,7 +131,7 @@ pub async fn create_and_open_empty_document() -> (DocumentTest, Arc<RwLock<Docum
     .await
     .unwrap();
 
-  test.open_document(&doc_id).await.unwrap();
+  test.open_document(&doc_id, None).await.unwrap();
   let document = test.editable_document(&doc_id).await.unwrap();
 
   (test, document, data.page_id)
