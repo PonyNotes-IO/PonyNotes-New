@@ -71,7 +71,6 @@ extension DocumentDataPBFromTo on DocumentDataPB {
         childrenMap[childrenId]!.children.add(value.id);
       }
     });
-<<<<<<< HEAD
     // 注意：MetaPB 构造函数期望的是 Map<String, ChildrenPB>，
     // 这里不能传入 childrenMap.entries（Iterable<MapEntry<...>>），否则会类型不匹配。
     final meta = MetaPB(childrenMap: childrenMap);
@@ -79,11 +78,6 @@ extension DocumentDataPBFromTo on DocumentDataPB {
     return DocumentDataPB(
       // DocumentDataPB 的 blocks 字段同样是 Map<String, BlockPB>，
       // 直接传 blocks 即可，不能使用 blocks.entries。
-=======
-    final meta = MetaPB(childrenMap: childrenMap);
-
-    return DocumentDataPB(
->>>>>>> 79ded3677 (重构：通过直接传递childrenMap和blocks简化DocumentDataPB的构建)
       blocks: blocks,
       pageId: pageId,
       meta: meta,
