@@ -1,3 +1,4 @@
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +28,9 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
+
+import '../../../../generated/locale_keys.g.dart';
+import '../../widgets/pop_up_action.dart';
 
 class SettingsWorkspaceManagementView extends StatefulWidget {
   const SettingsWorkspaceManagementView({
@@ -144,13 +148,14 @@ class _SettingsWorkspaceManagementViewState
       description: '管理您的工作空间设置和配置',
       autoSeparate:
           false, // control separators manually to avoid duplicate dividers
+      headerTrailingBuilder: (context) => _buildRightButton(),
       children: [
         // 创建团队协作区权限设置
         _buildCreatePermissionSection(),
         // keep a single visual separator between the two sections
         const SettingsCategorySpacer(),
         // 团队协作区列表
-        _buildTeamWorkspaceList(),
+        _buildTeamWorkspaceTable()
       ],
     );
   }
@@ -201,48 +206,10 @@ class _SettingsWorkspaceManagementViewState
     }
   }
 
-  Widget _buildTeamWorkspaceList() {
-    return SettingsCategory(
-      title: '团队协作区',
-      actions: [
-        if (_canCreateTeamWorkspace())
-          SizedBox(
-            width: 140,
-            height: 28,
-            child: FlowyButton(
-              onTap: () async {
-                PopoverContainer.maybeOf(context)?.closeAll();
-                await Future.delayed(Duration.zero);
-                if (!mounted) return;
-                final spaceBloc = context.read<SpaceBloc>();
-                await showDialog(
-                  context: context,
-                  builder: (dialogCtx) => Dialog(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    child: BlocProvider.value(
-                      value: spaceBloc,
-                      child: const CreateSpacePopup(),
-                    ),
-                  ),
-                );
-              },
-              margin: EdgeInsets.zero,
-              text: Center(child: FlowyText.regular('新建团队协作区', fontSize: 12)),
-            ),
-          ),
-      ],
-      children: [
-        _buildTeamWorkspaceTable(),
-      ],
-    );
-  }
-
   Widget _buildTeamWorkspaceTable() {
     return BlocBuilder<SpaceBloc, SpaceState>(
       builder: (context, spaceState) {
-        final spaces = spaceState.spaces;
+        final spaces = context.read<SpaceBloc>().publicSpaces;
 
         if (spaces.isEmpty) {
           return Padding(
@@ -267,8 +234,9 @@ class _SettingsWorkspaceManagementViewState
                 space: space,
                 userProfile: widget.userProfile,
                 workspaceId: widget.workspace.workspaceId,
+                role: widget.workspace.role,
               );
-            }).toList(),
+            }),
           ],
         );
       },
@@ -283,7 +251,7 @@ class _SettingsWorkspaceManagementViewState
           Expanded(
             flex: 5,
             child: FlowyText(
-              '名称',
+              '团队协作区',
               fontSize: 12,
               color: Theme.of(context).hintColor,
               fontWeight: FontWeight.w500,
@@ -324,6 +292,37 @@ class _SettingsWorkspaceManagementViewState
         ],
       ),
     );
+  }
+
+  _buildRightButton() {
+    _canCreateTeamWorkspace() ?
+      SizedBox(
+        width: 140,
+        height: 28,
+        child: FlowyButton(
+          onTap: () async {
+            PopoverContainer.maybeOf(context)?.closeAll();
+            await Future.delayed(Duration.zero);
+            if (!mounted) return;
+            final spaceBloc = context.read<SpaceBloc>();
+            await showDialog(
+              context: context,
+              builder: (dialogCtx) => Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.0),
+                ),
+                child: BlocProvider.value(
+                  value: spaceBloc,
+                  child: const CreateSpacePopup(),
+                ),
+              ),
+            );
+          },
+          margin: EdgeInsets.zero,
+          text: Center(child: FlowyText.regular('新建团队协作区', fontSize: 12,color: Theme.of(context).colorScheme.primary,)),
+        ),
+      ) :
+    SizedBox.shrink();
   }
 }
 
@@ -658,11 +657,13 @@ class _SpaceRow extends StatefulWidget {
     required this.space,
     required this.userProfile,
     required this.workspaceId,
+    required this.role,
   });
 
   final ViewPB space;
   final UserProfilePB userProfile;
   final String workspaceId;
+  final AFRolePB role;
 
   @override
   State<_SpaceRow> createState() => _SpaceRowState();
@@ -748,6 +749,9 @@ class _SpaceRowState extends State<_SpaceRow> {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(12))
+      ),
       child: Row(
         children: [
           Expanded(
@@ -812,12 +816,12 @@ class _SpaceRowState extends State<_SpaceRow> {
                             _permissionLabel(SpacePermission.publicToAll),
                             fontSize: 14),
                       ),
-                      DropdownMenuItem(
-                        value: SpacePermission.closed,
-                        child: FlowyText(
-                            _permissionLabel(SpacePermission.closed),
-                            fontSize: 14),
-                      ),
+                      // DropdownMenuItem(
+                      //   value: SpacePermission.closed,
+                      //   child: FlowyText(
+                      //       _permissionLabel(SpacePermission.closed),
+                      //       fontSize: 14),
+                      // ),
                       DropdownMenuItem(
                         value: SpacePermission.private,
                         child: FlowyText(
@@ -885,18 +889,24 @@ class _SpaceRowState extends State<_SpaceRow> {
           ),
           Expanded(
             flex: 2,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: SizedBox.square(
-                dimension: 28.0,
-                child: FlowyButton(
-                  useIntrinsicWidth: true,
-                  margin: EdgeInsets.zero,
-                  text: Center(child: FlowySvg(FlowySvgs.three_dots_s)),
-                  onTap: () => _openSpaceManageDialog(context),
-                ),
-              ),
-            ),
+            child:
+
+            widget.role.canDelete
+                //  && widget.space. != widget.userProfile.name // can't delete self
+                ? _WorkspaceMoreActionList(viewPB: widget.space)
+                : SizedBox(width: 24.0),
+            // Align(
+            //   alignment: Alignment.centerRight,
+            //   child: SizedBox.square(
+            //     dimension: 28.0,
+            //     child: FlowyButton(
+            //       useIntrinsicWidth: true,
+            //       margin: EdgeInsets.zero,
+            //       text: Center(child: FlowySvg(FlowySvgs.three_dots_s)),
+            //       onTap: () => _openSpaceManageDialog(context),
+            //     ),
+            //   ),
+            // ),
           ),
         ],
       ),
@@ -1082,8 +1092,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                                     AFRolePB dialogSelectedRole =
                                         AFRolePB.Member;
                                     final TextEditingController
-                                        searchController =
-                                        TextEditingController();
+                                        searchController = TextEditingController();
 
                                     return Dialog(
                                       shape: RoundedRectangleBorder(
@@ -1711,5 +1720,74 @@ class _SpaceRowState extends State<_SpaceRow> {
         );
       },
     );
+  }
+}
+
+
+enum _WorkspaceMoreAction {
+  delete,
+}
+
+
+class _WorkspaceMoreActionList extends StatelessWidget {
+  const _WorkspaceMoreActionList({
+    required this.viewPB,
+  });
+
+  final ViewPB viewPB;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopoverActionList<_WorkspaceMoreActionWrapper>(
+      asBarrier: true,
+      direction: PopoverDirection.bottomWithCenterAligned,
+      actions: _WorkspaceMoreAction.values
+          .map((e) => _WorkspaceMoreActionWrapper(e, viewPB))
+          .toList(),
+      buildChild: (controller) {
+        return FlowyButton(
+          useIntrinsicWidth: true,
+          text: const FlowySvg(
+            FlowySvgs.three_dots_s,
+          ),
+          onTap: () {
+            controller.show();
+          },
+        );
+      },
+      onSelected: (action, controller) {
+        switch (action.inner) {
+          case _WorkspaceMoreAction.delete:
+            showCancelAndConfirmDialog(
+              context: context,
+              title: LocaleKeys.settings_appearance_members_removeMember.tr(),
+              description: LocaleKeys
+                  .settings_appearance_members_areYouSureToRemoveMember
+                  .tr(),
+              confirmLabel: LocaleKeys.button_yes.tr(),
+              onConfirm: (_) => context.read<SpaceBloc>().add(
+                SpaceEvent.delete(viewPB)
+              ),
+            );
+            break;
+        }
+        controller.close();
+      },
+    );
+  }
+}
+
+class _WorkspaceMoreActionWrapper extends ActionCell {
+  _WorkspaceMoreActionWrapper(this.inner, this.viewPB);
+
+  final _WorkspaceMoreAction inner;
+  final ViewPB viewPB;
+
+  @override
+  String get name {
+    switch (inner) {
+      case _WorkspaceMoreAction.delete:
+        return LocaleKeys.settings_appearance_members_removeFromWorkspace.tr();
+    }
   }
 }
