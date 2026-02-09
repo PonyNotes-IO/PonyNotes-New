@@ -1,5 +1,5 @@
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
-import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
+
 import 'package:appflowy_backend/log.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
@@ -173,8 +173,8 @@ class _WhiteboardExportActionState extends State<WhiteboardExportAction> {
       final getIt = GetIt.instance;
       if (getIt.isRegistered<WhiteboardExportController>(
           instanceName: '${widget.view.id}_export')) {
-        final controller =
-            getIt.get<WhiteboardExportController>(instanceName: '${widget.view.id}_export');
+        final controller = getIt.get<WhiteboardExportController>(
+            instanceName: '${widget.view.id}_export');
         controller.export(format);
         Log.info('[WhiteboardExport] 通过 GetIt 调用导出: $format');
         return;
@@ -257,6 +257,8 @@ class _WhiteboardImportActionState extends State<WhiteboardImportAction> {
         return;
       }
 
+      if (!mounted) return;
+
       final filePath = result.files.first.path;
       if (filePath == null) {
         _showError(context, '导入失败：无法获取文件路径');
@@ -279,9 +281,10 @@ class _WhiteboardImportActionState extends State<WhiteboardImportAction> {
     try {
       final getIt = GetIt.instance;
       if (getIt.isRegistered<WhiteboardImportController>(
-          instanceName: '${widget.view.id}_import')) {
-        final controller =
-            getIt.get<WhiteboardImportController>(instanceName: '${widget.view.id}_import');
+        instanceName: '${widget.view.id}_import',
+      )) {
+        final controller = getIt.get<WhiteboardImportController>(
+            instanceName: '${widget.view.id}_import');
         controller.importFile(filePath);
         Log.info('[WhiteboardImport] 通过 GetIt 调用导入');
         return;
@@ -316,4 +319,3 @@ class _WhiteboardImportActionState extends State<WhiteboardImportAction> {
 bool isWhiteboardView(ViewPB view) {
   return view.layout == ViewLayoutPB.Whiteboard;
 }
-

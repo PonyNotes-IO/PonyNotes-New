@@ -63,7 +63,7 @@ class _DocumentPageState extends State<DocumentPage>
     with WidgetsBindingObserver {
   EditorState? editorState;
   Selection? initialSelection;
-  late final documentBloc = DocumentBloc(documentId: widget.view.id)
+  late final documentBloc = DocumentBloc(documentId: widget.view.id, workspaceId: widget.view.workspaceId)
     ..add(const DocumentEvent.initial());
 
   @override

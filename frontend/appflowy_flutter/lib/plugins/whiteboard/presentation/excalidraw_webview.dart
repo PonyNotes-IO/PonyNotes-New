@@ -223,7 +223,36 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       // 准备加载的数据（包含viewId）
       Map<String, dynamic> dataToLoad = {};
       if (widget.initialData != null) {
-        dataToLoad = Map.from(widget.initialData!);
+        // 1. 尝试从标准格式加载 (elements, appState, files)
+        if (widget.initialData!.containsKey('elements')) {
+          dataToLoad['elements'] = widget.initialData!['elements'];
+        }
+        if (widget.initialData!.containsKey('appState')) {
+          dataToLoad['appState'] = widget.initialData!['appState'];
+        }
+        if (widget.initialData!.containsKey('files')) {
+          dataToLoad['files'] = widget.initialData!['files'];
+        }
+
+        // 2. 尝试从 LocalStorage 格式加载 (key_excalidraw, key_excalidraw-state, key_excalidraw-files)
+        // 这种格式是 WhiteboardDataService 保存的格式
+        widget.initialData!.forEach((key, value) {
+          if (value is String) {
+            try {
+              if (key.endsWith('_excalidraw')) {
+                dataToLoad['elements'] = jsonDecode(value);
+              } else if (key.endsWith('_excalidraw-state')) {
+                dataToLoad['appState'] = jsonDecode(value);
+              } else if (key.endsWith('_excalidraw-files')) {
+                // 📸 关键修复：从自定义 key 加载 files
+                dataToLoad['files'] = jsonDecode(value);
+              }
+            } catch (e) {
+              Log.warn('⚠️ [ExcalidrawWebView] Failed to parse LS key $key: $e');
+            }
+          }
+        });
+        
         // debug log removed
       } else {
         // debug log removed

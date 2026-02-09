@@ -65,7 +65,7 @@
     const isolatedStorage = {
         getItem: function (key) {
             const value = originalLocalStorage.getItem(key);
-            console.log(`[PonyNotes Storage] getItem("${key}") -> prefixed: "${key}" -> ${value ? 'HAS_DATA' : 'null'}`);
+            // console.log(`[PonyNotes Storage] getItem("${key}") -> prefixed: "${key}" -> ${value ? 'HAS_DATA' : 'null'}`);
             return value;
         },
 
@@ -73,6 +73,54 @@
             originalLocalStorage.setItem(key, value);
             if (init) {
                 window.flutter_inappwebview.callHandler('localStorageOnSet', {key: key, value});
+                
+                // 📸 关键修复：当 elements 更新时，自动捕获 files 并同步
+                // Excalidraw 不会将 files 写入 localStorage，我们需要手动提取
+                if (key.endsWith('excalidraw') && window._excalidrawAPI) {
+                    try {
+                        // ✅ 改进：使用更可靠的 API 获取 files
+                        const api = window._excalidrawAPI;
+                        let files = null;
+                        
+                        // 尝试多种方式获取 files
+                        if (typeof api.getFiles === 'function') {
+                            files = api.getFiles();
+                        } else if (typeof api.getSceneElements === 'function') {
+                            // 如果 getFiles 不可用，尝试从 elements 中提取
+                            const elements = api.getSceneElements();
+                            if (elements && Array.isArray(elements)) {
+                                files = {};
+                                elements.forEach(el => {
+                                    if (el.fileId && el.imageData) {
+                                        files[el.fileId] = {
+                                            id: el.fileId,
+                                            data: el.imageData,
+                                            created: Date.now(),
+                                            mimeType: el.mimeType || 'image/png'
+                                        };
+                                    }
+                                });
+                            }
+                        }
+                        
+                        if (files && Object.keys(files).length > 0) {
+                            const filesKey = key + '-files'; // 定义一个虚拟key
+                            const filesValue = JSON.stringify(files);
+                            
+                            // 简单的防抖/去重，避免重复发送
+                            if (window._lastSentFiles !== filesValue) {
+                                window._lastSentFiles = filesValue;
+                                window.flutter_inappwebview.callHandler('localStorageOnSet', {
+                                    key: filesKey, 
+                                    value: filesValue
+                                });
+                                console.log('[PonyNotes] 📸 Synced files count:', Object.keys(files).length);
+                            }
+                        }
+                    } catch (e) {
+                         console.error('[PonyNotes] Failed to sync files:', e);
+                    }
+                }
             }
         },
 
@@ -94,7 +142,7 @@
             return originalLocalStorage.key(index);
         },
 
-        // ✅ 修复：返回正确的 length 值，而不是每次都清空数据
+        // ✅ 修复：返回正确的 length 值
         get length() {
             return originalLocalStorage.length;
         }
@@ -109,7 +157,6 @@
             configurable: false
         });
         console.log('[PonyNotes] ✅ localStorage isolation installed successfully!');
-        // console.log('[PonyNotes] 🔐 All localStorage operations will be scoped to viewId:', currentViewId);
     } catch (e) {
         console.error('[PonyNotes] ❌ Failed to install localStorage isolation:', e);
     }
@@ -117,6 +164,35 @@
     originalLocalStorage.clear();
     await window.flutter_inappwebview.callHandler('initData');
     init = true;
+    
+    // 初始化完成后，尝试获取API引用
+    setTimeout(() => {
+        const waitForAPI = async () => {
+             try {
+                // 等待API就绪
+                // Note: waitForExcalidrawAPI function is defined below, so we use a simple poller here or wait until it's defined
+                // actually we can use the one defined below if we move this block or structure carefully.
+                // But simplified:
+                const api = window.excalidrawAPI || window.__EXCALIDRAW_API__ || window._excalidrawAPI;
+                if (api) {
+                    window._excalidrawAPI = api;
+                    console.log('[PonyNotes] ✅ Excalidraw API captured for storage hooks');
+                }
+             } catch(e) {}
+        };
+        // 简单的轮询几次
+        let attempts = 0;
+        const interval = setInterval(() => {
+            const api = window.excalidrawAPI || window.__EXCALIDRAW_API__ || window._excalidrawAPI;
+            if (api) {
+                window._excalidrawAPI = api;
+                console.log('[PonyNotes] ✅ Excalidraw API captured for storage hooks');
+                clearInterval(interval);
+            }
+            attempts++;
+            if (attempts > 50) clearInterval(interval);
+        }, 200);
+    }, 1000);
 
     // =========================================================================
     // Excalidraw API 适配：导入 / 导出 / 数据加载

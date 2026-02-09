@@ -2611,15 +2611,19 @@ impl FolderManager {
           let view = all_views
             .iter()
             .find(|view| view.id == shared_view.view_id)?;
+          let mut view_pb = view_pb_with_all_child_views(view.clone(), &|parent_id| {
+            all_views
+              .iter()
+              .filter(|v| v.parent_view_id == *parent_id)
+              .cloned()
+              .collect()
+          });
+          // Set workspace_id on the view itself
+          view_pb.workspace_id = Some(shared_view.workspace_id.clone());
           Some(SharedViewPB {
-            view: view_pb_with_all_child_views(view.clone(), &|parent_id| {
-              all_views
-                .iter()
-                .filter(|v| v.parent_view_id == *parent_id)
-                .cloned()
-                .collect()
-            }),
+            view: view_pb,
             access_level: AFAccessLevelPB::from(shared_view.permission_id),
+            workspace_id: Some(shared_view.workspace_id),
           })
         })
         .collect();
@@ -2678,15 +2682,20 @@ impl FolderManager {
                     .max()
                     .unwrap_or(AFAccessLevel::ReadOnly);
                   
+                  let mut view_pb = view_pb_with_all_child_views(view.clone(), &|parent_id| {
+                    all_views
+                      .iter()
+                      .filter(|v| v.parent_view_id == *parent_id)
+                      .cloned()
+                      .collect()
+                  });
+                  // Set workspace_id on the view itself
+                  view_pb.workspace_id = shared_view.workspace_id.as_ref().map(|id| id.to_string());
+                  let workspace_id_str = shared_view.workspace_id.map(|id| id.to_string());
                   Some(SharedViewPB {
-                    view: view_pb_with_all_child_views(view.clone(), &|parent_id| {
-                      all_views
-                        .iter()
-                        .filter(|v| v.parent_view_id == *parent_id)
-                        .cloned()
-                        .collect()
-                    }),
+                    view: view_pb,
                     access_level: AFAccessLevelPB::from(access_level),
+                    workspace_id: workspace_id_str,
                   })
                 })
                 .collect(),

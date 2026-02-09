@@ -7,8 +7,10 @@ class SharedPage {
   SharedPage({
     required this.view,
     required this.accessLevel,
+    this.workspaceId,
   });
 
   final ViewPB view;
   final ShareAccessLevel accessLevel;
+  final String? workspaceId;
 }

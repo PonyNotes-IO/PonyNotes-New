@@ -140,7 +140,37 @@ class _AIInputAreaState extends State<AIInputArea> {
       name: 'DeepSeek',
       description: '',
       isDefault: true,
+      supportsImages: false, // DeepSeek不支持图片
     );
+  }
+
+  /// 检查是否有附件（图片或文件）
+  bool get _hasAttachments => _attachments.isNotEmpty || _selectedImages.isNotEmpty;
+
+  /// 获取过滤后的模型列表
+  /// 当有附件时，只返回支持多模态的模型
+  List<AIModel> _getFilteredModels() {
+    if (!_hasAttachments) {
+      return _availableModels;
+    }
+    // 有附件时，只返回支持图片/多模态的模型
+    return _availableModels.where((model) => model.supportsImages).toList();
+  }
+
+  /// 确保当前选择的模型支持图片/附件
+  /// 如果当前模型不支持图片/附件，自动切换到第一个支持的模型
+  void _ensureModelSupportsImages() {
+    if (!_hasAttachments) return;
+
+    // 如果没有选择模型，或者当前模型不支持图片
+    if (_selectedModel == null || !_selectedModel!.supportsImages) {
+      final filteredModels = _getFilteredModels();
+      if (filteredModels.isNotEmpty) {
+        final newModel = filteredModels.first;
+        debugPrint('🔄 AIInputArea: 有附件但当前模型不支持，自动切换到 ${newModel.name}');
+        _selectModel(newModel);
+      }
+    }
   }
 
   void _sendMessage() async {
@@ -154,12 +184,29 @@ class _AIInputAreaState extends State<AIInputArea> {
 
     // 确保已选择模型
     if (_selectedModel == null) {
-      if (_availableModels.isNotEmpty) {
-        // 选择第一个可用模型（通常是默认模型）
-        _selectModel(_availableModels.first);
+      final models = _getFilteredModels();
+      if (models.isNotEmpty) {
+        // 选择第一个可用模型（过滤后的）
+        _selectModel(models.first);
       } else {
         debugPrint('❌ 没有可用的AI模型');
-        // TODO: 显示错误提示，需要配置AI模型
+        // 显示错误提示
+        _showNoModelAvailableDialog();
+        return;
+      }
+    }
+
+    // 【关键修复】如果有附件，确保当前模型支持
+    if (_hasAttachments && _selectedModel != null && !_selectedModel!.supportsImages) {
+      final filteredModels = _getFilteredModels();
+      if (filteredModels.isNotEmpty) {
+        debugPrint('🔄 AIInputArea: 当前模型不支持附件，自动切换到支持的模型');
+        _selectModel(filteredModels.first);
+        // 重新获取选择的模型
+        _selectedModel = filteredModels.first;
+      } else {
+        // 没有支持图片的模型，显示错误提示
+        _showNoImageModelDialog();
         return;
       }
     }
@@ -385,19 +432,62 @@ class _AIInputAreaState extends State<AIInputArea> {
     );
   }
 
+  /// 显示没有支持图片的模型对话框
+  void _showNoImageModelDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('无法发送'),
+        content: const Text(
+            '当前没有可用的多模态AI模型，无法处理图片或文件附件。\n\n请选择其他模型（如通义千问或豆包）来发送图片。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 显示没有可用模型对话框
+  void _showNoModelAvailableDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('提示'),
+        content: const Text('没有可用的AI模型，请检查配置。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 构建模型选择下拉框
   Widget _buildModelSelector() {
+    // 检查当前模型是否支持附件
+    final currentModelSupportsAttachments =
+        _selectedModel?.supportsImages ?? false;
+    final showWarning =
+        _hasAttachments && !currentModelSupportsAttachments;
+
     return GestureDetector(
       key: _selectorKey, // 添加GlobalKey
       onTap: _toggleDropdown,
       child: Container(
-        width: 102,
+        width: showWarning ? 140 : 102, // 有警告时加宽
         height: 30,
         decoration: BoxDecoration(
           color: _getButtonBackgroundColor(context),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: _getButtonBorderColor(context, _selectedModel != null),
+            color: showWarning
+                ? Colors.orange // 有警告时显示橙色边框
+                : _getButtonBorderColor(context, _selectedModel != null),
             width: 1,
           ),
         ),
@@ -405,15 +495,30 @@ class _AIInputAreaState extends State<AIInputArea> {
           children: [
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                _selectedModel?.name ?? 'DeepSeek',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: _getButtonTextColor(context, _selectedModel != null),
-                  fontFamily: 'PingFangSC-Medium',
-                ),
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _selectedModel?.name ?? '选择模型',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: _getButtonTextColor(context, _selectedModel != null),
+                      fontFamily: 'PingFangSC-Medium',
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // 显示警告信息
+                  if (showWarning)
+                    Text(
+                      '不支持附件',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.orange,
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(width: 4),
@@ -452,7 +557,8 @@ class _AIInputAreaState extends State<AIInputArea> {
 
   /// 打开下拉框
   void _openDropdown() {
-    if (_availableModels.isEmpty) return;
+    final filteredModels = _getFilteredModels();
+    if (filteredModels.isEmpty) return;
 
     setState(() {
       _isDropdownOpen = true;
@@ -466,6 +572,9 @@ class _AIInputAreaState extends State<AIInputArea> {
     final selectorSize = selectorRenderBox.size;
     final selectorOffset = selectorRenderBox.localToGlobal(Offset.zero);
 
+    // 获取所有模型中当前选择的模型（即使它不支持图片，也需要显示）
+    final currentSelectedModel = _selectedModel;
+
     _overlayEntry = OverlayEntry(
       builder: (context) => Positioned(
         left: selectorOffset.dx, // 与选择器左对齐
@@ -474,7 +583,7 @@ class _AIInputAreaState extends State<AIInputArea> {
           elevation: 8,
           borderRadius: BorderRadius.circular(8),
           child: Container(
-            width: 150, // 与选择器宽度一致
+            width: 180, // 稍微加宽以显示更多信息
             constraints: const BoxConstraints(
               maxHeight: 200, // 最大高度限制
             ),
@@ -482,12 +591,12 @@ class _AIInputAreaState extends State<AIInputArea> {
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: _availableModels.asMap().entries.map((entry) {
+                children: filteredModels.asMap().entries.map((entry) {
                   final index = entry.key;
                   final model = entry.value;
                   final isFirst = index == 0;
-                  final isLast = index == _availableModels.length - 1;
-                  final isSelected = _selectedModel?.id == model.id;
+                  final isLast = index == filteredModels.length - 1;
+                  final isSelected = currentSelectedModel?.id == model.id;
 
                   return InkWell(
                     onTap: () => _selectModel(model),
@@ -513,18 +622,41 @@ class _AIInputAreaState extends State<AIInputArea> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            model.name,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isSelected
-                                  ? AIWelcomeTheme.selectedItemTextColor(
-                                      context)
-                                  : AIWelcomeTheme.primaryTextColor(context),
-                              fontWeight: isSelected
-                                  ? FontWeight.w500
-                                  : FontWeight.normal,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  model.name,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isSelected
+                                        ? AIWelcomeTheme.selectedItemTextColor(
+                                            context)
+                                        : AIWelcomeTheme.primaryTextColor(context),
+                                    fontWeight: isSelected
+                                        ? FontWeight.w500
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                              // 显示支持图片标识
+                              if (model.supportsImages)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    '多模态',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: Colors.green,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           if (model.description.isNotEmpty) ...[
                             const SizedBox(height: 2),
@@ -586,6 +718,9 @@ class _AIInputAreaState extends State<AIInputArea> {
       setState(() {
         _selectedImages.add(image);
       });
+
+      // 【关键修复】选择图片后，确保当前模型支持图片
+      _ensureModelSupportsImages();
 
       // 选择图片后自动聚焦到输入框，确保用户可以继续输入文字
       Future.delayed(const Duration(milliseconds: 100), () {
@@ -815,6 +950,9 @@ class _AIInputAreaState extends State<AIInputArea> {
           _selectedImages.addAll(newImages);
           _attachments.addAll(newAttachments);
         });
+
+        // 【关键修复】添加附件后，确保当前模型支持附件
+        _ensureModelSupportsImages();
       }
 
       // 选择后自动聚焦到输入框

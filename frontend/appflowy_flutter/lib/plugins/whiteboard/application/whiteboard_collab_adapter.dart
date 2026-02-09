@@ -13,6 +13,7 @@ import 'package:flutter/foundation.dart';
 /// 2. **立即调用** WhiteboardDataService.saveWhiteboardData()（模仿 TransactionAdapter.apply()）
 /// 3. 使用防抖机制避免过于频繁的调用
 /// 4. 提供强制同步方法（用于手动保存）
+/// 5. ✅ 关键修复：在 Widget 销毁前强制同步，确保数据不丢失
 class WhiteboardCollabAdapter {
   WhiteboardCollabAdapter({
     required this.viewId,
@@ -26,16 +27,38 @@ class WhiteboardCollabAdapter {
 
   late final WhiteboardDataService _service;
 
-  // 防抖延迟（500ms，避免过于频繁的调用）
-  static const _debounceDuration = Duration(milliseconds: 500);
+  // ✅ 减少防抖延迟：从 500ms 改为 100ms，更及时保存
+  static const _debounceDuration = Duration(milliseconds: 100);
 
-  Timer? _debounceTimer;
+  bool _disposed = false;
+  bool _isSyncing = false;
+  
+  // 待同步的数据（增量）
   final Map<String, dynamic> _pendingData = {};
   String _pendingType = "";
+
+  // 正在同步的数据（增量）
   final Map<String, dynamic> _syncData = {};
   String _syncType = "";
-  bool _isSyncing = false;
-  bool _disposed = false;
+
+  Timer? _debounceTimer;
+  // 缓存完整白板数据（全量状态）
+  final Map<String, dynamic> _fullData = {};
+
+  // ✅ 修复：添加待处理的 files 数据
+  final Map<String, dynamic> _pendingFiles = {};
+  final Map<String, dynamic> _syncFiles = {};
+
+  /// 设置初始数据
+  void setInitialData(Map<String, dynamic>? data) {
+    if (data != null) {
+      _fullData.addAll(data);
+      // ✅ 同时初始化 files 数据
+      if (data.containsKey('files') && data['files'] is Map) {
+        _fullData['files'] = Map<String, dynamic>.from(data['files']);
+      }
+    }
+  }
 
   /// 白板数据变更回调（模仿 DocumentBloc 的 transactionStream）
   ///
@@ -45,13 +68,30 @@ class WhiteboardCollabAdapter {
       return;
     }
 
+    // ✅ 调试日志
+    Log.info('[WhiteboardCollabAdapter] onWhiteboardDataChanged called, type: $type, keys: ${data.keys.toList()}');
+
+    // 更新全量数据缓存
+    // Excalidraw 的 update 事件通常只包含变化的字段
+    // 我们需要将其合并到全量数据中
+    data.forEach((key, value) {
+      if (key == 'files' && value is Map) {
+        // ✅ 特殊处理 files：合并而非替换
+        _fullData[key] = _mergeFiles(_fullData[key] as Map<String, dynamic>?, value as Map<String, dynamic>);
+        // 同时更新待同步的 files
+        _pendingFiles.addAll(value);
+      } else {
+        _fullData[key] = value;
+      }
+    });
+
     // 首先，data不能一样。
-    if (_pendingType == type && mapEquals(_pendingData, data)){
+    if (_pendingType == type && mapEquals(_pendingData, data)) {
       return;
     }
 
     // 正在同步和等待同步的数据不一样
-    if (_pendingType == _syncType && !mapEquals(_pendingData, _syncData)){
+    if (_pendingType == _syncType && !mapEquals(_pendingData, _syncData)) {
       return;
     }
 
@@ -65,10 +105,20 @@ class WhiteboardCollabAdapter {
     // 取消之前的防抖定时器
     _debounceTimer?.cancel();
 
-    // 设置新的防抖定时器，延迟同步
+    // ✅ 设置新的防抖定时器，延迟同步
     _debounceTimer = Timer(_debounceDuration, () {
       _syncImmediately();
     });
+  }
+
+  /// 合并 files 数据（保留已存在的文件）
+  Map<String, dynamic> _mergeFiles(Map<String, dynamic>? existing, Map<String, dynamic> newFiles) {
+    final result = <String, dynamic>{};
+    if (existing != null) {
+      result.addAll(existing);
+    }
+    result.addAll(newFiles);
+    return result;
   }
 
   /// 立即同步到 Collab 后端（模仿 TransactionAdapter.apply()）
@@ -84,29 +134,54 @@ class WhiteboardCollabAdapter {
     _pendingType = "";
     _pendingData.clear(); // 清空待同步数据
 
+    // ✅ 同时处理 files
+    _syncFiles.addAll(_pendingFiles);
+    _pendingFiles.clear();
+
     try {
       var success = false;
 
-      if (_syncType == 'update'){
-        success = await _service.saveWhiteboardData(viewId, _syncData);
-      }else{
+      // ✅ 始终保存全量数据 (_fullData)，而不是增量数据 (_syncData)
+      // 因为 WhiteboardDataService 和后端目前是覆盖式存储
+      if (_syncType == 'update') {
+        // 确保 files 数据被包含在全量数据中
+        if (_syncFiles.isNotEmpty) {
+          _fullData['files'] = _mergeFiles(_fullData['files'] as Map<String, dynamic>?, _syncFiles);
+        }
+        
+        Log.info('[WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
+        if (_fullData.containsKey('files')) {
+          final files = _fullData['files'] as Map<String, dynamic>;
+          Log.info('[WhiteboardCollabAdapter] Files count: ${files.length}');
+        }
+        
+        success = await _service.saveWhiteboardData(viewId, _fullData);
+      } else {
+        // 删除操作可能需要特殊处理，但目前白板通常只有 update
         success = await _service.deleteWhiteboardData(viewId, _syncData);
       }
 
       if (!success) {
         // 同步失败，重新缓存数据等待下次同步
         _pendingData.addAll(_syncData);
+        _pendingFiles.addAll(_syncFiles);
+        Log.warn('[WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
+      } else {
+        Log.info('[WhiteboardCollabAdapter] ✅ Sync completed successfully');
       }
     } catch (e) {
       // 发生错误，重新缓存数据等待下次同步
       _pendingData.addAll(_syncData);
+      _pendingFiles.addAll(_syncFiles);
+      Log.error('[WhiteboardCollabAdapter] ❌ Sync error: $e');
     } finally {
       _isSyncing = false;
       _syncData.clear();
+      _syncFiles.clear();
     }
   }
 
-  /// 强制立即同步（用于手动保存）
+  /// ✅ 关键修复：强制立即同步（用于手动保存和 Widget 销毁前）
   Future<void> forceSync() async {
     if (_disposed) {
       return;
@@ -124,5 +199,8 @@ class WhiteboardCollabAdapter {
     _debounceTimer = null;
     _pendingData.clear();
     _syncData.clear();
+    _fullData.clear();
+    _pendingFiles.clear();
+    _syncFiles.clear();
   }
 }

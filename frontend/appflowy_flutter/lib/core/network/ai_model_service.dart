@@ -8,12 +8,15 @@ class AIModel {
   final String name;
   final String description;
   final bool isDefault;
+  /// 是否支持图片/文件等多模态输入
+  final bool supportsImages;
 
   AIModel({
     required this.id,
     required this.name,
     required this.description,
     required this.isDefault,
+    this.supportsImages = false, // 默认不支持图片
   });
 
   factory AIModel.fromJson(Map<String, dynamic> json) {
@@ -22,11 +25,12 @@ class AIModel {
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
       isDefault: json['is_default'] as bool? ?? false,
+      supportsImages: json['supports_images'] as bool? ?? false,
     );
   }
 
   @override
-  String toString() => 'AIModel(id: $id, name: $name, isDefault: $isDefault)';
+  String toString() => 'AIModel(id: $id, name: $name, isDefault: $isDefault, supportsImages: $supportsImages)';
 }
 
 /// AI模型服务
@@ -106,18 +110,21 @@ class AIModelService {
         name: 'DeepSeek',
         description: '高性能对话模型',
         isDefault: true,
+        supportsImages: false, // DeepSeek不支持图片
       ),
       AIModel(
         id: 'qwen3-vl-plus',
         name: '通义千问',
         description: '阿里云通义千问qwen3',
         isDefault: false,
+        supportsImages: true, // 通义千问支持图片
       ),
       AIModel(
         id: 'doubao',
         name: '豆包',
         description: '字节跳动豆包',
         isDefault: false,
+        supportsImages: true, // 豆包支持图片
       ),
     ];
   }
@@ -127,6 +134,30 @@ class AIModelService {
     _cachedModels = [];
     _lastFetchTime = null;
     debugPrint('🗑️  清除AI模型缓存');
+  }
+
+  /// 获取支持图片/文件的模型列表
+  /// 当需要上传图片或文件时使用
+  Future<List<AIModel>> fetchModelsForImage({bool forceRefresh = false}) async {
+    final allModels = await fetchAvailableModels(forceRefresh: forceRefresh);
+    return allModels.where((model) => model.supportsImages).toList();
+  }
+
+  /// 判断模型ID是否支持图片
+  bool isModelSupportsImages(String modelId) {
+    // 检查缓存的模型
+    for (final model in _cachedModels) {
+      if (model.id == modelId) {
+        return model.supportsImages;
+      }
+    }
+    // 如果缓存中没有，检查默认模型
+    for (final model in _getDefaultModels()) {
+      if (model.id == modelId) {
+        return model.supportsImages;
+      }
+    }
+    return false;
   }
 }
 

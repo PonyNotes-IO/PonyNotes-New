@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:path/path.dart' as path_lib;
 import 'package:appflowy/plugins/standalone_ai_chat/models/chat_image.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -302,11 +303,28 @@ class AIChatViewService {
   static Future<List<String>> _prepareImagePaths(List<ChatImage> images) async {
     final paths = <String>[];
     final appDir = await getApplicationDocumentsDirectory();
-    final storageDir = Directory('${appDir.path}/ai_chat_images');
+    // 使用 path_lib.join 确保跨平台路径正确
+    final storageDirPath = path_lib.join(appDir.path, 'ai_chat_images');
+    final storageDir = Directory(storageDirPath);
+
+    Log.info('🔍 _prepareImagePaths: 存储目录 = $storageDirPath');
 
     // 确保目录存在
-    if (!await storageDir.exists()) {
-      await storageDir.create(recursive: true);
+    try {
+      if (!await storageDir.exists()) {
+        Log.info('🔄 创建图片存储目录: $storageDirPath');
+        await storageDir.create(recursive: true);
+        // 验证目录是否创建成功
+        if (!await storageDir.exists()) {
+          Log.error('❌ 无法创建图片存储目录: $storageDirPath');
+          return paths; // 返回空列表
+        }
+      } else {
+        Log.info('✅ 图片存储目录已存在: $storageDirPath');
+      }
+    } catch (e) {
+      Log.error('❌ 检查/创建目录失败: $e');
+      return paths; // 返回空列表
     }
 
     for (final image in images) {
@@ -315,22 +333,42 @@ class AIChatViewService {
 
         // 优先从 bytes 创建（最可靠的方式）
         if (image.bytes != null) {
-          final fileName = image.name ?? 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
-          final imageFile = File('${storageDir.path}/$fileName');
+          final fileName = image.name ?? 'image_${DateTime.now().millisecondsSinceEpoch}${_getFileExtension(image)}';
+          final imageFile = File(path_lib.join(storageDir.path, fileName));
+          
+          Log.info('📸 从bytes保存图片: ${imageFile.path} (${image.bytes!.length} bytes)');
+          
+          // 写入文件
           await imageFile.writeAsBytes(image.bytes!);
-          finalPath = imageFile.path;
-          Log.info('✅ 图片从bytes保存到永久目录: ${imageFile.path}');
+          
+          // 验证文件是否创建成功
+          if (await imageFile.exists()) {
+            finalPath = imageFile.path;
+            Log.info('✅ 图片保存成功: $finalPath');
+          } else {
+            Log.error('❌ 文件写入后检查不存在: ${imageFile.path}');
+          }
         }
         // 如果没有bytes，尝试从filePath读取并复制
         else if (image.filePath != null) {
           final sourceFile = File(image.filePath!);
+          
           if (await sourceFile.exists()) {
             final fileName = image.name ?? '${DateTime.now().millisecondsSinceEpoch}_${image.filePath!.split('/').last}';
-            final imageFile = File('${storageDir.path}/$fileName');
-            // 复制文件到永久目录
+            final imageFile = File(path_lib.join(storageDir.path, fileName));
+            
+            Log.info('📸 复制图片: ${imageFile.path} (源: ${image.filePath})');
+            
+            // 复制文件
             await sourceFile.copy(imageFile.path);
-            finalPath = imageFile.path;
-            Log.info('✅ 图片从filePath复制到永久目录: ${imageFile.path}');
+            
+            // 验证文件是否创建成功
+            if (await imageFile.exists()) {
+              finalPath = imageFile.path;
+              Log.info('✅ 图片复制成功: $finalPath');
+            } else {
+              Log.error('❌ 文件复制后检查不存在: ${imageFile.path}');
+            }
           } else {
             Log.warn('⚠️  源图片文件不存在: ${image.filePath}');
           }
@@ -342,12 +380,43 @@ class AIChatViewService {
 
         if (finalPath != null) {
           paths.add(finalPath);
+          Log.info('✅ 添加图片路径到列表: $finalPath');
         }
-      } catch (e) {
-        Log.error('❌ 处理图片失败: $e');
+      } catch (e, stackTrace) {
+        Log.error('❌ 处理单个图片失败: $e', e, stackTrace);
       }
     }
 
+    Log.info('📋 _prepareImagePaths 完成: 共 ${paths.length}/${images.length} 张图片保存成功');
     return paths;
+  }
+
+  /// 获取文件扩展名
+  static String _getFileExtension(ChatImage image) {
+    if (image.name != null && image.name!.contains('.')) {
+      final ext = path_lib.extension(image.name!).toLowerCase();
+      if (ext.isNotEmpty) return ext;
+    }
+    
+    if (image.mimeType != null) {
+      switch (image.mimeType!) {
+        case 'image/jpeg':
+          return '.jpg';
+        case 'image/png':
+          return '.png';
+        case 'image/gif':
+          return '.gif';
+        case 'image/webp':
+          return '.webp';
+        case 'image/bmp':
+          return '.bmp';
+        case 'image/svg+xml':
+          return '.svg';
+        default:
+          return '.jpg';
+      }
+    }
+    
+    return '.jpg'; // 默认
   }
 }

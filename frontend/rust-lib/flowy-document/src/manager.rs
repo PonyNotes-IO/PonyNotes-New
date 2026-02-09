@@ -101,7 +101,7 @@ impl DocumentManager {
       CollabPersistenceImpl::new(self.user_service.collab_db(uid)?, uid, workspace_id)
         .into_data_source();
     let collab = self
-      .collab_for_document(uid, doc_id, doc_state, false)
+      .collab_for_document(uid, doc_id, doc_state, false, None)
       .await?;
     let encoded_collab = collab
       .try_read()
@@ -168,7 +168,7 @@ impl DocumentManager {
   ) -> FlowyResult<EncodedCollab> {
     if self.is_doc_exist(doc_id).await.unwrap_or(false) {
       // Document record exists. Try to load existing document from persistence and return its encoded collab.
-      match self.create_document_instance(doc_id, false).await {
+      match self.create_document_instance(doc_id, false, None).await {
         Ok(document) => {
           // encode and return existing collab
           let encoded = document
@@ -235,9 +235,10 @@ impl DocumentManager {
     doc_id: &Uuid,
     data_source: DataSource,
     sync_enable: bool,
+    workspace_id: Option<Uuid>,
   ) -> FlowyResult<Arc<RwLock<Document>>> {
     let db = self.user_service.collab_db(uid)?;
-    let workspace_id = self.user_service.workspace_id()?;
+    let workspace_id = workspace_id.unwrap_or(self.user_service.workspace_id()?);
     let collab_object =
       self
         .collab_builder()?
@@ -276,6 +277,7 @@ impl DocumentManager {
     &self,
     doc_id: &Uuid,
     enable_sync: bool,
+    workspace_id: Option<Uuid>,
   ) -> FlowyResult<Arc<RwLock<Document>>> {
     let uid = self.user_service.user_id()?;
     let mut doc_state = self.persistence()?.into_data_source();
@@ -286,10 +288,12 @@ impl DocumentManager {
         "document {} not found in local disk, try to get the doc state from the cloud",
         doc_id
       );
+      // Use the provided workspace_id or fallback to the current user's workspace_id
+      let target_workspace_id = workspace_id.unwrap_or(self.user_service.workspace_id()?);
       doc_state = DataSource::DocStateV1(
         self
           .cloud_service
-          .get_document_doc_state(doc_id, &self.user_service.workspace_id()?)
+          .get_document_doc_state(doc_id, &target_workspace_id)
           .await?,
       );
 
@@ -306,10 +310,10 @@ impl DocumentManager {
       tracing::Level::DEBUG,
       "Initialize document: {}, workspace_id: {:?}",
       doc_id,
-      self.user_service.workspace_id()
+      workspace_id.unwrap_or(self.user_service.workspace_id().unwrap_or_default())
     );
     let result = self
-      .collab_for_document(uid, doc_id, doc_state, enable_sync)
+      .collab_for_document(uid, doc_id, doc_state, enable_sync, workspace_id)
       .await;
     match result {
       Ok(document) => {
@@ -357,11 +361,11 @@ impl DocumentManager {
       return Ok(doc);
     }
 
-    let document = self.create_document_instance(doc_id, false).await?;
+    let document = self.create_document_instance(doc_id, false, None).await?;
     Ok(document)
   }
 
-  pub async fn open_document(&self, doc_id: &Uuid) -> FlowyResult<()> {
+  pub async fn open_document(&self, doc_id: &Uuid, workspace_id: Option<Uuid>) -> FlowyResult<()> {
     if let Some(mutex_document) = self.restore_document_from_removing(doc_id) {
       let lock = mutex_document.read().await;
       lock.start_init_sync();
@@ -371,7 +375,7 @@ impl DocumentManager {
       return Ok(());
     }
 
-    let _ = self.create_document_instance(doc_id, true).await?;
+    let _ = self.create_document_instance(doc_id, true, workspace_id).await?;
     Ok(())
   }
 

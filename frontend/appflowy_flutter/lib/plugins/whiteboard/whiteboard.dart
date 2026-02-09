@@ -39,13 +39,15 @@ class WhiteboardPluginBuilder extends PluginBuilder {
   @override
   Plugin build(dynamic data) {
     // debug logs removed
-    
+
     if (data is ViewPB) {
       // debug logs removed
       return WhiteboardPlugin(pluginType: pluginType, view: data);
     }
 
-    Log.error('❌ [WhiteboardPluginBuilder] Invalid data type, throwing exception');
+    Log.error(
+      '❌ [WhiteboardPluginBuilder] Invalid data type, throwing exception',
+    );
     throw FlowyPluginException.invalidData;
   }
 
@@ -171,23 +173,21 @@ class WhiteboardPage extends StatefulWidget {
 }
 
 // 全局WebView实例计数器，确保每个WebView的Key绝对唯一
-int _globalWebViewInstanceCounter = 0;
+
 
 class _WhiteboardPageState extends State<WhiteboardPage> {
   Map<String, dynamic>? _initialData;
-  Map<String, dynamic>? _currentData; // 当前白板数据（实时更新）
   bool _isLoadingData = true;
-  int _webViewInstanceId = 0; // 用于生成唯一的WebView Key
   bool _isDisposing = false; // 标记是否正在销毁
-  
+
   // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
   WhiteboardCollabAdapter? _collabAdapter;
-  
+
   // ExcalidrawWebView的GlobalKey，用于调用其方法
   // ✅ 关键修复：为每个视图创建唯一的GlobalKey，避免视图切换时PlatformView重复创建
   // 使用view.id确保每个白板视图都有唯一的key
   late final GlobalKey<ExcalidrawWebViewState> _webViewKey;
-  
+
   // 主题监听
   Brightness? _lastBrightness;
 
@@ -198,7 +198,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
     // ✅ 关键修复：为每个视图创建唯一的GlobalKey
     // 使用view.id确保每个白板视图都有唯一的key，避免视图切换时PlatformView重复创建
-    _webViewKey = GlobalKey<ExcalidrawWebViewState>(debugLabel: 'whiteboard_webview_${widget.view.id}');
+    _webViewKey = GlobalKey<ExcalidrawWebViewState>(
+      debugLabel: 'whiteboard_webview_${widget.view.id}',
+    );
 
     // 注册导出和导入控制器到 GetIt，供 "更多操作" 菜单中的功能使用
     _registerControllers();
@@ -285,22 +287,16 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       };
 
       // 加载数据到 Excalidraw
-        await _webViewKey.currentState?.loadData(sceneData);
+      await _webViewKey.currentState?.loadData(sceneData);
 
-        // 保存到后端
-        final service = WhiteboardDataService();
-        final success = await service.saveWhiteboardData(
-          widget.view.id,
-          sceneData,
-        );
+      // 更新 Adapter 的全量数据缓存
+      _collabAdapter?.onWhiteboardDataChanged('update', sceneData);
 
-        if (success) {
-          Log.info('[Whiteboard] 导入成功');
-          _showSuccessSnackBar('导入成功');
-        } else {
-          Log.error('[Whiteboard] 保存失败');
-          _showErrorSnackBar('保存失败');
-        }
+      // 强制保存到后端
+      await _collabAdapter?.forceSync();
+
+      Log.info('[Whiteboard] 导入成功');
+      _showSuccessSnackBar('导入成功');
     } catch (e, stackTrace) {
       Log.error('[Whiteboard] 导入失败: $e');
       Log.error('[Whiteboard] 堆栈: $stackTrace');
@@ -337,6 +333,15 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     // debug log removed
     _isDisposing = true;
 
+    // ✅ 关键修复：在销毁前强制同步所有待保存的数据
+    // 这确保了所有图片和编辑内容都被保存到后端
+    Log.info('[WhiteboardPage] 🔄 Force sync before dispose...');
+    _collabAdapter?.forceSync().then((_) {
+      Log.info('[WhiteboardPage] ✅ Force sync completed before dispose');
+    }).catchError((e) {
+      Log.error('[WhiteboardPage] ❌ Force sync failed before dispose: $e');
+    });
+
     // 注销所有控制器
     _unregisterControllers();
 
@@ -349,7 +354,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     service.closeWhiteboard(viewId: widget.view.id).then((result) {
       result.fold(
         (_) => null,
-        (error) => Log.error('⚠️ [WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
+        (error) => Log.error(
+          '⚠️ [WhiteboardPage] Failed to close whiteboard: ${error.msg}',
+        ),
       );
     });
 
@@ -364,17 +371,17 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
       // 注销导出控制器
       if (getIt.isRegistered<WhiteboardExportController>(
-          instanceName: '${viewId}_export')) {
+          instanceName: '${viewId}_export',)) {
         getIt.unregister<WhiteboardExportController>(
-            instanceName: '${viewId}_export');
+            instanceName: '${viewId}_export',);
         Log.info('[Whiteboard] 注销导出控制器: $viewId');
       }
 
       // 注销导入控制器
       if (getIt.isRegistered<WhiteboardImportController>(
-          instanceName: '${viewId}_import')) {
+          instanceName: '${viewId}_import',)) {
         getIt.unregister<WhiteboardImportController>(
-            instanceName: '${viewId}_import');
+            instanceName: '${viewId}_import',);
         Log.info('[Whiteboard] 注销导入控制器: $viewId');
       }
     } catch (e) {
@@ -389,11 +396,11 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       viewId: widget.view.id,
       onDataChanged: (data) {
         // 更新当前数据缓存（用于 UI 显示）
-        if (mounted && !_isDisposing) {
-          setState(() {
-            _currentData = data;
-          });
-        }
+        // if (mounted && !_isDisposing) {
+        //   setState(() {
+        //     _currentData = data;
+        //   });
+        // }
       },
     );
     // debug log removed
@@ -403,22 +410,22 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     // debug log removed
     final service = WhiteboardDataService();
     final data = await service.loadWhiteboardData(widget.view.id);
-    
+
     // debug log removed
-    
-    // 生成新的唯一实例ID
-    _globalWebViewInstanceCounter++;
-    final uniqueInstanceId = _globalWebViewInstanceCounter;
-    
+
     if (mounted && !_isDisposing) {
       setState(() {
         _initialData = data.isEmpty ? null : data;
-        _currentData = data.isEmpty ? null : data; // 同步当前数据
         _isLoadingData = false;
-        _webViewInstanceId = uniqueInstanceId; // 使用全局唯一的实例ID
       });
+
+      // 初始化 Collab Adapter 的全量数据缓存
+      // 确保后续的增量更新能合并到完整的状态中
+      if (data.isNotEmpty) {
+        _collabAdapter?.setInitialData(data);
+      }
     }
-    
+
     // debug log removed
   }
 
@@ -428,11 +435,11 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       Log.debug('⚠️ [Whiteboard] Data change ignored - widget is disposing');
       return;
     }
-    
+
     // debug log removed
-    
+
     // 转发给 CollabAdapter 处理（完全模仿 DocumentBloc 的 TransactionAdapter）
-    _collabAdapter?.onWhiteboardDataChanged(type,data);
+    _collabAdapter?.onWhiteboardDataChanged(type, data);
   }
 
   void _onWhiteboardExport(String format, dynamic data) {
@@ -490,20 +497,24 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         const JsonEncoder.withIndent('  ').convert(ponyNotesData),
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('导出成功'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('导出成功'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
       Log.error('❌ [Whiteboard] Save PonyNotes json failed: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('保存失败: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('保存失败: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -527,20 +538,24 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       final file = File(savePath);
       await file.writeAsBytes(bytes);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('导出成功'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('导出成功'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
       Log.error('❌ [Whiteboard] Save PNG failed: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('保存失败: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('保存失败: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -558,20 +573,24 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       final file = File(savePath);
       await file.writeAsString(svgContent);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('导出成功'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('导出成功'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
       Log.error('❌ [Whiteboard] Save SVG failed: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('保存失败: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('保存失败: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -580,7 +599,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       Log.debug('⚠️ [Whiteboard] Error ignored - widget is disposing: $error');
       return; // 如果正在销毁，忽略错误通知
     }
-    
+
     // 处理错误
     Log.error('❌ [Whiteboard] Error: $error');
     if (mounted && !_isDisposing) {
@@ -595,11 +614,12 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   /// 手动保存白板数据（现在通过 CollabAdapter 自动处理）
   Future<void> _saveWhiteboard() async {
-    Log.debug('💾 [Whiteboard] Manual save triggered - forcing immediate sync (like DocumentBloc)');
-    
+    Log.debug(
+      '💾 [Whiteboard] Manual save triggered - forcing immediate sync (like DocumentBloc)',);
+
     // 强制立即同步（模仿 DocumentBloc 的行为）
     await _collabAdapter?.forceSync();
-    
+
     if (mounted) {
       Log.debug('✅ [Whiteboard] Manual save completed via CollabAdapter');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -618,12 +638,14 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    Log.debug('🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData');
-    
+    Log.debug(
+      '🖼️ [WhiteboardPage] build() called, _isLoadingData: $_isLoadingData',
+    );
+
     // 监听主题变化
     final appearanceCubit = context.watch<AppearanceSettingsCubit>();
     final currentBrightness = Theme.of(context).brightness;
-    
+
     // 如果主题发生变化，更新Excalidraw主题
     if (_lastBrightness != null && _lastBrightness != currentBrightness) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -633,7 +655,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       });
     }
     _lastBrightness = currentBrightness;
-    
+
     if (_isLoadingData) {
       Log.debug('⏳ [WhiteboardPage] Showing loading indicator');
       return Scaffold(
@@ -649,7 +671,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         ),
       );
     }
-    
+
     Log.debug('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
       body: Column(
@@ -703,7 +725,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
             builder: (context, isFullWindow, _) {
               return Tooltip(
                 message: isFullWindow ? '退出全窗口显示' : '全窗口显示',
-                child: Container(
+                child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: Theme.of(context)
                         .colorScheme
@@ -872,8 +894,10 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     // ✅ 使用基于view.id的GlobalKey，确保每个白板视图都有唯一的key
     // 📌 关键修复：GlobalKey基于view.id，确保视图切换时不会复用旧的Widget
     // 🎯 这样即使快速切换白板视图，每个WebView的Key也是唯一的，不会导致PlatformView重复创建
-    Log.debug('🔑 [Whiteboard] Creating ExcalidrawWebView with key based on view.id: ${widget.view.id}');
-    
+    Log.debug(
+      '🔑 [Whiteboard] Creating ExcalidrawWebView with key based on view.id: ${widget.view.id}',
+    );
+
     return ExcalidrawWebView(
       key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
       viewId: widget.view.id,
@@ -884,124 +908,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     );
   }
 
-  /// 导入白板文件
-  Future<void> _importWhiteboard() async {
-    try {
-      final filePicker = getIt<FilePickerService>();
-      final result = await filePicker.pickFiles(
-        dialogTitle: '选择PonyNotes白板文件',
-        type: FileType.custom,
-        allowedExtensions: ['ponynotes', 'excalidraw', 'json'],
-      );
 
-      if (result == null || result.files.isEmpty) {
-        return; // 用户取消了选择
-      }
 
-      final file = result.files.first;
-      if (file.path == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('无法读取文件路径'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
 
-      // 读取文件内容
-      final fileContent = await File(file.path!).readAsString();
-      final data = jsonDecode(fileContent) as Map<String, dynamic>;
-
-      // 验证数据格式
-      if (!_isValidExcalidrawData(data)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('文件格式无效，请选择有效的白板文件'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      // 确认是否覆盖当前内容
-      final shouldImport = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('导入确认'),
-          content: const Text('导入文件将替换当前白板内容，是否继续？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('确认'),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldImport == true) {
-        // 从标准Excalidraw格式中提取场景数据
-        final sceneData = <String, dynamic>{
-          'elements': data['elements'] ?? [],
-          'appState': data['appState'] ?? {},
-          'files': data['files'] ?? {},
-        };
-        
-        // 加载数据到Excalidraw（这会自动重新初始化UI）
-        await _webViewKey.currentState?.loadData(sceneData);
-        
-        // 保存到后端（保存完整格式）
-        final service = WhiteboardDataService();
-        await service.saveWhiteboardData(widget.view.id, data);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('导入成功'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      Log.error('❌ [Whiteboard] Import failed: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导入失败: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  /// 导出白板
-  Future<void> _exportWhiteboard(String format) async {
-    try {
-      if (format == 'ponynotes') {
-        // 导出为源文件：使用WebView的导出API获取标准格式数据
-        await _exportAsSourceFile();
-      } else if (format == 'png' || format == 'svg') {
-        // 导出为图片
-        await _exportAsImage(format);
-      }
-    } catch (e) {
-      Log.error('❌ [Whiteboard] Export failed: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导出失败: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
   /// 导出为源文件
   /// 修复：使用WebView的导出API获取标准格式的Excalidraw数据，而不是直接从服务加载
@@ -1041,4 +950,3 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         data['elements'] is List;
   }
 }
-

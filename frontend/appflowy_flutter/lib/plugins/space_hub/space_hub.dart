@@ -1,5 +1,6 @@
 library;
 
+import 'dart:convert';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -645,7 +646,24 @@ class _SpaceDocumentList extends StatelessWidget {
                     ext: ext,
                   );
                   result.fold(
-                    (view) {
+                    (view) async {
+                      // ✅ 关键修复：强制更新 view_type，确保即使在 Space 下创建也能正确识别
+                      // 某些情况下 Space 下创建 Document 可能会丢失 extra，这里二次确认
+                      if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+                        try {
+                          await ViewBackendService.updateView(
+                            viewId: view.id,
+                            extra: jsonEncode({'view_type': 'handwriting_saber'}),
+                          );
+                          // 更新本地 view 对象，确保 UI 立即渲染正确
+                          if (view.extra.isEmpty || !view.extra.contains('view_type')) {
+                             view.extra = '{"view_type":"handwriting_saber"}';
+                          }
+                        } catch (e) {
+                          Log.error('Failed to force update view type: $e');
+                        }
+                      }
+
                       // 刷新空间文档列表
                       spaceBloc.add(
                           const SpaceEvent.didUpdateCurrentSpaceChildViews());
@@ -665,7 +683,21 @@ class _SpaceDocumentList extends StatelessWidget {
                     openAfterCreate: false, // 不自动打开新标签页
                     ext: ext,
                   );
-                  result.fold((view) {
+                  result.fold((view) async {
+                    // ✅ 关键修复：强制更新 view_type (Fallback)
+                    if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+                        try {
+                          await ViewBackendService.updateView(
+                            viewId: view.id,
+                            extra: jsonEncode({'view_type': 'handwriting_saber'}),
+                          );
+                           if (view.extra.isEmpty || !view.extra.contains('view_type')) {
+                             view.extra = '{"view_type":"handwriting_saber"}';
+                          }
+                        } catch (e) {
+                          Log.error('Failed to force update view type (fallback): $e');
+                        }
+                    }
                     // Fallback create success
                     onViewCreated(view);
                   }, (error) {

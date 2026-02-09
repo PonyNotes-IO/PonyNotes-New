@@ -17,6 +17,7 @@ extension SharedViewPBExtension on SharedViewPB {
     return SharedPage(
       view: view,
       accessLevel: accessLevel.shareAccessLevel,
+      workspaceId: hasWorkspaceId() ? workspaceId : null,
     );
   }
 }

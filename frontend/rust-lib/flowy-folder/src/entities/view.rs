@@ -86,6 +86,9 @@ pub struct ViewPB {
   // If true, the view is locked and cannot be edited.
   #[pb(index = 13, one_of)]
   pub is_locked: Option<bool>,
+
+  #[pb(index = 14, one_of)]
+  pub workspace_id: Option<String>,
 }
 
 pub fn view_pb_without_child_views(view: View) -> ViewPB {
@@ -104,6 +107,7 @@ pub fn view_pb_without_child_views(view: View) -> ViewPB {
     last_edited: view.last_edited_time,
     last_edited_by: view.last_edited_by,
     is_locked: view.is_locked,
+    workspace_id: None,
   }
 }
 
@@ -123,6 +127,7 @@ pub fn view_pb_without_child_views_from_arc(view: Arc<View>) -> ViewPB {
     last_edited: view.last_edited_time,
     last_edited_by: view.last_edited_by,
     is_locked: view.is_locked,
+    workspace_id: None,
   }
 }
 
@@ -146,6 +151,7 @@ pub fn view_pb_with_child_views(view: Arc<View>, child_views: Vec<Arc<View>>) ->
     last_edited: view.last_edited_time,
     last_edited_by: view.last_edited_by,
     is_locked: view.is_locked,
+    workspace_id: None,
   }
 }
 
@@ -181,6 +187,7 @@ where
       last_edited: view.last_edited_time,
       last_edited_by: view.last_edited_by,
       is_locked: view.is_locked,
+      workspace_id: None,
     }
   }
 
@@ -964,6 +971,8 @@ pub struct SharedViewPB {
   pub view: ViewPB,
   #[pb(index = 2)]
   pub access_level: AFAccessLevelPB,
+  #[pb(index = 3, one_of)]
+  pub workspace_id: Option<String>,
 }
 
 #[derive(Default, ProtoBuf, Clone, Debug)]

@@ -24,16 +24,24 @@ class DocumentService {
 
   Future<FlowyResult<DocumentDataPB, FlowyError>> openDocument({
     required String documentId,
+    String? workspaceId,
   }) async {
     final payload = OpenDocumentPayloadPB()..documentId = documentId;
+    if (workspaceId != null) {
+      payload.workspaceId = workspaceId;
+    }
     final result = await DocumentEventOpenDocument(payload).send();
     return result;
   }
 
   Future<FlowyResult<DocumentDataPB, FlowyError>> getDocument({
     required String documentId,
+    String? workspaceId,
   }) async {
     final payload = OpenDocumentPayloadPB()..documentId = documentId;
+    if (workspaceId != null) {
+      payload.workspaceId = workspaceId;
+    }
     final result = await DocumentEventGetDocumentData(payload).send();
     return result;
   }

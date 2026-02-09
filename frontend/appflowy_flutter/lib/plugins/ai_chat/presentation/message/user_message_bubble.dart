@@ -340,6 +340,7 @@ class _MessageImageFromPathState extends State<_MessageImageFromPath> {
   Future<void> _loadImage() async {
     try {
       final file = File(widget.filePath);
+      
       if (await file.exists()) {
         final bytes = await file.readAsBytes();
         if (mounted) {

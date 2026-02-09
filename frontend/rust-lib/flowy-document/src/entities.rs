@@ -28,6 +28,9 @@ pub struct EncodedCollabPB {
 pub struct OpenDocumentPayloadPB {
   #[pb(index = 1)]
   pub document_id: String,
+
+  #[pb(index = 2)]
+  pub workspace_id: String,
 }
 
 pub struct OpenDocumentParams {

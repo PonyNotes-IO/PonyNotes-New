@@ -71,9 +71,15 @@ pub(crate) async fn open_document_handler(
   manager: AFPluginState<Weak<DocumentManager>>,
 ) -> DataResult<DocumentDataPB, FlowyError> {
   let manager = upgrade_document(manager)?;
-  let params: OpenDocumentParams = data.into_inner().try_into()?;
+  let payload = data.into_inner();
+  let workspace_id = if payload.workspace_id.is_empty() {
+    None
+  } else {
+    uuid::Uuid::parse_str(&payload.workspace_id).ok()
+  };
+  let params: OpenDocumentParams = payload.try_into()?;
   let doc_id = params.document_id;
-  manager.open_document(&doc_id).await?;
+  manager.open_document(&doc_id, workspace_id).await?;
 
   let document = manager.editable_document(&doc_id).await?;
   let document_data = document.read().await.get_document_data()?;
