@@ -167,6 +167,31 @@ impl AppFlowyServer for AppFlowyCloudServer {
   fn set_enable_sync(&self, uid: i64, enable: bool) {
     info!("{} cloud sync: {}", uid, enable);
     self.enable_sync.store(enable, Ordering::SeqCst);
+
+    // 当开启云同步时，触发 WebSocket 连接
+    if enable {
+      let ws_client = self.ws_client.clone();
+      tokio::spawn(async move {
+        // 如果当前未连接，尝试连接
+        if !ws_client.is_connected() {
+          info!("[云同步] 开启云同步，触发 WebSocket 连接");
+          if let Err(e) = ws_client.connect().await {
+            error!("[云同步] ❌ WebSocket 连接失败: {}", e);
+          } else {
+            info!("[云同步] ✅ WebSocket 连接成功");
+          }
+        } else {
+          info!("[云同步] WebSocket 已连接");
+        }
+      });
+    } else {
+      // 关闭云同步时，断开 WebSocket 连接
+      let ws_client = self.ws_client.clone();
+      tokio::spawn(async move {
+        info!("[云同步] 关闭云sync，断开 WebSocket 连接");
+        ws_client.disconnect().await;
+      });
+    }
   }
 
   fn set_network_reachable(&self, reachable: bool) {

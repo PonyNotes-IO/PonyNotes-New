@@ -2656,7 +2656,7 @@ impl FolderManager {
                 
                 Some(WorkspaceSharedViewTable {
                   uid,
-                  workspace_id: workspace_id.to_string(),
+                  workspace_id: cloud_workspace_id.to_string(),
                   view_id: shared_view.view_id.to_string(),
                   permission_id: access_level,
                   created_at: None,

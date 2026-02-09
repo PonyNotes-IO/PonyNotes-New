@@ -42,9 +42,10 @@ pub fn create_log_filter(
     .map(|crate_name| format!("{}={}", crate_name, level))
     .collect::<Vec<String>>();
   // PonyNotes: 只保留白板相关模块的详细日志，其他模块只记录警告以上级别
-  filters.push(format!("flowy_core={}", "warn"));
+  // 修改：开启云同步调试时需要 info 级别日志
+  filters.push(format!("flowy_core={}", "info"));
   filters.push(format!("flowy_folder={}", "warn"));
-  filters.push(format!("collab_sync={}", "warn"));
+  filters.push(format!("collab_sync={}", "info"));  // 改为 info 以显示同步状态
   filters.push(format!("collab_folder={}", "warn"));
   filters.push(format!("collab_database={}", "warn"));
   filters.push(format!("collab_plugins={}", level)); // 白板相关，保留详细日志
@@ -53,7 +54,7 @@ pub fn create_log_filter(
   filters.push(format!("flowy_user={}", "warn"));
   filters.push(format!("flowy_document={}", "warn"));
   filters.push(format!("flowy_database2={}", "warn"));
-  filters.push(format!("flowy_server={}", "warn"));
+  filters.push(format!("flowy_server={}", "info"));  // 改为 info 以显示云同步日志
   filters.push(format!("flowy_notification={}", "warn"));
   filters.push(format!("lib_infra={}", "warn"));
   filters.push(format!("flowy_search={}", "warn"));

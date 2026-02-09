@@ -641,6 +641,11 @@ impl CollabCloudPluginProvider for ServerProvider {
 
           match server.collab_ws_channel(&collab_object.object_id) {
             Ok(Some((channel, ws_connect_state, _is_connected))) => {
+              tracing::info!(
+                "[云同步] collab_ws_channel 获取成功, object_id: {}, is_connected: {}",
+                collab_object.object_id,
+                _is_connected
+              );
               let origin = CollabOrigin::Client(CollabClient::new(
                 collab_object.uid,
                 collab_object.device_id.clone(),
@@ -650,6 +655,11 @@ impl CollabCloudPluginProvider for ServerProvider {
                 Uuid::from_str(&collab_object.object_id),
                 Uuid::from_str(&collab_object.workspace_id),
               ) {
+                tracing::info!(
+                  "[云同步] 创建 SyncPlugin, object_id: {}, workspace_id: {}",
+                  object_id,
+                  workspace_id
+                );
                 let sync_object = SyncObject::new(
                   object_id,
                   workspace_id,
@@ -678,9 +688,17 @@ impl CollabCloudPluginProvider for ServerProvider {
               }
             },
             Ok(None) => {
-              tracing::error!("🔴Failed to get collab ws channel: channel is none");
+              tracing::warn!(
+                "[云同步] 🔴Failed to get collab ws channel: channel is none, object_id: {}, enable_sync: {}",
+                collab_object.object_id,
+                self.is_sync_enabled()
+              );
             },
-            Err(err) => tracing::error!("🔴Failed to get collab ws channel: {:?}", err),
+            Err(err) => tracing::error!(
+              "[云同步] 🔴Failed to get collab ws channel: {:?}, object_id: {}",
+              err,
+              collab_object.object_id
+            ),
           }
           plugins
         } else {

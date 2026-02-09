@@ -98,6 +98,11 @@ pub(crate) fn subscribe_folder_sync_state_changed(
         }
       }
 
+      tracing::info!(
+        "[FolderSyncState] 收到同步状态更新: is_syncing={}, is_finish={}",
+        state.is_syncing(),
+        state.is_sync_finished()
+      );
       folder_notification_builder(
         workspace_id.to_string(),
         FolderNotification::DidUpdateFolderSyncUpdate,
