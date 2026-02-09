@@ -5,6 +5,7 @@ import 'package:appflowy/plugins/ai_chat/presentation/layout_define.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
+import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 
 // PonyNotes: 添加使用次数相关的protobuf导入
@@ -305,6 +306,11 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
 
   Future<void> handleSend() async {
     if (widget.isStreaming) {
+      return;
+    }
+    // 检查AI对话限制
+    final canUseAI = await context.checkAndHandleAIChatLimit();
+    if (!canUseAI) {
       return;
     }
     String userInput = widget.textController.text.trim();

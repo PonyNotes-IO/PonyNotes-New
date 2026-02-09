@@ -3,6 +3,7 @@ import 'package:appflowy/ai/widgets/prompt_input/mentioned_page_text_span.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_input_control_cubit.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/command_palette/command_palette_bloc.dart';
+import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:extended_text_field/extended_text_field.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -173,7 +174,13 @@ class _MobileChatInputState extends State<MobileChatInput> {
     }
   }
 
-  void handleSendPressed() {
+  Future<void> handleSendPressed() async {
+    // 检查AI对话限制
+    final canUseAI = await context.checkAndHandleAIChatLimit();
+    if (!canUseAI) {
+      return;
+    }
+
     if (widget.isStreaming) {
       return;
     }
