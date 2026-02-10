@@ -227,20 +227,16 @@ pub trait UserCloudService: Send + Sync + 'static {
 
   async fn remove_workspace_member(
     &self,
-    user_email: String,
+    user_identifier: String,
     workspace_id: Uuid,
-  ) -> Result<(), FlowyError> {
-    Ok(())
-  }
+  ) -> Result<(), FlowyError>;
 
   async fn update_workspace_member(
     &self,
-    user_email: String,
+    user_identifier: String,
     workspace_id: Uuid,
     role: Role,
-  ) -> Result<(), FlowyError> {
-    Ok(())
-  }
+  ) -> Result<(), FlowyError>;
 
   async fn get_workspace_members(
     &self,

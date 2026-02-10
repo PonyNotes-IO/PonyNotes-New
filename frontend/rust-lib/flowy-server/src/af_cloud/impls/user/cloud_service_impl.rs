@@ -316,24 +316,24 @@ where
 
   async fn remove_workspace_member(
     &self,
-    user_email: String,
+    user_identifier: String,
     workspace_id: Uuid,
   ) -> Result<(), FlowyError> {
     let try_get_client = self.server.try_get_client();
     try_get_client?
-      .remove_workspace_members(&workspace_id, vec![user_email])
+      .remove_workspace_members(&workspace_id, vec![user_identifier])
       .await?;
     Ok(())
   }
 
   async fn update_workspace_member(
     &self,
-    user_email: String,
+    user_identifier: String,
     workspace_id: Uuid,
     role: Role,
   ) -> Result<(), FlowyError> {
     let try_get_client = self.server.try_get_client();
-    let changeset = WorkspaceMemberChangeset::new(user_email).with_role(to_af_role(role));
+    let changeset = WorkspaceMemberChangeset::new(user_identifier).with_role(to_af_role(role));
     try_get_client?
       .update_workspace_member(&workspace_id, changeset)
       .await?;

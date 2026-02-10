@@ -382,13 +382,13 @@ impl UserManager {
 
   pub async fn remove_workspace_member(
     &self,
-    user_email: String,
+    user_identifier: String,
     workspace_id: Uuid,
   ) -> FlowyResult<()> {
     self
       .cloud_service()?
       .get_user_service()?
-      .remove_workspace_member(user_email, workspace_id)
+      .remove_workspace_member(user_identifier, workspace_id)
       .await?;
     Ok(())
   }
@@ -420,14 +420,14 @@ impl UserManager {
 
   pub async fn update_workspace_member(
     &self,
-    user_email: String,
+    user_identifier: String,
     workspace_id: Uuid,
     role: Role,
   ) -> FlowyResult<()> {
     self
       .cloud_service()?
       .get_user_service()?
-      .update_workspace_member(user_email, workspace_id, role)
+      .update_workspace_member(user_identifier, workspace_id, role)
       .await?;
     Ok(())
   }

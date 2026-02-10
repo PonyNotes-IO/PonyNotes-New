@@ -396,8 +396,8 @@ pub struct RemoveWorkspaceMemberPB {
   pub workspace_id: String,
 
   #[pb(index = 2)]
-  #[validate(email)]
-  pub email: String,
+  #[validate(custom(function = "required_not_empty_str"))]
+  pub identifier: String,
 }
 
 #[derive(ProtoBuf, Default, Clone, Validate)]

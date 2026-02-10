@@ -795,7 +795,7 @@ pub async fn delete_workspace_member_handler(
   let manager = upgrade_manager(manager)?;
   let workspace_id = Uuid::from_str(&data.workspace_id)?;
   manager
-    .remove_workspace_member(data.email, workspace_id)
+    .remove_workspace_member(data.identifier, workspace_id)
     .await?;
   Ok(())
 }

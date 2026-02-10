@@ -469,11 +469,11 @@ class UserBackendService implements IUserBackendService {
 
   Future<FlowyResult<void, FlowyError>> removeWorkspaceMember(
     String workspaceId,
-    String email,
+    String identifier,
   ) async {
     final data = RemoveWorkspaceMemberPB()
       ..workspaceId = workspaceId
-      ..email = email;
+      ..identifier = identifier;
     return UserEventRemoveWorkspaceMember(data).send();
   }
 
