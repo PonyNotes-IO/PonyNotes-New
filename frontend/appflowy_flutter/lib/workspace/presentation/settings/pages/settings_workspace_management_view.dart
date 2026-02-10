@@ -294,35 +294,33 @@ class _SettingsWorkspaceManagementViewState
     );
   }
 
-  _buildRightButton() {
-    _canCreateTeamWorkspace() ?
-      SizedBox(
-        width: 140,
-        height: 28,
-        child: FlowyButton(
-          onTap: () async {
-            PopoverContainer.maybeOf(context)?.closeAll();
-            await Future.delayed(Duration.zero);
-            if (!mounted) return;
-            final spaceBloc = context.read<SpaceBloc>();
-            await showDialog(
-              context: context,
-              builder: (dialogCtx) => Dialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12.0),
-                ),
-                child: BlocProvider.value(
-                  value: spaceBloc,
-                  child: const CreateSpacePopup(),
-                ),
+  Widget _buildRightButton() {
+    return SizedBox(
+      width: 140,
+      height: 28,
+      child: FlowyButton(
+        onTap: () async {
+          PopoverContainer.maybeOf(context)?.closeAll();
+          await Future.delayed(Duration.zero);
+          if (!mounted) return;
+          final spaceBloc = context.read<SpaceBloc>();
+          await showDialog(
+            context: context,
+            builder: (dialogCtx) => Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0),
               ),
-            );
-          },
-          margin: EdgeInsets.zero,
-          text: Center(child: FlowyText.regular('新建团队协作区', fontSize: 12,color: Theme.of(context).colorScheme.primary,)),
-        ),
-      ) :
-    SizedBox.shrink();
+              child: BlocProvider.value(
+                value: spaceBloc,
+                child: const CreateSpacePopup(),
+              ),
+            ),
+          );
+        },
+        margin: EdgeInsets.zero,
+        text: Center(child: FlowyText.regular('新建团队协作区', fontSize: 12,color: Theme.of(context).colorScheme.primary,)),
+      ),
+    );
   }
 }
 
