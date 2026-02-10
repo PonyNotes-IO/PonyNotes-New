@@ -324,331 +324,6 @@ class _SettingsWorkspaceManagementViewState
   }
 }
 
-// 团队协作区表格行组件
-class _TeamWorkspaceRow extends StatefulWidget {
-  const _TeamWorkspaceRow({
-    required this.workspace,
-    required this.userProfile,
-  });
-
-  final UserWorkspacePB workspace;
-  final UserProfilePB userProfile;
-
-  @override
-  State<_TeamWorkspaceRow> createState() => _TeamWorkspaceRowState();
-}
-
-class _TeamWorkspaceRowState extends State<_TeamWorkspaceRow> {
-  String? _ownerName;
-  int _memberCount = 0;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadWorkspaceInfo();
-  }
-
-  Future<void> _loadWorkspaceInfo() async {
-    try {
-      final userService = UserBackendService(userId: widget.userProfile.id);
-      final result = await userService.getWorkspaceMembers(
-        widget.workspace.workspaceId,
-      );
-
-      result.fold(
-        (members) {
-          setState(() {
-            _memberCount = members.items.length;
-            // 查找所有者
-            final owner = members.items.firstWhereOrNull(
-              (member) => member.role == AFRolePB.Owner,
-            );
-            _ownerName = (owner != null && owner.name.isNotEmpty)
-                ? owner.name
-                : owner?.email ?? '未知';
-            _isLoading = false;
-          });
-        },
-        (error) {
-          Log.error('Failed to get workspace members: $error');
-          setState(() {
-            _memberCount = widget.workspace.memberCount.toInt();
-            _ownerName = '未知';
-            _isLoading = false;
-          });
-        },
-      );
-    } catch (e) {
-      Log.error('Error loading workspace info: $e');
-      setState(() {
-        _memberCount = widget.workspace.memberCount.toInt();
-        _ownerName = '未知';
-        _isLoading = false;
-      });
-    }
-  }
-
-  String _formatUpdateTime(Int64 timestamp) {
-    if (timestamp.toInt() == 0) {
-      return '未知';
-    }
-    try {
-      // Int64 时间戳通常是秒，需要转换为毫秒
-      final date =
-          DateTime.fromMillisecondsSinceEpoch(timestamp.toInt() * 1000);
-      final now = DateTime.now();
-      final difference = now.difference(date);
-
-      if (difference.inDays == 0) {
-        return '今天';
-      } else if (difference.inDays == 1) {
-        return '昨天';
-      } else if (difference.inDays < 7) {
-        return '${difference.inDays}天前';
-      } else {
-        return DateFormat('d/M/yy').format(date);
-      }
-    } catch (e) {
-      return '未知';
-    }
-  }
-
-  String _getAccessPermission() {
-    // 根据工作空间类型判断访问权限
-    // 这里可以根据实际需求调整逻辑
-    return '开放式'; // 默认值，可以根据实际业务逻辑修改
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: const Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    final status = '$_memberCount名成员·已加入';
-    final owner = _ownerName ?? '未知';
-    final access = _getAccessPermission();
-    final updateTime = _formatUpdateTime(widget.workspace.createdAtTimestamp);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: Row(
-              children: [
-                // 团队协作区图标
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(
-                    Icons.groups,
-                    size: 16,
-                    color: Colors.orange,
-                  ),
-                ),
-                const HSpace(12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FlowyText(
-                      widget.workspace.name,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    const VSpace(2),
-                    FlowyText(
-                      status,
-                      fontSize: 12,
-                      color: Theme.of(context).hintColor,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Row(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: FlowyText(
-                      owner.isNotEmpty ? owner.substring(0, 1) : '?',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.blue,
-                    ),
-                  ),
-                ),
-                const HSpace(8),
-                Expanded(
-                  child: FlowyText(
-                    owner,
-                    fontSize: 14,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: FlowyText(
-              access,
-              fontSize: 14,
-            ),
-          ),
-          // 将更新时间与管理按钮放在同一列内以减小二者间距，最后一列保留占位用于对齐表头
-          Expanded(
-            flex: 2,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                FlowyText(
-              updateTime,
-              fontSize: 14,
-            ),
-                const HSpace(8),
-                SizedBox(
-                  width: 36,
-                  height: 28,
-                  child: FlowyButton(
-                    text: Center(child: FlowyText.regular('管理', fontSize: 12)),
-                    onTap: () => _openManageDialog(context),
-                    margin: EdgeInsets.zero,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _openManageDialog(BuildContext context) async {
-    // load workspace members
-    final userService = UserBackendService(userId: widget.userProfile.id);
-    List<WorkspaceMemberPB> members = [];
-    try {
-      final res =
-          await userService.getWorkspaceMembers(widget.workspace.workspaceId);
-      res.fold((s) {
-        members = s.items;
-      }, (e) {
-        Log.error('Failed to load workspace members for manage dialog: $e');
-      });
-    } catch (e) {
-      Log.error('Exception loading members for manage dialog: $e');
-    }
-
-    // Initially select all members as allowed (placeholder until backend ACL exists)
-    final Map<String, bool> selected = {
-      for (final m in members) m.email: true,
-    };
-
-    await showDialog(
-      context: context,
-      builder: (ctx) {
-        return Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: SizedBox(
-            width: 640,
-            height: 480,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      FlowyText('管理团队协作区访问权限',
-                          fontSize: 16, fontWeight: FontWeight.w600),
-                      SizedBox(
-                        width: 72,
-                        child: FlowyButton(
-                          text: const FlowyText.regular('关闭'),
-                          onTap: () => Navigator.of(ctx).pop(),
-                          margin: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const VSpace(12),
-                  const Divider(),
-                  const VSpace(12),
-                  Expanded(
-                    child: members.isEmpty
-                        ? Center(child: FlowyText('无法加载成员或无成员', fontSize: 14))
-                        : ListView(
-                            children: members.map((m) {
-                              final email = m.email;
-                              return CheckboxListTile(
-                                title: Text(m.name.isNotEmpty ? m.name : email),
-                                subtitle: Text(email),
-                                value: selected[email] ?? false,
-                                onChanged: (v) {
-                                  if (v == null) return;
-                                  selected[email] = v;
-                                  // trigger rebuild of dialog
-                                  (ctx as Element).markNeedsBuild();
-                                },
-                              );
-                            }).toList(),
-                          ),
-                  ),
-                  const VSpace(12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      OutlinedRoundedButton(
-                        text: '取消',
-                        onTap: () => Navigator.of(ctx).pop(),
-                      ),
-                      const HSpace(12),
-                      AFFilledTextButton.primary(
-                        text: '保存',
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          showToastNotification(message: '已保存（示例，仅前端）');
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
 class _SpaceRow extends StatefulWidget {
   const _SpaceRow({
     required this.space,
@@ -799,83 +474,49 @@ class _SpaceRowState extends State<_SpaceRow> {
           ),
           Expanded(
             flex: 4,
-            child: Row(
-              children: [
-                DropdownButtonHideUnderline(
-                  child: DropdownButton<SpacePermission>(
-                    isDense: true,
-                    isExpanded: false,
-                    value: _selectedPermission,
-                    items: [
-                      DropdownMenuItem(
-                        value: SpacePermission.publicToAll,
-                        child: FlowyText(
-                            _permissionLabel(SpacePermission.publicToAll),
-                            fontSize: 14),
-                      ),
-                      // DropdownMenuItem(
-                      //   value: SpacePermission.closed,
-                      //   child: FlowyText(
-                      //       _permissionLabel(SpacePermission.closed),
-                      //       fontSize: 14),
-                      // ),
-                      DropdownMenuItem(
-                        value: SpacePermission.private,
-                        child: FlowyText(
-                            _permissionLabel(SpacePermission.private),
-                            fontSize: 14),
-                      ),
-                    ],
-                    onChanged: _isUpdating
-                        ? null
-                        : (newPerm) async {
-                            if (newPerm == null) return;
-                            setState(() {
-                              _isUpdating = true;
-                              _selectedPermission = newPerm;
-                            });
+            child: _SpacePermissionActionList(
+                permission:_selectedPermission,
+                onPermissionChanged: _isUpdating
+                    ? null
+                    : (newPerm) async {
+                  if (newPerm == null) return;
+                  setState(() {
+                    _isUpdating = true;
+                    _selectedPermission = newPerm;
+                  });
 
-                            try {
-                              context.read<SpaceBloc>().add(
-                                    SpaceEvent.update(
-                                      space: widget.space,
-                                      permission: newPerm,
-                                    ),
-                                  );
-                              // optimistic UI; small delay to improve UX
-                              await Future.delayed(
-                                  const Duration(milliseconds: 200));
-                              showToastNotification(message: '权限已更新');
-                            } catch (e) {
-                              // revert on error
-                              setState(() {
-                                _selectedPermission =
-                                    widget.space.spacePermission;
-                              });
-                              Log.error(
-                                  'Failed to update space permission: $e');
-                              showToastNotification(
-                                  message: '更新失败，请重试',
-                                  type: ToastificationType.error);
-                            } finally {
-                              if (mounted) {
-                                setState(() {
-                                  _isUpdating = false;
-                                });
-                              }
-                            }
-                          },
-                  ),
-                ),
-                if (_isUpdating) ...[
-                  const HSpace(8),
-                  const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2)),
-                ],
-              ],
-            ),
+                  try {
+                    context.read<SpaceBloc>().add(
+                      SpaceEvent.update(
+                        space: widget.space,
+                        permission: newPerm,
+                      ),
+                    );
+                    // optimistic UI; small delay to improve UX
+                    await Future.delayed(
+                        const Duration(milliseconds: 200));
+                    showToastNotification(message: '权限已更新');
+                  } catch (e) {
+                    // revert on error
+                    setState(() {
+                      _selectedPermission =
+                          widget.space.spacePermission;
+                    });
+                    Log.error(
+                        'Failed to update space permission: $e');
+                    showToastNotification(
+                        message: '更新失败，请重试',
+                        type: ToastificationType.error);
+                  } finally {
+                    if (mounted) {
+                      setState(() {
+                        _isUpdating = false;
+                      });
+                    }
+                  }
+                },
+
+            )
           ),
           Expanded(
             flex: 3,
@@ -1785,6 +1426,89 @@ class _WorkspaceMoreActionWrapper extends ActionCell {
     switch (inner) {
       case _WorkspaceMoreAction.delete:
         return LocaleKeys.settings_workspacePage_deleteWorkspacePrompt_title.tr();
+    }
+  }
+}
+
+
+class _SpacePermissionActionList extends StatelessWidget {
+  const _SpacePermissionActionList({
+    required this.permission,
+    required this.onPermissionChanged,
+  });
+
+  final SpacePermission permission;
+  final void Function(SpacePermission)? onPermissionChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    // 定义权限选项
+    final permissionOptions = [
+      _SpacePermissionActionWrapper(SpacePermission.publicToAll),
+      _SpacePermissionActionWrapper(SpacePermission.private),
+      // _SpacePermissionActionWrapper(SpacePermission.closed),
+    ];
+
+    return PopoverActionList<_SpacePermissionActionWrapper>(
+      asBarrier: true,
+      direction: PopoverDirection.bottomWithCenterAligned,
+      actions: permissionOptions,
+      buildChild: (controller) {
+        return FlowyButton(
+          useIntrinsicWidth:true,
+          onTap: onPermissionChanged != null
+              ? () => controller.show()
+              : null,
+          text: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FlowyText.regular(
+                _permissionLabel(permission),
+                color: theme.textColorScheme.primary,
+                fontSize: 14,
+              ),
+              FlowySvg(FlowySvgs.arrow_down_s,)
+            ],
+          ),
+        );
+      },
+      onSelected: (action, controller) {
+        if (onPermissionChanged != null) {
+          onPermissionChanged!(action.permission);
+        }
+        controller.close();
+      },
+    );
+  }
+
+  String _permissionLabel(SpacePermission p) {
+    switch (p) {
+      case SpacePermission.publicToAll:
+        return '开放式';
+      case SpacePermission.closed:
+        return '封闭式';
+      case SpacePermission.private:
+        return '私人';
+    }
+  }
+}
+
+class _SpacePermissionActionWrapper extends ActionCell {
+  _SpacePermissionActionWrapper(this.permission);
+
+  final SpacePermission permission;
+
+  @override
+  String get name {
+    switch (permission) {
+      case SpacePermission.publicToAll:
+        return '开放式';
+      case SpacePermission.closed:
+        return '封闭式';
+      case SpacePermission.private:
+        return '私人';
     }
   }
 }
