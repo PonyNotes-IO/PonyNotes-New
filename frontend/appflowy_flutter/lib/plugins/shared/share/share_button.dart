@@ -8,6 +8,8 @@ import 'package:appflowy/plugins/shared/share/share_bloc.dart';
 import 'package:appflowy/plugins/shared/share/share_menu.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -71,20 +73,81 @@ class ShareButton extends StatelessWidget {
         },
         child: BlocBuilder<ShareBloc, ShareState>(
           builder: (context, state) {
-            final tabs = [
-              if (state.enablePublish) ...[
-                // share the same permission with publish
-                ShareMenuTab.share,
-                ShareMenuTab.publish,
-              ],
-              // ShareMenuTab.exportAs,
-            ];
+            return FutureBuilder<SpacePermission>(
+              future: getSpacePermission(),
+              builder: (context, snapshot) {
+                // 默认权限为publicToAll，确保在加载过程中也能显示分享按钮
+                SpacePermission spacePermission = SpacePermission.publicToAll;
+                
+                if (snapshot.connectionState == ConnectionState.done) {
+                  if (snapshot.hasData) {
+                    spacePermission = snapshot.data!;
+                    print('获取到空间权限: $spacePermission');
+                  } else if (snapshot.hasError) {
+                    print('获取空间权限失败: ${snapshot.error}');
+                    // 错误时默认为publicToAll
+                  }
+                }
 
-            return ShareMenuButton(tabs: tabs);
+                final tabs = [
+                  if (state.enablePublish) ...[
+                    // 私有空间文档不支持共享和协作，只支持发布
+                    if (spacePermission != SpacePermission.private) ...[
+                      ShareMenuTab.share,
+                    ],
+                    ShareMenuTab.publish,
+                  ],
+                  // ShareMenuTab.exportAs,
+                ];
+
+                return ShareMenuButton(tabs: tabs);
+              },
+            );
           },
         ),
       ),
     );
+  }
+
+  // 异步获取空间权限
+  Future<SpacePermission> getSpacePermission() async {
+    try {
+      // 检查视图是否是空间
+      if (view.isSpace) {
+        // 如果是空间，直接返回它的权限
+        final viewPermission = view.spacePermission;
+        print('视图是空间，权限: $viewPermission');
+        return viewPermission;
+      } else {
+        // 如果不是空间，尝试获取其所属的空间
+        final ancestorsResult = await ViewBackendService.getViewAncestors(view.id);
+        
+        return ancestorsResult.fold(
+          (ancestors) {
+            // 遍历祖先视图，找到第一个空间类型的视图
+            for (final ancestor in ancestors.items) {
+              if (ancestor.isSpace) {
+                final spacePermission = ancestor.spacePermission;
+                print('找到所属空间，权限: $spacePermission');
+                return spacePermission;
+              }
+            }
+            // 如果没有找到所属空间，默认为publicToAll
+            print('未找到所属空间，默认视为公共空间');
+            return SpacePermission.publicToAll;
+          },
+          (error) {
+            print('获取祖先视图失败: $error');
+            // 错误时默认为publicToAll
+            return SpacePermission.publicToAll;
+          }
+        );
+      }
+    } catch (e) {
+      print('获取空间权限失败: $e');
+      // 异常时默认为publicToAll
+      return SpacePermission.publicToAll;
+    }
   }
 
   void _handleExportSuccess(BuildContext context, ShareType shareType) {

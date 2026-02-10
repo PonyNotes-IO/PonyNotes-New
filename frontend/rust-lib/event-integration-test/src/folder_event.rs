@@ -82,7 +82,7 @@ impl EventIntegrationTest {
       .event(UserEvent::RemoveWorkspaceMember)
       .payload(RemoveWorkspaceMemberPB {
         workspace_id: workspace_id.to_string(),
-        email: email.to_string(),
+        identifier: email.to_string(),
       })
       .async_send()
       .await
