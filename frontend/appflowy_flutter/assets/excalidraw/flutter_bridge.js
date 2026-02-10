@@ -515,4 +515,19 @@
             console.error('[PonyNotes] loadExcalidrawData failed', e);
         }
     };
+
+    // ✅ 新增：白板数据加载完成回调
+    window._onWhiteboardDataReady = async function (count) {
+        console.log('[PonyNotes] ✅ Whiteboard data ready, ' + count + ' items loaded');
+        try {
+            const api = await waitForExcalidrawAPI();
+            // 触发 Excalidraw 重新加载场景数据
+            if (api.refresh) {
+                api.refresh();
+            }
+            console.log('[PonyNotes] ✅ Excalidraw refreshed with loaded data');
+        } catch (e) {
+            console.error('[PonyNotes] Failed to refresh Excalidraw:', e);
+        }
+    };
 })();

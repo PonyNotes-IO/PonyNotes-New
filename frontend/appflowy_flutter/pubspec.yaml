@@ -239,6 +239,8 @@ dependency_overrides:
 
   uuid: ^4.4.0
 
+  crypto: ^3.0.3
+
   flutter_cache_manager:
     git:
       url: https://github.com/LucasXu0/flutter_cache_manager.git

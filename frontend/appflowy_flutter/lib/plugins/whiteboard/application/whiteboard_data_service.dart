@@ -10,6 +10,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-whiteboard/entities.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:path/path.dart' as p;
+import 'whiteboard_image_upload_service.dart';
 
 /// Excalidraw 白板数据服务
 /// 负责白板数据的本地存储和加载
@@ -96,6 +97,7 @@ class WhiteboardDataService {
   }
 
   /// 保存白板数据（使用 Collab 后端，失败则回退到文件）
+  /// 优化版本：先上传图片到云存储，再保存数据
   ///
   /// [viewId] 白板视图 ID
   /// [data] Excalidraw 数据
@@ -108,7 +110,7 @@ class WhiteboardDataService {
     Log.info('[Whiteboard] saveWhiteboardData() called');
     Log.info('[Whiteboard] ViewID: $viewId');
     Log.info('[Whiteboard] Data keys: ${data.keys.toList()}');
-    
+
     // ✅ 调试：检查 files 数据
     if (data.containsKey('files') && data['files'] is Map) {
       final files = data['files'] as Map<String, dynamic>;
@@ -118,18 +120,36 @@ class WhiteboardDataService {
         final firstFile = files.values.first;
         if (firstFile is Map) {
           final firstFileMap = firstFile as Map<String, dynamic>;
-          Log.info('[Whiteboard] 📸 First file has data: ${firstFileMap.containsKey('data')}');
-          if (firstFileMap['data'] is String) {
-            Log.info('[Whiteboard] 📸 First file data length: ${(firstFileMap['data'] as String).length}');
+          Log.info('[Whiteboard] 📸 First file has dataURL: ${firstFileMap.containsKey('dataURL')}');
+          if (firstFileMap['dataURL'] is String) {
+            final dataUrl = firstFileMap['dataURL'] as String;
+            Log.info('[Whiteboard] 📸 First file dataURL length: ${dataUrl.length}');
           }
         }
       }
     } else {
       Log.warn('[Whiteboard] ⚠️ No files in data!');
     }
-    
-    Log.info(
-        '[Whiteboard] =====================================================');
+
+    // ✅ 优化：先上传图片到云存储
+    if (data.containsKey('files') && data['files'] is Map) {
+      final files = data['files'] as Map<String, dynamic>;
+      if (files.isNotEmpty) {
+        Log.info('[Whiteboard] 🚀 Step 0: Uploading images to cloud storage...');
+        try {
+          final processedFiles = await WhiteboardImageUploadService.processFilesForUpload(
+            files,
+            forceUpload: false, // 只上传新的 dataURL，保留已有的 cloud URL
+          );
+          // 更新 data 中的 files
+          data['files'] = processedFiles;
+          Log.info('[Whiteboard] ✅ Images uploaded successfully');
+        } catch (e) {
+          Log.warn('[Whiteboard] ⚠️ Image upload failed, keeping original dataURL: $e');
+          // 继续保存，不阻止用户操作
+        }
+      }
+    }
 
     // 1. 尝试保存到 Collab 后端
     Log.info('[Whiteboard] Step 1: Trying to save to Collab backend...');

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -40,6 +41,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   // 内部状态（保持原有实现）
   InAppWebViewController? _controller;
   bool _isLoading = true;
+  bool _isInitializing = false; // ✅ 新增：用于跟踪初始化状态
   String? _loadingError;
   final _assetServer = LocalAssetServer();
   String? _whiteboardUrl;
@@ -47,6 +49,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   bool _webViewCreated = false;
   bool _pageLoaded = false;
   late final int _inAppWebViewInstanceId; // 每个InAppWebView的全局唯一ID
+  Completer<void>? _initializationCompleter; // ✅ 新增：用于等待初始化完成
 
   @override
   void initState() {
@@ -153,32 +156,82 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   }
 
   void _setupJavaScriptHandlers(InAppWebViewController controller) {
+    // ✅ 新增：初始化完成器
+    _initializationCompleter = Completer<void>();
+
     controller.addJavaScriptHandler(
         handlerName: "initData",
         callback: (args) async {
-          final service = WhiteboardDataService();
-          final data = await service.loadWhiteboardData(widget.viewId);
-
-          data.forEach((key, value) async {
-            // 修复：确保 value 是 JSON 字符串
-            final stringValue = value is String ? value : jsonEncode(value);
-
-            // 修复：映射键名到 Excalidraw 期望的 LocalStorage 键
-            String lsKey = key;
-            if (key == 'files') {
-              lsKey = 'excalidraw-files';
-            } else if (key == 'elements') {
-              lsKey = 'excalidraw';
-            } else if (key == 'appState') {
-              lsKey = 'excalidraw-state';
+          Log.info('[ExcalidrawWebView] 🚀 initData called, loading whiteboard data...');
+          
+          try {
+            final service = WhiteboardDataService();
+            final data = await service.loadWhiteboardData(widget.viewId);
+            
+            Log.info('[ExcalidrawWebView] ✅ Data loaded, ${data.keys.length} keys found');
+            if (data.containsKey('elements')) {
+              final elements = data['elements'];
+              if (elements is List) {
+                Log.info('[ExcalidrawWebView] 📝 Elements count: ${elements.length}');
+              }
+            }
+            if (data.containsKey('files')) {
+              final files = data['files'];
+              if (files is Map) {
+                Log.info('[ExcalidrawWebView] 📸 Files count: ${files.length}');
+              }
             }
 
-            await _controller!.webStorage.localStorage.setItem(
-              key: lsKey,
-              value: stringValue,
-            );
-            Log.debug('[ExcalidrawWebView] initData set LS: $lsKey');
-          });
+            // 设置数据到 LocalStorage
+            int setCount = 0;
+            for (final entry in data.entries) {
+              final key = entry.key;
+              final value = entry.value;
+              
+              // 跳过非白板数据键
+              if (key == 'viewId' || key == 'savedAt' || key == '__test__') {
+                continue;
+              }
+              
+              // 修复：确保 value 是 JSON 字符串
+              final stringValue = value is String ? value : jsonEncode(value);
+
+              // 修复：映射键名到 Excalidraw 期望的 LocalStorage 键
+              String lsKey = key;
+              if (key == 'files') {
+                lsKey = 'excalidraw-files';
+              } else if (key == 'elements') {
+                lsKey = 'excalidraw';
+              } else if (key == 'appState') {
+                lsKey = 'excalidraw-state';
+              }
+
+              await _controller!.webStorage.localStorage.setItem(
+                key: lsKey,
+                value: stringValue,
+              );
+              setCount++;
+            }
+            
+            Log.info('[ExcalidrawWebView] ✅ Set $setCount items to localStorage');
+            
+            // ✅ 关键：初始化完成后发送信号给 Excalidraw
+            await _safeEvalJs('''
+              if (window._onWhiteboardDataReady) {
+                window._onWhiteboardDataReady($setCount);
+              }
+            ''', tag: 'initDataReady');
+            
+            // ✅ 标记初始化完成
+            if (!_initializationCompleter!.isCompleted) {
+              _initializationCompleter!.complete();
+            }
+          } catch (e, stack) {
+            Log.error('[ExcalidrawWebView] ❌ initData failed: $e\n$stack');
+            if (!_initializationCompleter!.isCompleted) {
+              _initializationCompleter!.completeError(e);
+            }
+          }
         });
     controller.addJavaScriptHandler(
         handlerName: "localStorageOnSet",
@@ -314,6 +367,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       final dataJson = jsonEncode(dataToLoad);
       // debug log removed
 
+      /*
       await _controller?.evaluateJavascript(source: '''
         console.log('[ExcalidrawWebView] Loading data into Excalidraw with viewId: ${widget.viewId}');
         if (window.loadExcalidrawData) {
@@ -323,6 +377,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           console.error('[ExcalidrawWebView] window.loadExcalidrawData not found!');
         }
       ''');
+      */
       // debug log removed
 
       // 首先隐藏加载时的底图标志（尽早执行，避免闪现）
@@ -869,6 +924,31 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 _isLoading = false;
                 _pageLoaded = true;
               });
+              
+              // ✅ 关键：等待 initData 完成后再初始化 UI
+              if (_initializationCompleter != null && !_initializationCompleter!.isCompleted) {
+                Log.info('[ExcalidrawWebView] ⏳ Waiting for data initialization...');
+                _isInitializing = true;
+                setState(() {});
+                
+                try {
+                  await _initializationCompleter!.future.timeout(
+                    const Duration(seconds: 10),
+                    onTimeout: () {
+                      Log.warn('[ExcalidrawWebView] ⏰ initData timeout, proceeding anyway');
+                    },
+                  );
+                  Log.info('[ExcalidrawWebView] ✅ Data initialization complete');
+                } catch (e) {
+                  Log.warn('[ExcalidrawWebView] ⚠️ initData error: $e, proceeding anyway');
+                }
+                
+                _isInitializing = false;
+                if (mounted) {
+                  setState(() {});
+                }
+              }
+              
               await _initializeExcalidraw();
             }
             Log.debug('✅ [ExcalidrawWebView] Loading finished: $url');
@@ -919,7 +999,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         ),
 
         // 加载覆盖层 - 使用完全不透明背景遮挡 Excalidraw 的加载界面
-        if (_isLoading)
+        if (_isLoading || _isInitializing)
           Builder(
             builder: (context) {
               final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -944,7 +1024,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       Opacity(
                         opacity: 0.5,
                         child: Text(
-                          '小马笔记白板',
+                          _isInitializing ? '正在加载白板数据...' : '小马笔记白板',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -967,7 +1047,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        '正在加载白板编辑器...',
+                        _isInitializing
+                            ? '正在恢复图片和画布内容...'
+                            : '正在加载白板编辑器...',
                         style: TextStyle(
                           fontSize: 14,
                           color: isDark ? Colors.white54 : Colors.grey.shade500,
