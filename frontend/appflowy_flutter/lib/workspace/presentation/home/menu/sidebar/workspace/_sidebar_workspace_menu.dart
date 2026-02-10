@@ -52,8 +52,13 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppFlowyTheme.of(context).backgroundColorScheme.primary,
+    final theme = AppFlowyTheme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppFlowyTheme.of(context).backgroundColorScheme.primary,
+          borderRadius: BorderRadius.all(
+              Radius.circular(theme.borderRadius.l))
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,

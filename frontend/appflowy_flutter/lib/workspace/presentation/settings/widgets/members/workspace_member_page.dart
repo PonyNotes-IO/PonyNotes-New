@@ -610,7 +610,7 @@ class _MemberListHeader extends StatelessWidget {
         //   ),
         // ),
         // email column removed per design
-        SizedBox(width: 24.0),
+        Expanded(flex: 1, child: SizedBox(width: 24.0)),
       ],
     );
   }
@@ -692,7 +692,8 @@ class _MemberItemState extends State<_MemberItem> {
     final myRole = widget.myRole;
     final userProfile = widget.userProfile;
     final theme = AppFlowyTheme.of(context);
-
+    final currentWorkspace =
+        context.watch<UserWorkspaceBloc>().state.currentWorkspace;
     return Row(
       children: [
         Expanded(
@@ -737,32 +738,33 @@ class _MemberItemState extends State<_MemberItem> {
         // 团队协作区 列
         Expanded(
           flex: 3,
-          child: Builder(
-            builder: (context) {
-              final currentWorkspace = context.watch<UserWorkspaceBloc>().state.currentWorkspace;
-              final workspaceName = currentWorkspace?.name ?? '—';
-              return Text(
-                workspaceName,
-                style: theme.textStyle.body.standard(
-                  color: theme.textColorScheme.primary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              );
-            },
+          child: Text(
+            currentWorkspace?.name ?? '—',
+            style: theme.textStyle.body.standard(
+              color: theme.textColorScheme.primary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
         Expanded(
           flex: 2,
-          child: !member.role.isOwner
-              ? Text(
+          child: myRole.isOwner
+              ? member.name == userProfile.name
+                  ? Text(
+                      member.role.description,
+                      style: theme.textStyle.body.standard(
+                        color: theme.textColorScheme.primary,
+                      ),
+                    )
+                  : _MemberRoleActionList(
+                      member: member,
+                    )
+              : Text(
                   member.role.description,
                   style: theme.textStyle.body.standard(
                     color: theme.textColorScheme.primary,
                   ),
-                )
-              : _MemberRoleActionList(
-                  member: member,
                 ),
         ),
         // 群组 列（placeholder，目前 backend 未提供 group 字段）
@@ -778,10 +780,13 @@ class _MemberItemState extends State<_MemberItem> {
         //   ),
         // ),
         // email column removed per design; keep member.email available for internal logic (e.g., delete check)
-        myRole == AFRolePB.Owner &&
-                member.name != userProfile.name // can't delete self
-            ? _MemberMoreActionList(member: member)
-            : SizedBox(width: 24.0),
+        Expanded(
+          flex: 1,
+          child: myRole.isOwner &&
+                  member.name != userProfile.name // can't delete self
+              ? _MemberMoreActionList(member: member)
+              : SizedBox(width: 24.0),
+        )
       ],
     );
   }
@@ -809,7 +814,8 @@ class _MemberMoreActionList extends StatelessWidget {
       buildChild: (controller) {
         return FlowyButton(
           useIntrinsicWidth: true,
-          text: FlowyText.regular(LocaleKeys.settings_appearance_members_removeMember.tr(),
+          text: FlowyText.regular(
+            LocaleKeys.settings_appearance_members_removeMember.tr(),
             color: Theme.of(context).colorScheme.primary,
             fontSize: 12,
           ),
@@ -821,14 +827,14 @@ class _MemberMoreActionList extends StatelessWidget {
       onSelected: (action, controller) {
         switch (action.inner) {
           case _MemberMoreAction.delete:
-            showCancelAndConfirmDialog(
+            showCancelAndDeleteDialog(
               context: context,
               title: LocaleKeys.settings_appearance_members_removeMember.tr(),
               description: LocaleKeys
                   .settings_appearance_members_areYouSureToRemoveMember
                   .tr(),
-              confirmLabel: LocaleKeys.button_yes.tr(),
-              onConfirm: (_) => context.read<WorkspaceMemberBloc>().add(
+              confirmLabel: LocaleKeys.button_delete.tr(),
+              onDelete: () => context.read<WorkspaceMemberBloc>().add(
                     WorkspaceMemberEvent.removeWorkspaceMemberByEmail(
                       action.member.email,
                     ),

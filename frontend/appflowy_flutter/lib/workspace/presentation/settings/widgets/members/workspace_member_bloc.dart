@@ -529,7 +529,7 @@ class WorkspaceMemberBloc
   AFRolePB _getMyRole(List<WorkspaceMemberPB> members) {
     final role = members
         .firstWhereOrNull(
-          (e) => e.email == userProfile.email,
+          (e) => e.name == userProfile.name,
         )
         ?.role;
     if (role == null) {
