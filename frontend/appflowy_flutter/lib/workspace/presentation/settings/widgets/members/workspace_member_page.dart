@@ -749,23 +749,15 @@ class _MemberItemState extends State<_MemberItem> {
         ),
         Expanded(
           flex: 2,
-          child: myRole.isOwner
-              ? member.name == userProfile.name
-                  ? Text(
-                      member.role.description,
-                      style: theme.textStyle.body.standard(
-                        color: theme.textColorScheme.primary,
-                      ),
-                    )
-                  : _MemberRoleActionList(
-                      member: member,
-                    )
-              : Text(
-                  member.role.description,
-                  style: theme.textStyle.body.standard(
-                    color: theme.textColorScheme.primary,
-                  ),
-                ),
+          child:member.role.isOwner || !myRole.canUpdate
+              ? FlowyText.regular(
+            member.role.description,
+            color: theme.textColorScheme.primary,
+            fontSize: 14,
+          )
+              : _MemberRoleActionList(
+            member: member,
+          ),
         ),
         // 群组 列（placeholder，目前 backend 未提供 group 字段）
         // Expanded(
@@ -836,9 +828,10 @@ class _MemberMoreActionList extends StatelessWidget {
               confirmLabel: LocaleKeys.button_delete.tr(),
               onDelete: () => context.read<WorkspaceMemberBloc>().add(
                     WorkspaceMemberEvent.removeWorkspaceMemberByEmail(
-                      action.member.email,
+                      action.member.name,
                     ),
                   ),
+              closeOnAction: true
             );
             break;
         }
@@ -863,7 +856,27 @@ class _MemberMoreActionWrapper extends ActionCell {
   }
 }
 
-class _MemberRoleActionList extends StatefulWidget {
+class _RoleActionWrapper extends ActionCell {
+  _RoleActionWrapper(this.role, this.member);
+
+  final AFRolePB role;
+  final WorkspaceMemberPB member;
+
+  @override
+  String get name {
+    switch (role) {
+      case AFRolePB.Owner:
+        return '工作空间所有者';
+      case AFRolePB.Member:
+        return '成员';
+      case AFRolePB.Guest:
+        return '受限成员';
+    }
+    return "";
+  }
+}
+
+class _MemberRoleActionList extends StatelessWidget {
   const _MemberRoleActionList({
     required this.member,
   });
@@ -871,62 +884,67 @@ class _MemberRoleActionList extends StatefulWidget {
   final WorkspaceMemberPB member;
 
   @override
-  State<_MemberRoleActionList> createState() => _MemberRoleActionListState();
-}
-
-class _MemberRoleActionListState extends State<_MemberRoleActionList> {
-  late AFRolePB _currentRole;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentRole = widget.member.role;
-  }
-
-  @override
-  void didUpdateWidget(covariant _MemberRoleActionList oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // If the member role changed in the parent state, update local state so UI reflects it immediately.
-    if (oldWidget.member.role != widget.member.role) {
-      setState(() {
-        _currentRole = widget.member.role;
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    return FittedBox(
-      child: DropdownButton<AFRolePB>(
-        value: _currentRole,
-        items: [
-          DropdownMenuItem(value: AFRolePB.Owner, child: Text('工作空间所有者')),
-          DropdownMenuItem(value: AFRolePB.Member, child: Text('成员')),
-          DropdownMenuItem(value: AFRolePB.Guest, child: Text('受限成员')),
-        ],
-        onChanged: (v) {
-          if (v == null) return;
-          if (v == _currentRole) return;
-          // Optimistically update UI
-          setState(() {
-            _currentRole = v;
-          });
-          // Dispatch update event
-          context.read<WorkspaceMemberBloc>().add(
-                WorkspaceMemberEvent.updateWorkspaceMember(
-                  widget.member.email,
-                  v,
-                ),
-              );
-        },
-        underline: const SizedBox.shrink(),
-        elevation: 0,
-        dropdownColor: Theme.of(context).cardColor,
-        style: theme.textStyle.body.standard(
-          color: theme.textColorScheme.primary,
-        ),
-      ),
+    
+    // 定义角色选项
+    final roleOptions = [
+      _RoleActionWrapper(AFRolePB.Owner, member),
+      _RoleActionWrapper(AFRolePB.Member, member),
+      _RoleActionWrapper(AFRolePB.Guest, member),
+    ];
+
+    return PopoverActionList<_RoleActionWrapper>(
+      asBarrier: true,
+      direction: PopoverDirection.bottomWithCenterAligned,
+      actions: roleOptions,
+      buildChild: (controller) {
+        return FlowyButton(
+          useIntrinsicWidth:true,
+          onTap: () {
+            controller.show();
+          },
+          text: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FlowyText.regular(
+                _getRoleDisplayName(member.role),
+                color: theme.textColorScheme.primary,
+                fontSize: 14,
+              ),
+              FlowySvg(FlowySvgs.arrow_down_s,)
+            ],
+          ),
+        );
+      },
+      onSelected: (action, controller) {
+        if (action.role == member.role) {
+          controller.close();
+          return;
+        }
+        
+        // Dispatch update event
+        context.read<WorkspaceMemberBloc>().add(
+              WorkspaceMemberEvent.updateWorkspaceMember(
+                member.name,
+                action.role,
+              ),
+            );
+        controller.close();
+      },
     );
   }
+
+  String _getRoleDisplayName(AFRolePB role) {
+    switch (role) {
+      case AFRolePB.Owner:
+        return '工作空间所有者';
+      case AFRolePB.Member:
+        return '成员';
+      case AFRolePB.Guest:
+        return '受限成员';
+    }
+    return "";
+  }
+
 }

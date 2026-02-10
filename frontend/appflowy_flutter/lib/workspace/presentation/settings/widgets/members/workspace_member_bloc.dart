@@ -410,7 +410,7 @@ class WorkspaceMemberBloc
 
   Future<void> _onUpdateWorkspaceMember(
     Emitter<WorkspaceMemberState> emit,
-    String email,
+    String name,
     AFRolePB role,
   ) async {
     final workspaceId = _workspaceId.value;
@@ -421,12 +421,12 @@ class WorkspaceMemberBloc
 
     final result = await _userBackendService.updateWorkspaceMember(
       workspaceId,
-      email,
+      name,
       role,
     );
     final members = result.fold(
       (s) => state.members.map((e) {
-        if (e.email == email) {
+        if (e.name == name) {
           e.freeze();
           return e.rebuild((p0) => p0.role = role);
         }
