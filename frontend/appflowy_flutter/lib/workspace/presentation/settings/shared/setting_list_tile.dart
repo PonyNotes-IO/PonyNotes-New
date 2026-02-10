@@ -39,7 +39,7 @@ class SettingListTile extends StatelessWidget {
               ),
               if (hint != null)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
+                  padding: const EdgeInsets.only(top:4,bottom: 4),
                   child: FlowyText.regular(
                     hint!,
                     fontSize: 10,

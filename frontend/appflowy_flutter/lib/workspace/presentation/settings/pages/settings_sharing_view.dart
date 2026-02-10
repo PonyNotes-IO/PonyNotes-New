@@ -80,10 +80,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
       description: '',
       autoSeparate: false,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 16),
-          child: _buildTabSection(),
-        ),
+        _buildTabSection(),
         const VSpace(8),
         _buildTabContent(),
       ],
@@ -104,10 +101,9 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     });
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl =
-          cloudEnv.appflowyCloudConfig.base_url.isNotEmpty
-              ? cloudEnv.appflowyCloudConfig.base_url
-              : 'http://localhost:8000';
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url.isNotEmpty
+          ? cloudEnv.appflowyCloudConfig.base_url
+          : 'http://localhost:8000';
 
       final profileResult = await UserBackendService.getCurrentUserProfile();
       final userProfile = profileResult.fold(
@@ -269,8 +265,9 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
       }
 
       // 根据新的 API 响应结构，使用 oid 作为 viewId
-      final oid = (entry['oid'] ?? entry['object_id'] ?? entry['objectId'] ?? '')
-          .toString();
+      final oid =
+          (entry['oid'] ?? entry['object_id'] ?? entry['objectId'] ?? '')
+              .toString();
       if (oid.isEmpty) {
         continue;
       }
@@ -406,35 +403,35 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
 
   Widget _buildTabSection() {
     return Row(
-        children: _tabs.asMap().entries.map((entry) {
-          int index = entry.key;
-          String tab = entry.value;
+      children: _tabs.asMap().entries.map((entry) {
+        int index = entry.key;
+        String tab = entry.value;
         bool isSelected = _currentTab == index;
-          
-          return GestureDetector(
-            onTap: () {
+
+        return GestureDetector(
+          onTap: () {
             if (_currentTab != index) {
               setState(() {
                 _currentTab = index;
               });
             }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                border: isSelected ? null : Border.all(color: Colors.grey[300]!),
-              ),
-              child: FlowyText(
-                tab,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: isSelected ? Colors.white : Colors.grey[600],
-              ),
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: isSelected ? null : Border.all(color: Colors.grey[300]!),
             ),
-          );
-        }).toList(),
+            child: FlowyText(
+              tab,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: isSelected ? Colors.white : Colors.grey[600],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -451,7 +448,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
           : KeyedSubtree(
               key: const ValueKey('publish_tab'),
               child: _buildPublishedContent(),
-      ),
+            ),
     );
   }
 
@@ -689,7 +686,9 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
       item.info.publishTimestampSec.toInt(),
     );
     // 获取当前工作区ID
-    final workspaceId = context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ?? '';
+    final workspaceId =
+        context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ??
+            '';
     final String publishUrl = ShareConstants.buildPublishUrl(
       workspaceId: workspaceId,
       viewId: item.info.viewId,
@@ -814,9 +813,9 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
 
   String _formatPublishTime(int secondsSinceEpoch) {
     // 后端时间单位是秒
-    final dt =
-        DateTime.fromMillisecondsSinceEpoch(secondsSinceEpoch * 1000, isUtc: true)
-            .toLocal();
+    final dt = DateTime.fromMillisecondsSinceEpoch(secondsSinceEpoch * 1000,
+            isUtc: true)
+        .toLocal();
     final two = (int v) => v.toString().padLeft(2, '0');
     return '${dt.year}年${dt.month}月${dt.day}日 ${two(dt.hour)}:${two(dt.minute)}';
   }
@@ -846,8 +845,9 @@ class _ViewInviteMembersDialogState extends State<_ViewInviteMembersDialog> {
         final currentSharedUser = sharedUsers.firstWhereOrNull(
           (user) => user.email == state.currentUser?.email,
         );
-        final isInitialLoading =
-            sharedUsers.isEmpty && state.errorMessage.isEmpty && state.currentUser == null;
+        final isInitialLoading = sharedUsers.isEmpty &&
+            state.errorMessage.isEmpty &&
+            state.currentUser == null;
 
         return Dialog(
           insetPadding: const EdgeInsets.all(24),
@@ -871,8 +871,7 @@ class _ViewInviteMembersDialogState extends State<_ViewInviteMembersDialog> {
                         child: CircularProgressIndicator.adaptive(),
                       ),
                     )
-                  else if (state.errorMessage.isNotEmpty &&
-                      sharedUsers.isEmpty)
+                  else if (state.errorMessage.isNotEmpty && sharedUsers.isEmpty)
                     SizedBox(
                       height: 220,
                       child: Center(
@@ -965,8 +964,7 @@ class _ViewInviteMembersDialogState extends State<_ViewInviteMembersDialog> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    final viewTitle =
-        widget.view.name.isNotEmpty ? widget.view.name : '无标题';
+    final viewTitle = widget.view.name.isNotEmpty ? widget.view.name : '无标题';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1047,6 +1045,3 @@ class _ViewInviteMembersDialogState extends State<_ViewInviteMembersDialog> {
     }
   }
 }
-
-
-
