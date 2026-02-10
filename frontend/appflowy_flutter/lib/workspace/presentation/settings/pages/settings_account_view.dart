@@ -54,7 +54,7 @@ class _SettingsAccountViewState extends State<SettingsAccountView> {
         final latestUserProfile = settingsState.userProfile;
         final currentSubscription = settingsState.currentSubscription;
         final isLoadingSubscription = settingsState.isLoadingCurrentSubscription;
-
+        final theme = AppFlowyTheme.of(context);
         return BlocProvider<SettingsUserViewBloc>(
           create: (context) =>
               getIt<SettingsUserViewBloc>(param1: latestUserProfile)
@@ -67,7 +67,6 @@ class _SettingsAccountViewState extends State<SettingsAccountView> {
                   _AccountQuickActionsSection(
                     currentSubscription: currentSubscription,
                     isLoadingSubscription: isLoadingSubscription,
-                    didLogout: widget.didLogout,
                   ),
                   const VSpace(16),
                   // 保留原有账号设置内容（后续可以继续补充）
@@ -82,6 +81,45 @@ class _SettingsAccountViewState extends State<SettingsAccountView> {
                   // ],
                   // const VSpace(16),
                   // const AppVersion(),
+                  
+                  // 添加足够的间距，将退出登录按钮推到页面底部
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.4, // 调整高度以适应不同屏幕
+                  ),
+                  
+                  GestureDetector(
+                    onTap: () async {
+                      // 统一走 SettingsDialog 的 didLogout（会关闭弹窗并重启）
+                      try {
+                        await getIt<AuthService>().signOut();
+                      } catch (_) {}
+                      widget.didLogout();
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme
+                              .of(context)
+                              .colorScheme
+                              .primary,
+                          width: 1,
+                        ),
+                        borderRadius: BorderRadius.circular(theme.spacing.s),
+                      ),
+                      child: Center(
+                        child: FlowyText(
+                          '退出登录',
+                          fontSize: 16,
+                          color: Theme
+                              .of(context)
+                              .colorScheme
+                              .primary,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               );
             },
@@ -96,12 +134,10 @@ class _AccountQuickActionsSection extends StatelessWidget {
   const _AccountQuickActionsSection({
     required this.currentSubscription,
     required this.isLoadingSubscription,
-    required this.didLogout,
   });
 
   final CurrentSubscription? currentSubscription;
   final bool isLoadingSubscription;
-  final VoidCallback didLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -153,40 +189,6 @@ class _AccountQuickActionsSection extends StatelessWidget {
             title: '邮箱',
             trailing: '修改',
             showArrow: true,
-          ),
-        ),
-        const VSpace(20),
-        GestureDetector(
-          onTap: () async {
-            // 统一走 SettingsDialog 的 didLogout（会关闭弹窗并重启）
-            try {
-              await getIt<AuthService>().signOut();
-            } catch (_) {}
-            didLogout();
-          },
-          child: Container(
-            width: double.infinity,
-            padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme
-                    .of(context)
-                    .colorScheme
-                    .primary,
-                width: 1,
-              ),
-              borderRadius: BorderRadius.circular(theme.spacing.s),
-            ),
-            child: Center(
-              child: FlowyText(
-                '退出登录',
-                fontSize: 16,
-                color: Theme
-                    .of(context)
-                    .colorScheme
-                    .primary,
-              ),
-            ),
           ),
         ),
       ],
