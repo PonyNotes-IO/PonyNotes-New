@@ -145,7 +145,8 @@ class _AIInputAreaState extends State<AIInputArea> {
   }
 
   /// 检查是否有附件（图片或文件）
-  bool get _hasAttachments => _attachments.isNotEmpty || _selectedImages.isNotEmpty;
+  bool get _hasAttachments =>
+      _attachments.isNotEmpty || _selectedImages.isNotEmpty;
 
   /// 获取过滤后的模型列表
   /// 当有附件时，只返回支持多模态的模型
@@ -197,7 +198,9 @@ class _AIInputAreaState extends State<AIInputArea> {
     }
 
     // 【关键修复】如果有附件，确保当前模型支持
-    if (_hasAttachments && _selectedModel != null && !_selectedModel!.supportsImages) {
+    if (_hasAttachments &&
+        _selectedModel != null &&
+        !_selectedModel!.supportsImages) {
       final filteredModels = _getFilteredModels();
       if (filteredModels.isNotEmpty) {
         debugPrint('🔄 AIInputArea: 当前模型不支持附件，自动切换到支持的模型');
@@ -472,15 +475,14 @@ class _AIInputAreaState extends State<AIInputArea> {
     // 检查当前模型是否支持附件
     final currentModelSupportsAttachments =
         _selectedModel?.supportsImages ?? false;
-    final showWarning =
-        _hasAttachments && !currentModelSupportsAttachments;
+    final showWarning = _hasAttachments && !currentModelSupportsAttachments;
 
     return GestureDetector(
       key: _selectorKey, // 添加GlobalKey
       onTap: _toggleDropdown,
       child: Container(
         width: showWarning ? 140 : 102, // 有警告时加宽
-        height: 30,
+        height: showWarning ? 42 : 30, // 有警告时加高
         decoration: BoxDecoration(
           color: _getButtonBackgroundColor(context),
           borderRadius: BorderRadius.circular(6),
@@ -504,7 +506,8 @@ class _AIInputAreaState extends State<AIInputArea> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: _getButtonTextColor(context, _selectedModel != null),
+                      color:
+                          _getButtonTextColor(context, _selectedModel != null),
                       fontFamily: 'PingFangSC-Medium',
                     ),
                     overflow: TextOverflow.ellipsis,
@@ -632,7 +635,8 @@ class _AIInputAreaState extends State<AIInputArea> {
                                     color: isSelected
                                         ? AIWelcomeTheme.selectedItemTextColor(
                                             context)
-                                        : AIWelcomeTheme.primaryTextColor(context),
+                                        : AIWelcomeTheme.primaryTextColor(
+                                            context),
                                     fontWeight: isSelected
                                         ? FontWeight.w500
                                         : FontWeight.normal,

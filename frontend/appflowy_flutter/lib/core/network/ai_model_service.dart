@@ -8,6 +8,7 @@ class AIModel {
   final String name;
   final String description;
   final bool isDefault;
+
   /// 是否支持图片/文件等多模态输入
   final bool supportsImages;
 
@@ -20,24 +21,32 @@ class AIModel {
   });
 
   factory AIModel.fromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String;
+    // 【强制修复】通义千问(qwen)和豆包(doubao)确认为多模态模型
+    // 即使后端返回false，前端也强制视为支持图片
+    final isKnownMultimodal = id.toLowerCase().contains('qwen') ||
+        id.toLowerCase().contains('doubao');
+
     return AIModel(
-      id: json['id'] as String,
+      id: id,
       name: json['name'] as String,
       description: json['description'] as String? ?? '',
       isDefault: json['is_default'] as bool? ?? false,
-      supportsImages: json['supports_images'] as bool? ?? false,
+      supportsImages:
+          isKnownMultimodal || (json['supports_images'] as bool? ?? false),
     );
   }
 
   @override
-  String toString() => 'AIModel(id: $id, name: $name, isDefault: $isDefault, supportsImages: $supportsImages)';
+  String toString() =>
+      'AIModel(id: $id, name: $name, isDefault: $isDefault, supportsImages: $supportsImages)';
 }
 
 /// AI模型服务
 class AIModelService {
   static final AIModelService _instance = AIModelService._();
   static AIModelService get instance => _instance;
-  
+
   AIModelService._();
 
   List<AIModel> _cachedModels = [];
@@ -45,10 +54,11 @@ class AIModelService {
   static const _cacheDuration = Duration(minutes: 30);
 
   /// 获取可用的AI模型列表
-  Future<List<AIModel>> fetchAvailableModels({bool forceRefresh = false}) async {
+  Future<List<AIModel>> fetchAvailableModels(
+      {bool forceRefresh = false}) async {
     // 如果有缓存且未过期，直接返回缓存
-    if (!forceRefresh && 
-        _cachedModels.isNotEmpty && 
+    if (!forceRefresh &&
+        _cachedModels.isNotEmpty &&
         _lastFetchTime != null &&
         DateTime.now().difference(_lastFetchTime!) < _cacheDuration) {
       debugPrint('✅ 使用缓存的AI模型列表，共 ${_cachedModels.length} 个模型');
@@ -61,9 +71,9 @@ class AIModelService {
         'API_BASE_URL',
         defaultValue: 'https://api.xiaomabiji.com',
       );
-      
+
       debugPrint('🔍 正在从 $apiBaseUrl 获取AI模型列表...');
-      
+
       final response = await http.get(
         Uri.parse('$apiBaseUrl/api/ai/chat/models'),
         headers: {'Content-Type': 'application/json'},
@@ -72,30 +82,31 @@ class AIModelService {
       if (response.statusCode == 200) {
         final jsonData = json.decode(response.body) as Map<String, dynamic>;
         final modelsData = jsonData['data']['models'] as List<dynamic>;
-        
+
         _cachedModels = modelsData
             .map((model) => AIModel.fromJson(model as Map<String, dynamic>))
             .toList();
         _lastFetchTime = DateTime.now();
-        
+
         debugPrint('✅ 成功获取 ${_cachedModels.length} 个AI模型');
         for (final model in _cachedModels) {
-          debugPrint('   - ${model.name} (${model.id})${model.isDefault ? ' [默认]' : ''}');
+          debugPrint(
+              '   - ${model.name} (${model.id})${model.isDefault ? ' [默认]' : ''}');
         }
-        
+
         return _cachedModels;
       } else {
         throw Exception('获取模型列表失败: HTTP ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('❌ 获取AI模型列表失败: $e');
-      
+
       // 如果有旧缓存，返回旧缓存
       if (_cachedModels.isNotEmpty) {
         debugPrint('⚠️  使用缓存的模型列表');
         return _cachedModels;
       }
-      
+
       // 返回默认硬编码列表作为fallback
       debugPrint('⚠️  使用默认硬编码模型列表');
       return _getDefaultModels();
@@ -160,4 +171,3 @@ class AIModelService {
     return false;
   }
 }
-

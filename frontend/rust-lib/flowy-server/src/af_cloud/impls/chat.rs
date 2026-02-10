@@ -67,6 +67,7 @@ where
       content: message.to_string(),
       message_type,
       prompt_id,
+      metadata: None,
     };
 
     let message = try_get_client?
