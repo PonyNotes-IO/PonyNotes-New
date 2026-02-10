@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
+
+import '../../../generated/flowy_svgs.g.dart';
 
 class LegalDocumentScreen extends StatelessWidget {
   const LegalDocumentScreen({
@@ -15,13 +18,19 @@ class LegalDocumentScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: FlowySvg(
+            FlowySvgs.m_app_bar_back_s,
+            color: theme.textColorScheme.primary,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        backgroundColor: theme.surfaceColorScheme.primary,
+        foregroundColor: theme.textColorScheme.primary,
       ),
       body: url != null && url?.isNotEmpty == true ? InAppWebView(
         initialUrlRequest: URLRequest(url: WebUri(url ?? "")),

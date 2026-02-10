@@ -521,7 +521,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
                               builder: (context) => LegalDocumentScreen(
                                 title: LocaleKeys.sidebar_appName.tr() +
                                     LocaleKeys.legal_userAgreement.tr(),
-                                url: "$base_web_domain/agreement",
+                                url: "$base_web_domain/agreements/paidSubscription",
                               ),
                             ),
                           );
