@@ -212,8 +212,8 @@ class _WorkspaceMembersPageState extends State<WorkspaceMembersPage> {
                         ? state.members
                         : state.members.where((m) {
                             final q = _searchQuery;
-                            final name = (m.name ?? '').toLowerCase();
-                            final email = (m.email ?? '').toLowerCase();
+                            final name = m.name.toLowerCase();
+                            final email = m.email.toLowerCase();
                             return name.contains(q) || email.contains(q);
                           }).toList(),
                     userProfile: widget.userProfile,
@@ -788,7 +788,7 @@ enum _MemberMoreAction {
   delete,
 }
 
-class _MemberMoreActionList extends StatelessWidget {
+class _MemberMoreActionList extends StatefulWidget {
   const _MemberMoreActionList({
     required this.member,
   });
@@ -796,12 +796,70 @@ class _MemberMoreActionList extends StatelessWidget {
   final WorkspaceMemberPB member;
 
   @override
+  State<_MemberMoreActionList> createState() => _MemberMoreActionListState();
+}
+
+class _MemberMoreActionListState extends State<_MemberMoreActionList> {
+  String _memberIdentifier = '';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMemberIdentifier();
+  }
+
+  Future<void> _loadMemberIdentifier() async {
+    final member = widget.member;
+    // 优先使用 email
+    if (member.email.isNotEmpty) {
+      setState(() {
+        _memberIdentifier = member.email;
+        _isLoading = false;
+      });
+    } else {
+      // 如果 email 为空，尝试通过 name 搜索获取用户的 email 或 phone
+      try {
+        final repo = RustShareWithUserRepositoryImpl();
+        final res = await repo.searchUsers(query: member.name);
+        res.fold((users) {
+          // 查找与当前成员匹配的用户
+          final match = users.firstWhereOrNull(
+            (u) => (u.email.isNotEmpty) || (u.phone?.isNotEmpty ?? false),
+          );
+          setState(() {
+            // 如果找到匹配用户，优先使用 email，否则使用 phone
+            if (match != null && match.email.isNotEmpty) {
+              _memberIdentifier = match.email;
+            } else {
+              _memberIdentifier = match?.phone ?? '';
+            }
+            _isLoading = false;
+          });
+        }, (_) {
+          // 搜索失败，使用 name 作为后备
+          setState(() {
+            _memberIdentifier = member.name;
+            _isLoading = false;
+          });
+        });
+      } catch (_) {
+        // 异常情况下使用 name
+        setState(() {
+          _memberIdentifier = member.name;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return PopoverActionList<_MemberMoreActionWrapper>(
       asBarrier: true,
       direction: PopoverDirection.bottomWithCenterAligned,
       actions: _MemberMoreAction.values
-          .map((e) => _MemberMoreActionWrapper(e, member))
+          .map((e) => _MemberMoreActionWrapper(e, widget.member))
           .toList(),
       buildChild: (controller) {
         return FlowyButton(
@@ -819,6 +877,15 @@ class _MemberMoreActionList extends StatelessWidget {
       onSelected: (action, controller) {
         switch (action.inner) {
           case _MemberMoreAction.delete:
+            if (_isLoading) {
+              // 正在加载中，不执行删除操作
+              break;
+            }
+            // 使用获取到的标识符（email 或 phone）
+            final identifier = _memberIdentifier.isNotEmpty
+                ? _memberIdentifier
+                : widget.member.name;
+            
             showCancelAndDeleteDialog(
               context: context,
               title: LocaleKeys.settings_appearance_members_removeMember.tr(),
@@ -826,11 +893,13 @@ class _MemberMoreActionList extends StatelessWidget {
                   .settings_appearance_members_areYouSureToRemoveMember
                   .tr(),
               confirmLabel: LocaleKeys.button_delete.tr(),
-              onDelete: () => context.read<WorkspaceMemberBloc>().add(
-                    WorkspaceMemberEvent.removeWorkspaceMemberByEmail(
-                      action.member.name,
-                    ),
-                  ),
+              onDelete: () {
+                // 使用 BlocBuilder 确保在 widget active 时才发送事件
+                if (!context.mounted) return;
+                context.read<WorkspaceMemberBloc>().add(
+                      WorkspaceMemberEvent.removeWorkspaceMemberByEmail(identifier),
+                    );
+              },
               closeOnAction: true
             );
             break;
