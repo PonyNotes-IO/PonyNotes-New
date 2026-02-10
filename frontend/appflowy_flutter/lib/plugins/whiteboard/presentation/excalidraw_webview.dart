@@ -160,11 +160,24 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           final data = await service.loadWhiteboardData(widget.viewId);
 
           data.forEach((key, value) async {
+            // 修复：确保 value 是 JSON 字符串
+            final stringValue = value is String ? value : jsonEncode(value);
+
+            // 修复：映射键名到 Excalidraw 期望的 LocalStorage 键
+            String lsKey = key;
+            if (key == 'files') {
+              lsKey = 'excalidraw-files';
+            } else if (key == 'elements') {
+              lsKey = 'excalidraw';
+            } else if (key == 'appState') {
+              lsKey = 'excalidraw-state';
+            }
+
             await _controller!.webStorage.localStorage.setItem(
-              key: key,
-              value: value,
+              key: lsKey,
+              value: stringValue,
             );
-            // debug log removed
+            Log.debug('[ExcalidrawWebView] initData set LS: $lsKey');
           });
         });
     controller.addJavaScriptHandler(
@@ -301,15 +314,15 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       final dataJson = jsonEncode(dataToLoad);
       // debug log removed
 
-      // await _controller?.evaluateJavascript(source: '''
-      //   console.log('[ExcalidrawWebView] Loading data into Excalidraw with viewId: ${widget.viewId}');
-      //   if (window.loadExcalidrawData) {
-      //     window.loadExcalidrawData($dataJson);
-      //     console.log('[ExcalidrawWebView] Data loaded successfully');
-      //   } else {
-      //     console.error('[ExcalidrawWebView] window.loadExcalidrawData not found!');
-      //   }
-      // ''');
+      await _controller?.evaluateJavascript(source: '''
+        console.log('[ExcalidrawWebView] Loading data into Excalidraw with viewId: ${widget.viewId}');
+        if (window.loadExcalidrawData) {
+          window.loadExcalidrawData($dataJson);
+          console.log('[ExcalidrawWebView] Data loaded successfully');
+        } else {
+          console.error('[ExcalidrawWebView] window.loadExcalidrawData not found!');
+        }
+      ''');
       // debug log removed
 
       // 首先隐藏加载时的底图标志（尽早执行，避免闪现）
