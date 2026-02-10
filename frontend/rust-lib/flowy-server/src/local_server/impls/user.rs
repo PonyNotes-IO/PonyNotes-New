@@ -359,6 +359,23 @@ impl UserCloudService for LocalServerUserServiceImpl {
       only_owner_can_create_team_workspace: row.only_owner_can_create_team_workspace,
     })
   }
+
+  async fn remove_workspace_member(
+    &self,
+    _user_identifier: String,
+    _workspace_id: Uuid,
+  ) -> Result<(), FlowyError> {
+    Err(FlowyError::local_version_not_support().with_context("Not support remove workspace member in local mode"))
+  }
+
+  async fn update_workspace_member(
+    &self,
+    _user_identifier: String,
+    _workspace_id: Uuid,
+    _role: Role,
+  ) -> Result<(), FlowyError> {
+    Err(FlowyError::local_version_not_support().with_context("Not support update workspace member in local mode"))
+  }
 }
 
 fn insert_collabs(

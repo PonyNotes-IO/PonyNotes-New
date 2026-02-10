@@ -879,13 +879,16 @@ class _MemberMoreActionListState extends State<_MemberMoreActionList> {
           case _MemberMoreAction.delete:
             if (_isLoading) {
               // 正在加载中，不执行删除操作
+              Log.error('删除失败: 成员标识符加载中, _isLoading=$_isLoading, _memberIdentifier=$_memberIdentifier');
               break;
             }
             // 使用获取到的标识符（email 或 phone）
             final identifier = _memberIdentifier.isNotEmpty
                 ? _memberIdentifier
                 : widget.member.name;
-            
+
+            Log.info('准备删除成员: name=${widget.member.name}, identifier=$identifier, email=${widget.member.email}');
+
             showCancelAndDeleteDialog(
               context: context,
               title: LocaleKeys.settings_appearance_members_removeMember.tr(),
@@ -894,8 +897,12 @@ class _MemberMoreActionListState extends State<_MemberMoreActionList> {
                   .tr(),
               confirmLabel: LocaleKeys.button_delete.tr(),
               onDelete: () {
+                Log.info('确认删除成员: identifier=$identifier');
                 // 使用 BlocBuilder 确保在 widget active 时才发送事件
-                if (!context.mounted) return;
+                if (!context.mounted) {
+                  Log.error('删除失败: context 已卸载');
+                  return;
+                }
                 context.read<WorkspaceMemberBloc>().add(
                       WorkspaceMemberEvent.removeWorkspaceMemberByEmail(identifier),
                     );

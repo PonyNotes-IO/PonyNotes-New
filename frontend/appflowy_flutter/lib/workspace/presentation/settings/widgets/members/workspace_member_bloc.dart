@@ -328,23 +328,36 @@ class WorkspaceMemberBloc
 
   Future<void> _onRemoveWorkspaceMemberByEmail(
     Emitter<WorkspaceMemberState> emit,
-    String email,
+    String identifier,
   ) async {
     final workspaceId = _workspaceId.value;
     if (workspaceId == null) {
       Log.error(
-        'Failed to remove workspace member by email: workspaceId is null',
+        'Failed to remove workspace member by identifier: workspaceId is null',
       );
       return;
     }
 
+    Log.info('正在删除成员: identifier=$identifier');
+
     final result = await _userBackendService.removeWorkspaceMember(
       workspaceId,
-      email,
+      identifier,
     );
+
+    // 使用 identifier 来过滤，因为 identifier 可能是 email 或 phone
     final members = result.fold(
-      (s) => state.members.where((e) => e.email != email).toList(),
-      (e) => state.members,
+      (s) {
+        Log.info('删除成功，更新成员列表，移除 identifier=$identifier');
+        // 通过 email 匹配（手机号用户 email 为空，不匹配也没关系，因为后端已删除）
+        return state.members.where((e) {
+          return e.email != identifier;
+        }).toList();
+      },
+      (e) {
+        Log.error('删除失败: ${e.msg}');
+        return state.members;
+      },
     );
     emit(
       state.copyWith(
