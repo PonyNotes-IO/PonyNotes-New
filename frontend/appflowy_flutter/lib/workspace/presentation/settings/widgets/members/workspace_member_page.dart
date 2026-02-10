@@ -1000,9 +1000,10 @@ class _MemberRoleActionList extends StatelessWidget {
         }
         
         // Dispatch update event
+        // 使用 email 而不是 name，因为后端 API 需要 email 来识别用户
         context.read<WorkspaceMemberBloc>().add(
               WorkspaceMemberEvent.updateWorkspaceMember(
-                member.name,
+                member.email.isNotEmpty ? member.email : member.name,
                 action.role,
               ),
             );
