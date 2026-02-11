@@ -333,7 +333,7 @@ where
     role: Role,
   ) -> Result<(), FlowyError> {
     let try_get_client = self.server.try_get_client();
-    let changeset = WorkspaceMemberChangeset::new(user_identifier).with_role(to_af_role(role));
+    let changeset = WorkspaceMemberChangeset::new_from_email(user_identifier).with_role(to_af_role(role));
     try_get_client?
       .update_workspace_member(&workspace_id, changeset)
       .await?;
