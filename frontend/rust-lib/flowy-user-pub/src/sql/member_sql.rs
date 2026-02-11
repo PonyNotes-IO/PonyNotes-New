@@ -22,7 +22,6 @@ pub struct WorkspaceMemberTable {
 impl From<WorkspaceMemberTable> for WorkspaceMember {
   fn from(value: WorkspaceMemberTable) -> Self {
     Self {
-      uid: value.uid,
       email: value.email,
       role: Role::from(value.role),
       name: value.name,

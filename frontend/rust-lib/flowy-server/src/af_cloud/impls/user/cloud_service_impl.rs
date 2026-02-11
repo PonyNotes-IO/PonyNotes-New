@@ -333,18 +333,7 @@ where
     role: Role,
   ) -> Result<(), FlowyError> {
     let try_get_client = self.server.try_get_client();
-
-    // 判断user_identifier是uid还是email
-    let changeset = if user_identifier.parse::<i64>().is_ok() {
-      // 是uid
-      WorkspaceMemberChangeset::new_with_uid(user_identifier.parse().unwrap())
-        .with_role(to_af_role(role))
-    } else {
-      // 是email
-      WorkspaceMemberChangeset::new_with_email(user_identifier)
-        .with_role(to_af_role(role))
-    };
-
+    let changeset = WorkspaceMemberChangeset::new(user_identifier).with_role(to_af_role(role));
     try_get_client?
       .update_workspace_member(&workspace_id, changeset)
       .await?;

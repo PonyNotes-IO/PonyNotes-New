@@ -469,25 +469,21 @@ class UserBackendService implements IUserBackendService {
 
   Future<FlowyResult<void, FlowyError>> removeWorkspaceMember(
     String workspaceId,
-    int uid,  // 使用用户ID，这是最准确的标识符
-    String email,  // 保留email作为后备
+    String identifier,
   ) async {
     final data = RemoveWorkspaceMemberPB()
       ..workspaceId = workspaceId
-      ..uid = Int64(uid)  // 转换为Int64
-      ..email = email;
+      ..identifier = identifier;
     return UserEventRemoveWorkspaceMember(data).send();
   }
 
   Future<FlowyResult<void, FlowyError>> updateWorkspaceMember(
     String workspaceId,
-    int uid,  // 使用用户ID，这是最准确的标识符
-    String email,  // 保留email作为后备
+    String email,
     AFRolePB role,
   ) async {
     final data = UpdateWorkspaceMemberPB()
       ..workspaceId = workspaceId
-      ..uid = Int64(uid)  // 转换为Int64
       ..email = email
       ..role = role;
     return UserEventUpdateWorkspaceMember(data).send();

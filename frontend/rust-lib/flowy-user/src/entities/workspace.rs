@@ -154,28 +154,24 @@ use lib_infra::validator_fn::{email_or_phone, required_not_empty_str};
 #[derive(ProtoBuf, Default, Clone)]
 pub struct WorkspaceMemberPB {
   #[pb(index = 1)]
-  pub uid: i64,  // 用户ID，最准确的标识符
-
-  #[pb(index = 2)]
   pub email: String,
 
-  #[pb(index = 3)]
+  #[pb(index = 2)]
   pub name: String,
 
-  #[pb(index = 4)]
+  #[pb(index = 3)]
   pub role: AFRolePB,
 
-  #[pb(index = 5, one_of)]
+  #[pb(index = 4, one_of)]
   pub avatar_url: Option<String>,
 
-  #[pb(index = 6, one_of)]
+  #[pb(index = 5, one_of)]
   pub joined_at: Option<i64>,
 }
 
 impl From<WorkspaceMember> for WorkspaceMemberPB {
   fn from(value: WorkspaceMember) -> Self {
     Self {
-      uid: value.uid,
       email: value.email,
       name: value.name,
       role: value.role.into(),
@@ -399,13 +395,9 @@ pub struct RemoveWorkspaceMemberPB {
   #[validate(custom(function = "required_not_empty_str"))]
   pub workspace_id: String,
 
-  /// 用户ID，最准确的标识符
   #[pb(index = 2)]
-  pub uid: i64,
-
-  /// 用户邮箱（保留用于兼容，如果没有uid则使用email）
-  #[pb(index = 3)]
-  pub email: String,
+  #[validate(custom(function = "required_not_empty_str"))]
+  pub identifier: String,
 }
 
 #[derive(ProtoBuf, Default, Clone, Validate)]
@@ -414,15 +406,11 @@ pub struct UpdateWorkspaceMemberPB {
   #[validate(custom(function = "required_not_empty_str"))]
   pub workspace_id: String,
 
-  /// 用户ID，最准确的标识符
   #[pb(index = 2)]
-  pub uid: i64,
-
-  /// 用户邮箱（保留用于兼容，如果没有uid则使用email）
-  #[pb(index = 3)]
+  #[validate(email)]
   pub email: String,
 
-  #[pb(index = 4)]
+  #[pb(index = 3)]
   pub role: AFRolePB,
 }
 

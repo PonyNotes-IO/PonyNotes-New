@@ -794,16 +794,8 @@ pub async fn delete_workspace_member_handler(
   let data = data.try_into_inner()?;
   let manager = upgrade_manager(manager)?;
   let workspace_id = Uuid::from_str(&data.workspace_id)?;
-
-  // 优先使用uid，如果uid为0则使用email作为后备
-  let user_identifier = if data.uid != 0 {
-    data.uid.to_string()
-  } else {
-    data.email.clone()
-  };
-
   manager
-    .remove_workspace_member(user_identifier, workspace_id)
+    .remove_workspace_member(data.identifier, workspace_id)
     .await?;
   Ok(())
 }
@@ -950,16 +942,8 @@ pub async fn update_workspace_member_handler(
   let data = data.try_into_inner()?;
   let manager = upgrade_manager(manager)?;
   let workspace_id = Uuid::from_str(&data.workspace_id)?;
-
-  // 优先使用uid，如果uid为0则使用email作为后备
-  let user_identifier = if data.uid != 0 {
-    data.uid.to_string()
-  } else {
-    data.email.clone()
-  };
-
   manager
-    .update_workspace_member(user_identifier, workspace_id, data.role.into())
+    .update_workspace_member(data.email, workspace_id, data.role.into())
     .await?;
   Ok(())
 }

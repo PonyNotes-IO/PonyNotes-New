@@ -707,7 +707,6 @@ impl UserManager {
       }
 
       return Ok(WorkspaceMember {
-        uid: member_record.uid,
         email: member_record.email,
         role: member_record.role.into(),
         name: member_record.name,

@@ -52,20 +52,20 @@ class ShareTab extends StatefulWidget {
 }
 
 class _ShareTabState extends State<ShareTab> {
-  final TextEditingController controller = TextEditingController();
-  late final ShareTabBloc shareTabBloc;
+  final TextEditingController _inviteController = TextEditingController();
+  late final ShareTabBloc _bloc;
 
   @override
   void initState() {
     super.initState();
 
-    shareTabBloc = context.read<ShareTabBloc>();
+    _bloc = context.read<ShareTabBloc>();
   }
 
   @override
   void dispose() {
-    controller.dispose();
-    shareTabBloc.add(ShareTabEvent.clearState());
+    _inviteController.dispose();
+    _bloc.add(ShareTabEvent.clearState());
 
     super.dispose();
   }
@@ -199,7 +199,7 @@ class _ShareTabState extends State<ShareTab> {
   }
 
   void _handleShareWithUser({required List<String> emails}) {
-    shareTabBloc.add(
+    _bloc.add(
       ShareTabEvent.inviteUsers(
         emails: emails,
         accessLevel: ShareAccessLevel.readAndWrite,
@@ -216,13 +216,13 @@ class _ShareTabState extends State<ShareTab> {
 
   void _onListenShareWithUserState(
     BuildContext context,
-    ShareTabState state,
+    ShareTabState shareState,
   ) {
-    final shareResult = state.shareResult;
+    final shareResult = shareState.shareResult;
     if (shareResult != null) {
       shareResult.fold((success) {
         // clear the controller to avoid showing the previous emails
-        controller.clear();
+        _inviteController.clear();
 
         showToastNotification(
           message: LocaleKeys.shareTab_invitationSent.tr(),
@@ -249,7 +249,7 @@ class _ShareTabState extends State<ShareTab> {
       });
     }
 
-    final removeResult = state.removeResult;
+    final removeResult = shareState.removeResult;
     if (removeResult != null) {
       removeResult.fold((success) {
         showToastNotification(
@@ -263,7 +263,7 @@ class _ShareTabState extends State<ShareTab> {
       });
     }
 
-    final updateAccessLevelResult = state.updateAccessLevelResult;
+    final updateAccessLevelResult = shareState.updateAccessLevelResult;
     if (updateAccessLevelResult != null) {
       updateAccessLevelResult.fold((success) {
         showToastNotification(
@@ -277,7 +277,7 @@ class _ShareTabState extends State<ShareTab> {
       });
     }
 
-    final turnIntoMemberResult = state.turnIntoMemberResult;
+    final turnIntoMemberResult = shareState.turnIntoMemberResult;
     if (turnIntoMemberResult != null) {
       turnIntoMemberResult.fold((success) {
         showToastNotification(
@@ -486,11 +486,12 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
     );
   }
 
-  void _addCollaborator(SharedUser user) {
-    // 调用 bloc 事件添加协作用户，默认赋予只读权限
+  void _addCollaborator(SharedUser user, ShareAccessLevel accessLevel) {
+    // 调用 bloc 事件添加协作用户，使用选定的权限
     _bloc.add(
       ShareTabEvent.addCollaborator(
         user: user,
+        accessLevel: accessLevel,
       ),
     );
   }
@@ -581,22 +582,10 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                   const Divider(height: 1),
                   VSpace(theme.spacing.m),
 
-                  // Search input
-                  _UserSearchField(
-                    controller: _inviteController,
-                    onSearch: (query) {
-                      _bloc.add(
-                        ShareTabEvent.searchAvailableUsers(query: query),
-                      );
-                    },
-                    onUserSelected: (user) {
-                      // _inviteUser(user);
-                      _addCollaborator(user);
-                      _inviteController.clear();
-                      _bloc.add(
-                        ShareTabEvent.searchAvailableUsers(query: ''),
-                      );
-                    },
+                  // 权限选择和搜索框
+                  _AccessLevelSelector(
+                    inviteController: _inviteController,
+                    bloc: _bloc,
                     availableUsers: state.availableUsers,
                     existingUsers: allUsers,
                   ),
@@ -1218,6 +1207,123 @@ class _RoundIconButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 权限选择和搜索组件
+class _AccessLevelSelector extends StatefulWidget {
+  const _AccessLevelSelector({
+    required this.inviteController,
+    required this.bloc,
+    required this.availableUsers,
+    required this.existingUsers,
+  });
+
+  final TextEditingController inviteController;
+  final ShareTabBloc bloc;
+  final List<SharedUser> availableUsers;
+  final List<SharedUser> existingUsers;
+
+  @override
+  State<_AccessLevelSelector> createState() => _AccessLevelSelectorState();
+}
+
+class _AccessLevelSelectorState extends State<_AccessLevelSelector> {
+  ShareAccessLevel _selectedLevel = ShareAccessLevel.readAndWrite;
+
+  String _getAccessLevelLabel(ShareAccessLevel level) {
+    switch (level) {
+      case ShareAccessLevel.readOnly:
+        return '仅查看';
+      case ShareAccessLevel.readAndComment:
+        return '查看和评论';
+      case ShareAccessLevel.readAndWrite:
+        return '查看和编辑';
+      case ShareAccessLevel.fullAccess:
+        return '完全访问';
+    }
+  }
+
+  void _addCollaborator(SharedUser user, ShareAccessLevel accessLevel) {
+    widget.bloc.add(
+      ShareTabEvent.addCollaborator(
+        user: user,
+        accessLevel: accessLevel,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    return Row(
+      children: [
+        FlowyText.medium(
+          '权限:',
+          color: theme.textColorScheme.primary,
+        ),
+        const HSpace(8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: theme.surfaceContainerColorScheme.layer02,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: theme.borderColorScheme.primary.withValues(alpha: 0.3),
+            ),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<ShareAccessLevel>(
+              value: _selectedLevel,
+              icon: FlowySvg(
+                FlowySvgs.arrow_down_s,
+                size: const Size.square(16),
+                color: theme.iconColorScheme.primary,
+              ),
+              style: theme.textStyle.body.standard(
+                color: theme.textColorScheme.primary,
+              ),
+              dropdownColor: theme.surfaceContainerColorScheme.layer01,
+              borderRadius: BorderRadius.circular(8),
+              items: ShareAccessLevel.values.map((level) {
+                return DropdownMenuItem(
+                  value: level,
+                  child: Text(_getAccessLevelLabel(level)),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _selectedLevel = value;
+                  });
+                }
+              },
+            ),
+          ),
+        ),
+        const HSpace(8),
+        Expanded(
+          child: _UserSearchField(
+            controller: widget.inviteController,
+            onSearch: (query) {
+              widget.bloc.add(
+                ShareTabEvent.searchAvailableUsers(query: query),
+              );
+            },
+            onUserSelected: (user) {
+              _addCollaborator(user, _selectedLevel);
+              widget.inviteController.clear();
+              widget.bloc.add(
+                ShareTabEvent.searchAvailableUsers(query: ''),
+              );
+            },
+            availableUsers: widget.availableUsers,
+            existingUsers: widget.existingUsers,
+          ),
+        ),
+      ],
     );
   }
 }

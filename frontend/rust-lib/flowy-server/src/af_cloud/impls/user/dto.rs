@@ -86,7 +86,6 @@ pub fn from_af_role(role: AFRole) -> Role {
 
 pub fn from_af_workspace_member(member: AFWorkspaceMember) -> WorkspaceMember {
   WorkspaceMember {
-    uid: member.uid,
     email: member.email.unwrap_or_default(),
     role: from_af_role(member.role),
     name: member.name,

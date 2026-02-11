@@ -2635,6 +2635,8 @@ impl FolderManager {
     }
 
     // 2. Fetch the data from the cloud service and persist to the local database
+    // 注意：这里使用当前用户的 workspace_id 来调用 API
+    // 但 API 返回的文档可能属于不同的 workspace_id
     let cloud_workspace_id = workspace_id;
     let user = self.user.clone();
     let cloud_service = self.cloud_service.clone();
@@ -2646,6 +2648,12 @@ impl FolderManager {
               .shared_views
               .iter()
               .filter_map(|shared_view| {
+                // 使用返回的 workspace_id，而不是当前用户的 workspace_id
+                let doc_workspace_id = shared_view.workspace_id
+                  .as_ref()
+                  .map(|id| id.to_string())
+                  .unwrap_or_else(|| cloud_workspace_id.to_string());
+                
                 // Get the highest access level from shared_users
                 let access_level = shared_view
                   .shared_users
@@ -2656,7 +2664,7 @@ impl FolderManager {
                 
                 Some(WorkspaceSharedViewTable {
                   uid,
-                  workspace_id: cloud_workspace_id.to_string(),
+                  workspace_id: doc_workspace_id,
                   view_id: shared_view.view_id.to_string(),
                   permission_id: access_level,
                   created_at: None,
@@ -2694,8 +2702,11 @@ impl FolderManager {
                       .cloned()
                       .collect()
                   });
-                  // Set workspace_id on the view itself
-                  let workspace_id_str = cloud_workspace_id.to_string();
+                  // 使用返回的 workspace_id
+                  let workspace_id_str = shared_view.workspace_id
+                    .as_ref()
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| cloud_workspace_id.to_string());
                   Some(SharedViewPB {
                     view: view_pb,
                     access_level: AFAccessLevelPB::from(access_level),

@@ -188,8 +188,7 @@ class _MemberItem extends StatelessWidget {
           onTap: () {
             workspaceMemberBloc.add(
               WorkspaceMemberEvent.removeWorkspaceMemberByEmail(
-                member.uid,  // 使用用户ID
-                member.email,  // 保留email作为后备
+                member.email,
               ),
             );
             Navigator.of(context).pop();
