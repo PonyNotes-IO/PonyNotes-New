@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/shared/af_role_pb_extension.dart';
@@ -15,9 +18,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
-import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fixnum/fixnum.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:protobuf/protobuf.dart';
 
@@ -47,13 +48,13 @@ class WorkspaceMemberBloc
         addWorkspaceMember: (email) async => _onAddWorkspaceMember(emit, email),
         inviteWorkspaceMemberByEmail: (email, role) async =>
             _onInviteWorkspaceMemberByEmail(emit, email, role),
-        removeWorkspaceMemberByEmail: (email) async =>
-            _onRemoveWorkspaceMemberByEmail(emit, email),
+        removeWorkspaceMemberByEmail: (uid, email) async =>
+            _onRemoveWorkspaceMemberByEmail(emit, uid, email),
         inviteWorkspaceMemberByLink: (link) async =>
             _onInviteWorkspaceMemberByLink(emit, link),
         generateInviteLink: () async => _onGenerateInviteLink(emit),
-        updateWorkspaceMember: (email, role) async =>
-            _onUpdateWorkspaceMember(emit, email, role),
+        updateWorkspaceMember: (uid, email, role) async =>
+            _onUpdateWorkspaceMember(emit, uid, email, role),
         updateSubscriptionInfo: (info) async =>
             _onUpdateSubscriptionInfo(emit, info),
         upgradePlan: () async => _onUpgradePlan(),
@@ -328,7 +329,8 @@ class WorkspaceMemberBloc
 
   Future<void> _onRemoveWorkspaceMemberByEmail(
     Emitter<WorkspaceMemberState> emit,
-    String identifier,
+    Int64 uid,  // 使用用户ID
+    String email,  // 保留email作为后备
   ) async {
     final workspaceId = _workspaceId.value;
     if (workspaceId == null) {
@@ -338,20 +340,20 @@ class WorkspaceMemberBloc
       return;
     }
 
-    Log.info('正在删除成员: identifier=$identifier');
+    Log.info('正在删除成员: uid=$uid, email=$email');
 
     final result = await _userBackendService.removeWorkspaceMember(
       workspaceId,
-      identifier,
+      uid.toInt(),  // 转换为int
+      email,
     );
 
-    // 使用 identifier 来过滤，因为 identifier 可能是 email 或 phone
+    // 使用 uid 来过滤，因为 uid 是最准确的标识符
     final members = result.fold(
       (s) {
-        Log.info('删除成功，更新成员列表，移除 identifier=$identifier');
-        // 通过 email 匹配（手机号用户 email 为空，不匹配也没关系，因为后端已删除）
+        Log.info('删除成功，更新成员列表，移除 uid=$uid');
         return state.members.where((e) {
-          return e.email != identifier;
+          return e.uid != uid;
         }).toList();
       },
       (e) {
@@ -423,7 +425,7 @@ class WorkspaceMemberBloc
 
   Future<void> _onUpdateWorkspaceMember(
     Emitter<WorkspaceMemberState> emit,
-    int uid,  // 使用用户ID，这是最准确的标识符
+    Int64 uid,  // 使用用户ID，这是最准确的标识符
     String email,  // 保留email作为后备
     AFRolePB role,
   ) async {
@@ -435,7 +437,7 @@ class WorkspaceMemberBloc
 
     final result = await _userBackendService.updateWorkspaceMember(
       workspaceId,
-      uid,
+      uid.toInt(),  // 转换为int传递给user_service
       email,
       role,
     );
@@ -623,10 +625,11 @@ class WorkspaceMemberEvent with _$WorkspaceMemberEvent {
     AFRolePB role,
   ) = InviteWorkspaceMemberByEmail;
   const factory WorkspaceMemberEvent.removeWorkspaceMemberByEmail(
-    String email,
+    Int64 uid,  // 使用用户ID
+    String email,  // 保留email作为后备
   ) = RemoveWorkspaceMemberByEmail;
   const factory WorkspaceMemberEvent.updateWorkspaceMember(
-    int uid,  // 使用用户ID，这是最准确的标识符
+    Int64 uid,  // 使用用户ID，这是最准确的标识符
     String email,  // 保留email作为后备
     AFRolePB role,
   ) = UpdateWorkspaceMember;
