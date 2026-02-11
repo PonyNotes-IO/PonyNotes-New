@@ -422,6 +422,7 @@ impl From<AFRole> for Role {
 }
 
 pub struct WorkspaceMember {
+  pub uid: i64,  // 用户ID，最准确的标识符
   pub email: String,
   pub role: Role,
   pub name: String,

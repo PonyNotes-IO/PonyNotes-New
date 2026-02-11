@@ -1000,10 +1000,11 @@ class _MemberRoleActionList extends StatelessWidget {
         }
         
         // Dispatch update event
-        // 使用 email 而不是 name，因为后端 API 需要 email 来识别用户
+        // 使用 uid 作为用户标识符，这是最准确的标识方式
         context.read<WorkspaceMemberBloc>().add(
               WorkspaceMemberEvent.updateWorkspaceMember(
-                member.email.isNotEmpty ? member.email : member.name,
+                member.uid,  // 使用用户ID
+                member.email,  // 保留email作为后备
                 action.role,
               ),
             );

@@ -423,7 +423,8 @@ class WorkspaceMemberBloc
 
   Future<void> _onUpdateWorkspaceMember(
     Emitter<WorkspaceMemberState> emit,
-    String name,
+    int uid,  // 使用用户ID，这是最准确的标识符
+    String email,  // 保留email作为后备
     AFRolePB role,
   ) async {
     final workspaceId = _workspaceId.value;
@@ -434,12 +435,13 @@ class WorkspaceMemberBloc
 
     final result = await _userBackendService.updateWorkspaceMember(
       workspaceId,
-      name,
+      uid,
+      email,
       role,
     );
     final members = result.fold(
       (s) => state.members.map((e) {
-        if (e.name == name) {
+        if (e.uid == uid) {
           e.freeze();
           return e.rebuild((p0) => p0.role = role);
         }
@@ -624,7 +626,8 @@ class WorkspaceMemberEvent with _$WorkspaceMemberEvent {
     String email,
   ) = RemoveWorkspaceMemberByEmail;
   const factory WorkspaceMemberEvent.updateWorkspaceMember(
-    String email,
+    int uid,  // 使用用户ID，这是最准确的标识符
+    String email,  // 保留email作为后备
     AFRolePB role,
   ) = UpdateWorkspaceMember;
 
