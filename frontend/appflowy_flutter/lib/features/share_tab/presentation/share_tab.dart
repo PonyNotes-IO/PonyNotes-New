@@ -620,8 +620,9 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                   return SharedUserWidget(
                                     user: user,
                                     currentUser: currentSharedUser,
-                                    isInPublicPage: state.sectionType ==
-                                        SharedSectionType.public,
+                                    /// 因为当前协作区都是公开，所有分享都是公开的文档，导致分享后不能编辑权限。
+                                    // isInPublicPage: state.sectionType ==
+                                    //     SharedSectionType.public,
                                     callbacks: AccessLevelListCallbacks(
                                       onSelectAccessLevel: (accessLevel) {
                                         _bloc.add(

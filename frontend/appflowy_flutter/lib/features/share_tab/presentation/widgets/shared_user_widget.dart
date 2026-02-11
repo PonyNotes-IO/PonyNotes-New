@@ -15,14 +15,14 @@ class SharedUserWidget extends StatelessWidget {
     super.key,
     required this.user,
     required this.currentUser,
-    required this.isInPublicPage,
+    this.isInPublicPage = false,
     this.callbacks,
   });
 
   final SharedUser user;
   final SharedUser currentUser;
   final AccessLevelListCallbacks? callbacks;
-  final bool isInPublicPage;
+  final bool? isInPublicPage;
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +99,7 @@ class SharedUserWidget extends StatelessWidget {
   }
 
   Widget _buildTrailing(BuildContext context) {
-    final isCurrentUser = user.email == currentUser.email;
+    final isCurrentUser = user.name == currentUser.name;
     final theme = AppFlowyTheme.of(context);
     final currentAccessLevel = currentUser.accessLevel;
 
@@ -121,7 +121,7 @@ class SharedUserWidget extends StatelessWidget {
         );
 
     // In public page, member/owner permissions are fixed
-    if (isInPublicPage &&
+    if (isInPublicPage == true &&
         (user.role == ShareRole.member || user.role == ShareRole.owner)) {
       return disabledAccessButton();
     }
@@ -152,6 +152,11 @@ class SharedUserWidget extends StatelessWidget {
         // Full access user cannot change own access
         return disabledAccessButton();
       }
+    }
+
+    // Owner's permissions can never be edited by others
+    if (user.role == ShareRole.owner) {
+      return disabledAccessButton();
     }
 
     // Managing others
