@@ -347,13 +347,13 @@ class WorkspaceMemberBloc
       identifier,
     );
 
-    // 使用 identifier 来过滤，因为 identifier 可能是 email 或 phone
+    // 使用 identifier 来过滤，因为 identifier 可能是 email 或 phone 或 name
     final members = result.fold(
       (s) {
         Log.info('删除成功，更新成员列表，移除 identifier=$identifier');
-        // 通过 email 匹配（手机号用户 email 为空，不匹配也没关系，因为后端已删除）
+        // identifier 可能是 email、phone 或 name，需要同时匹配所有字段
         return state.members.where((e) {
-          return e.name != identifier;
+          return e.email != identifier && e.name != identifier;
         }).toList();
       },
       (e) {
