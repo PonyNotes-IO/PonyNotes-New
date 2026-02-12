@@ -78,6 +78,12 @@ pub trait FolderCloudService: Send + Sync + 'static {
     workspace_id: &Uuid,
   ) -> Result<Vec<PublishInfoView>, FlowyError>;
 
+  /// 获取所有发布的笔记列表（不限制 workspace_id）
+  /// 用于侧边栏发布菜单显示所有发布的笔记
+  async fn list_all_published_views(
+    &self,
+  ) -> Result<Vec<PublishInfoView>, FlowyError>;
+
   async fn get_default_published_view_info(
     &self,
     workspace_id: &Uuid,

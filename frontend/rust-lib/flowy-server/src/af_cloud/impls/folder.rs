@@ -212,6 +212,20 @@ where
     Ok(published_views)
   }
 
+  /// 获取所有发布的笔记列表（不限制 workspace_id）
+  /// 用于侧边栏发布菜单显示所有发布的笔记
+  async fn list_all_published_views(
+    &self,
+  ) -> Result<Vec<PublishInfoView>, FlowyError> {
+    let published_views = self
+      .inner
+      .try_get_client()?
+      .list_all_published_views()
+      .await
+      .map_err(FlowyError::from)?;
+    Ok(published_views)
+  }
+
   async fn get_default_published_view_info(
     &self,
     workspace_id: &Uuid,

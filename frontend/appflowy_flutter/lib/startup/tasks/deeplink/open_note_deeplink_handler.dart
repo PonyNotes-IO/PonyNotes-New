@@ -116,40 +116,41 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         );
       }
 
+      // 获取发布笔记的真实标题（用于发布链接或协作分享链接）
+      final viewName = await _getViewNameFromPublishInfo(viewId);
+
       // 创建最小化的 ViewPB 对象，用于在UI中打开视图
-      // 标题会在文档打开后由文档页面自动更新
       final minimalView = ViewPB()
         ..id = viewId
-        ..name = LocaleKeys.menuAppHeader_defaultNewNotebookName.tr() // 默认名称，文档打开后会自动更新
+        ..name = viewName // 使用真实标题，如果没有则使用默认名称
         ..layout = ViewLayoutPB.Document;
-      
-          
-          // 等待应用初始化完成后再打开视图
-          // 使用WidgetsBinding确保在UI线程中执行
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            try {
-              // 获取TabsBloc实例
-              final navContext = AppGlobals.rootNavKey.currentState?.context;
-              if (navContext == null) {
-                Log.error('[OpenNoteDeepLinkHandler] 无法获取BuildContext，应用可能未完全初始化');
-                // 如果应用未初始化，延迟一段时间后重试
-                await Future.delayed(const Duration(seconds: 1));
-                final retryContext = AppGlobals.rootNavKey.currentState?.context;
-                if (retryContext == null) {
-                  Log.error('[OpenNoteDeepLinkHandler] 重试后仍无法获取BuildContext');
-                  return;
-                }
-            _openView(retryContext, minimalView);
-              } else {
-            _openView(navContext, minimalView);
-              }
-            } catch (e, stackTrace) {
-              Log.error('[OpenNoteDeepLinkHandler] 打开视图时出错: $e', stackTrace);
+
+      // 等待应用初始化完成后再打开视图
+      // 使用WidgetsBinding确保在UI线程中执行
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          // 获取TabsBloc实例
+          final navContext = AppGlobals.rootNavKey.currentState?.context;
+          if (navContext == null) {
+            Log.error('[OpenNoteDeepLinkHandler] 无法获取BuildContext，应用可能未完全初始化');
+            // 如果应用未初始化，延迟一段时间后重试
+            await Future.delayed(const Duration(seconds: 1));
+            final retryContext = AppGlobals.rootNavKey.currentState?.context;
+            if (retryContext == null) {
+              Log.error('[OpenNoteDeepLinkHandler] 重试后仍无法获取BuildContext');
+              return;
             }
-          });
-          
-          onStateChange(this, DeepLinkState.finish);
-          return FlowyResult.success(null);
+            _openView(retryContext, minimalView);
+          } else {
+            _openView(navContext, minimalView);
+          }
+        } catch (e, stackTrace) {
+          Log.error('[OpenNoteDeepLinkHandler] 打开视图时出错: $e', stackTrace);
+        }
+      });
+
+      onStateChange(this, DeepLinkState.finish);
+      return FlowyResult.success(null);
     } catch (e, stackTrace) {
       Log.error('[OpenNoteDeepLinkHandler] 处理深度链接时出错: $e', stackTrace);
       onStateChange(this, DeepLinkState.error);
@@ -309,6 +310,68 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       return rawToken;
     }
     return null;
+  }
+
+  /// 从发布元数据获取视图名称
+  /// 如果获取失败，则使用默认名称
+  Future<String> _getViewNameFromPublishInfo(String viewId) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+
+      if (baseUrl.isEmpty) {
+        Log.warn('[OpenNoteDeepLinkHandler] Base URL 为空，使用默认名称');
+        return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
+      }
+
+      // 构建 API URL: /api/workspace/v1/published-info/{view_id}
+      // 这个 API 不需要登录认证，可以公开访问
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/workspace/v1/published-info/$viewId',
+      );
+
+      final response = await http.get(uri).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('请求超时');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic>) {
+          final data = body['data'];
+          if (data is Map<String, dynamic>) {
+            final metadata = data['metadata'];
+            if (metadata is Map<String, dynamic>) {
+              // metadata 结构: { "view": { "name": "笔记名称", ... } }
+              final view = metadata['view'];
+              if (view is Map<String, dynamic>) {
+                final name = view['name'] as String?;
+                if (name != null && name.isNotEmpty) {
+                  Log.info('[OpenNoteDeepLinkHandler] 从发布元数据获取到标题: $name');
+                  return name;
+                }
+              }
+            }
+          }
+        }
+      } else if (response.statusCode == 404) {
+        // 404 表示笔记未发布（可能是纯协作分享链接），使用默认名称
+        Log.info('[OpenNoteDeepLinkHandler] 笔记未发布，使用默认名称');
+        return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
+      } else {
+        Log.warn('[OpenNoteDeepLinkHandler] 获取发布信息失败: HTTP ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      Log.error(
+        '[OpenNoteDeepLinkHandler] 获取发布信息时出错: $e',
+        stackTrace,
+      );
+    }
+
+    // 获取失败时使用默认名称
+    return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
   }
 
 }

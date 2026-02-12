@@ -69,36 +69,58 @@ impl Whiteboard {
     Ok(())
   }
 
-  /// 从完整的 Excalidraw JSON 更新（直接从 Map/对象结构）
+  /// 从完整的 Excalidraw JSON 更新
+  /// 前端发送格式：{"type": "update", "data": "{\"elements\":..., \"files\":..., \"appState\":...}"}
+  /// 这里的 data 字段是 JSON 字符串，需要二次解析
   pub fn update_from_json(&mut self, json_str: &str) -> Result<(), Error> {
     tracing::trace!("[Whiteboard] update_from_json called, len: {}", json_str.len());
 
-    #[derive(Serialize, Deserialize)]
-    struct UpdateData {
+    // ✅ 解析外层 JSON
+    #[derive(serde::Deserialize)]
+    struct UpdateWrapper {
+      #[serde(default)]
       r#type: String,
-      data: String,
+      // data 字段可能是字符串（嵌套JSON）或直接是对象
+      #[serde(default)]
+      data: serde_json::Value,
     }
 
-    let update_data = serde_json::from_str::<UpdateData>(json_str)?;
-    let data_map = serde_json::from_str::<HashMap<String, serde_json::Value>>(&update_data.data)
-      .map_err(|e| anyhow!("Failed to parse JSON into map: {}", e))?;
+    let wrapper: UpdateWrapper = serde_json::from_str(json_str)
+      .map_err(|e| anyhow!("Failed to parse wrapper JSON: {}", e))?;
+
+    // ✅ 提取实际数据：如果是字符串则二次解析，否则直接使用
+    let data_map: HashMap<String, serde_json::Value> = match wrapper.data {
+      serde_json::Value::String(data_str) => {
+        // data 是嵌套的 JSON 字符串，需要解析
+        serde_json::from_str(&data_str)
+          .map_err(|e| anyhow!("Failed to parse nested data JSON: {}", e))?
+      },
+      serde_json::Value::Object(map) => map
+        .into_iter()
+        .map(|(k, v)| (k, v))
+        .collect(),
+      _ => HashMap::new(),
+    };
 
     let mut txn = self.collab.context.transact_mut();
-    match update_data.r#type.as_str() {
-      "update" => {
+    match wrapper.r#type.as_str() {
+      "update" | "" => {
+        // 存储所有数据字段（elements, files, appState 等）
         for (key, value) in data_map.iter() {
           let json = serde_json::to_string(value)
             .map_err(|e| anyhow!("Failed to serialize field '{}': {}", key, e))?;
           self.data.insert(&mut txn, key.as_str(), json.as_str());
         }
+        tracing::trace!("[Whiteboard] Stored {} fields from update", data_map.len());
       },
       "delete" => {
-        for (key, _value) in data_map.iter() {
+        for (key, _) in data_map.iter() {
           self.data.remove(&mut txn, key.as_str());
         }
+        tracing::trace!("[Whiteboard] Deleted {} fields", data_map.len());
       },
       _ => {
-        unimplemented!("unknown update type {}", update_data.r#type);
+        tracing::warn!("[Whiteboard] Unknown update type: {}", wrapper.r#type);
       },
     }
 

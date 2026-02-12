@@ -489,6 +489,21 @@ pub(crate) async fn list_published_views_handler(
   data_result_ok(RepeatedPublishInfoViewPB { items })
 }
 
+/// Handler for listing all published views globally (not limited to current workspace).
+/// Used for sidebar publish menu to show all published notes.
+#[tracing::instrument(level = "debug", skip(folder), err)]
+pub(crate) async fn list_all_published_views_handler(
+  folder: AFPluginState<Weak<FolderManager>>,
+) -> DataResult<RepeatedPublishInfoViewPB, FlowyError> {
+  let folder = upgrade_folder(folder)?;
+  let published_views = folder.list_all_published_views().await?;
+  let items: Vec<PublishInfoViewPB> = published_views
+    .into_iter()
+    .map(|view| view.into())
+    .collect();
+  data_result_ok(RepeatedPublishInfoViewPB { items })
+}
+
 #[tracing::instrument(level = "debug", skip(folder))]
 pub(crate) async fn get_default_publish_info_handler(
   folder: AFPluginState<Weak<FolderManager>>,

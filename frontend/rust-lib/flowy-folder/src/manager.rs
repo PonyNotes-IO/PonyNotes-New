@@ -1850,6 +1850,17 @@ impl FolderManager {
     Ok(published_views)
   }
 
+  /// List all published views globally (not limited to current workspace).
+  /// Used for sidebar publish menu to show all published notes.
+  #[tracing::instrument(level = "debug", skip(self), err)]
+  pub async fn list_all_published_views(&self) -> FlowyResult<Vec<PublishInfoView>> {
+    let published_views = self
+      .cloud_service()?
+      .list_all_published_views()
+      .await?;
+    Ok(published_views)
+  }
+
   #[tracing::instrument(level = "debug", skip(self), err)]
   pub async fn get_default_published_view_info(&self) -> FlowyResult<PublishInfo> {
     let workspace_id = self.user.workspace_id()?;
