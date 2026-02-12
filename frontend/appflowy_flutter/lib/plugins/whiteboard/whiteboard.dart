@@ -329,18 +329,20 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   @override
-  void dispose() {
+  Future<void> dispose() async {
     // debug log removed
     _isDisposing = true;
 
     // ✅ 关键修复：在销毁前强制同步所有待保存的数据
+    // 使用 await 确保同步完成后再继续销毁
     // 这确保了所有图片和编辑内容都被保存到后端
-    Log.info('[WhiteboardPage] 🔄 Force sync before dispose...');
-    _collabAdapter?.forceSync().then((_) {
-      Log.info('[WhiteboardPage] ✅ Force sync completed before dispose');
-    }).catchError((e) {
-      Log.error('[WhiteboardPage] ❌ Force sync failed before dispose: $e');
-    });
+    print('[WhiteboardPage] 🔄 Force sync before dispose...');
+    try {
+      await _collabAdapter?.forceSync();
+      print('[WhiteboardPage] ✅ Force sync completed before dispose');
+    } catch (e) {
+      print('[WhiteboardPage] ❌ Force sync failed before dispose: $e');
+    }
 
     // 注销所有控制器
     _unregisterControllers();
@@ -351,14 +353,15 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
     // 关闭白板以释放后端资源
     final service = WhiteboardDataService();
-    service.closeWhiteboard(viewId: widget.view.id).then((result) {
+    try {
+      final result = await service.closeWhiteboard(viewId: widget.view.id);
       result.fold(
         (_) => null,
-        (error) => Log.error(
-          '⚠️ [WhiteboardPage] Failed to close whiteboard: ${error.msg}',
-        ),
+        (error) => print('[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
       );
-    });
+    } catch (e) {
+      print('[WhiteboardPage] Exception closing whiteboard: $e');
+    }
 
     super.dispose();
   }

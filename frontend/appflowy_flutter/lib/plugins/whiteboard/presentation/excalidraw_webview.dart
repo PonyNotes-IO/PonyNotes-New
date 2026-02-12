@@ -181,12 +181,14 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             if (data.containsKey('files')) {
               final files = data['files'];
               if (files is Map) {
-                Log.info('[ExcalidrawWebView] 📸 Files count: ${files.length}');
-                // ⚠️ 注意：不在这里做耗时的文件预处理（如下载云URL图片）
-                // 原因：initData 必须尽快完成，否则 Excalidraw 会在 elements 设置到
-                // localStorage 之前就读取空数据，导致绘图对象丢失
-                // 文件的云URL处理放在 JS 端的 _injectFilesFromStorage 和
-                // downloadCloudImages handler 中异步完成
+                print('[ExcalidrawWebView] 📸 Files count: ${files.length}');
+                // ✅ 关键修复：预处理文件数据
+                // 对于只有云 URL 没有 base64 dataURL 的文件，在 Flutter 端下载并转换
+                final processedFiles = await _preprocessFilesForLoading(
+                  Map<String, dynamic>.from(files),
+                );
+                data['files'] = processedFiles;
+                print('[ExcalidrawWebView] 📸 Files preprocessed, count: ${processedFiles.length}');
               }
             }
 

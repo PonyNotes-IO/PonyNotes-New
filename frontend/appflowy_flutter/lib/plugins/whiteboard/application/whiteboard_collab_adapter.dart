@@ -68,8 +68,8 @@ class WhiteboardCollabAdapter {
       return;
     }
 
-    // ✅ 调试日志
-    Log.info('[WhiteboardCollabAdapter] onWhiteboardDataChanged called, type: $type, keys: ${data.keys.toList()}');
+    // ✅ 调试日志 - 使用 print() 确保能写入日志文件
+    print('[WhiteboardCollabAdapter] onWhiteboardDataChanged called, type: $type, keys: ${data.keys.toList()}');
 
     // 更新全量数据缓存
     // Excalidraw 的 update 事件通常只包含变化的字段
@@ -149,10 +149,11 @@ class WhiteboardCollabAdapter {
           _fullData['files'] = _mergeFiles(_fullData['files'] as Map<String, dynamic>?, _syncFiles);
         }
         
-        Log.info('[WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
+        // ✅ 使用 print() 确保日志能写入文件
+        print('[WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
         if (_fullData.containsKey('files')) {
           final files = _fullData['files'] as Map<String, dynamic>;
-          Log.info('[WhiteboardCollabAdapter] Files count: ${files.length}');
+          print('[WhiteboardCollabAdapter] Files count: ${files.length}');
         }
         
         success = await _service.saveWhiteboardData(viewId, _fullData);
@@ -165,15 +166,15 @@ class WhiteboardCollabAdapter {
         // 同步失败，重新缓存数据等待下次同步
         _pendingData.addAll(_syncData);
         _pendingFiles.addAll(_syncFiles);
-        Log.warn('[WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
+        print('[WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
       } else {
-        Log.info('[WhiteboardCollabAdapter] ✅ Sync completed successfully');
+        print('[WhiteboardCollabAdapter] ✅ Sync completed successfully');
       }
     } catch (e) {
       // 发生错误，重新缓存数据等待下次同步
       _pendingData.addAll(_syncData);
       _pendingFiles.addAll(_syncFiles);
-      Log.error('[WhiteboardCollabAdapter] ❌ Sync error: $e');
+      print('[WhiteboardCollabAdapter] ❌ Sync error: $e');
     } finally {
       _isSyncing = false;
       _syncData.clear();

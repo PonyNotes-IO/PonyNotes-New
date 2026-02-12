@@ -105,37 +105,36 @@ class WhiteboardDataService {
     String viewId,
     Map<String, dynamic> data,
   ) async {
-    Log.info(
-        '[Whiteboard] =====================================================');
-    Log.info('[Whiteboard] saveWhiteboardData() called');
-    Log.info('[Whiteboard] ViewID: $viewId');
-    Log.info('[Whiteboard] Data keys: ${data.keys.toList()}');
+    // ✅ 使用 print() 确保日志能写入文件
+    print('[Whiteboard] =====================================================');
+    print('[Whiteboard] saveWhiteboardData() called for viewId: $viewId');
+    print('[Whiteboard] Data keys: ${data.keys.toList()}');
 
     // ✅ 调试：检查 files 数据
     if (data.containsKey('files') && data['files'] is Map) {
       final files = data['files'] as Map<String, dynamic>;
-      Log.info('[Whiteboard] 📸 Files count: ${files.length}');
+      print('[Whiteboard] 📸 Files count: ${files.length}');
       if (files.isNotEmpty) {
-        Log.info('[Whiteboard] 📸 First file key: ${files.keys.first}');
+        print('[Whiteboard] 📸 First file key: ${files.keys.first}');
         final firstFile = files.values.first;
         if (firstFile is Map) {
           final firstFileMap = firstFile as Map<String, dynamic>;
-          Log.info('[Whiteboard] 📸 First file has dataURL: ${firstFileMap.containsKey('dataURL')}');
+          print('[Whiteboard] 📸 First file has dataURL: ${firstFileMap.containsKey('dataURL')}');
           if (firstFileMap['dataURL'] is String) {
             final dataUrl = firstFileMap['dataURL'] as String;
-            Log.info('[Whiteboard] 📸 First file dataURL length: ${dataUrl.length}');
+            print('[Whiteboard] 📸 First file dataURL length: ${dataUrl.length}');
           }
         }
       }
     } else {
-      Log.warn('[Whiteboard] ⚠️ No files in data!');
+      print('[Whiteboard] ⚠️ No files in data!');
     }
 
     // ✅ 优化：先上传图片到云存储
     if (data.containsKey('files') && data['files'] is Map) {
       final files = data['files'] as Map<String, dynamic>;
       if (files.isNotEmpty) {
-        Log.info('[Whiteboard] 🚀 Step 0: Uploading images to cloud storage...');
+        print('[Whiteboard] 🚀 Step 0: Uploading images to cloud storage...');
         try {
           final processedFiles = await WhiteboardImageUploadService.processFilesForUpload(
             files,
@@ -143,27 +142,27 @@ class WhiteboardDataService {
           );
           // 更新 data 中的 files
           data['files'] = processedFiles;
-          Log.info('[Whiteboard] ✅ Images uploaded successfully');
+          print('[Whiteboard] ✅ Images uploaded successfully');
         } catch (e) {
-          Log.warn('[Whiteboard] ⚠️ Image upload failed, keeping original dataURL: $e');
+          print('[Whiteboard] ⚠️ Image upload failed, keeping original dataURL: $e');
           // 继续保存，不阻止用户操作
         }
       }
     }
 
     // 1. 尝试保存到 Collab 后端
-    Log.info('[Whiteboard] Step 1: Trying to save to Collab backend...');
+    print('[Whiteboard] Step 1: Trying to save to Collab backend...');
     final collabSuccess = await _saveToCollab(
         viewId, jsonEncode({'type': 'update', 'data': jsonEncode(data)}));
     if (collabSuccess) {
-      Log.info('[Whiteboard] ✅ Saved to Collab successfully: $viewId');
+      print('[Whiteboard] ✅ Saved to Collab successfully: $viewId');
       return true;
     }
 
     // 2. 回退到文件系统（向后兼容）
-    Log.warn('[Whiteboard] ⚠️ Collab save failed, falling back to file system');
+    print('[Whiteboard] ⚠️ Collab save failed, falling back to file system');
     final fileSuccess = await _saveToFile(viewId, data);
-    Log.info('[Whiteboard] File save result: $fileSuccess');
+    print('[Whiteboard] File save result: $fileSuccess');
     return fileSuccess;
   }
 
@@ -207,25 +206,23 @@ class WhiteboardDataService {
         ..viewId = viewId
         ..jsonData = data;
 
-      Log.info(
-        '[Whiteboard] _saveToCollab: Sending WhiteboardEventUpdateWhiteboard event...',
-      );
+      print('[Whiteboard] _saveToCollab: Sending WhiteboardEventUpdateWhiteboard event...');
       final result = await WhiteboardEventUpdateWhiteboard(payload).send();
 
       return result.fold(
         (_) {
-          Log.info('[Whiteboard] _saveToCollab: ✅ Success!');
+          print('[Whiteboard] _saveToCollab: ✅ Success!');
           return true;
         },
         (error) {
-          Log.error('[Whiteboard] _saveToCollab: ❌ Error: ${error.msg}');
-          Log.error('[Whiteboard] _saveToCollab: Error code: ${error.code}');
+          print('[Whiteboard] _saveToCollab: ❌ Error: ${error.msg}');
+          print('[Whiteboard] _saveToCollab: Error code: ${error.code}');
           return false;
         },
       );
     } catch (e, stackTrace) {
-      Log.error('[Whiteboard] _saveToCollab: ❌ Exception: $e');
-      Log.error('[Whiteboard] _saveToCollab: Stack trace: $stackTrace');
+      print('[Whiteboard] _saveToCollab: ❌ Exception: $e');
+      print('[Whiteboard] _saveToCollab: Stack trace: $stackTrace');
       return false;
     }
   }
@@ -262,8 +259,8 @@ class WhiteboardDataService {
   /// [viewId] 白板视图 ID
   /// 返回 Excalidraw 数据，如果不存在则返回空白板
   Future<Map<String, dynamic>> loadWhiteboardData(String viewId) async {
-    Log.info('[Whiteboard] =====================================================');
-    Log.info('[Whiteboard] loadWhiteboardData() called for viewId: $viewId');
+    print('[Whiteboard] =====================================================');
+    print('[Whiteboard] loadWhiteboardData() called for viewId: $viewId');
 
     // 1. 先尝试打开白板（加载到内存）
     await openWhiteboard(viewId: viewId);
@@ -271,28 +268,28 @@ class WhiteboardDataService {
     // 2. 尝试从 Collab 后端加载
     final collabData = await _loadFromCollab(viewId);
     if (collabData != null) {
-      Log.info('[Whiteboard] ✅ Loaded from Collab: $viewId');
+      print('[Whiteboard] ✅ Loaded from Collab: $viewId');
       
       // ✅ 调试：检查 files 数据
       if (collabData.containsKey('files') && collabData['files'] is Map) {
         final files = collabData['files'] as Map<String, dynamic>;
-        Log.info('[Whiteboard] 📸 Loaded files count from Collab: ${files.length}');
+        print('[Whiteboard] 📸 Loaded files count from Collab: ${files.length}');
       } else {
-        Log.warn('[Whiteboard] ⚠️ No files in loaded Collab data!');
+        print('[Whiteboard] ⚠️ No files in loaded Collab data!');
       }
       
       return collabData;
     }
 
     // 3. 回退到文件系统
-    Log.info('[Whiteboard] ℹ️ Collab not found, trying file system');
+    print('[Whiteboard] ℹ️ Collab not found, trying file system');
     final fileData = await _loadFromFile(viewId);
 
     // 4. 如果从文件加载成功，迁移到 Collab
     await _saveToCollab(
         viewId, jsonEncode({'type': 'update', 'data': fileData}));
 
-    Log.info('[Whiteboard] =====================================================');
+    print('[Whiteboard] =====================================================');
     return fileData;
   }
 
@@ -311,14 +308,14 @@ class WhiteboardDataService {
           return json;
         },
         (error) {
-          Log.debug(
+          print(
             '[Whiteboard] Collab load error (normal if new): ${error.msg}',
           );
           return null;
         },
       );
     } catch (e) {
-      Log.debug('[Whiteboard] Exception in _loadFromCollab: $e');
+      print('[Whiteboard] Exception in _loadFromCollab: $e');
       return null;
     }
   }
