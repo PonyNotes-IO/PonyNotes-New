@@ -4,30 +4,32 @@ use client_api::entity::{
 };
 use client_api::entity::{PatchPublishedCollab, PublishInfo};
 use client_api::http_publish::{
-  ListAllPublishedCollabResponse, ReceivePublishedCollabRequest, ReceivePublishedCollabResponse,
+  ListAllPublishedCollabResponse as ApiListResponse,
+  ReceivePublishedCollabRequest as ApiReceiveRequest,
+  ReceivePublishedCollabResponse as ApiReceiveResponse,
 };
 use collab_entity::CollabType;
+use flowy_folder_pub::cloud::{
+  AllPublishedCollabItem, FolderCloudService, FolderCollabParams, FolderSnapshot,
+  FullSyncCollabParams, ListAllPublishedCollabResponse, ReceivePublishedCollabRequest,
+  ReceivePublishedCollabResponse,
+};
+
+use crate::af_cloud::AFServer;
+use crate::af_cloud::define::LoggedUser;
+use crate::af_cloud::impls::util::check_request_workspace_id_is_match;
+use flowy_error::FlowyError;
+use flowy_folder_pub::entities::PublishPayload;
 use flowy_server_pub::guest_dto::{
   ListSharedViewResponse, RevokeSharedViewAccessRequest, ShareViewWithGuestRequest,
   SharedViewDetails,
 };
+use lib_infra::async_trait::async_trait;
 use serde_json::to_vec;
 use std::path::PathBuf;
 use std::sync::Weak;
 use tracing::{instrument, trace};
 use uuid::Uuid;
-
-use flowy_error::FlowyError;
-use flowy_folder_pub::cloud::{
-  AllPublishedCollabItem, FolderCloudService, FolderCollabParams, FolderSnapshot,
-  FullSyncCollabParams,
-};
-use flowy_folder_pub::entities::PublishPayload;
-use lib_infra::async_trait::async_trait;
-
-use crate::af_cloud::AFServer;
-use crate::af_cloud::define::LoggedUser;
-use crate::af_cloud::impls::util::check_request_workspace_id_is_match;
 
 pub(crate) struct AFCloudFolderCloudServiceImpl<T> {
   pub inner: T,
@@ -221,13 +223,25 @@ where
   async fn list_all_published_views(
     &self,
   ) -> Result<ListAllPublishedCollabResponse, FlowyError> {
-    let response = self
+    let response: ApiListResponse = self
       .inner
       .try_get_client()?
       .list_all_published_views()
       .await
       .map_err(FlowyError::from)?;
-    Ok(response)
+    // Convert from client_api type to flowy_folder_pub type
+    let items = response.items.into_iter().map(|item| AllPublishedCollabItem {
+      published_view_id: item.published_view_id,
+      view_id: item.view_id,
+      workspace_id: item.workspace_id,
+      name: item.name,
+      publish_name: item.publish_name,
+      publisher_email: item.publisher_email,
+      published_at: item.published_at,
+      is_received: item.is_received,
+      is_readonly: item.is_readonly,
+    }).collect();
+    Ok(ListAllPublishedCollabResponse { items })
   }
 
   /// 接收发布的文档（复制到自己的工作区）
@@ -236,13 +250,23 @@ where
     &self,
     request: &ReceivePublishedCollabRequest,
   ) -> Result<ReceivePublishedCollabResponse, FlowyError> {
-    let response = self
+    // Convert from flowy_folder_pub type to client_api type
+    let api_request = ApiReceiveRequest {
+      published_view_id: request.published_view_id,
+      dest_workspace_id: request.dest_workspace_id,
+      dest_view_id: request.dest_view_id,
+    };
+    let response: ApiReceiveResponse = self
       .inner
       .try_get_client()?
-      .receive_published_collab(request)
+      .receive_published_collab(&api_request)
       .await
       .map_err(FlowyError::from)?;
-    Ok(response)
+    // Convert from client_api type to flowy_folder_pub type
+    Ok(ReceivePublishedCollabResponse {
+      view_id: response.view_id,
+      is_readonly: response.is_readonly,
+    })
   }
 
   async fn get_default_published_view_info(

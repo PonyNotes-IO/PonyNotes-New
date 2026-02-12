@@ -216,7 +216,7 @@ pub enum FolderEvent {
   ListPublishedViews = 49,
 
   #[event(output = "RepeatedAllPublishedCollabItemPB")]
-  ListAllPublishedViews = 60,
+  ListAllPublishedViews = 61,
 
   #[event(output = "PublishInfoResponsePB")]
   GetDefaultPublishInfo = 50,

@@ -27,6 +27,7 @@ use flowy_document_pub::cloud::{DocumentCloudService, DocumentSnapshot};
 use flowy_error::{FlowyError, FlowyResult};
 use flowy_folder_pub::cloud::{
   FolderCloudService, FolderCollabParams, FolderSnapshot, FullSyncCollabParams,
+  ListAllPublishedCollabResponse, ReceivePublishedCollabRequest, ReceivePublishedCollabResponse,
 };
 use flowy_folder_pub::entities::PublishPayload;
 use flowy_search_pub::cloud::SearchCloudService;
@@ -374,11 +375,23 @@ impl FolderCloudService for ServerProvider {
   /// List all published views globally (not limited to current workspace).
   async fn list_all_published_views(
     &self,
-  ) -> Result<Vec<PublishInfoView>, FlowyError> {
+  ) -> Result<ListAllPublishedCollabResponse, FlowyError> {
     let server = self.get_server()?;
     server
       .folder_service()
       .list_all_published_views()
+      .await
+  }
+
+  /// Receive a published collab (copy to own workspace)
+  async fn receive_published_collab(
+    &self,
+    request: &ReceivePublishedCollabRequest,
+  ) -> Result<ReceivePublishedCollabResponse, FlowyError> {
+    let server = self.get_server()?;
+    server
+      .folder_service()
+      .receive_published_collab(request)
       .await
   }
 

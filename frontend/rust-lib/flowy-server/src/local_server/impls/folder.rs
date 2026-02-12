@@ -13,6 +13,7 @@ use collab_plugins::local_storage::kv::doc::CollabKVAction;
 use flowy_error::FlowyError;
 use flowy_folder_pub::cloud::{
   FolderCloudService, FolderCollabParams, FolderSnapshot, FullSyncCollabParams,
+  ListAllPublishedCollabResponse, ReceivePublishedCollabRequest, ReceivePublishedCollabResponse,
 };
 use flowy_folder_pub::entities::PublishPayload;
 use flowy_server_pub::guest_dto::{
@@ -147,7 +148,14 @@ impl FolderCloudService for LocalServerFolderCloudServiceImpl {
 
   async fn list_all_published_views(
     &self,
-  ) -> Result<Vec<PublishInfoView>, FlowyError> {
+  ) -> Result<ListAllPublishedCollabResponse, FlowyError> {
+    Err(FlowyError::local_version_not_support())
+  }
+
+  async fn receive_published_collab(
+    &self,
+    _request: &ReceivePublishedCollabRequest,
+  ) -> Result<ReceivePublishedCollabResponse, FlowyError> {
     Err(FlowyError::local_version_not_support())
   }
 
