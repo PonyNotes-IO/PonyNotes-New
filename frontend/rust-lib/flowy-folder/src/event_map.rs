@@ -215,10 +215,8 @@ pub enum FolderEvent {
   #[event(output = "RepeatedPublishInfoViewPB")]
   ListPublishedViews = 49,
 
-  /// List all published views globally (not limited to current workspace).
-  /// Used for sidebar publish menu to show all published notes.
-  #[event(output = "RepeatedPublishInfoViewPB")]
-  ListAllPublishedViews = 61,
+  #[event(output = "RepeatedAllPublishedCollabItemPB")]
+  ListAllPublishedViews = 60,
 
   #[event(output = "PublishInfoResponsePB")]
   GetDefaultPublishInfo = 50,

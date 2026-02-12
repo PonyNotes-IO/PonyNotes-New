@@ -38,7 +38,7 @@ use collab_integrate::collab_builder::{
   AppFlowyCollabBuilder, CollabBuilderConfig, CollabPersistenceImpl,
 };
 use flowy_error::{ErrorCode, FlowyError, FlowyResult, internal_error};
-use flowy_folder_pub::cloud::{FolderCloudService, FolderCollabParams, gen_view_id};
+use flowy_folder_pub::cloud::{FolderCloudService, FolderCollabParams, gen_view_id, ListAllPublishedCollabResponse};
 use flowy_folder_pub::entities::{
   PublishDatabaseData, PublishDatabasePayload, PublishDocumentPayload, PublishPayload,
   PublishViewInfo, PublishViewMeta, PublishViewMetaData,
@@ -1850,15 +1850,15 @@ impl FolderManager {
     Ok(published_views)
   }
 
-  /// List all published views globally (not limited to current workspace).
-  /// Used for sidebar publish menu to show all published notes.
+  /// List all published views (not limited to current workspace)
+  /// Used for sidebar to display all published documents
   #[tracing::instrument(level = "debug", skip(self), err)]
-  pub async fn list_all_published_views(&self) -> FlowyResult<Vec<PublishInfoView>> {
-    let published_views = self
+  pub async fn list_all_published_views(&self) -> FlowyResult<ListAllPublishedCollabResponse> {
+    let response = self
       .cloud_service()?
       .list_all_published_views()
       .await?;
-    Ok(published_views)
+    Ok(response)
   }
 
   #[tracing::instrument(level = "debug", skip(self), err)]
