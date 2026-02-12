@@ -116,7 +116,6 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
     setState(() => _loading = true);
     // 刷新发布服务状态
     await ViewPublishService().refreshPublishedViews();
-
     // 使用新的全局发布列表 API 获取所有发布的笔记
     // 这样其他用户发布的笔记也会显示在侧边栏中
     final result = await FolderEventListPublishedViews().send();
@@ -126,7 +125,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         items.sort((a, b) => b.info.publishTimestampSec.toInt() - a.info.publishTimestampSec.toInt());
         return items;
       }, (f) {
-        Log.error('load all published views failed: $f');
+        Log.error('load published views failed: $f');
         return [];
       });
       _loading = false;

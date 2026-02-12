@@ -3,6 +3,9 @@ use client_api::entity::{
   CollabParams, PublishCollabItem, PublishCollabMetadata, QueryCollab, QueryCollabParams,
 };
 use client_api::entity::{PatchPublishedCollab, PublishInfo};
+use client_api::http_publish::{
+  ListAllPublishedCollabResponse, ReceivePublishedCollabRequest, ReceivePublishedCollabResponse,
+};
 use collab_entity::CollabType;
 use flowy_server_pub::guest_dto::{
   ListSharedViewResponse, RevokeSharedViewAccessRequest, ShareViewWithGuestRequest,
@@ -16,7 +19,8 @@ use uuid::Uuid;
 
 use flowy_error::FlowyError;
 use flowy_folder_pub::cloud::{
-  FolderCloudService, FolderCollabParams, FolderSnapshot, FullSyncCollabParams,
+  AllPublishedCollabItem, FolderCloudService, FolderCollabParams, FolderSnapshot,
+  FullSyncCollabParams,
 };
 use flowy_folder_pub::entities::PublishPayload;
 use lib_infra::async_trait::async_trait;
@@ -216,14 +220,29 @@ where
   /// 用于侧边栏发布菜单显示所有发布的笔记
   async fn list_all_published_views(
     &self,
-  ) -> Result<Vec<PublishInfoView>, FlowyError> {
-    let published_views = self
+  ) -> Result<ListAllPublishedCollabResponse, FlowyError> {
+    let response = self
       .inner
       .try_get_client()?
       .list_all_published_views()
       .await
       .map_err(FlowyError::from)?;
-    Ok(published_views)
+    Ok(response)
+  }
+
+  /// 接收发布的文档（复制到自己的工作区）
+  /// 发布的文档对接收者默认是只读的，不能协作同步
+  async fn receive_published_collab(
+    &self,
+    request: &ReceivePublishedCollabRequest,
+  ) -> Result<ReceivePublishedCollabResponse, FlowyError> {
+    let response = self
+      .inner
+      .try_get_client()?
+      .receive_published_collab(request)
+      .await
+      .map_err(FlowyError::from)?;
+    Ok(response)
   }
 
   async fn get_default_published_view_info(

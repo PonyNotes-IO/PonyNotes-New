@@ -489,19 +489,28 @@ pub(crate) async fn list_published_views_handler(
   data_result_ok(RepeatedPublishInfoViewPB { items })
 }
 
-/// Handler for listing all published views globally (not limited to current workspace).
-/// Used for sidebar publish menu to show all published notes.
 #[tracing::instrument(level = "debug", skip(folder), err)]
 pub(crate) async fn list_all_published_views_handler(
   folder: AFPluginState<Weak<FolderManager>>,
-) -> DataResult<RepeatedPublishInfoViewPB, FlowyError> {
+) -> DataResult<RepeatedAllPublishedCollabItemPB, FlowyError> {
   let folder = upgrade_folder(folder)?;
-  let published_views = folder.list_all_published_views().await?;
-  let items: Vec<PublishInfoViewPB> = published_views
+  let response = folder.list_all_published_views().await?;
+  let items: Vec<AllPublishedCollabItemPB> = response
+    .items
     .into_iter()
-    .map(|view| view.into())
+    .map(|item| AllPublishedCollabItemPB {
+      published_view_id: item.published_view_id.to_string(),
+      view_id: item.view_id.to_string(),
+      workspace_id: item.workspace_id.to_string(),
+      name: item.name,
+      publish_name: item.publish_name,
+      publisher_email: item.publisher_email,
+      published_at: item.published_at.timestamp_millis(),
+      is_received: item.is_received,
+      is_readonly: item.is_readonly,
+    })
     .collect();
-  data_result_ok(RepeatedPublishInfoViewPB { items })
+  data_result_ok(RepeatedAllPublishedCollabItemPB { items })
 }
 
 #[tracing::instrument(level = "debug", skip(folder))]

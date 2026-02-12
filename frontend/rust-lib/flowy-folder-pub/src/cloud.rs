@@ -15,6 +15,41 @@ use flowy_error::FlowyError;
 use lib_infra::async_trait::async_trait;
 use uuid::Uuid;
 
+/// 所有发布的文档列表项（包含发布者和接收者的信息）
+#[derive(Debug, Clone)]
+pub struct AllPublishedCollabItem {
+  pub published_view_id: Uuid,
+  pub view_id: Uuid,
+  pub workspace_id: Uuid,
+  pub name: String,
+  pub publish_name: String,
+  pub publisher_email: Option<String>,
+  pub published_at: chrono::DateTime<chrono::Utc>,
+  pub is_received: bool,
+  pub is_readonly: bool,
+}
+
+/// 获取所有发布的文档列表响应
+#[derive(Debug, Clone)]
+pub struct ListAllPublishedCollabResponse {
+  pub items: Vec<AllPublishedCollabItem>,
+}
+
+/// 用户接收的发布文档请求
+#[derive(Debug, Clone)]
+pub struct ReceivePublishedCollabRequest {
+  pub published_view_id: Uuid,
+  pub dest_workspace_id: Uuid,
+  pub dest_view_id: Uuid,
+}
+
+/// 用户接收的发布文档响应
+#[derive(Debug, Clone)]
+pub struct ReceivePublishedCollabResponse {
+  pub view_id: Uuid,
+  pub is_readonly: bool,
+}
+
 /// [FolderCloudService] represents the cloud service for folder.
 #[async_trait]
 pub trait FolderCloudService: Send + Sync + 'static {
@@ -82,7 +117,14 @@ pub trait FolderCloudService: Send + Sync + 'static {
   /// 用于侧边栏发布菜单显示所有发布的笔记
   async fn list_all_published_views(
     &self,
-  ) -> Result<Vec<PublishInfoView>, FlowyError>;
+  ) -> Result<ListAllPublishedCollabResponse, FlowyError>;
+
+  /// 接收发布的文档（复制到自己的工作区）
+  /// 发布的文档对接收者默认是只读的，不能协作同步
+  async fn receive_published_collab(
+    &self,
+    request: &ReceivePublishedCollabRequest,
+  ) -> Result<ReceivePublishedCollabResponse, FlowyError>;
 
   async fn get_default_published_view_info(
     &self,
