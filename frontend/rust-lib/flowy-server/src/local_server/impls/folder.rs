@@ -145,6 +145,12 @@ impl FolderCloudService for LocalServerFolderCloudServiceImpl {
     Err(FlowyError::local_version_not_support())
   }
 
+  async fn list_all_published_views(
+    &self,
+  ) -> Result<Vec<PublishInfoView>, FlowyError> {
+    Err(FlowyError::local_version_not_support())
+  }
+
   async fn get_default_published_view_info(
     &self,
     workspace_id: &Uuid,

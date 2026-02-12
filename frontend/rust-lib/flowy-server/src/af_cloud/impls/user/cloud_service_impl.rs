@@ -332,25 +332,9 @@ where
     workspace_id: Uuid,
     role: Role,
   ) -> Result<(), FlowyError> {
-<<<<<<< HEAD
     let try_get_client = self.server.try_get_client();
     let changeset = WorkspaceMemberChangeset::new_from_email(user_identifier).with_role(to_af_role(role));
     try_get_client?
-=======
-    // Get the client once and reuse it
-    let client = self
-      .server
-      .try_get_client()
-      .map_err(|e| anyhow!("Failed to get client: {}", e))?;
-    // First, get the uid from the identifier (email or phone)
-    let uid = client
-      .get_user_uid(&user_identifier)
-      .await
-      .map_err(|e| anyhow!("Failed to get user uid: {}", e))?;
-    // Use uid instead of email for WorkspaceMemberChangeset
-    let changeset = WorkspaceMemberChangeset::new(uid).with_role(to_af_role(role));
-    client
->>>>>>> 0576e4614 (优化：在深度链接处理程序中添加从发布元数据获取视图名称的功能，确保在打开视图时使用真实标题，并更新侧边栏以显示所有发布的笔记，增强用户体验和功能一致性。)
       .update_workspace_member(&workspace_id, changeset)
       .await?;
     Ok(())

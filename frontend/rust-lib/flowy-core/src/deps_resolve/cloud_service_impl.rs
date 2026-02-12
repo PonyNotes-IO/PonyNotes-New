@@ -371,6 +371,17 @@ impl FolderCloudService for ServerProvider {
       .await
   }
 
+  /// List all published views globally (not limited to current workspace).
+  async fn list_all_published_views(
+    &self,
+  ) -> Result<Vec<PublishInfoView>, FlowyError> {
+    let server = self.get_server()?;
+    server
+      .folder_service()
+      .list_all_published_views()
+      .await
+  }
+
   async fn get_default_published_view_info(
     &self,
     workspace_id: &Uuid,
