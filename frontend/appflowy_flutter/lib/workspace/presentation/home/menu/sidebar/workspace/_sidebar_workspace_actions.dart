@@ -176,6 +176,7 @@ class _WorkspaceMoreActionWrapper extends CustomActionCell {
               },
             );
           case WorkspaceMoreAction.leave:
+            var confirmed = false;
             await showConfirmDialog(
               context: context,
               title: LocaleKeys.workspace_leaveCurrentWorkspace.tr(),
@@ -183,13 +184,17 @@ class _WorkspaceMoreActionWrapper extends CustomActionCell {
                   LocaleKeys.workspace_leaveCurrentWorkspacePrompt.tr(),
               confirmLabel: LocaleKeys.button_yes.tr(),
               onConfirm: (_) {
-                workspaceBloc.add(
-                  UserWorkspaceEvent.leaveWorkspace(
-                    workspaceId: workspace.workspaceId,
-                  ),
-                );
+                confirmed = true;
               },
             );
+            // dialog 已完全关闭后再触发退出，避免 Directionality 报错
+            if (confirmed) {
+              workspaceBloc.add(
+                UserWorkspaceEvent.leaveWorkspace(
+                  workspaceId: workspace.workspaceId,
+                ),
+              );
+            }
         }
       },
     );

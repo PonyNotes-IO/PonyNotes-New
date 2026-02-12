@@ -635,13 +635,13 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                       onTurnIntoMember: () {
                                         _bloc.add(
                                           ShareTabEvent.convertToMember(
-                                            email: user.email,
+                                            email: user.name,
                                           ),
                                         );
                                       },
                                       onRemoveAccess: () {
                                         final removingSelf =
-                                            user.email == currentUser?.email;
+                                            user.name == currentUser?.name;
                                         if (removingSelf) {
                                           showConfirmDialog(
                                             context: context,
@@ -1267,7 +1267,7 @@ class _AccessLevelSelectorState extends State<_AccessLevelSelector> {
         ),
         const HSpace(8),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: theme.surfaceContainerColorScheme.layer02,
             borderRadius: BorderRadius.circular(8),
@@ -1288,11 +1288,14 @@ class _AccessLevelSelectorState extends State<_AccessLevelSelector> {
               ),
               dropdownColor: theme.surfaceContainerColorScheme.layer01,
               borderRadius: BorderRadius.circular(8),
-              items: ShareAccessLevel.values.map((level) {
-                return DropdownMenuItem(
-                  value: level,
-                  child: Text(_getAccessLevelLabel(level)),
-                );
+              items: ShareAccessLevel.values
+                  .where((level) =>
+                      level != ShareAccessLevel.readAndComment)
+                  .map((level) {
+                  return DropdownMenuItem(
+                    value: level,
+                    child: Text(_getAccessLevelLabel(level)),
+                  );
               }).toList(),
               onChanged: (value) {
                 if (value != null) {

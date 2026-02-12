@@ -75,7 +75,7 @@ class _MemberItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final canDelete = myRole.canDelete && member.email != userProfile.email;
+    final canDelete = myRole.canDelete && member.name != userProfile.name;
 
     Widget child;
 
@@ -134,7 +134,7 @@ class _MemberItem extends StatelessWidget {
 
     if (canDelete) {
       child = Slidable(
-        key: ValueKey(member.email),
+        key: ValueKey(member.name),
         endActionPane: ActionPane(
           extentRatio: 1 / 6.0,
           motion: const ScrollMotion(),
@@ -188,7 +188,7 @@ class _MemberItem extends StatelessWidget {
           onTap: () {
             workspaceMemberBloc.add(
               WorkspaceMemberEvent.removeWorkspaceMemberByEmail(
-                member.email,
+                member.name,
               ),
             );
             Navigator.of(context).pop();

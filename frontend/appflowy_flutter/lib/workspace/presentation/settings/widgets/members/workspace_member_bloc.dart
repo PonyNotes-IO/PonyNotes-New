@@ -21,6 +21,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:protobuf/protobuf.dart';
 
+import '../../../widgets/dialogs.dart';
+
 part 'workspace_member_bloc.freezed.dart';
 
 // 1. get the workspace members
@@ -351,11 +353,15 @@ class WorkspaceMemberBloc
         Log.info('删除成功，更新成员列表，移除 identifier=$identifier');
         // 通过 email 匹配（手机号用户 email 为空，不匹配也没关系，因为后端已删除）
         return state.members.where((e) {
-          return e.email != identifier;
+          return e.name != identifier;
         }).toList();
       },
       (e) {
         Log.error('删除失败: ${e.msg}');
+        showToastNotification(
+          message: '删除失败: ${e.msg}',
+          type: ToastificationType.error,
+        );
         return state.members;
       },
     );
