@@ -191,7 +191,7 @@ impl ChatCloudService for ChatServiceMiddleware {
 
   async fn stream_answer_with_thinking(
     &self,
-    _workspace_id: &Uuid,
+    workspace_id: &Uuid,
     chat_id: &Uuid,
     question_id: i64,
     format: ResponseFormat,
@@ -199,7 +199,7 @@ impl ChatCloudService for ChatServiceMiddleware {
     enable_thinking: bool,
     enable_web_search: bool,
   ) -> Result<StreamAnswer, FlowyError> {
-    info!("[Middleware] stream_answer_with_thinking use model: {:?}, enable_thinking: {}, enable_web_search: {}", ai_model, enable_thinking, enable_web_search);
+    info!("[Middleware] stream_answer_with_thinking use model: {:?}, enable_thinking: {}, enable_web_search: {}, workspace_id: {}", ai_model, enable_thinking, enable_web_search, workspace_id);
     if ai_model.is_local {
       if self.local_ai.is_ready().await {
         let content = self.get_message_content(question_id)?;
@@ -328,6 +328,10 @@ impl ChatCloudService for ChatServiceMiddleware {
       // 调用新的 AI 会话接口，传递深度思考和全网搜索参数
       info!("[Middleware] 调用 AI 会话接口，enable_thinking: {}, enable_web_search: {}", enable_thinking, enable_web_search);
       
+      // 传递workspace_id用于协作区场景（消耗workspace owner的AI配额）
+      let ws_id_str = Some(workspace_id.to_string());
+      info!("[Middleware] 传递 workspace_id: {} 到AI会话请求", workspace_id);
+      
       // 如果有图片或文件附件，使用带附件的版本
       let stream = if images.is_some() || files.is_some() {
         info!("[Middleware] 使用带附件的AI会话接口");
@@ -340,10 +344,11 @@ impl ChatCloudService for ChatServiceMiddleware {
           enable_web_search,
           images,
           files,
+          ws_id_str,
         ).await?
       } else {
         info!("[Middleware] 使用普通AI会话接口");
-        stream_ai_session(base_url, &content, Some(model_id), token, enable_thinking, enable_web_search).await?
+        stream_ai_session(base_url, &content, Some(model_id), token, enable_thinking, enable_web_search, ws_id_str).await?
       };
       
       // 将 AISessionStreamValue 转换为 QuestionStreamValue

@@ -95,6 +95,7 @@ pub async fn stream_ai_session(
   token: Option<String>,
   enable_thinking: bool,
   enable_web_search: bool,
+  workspace_id: Option<String>,
 ) -> Result<AISessionStream, FlowyError> {
   stream_ai_session_with_attachments(
     base_url,
@@ -105,10 +106,12 @@ pub async fn stream_ai_session(
     enable_web_search,
     None,
     None,
+    workspace_id,
   ).await
 }
 
 /// 调用新的 AI 会话接口（完整版本，支持图片和文件）
+/// workspace_id: 当前工作空间ID，用于协作区场景，使AI消耗workspace owner的配额
 pub async fn stream_ai_session_with_attachments(
   base_url: &str,
   message: &str,
@@ -118,6 +121,7 @@ pub async fn stream_ai_session_with_attachments(
   enable_web_search: bool,
   images: Option<Vec<String>>,  // base64编码的图片
   files: Option<Vec<serde_json::Value>>,  // 文件数据
+  workspace_id: Option<String>,  // 当前工作空间ID（协作区资源归属）
 ) -> Result<AISessionStream, FlowyError> {
   use reqwest::Client;
   use std::time::Duration;
@@ -168,6 +172,12 @@ pub async fn stream_ai_session_with_attachments(
       body["has_files"] = serde_json::Value::Bool(true);
       body["files"] = serde_json::Value::Array(fs);
     }
+  }
+
+  // 添加workspace_id（协作区场景：消耗workspace owner的AI配额）
+  if let Some(ws_id) = workspace_id {
+    body["workspace_id"] = serde_json::Value::String(ws_id);
+    info!("[AISession] 已添加 workspace_id 到请求体");
   }
 
   let mut request = client

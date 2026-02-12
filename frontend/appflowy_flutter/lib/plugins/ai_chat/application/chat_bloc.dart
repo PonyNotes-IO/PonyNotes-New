@@ -9,11 +9,8 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-ai/entities.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
-import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
-import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
-import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/widgets.dart';
@@ -337,24 +334,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     bool? enableWebSearchOverride,
     Emitter<ChatState> emit,
   ) async {
-    // 检查AI聊天限制
-    try {
-      final userResult = await UserBackendService.getCurrentUserProfile();
-      final userProfile = userResult.fold(
-        (user) => user,
-        (error) => throw Exception('Failed to get user profile: ${error.msg}'),
-      );
-      
-      final canUseAI = await MembershipCheckerService().checkAIChatLimit(userProfile: userProfile);
-      if (!canUseAI) {
-        Log.info('❌ ChatBloc: AI聊天次数已达上限，停止发送消息');
-        return;
-      }
-    } catch (e) {
-      Log.error('Failed to check AI chat limit: $e');
-      // 如果检查失败，默认允许使用AI
-      return;
-    }
+    // AI聊天限制检查说明：
+    // 协作区场景下，AI配额消耗的是workspace owner的订阅次数，而非当前用户自己的。
+    // 例如：用户B在用户A的协作区中使用AI会话，消耗的是A的AI订阅次数。
+    // 因此客户端不再做硬性限制检查（因为无法准确获取workspace owner的配额信息），
+    // 而是交由服务器端根据workspace_id确定资源归属并进行配额校验。
+    // 服务器返回的错误（如AI_LIMIT_EXCEEDED, SUBSCRIPTION_NOT_FOUND）会在流式响应中处理。
 
     _messageHandler.clearErrorMessages();
     emit(state.copyWith(clearErrorMessages: !state.clearErrorMessages));
@@ -413,24 +398,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     AIModelPB? model,
     Emitter<ChatState> emit,
   ) async {
-    // 检查AI聊天限制
-    try {
-      final userResult = await UserBackendService.getCurrentUserProfile();
-      final userProfile = userResult.fold(
-        (user) => user,
-        (error) => throw Exception('Failed to get user profile: ${error.msg}'),
-      );
-      
-      final canUseAI = await MembershipCheckerService().checkAIChatLimit(userProfile: userProfile);
-      if (!canUseAI) {
-        Log.info('❌ ChatBloc: AI聊天次数已达上限，停止重新生成答案');
-        return;
-      }
-    } catch (e) {
-      Log.error('Failed to check AI chat limit: $e');
-      // 如果检查失败，默认允许使用AI
-      return;
-    }
+    // AI聊天限制检查说明（同_handleSendMessage）：
+    // 协作区场景下AI配额消耗的是workspace owner的订阅次数，
+    // 服务器端会根据workspace_id进行正确的资源归属检查。
 
     _messageHandler.clearRelatedQuestions();
     _regenerateAnswer(id, format, model);

@@ -231,7 +231,7 @@ where
     
     info!("[StreamComplete] 使用 /api/ai/chat/session 接口，message_len: {}", message.len());
     
-    // 调用 /api/ai/chat/session 接口
+    // 调用 /api/ai/chat/session 接口（传递workspace_id用于协作区场景）
     let session_stream = stream_ai_session(
       base_url,
       &message,
@@ -239,6 +239,7 @@ where
       token,
       false, // enable_thinking - 文档内问AI暂时不支持深度思考
       false, // enable_web_search - 文档内问AI暂时不支持全网搜索
+      Some(workspace_id.to_string()), // workspace_id用于协作区资源归属
     ).await?;
     
     // 将 AISessionStreamValue 转换为 CompletionStreamValue
