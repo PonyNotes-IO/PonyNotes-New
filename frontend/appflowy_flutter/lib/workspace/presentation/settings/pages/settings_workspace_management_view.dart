@@ -476,10 +476,9 @@ class _SpaceRowState extends State<_SpaceRow> {
             flex: 4,
             child: _SpacePermissionActionList(
                 permission:_selectedPermission,
-                onPermissionChanged: _isUpdating
+                onPermissionChanged: (!widget.role.isOwner || _isUpdating)
                     ? null
                     : (newPerm) async {
-                  if (newPerm == null) return;
                   setState(() {
                     _isUpdating = true;
                     _selectedPermission = newPerm;
@@ -1469,7 +1468,8 @@ class _SpacePermissionActionList extends StatelessWidget {
                 color: theme.textColorScheme.primary,
                 fontSize: 14,
               ),
-              FlowySvg(FlowySvgs.arrow_down_s,)
+              if (onPermissionChanged != null)
+                FlowySvg(FlowySvgs.arrow_down_s,)
             ],
           ),
         );
