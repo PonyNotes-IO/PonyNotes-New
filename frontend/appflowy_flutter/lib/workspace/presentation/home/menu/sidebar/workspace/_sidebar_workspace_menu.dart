@@ -628,14 +628,16 @@ class _CreateWorkspaceButton extends StatelessWidget {
       final workspaceBloc = context.read<UserWorkspaceBloc>();
       final state = workspaceBloc.state;
       
-      // 获取当前工作区数量
-      final currentWorkspaceCount = state.workspaces.length;
-      Log.info('Current workspace count: $currentWorkspaceCount');
+      // 只计算自己创建的工作区（role 为 Owner），不包含加入的工作区（Member/Guest）
+      final ownedWorkspaceCount = state.workspaces
+          .where((ws) => ws.role == AFRolePB.Owner)
+          .length;
+      Log.info('Owned workspace count: $ownedWorkspaceCount (total: ${state.workspaces.length})');
 
       // 检查是否有权限创建更多工作区
       final canCreate = await context.checkAndHandleWorkspaceCreation(
           workspaceId: state.currentWorkspace?.workspaceId,
-          currentWorkspaceCount: currentWorkspaceCount,
+          currentWorkspaceCount: ownedWorkspaceCount,
       );
       return canCreate;
     } catch (e) {
