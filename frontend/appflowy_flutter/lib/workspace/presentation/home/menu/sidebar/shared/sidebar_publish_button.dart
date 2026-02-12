@@ -119,7 +119,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
 
     // 使用新的全局发布列表 API 获取所有发布的笔记
     // 这样其他用户发布的笔记也会显示在侧边栏中
-    final result = await FolderEventListAllPublishedViews().send();
+    final result = await FolderEventListPublishedViews().send();
     setState(() {
       _items = result.fold((s) {
         final items = List<PublishInfoViewPB>.from(s.items);
