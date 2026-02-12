@@ -541,9 +541,39 @@
         }
     };
 
-    // 📸 从 localStorage 读取 files 并注入到 Excalidraw
+    // 📸 恢复白板完整数据：先确保 elements 正确，再注入 files
     async function _injectFilesFromStorage(api) {
         try {
+            // ============================================================
+            // 🔒 步骤 1：确保 elements 已正确加载（防止竞态条件导致丢失）
+            // 原因：initData 是异步的，如果 Excalidraw 在 localStorage 
+            //       设置之前就读取了数据，elements 会为空
+            // ============================================================
+            const currentElements = api.getSceneElements ? api.getSceneElements() : [];
+            console.log('[PonyNotes] 📝 Current elements count:', currentElements.length);
+            
+            if (currentElements.length === 0) {
+                // Excalidraw 当前没有 elements，尝试从 localStorage 恢复
+                const elementsStr = originalLocalStorage.getItem('excalidraw');
+                if (elementsStr && elementsStr !== '[]' && elementsStr !== 'null') {
+                    try {
+                        const elements = JSON.parse(elementsStr);
+                        if (Array.isArray(elements) && elements.length > 0) {
+                            console.log('[PonyNotes] 📝 Restoring ' + elements.length + ' elements via API...');
+                            api.updateScene({ elements: elements });
+                            console.log('[PonyNotes] ✅ Elements restored successfully');
+                        }
+                    } catch (e) {
+                        console.error('[PonyNotes] ❌ Failed to parse/restore elements:', e);
+                    }
+                }
+            } else {
+                console.log('[PonyNotes] 📝 Elements already loaded (' + currentElements.length + '), no restore needed');
+            }
+
+            // ============================================================
+            // 📸 步骤 2：注入图片文件
+            // ============================================================
             const filesStr = originalLocalStorage.getItem('excalidraw-files');
             if (!filesStr || filesStr === '{}' || filesStr === 'null') {
                 console.log('[PonyNotes] 📸 No files to inject');
@@ -597,7 +627,6 @@
                         created: fileData.created || Date.now(),
                     });
                 } else if (fileData.url && typeof fileData.url === 'string' && fileData.url.startsWith('http')) {
-                    // 云 URL - 需要通过 Flutter 下载（JS 无法直接访问需要认证的 API）
                     cloudFilesToFetch.push({ fileId, fileData });
                     console.log('[PonyNotes] 📸 File ' + fileId + ' has cloud URL, will request download from Flutter');
                 } else if (fileData.data && typeof fileData.data === 'string' && fileData.data.startsWith('http')) {
@@ -609,27 +638,14 @@
                 }
             }
             
-            // 先注入已有 dataURL 的文件
+            // 注入已有 dataURL 的文件
             if (filesToAdd.length > 0) {
                 console.log('[PonyNotes] 📸 Injecting ' + filesToAdd.length + ' files with dataURL...');
                 if (typeof api.addFiles === 'function') {
                     api.addFiles(filesToAdd);
                     console.log('[PonyNotes] ✅ Injected ' + filesToAdd.length + ' files via addFiles()');
                 } else {
-                    // 兜底方案：使用 updateScene
-                    console.log('[PonyNotes] ⚠️ addFiles not available, trying updateScene...');
-                    const filesObj = {};
-                    for (const f of filesToAdd) {
-                        filesObj[f.id] = f;
-                    }
-                    const currentElements = api.getSceneElements ? api.getSceneElements() : [];
-                    const currentAppState = api.getAppState ? api.getAppState() : {};
-                    api.updateScene({ 
-                        elements: currentElements, 
-                        appState: currentAppState,
-                        files: filesObj 
-                    });
-                    console.log('[PonyNotes] ✅ Injected files via updateScene()');
+                    console.warn('[PonyNotes] ⚠️ addFiles not available');
                 }
             }
             
@@ -642,7 +658,6 @@
                         url: f.fileData.url,
                         mimeType: f.fileData.mimeType || 'image/png',
                     }));
-                    // 请求 Flutter 下载云端图片并返回 base64 dataURL
                     const result = await window.flutter_inappwebview.callHandler('downloadCloudImages', cloudFileIds);
                     if (result && Array.isArray(result)) {
                         const downloadedFiles = [];
