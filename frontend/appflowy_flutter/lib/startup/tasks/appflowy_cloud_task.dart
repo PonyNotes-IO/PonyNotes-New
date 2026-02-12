@@ -17,6 +17,7 @@ import 'package:appflowy/startup/tasks/deeplink/appflowy_invite_fallback_deeplin
 import 'package:appflowy/startup/tasks/deeplink/login_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/open_app_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/open_note_deeplink_handler.dart';
+import 'package:appflowy/startup/tasks/deeplink/open_published_note_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/wechat_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/douyin_deeplink_handler.dart';
 import 'package:appflowy/startup/tasks/deeplink/payment_deeplink_handler.dart';
@@ -46,6 +47,7 @@ class AppFlowyCloudDeepLink {
       ..register(AppflowyInviteFallbackDeepLinkHandler())
       ..register(ExpireLoginDeepLinkHandler())
       ..register(OpenAppDeepLinkHandler())
+      ..register(OpenPublishedNoteDeepLinkHandler()) // 发布链接处理器
       ..register(OpenNoteDeepLinkHandler())
       ..register(WeChatDeepLinkHandler())
       ..register(DouYinDeepLinkHandler());
