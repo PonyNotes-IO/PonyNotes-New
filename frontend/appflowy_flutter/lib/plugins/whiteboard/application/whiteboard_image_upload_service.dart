@@ -104,6 +104,9 @@ class WhiteboardImageUploadService {
 
   /// Process files map - upload any dataURL images to cloud
   /// Returns a new files map with cloud URLs
+  /// 
+  /// ✅ 修复：Excalidraw 的文件格式使用 'dataURL' 字段（不是 'data' 字段）
+  /// 格式：{id, dataURL: "data:image/png;base64,...", mimeType, created}
   static Future<Map<String, dynamic>> processFilesForUpload(
     Map<String, dynamic> files, {
     bool forceUpload = false,
@@ -120,11 +123,14 @@ class WhiteboardImageUploadService {
         continue;
       }
 
-      final fileDataMap = fileData as Map<String, dynamic>;
-      final dataURL = fileDataMap['data'] as String?;
+      final fileDataMap = Map<String, dynamic>.from(fileData as Map);
+      
+      // ✅ 修复：同时检查 'dataURL' 和 'data' 字段
+      // Excalidraw 使用 'dataURL'，而之前的代码只检查了 'data'
+      final dataURL = (fileDataMap['dataURL'] as String?) ?? (fileDataMap['data'] as String?);
 
       if (dataURL != null && (dataURL.startsWith('data:') || forceUpload)) {
-        // Need to upload this image
+        // Need to upload this image to cloud
         final parsed = parseDataURL(dataURL);
         if (parsed != null) {
           final task = _uploadAndReplace(
@@ -132,6 +138,7 @@ class WhiteboardImageUploadService {
             dataURL: dataURL,
             parsed: parsed,
             result: result,
+            originalFileData: fileDataMap,
           );
           uploadTasks[fileId] = task;
         } else {
@@ -141,6 +148,7 @@ class WhiteboardImageUploadService {
         // Already a cloud URL, keep as is
         result[fileId] = fileDataMap;
       } else {
+        // No recognized format, keep as is
         result[fileId] = fileDataMap;
       }
     }
@@ -160,34 +168,43 @@ class WhiteboardImageUploadService {
     required String dataURL,
     required ({Uint8List bytes, String mimeType, String? originalFileName}) parsed,
     required Map<String, dynamic> result,
+    Map<String, dynamic>? originalFileData,
   }) async {
     try {
       final originalFileName = parsed.originalFileName ?? 'image_$fileId.png';
       final metadata = await uploadImageWithMetadata(parsed.bytes, originalFileName);
 
-      // Replace dataURL with cloud URL
+      // ✅ 关键修复：保留 Excalidraw 原始格式，同时添加云 URL 信息
+      // Excalidraw 需要 'dataURL' 字段来显示图片
+      // 'url' 字段存储云 URL，用于持久化恢复
       result[fileId] = {
         'id': fileId,
-        'url': metadata.url,
-        'data': metadata.url, // Use URL as data for Excalidraw
+        'dataURL': dataURL, // ✅ 保留原始 base64 dataURL，加载时用于注入 Excalidraw
         'mimeType': parsed.mimeType,
+        'created': originalFileData?['created'] ?? DateTime.now().millisecondsSinceEpoch,
+        // 云存储元数据
+        'url': metadata.url,
         'fileName': metadata.fileName,
         'fileSize': metadata.fileSize,
         'fileHash': metadata.fileHash,
         'uploadedAt': metadata.uploadedAt,
         'source': 'cloud',
-        'dataURL': dataURL, // Keep original for fallback
       };
       Log.info('[WhiteboardImage] ✅ Uploaded $fileId -> ${metadata.url}');
     } catch (e) {
       Log.error('[WhiteboardImage] ❌ Failed to upload $fileId: $e');
-      // Keep original dataURL as fallback
-      result[fileId] = {
-        'id': fileId,
-        'data': dataURL,
-        'mimeType': parsed.mimeType,
-        'uploadError': e.toString(),
-      };
+      // 上传失败，保留原始数据格式
+      if (originalFileData != null) {
+        result[fileId] = originalFileData;
+      } else {
+        result[fileId] = {
+          'id': fileId,
+          'dataURL': dataURL,
+          'mimeType': parsed.mimeType,
+          'created': DateTime.now().millisecondsSinceEpoch,
+          'uploadError': e.toString(),
+        };
+      }
     }
   }
 

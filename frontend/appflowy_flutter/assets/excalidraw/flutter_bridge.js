@@ -165,29 +165,30 @@
     await window.flutter_inappwebview.callHandler('initData');
     init = true;
     
-    // 初始化完成后，尝试获取API引用
+    // 初始化完成后，尝试获取API引用并注入文件（作为安全网）
+    // ✅ 关键：如果 _onWhiteboardDataReady 由于时序问题未被调用，
+    // 这个轮询机制将作为备用方案注入文件
+    let _filesInjected = false; // 标记文件是否已注入，避免重复注入
+    
     setTimeout(() => {
-        const waitForAPI = async () => {
-             try {
-                // 等待API就绪
-                // Note: waitForExcalidrawAPI function is defined below, so we use a simple poller here or wait until it's defined
-                // actually we can use the one defined below if we move this block or structure carefully.
-                // But simplified:
-                const api = window.excalidrawAPI || window.__EXCALIDRAW_API__ || window._excalidrawAPI;
-                if (api) {
-                    window._excalidrawAPI = api;
-                    console.log('[PonyNotes] ✅ Excalidraw API captured for storage hooks');
-                }
-             } catch(e) {}
-        };
-        // 简单的轮询几次
         let attempts = 0;
-        const interval = setInterval(() => {
+        const interval = setInterval(async () => {
             const api = window.excalidrawAPI || window.__EXCALIDRAW_API__ || window._excalidrawAPI;
             if (api) {
                 window._excalidrawAPI = api;
                 console.log('[PonyNotes] ✅ Excalidraw API captured for storage hooks');
                 clearInterval(interval);
+                
+                // ✅ 安全网：如果 _onWhiteboardDataReady 尚未注入文件，在这里注入
+                if (!_filesInjected) {
+                    _filesInjected = true;
+                    console.log('[PonyNotes] 📸 Safety net: injecting files from polling mechanism...');
+                    try {
+                        await _injectFilesFromStorage(api);
+                    } catch (e) {
+                        console.error('[PonyNotes] ❌ Safety net file injection failed:', e);
+                    }
+                }
             }
             attempts++;
             if (attempts > 50) clearInterval(interval);
@@ -516,18 +517,158 @@
         }
     };
 
-    // ✅ 新增：白板数据加载完成回调
+    // ✅ 关键修复：白板数据加载完成回调 - 注入图片文件到 Excalidraw
+    // 原因：Excalidraw 将图片存储在内部 React 状态和 IndexedDB 中，而不是 localStorage
+    // 因此我们必须使用 api.addFiles() 将图片数据直接注入到 Excalidraw 中
     window._onWhiteboardDataReady = async function (count) {
         console.log('[PonyNotes] ✅ Whiteboard data ready, ' + count + ' items loaded');
         try {
             const api = await waitForExcalidrawAPI();
-            // 触发 Excalidraw 重新加载场景数据
-            if (api.refresh) {
-                api.refresh();
+            window._excalidrawAPI = api;
+            console.log('[PonyNotes] ✅ Excalidraw API ready, injecting files...');
+            
+            // 📸 关键修复：从 localStorage 读取 files 并注入到 Excalidraw
+            if (!_filesInjected) {
+                _filesInjected = true;
+                await _injectFilesFromStorage(api);
+            } else {
+                console.log('[PonyNotes] 📸 Files already injected by safety net, skipping');
             }
-            console.log('[PonyNotes] ✅ Excalidraw refreshed with loaded data');
+            
+            console.log('[PonyNotes] ✅ Whiteboard initialization complete');
         } catch (e) {
-            console.error('[PonyNotes] Failed to refresh Excalidraw:', e);
+            console.error('[PonyNotes] Failed to initialize whiteboard:', e);
         }
     };
+
+    // 📸 从 localStorage 读取 files 并注入到 Excalidraw
+    async function _injectFilesFromStorage(api) {
+        try {
+            const filesStr = originalLocalStorage.getItem('excalidraw-files');
+            if (!filesStr || filesStr === '{}' || filesStr === 'null') {
+                console.log('[PonyNotes] 📸 No files to inject');
+                return;
+            }
+            
+            let filesMap;
+            try {
+                filesMap = JSON.parse(filesStr);
+            } catch (e) {
+                console.error('[PonyNotes] ❌ Failed to parse files JSON:', e);
+                return;
+            }
+            
+            if (!filesMap || typeof filesMap !== 'object') {
+                console.log('[PonyNotes] 📸 No valid files data');
+                return;
+            }
+            
+            const fileEntries = Object.entries(filesMap);
+            if (fileEntries.length === 0) {
+                console.log('[PonyNotes] 📸 Files map is empty');
+                return;
+            }
+            
+            console.log('[PonyNotes] 📸 Found ' + fileEntries.length + ' files to inject');
+            
+            const filesToAdd = [];
+            const cloudFilesToFetch = [];
+            
+            for (const [fileId, fileData] of fileEntries) {
+                if (!fileData || typeof fileData !== 'object') {
+                    console.warn('[PonyNotes] ⚠️ Invalid file data for:', fileId);
+                    continue;
+                }
+                
+                let dataURL = null;
+                
+                // 优先使用 base64 dataURL（最可靠）
+                if (fileData.dataURL && typeof fileData.dataURL === 'string' && fileData.dataURL.startsWith('data:')) {
+                    dataURL = fileData.dataURL;
+                } else if (fileData.data && typeof fileData.data === 'string' && fileData.data.startsWith('data:')) {
+                    dataURL = fileData.data;
+                }
+                
+                if (dataURL) {
+                    filesToAdd.push({
+                        id: fileId,
+                        dataURL: dataURL,
+                        mimeType: fileData.mimeType || 'image/png',
+                        created: fileData.created || Date.now(),
+                    });
+                } else if (fileData.url && typeof fileData.url === 'string' && fileData.url.startsWith('http')) {
+                    // 云 URL - 需要通过 Flutter 下载（JS 无法直接访问需要认证的 API）
+                    cloudFilesToFetch.push({ fileId, fileData });
+                    console.log('[PonyNotes] 📸 File ' + fileId + ' has cloud URL, will request download from Flutter');
+                } else if (fileData.data && typeof fileData.data === 'string' && fileData.data.startsWith('http')) {
+                    cloudFilesToFetch.push({ fileId, fileData: { ...fileData, url: fileData.data } });
+                    console.log('[PonyNotes] 📸 File ' + fileId + ' has cloud URL in data field');
+                } else {
+                    console.warn('[PonyNotes] ⚠️ No valid dataURL or cloud URL for file:', fileId, 
+                        'keys:', Object.keys(fileData));
+                }
+            }
+            
+            // 先注入已有 dataURL 的文件
+            if (filesToAdd.length > 0) {
+                console.log('[PonyNotes] 📸 Injecting ' + filesToAdd.length + ' files with dataURL...');
+                if (typeof api.addFiles === 'function') {
+                    api.addFiles(filesToAdd);
+                    console.log('[PonyNotes] ✅ Injected ' + filesToAdd.length + ' files via addFiles()');
+                } else {
+                    // 兜底方案：使用 updateScene
+                    console.log('[PonyNotes] ⚠️ addFiles not available, trying updateScene...');
+                    const filesObj = {};
+                    for (const f of filesToAdd) {
+                        filesObj[f.id] = f;
+                    }
+                    const currentElements = api.getSceneElements ? api.getSceneElements() : [];
+                    const currentAppState = api.getAppState ? api.getAppState() : {};
+                    api.updateScene({ 
+                        elements: currentElements, 
+                        appState: currentAppState,
+                        files: filesObj 
+                    });
+                    console.log('[PonyNotes] ✅ Injected files via updateScene()');
+                }
+            }
+            
+            // 对于需要从云端下载的文件，通知 Flutter 下载
+            if (cloudFilesToFetch.length > 0) {
+                console.log('[PonyNotes] 📸 Requesting Flutter to download ' + cloudFilesToFetch.length + ' cloud images...');
+                try {
+                    const cloudFileIds = cloudFilesToFetch.map(f => ({
+                        fileId: f.fileId,
+                        url: f.fileData.url,
+                        mimeType: f.fileData.mimeType || 'image/png',
+                    }));
+                    // 请求 Flutter 下载云端图片并返回 base64 dataURL
+                    const result = await window.flutter_inappwebview.callHandler('downloadCloudImages', cloudFileIds);
+                    if (result && Array.isArray(result)) {
+                        const downloadedFiles = [];
+                        for (const item of result) {
+                            if (item && item.fileId && item.dataURL) {
+                                downloadedFiles.push({
+                                    id: item.fileId,
+                                    dataURL: item.dataURL,
+                                    mimeType: item.mimeType || 'image/png',
+                                    created: item.created || Date.now(),
+                                });
+                            }
+                        }
+                        if (downloadedFiles.length > 0 && typeof api.addFiles === 'function') {
+                            api.addFiles(downloadedFiles);
+                            console.log('[PonyNotes] ✅ Injected ' + downloadedFiles.length + ' downloaded cloud images');
+                        }
+                    }
+                } catch (e) {
+                    console.error('[PonyNotes] ❌ Failed to download cloud images:', e);
+                }
+            }
+            
+            console.log('[PonyNotes] 📸 File injection complete. Total: ' + filesToAdd.length + ' local + ' + cloudFilesToFetch.length + ' cloud');
+        } catch (e) {
+            console.error('[PonyNotes] ❌ Failed to inject files:', e);
+        }
+    }
 })();
