@@ -116,13 +116,31 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
     setState(() => _loading = true);
     // 刷新发布服务状态
     await ViewPublishService().refreshPublishedViews();
-    // 使用新的全局发布列表 API 获取所有发布的笔记
+    // 使用全局发布列表 API 获取所有发布的笔记
     // 这样其他用户发布的笔记也会显示在侧边栏中
-    final result = await FolderEventListPublishedViews().send();
+    final result = await FolderEventListAllPublishedViews().send();
     setState(() {
       _items = result.fold((s) {
-        final items = List<PublishInfoViewPB>.from(s.items);
-        items.sort((a, b) => b.info.publishTimestampSec.toInt() - a.info.publishTimestampSec.toInt());
+        // 直接使用返回的 AllPublishedCollabItemPB 列表
+        // 由于 PublishInfoViewPB 需要的字段与 AllPublishedCollabItemPB 不同，
+        // 我们需要手动创建对象
+        final items = <PublishInfoViewPB>[];
+        for (final item in s.items) {
+          final view = FolderViewMinimalPB()
+            ..viewId = item.viewId
+            ..name = item.name.isNotEmpty ? item.name : item.publishName
+            ..layout = ViewLayoutPB.Document;
+          
+          final info = PublishInfoResponsePB()
+            ..viewId = item.viewId
+            ..publishName = item.publishName
+            ..publishTimestampSec = item.publishedAt
+            ..publisherEmail = item.publisherEmail;
+          
+          items.add(PublishInfoViewPB()..info = info..view = view);
+        }
+        // 按发布时间倒序排序
+        items.sort((a, b) => b.info.publishTimestampSec.compareTo(a.info.publishTimestampSec));
         return items;
       }, (f) {
         Log.error('load published views failed: $f');
