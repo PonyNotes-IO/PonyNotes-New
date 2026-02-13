@@ -444,21 +444,25 @@ class _SpaceRowState extends State<_SpaceRow> {
                   ),
                 ),
                 const HSpace(12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FlowyText(
-                      name,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    const VSpace(2),
-                    FlowyText(
-                      '协作区',
-                      fontSize: 12,
-                      color: Theme.of(context).hintColor,
-                    ),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FlowyText(
+                        name,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                      const VSpace(2),
+                      FlowyText(
+                        '协作区',
+                        fontSize: 12,
+                        color: Theme.of(context).hintColor,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
