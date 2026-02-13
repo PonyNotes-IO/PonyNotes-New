@@ -113,41 +113,80 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() => _loading = true);
-    // 刷新发布服务状态
-    await ViewPublishService().refreshPublishedViews();
-    // 使用全局发布列表 API 获取所有发布的笔记
-    // 这样其他用户发布的笔记也会显示在侧边栏中
-    final result = await FolderEventListAllPublishedViews().send();
-    setState(() {
-      _items = result.fold((s) {
-        // 直接使用返回的 AllPublishedCollabItemPB 列表
-        // 由于 PublishInfoViewPB 需要的字段与 AllPublishedCollabItemPB 不同，
-        // 我们需要手动创建对象
-        final items = <PublishInfoViewPB>[];
-        for (final item in s.items) {
-          final view = FolderViewMinimalPB()
-            ..viewId = item.viewId
-            ..name = item.name.isNotEmpty ? item.name : item.publishName
-            ..layout = ViewLayoutPB.Document;
-          
-          final info = PublishInfoResponsePB()
-            ..viewId = item.viewId
-            ..publishName = item.publishName
-            ..publishTimestampSec = item.publishedAt
-            ..publisherEmail = item.publisherEmail;
-          
-          items.add(PublishInfoViewPB()..info = info..view = view);
+    try {
+      // 刷新发布服务状态
+      await ViewPublishService().refreshPublishedViews();
+
+      List<PublishInfoViewPB> loadedItems = [];
+      bool globalApiSuccess = false;
+
+      // 优先使用全局发布列表 API（包含所有用户发布的笔记）
+      try {
+        final result = await FolderEventListAllPublishedViews().send();
+        loadedItems = result.fold((s) {
+          final items = <PublishInfoViewPB>[];
+          for (final item in s.items) {
+            final view = FolderViewMinimalPB()
+              ..viewId = item.viewId
+              ..name = item.name.isNotEmpty ? item.name : item.publishName
+              ..layout = ViewLayoutPB.Document;
+
+            final info = PublishInfoResponsePB()
+              ..viewId = item.viewId
+              ..publishName = item.publishName
+              ..publishTimestampSec = item.publishedAt
+              ..publisherEmail = item.publisherEmail;
+
+            items.add(PublishInfoViewPB()..info = info..view = view);
+          }
+          globalApiSuccess = true;
+          return items;
+        }, (f) {
+          Log.error('ListAllPublishedViews API error: $f');
+          return <PublishInfoViewPB>[];
+        });
+      } catch (e) {
+        Log.error('ListAllPublishedViews exception: $e');
+      }
+
+      // 如果全局 API 失败，使用 workspace 级别的 API 作为备选
+      if (!globalApiSuccess) {
+        Log.info('Fallback to ListPublishedViews (workspace-scoped)');
+        try {
+          final result = await FolderEventListPublishedViews().send();
+          loadedItems = result.fold(
+            (s) => s.items.toList(),
+            (f) {
+              Log.error('ListPublishedViews fallback error: $f');
+              return <PublishInfoViewPB>[];
+            },
+          );
+        } catch (e) {
+          Log.error('ListPublishedViews fallback exception: $e');
+          loadedItems = [];
         }
-        // 按发布时间倒序排序
-        items.sort((a, b) => b.info.publishTimestampSec.compareTo(a.info.publishTimestampSec));
-        return items;
-      }, (f) {
-        Log.error('load published views failed: $f');
-        return [];
+      }
+
+      // 按发布时间倒序排序
+      loadedItems.sort(
+        (a, b) => b.info.publishTimestampSec.compareTo(a.info.publishTimestampSec),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _items = loadedItems;
+        _loading = false;
       });
-      _loading = false;
-    });
+    } catch (e, st) {
+      Log.error('load published views unexpected error: $e', e, st);
+      if (!mounted) return;
+      setState(() {
+        _items = [];
+        _loading = false;
+      });
+    }
   }
 
   Widget _buildPublishedList(BuildContext context) {
