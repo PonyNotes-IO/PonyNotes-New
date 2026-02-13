@@ -22,9 +22,35 @@ class SidebarPublishButton extends StatefulWidget {
   State<SidebarPublishButton> createState() => _SidebarPublishButtonState();
 }
 
+/// 用于保存发布项的扩展信息
+class PublishedItemData {
+  final String publishedViewId;  // 原始发布文档的viewId
+  final String viewId;           // 当前用户可以访问的viewId（接收后是新viewId）
+  final String workspaceId;      // 工作区ID
+  final String name;              // 文档名称
+  final String publishName;       // 发布名称
+  final String? publisherEmail;   // 发布者邮箱
+  final DateTime publishedAt;   // 发布时间
+  final bool isReceived;          // 是否是接收的发布
+  final bool isReadonly;         // 是否只读
+
+  PublishedItemData({
+    required this.publishedViewId,
+    required this.viewId,
+    required this.workspaceId,
+    required this.name,
+    required this.publishName,
+    this.publisherEmail,
+    required this.publishedAt,
+    required this.isReceived,
+    required this.isReadonly,
+  });
+}
+
 class _SidebarPublishButtonState extends State<SidebarPublishButton> {
   bool _isExpanded = false;
-  List<PublishInfoViewPB> _items = const [];
+  List<PublishedItemData> _myPublishedItems = const [];  // 我发布的
+  List<PublishedItemData> _receivedPublishedItems = const [];  // 我接收的发布
   bool _loading = false;
   String _workspaceId = '';
   void _onPublishPing() {
@@ -74,7 +100,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
                     size: AFButtonSize.l,
                     onTap: () async {
                       setState(() => _isExpanded = !_isExpanded);
-                      if (_isExpanded && _items.isEmpty && !_loading) {
+                      if (_isExpanded && _myPublishedItems.isEmpty && _receivedPublishedItems.isEmpty && !_loading) {
                         await _load();
                       }
                     },
@@ -119,71 +145,93 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
       // 刷新发布服务状态
       await ViewPublishService().refreshPublishedViews();
 
-      List<PublishInfoViewPB> loadedItems = [];
+      List<PublishedItemData> myPublishedItems = [];
+      List<PublishedItemData> receivedPublishedItems = [];
       bool globalApiSuccess = false;
 
       // 优先使用全局发布列表 API（包含所有用户发布的笔记）
+      // API返回的数据包含 is_received 标记，表示当前用户是否已接收
       try {
         final result = await FolderEventListAllPublishedViews().send();
-        loadedItems = result.fold((s) {
-          final items = <PublishInfoViewPB>[];
+        globalApiSuccess = result.fold((s) {
           for (final item in s.items) {
-            final view = FolderViewMinimalPB()
-              ..viewId = item.viewId
-              ..name = item.name.isNotEmpty ? item.name : item.publishName
-              ..layout = ViewLayoutPB.Document;
+            // publishedAt 是 Int64 类型，需要转换为 int
+            final publishedAtMs = item.publishedAt.toInt();
+            final itemData = PublishedItemData(
+              publishedViewId: item.publishedViewId,
+              viewId: item.viewId,
+              workspaceId: item.workspaceId,
+              name: item.name.isNotEmpty ? item.name : item.publishName,
+              publishName: item.publishName,
+              publisherEmail: item.publisherEmail,
+              publishedAt: DateTime.fromMillisecondsSinceEpoch(publishedAtMs),
+              isReceived: item.isReceived,
+              isReadonly: item.isReadonly,
+            );
 
-            final info = PublishInfoResponsePB()
-              ..viewId = item.viewId
-              ..publishName = item.publishName
-              ..publishTimestampSec = item.publishedAt
-              ..publisherEmail = item.publisherEmail;
-
-            items.add(PublishInfoViewPB()..info = info..view = view);
+            // 根据 is_received 字段分别添加到对应的列表
+            if (item.isReceived) {
+              receivedPublishedItems.add(itemData);
+            } else {
+              myPublishedItems.add(itemData);
+            }
           }
-          globalApiSuccess = true;
-          return items;
+          return true;
         }, (f) {
           Log.error('ListAllPublishedViews API error: $f');
-          return <PublishInfoViewPB>[];
+          return false;
         });
       } catch (e) {
         Log.error('ListAllPublishedViews exception: $e');
       }
 
       // 如果全局 API 失败，使用 workspace 级别的 API 作为备选
+      // workspace 级别的 API 只返回当前用户发布的文档
       if (!globalApiSuccess) {
         Log.info('Fallback to ListPublishedViews (workspace-scoped)');
         try {
           final result = await FolderEventListPublishedViews().send();
-          loadedItems = result.fold(
-            (s) => s.items.toList(),
-            (f) {
-              Log.error('ListPublishedViews fallback error: $f');
-              return <PublishInfoViewPB>[];
-            },
-          );
+          result.fold((s) {
+            for (final item in s.items) {
+              // publishTimestampSec 是 Int64 类型，需要转换为 int
+              final publishedAtMs = item.info.publishTimestampSec.toInt();
+              final itemData = PublishedItemData(
+                publishedViewId: item.info.viewId,
+                viewId: item.view.viewId,
+                workspaceId: _workspaceId,
+                name: item.view.name.isNotEmpty ? item.view.name : item.info.publishName,
+                publishName: item.info.publishName,
+                publisherEmail: item.info.publisherEmail,
+                publishedAt: DateTime.fromMillisecondsSinceEpoch(publishedAtMs),
+                isReceived: false,
+                isReadonly: false,
+              );
+              myPublishedItems.add(itemData);
+            }
+          }, (f) {
+            Log.error('ListPublishedViews fallback error: $f');
+          });
         } catch (e) {
           Log.error('ListPublishedViews fallback exception: $e');
-          loadedItems = [];
         }
       }
 
       // 按发布时间倒序排序
-      loadedItems.sort(
-        (a, b) => b.info.publishTimestampSec.compareTo(a.info.publishTimestampSec),
-      );
+      myPublishedItems.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+      receivedPublishedItems.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
 
       if (!mounted) return;
       setState(() {
-        _items = loadedItems;
+        _myPublishedItems = myPublishedItems;
+        _receivedPublishedItems = receivedPublishedItems;
         _loading = false;
       });
     } catch (e, st) {
       Log.error('load published views unexpected error: $e', e, st);
       if (!mounted) return;
       setState(() {
-        _items = [];
+        _myPublishedItems = [];
+        _receivedPublishedItems = [];
         _loading = false;
       });
     }
@@ -196,7 +244,11 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         child: Center(child: CircularProgressIndicator.adaptive()),
       );
     }
-    if (_items.isEmpty) {
+
+    // 合并两个列表
+    final allItems = [..._myPublishedItems, ..._receivedPublishedItems];
+    
+    if (allItems.isEmpty) {
       return Padding(
         padding: const EdgeInsets.only(left: 20.0, right: 8.0, top: 6.0, bottom: 6.0),
         child: FlowyText.small(
@@ -205,33 +257,141 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         ),
       );
     }
+
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: _items.map((item) {
-        final title = item.view.name.isNotEmpty ? item.view.name : item.info.publishName;
-        return ListTile(
-          dense: true,
-          contentPadding: const EdgeInsets.only(left: 24, right: 8),
-          title: FlowyText.regular(title, overflow: TextOverflow.ellipsis),
-          subtitle: item.info.publishName.isNotEmpty
-              ? FlowyText.small(item.info.publishName, color: Theme.of(context).hintColor)
-              : null,
-          onTap: () async {
-            final viewOrErr = await ViewBackendService.getView(item.info.viewId);
-            viewOrErr.fold(
-              (view) => context.read<TabsBloc>().openPlugin(view),
-              (e) {
-                Log.error('open published view failed: $e');
-                // 显示错误提示
-                showToastNotification(
-                  message: '打开发布笔记失败: ${e.msg}',
-                  type: ToastificationType.error,
-                );
-              },
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 显示"我的发布"部分
+        if (_myPublishedItems.isNotEmpty) ...[
+          _buildSectionHeader(context, '我的发布', Icons.public),
+          ..._myPublishedItems.map((item) => _buildPublishedItem(context, item)),
+        ],
+        // 显示"我接收的发布"部分
+        if (_receivedPublishedItems.isNotEmpty) ...[
+          if (_myPublishedItems.isNotEmpty)
+            const SizedBox(height: 8),
+          _buildSectionHeader(context, '我接收的发布', Icons.inbox),
+          ..._receivedPublishedItems.map((item) => _buildReceivedItem(context, item)),
+        ],
+      ],
+    );
+  }
+
+  /// 构建分组标题
+  Widget _buildSectionHeader(BuildContext context, String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 24, right: 8, top: 8, bottom: 4),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: Theme.of(context).hintColor,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).hintColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 构建"我的发布"列表项
+  Widget _buildPublishedItem(BuildContext context, PublishedItemData item) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.only(left: 24, right: 8),
+      title: FlowyText.regular(
+        item.name,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: item.publishName.isNotEmpty
+          ? FlowyText.small(
+              item.publishName,
+              color: Theme.of(context).hintColor,
+            )
+          : null,
+      trailing: item.publisherEmail != null
+          ? Text(
+              item.publisherEmail!,
+              style: TextStyle(
+                fontSize: 10,
+                color: Theme.of(context).hintColor,
+              ),
+            )
+          : null,
+      onTap: () async {
+        final viewOrErr = await ViewBackendService.getView(item.viewId);
+        viewOrErr.fold(
+          (view) => context.read<TabsBloc>().openPlugin(view),
+          (e) {
+            Log.error('open published view failed: $e');
+            showToastNotification(
+              message: '打开发布笔记失败: ${e.msg}',
+              type: ToastificationType.error,
             );
           },
         );
-      }).toList(),
+      },
+    );
+  }
+
+  /// 构建"我接收的发布"列表项
+  Widget _buildReceivedItem(BuildContext context, PublishedItemData item) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.only(left: 24, right: 8),
+      title: Row(
+        children: [
+          Expanded(
+            child: FlowyText.regular(
+              item.name,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (item.isReadonly)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '只读',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Theme.of(context).hintColor,
+                ),
+              ),
+            ),
+        ],
+      ),
+      subtitle: item.publishName.isNotEmpty
+          ? FlowyText.small(
+              '来自: ${item.publisherEmail ?? "未知"}',
+              color: Theme.of(context).hintColor,
+            )
+          : null,
+      onTap: () async {
+        final viewOrErr = await ViewBackendService.getView(item.viewId);
+        viewOrErr.fold(
+          (view) => context.read<TabsBloc>().openPlugin(view),
+          (e) {
+            Log.error('open received published view failed: $e');
+            showToastNotification(
+              message: '打开发布笔记失败: ${e.msg}',
+              type: ToastificationType.error,
+            );
+          },
+        );
+      },
     );
   }
 
@@ -242,7 +402,8 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
     }
     setState(() {
       _workspaceId = newWorkspaceId;
-      _items = const [];
+      _myPublishedItems = const [];
+      _receivedPublishedItems = const [];
       _isExpanded = false;
       _loading = false;
     });
