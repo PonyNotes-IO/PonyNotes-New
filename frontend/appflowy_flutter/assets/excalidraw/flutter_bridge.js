@@ -9,63 +9,25 @@
 // 原理：拦截localStorage API，自动添加viewId前缀
 // ========================================================================
 (async function () {
-    // /**
-    //  * 解析 URL 中的所有参数（支持 query 和 path 中 viewId=xxx 形式）
-    //  * @param {string} urlStr
-    //  * @returns {Record<string, string>} 参数对象
-    //  */
-    // function parseUrlParams(urlStr = window.location.href) {
-    //     const params = {};
-    //
-    //     try {
-    //         const url = new URL(urlStr);
-    //
-    //         // 1️⃣ 先解析 query 参数
-    //         for (const [key, value] of url.searchParams.entries()) {
-    //             params[key] = value;
-    //         }
-    //
-    //         // 2️⃣ 再解析路径中可能存在的 key=value 形式
-    //         const pathParts = url.pathname.split('/');
-    //         for (const part of pathParts) {
-    //             const match = part.match(/^([^=]+)=(.+)$/);
-    //             if (match) {
-    //                 const [, key, value] = match;
-    //                 if (!(key in params)) { // query 优先
-    //                     params[key] = value;
-    //                 }
-    //             }
-    //         }
-    //     } catch (e) {
-    //         console.error('[PonyNotes] Failed to parse URL params:', e);
-    //     }
-    //
-    //     return params;
-    // }
-    //
-    // // 从URL路径提取viewId（格式：http://127.0.0.1:xxxx/whiteboard/index.html/viewId={viewId}）
-    // const allParams = parseUrlParams();
-    // let currentViewId = allParams.viewId || null;
     console.log('[PonyNotes] 🔐 Initializing localStorage isolation...');
-    // console.log('[PonyNotes] 🆔 Current viewId:', currentViewId || 'unknown');
 
     // 保存原始localStorage的引用
     const originalLocalStorage = window.localStorage;
 
-    // originalLocalStorage.setItem('whiteboard_2f6baa3b-f8e7-4551-b553-1b7f3802d299_excalidraw', '[{"id":"9PhCCR1kTVFHVnPs3Mp3K","type":"rectangle","x":393,"y":203,"width":351,"height":184,"angle":0,"strokeColor":"#1e1e1e","backgroundColor":"transparent","fillStyle":"solid","strokeWidth":2,"strokeStyle":"solid","roughness":1,"opacity":100,"groupIds":[],"frameId":null,"index":"a0","roundness":{"type":3},"seed":872014341,"version":10,"versionNonce":311623397,"isDeleted":false,"boundElements":null,"updated":1762427879424,"link":null,"locked":false},{"id":"m0kkeUsoOo1g8aoe3hQ0P","type":"ellipse","x":342,"y":227,"width":270,"height":252,"angle":0,"strokeColor":"#1e1e1e","backgroundColor":"transparent","fillStyle":"solid","strokeWidth":2,"strokeStyle":"solid","roughness":1,"opacity":100,"groupIds":[],"frameId":null,"index":"a1","roundness":{"type":2},"seed":1475104555,"version":7,"versionNonce":756141861,"isDeleted":false,"boundElements":null,"updated":1762427880512,"link":null,"locked":false},{"id":"YoZXd6k_fyrndPlsTm_ll","type":"arrow","x":707,"y":110,"width":128,"height":505,"angle":0,"strokeColor":"#1e1e1e","backgroundColor":"transparent","fillStyle":"solid","strokeWidth":2,"strokeStyle":"solid","roughness":1,"opacity":100,"groupIds":[],"frameId":null,"index":"a2","roundness":{"type":2},"seed":1337963243,"version":10,"versionNonce":937132043,"isDeleted":false,"boundElements":null,"updated":1762427881443,"link":null,"locked":false,"points":[[0,0],[128,505]],"lastCommittedPoint":null,"startBinding":null,"endBinding":null,"startArrowhead":null,"endArrowhead":"arrow","elbowed":false},{"id":"IeuLjFCt3h2unVKd90dI2","type":"line","x":674,"y":170,"width":123,"height":248,"angle":0,"strokeColor":"#1e1e1e","backgroundColor":"transparent","fillStyle":"solid","strokeWidth":2,"strokeStyle":"solid","roughness":1,"opacity":100,"groupIds":[],"frameId":null,"index":"a3","roundness":{"type":2},"seed":2063456235,"version":8,"versionNonce":968428139,"isDeleted":false,"boundElements":null,"updated":1762427882681,"link":null,"locked":false,"points":[[0,0],[-123,248]],"lastCommittedPoint":null,"startBinding":null,"endBinding":null,"startArrowhead":null,"endArrowhead":null,"polygon":false}]');
-    // originalLocalStorage.setItem('whiteboard_2f6baa3b-f8e7-4551-b553-1b7f3802d299_excalidraw-state', '{"showWelcomeScreen":true,"theme":"light","currentChartType":"bar","currentItemBackgroundColor":"transparent","currentItemEndArrowhead":"arrow","currentItemFillStyle":"solid","currentItemFontFamily":5,"currentItemFontSize":20,"currentItemOpacity":100,"currentItemRoughness":1,"currentItemStartArrowhead":null,"currentItemStrokeColor":"#1e1e1e","currentItemRoundness":"round","currentItemArrowType":"round","currentItemStrokeStyle":"solid","currentItemStrokeWidth":2,"currentItemTextAlign":"left","cursorButton":"up","editingGroupId":null,"activeTool":{"type":"selection","customType":null,"locked":false,"fromSelection":false,"lastActiveTool":null},"penMode":false,"penDetected":false,"exportBackground":true,"exportScale":1,"exportEmbedScene":false,"exportWithDarkMode":false,"gridSize":20,"gridStep":5,"gridModeEnabled":false,"defaultSidebarDockedPreference":false,"lastPointerDownWith":"mouse","name":"Untitled-2025-11-06-1917","openMenu":null,"openSidebar":null,"previousSelectedElementIds":{},"scrolledOutside":false,"scrollX":0,"scrollY":0,"selectedElementIds":{"IeuLjFCt3h2unVKd90dI2":true},"selectedGroupIds":{},"shouldCacheIgnoreZoom":false,"stats":{"open":false,"panels":3},"viewBackgroundColor":"#ffffff","zenModeEnabled":false,"zoom":{"value":1},"selectedLinearElement":{"elementId":"IeuLjFCt3h2unVKd90dI2","selectedPointsIndices":null,"pointerDownState":{"prevSelectedPointsIndices":null,"lastClickedPoint":-1,"lastClickedIsEndPoint":false,"origin":null,"segmentMidpoint":{"value":null,"index":null,"added":false}},"isDragging":false,"lastUncommittedPoint":null,"pointerOffset":{"x":0,"y":0},"startBindingElement":"keep","endBindingElement":"keep","hoverPointIndex":-1,"segmentMidPointHoveredCoords":null,"elbowed":false,"customLineAngle":null,"isEditing":false},"objectsSnapModeEnabled":false,"lockedMultiSelections":{},"stylesPanelMode":"full"}');
-    // originalLocalStorage.setItem('whiteboard_2f6baa3b-f8e7-4551-b553-1b7f3802d299_excalidraw-theme', 'light');
-    // originalLocalStorage.setItem('whiteboard_2f6baa3b-f8e7-4551-b553-1b7f3802d299_i18nextLng', 'zh-CN');
-    // originalLocalStorage.setItem('whiteboard_2f6baa3b-f8e7-4551-b553-1b7f3802d299_version-dataState', '1762427884038');
-    // originalLocalStorage.setItem('whiteboard_2f6baa3b-f8e7-4551-b553-1b7f3802d299_version-files', '1762427884038');
-
     let init = false;
+
+    // ✅ 关键修复：保存 initData 返回的权威数据，避免竞态条件
+    // 原因：Excalidraw 的脚本可能在 initData 完成之前就读取 localStorage
+    // 如果此时 localStorage 是空的（被 clear() 清掉），Excalidraw 会写入空数据 '[]'
+    // 覆盖 initData 后续设置的正确数据。
+    // 解决方案：将 initData 返回的数据保存到 JS 变量中，
+    // 在 _injectFilesFromStorage 中使用此变量而非 localStorage
+    let _initPayload = null;
 
     // 创建隔离的localStorage代理
     const isolatedStorage = {
         getItem: function (key) {
             const value = originalLocalStorage.getItem(key);
-            // console.log(`[PonyNotes Storage] getItem("${key}") -> prefixed: "${key}" -> ${value ? 'HAS_DATA' : 'null'}`);
             return value;
         },
 
@@ -127,7 +89,7 @@
         removeItem: function (key) {
             originalLocalStorage.removeItem(key);
             if (init) {
-                window.flutter_inappwebview.callHandler('localStorageOnRemove', {key: key, value});
+                window.flutter_inappwebview.callHandler('localStorageOnRemove', {key: key});
             }
         },
 
@@ -162,38 +124,55 @@
     }
 
     originalLocalStorage.clear();
-    await window.flutter_inappwebview.callHandler('initData');
+
+    // ✅ 关键修复：initData 现在返回加载的数据
+    // 将数据保存到 _initPayload，用于后续恢复（不依赖 localStorage）
+    try {
+        _initPayload = await window.flutter_inappwebview.callHandler('initData');
+        console.log('[PonyNotes] ✅ initData completed, payload:', 
+            _initPayload ? Object.keys(_initPayload) : 'null');
+    } catch (e) {
+        console.error('[PonyNotes] ❌ initData failed:', e);
+        _initPayload = null;
+    }
+    
     init = true;
     
-    // 初始化完成后，尝试获取API引用并注入文件（作为安全网）
-    // ✅ 关键：如果 _onWhiteboardDataReady 由于时序问题未被调用，
-    // 这个轮询机制将作为备用方案注入文件
-    let _filesInjected = false; // 标记文件是否已注入，避免重复注入
+    // ✅ 关键修复：在 init=true 之后立即尝试恢复数据
+    // 不再依赖 _safeEvalJs 的延迟调用，而是直接在 IIFE 中处理
+    // 此时 localStorage 已被 initData 设置，且 _initPayload 已保存
+    let _filesInjected = false;
     
-    setTimeout(() => {
+    // 等待 Excalidraw API 就绪后立即恢复数据
+    const waitForExcalidrawAndRestore = async () => {
         let attempts = 0;
-        const interval = setInterval(async () => {
+        const maxAttempts = 100; // 最多等待 20 秒
+        const interval = 200;
+        
+        while (attempts < maxAttempts) {
             const api = window.excalidrawAPI || window.__EXCALIDRAW_API__ || window._excalidrawAPI;
             if (api) {
                 window._excalidrawAPI = api;
-                console.log('[PonyNotes] ✅ Excalidraw API captured for storage hooks');
-                clearInterval(interval);
+                console.log('[PonyNotes] ✅ Excalidraw API captured, restoring data...');
                 
-                // ✅ 安全网：如果 _onWhiteboardDataReady 尚未注入文件，在这里注入
                 if (!_filesInjected) {
                     _filesInjected = true;
-                    console.log('[PonyNotes] 📸 Safety net: injecting files from polling mechanism...');
                     try {
-                        await _injectFilesFromStorage(api);
+                        await _restoreWhiteboardData(api);
                     } catch (e) {
-                        console.error('[PonyNotes] ❌ Safety net file injection failed:', e);
+                        console.error('[PonyNotes] ❌ Data restoration failed:', e);
                     }
                 }
+                return;
             }
             attempts++;
-            if (attempts > 50) clearInterval(interval);
-        }, 200);
-    }, 1000);
+            await new Promise(resolve => setTimeout(resolve, interval));
+        }
+        console.error('[PonyNotes] ❌ Excalidraw API not found after max attempts');
+    };
+    
+    // 启动异步恢复（不阻塞后续代码）
+    waitForExcalidrawAndRestore();
 
     // =========================================================================
     // Excalidraw API 适配：导入 / 导出 / 数据加载
@@ -390,7 +369,6 @@
                         const serializer = new XMLSerializer();
                         svgString = serializer.serializeToString(svg);
                     } else if (svg instanceof Blob) {
-                        // 如果返回的是Blob，读取为文本
                         svgString = await new Promise((resolve, reject) => {
                             const reader = new FileReader();
                             reader.onloadend = () => {
@@ -517,79 +495,113 @@
         }
     };
 
-    // ✅ 关键修复：白板数据加载完成回调 - 注入图片文件到 Excalidraw
-    // 原因：Excalidraw 将图片存储在内部 React 状态和 IndexedDB 中，而不是 localStorage
-    // 因此我们必须使用 api.addFiles() 将图片数据直接注入到 Excalidraw 中
-    window._onWhiteboardDataReady = async function (count) {
-        console.log('[PonyNotes] ✅ Whiteboard data ready, ' + count + ' items loaded');
+    // ✅ 关键修复：白板数据恢复函数
+    // 使用 _initPayload（从 initData 返回的权威数据）而非 localStorage
+    // 这彻底解决了竞态条件：Excalidraw 可能在 initData 完成前就读取 localStorage 并写入空数据
+    async function _restoreWhiteboardData(api) {
         try {
-            const api = await waitForExcalidrawAPI();
-            window._excalidrawAPI = api;
-            console.log('[PonyNotes] ✅ Excalidraw API ready, injecting files...');
+            console.log('[PonyNotes] 🔄 Starting whiteboard data restoration...');
             
-            // 📸 关键修复：从 localStorage 读取 files 并注入到 Excalidraw
-            if (!_filesInjected) {
-                _filesInjected = true;
-                await _injectFilesFromStorage(api);
-            } else {
-                console.log('[PonyNotes] 📸 Files already injected by safety net, skipping');
+            // ============================================================
+            // 📝 步骤 1：恢复 elements
+            // ✅ 关键改进：使用 _initPayload 中的权威数据，而非 localStorage
+            // 原因：Excalidraw 可能已经将空数据写入 localStorage，覆盖了 initData 设置的值
+            // ============================================================
+            let elementsToRestore = null;
+            
+            // 优先使用 _initPayload 中的数据（最可靠，不受竞态条件影响）
+            if (_initPayload) {
+                // _initPayload 的 elements 可能是数组或 JSON 字符串
+                if (_initPayload.elements) {
+                    if (typeof _initPayload.elements === 'string') {
+                        try {
+                            elementsToRestore = JSON.parse(_initPayload.elements);
+                        } catch (e) {
+                            console.error('[PonyNotes] ❌ Failed to parse elements from payload:', e);
+                        }
+                    } else if (Array.isArray(_initPayload.elements)) {
+                        elementsToRestore = _initPayload.elements;
+                    }
+                }
+                // 也检查 excalidraw 键（保持向后兼容）
+                if (!elementsToRestore && _initPayload.excalidraw) {
+                    if (typeof _initPayload.excalidraw === 'string') {
+                        try {
+                            elementsToRestore = JSON.parse(_initPayload.excalidraw);
+                        } catch (e) {
+                            console.error('[PonyNotes] ❌ Failed to parse excalidraw from payload:', e);
+                        }
+                    } else if (Array.isArray(_initPayload.excalidraw)) {
+                        elementsToRestore = _initPayload.excalidraw;
+                    }
+                }
             }
             
-            console.log('[PonyNotes] ✅ Whiteboard initialization complete');
-        } catch (e) {
-            console.error('[PonyNotes] Failed to initialize whiteboard:', e);
-        }
-    };
-
-    // 📸 恢复白板完整数据：先确保 elements 正确，再注入 files
-    async function _injectFilesFromStorage(api) {
-        try {
-            // ============================================================
-            // 🔒 步骤 1：确保 elements 已正确加载（防止竞态条件导致丢失）
-            // 原因：initData 是异步的，如果 Excalidraw 在 localStorage 
-            //       设置之前就读取了数据，elements 会为空
-            // ============================================================
-            const currentElements = api.getSceneElements ? api.getSceneElements() : [];
-            console.log('[PonyNotes] 📝 Current elements count:', currentElements.length);
-            
-            if (currentElements.length === 0) {
-                // Excalidraw 当前没有 elements，尝试从 localStorage 恢复
+            // 回退：从 localStorage 读取（仅当 _initPayload 不可用时）
+            if (!elementsToRestore || !Array.isArray(elementsToRestore) || elementsToRestore.length === 0) {
                 const elementsStr = originalLocalStorage.getItem('excalidraw');
                 if (elementsStr && elementsStr !== '[]' && elementsStr !== 'null') {
                     try {
-                        const elements = JSON.parse(elementsStr);
-                        if (Array.isArray(elements) && elements.length > 0) {
-                            console.log('[PonyNotes] 📝 Restoring ' + elements.length + ' elements via API...');
-                            api.updateScene({ elements: elements });
-                            console.log('[PonyNotes] ✅ Elements restored successfully');
-                        }
+                        elementsToRestore = JSON.parse(elementsStr);
                     } catch (e) {
-                        console.error('[PonyNotes] ❌ Failed to parse/restore elements:', e);
+                        console.error('[PonyNotes] ❌ Failed to parse elements from localStorage:', e);
                     }
                 }
+            }
+            
+            // 恢复 elements
+            if (elementsToRestore && Array.isArray(elementsToRestore) && elementsToRestore.length > 0) {
+                const currentElements = api.getSceneElements ? api.getSceneElements() : [];
+                console.log('[PonyNotes] 📝 Current elements:', currentElements.length, 
+                    'Payload elements:', elementsToRestore.length);
+                
+                // ✅ 关键改进：总是使用权威数据恢复
+                // 即使 Excalidraw 当前有元素，也用 _initPayload 中的数据覆盖
+                // 因为 Excalidraw 可能读取了不完整或过时的 localStorage 数据
+                if (currentElements.length === 0 || 
+                    (currentElements.length !== elementsToRestore.length && _initPayload)) {
+                    console.log('[PonyNotes] 📝 Restoring', elementsToRestore.length, 'elements via API...');
+                    api.updateScene({ elements: elementsToRestore });
+                    console.log('[PonyNotes] ✅ Elements restored successfully');
+                } else {
+                    console.log('[PonyNotes] 📝 Elements already loaded correctly (' + currentElements.length + ')');
+                }
             } else {
-                console.log('[PonyNotes] 📝 Elements already loaded (' + currentElements.length + '), no restore needed');
+                console.log('[PonyNotes] 📝 No elements to restore (empty whiteboard)');
             }
 
             // ============================================================
-            // 📸 步骤 2：注入图片文件
+            // 📸 步骤 2：恢复图片文件
             // ============================================================
-            const filesStr = originalLocalStorage.getItem('excalidraw-files');
-            if (!filesStr || filesStr === '{}' || filesStr === 'null') {
-                console.log('[PonyNotes] 📸 No files to inject');
-                return;
+            let filesMap = null;
+            
+            // 优先从 _initPayload 获取 files
+            if (_initPayload && _initPayload.files) {
+                if (typeof _initPayload.files === 'string') {
+                    try {
+                        filesMap = JSON.parse(_initPayload.files);
+                    } catch (e) {
+                        console.error('[PonyNotes] ❌ Failed to parse files from payload:', e);
+                    }
+                } else if (typeof _initPayload.files === 'object') {
+                    filesMap = _initPayload.files;
+                }
             }
             
-            let filesMap;
-            try {
-                filesMap = JSON.parse(filesStr);
-            } catch (e) {
-                console.error('[PonyNotes] ❌ Failed to parse files JSON:', e);
-                return;
+            // 回退：从 localStorage 读取
+            if (!filesMap) {
+                const filesStr = originalLocalStorage.getItem('excalidraw-files');
+                if (filesStr && filesStr !== '{}' && filesStr !== 'null') {
+                    try {
+                        filesMap = JSON.parse(filesStr);
+                    } catch (e) {
+                        console.error('[PonyNotes] ❌ Failed to parse files from localStorage:', e);
+                    }
+                }
             }
             
             if (!filesMap || typeof filesMap !== 'object') {
-                console.log('[PonyNotes] 📸 No valid files data');
+                console.log('[PonyNotes] 📸 No files to inject');
                 return;
             }
             
@@ -683,7 +695,7 @@
             
             console.log('[PonyNotes] 📸 File injection complete. Total: ' + filesToAdd.length + ' local + ' + cloudFilesToFetch.length + ' cloud');
         } catch (e) {
-            console.error('[PonyNotes] ❌ Failed to inject files:', e);
+            console.error('[PonyNotes] ❌ Failed to restore whiteboard data:', e);
         }
     }
 })();

@@ -329,41 +329,61 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   @override
-  Future<void> dispose() async {
-    // debug log removed
+  void dispose() {
+    // ✅ 关键修复：dispose() 必须是同步方法
+    // 在 Flutter 中，dispose() 被框架同步调用，如果声明为 async，
+    // await 之后的代码（包括 super.dispose()）会被延迟执行，
+    // 导致新 widget 的 initState() 在旧 widget 的 dispose() 完成前就运行。
+    // 这会引起竞态条件，特别是在视图切换时。
     _isDisposing = true;
 
-    // ✅ 关键修复：在销毁前强制同步所有待保存的数据
-    // 使用 await 确保同步完成后再继续销毁
-    // 这确保了所有图片和编辑内容都被保存到后端
-    print('[WhiteboardPage] 🔄 Force sync before dispose...');
-    try {
-      await _collabAdapter?.forceSync();
-      print('[WhiteboardPage] ✅ Force sync completed before dispose');
-    } catch (e) {
-      print('[WhiteboardPage] ❌ Force sync failed before dispose: $e');
+    // ✅ 关键修复：使用 fire-and-forget 模式进行异步清理
+    // forceSync 和 closeWhiteboard 是异步操作，但我们不能在 dispose 中 await
+    // 解决方案：先同步完成关键清理，然后启动异步操作（不等待完成）
+    print('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
+    
+    // 1. 立即触发强制同步（fire-and-forget）
+    // 注意：此时 adapter 尚未 dispose，数据还在内存中
+    final adapter = _collabAdapter;
+    if (adapter != null) {
+      // 使用 unawaited 模式：启动同步但不等待
+      adapter.forceSync().then((_) {
+        print('[WhiteboardPage] ✅ Force sync completed (background)');
+      }).catchError((e) {
+        print('[WhiteboardPage] ❌ Force sync failed (background): $e');
+      });
     }
 
-    // 注销所有控制器
+    // 2. 注销所有控制器（同步操作）
     _unregisterControllers();
 
-    // 销毁 Collab 适配器（模仿 DocumentBloc）
-    _collabAdapter?.dispose();
+    // 3. 销毁 Collab 适配器
+    // 注意：forceSync 已经开始执行，但 dispose 会清空数据
+    // 由于 forceSync 内部会复制 _fullData 到局部变量 _syncData，
+    // 所以 adapter.dispose() 在 forceSync 之后调用是安全的
+    // 但为了更安全，我们延迟 dispose adapter
+    Future.delayed(const Duration(milliseconds: 200), () {
+      adapter?.dispose();
+    });
     _collabAdapter = null;
 
-    // 关闭白板以释放后端资源
-    final service = WhiteboardDataService();
-    try {
-      final result = await service.closeWhiteboard(viewId: widget.view.id);
-      result.fold(
-        (_) => null,
-        (error) => print('[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
-      );
-    } catch (e) {
-      print('[WhiteboardPage] Exception closing whiteboard: $e');
-    }
+    // 4. 关闭白板以释放后端资源（fire-and-forget）
+    final viewId = widget.view.id;
+    Future(() async {
+      try {
+        final service = WhiteboardDataService();
+        final result = await service.closeWhiteboard(viewId: viewId);
+        result.fold(
+          (_) => print('[WhiteboardPage] ✅ Whiteboard closed: $viewId'),
+          (error) => print('[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
+        );
+      } catch (e) {
+        print('[WhiteboardPage] Exception closing whiteboard: $e');
+      }
+    });
 
     super.dispose();
+    print('[WhiteboardPage] ✅ Dispose completed (sync part)');
   }
 
   /// 注销所有控制器

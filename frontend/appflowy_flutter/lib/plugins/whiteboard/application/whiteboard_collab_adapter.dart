@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/foundation.dart';
@@ -50,13 +51,58 @@ class WhiteboardCollabAdapter {
   final Map<String, dynamic> _syncFiles = {};
 
   /// 设置初始数据
+  /// ✅ 关键修复：标准化键名，避免 localStorage 原始键名和标准键名共存导致数据混乱
   void setInitialData(Map<String, dynamic>? data) {
     if (data != null) {
-      _fullData.addAll(data);
-      // ✅ 同时初始化 files 数据
-      if (data.containsKey('files') && data['files'] is Map) {
-        _fullData['files'] = Map<String, dynamic>.from(data['files']);
+      // 标准化键名后再设置
+      final normalized = _normalizeKeys(data);
+      _fullData.addAll(normalized);
+      // 同时初始化 files 数据
+      if (normalized.containsKey('files') && normalized['files'] is Map) {
+        _fullData['files'] = Map<String, dynamic>.from(normalized['files'] as Map);
       }
+      print('[WhiteboardCollabAdapter] setInitialData: keys=${_fullData.keys.toList()}');
+    }
+  }
+
+  /// ✅ 标准化键名：将 localStorage 原始键名转换为标准键名
+  /// excalidraw -> elements, excalidraw-state -> appState, excalidraw-files -> files
+  Map<String, dynamic> _normalizeKeys(Map<String, dynamic> data) {
+    final normalized = <String, dynamic>{};
+    
+    for (final entry in data.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      
+      if (key == 'excalidraw' || key.endsWith('_excalidraw')) {
+        if (!normalized.containsKey('elements')) {
+          normalized['elements'] = value is String ? _tryParseJson(value) : value;
+        }
+      } else if (key == 'excalidraw-state' || key.endsWith('_excalidraw-state')) {
+        if (!normalized.containsKey('appState')) {
+          normalized['appState'] = value is String ? _tryParseJson(value) : value;
+        }
+      } else if (key == 'excalidraw-files' || key.endsWith('_excalidraw-files')) {
+        if (!normalized.containsKey('files')) {
+          normalized['files'] = value is String ? _tryParseJson(value) : value;
+        }
+      } else if (key == 'elements' || key == 'appState' || key == 'files') {
+        // 标准键名优先（不覆盖已有的标准键名数据）
+        normalized[key] = value is String ? _tryParseJson(value) : value;
+      } else {
+        normalized[key] = value;
+      }
+    }
+    
+    return normalized;
+  }
+
+  /// 尝试解析 JSON 字符串，失败则返回原始值
+  dynamic _tryParseJson(String value) {
+    try {
+      return jsonDecode(value);
+    } catch (e) {
+      return value;
     }
   }
 

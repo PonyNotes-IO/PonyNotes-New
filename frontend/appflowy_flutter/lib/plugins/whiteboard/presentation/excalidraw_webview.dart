@@ -172,29 +172,31 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             final data = await service.loadWhiteboardData(widget.viewId);
             
             Log.info('[ExcalidrawWebView] ✅ Data loaded, ${data.keys.length} keys found');
-            if (data.containsKey('elements')) {
-              final elements = data['elements'];
+            
+            // ✅ 关键修复：标准化数据键名
+            // 后端可能返回 localStorage 原始键名（excalidraw, excalidraw-state）
+            // 也可能返回标准键名（elements, appState）
+            // 统一转换为标准键名，避免重复存储
+            final normalizedData = _normalizeDataKeys(data);
+            
+            if (normalizedData.containsKey('elements')) {
+              final elements = normalizedData['elements'];
               if (elements is List) {
                 Log.info('[ExcalidrawWebView] 📝 Elements count: ${elements.length}');
+              } else if (elements is String) {
+                Log.info('[ExcalidrawWebView] 📝 Elements is string, length: ${elements.length}');
               }
             }
-            if (data.containsKey('files')) {
-              final files = data['files'];
+            if (normalizedData.containsKey('files')) {
+              final files = normalizedData['files'];
               if (files is Map) {
                 print('[ExcalidrawWebView] 📸 Files count: ${files.length}');
-                // ✅ 关键修复：预处理文件数据
-                // 对于只有云 URL 没有 base64 dataURL 的文件，在 Flutter 端下载并转换
-                final processedFiles = await _preprocessFilesForLoading(
-                  Map<String, dynamic>.from(files),
-                );
-                data['files'] = processedFiles;
-                print('[ExcalidrawWebView] 📸 Files preprocessed, count: ${processedFiles.length}');
               }
             }
 
             // 设置数据到 LocalStorage
             int setCount = 0;
-            for (final entry in data.entries) {
+            for (final entry in normalizedData.entries) {
               final key = entry.key;
               final value = entry.value;
               
@@ -206,7 +208,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               // 修复：确保 value 是 JSON 字符串
               final stringValue = value is String ? value : jsonEncode(value);
 
-              // 修复：映射键名到 Excalidraw 期望的 LocalStorage 键
+              // 映射标准键名到 Excalidraw 期望的 LocalStorage 键
               String lsKey = key;
               if (key == 'files') {
                 lsKey = 'excalidraw-files';
@@ -225,24 +227,21 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             
             Log.info('[ExcalidrawWebView] ✅ Set $setCount items to localStorage');
             
-            // ✅ 关键：初始化完成后发送信号给 Excalidraw
-            // 这将触发 _onWhiteboardDataReady，它会从 localStorage 读取 files
-            // 并使用 api.addFiles() 将图片注入到 Excalidraw 的内部状态中
-            await _safeEvalJs('''
-              if (window._onWhiteboardDataReady) {
-                window._onWhiteboardDataReady($setCount);
-              }
-            ''', tag: 'initDataReady');
-            
             // ✅ 标记初始化完成
             if (!_initializationCompleter!.isCompleted) {
               _initializationCompleter!.complete();
             }
+            
+            // ✅ 关键修复：将加载的数据作为返回值传给 JavaScript
+            // flutter_bridge.js 会将此数据保存到 _initPayload 变量中
+            // 用于在 Excalidraw API 就绪后恢复数据（不依赖 localStorage，避免竞态条件）
+            return normalizedData;
           } catch (e, stack) {
             Log.error('[ExcalidrawWebView] ❌ initData failed: $e\n$stack');
             if (!_initializationCompleter!.isCompleted) {
               _initializationCompleter!.completeError(e);
             }
+            return null;
           }
         });
     controller.addJavaScriptHandler(
@@ -256,9 +255,11 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               final key = arg['key'].toString();
               final value = arg['value'];
 
-              // 📸 关键修复：拦截 excalidraw-files 并转换为标准的 files 键
-              // Excalidraw 将文件数据存储在 key_excalidraw-files 中
-              // 我们需要将其解析并以 'files' 键发送给 WhiteboardCollabAdapter，以便它能正确合并数据
+              // ✅ 关键修复：标准化所有 localStorage 键名
+              // 将 Excalidraw 的 localStorage 键名转换为后端存储使用的标准键名
+              // 避免 _fullData 中出现重复键（elements + excalidraw 同时存在导致数据混乱）
+              
+              // 📸 拦截 excalidraw-files 并转换为标准的 files 键
               if (key.endsWith('excalidraw-files') && value is String) {
                 try {
                   final filesMap = jsonDecode(value);
@@ -266,14 +267,45 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                     Log.debug(
                         '📸 [ExcalidrawWebView] Intercepted files update, count: ${filesMap.length}');
                     widget.onDataChanged?.call('update', {'files': filesMap});
-                    return; // 拦截成功，不再发送原始 key
+                    return;
                   }
                 } catch (e) {
                   Log.warn(
                       '⚠️ [ExcalidrawWebView] Failed to parse files JSON: $e');
                 }
               }
+              
+              // ✅ 标准化 excalidraw -> elements（解析 JSON 字符串为实际数据）
+              if (key == 'excalidraw' || key.endsWith('_excalidraw')) {
+                if (value is String) {
+                  try {
+                    final parsed = jsonDecode(value);
+                    widget.onDataChanged?.call('update', {'elements': parsed});
+                    return;
+                  } catch (e) {
+                    Log.warn('⚠️ [ExcalidrawWebView] Failed to parse elements: $e');
+                  }
+                }
+                widget.onDataChanged?.call('update', {'elements': value});
+                return;
+              }
+              
+              // ✅ 标准化 excalidraw-state -> appState（解析 JSON 字符串为实际数据）
+              if (key == 'excalidraw-state' || key.endsWith('_excalidraw-state')) {
+                if (value is String) {
+                  try {
+                    final parsed = jsonDecode(value);
+                    widget.onDataChanged?.call('update', {'appState': parsed});
+                    return;
+                  } catch (e) {
+                    Log.warn('⚠️ [ExcalidrawWebView] Failed to parse appState: $e');
+                  }
+                }
+                widget.onDataChanged?.call('update', {'appState': value});
+                return;
+              }
 
+              // 其他键直接传递（如 theme、language 等）
               final singleEntryMap = {key: value};
               widget.onDataChanged?.call('update', singleEntryMap);
             } else {
@@ -753,6 +785,78 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     ''', tag: 'hideLoadingLogo');
   }
 
+  /// ✅ 关键修复：标准化数据键名
+  /// 将 localStorage 原始键名转换为标准键名，避免重复存储
+  /// excalidraw -> elements, excalidraw-state -> appState, excalidraw-files -> files
+  Map<String, dynamic> _normalizeDataKeys(Map<String, dynamic> data) {
+    final normalized = <String, dynamic>{};
+    
+    for (final entry in data.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      
+      if (key == 'excalidraw' || key.endsWith('_excalidraw')) {
+        // excalidraw -> elements（如果 elements 键已存在且有效，跳过）
+        if (!normalized.containsKey('elements') || 
+            (normalized['elements'] is List && (normalized['elements'] as List).isEmpty)) {
+          if (value is String) {
+            try {
+              normalized['elements'] = jsonDecode(value);
+            } catch (e) {
+              normalized['elements'] = value;
+            }
+          } else {
+            normalized['elements'] = value;
+          }
+        }
+      } else if (key == 'excalidraw-state' || key.endsWith('_excalidraw-state')) {
+        // excalidraw-state -> appState
+        if (!normalized.containsKey('appState') ||
+            (normalized['appState'] is Map && (normalized['appState'] as Map).isEmpty)) {
+          if (value is String) {
+            try {
+              normalized['appState'] = jsonDecode(value);
+            } catch (e) {
+              normalized['appState'] = value;
+            }
+          } else {
+            normalized['appState'] = value;
+          }
+        }
+      } else if (key == 'excalidraw-files' || key.endsWith('_excalidraw-files')) {
+        // excalidraw-files -> files
+        if (!normalized.containsKey('files') ||
+            (normalized['files'] is Map && (normalized['files'] as Map).isEmpty)) {
+          if (value is String) {
+            try {
+              normalized['files'] = jsonDecode(value);
+            } catch (e) {
+              normalized['files'] = value;
+            }
+          } else {
+            normalized['files'] = value;
+          }
+        }
+      } else if (key == 'elements' || key == 'appState' || key == 'files') {
+        // 标准键名直接使用（优先级高于 localStorage 键名）
+        if (value is String && (key == 'elements' || key == 'appState' || key == 'files')) {
+          try {
+            normalized[key] = jsonDecode(value);
+          } catch (e) {
+            normalized[key] = value;
+          }
+        } else {
+          normalized[key] = value;
+        }
+      } else {
+        // 其他键直接保留
+        normalized[key] = value;
+      }
+    }
+    
+    return normalized;
+  }
+
   /// 预处理文件数据：确保所有文件都有有效的 base64 dataURL
   /// 对于只有云 URL 的文件，下载并转换为 dataURL
   Future<Map<String, dynamic>> _preprocessFilesForLoading(
@@ -1050,15 +1154,10 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             _controller = controller;
             _webViewCreated = true;
             _setupJavaScriptHandlers(controller);
-            widget.initialData?.forEach((key, value) async {
-              final jsonValue = jsonEncode(value);
-              final localStorageKey = 'whiteboard_${widget.viewId}_$key';
-              await _controller!.webStorage.localStorage.setItem(
-                key: localStorageKey,
-                value: jsonValue,
-              );
-              Log.debug('💾 localStorage set: $localStorageKey = $jsonValue');
-            });
+            // ✅ 修复：不再在 onWebViewCreated 中设置 localStorage
+            // 原因：flutter_bridge.js 的 IIFE 会立即调用 originalLocalStorage.clear()
+            // 清空所有 localStorage，然后通过 initData handler 重新加载数据
+            // 所以在这里设置 localStorage 是无用的（会被立即清空）
             Log.debug('🌐 [ExcalidrawWebView] WebView created');
           },
 
