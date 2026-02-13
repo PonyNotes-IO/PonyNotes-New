@@ -17,6 +17,7 @@ import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:collection/collection.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:flutter/material.dart';
@@ -480,6 +481,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
   }
 
   Widget _buildSharedHeader() {
+    final theme = AppFlowyTheme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -490,7 +492,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
               '文件标题名称',
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: Colors.grey[600],
+              color: theme.textColorScheme.secondary,
             ),
           ),
           Expanded(
@@ -499,7 +501,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
               '时间',
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: Colors.grey[600],
+              color: theme.textColorScheme.secondary,
             ),
           ),
           Expanded(
@@ -508,7 +510,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
               '访问权限',
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: Colors.grey[600],
+              color: theme.textColorScheme.secondary,
             ),
           ),
         ],
@@ -574,7 +576,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
     final title = view.name.isNotEmpty ? view.name : '无标题';
     final shareTime = _formatTimestamp(view.createTime.toInt());
     const accessLabel = '已共享';
-
+    final theme = AppFlowyTheme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -585,7 +587,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
               title,
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: theme.textColorScheme.primary,
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -595,7 +597,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
               shareTime,
               fontSize: 14,
               fontWeight: FontWeight.normal,
-              color: Colors.black87,
+              color: theme.textColorScheme.primary,
             ),
           ),
           Expanded(
@@ -605,7 +607,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
               children: [
                 FlowyText.small(
                   accessLabel,
-                  color: Colors.grey[600],
+                  color: theme.textColorScheme.secondary,
                 ),
                 TextButton(
                   onPressed: () {
@@ -694,6 +696,8 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
       viewId: item.info.viewId,
     );
 
+    final theme = AppFlowyTheme.of(context);
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       child: Row(
@@ -727,7 +731,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
                         title.isEmpty ? '无标题' : title,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                        color: theme.textColorScheme.primary,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const VSpace(4),
@@ -752,7 +756,7 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
               publishTime,
               fontSize: 14,
               fontWeight: FontWeight.normal,
-              color: Colors.black87,
+              color: theme.textColorScheme.primary,
             ),
           ),
           Expanded(
