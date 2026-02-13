@@ -156,10 +156,12 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       final viewName = await _getViewNameFromPublishInfo(viewId);
 
       // 创建最小化的 ViewPB 对象，用于在UI中打开视图
+      // 如果是发布的文档（只读），设置 is_locked = true
       final minimalView = ViewPB()
-        ..id = viewId
+        ..id = effectiveViewId  // 使用接收后的 viewId
         ..name = viewName // 使用真实标题，如果没有则使用默认名称
-        ..layout = ViewLayoutPB.Document;
+        ..layout = ViewLayoutPB.Document
+        ..isLocked = isReadonly;  // 设置只读锁定状态
 
       // 等待应用初始化完成后再打开视图
       // 使用WidgetsBinding确保在UI线程中执行
