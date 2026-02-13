@@ -186,7 +186,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       }
 
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/published/received/$pageId/readonly',
+        // 注意：后端 API 是在 /api/workspace scope 下定义的
+        path: '/api/workspace/published/received/$pageId/readonly',
       );
 
       final authToken = await _getAuthToken();

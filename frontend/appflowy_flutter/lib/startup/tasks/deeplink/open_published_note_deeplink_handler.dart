@@ -312,9 +312,10 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
         return (false, 'Base URL 为空', publishedViewId, true);
       }
 
-      // 构建 API URL: /api/published/receive
+      // 构建 API URL: /api/workspace/published/receive
+      // 注意：后端 API 是在 /api/workspace scope 下定义的
       final uri = Uri.parse(baseUrl).replace(
-        path: '/api/published/receive',
+        path: '/api/workspace/published/receive',
       );
 
       // 获取 auth token
