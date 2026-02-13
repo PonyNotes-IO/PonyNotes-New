@@ -17,6 +17,7 @@ import 'package:appflowy_backend/protobuf/flowy-notification/protobuf.dart';
 import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -38,21 +39,23 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     // 检查是否是打开笔记的深度链接（兼容 host 或 path 形式）
     final host = uri.host;
     final path = uri.path;
-    
+
     // 原有格式: ponynotes://note?viewId=xxx 或 ponynotes://open?viewId=xxx
-    final isNotePath = host == 'note' || host == 'open' || path == 'note' || path == 'open';
-    
+    final isNotePath =
+        host == 'note' || host == 'open' || path == 'note' || path == 'open';
+
     // 新格式: https://www.xiaomabiji.com/share?viewId=xxx&type=publish
     // 支持任意域名下的 /share 路径，带 viewId 和 type=publish 参数
     final isSharePath = path == '/share' || path == 'share';
     final hasViewId = uri.queryParameters.containsKey('viewId');
     final linkType = uri.queryParameters['type'];
     final isPublishType = linkType == 'publish';
-    
+
     // 支持两种格式：
     // 1. ponynotes://note?viewId=xxx 或 ponynotes://open?viewId=xxx
     // 2. https://domain/share?viewId=xxx&type=publish
-    return (isNotePath && hasViewId) || (isSharePath && hasViewId && isPublishType);
+    return (isNotePath && hasViewId) ||
+        (isSharePath && hasViewId && isPublishType);
   }
 
   @override
@@ -67,7 +70,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       final viewId = uri.queryParameters['viewId'];
       final targetWorkspaceId = uri.queryParameters['workspaceId'];
       final linkType = uri.queryParameters['type']; // 获取链接类型：share 或 publish
-      
+
       if (viewId == null || viewId.isEmpty) {
         Log.error('[OpenNoteDeepLinkHandler] viewId参数为空');
         onStateChange(this, DeepLinkState.error);
@@ -84,7 +87,9 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
 
       // 如果是分享链接（type=share），尝试将当前用户添加到协作中，
       // 具体权限与视图可见性仍由后端控制。
-      if (linkType == 'share' && workspaceId != null && workspaceId.isNotEmpty) {
+      if (linkType == 'share' &&
+          workspaceId != null &&
+          workspaceId.isNotEmpty) {
         await _addUserToCollaboration(
           workspaceId: workspaceId,
           viewId: viewId,
@@ -94,22 +99,29 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       // 如果是发布链接（type=publish），调用 receive API 接收文档
       String effectiveViewId = viewId;
       bool isReadonly = false;
-      
-      if (linkType == 'publish' && workspaceId != null && workspaceId.isNotEmpty) {
-        Log.info('[OpenNoteDeepLinkHandler] 处理发布链接: viewId=$viewId, workspaceId=$workspaceId');
-        
+
+      if (linkType == 'publish' &&
+          workspaceId != null &&
+          workspaceId.isNotEmpty) {
+        Log.info(
+            '[OpenNoteDeepLinkHandler] 处理发布链接: viewId=$viewId, workspaceId=$workspaceId');
+
         // 调用 receive API 接收发布的文档
         final receiveResult = await _receivePublishedCollab(
           publishedViewId: viewId,
           workspaceId: workspaceId,
         );
-        
+
         if (receiveResult.$1) {
           effectiveViewId = receiveResult.$3;
           isReadonly = receiveResult.$4;
-          Log.info('[OpenNoteDeepLinkHandler] 接收发布文档成功: receivedViewId=$effectiveViewId, isReadonly=$isReadonly');
+          Log.info(
+              '[OpenNoteDeepLinkHandler] 接收发布文档成功: receivedViewId=$effectiveViewId, isReadonly=$isReadonly');
+          // 刷新侧边栏
+          PublishRefresh.ping();
         } else {
-          Log.warn('[OpenNoteDeepLinkHandler] 接收发布文档失败: ${receiveResult.$2}，尝试使用原viewId打开');
+          Log.warn(
+              '[OpenNoteDeepLinkHandler] 接收发布文档失败: ${receiveResult.$2}，尝试使用原viewId打开');
           // 即使接收失败也继续打开，使用原始viewId
           effectiveViewId = viewId;
           isReadonly = true;
@@ -137,7 +149,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
           },
         );
       } catch (e, stackTrace) {
-        Log.error('[OpenNoteDeepLinkHandler] 调用 open_document 时异常: $e', stackTrace);
+        Log.error(
+            '[OpenNoteDeepLinkHandler] 调用 open_document 时异常: $e', stackTrace);
         documentOpened = false;
       }
 
@@ -158,10 +171,10 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       // 创建最小化的 ViewPB 对象，用于在UI中打开视图
       // 如果是发布的文档（只读），设置 is_locked = true
       final minimalView = ViewPB()
-        ..id = effectiveViewId  // 使用接收后的 viewId
+        ..id = effectiveViewId // 使用接收后的 viewId
         ..name = viewName // 使用真实标题，如果没有则使用默认名称
         ..layout = ViewLayoutPB.Document
-        ..isLocked = isReadonly;  // 设置只读锁定状态
+        ..isLocked = isReadonly; // 设置只读锁定状态
 
       // 等待应用初始化完成后再打开视图
       // 使用WidgetsBinding确保在UI线程中执行
@@ -203,10 +216,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
   /// 打开视图
   void _openView(BuildContext context, ViewPB view) {
     try {
-
       // 通过 ActionNavigationBloc 触发打开逻辑，避免直接依赖 TabsBloc
-      final actionBloc =
-          context.read<ActionNavigationBloc?>();
+      final actionBloc = context.read<ActionNavigationBloc?>();
 
       if (actionBloc != null) {
         actionBloc.add(
@@ -236,7 +247,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     required String viewId,
   }) async {
     try {
-
       // 获取当前用户信息
       final userResult = await UserBackendService.getCurrentUserProfile();
       final userProfile = userResult.fold(
@@ -268,7 +278,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       // 获取 base URL
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
       final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-      
+
       if (baseUrl.isEmpty) {
         Log.warn('📝 [OpenNoteDeepLinkHandler] Base URL 为空，跳过添加协作');
         return;
@@ -299,7 +309,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       } else if (response.statusCode == 409) {
         // 409 表示用户已经在协作中，这是正常情况，不需要报错
       } else {
-        Log.warn('[OpenNoteDeepLinkHandler] 添加协作失败: HTTP ${response.statusCode}');
+        Log.warn(
+            '[OpenNoteDeepLinkHandler] 添加协作失败: HTTP ${response.statusCode}');
       }
     } catch (e, stackTrace) {
       // 添加协作失败不应该阻止打开笔记，只记录错误
@@ -339,7 +350,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         final user = decoded['user'];
         if (user is Map<String, dynamic>) {
           return user['id'];
-        }else {
+        } else {
           return null;
         }
       }
@@ -399,7 +410,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         Log.info('[OpenNoteDeepLinkHandler] 笔记未发布，使用默认名称');
         return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
       } else {
-        Log.warn('[OpenNoteDeepLinkHandler] 获取发布信息失败: HTTP ${response.statusCode}');
+        Log.warn(
+            '[OpenNoteDeepLinkHandler] 获取发布信息失败: HTTP ${response.statusCode}');
       }
     } catch (e, stackTrace) {
       Log.error(
@@ -451,21 +463,24 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       Log.info('[OpenNoteDeepLinkHandler] 调用 receive API: $uri');
       Log.info('[OpenNoteDeepLinkHandler] 请求参数: $requestBody');
 
-      final response = await http.post(
+      final response = await http
+          .post(
         uri,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $authToken',
         },
         body: requestBody,
-      ).timeout(
+      )
+          .timeout(
         const Duration(seconds: 30),
         onTimeout: () {
           throw Exception('请求超时');
         },
       );
 
-      Log.info('[OpenNoteDeepLinkHandler] receive API 响应: HTTP ${response.statusCode}');
+      Log.info(
+          '[OpenNoteDeepLinkHandler] receive API 响应: HTTP ${response.statusCode}');
 
       // 解析响应体（所有分支都需要）
       final responseBody = jsonDecode(response.body);
@@ -477,7 +492,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
           if (data is Map<String, dynamic>) {
             final viewId = data['view_id'] as String?;
             final isReadonly = data['is_readonly'] as bool? ?? true;
-            Log.info('[OpenNoteDeepLinkHandler] 接收成功: viewId=$viewId, isReadonly=$isReadonly');
+            Log.info(
+                '[OpenNoteDeepLinkHandler] 接收成功: viewId=$viewId, isReadonly=$isReadonly');
             return (true, '', viewId ?? destViewId, isReadonly);
           }
         }
@@ -494,7 +510,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         }
         return (false, '已接收过', publishedViewId, true);
       } else {
-        final error = responseBody is Map<String, dynamic> 
+        final error = responseBody is Map<String, dynamic>
             ? (responseBody['error'] as String? ?? '未知错误')
             : '未知错误';
         Log.warn('[OpenNoteDeepLinkHandler] 接收失败: $error');
@@ -530,6 +546,4 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     bytes[8] = (bytes[8] & 0x3f) | 0x80; // 变体
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('-');
   }
-
 }
-
