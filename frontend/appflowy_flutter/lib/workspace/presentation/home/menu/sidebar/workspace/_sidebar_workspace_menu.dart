@@ -321,20 +321,28 @@ class WorkspaceMenuItem extends StatefulWidget {
 
 class _WorkspaceMenuItemState extends State<WorkspaceMenuItem> {
   final ValueNotifier<bool> isHovered = ValueNotifier(false);
+  late final WorkspaceMemberBloc _memberBloc;
+
+  @override
+  void initState() {
+    super.initState();
+    _memberBloc = WorkspaceMemberBloc(
+      userProfile: widget.userProfile,
+      workspace: widget.workspace,
+    )..add(const WorkspaceMemberEvent.initial());
+  }
 
   @override
   void dispose() {
     isHovered.dispose();
+    _memberBloc.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => WorkspaceMemberBloc(
-        userProfile: widget.userProfile,
-        workspace: widget.workspace,
-      )..add(const WorkspaceMemberEvent.initial()),
+    return BlocProvider.value(
+      value: _memberBloc,
       child: BlocBuilder<WorkspaceMemberBloc, WorkspaceMemberState>(
         builder: (context, state) {
           // settings right icon inside the flowy button will

@@ -359,6 +359,7 @@ class _SpaceRowState extends State<_SpaceRow> {
       if (widget.space.spacePermission == SpacePermission.private) {
         final userService = UserBackendService(userId: widget.userProfile.id);
         final res = await userService.getTeamACL(widget.space.id);
+        if (!mounted) return;
         res.fold((acl) {
           final allowed = acl.allowEmails.contains(widget.userProfile.email) ||
               acl.allowUserIds.contains(widget.userProfile.id.toInt());
@@ -372,11 +373,13 @@ class _SpaceRowState extends State<_SpaceRow> {
           });
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _isVisible = true;
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isVisible = false;
       });
@@ -474,6 +477,8 @@ class _SpaceRowState extends State<_SpaceRow> {
                   ? widget.userProfile.name
                   : widget.userProfile.email,
               fontSize: 14,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
           Expanded(
@@ -569,10 +574,11 @@ class _SpaceRowState extends State<_SpaceRow> {
       Log.error('Exception loading collab members for manage dialog: $e');
     }
 
+    final dialogSearchController = TextEditingController();
     await showDialog(
       context: context,
       builder: (ctx) {
-        final TextEditingController _searchController = TextEditingController();
+        final _searchController = dialogSearchController;
         return Dialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -647,6 +653,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                             bool isSearching = false;
                             bool hasSearched = false;
 
+                            final addMemberSearchController = TextEditingController();
                             await showDialog(
                               context: ctx,
                               builder: (dctx) {
@@ -732,8 +739,7 @@ class _SpaceRowState extends State<_SpaceRow> {
 
                                     AFRolePB dialogSelectedRole =
                                         AFRolePB.Member;
-                                    final TextEditingController
-                                        searchController = TextEditingController();
+                                    final searchController = addMemberSearchController;
 
                                     return Dialog(
                                       shape: RoundedRectangleBorder(
@@ -1051,6 +1057,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                                 );
                               },
                             );
+                            addMemberSearchController.dispose();
                           },
                         ),
                       ),
@@ -1361,6 +1368,7 @@ class _SpaceRowState extends State<_SpaceRow> {
         );
       },
     );
+    dialogSearchController.dispose();
   }
 }
 

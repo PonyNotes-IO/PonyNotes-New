@@ -706,18 +706,4 @@ class WorkspaceMemberState with _$WorkspaceMemberState {
     return false;
   }
 
-  @override
-  int get hashCode => runtimeType.hashCode;
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-
-    return other is WorkspaceMemberState &&
-        other.members == members &&
-        other.myRole == myRole &&
-        other.subscriptionInfo == subscriptionInfo &&
-        other.inviteLink == inviteLink &&
-        identical(other.actionResult, actionResult);
-  }
 }

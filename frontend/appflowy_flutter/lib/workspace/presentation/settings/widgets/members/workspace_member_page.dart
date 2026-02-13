@@ -20,8 +20,6 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
-import 'package:collection/collection.dart';
 
 class WorkspaceMembersPage extends StatefulWidget {
   const WorkspaceMembersPage({
@@ -633,57 +631,12 @@ class _MemberItem extends StatefulWidget {
 
 class _MemberItemState extends State<_MemberItem> {
   String? _contact;
-  bool _loadingContact = false;
 
   @override
   void initState() {
     super.initState();
-    // Prefer email if available; otherwise try to load phone asynchronously.
-    if (widget.member.email.isNotEmpty) {
-      _contact = widget.member.email;
-    } else {
-      _loadContactFallback();
-    }
-  }
-
-  Future<void> _loadContactFallback() async {
-    setState(() {
-      _loadingContact = true;
-    });
-    try {
-      final repo = RustShareWithUserRepositoryImpl();
-      // Try searching by name first; the backend search may return phone in results.
-      final nameQuery = widget.member.name;
-      final res = await repo.searchUsers(query: nameQuery);
-      res.fold((users) {
-        // Pick first user whose email or phone matches/exists
-        final match = users.firstWhereOrNull(
-            (u) => (u.email.isNotEmpty) || (u.phone?.isNotEmpty ?? false));
-        if (match != null) {
-          final contact =
-              (match.email.isNotEmpty) ? match.email : (match.phone ?? '');
-          setState(() {
-            _contact = contact;
-          });
-        } else {
-          setState(() {
-            _contact = '';
-          });
-        }
-      }, (err) {
-        setState(() {
-          _contact = '';
-        });
-      });
-    } catch (_) {
-      setState(() {
-        _contact = '';
-      });
-    } finally {
-      setState(() {
-        _loadingContact = false;
-      });
-    }
+    // 优先使用 email；email 为空时直接显示空（避免 N+1 API 查询）
+    _contact = widget.member.email.isNotEmpty ? widget.member.email : '';
   }
 
   @override
@@ -720,8 +673,7 @@ class _MemberItemState extends State<_MemberItem> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      // Show contact (email preferred, otherwise loaded phone). Empty string if not available.
-                      _contact ?? (_loadingContact ? '...' : ''),
+                      _contact ?? '',
                       style: theme.textStyle.caption.standard(
                         color: theme.textColorScheme.secondary,
                       ),
@@ -800,57 +752,14 @@ class _MemberMoreActionList extends StatefulWidget {
 }
 
 class _MemberMoreActionListState extends State<_MemberMoreActionList> {
-  String _memberIdentifier = '';
-  bool _isLoading = true;
+  late final String _memberIdentifier;
 
   @override
   void initState() {
     super.initState();
-    _loadMemberIdentifier();
-  }
-
-  Future<void> _loadMemberIdentifier() async {
     final member = widget.member;
-    // 优先使用 email
-    if (member.email.isNotEmpty) {
-      setState(() {
-        _memberIdentifier = member.email;
-        _isLoading = false;
-      });
-    } else {
-      // 如果 email 为空，尝试通过 name 搜索获取用户的 email 或 phone
-      try {
-        final repo = RustShareWithUserRepositoryImpl();
-        final res = await repo.searchUsers(query: member.name);
-        res.fold((users) {
-          // 查找与当前成员匹配的用户
-          final match = users.firstWhereOrNull(
-            (u) => (u.email.isNotEmpty) || (u.phone?.isNotEmpty ?? false),
-          );
-          setState(() {
-            // 如果找到匹配用户，优先使用 email，否则使用 phone
-            if (match != null && match.email.isNotEmpty) {
-              _memberIdentifier = match.email;
-            } else {
-              _memberIdentifier = match?.phone ?? '';
-            }
-            _isLoading = false;
-          });
-        }, (_) {
-          // 搜索失败，使用 name 作为后备
-          setState(() {
-            _memberIdentifier = member.name;
-            _isLoading = false;
-          });
-        });
-      } catch (_) {
-        // 异常情况下使用 name
-        setState(() {
-          _memberIdentifier = member.name;
-          _isLoading = false;
-        });
-      }
-    }
+    // 优先使用 email，否则用 name 做标识（避免 N+1 API 查询）
+    _memberIdentifier = member.email.isNotEmpty ? member.email : member.name;
   }
 
   @override
@@ -877,15 +786,7 @@ class _MemberMoreActionListState extends State<_MemberMoreActionList> {
       onSelected: (action, controller) {
         switch (action.inner) {
           case _MemberMoreAction.delete:
-            if (_isLoading) {
-              // 正在加载中，不执行删除操作
-              Log.error('删除失败: 成员标识符加载中, _isLoading=$_isLoading, _memberIdentifier=$_memberIdentifier');
-              break;
-            }
-            // 使用获取到的标识符（email 或 phone）
-            final identifier = _memberIdentifier.isNotEmpty
-                ? _memberIdentifier
-                : widget.member.name;
+            final identifier = _memberIdentifier;
 
             Log.info('准备删除成员: name=${widget.member.name}, identifier=$identifier, email=${widget.member.email}');
 
