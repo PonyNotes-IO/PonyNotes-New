@@ -862,13 +862,14 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
 
       Log.info('Adding collaborator: $uri');
 
-      // 发送 POST 请求
+      // 发送 POST 请求，需要包含 permission_id 在 body 中
       final response = await http.post(
         uri,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $accessToken',
         },
+        body: jsonEncode({'permission_id': 1}), // 默认只读权限
       ).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
