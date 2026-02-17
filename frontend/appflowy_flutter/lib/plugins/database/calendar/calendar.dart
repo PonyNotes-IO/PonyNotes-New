@@ -392,9 +392,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       await result.fold(
         (view) async {
           // 视图已存在，直接使用
-          setState(() {
-            _currentViewId = view.id;
-          });
+          if (mounted) {
+            setState(() {
+              _currentViewId = view.id;
+            });
+          }
         },
         (error) async {
           // 视图不存在，创建新视图
@@ -407,15 +409,19 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
           createResult.fold(
             (view) {
-              setState(() {
-                _currentViewId = view.id;
-              });
+              if (mounted) {
+                setState(() {
+                  _currentViewId = view.id;
+                });
+              }
             },
             (createError) {
               // 如果创建失败，使用固定ID作为后备
-              setState(() {
-                _currentViewId = fixedViewId;
-              });
+              if (mounted) {
+                setState(() {
+                  _currentViewId = fixedViewId;
+                });
+              }
             },
           );
         },
@@ -429,9 +435,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       });
     } catch (e) {
       // 使用固定ID作为后备
-      setState(() {
-        _currentViewId = fixedUuid(12345, UuidType.privateSpace);
-      });
+      if (mounted) {
+        setState(() {
+          _currentViewId = fixedUuid(12345, UuidType.privateSpace);
+        });
+      }
     }
   }
 
@@ -1246,6 +1254,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   Future<void> _loadContentForDate(DateTime date) async {
     if (_isLoadingContent) return; // 防止重复加载
 
+    if (!mounted) return; // 组件已销毁，直接返回
+
     setState(() {
       _isLoadingContent = true;
     });
@@ -1359,9 +1369,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       }
 
       // 其他错误，回滚状态
-      setState(() {
-        _isSubscribeSystemCalendar = !value;
-      });
+      if (mounted) {
+        setState(() {
+          _isSubscribeSystemCalendar = !value;
+        });
+      }
 
       // 显示错误提示
       _showToggleErrorMessage();
