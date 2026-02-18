@@ -404,7 +404,11 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
   void _onCopyLink(
     ShareTabEventCopyShareLink event,
     Emitter<ShareTabState> emit,
-  ) {
+  ) async {
+    // 在复制链接之前，先调用API创建邀请记录
+    // 这样"共享"菜单就能显示这个邀请
+    await _createShareLinkInvite();
+    
     getIt<ClipboardService>().setData(
       ClipboardServiceData(
         plainText: event.link,
@@ -416,6 +420,100 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         linkCopied: true,
       ),
     );
+  }
+  
+  /// 调用后端API创建邀请链接记录
+  Future<void> _createShareLinkInvite() async {
+    try {
+      // 获取当前用户信息
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold(
+        (user) => user,
+        (error) => null,
+      );
+      
+      if (userProfile == null) {
+        Log.warn('[ShareTabBloc] 获取用户信息失败');
+        return;
+      }
+      
+      // 获取 auth token
+      final authToken = userProfile.token;
+      if (authToken.isEmpty) {
+        Log.warn('[ShareTabBloc] Auth token 为空');
+        return;
+      }
+      
+      // 提取 access token
+      String? accessToken;
+      try {
+        final tokenData = jsonDecode(authToken);
+        if (tokenData is Map<String, dynamic>) {
+          accessToken = tokenData['access_token'] as String?;
+        }
+      } catch (_) {
+        accessToken = authToken;
+      }
+      
+      if (accessToken == null) {
+        Log.warn('[ShareTabBloc] access_token 为空');
+        return;
+      }
+      
+      // 获取 base URL
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      
+      if (baseUrl.isEmpty) {
+        Log.warn('[ShareTabBloc] Base URL 为空');
+        return;
+      }
+      
+      // 构建 API URL
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/workspace/$workspaceId/collab/$pageId/invite-link',
+      );
+      
+      // 发送 POST 请求
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: jsonEncode({
+          'permission_id': state.selectedPermissionId,
+        }),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('请求超时');
+        },
+      );
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        Log.info('[ShareTabBloc] 创建邀请链接成功');
+        
+        // 刷新共享列表
+        _refreshSharedUsers();
+      } else {
+        Log.warn('[ShareTabBloc] 创建邀请链接失败: HTTP ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      Log.error('[ShareTabBloc] 创建邀请链接时出错: $e', stackTrace);
+    }
+  }
+  
+  /// 刷新共享用户列表
+  Future<void> _refreshSharedUsers() async {
+    try {
+      final users = await _getSharedUsers();
+      add(
+        ShareTabEvent.updateSharedUsers(users: users),
+      );
+    } catch (e) {
+      Log.error('[ShareTabBloc] 刷新共享用户列表失败: $e');
+    }
   }
 
   Future<void> _onSearchAvailableUsers(
