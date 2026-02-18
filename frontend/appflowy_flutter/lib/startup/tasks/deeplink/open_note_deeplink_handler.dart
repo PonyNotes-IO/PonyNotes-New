@@ -381,13 +381,21 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     // 首先尝试从发布元数据获取名称
     final publishName = await _getViewNameFromPublishInfo(viewId);
     
-    // 如果获取到的是默认名称（说明可能是协作分享链接），尝试通过 ViewBackendService 获取
+    // 如果获取到的是空字符串（说明是协作分享链接），或者获取到的是默认名称，尝试通过 ViewBackendService 获取
     final defaultName = LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
-    if (publishName == defaultName && workspaceId != null && workspaceId.isNotEmpty) {
-      return _getCollabViewName(viewId, workspaceId);
+    if (publishName.isEmpty || publishName == defaultName) {
+      if (workspaceId != null && workspaceId.isNotEmpty) {
+        return _getCollabViewName(viewId, workspaceId);
+      }
     }
     
-    return publishName;
+    // 如果获取到了有效的名称，直接返回
+    if (publishName.isNotEmpty) {
+      return publishName;
+    }
+    
+    // 否则返回默认名称
+    return defaultName;
   }
 
   /// 从发布元数据获取视图名称
