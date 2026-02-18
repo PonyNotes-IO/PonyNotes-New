@@ -76,6 +76,11 @@ sealed class ShareTabEvent {
         user: user,
         accessLevel: accessLevel,
       );
+
+  factory ShareTabEvent.updateShareLinkPermission({
+    required int permissionId,
+  }) =>
+      ShareTabEventUpdateShareLinkPermission(permissionId: permissionId);
 }
 
 /// Initializes the share tab bloc.
@@ -191,4 +196,13 @@ class ShareTabEventUpdateMemberPermission extends ShareTabEvent {
 
   final SharedUser user;
   final ShareAccessLevel accessLevel;
+}
+
+/// Updates the selected permission for share link.
+class ShareTabEventUpdateShareLinkPermission extends ShareTabEvent {
+  const ShareTabEventUpdateShareLinkPermission({
+    required this.permissionId,
+  });
+
+  final int permissionId; // 1=查看，2=评论，3=编辑，4=全部权限
 }
