@@ -104,6 +104,11 @@ class _ShareTabState extends State<ShareTab> {
               ],
             ),
             VSpace(theme.spacing.m),
+            
+            // 添加权限选择器
+            _buildPermissionSelector(context, state),
+            
+            VSpace(theme.spacing.m),
             _buildLinkAndCopyButton(
               state.shareLink,
               state.users.isNotEmpty,
@@ -333,6 +338,75 @@ class _ShareTabState extends State<ShareTab> {
           ),
         );
       },
+    );
+  }
+
+  /// 构建权限选择器
+  Widget _buildPermissionSelector(BuildContext context, ShareTabState state) {
+    final theme = AppFlowyTheme.of(context);
+    
+    // 权限选项
+    final permissions = [
+      {'id': 1, 'name': '可以查看', 'icon': Icons.visibility_outlined},
+      {'id': 2, 'name': '可以评论', 'icon': Icons.comment_outlined},
+      {'id': 3, 'name': '可以编辑', 'icon': Icons.edit_outlined},
+      {'id': 4, 'name': '全部权限', 'icon': Icons.admin_panel_settings_outlined},
+    ];
+    
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: theme.spacing.m,
+        vertical: theme.spacing.s,
+      ),
+      decoration: BoxDecoration(
+        color: theme.surfaceContainerColorScheme.layer01,
+        borderRadius: BorderRadius.circular(theme.spacing.m),
+        border: Border.all(
+          color: theme.borderColorScheme.primary.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Row(
+        children: [
+          FlowyText(
+            '链接权限：',
+            color: theme.textColorScheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DropdownButton<int>(
+              value: state.selectedPermissionId,
+              isExpanded: true,
+              underline: const SizedBox(),
+              items: permissions.map((p) {
+                return DropdownMenuItem<int>(
+                  value: p['id'] as int,
+                  child: Row(
+                    children: [
+                      Icon(
+                        p['icon'] as IconData,
+                        size: 18,
+                        color: theme.textColorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      FlowyText(
+                        p['name'] as String,
+                        color: theme.textColorScheme.primary,
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  context.read<ShareTabBloc>().add(
+                    ShareTabEvent.updateShareLinkPermission(permissionId: value),
+                  );
+                }
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 

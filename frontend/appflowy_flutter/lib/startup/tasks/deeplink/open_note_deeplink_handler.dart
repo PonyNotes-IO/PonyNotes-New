@@ -71,6 +71,11 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       final viewId = uri.queryParameters['viewId'];
       final targetWorkspaceId = uri.queryParameters['workspaceId'];
       final linkType = uri.queryParameters['type']; // 获取链接类型：share 或 publish
+      final permissionParam = uri.queryParameters['permission']; // 获取分享链接权限参数
+      // 解析权限ID，默认只读权限(1)
+      final permissionId = permissionParam != null 
+          ? int.tryParse(permissionParam) ?? 1 
+          : 1;
 
       if (viewId == null || viewId.isEmpty) {
         Log.error('[OpenNoteDeepLinkHandler] viewId参数为空');
@@ -94,6 +99,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         await _addUserToCollaboration(
           workspaceId: workspaceId,
           viewId: viewId,
+          permissionId: permissionId,
         );
       }
 
@@ -244,9 +250,11 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
   }
 
   /// 将当前用户添加到协作中（用于分享链接）
+  /// permissionId: 权限ID，1=查看，2=评论，3=编辑，4=全部权限
   Future<void> _addUserToCollaboration({
     required String workspaceId,
     required String viewId,
+    int permissionId = 1, // 默认只读权限
   }) async {
     try {
       // 获取当前用户信息
@@ -300,7 +308,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
           'Authorization': 'Bearer ${_extractAccessToken(authToken)}',
         },
         body: jsonEncode({
-          'permission_id': 1, // 默认只读权限
+          'permission_id': permissionId, // 使用分享链接中的权限参数
         }),
       ).timeout(
         const Duration(seconds: 10),

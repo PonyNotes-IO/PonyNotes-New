@@ -42,6 +42,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     on<ShareTabEventUpgradeToProClicked>(_onUpgradeToProClicked);
     on<ShareTabEventAddCollaborator>(_onAddCollaborator);
     on<ShareTabEventUpdateMemberPermission>(_onUpdateMemberPermission);
+    on<ShareTabEventUpdateShareLinkPermission>(_onUpdateShareLinkPermission);
   }
 
   final ShareWithUserRepository repository;
@@ -123,6 +124,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     final shareLink = ShareConstants.buildShareUrl(
       workspaceId: workspaceId,
       viewId: pageId,
+      permissionId: state.selectedPermissionId, // 传递选中的权限
     );
 
     final users = await _getSharedUsers();
@@ -1038,6 +1040,25 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           }
         }
       },
+    );
+  }
+
+  Future<void> _onUpdateShareLinkPermission(
+    ShareTabEventUpdateShareLinkPermission event,
+    Emitter<ShareTabState> emit,
+  ) async {
+    // 更新选中的权限
+    final newShareLink = ShareConstants.buildShareUrl(
+      workspaceId: workspaceId,
+      viewId: pageId,
+      permissionId: event.permissionId,
+    );
+
+    emit(
+      state.copyWith(
+        selectedPermissionId: event.permissionId,
+        shareLink: newShareLink,
+      ),
     );
   }
 }
