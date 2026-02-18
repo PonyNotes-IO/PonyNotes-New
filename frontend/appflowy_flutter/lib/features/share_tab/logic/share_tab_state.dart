@@ -61,6 +61,7 @@ class ShareTabState {
     FlowyResult<void, FlowyError>? turnIntoMemberResult,
     FlowyResult<void, FlowyError>? addCollaboratorResult,
     bool? hasClickedUpgradeToPro,
+    int? selectedPermissionId,
   }) {
     return ShareTabState(
       currentUser: currentUser ?? this.currentUser,
@@ -80,6 +81,7 @@ class ShareTabState {
       addCollaboratorResult: addCollaboratorResult,
       hasClickedUpgradeToPro:
           hasClickedUpgradeToPro ?? this.hasClickedUpgradeToPro,
+      selectedPermissionId: selectedPermissionId ?? this.selectedPermissionId,
     );
   }
 
