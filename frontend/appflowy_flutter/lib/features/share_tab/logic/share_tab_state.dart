@@ -23,6 +23,7 @@ class ShareTabState {
     this.turnIntoMemberResult,
     this.addCollaboratorResult,
     this.hasClickedUpgradeToPro = false,
+    this.selectedPermissionId = 1, // 默认只读权限
   });
 
   final UserProfilePB? currentUser;
@@ -41,6 +42,7 @@ class ShareTabState {
   final FlowyResult<void, FlowyError>? turnIntoMemberResult;
   final FlowyResult<void, FlowyError>? addCollaboratorResult;
   final bool hasClickedUpgradeToPro;
+  final int selectedPermissionId; // 分享链接的权限：1=查看，2=评论，3=编辑，4=全部权限
 
   ShareTabState copyWith({
     UserProfilePB? currentUser,

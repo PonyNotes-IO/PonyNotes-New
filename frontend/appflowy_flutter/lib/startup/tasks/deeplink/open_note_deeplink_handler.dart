@@ -8,6 +8,7 @@ import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -166,7 +167,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       }
 
       // 获取发布笔记的真实标题（用于发布链接或协作分享链接）
-      final viewName = await _getViewNameFromPublishInfo(viewId);
+      // 传入 viewId 和 workspaceId，以便获取协作文档的真实名称
+      final viewName = await _getViewName(viewId, workspaceId);
 
       // 创建最小化的 ViewPB 对象，用于在UI中打开视图
       // 如果是发布的文档（只读），设置 is_locked = true
@@ -289,13 +291,17 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         path: '/api/workspace/$workspaceId/collab/$viewId/members/$userId',
       );
 
-      // 发送 POST 请求
+      // 发送 POST 请求，传递 permission_id 参数（默认只读权限 = 1）
+      // 这样后端会正确创建 af_collab_member 和 af_collab_member_invite 记录
       final response = await http.post(
         uri,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${_extractAccessToken(authToken)}',
         },
+        body: jsonEncode({
+          'permission_id': 1, // 默认只读权限
+        }),
       ).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
@@ -361,6 +367,21 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     return null;
   }
 
+  /// 获取视图名称
+  /// 优先从发布元数据获取，如果是协作分享链接则通过 ViewBackendService 获取
+  Future<String> _getViewName(String viewId, String? workspaceId) async {
+    // 首先尝试从发布元数据获取名称
+    final publishName = await _getViewNameFromPublishInfo(viewId);
+    
+    // 如果获取到的是默认名称（说明可能是协作分享链接），尝试通过 ViewBackendService 获取
+    final defaultName = LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
+    if (publishName == defaultName && workspaceId != null && workspaceId.isNotEmpty) {
+      return _getCollabViewName(viewId, workspaceId);
+    }
+    
+    return publishName;
+  }
+
   /// 从发布元数据获取视图名称
   /// 如果获取失败，则使用默认名称
   Future<String> _getViewNameFromPublishInfo(String viewId) async {
@@ -406,9 +427,9 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
           }
         }
       } else if (response.statusCode == 404) {
-        // 404 表示笔记未发布（可能是纯协作分享链接），使用默认名称
-        Log.info('[OpenNoteDeepLinkHandler] 笔记未发布，使用默认名称');
-        return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
+        // 404 表示笔记未发布（可能是纯协作分享链接），返回空字符串表示需要使用其他方式获取
+        Log.info('[OpenNoteDeepLinkHandler] 笔记未发布，将尝试其他方式获取名称');
+        return '';
       } else {
         Log.warn(
             '[OpenNoteDeepLinkHandler] 获取发布信息失败: HTTP ${response.statusCode}');
@@ -420,8 +441,37 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       );
     }
 
-    // 获取失败时使用默认名称
-    return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
+    // 获取失败时使用空字符串，由调用方决定是否使用默认名称
+    return '';
+  }
+
+  /// 通过 ViewBackendService 获取协作文档的名称
+  /// 用于协作分享链接（非发布文档）的场景
+  Future<String> _getCollabViewName(String viewId, String workspaceId) async {
+    try {
+      Log.info('[OpenNoteDeepLinkHandler] 尝试通过 ViewBackendService 获取协作文档名称: viewId=$viewId, workspaceId=$workspaceId');
+      
+      // 使用 ViewBackendService.getView 获取视图信息
+      final result = await ViewBackendService.getView(viewId);
+      
+      return result.fold(
+        (view) {
+          if (view.name.isNotEmpty) {
+            Log.info('[OpenNoteDeepLinkHandler] 从 ViewBackendService 获取到标题: ${view.name}');
+            return view.name;
+          }
+          Log.warn('[OpenNoteDeepLinkHandler] ViewBackendService 返回的视图名称为空');
+          return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
+        },
+        (error) {
+          Log.error('[OpenNoteDeepLinkHandler] ViewBackendService 获取视图失败: ${error.msg}');
+          return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
+        },
+      );
+    } catch (e, stackTrace) {
+      Log.error('[OpenNoteDeepLinkHandler] 通过 ViewBackendService 获取视图名称时出错: $e', stackTrace);
+      return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
+    }
   }
 
   /// 调用 receive_published_collab API 接收发布的文档
