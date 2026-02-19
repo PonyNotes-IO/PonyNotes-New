@@ -113,10 +113,17 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         Log.info(
             '[OpenNoteDeepLinkHandler] 处理发布链接: viewId=$viewId, workspaceId=$workspaceId');
 
-        // 调用 receive API 接收发布的文档
+        // 获取当前用户的工作区ID（而不是使用链接中的发布者工作区ID）
+        final currentWorkspaceId = await _getCurrentWorkspaceId();
+        if (currentWorkspaceId == null || currentWorkspaceId.isEmpty) {
+          Log.warn('[OpenNoteDeepLinkHandler] 无法获取当前用户工作区，使用链接中的workspaceId');
+          // 如果获取失败，尝试使用链接中的workspaceId（这可能会导致问题）
+        }
+
+        // 调用 receive API 接收发布的文档，使用当前用户的工作区ID
         final receiveResult = await _receivePublishedCollab(
           publishedViewId: viewId,
-          workspaceId: workspaceId,
+          workspaceId: currentWorkspaceId ?? workspaceId,
         );
 
         if (receiveResult.$1) {
@@ -587,6 +594,59 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       Log.error('[OpenNoteDeepLinkHandler] 调用 receive API 时出错: $e', stackTrace);
       return (false, e.toString(), publishedViewId, true);
     }
+  }
+
+  /// 获取当前用户的工作区ID
+  Future<String?> _getCurrentWorkspaceId() async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+
+      if (baseUrl.isEmpty) {
+        return null;
+      }
+
+      // 构建 API URL: /api/user/workspaces
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/user/workspaces',
+      );
+
+      // 获取 auth token
+      final authToken = await _getAuthTokenFromUserService();
+      if (authToken == null || authToken.isEmpty) {
+        Log.warn('[OpenNoteDeepLinkHandler] Auth token 为空');
+        return null;
+      }
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('请求超时');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic>) {
+          final data = body['data'];
+          if (data is List && data.isNotEmpty) {
+            final firstWorkspace = data[0];
+            if (firstWorkspace is Map<String, dynamic>) {
+              return firstWorkspace['workspace_id'] as String?;
+            }
+          }
+        }
+      }
+    } catch (e, stackTrace) {
+      Log.error('[OpenNoteDeepLinkHandler] 获取工作区信息时出错: $e', stackTrace);
+    }
+    return null;
   }
 
   /// 从用户服务获取 auth token
