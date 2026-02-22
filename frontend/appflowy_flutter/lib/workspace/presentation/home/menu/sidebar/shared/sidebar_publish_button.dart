@@ -303,6 +303,56 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
     );
   }
 
+  /// 通用的打开发布文档逻辑
+  /// 1. 先尝试 getView（本地 Folder 中查找）
+  /// 2. 如果找不到，说明是其他用户的文档，需要先调用 receive API 接收
+  /// 3. 接收成功后，使用接收后的 viewId 打开
+  Future<void> _openPublishedView(BuildContext context, PublishedItemData item) async {
+    try {
+      final viewOrErr = await ViewBackendService.getView(item.viewId);
+      final opened = viewOrErr.fold(
+        (view) {
+          context.read<TabsBloc>().openPlugin(view);
+          return true;
+        },
+        (e) => false,
+      );
+      if (opened) return;
+
+      Log.info('[PublishButton] getView 失败，尝试接收发布文档: publishedViewId=${item.publishedViewId}');
+
+      final result = await ViewPublishService.receivePublishedCollab(
+        publishedViewId: item.publishedViewId,
+        workspaceId: _workspaceId,
+      );
+
+      if (result.success) {
+        Log.info('[PublishButton] 接收成功: receivedViewId=${result.receivedViewId}');
+        final minimalView = ViewPB()
+          ..id = result.receivedViewId
+          ..name = item.name
+          ..layout = ViewLayoutPB.Document
+          ..isLocked = result.isReadonly;
+        if (context.mounted) {
+          context.read<TabsBloc>().openPlugin(minimalView);
+          PublishRefresh.ping();
+        }
+      } else {
+        Log.error('[PublishButton] 接收失败: ${result.error}');
+        showToastNotification(
+          message: '打开发布笔记失败: ${result.error}',
+          type: ToastificationType.error,
+        );
+      }
+    } catch (e, stackTrace) {
+      Log.error('[PublishButton] 打开发布文档出错: $e', stackTrace);
+      showToastNotification(
+        message: '打开发布笔记失败: $e',
+        type: ToastificationType.error,
+      );
+    }
+  }
+
   /// 构建"我的发布"列表项
   Widget _buildPublishedItem(BuildContext context, PublishedItemData item) {
     return ListTile(
@@ -327,19 +377,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
               ),
             )
           : null,
-      onTap: () async {
-        final viewOrErr = await ViewBackendService.getView(item.viewId);
-        viewOrErr.fold(
-          (view) => context.read<TabsBloc>().openPlugin(view),
-          (e) {
-            Log.error('open published view failed: $e');
-            showToastNotification(
-              message: '打开发布笔记失败: ${e.msg}',
-              type: ToastificationType.error,
-            );
-          },
-        );
-      },
+      onTap: () => _openPublishedView(context, item),
     );
   }
 
@@ -379,23 +417,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
               color: Theme.of(context).hintColor,
             )
           : null,
-      onTap: () async {
-        final viewOrErr = await ViewBackendService.getView(item.viewId);
-        viewOrErr.fold(
-          (view) => context.read<TabsBloc>().openPlugin(view),
-          (e) {
-            // 接收的发布文档可能尚未同步到本地 Folder，
-            // 使用最小化 ViewPB 直接打开（与深度链接处理器相同的策略）
-            Log.info('open received published view via minimal ViewPB: ${item.viewId}');
-            final minimalView = ViewPB()
-              ..id = item.viewId
-              ..name = item.name
-              ..layout = ViewLayoutPB.Document
-              ..isLocked = item.isReadonly;
-            context.read<TabsBloc>().openPlugin(minimalView);
-          },
-        );
-      },
+      onTap: () => _openPublishedView(context, item),
     );
   }
 

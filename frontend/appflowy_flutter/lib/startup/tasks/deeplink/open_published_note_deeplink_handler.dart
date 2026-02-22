@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:uuid/uuid.dart' as uuid_lib;
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
@@ -326,7 +326,7 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
       }
 
       // 生成目标 view_id
-      final destViewId = Uuid().v4();
+      final destViewId = const uuid_lib.Uuid().v4();
 
       final requestBody = jsonEncode({
         'published_view_id': publishedViewId,
@@ -348,7 +348,11 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
         },
       );
 
-      // 解析响应体（所有分支都需要）
+      if (response.body.isEmpty) {
+        Log.error('[OpenPublishedNoteDeepLinkHandler] 服务器返回空响应体');
+        return (false, '服务器返回空响应 (HTTP ${response.statusCode})', publishedViewId, true);
+      }
+
       final responseBody = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
@@ -455,14 +459,3 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
   }
 }
 
-/// 简单的 UUID v4 生成器
-class Uuid {
-  String v4() {
-    final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
-    // 设置版本号 (4) 和变体 (8, 9, A, 或 B)
-    bytes[6] = (bytes[6] & 0x0f) | 0x40; // 版本4
-    bytes[8] = (bytes[8] & 0x3f) | 0x80; // 变体
-
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('-');
-  }
-}

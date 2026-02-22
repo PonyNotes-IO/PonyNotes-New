@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:appflowy/core/notification/folder_notification.dart';
 import 'package:appflowy/shared/af_user_profile_extension.dart';
@@ -23,6 +22,7 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../env/cloud_env.dart';
@@ -556,7 +556,11 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       Log.info(
           '[OpenNoteDeepLinkHandler] receive API 响应: HTTP ${response.statusCode}');
 
-      // 解析响应体（所有分支都需要）
+      if (response.body.isEmpty) {
+        Log.error('[OpenNoteDeepLinkHandler] 服务器返回空响应体');
+        return (false, '服务器返回空响应 (HTTP ${response.statusCode})', publishedViewId, true);
+      }
+
       final responseBody = jsonDecode(response.body);
       Log.info('[OpenNoteDeepLinkHandler] receive API 响应体: $responseBody');
 
@@ -668,9 +672,6 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
 
   /// 生成 UUID v4
   String _generateUuid() {
-    final bytes = List<int>.generate(16, (_) => Random.secure().nextInt(256));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40; // 版本4
-    bytes[8] = (bytes[8] & 0x3f) | 0x80; // 变体
-    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('-');
+    return const Uuid().v4();
   }
 }

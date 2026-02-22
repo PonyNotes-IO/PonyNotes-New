@@ -49,6 +49,7 @@ class _PublishPanelState extends State<PublishPanel> {
   List<PublishedItem> _items = [];
   bool _loading = true;
   String? _error;
+  String _workspaceId = '';
   
   void _onPublishPing() {
     if (!mounted) return;
@@ -71,6 +72,13 @@ class _PublishPanelState extends State<PublishPanel> {
     });
     
     try {
+      // 获取当前工作区 ID
+      final wsResult = await FolderEventGetCurrentWorkspaceSetting().send();
+      wsResult.fold(
+        (ws) => _workspaceId = ws.workspaceId,
+        (e) => Log.error('get workspace id failed: $e'),
+      );
+
       // 刷新发布服务状态
       await ViewPublishService().refreshPublishedViews();
       
@@ -180,6 +188,52 @@ class _PublishPanelState extends State<PublishPanel> {
     );
   }
 
+  Future<void> _openPublishedView(BuildContext context, PublishedItem item) async {
+    try {
+      final viewOrErr = await ViewBackendService.getView(item.viewId);
+      final opened = viewOrErr.fold(
+        (view) {
+          context.read<TabsBloc>().openPlugin(view);
+          return true;
+        },
+        (e) => false,
+      );
+      if (opened) return;
+
+      Log.info('[PublishPanel] getView 失败，尝试接收发布文档: publishedViewId=${item.publishedViewId}');
+
+      final result = await ViewPublishService.receivePublishedCollab(
+        publishedViewId: item.publishedViewId,
+        workspaceId: _workspaceId,
+      );
+
+      if (result.success) {
+        Log.info('[PublishPanel] 接收成功: receivedViewId=${result.receivedViewId}');
+        final minimalView = ViewPB()
+          ..id = result.receivedViewId
+          ..name = item.name
+          ..layout = ViewLayoutPB.Document
+          ..isLocked = result.isReadonly;
+        if (context.mounted) {
+          context.read<TabsBloc>().openPlugin(minimalView);
+          PublishRefresh.ping();
+        }
+      } else {
+        Log.error('[PublishPanel] 接收失败: ${result.error}');
+        showToastNotification(
+          message: '打开发布笔记失败: ${result.error}',
+          type: ToastificationType.error,
+        );
+      }
+    } catch (e, stackTrace) {
+      Log.error('[PublishPanel] 打开发布文档出错: $e', stackTrace);
+      showToastNotification(
+        message: '打开发布笔记失败: $e',
+        type: ToastificationType.error,
+      );
+    }
+  }
+
   Widget _buildPublishItem(BuildContext context, PublishedItem item) {
     return ListTile(
       dense: true,
@@ -201,39 +255,7 @@ class _PublishPanelState extends State<PublishPanel> {
       trailing: item.isReadonly 
           ? Icon(Icons.lock_outline, size: 16, color: Theme.of(context).hintColor)
           : null,
-      onTap: () async {
-        try {
-          final viewOrErr = await ViewBackendService.getView(item.viewId);
-          viewOrErr.fold(
-            (view) => context.read<TabsBloc>().openPlugin(view),
-            (e) {
-              if (item.isReceived) {
-                // 接收的发布文档可能尚未同步到本地 Folder，
-                // 使用最小化 ViewPB 直接打开（与深度链接处理器相同的策略）
-                Log.info('open received published view via minimal ViewPB: ${item.viewId}');
-                final minimalView = ViewPB()
-                  ..id = item.viewId
-                  ..name = item.name
-                  ..layout = ViewLayoutPB.Document
-                  ..isLocked = item.isReadonly;
-                context.read<TabsBloc>().openPlugin(minimalView);
-              } else {
-                Log.error('open published view failed: $e');
-                showToastNotification(
-                  message: '打开发布笔记失败: ${e.msg}',
-                  type: ToastificationType.error,
-                );
-              }
-            },
-          );
-        } catch (e, stackTrace) {
-          Log.error('open published view error: $e', stackTrace);
-          showToastNotification(
-            message: '打开发布笔记失败: $e',
-            type: ToastificationType.error,
-          );
-        }
-      },
+      onTap: () => _openPublishedView(context, item),
     );
   }
 
