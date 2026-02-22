@@ -251,7 +251,21 @@ class ViewPublishService {
     try {
       final userResult = await UserBackendService.getCurrentUserProfile();
       return userResult.fold(
-        (user) => user.authToken,
+        (user) {
+          final rawToken = user.authToken;
+          if (rawToken == null || rawToken.isEmpty) return null;
+          // 尝试从 JSON 中提取 access_token，否则直接使用
+          try {
+            final decoded = jsonDecode(rawToken);
+            if (decoded is Map<String, dynamic>) {
+              final accessToken = decoded['access_token'] as String?;
+              if (accessToken != null && accessToken.isNotEmpty) {
+                return accessToken;
+              }
+            }
+          } catch (_) {}
+          return rawToken;
+        },
         (error) {
           Log.warn('[ReceivePublish] 获取用户信息失败: $error');
           return null;

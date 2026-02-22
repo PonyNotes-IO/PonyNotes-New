@@ -1,22 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:appflowy/core/notification/folder_notification.dart';
 import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
-import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
-import 'package:appflowy_backend/protobuf/flowy-notification/protobuf.dart';
-import 'package:appflowy_backend/rust_stream.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
-import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -519,13 +515,13 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       );
 
       // 获取 auth token
-      final authToken = await _getAuthTokenFromUserService();
+      final rawToken = await _getAuthTokenFromUserService();
+      final authToken = _extractAccessToken(rawToken);
       if (authToken == null || authToken.isEmpty) {
         Log.warn('[OpenNoteDeepLinkHandler] Auth token 为空');
         return (false, 'Auth token 为空', publishedViewId, true);
       }
 
-      // 生成目标 view_id
       final destViewId = _generateUuid();
 
       final requestBody = jsonEncode({
@@ -600,53 +596,20 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     }
   }
 
-  /// 获取当前用户的工作区ID
+  /// 通过 Rust FFI 获取当前用户的工作区ID
   Future<String?> _getCurrentWorkspaceId() async {
     try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-
-      if (baseUrl.isEmpty) {
-        return null;
-      }
-
-      // 构建 API URL: /api/user/workspaces
-      final uri = Uri.parse(baseUrl).replace(
-        path: '/api/user/workspaces',
-      );
-
-      // 获取 auth token
-      final authToken = await _getAuthTokenFromUserService();
-      if (authToken == null || authToken.isEmpty) {
-        Log.warn('[OpenNoteDeepLinkHandler] Auth token 为空');
-        return null;
-      }
-
-      final response = await http.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
+      final result = await FolderEventGetCurrentWorkspaceSetting().send();
+      return result.fold(
+        (ws) {
+          Log.info('[OpenNoteDeepLinkHandler] 获取到当前工作区: ${ws.workspaceId}');
+          return ws.workspaceId.isEmpty ? null : ws.workspaceId;
         },
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('请求超时');
+        (e) {
+          Log.error('[OpenNoteDeepLinkHandler] 获取当前工作区失败: $e');
+          return null;
         },
       );
-
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic>) {
-          final data = body['data'];
-          if (data is List && data.isNotEmpty) {
-            final firstWorkspace = data[0];
-            if (firstWorkspace is Map<String, dynamic>) {
-              return firstWorkspace['workspace_id'] as String?;
-            }
-          }
-        }
-      }
     } catch (e, stackTrace) {
       Log.error('[OpenNoteDeepLinkHandler] 获取工作区信息时出错: $e', stackTrace);
     }

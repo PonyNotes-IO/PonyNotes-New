@@ -49,14 +49,17 @@ class PublishedItemData {
 
 class _SidebarPublishButtonState extends State<SidebarPublishButton> {
   bool _isExpanded = false;
-  List<PublishedItemData> _myPublishedItems = const [];  // 我发布的
-  List<PublishedItemData> _receivedPublishedItems = const [];  // 我接收的发布
+  List<PublishedItemData> _myPublishedItems = const [];
+  List<PublishedItemData> _receivedPublishedItems = const [];
   bool _loading = false;
+  bool _needsRefresh = true;
   String _workspaceId = '';
   void _onPublishPing() {
     if (!mounted) return;
-    if (!_loading) {
+    if (_isExpanded && !_loading) {
       _load();
+    } else {
+      _needsRefresh = true;
     }
   }
 
@@ -100,7 +103,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
                     size: AFButtonSize.l,
                     onTap: () async {
                       setState(() => _isExpanded = !_isExpanded);
-                      if (_isExpanded && _myPublishedItems.isEmpty && _receivedPublishedItems.isEmpty && !_loading) {
+                      if (_isExpanded && !_loading && _needsRefresh) {
                         await _load();
                       }
                     },
@@ -225,6 +228,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         _myPublishedItems = myPublishedItems;
         _receivedPublishedItems = receivedPublishedItems;
         _loading = false;
+        _needsRefresh = false;
       });
     } catch (e, st) {
       Log.error('load published views unexpected error: $e', e, st);
@@ -233,6 +237,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         _myPublishedItems = [];
         _receivedPublishedItems = [];
         _loading = false;
+        _needsRefresh = false;
       });
     }
   }
@@ -358,36 +363,23 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
     return ListTile(
       dense: true,
       contentPadding: const EdgeInsets.only(left: 24, right: 8),
-      title: Row(
-        children: [
-          Expanded(
-            child: FlowyText.regular(
-              item.name,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '自发布',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w500,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ),
-        ],
+      title: FlowyText.regular(
+        item.name,
+        overflow: TextOverflow.ellipsis,
       ),
       subtitle: item.publishName.isNotEmpty
           ? FlowyText.small(
               item.publishName,
               color: Theme.of(context).hintColor,
+            )
+          : null,
+      trailing: item.publisherEmail != null
+          ? Text(
+              item.publisherEmail!,
+              style: TextStyle(
+                fontSize: 10,
+                color: Theme.of(context).hintColor,
+              ),
             )
           : null,
       onTap: () => _openPublishedView(context, item),
@@ -407,26 +399,9 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.tertiaryContainer,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              '他人发布',
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w500,
-                color: Theme.of(context).colorScheme.tertiary,
-              ),
-            ),
-          ),
-          if (item.isReadonly) ...[
-            const SizedBox(width: 4),
+          if (item.isReadonly)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(4),
@@ -434,18 +409,19 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
               child: Text(
                 '只读',
                 style: TextStyle(
-                  fontSize: 9,
+                  fontSize: 10,
                   color: Theme.of(context).hintColor,
                 ),
               ),
             ),
-          ],
         ],
       ),
-      subtitle: FlowyText.small(
-        '来自: ${item.publisherEmail ?? "未知"}',
-        color: Theme.of(context).hintColor,
-      ),
+      subtitle: item.publishName.isNotEmpty
+          ? FlowyText.small(
+              '来自: ${item.publisherEmail ?? "未知"}',
+              color: Theme.of(context).hintColor,
+            )
+          : null,
       onTap: () => _openPublishedView(context, item),
     );
   }
@@ -461,6 +437,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
       _receivedPublishedItems = const [];
       _isExpanded = false;
       _loading = false;
+      _needsRefresh = true;
     });
   }
 }

@@ -4,11 +4,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart' as uuid_lib;
+import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
+import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -19,6 +21,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../env/cloud_env.dart';
 import '../../../generated/locale_keys.g.dart';
+import '../../../user/application/user_service.dart';
 import '../../../startup/startup.dart';
 import '../app_widget.dart';
 
@@ -135,13 +138,12 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
         workspaceId: workspaceId,
       );
 
-      if (receiveResult.$1) {
-        PublishRefresh.ping();
-      } else {
+      if (!receiveResult.$1) {
         Log.warn('[OpenPublishedNoteDeepLinkHandler] 接收发布文档失败: ${receiveResult.$2}');
+      } else {
+        PublishRefresh.ping();
       }
 
-      // 打开复制的文档
       final receivedViewId = receiveResult.$3;
       final isReadonly = receiveResult.$4;
 
@@ -247,53 +249,20 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
     return null;
   }
 
-  /// 获取当前工作区 ID
+  /// 通过 Rust FFI 获取当前用户的工作区ID
   Future<String?> _getCurrentWorkspaceId() async {
     try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-
-      if (baseUrl.isEmpty) {
-        return null;
-      }
-
-      // 构建 API URL: /api/user/workspaces
-      final uri = Uri.parse(baseUrl).replace(
-        path: '/api/user/workspaces',
-      );
-
-      // 获取 auth token
-      final authToken = await _getAuthToken();
-      if (authToken == null || authToken.isEmpty) {
-        Log.warn('[OpenPublishedNoteDeepLinkHandler] Auth token 为空');
-        return null;
-      }
-
-      final response = await http.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $authToken',
+      final result = await FolderEventGetCurrentWorkspaceSetting().send();
+      return result.fold(
+        (ws) {
+          Log.info('[OpenPublishedNoteDeepLinkHandler] 获取到当前工作区: ${ws.workspaceId}');
+          return ws.workspaceId.isEmpty ? null : ws.workspaceId;
         },
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('请求超时');
+        (e) {
+          Log.error('[OpenPublishedNoteDeepLinkHandler] 获取当前工作区失败: $e');
+          return null;
         },
       );
-
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic>) {
-          final data = body['data'];
-          if (data is List && data.isNotEmpty) {
-            final firstWorkspace = data[0];
-            if (firstWorkspace is Map<String, dynamic>) {
-              return firstWorkspace['workspace_id'] as String?;
-            }
-          }
-        }
-      }
     } catch (e, stackTrace) {
       Log.error('[OpenPublishedNoteDeepLinkHandler] 获取工作区信息时出错: $e', stackTrace);
     }
@@ -391,43 +360,31 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
     }
   }
 
-  /// 获取 auth token
+  /// 通过 UserBackendService 获取 auth token
   Future<String?> _getAuthToken() async {
     try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-
-      if (baseUrl.isEmpty) {
-        return null;
-      }
-
-      // 构建 API URL: /api/user/me
-      final uri = Uri.parse(baseUrl).replace(
-        path: '/api/user/me',
-      );
-
-      final response = await http.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      return userResult.fold(
+        (user) {
+          final rawToken = user.authToken;
+          if (rawToken == null || rawToken.isEmpty) return null;
+          // 尝试从 JSON 中提取 access_token，否则直接使用
+          try {
+            final decoded = jsonDecode(rawToken);
+            if (decoded is Map<String, dynamic>) {
+              final accessToken = decoded['access_token'] as String?;
+              if (accessToken != null && accessToken.isNotEmpty) {
+                return accessToken;
+              }
+            }
+          } catch (_) {}
+          return rawToken;
         },
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('请求超时');
+        (error) {
+          Log.warn('[OpenPublishedNoteDeepLinkHandler] 获取用户信息失败: $error');
+          return null;
         },
       );
-
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic>) {
-          final data = body['data'];
-          if (data is Map<String, dynamic>) {
-            final token = data['token'] as String?;
-            return token;
-          }
-        }
-      }
     } catch (e) {
       Log.error('[OpenPublishedNoteDeepLinkHandler] 获取 token 时出错: $e');
     }
