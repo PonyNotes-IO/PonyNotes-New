@@ -8,6 +8,7 @@ import 'package:appflowy/startup/tasks/deeplink/deeplink_handler.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -134,9 +135,10 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
         workspaceId: workspaceId,
       );
 
-      if (!receiveResult.$1) {
+      if (receiveResult.$1) {
+        PublishRefresh.ping();
+      } else {
         Log.warn('[OpenPublishedNoteDeepLinkHandler] 接收发布文档失败: ${receiveResult.$2}');
-        // 即使接收失败，也尝试打开文档（可能是已接收过的）
       }
 
       // 打开复制的文档

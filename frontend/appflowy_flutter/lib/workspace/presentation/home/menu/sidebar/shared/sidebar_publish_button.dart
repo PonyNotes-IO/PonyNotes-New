@@ -55,7 +55,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
   String _workspaceId = '';
   void _onPublishPing() {
     if (!mounted) return;
-    if (_isExpanded && !_loading) {
+    if (!_loading) {
       _load();
     }
   }
@@ -358,23 +358,36 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
     return ListTile(
       dense: true,
       contentPadding: const EdgeInsets.only(left: 24, right: 8),
-      title: FlowyText.regular(
-        item.name,
-        overflow: TextOverflow.ellipsis,
+      title: Row(
+        children: [
+          Expanded(
+            child: FlowyText.regular(
+              item.name,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '自发布',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+        ],
       ),
       subtitle: item.publishName.isNotEmpty
           ? FlowyText.small(
               item.publishName,
               color: Theme.of(context).hintColor,
-            )
-          : null,
-      trailing: item.publisherEmail != null
-          ? Text(
-              item.publisherEmail!,
-              style: TextStyle(
-                fontSize: 10,
-                color: Theme.of(context).hintColor,
-              ),
             )
           : null,
       onTap: () => _openPublishedView(context, item),
@@ -394,9 +407,26 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (item.isReadonly)
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.tertiaryContainer,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              '他人发布',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.tertiary,
+              ),
+            ),
+          ),
+          if (item.isReadonly) ...[
+            const SizedBox(width: 4),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(4),
@@ -404,19 +434,18 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
               child: Text(
                 '只读',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 9,
                   color: Theme.of(context).hintColor,
                 ),
               ),
             ),
+          ],
         ],
       ),
-      subtitle: item.publishName.isNotEmpty
-          ? FlowyText.small(
-              '来自: ${item.publisherEmail ?? "未知"}',
-              color: Theme.of(context).hintColor,
-            )
-          : null,
+      subtitle: FlowyText.small(
+        '来自: ${item.publisherEmail ?? "未知"}',
+        color: Theme.of(context).hintColor,
+      ),
       onTap: () => _openPublishedView(context, item),
     );
   }

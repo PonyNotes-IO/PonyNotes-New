@@ -244,17 +244,46 @@ class _PublishPanelState extends State<PublishPanel> {
             ? Theme.of(context).hintColor 
             : Theme.of(context).primaryColor,
       ),
-      title: FlowyText.regular(
-        item.name.isNotEmpty ? item.name : item.publishName, 
-        overflow: TextOverflow.ellipsis,
+      title: Row(
+        children: [
+          Expanded(
+            child: FlowyText.regular(
+              item.name.isNotEmpty ? item.name : item.publishName, 
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: BoxDecoration(
+              color: item.isReceived
+                  ? Theme.of(context).colorScheme.tertiaryContainer
+                  : Theme.of(context).colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              item.isReceived ? '他人发布' : '自发布',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w500,
+                color: item.isReceived
+                    ? Theme.of(context).colorScheme.tertiary
+                    : Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+          if (item.isReadonly) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.lock_outline, size: 14, color: Theme.of(context).hintColor),
+          ],
+        ],
       ),
       subtitle: FlowyText.small(
-        item.publishName, 
+        item.isReceived 
+            ? '来自: ${item.publisherEmail ?? "未知"}'
+            : item.publishName, 
         color: Theme.of(context).hintColor,
       ),
-      trailing: item.isReadonly 
-          ? Icon(Icons.lock_outline, size: 16, color: Theme.of(context).hintColor)
-          : null,
       onTap: () => _openPublishedView(context, item),
     );
   }
