@@ -384,11 +384,15 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         viewOrErr.fold(
           (view) => context.read<TabsBloc>().openPlugin(view),
           (e) {
-            Log.error('open received published view failed: $e');
-            showToastNotification(
-              message: '打开发布笔记失败: ${e.msg}',
-              type: ToastificationType.error,
-            );
+            // 接收的发布文档可能尚未同步到本地 Folder，
+            // 使用最小化 ViewPB 直接打开（与深度链接处理器相同的策略）
+            Log.info('open received published view via minimal ViewPB: ${item.viewId}');
+            final minimalView = ViewPB()
+              ..id = item.viewId
+              ..name = item.name
+              ..layout = ViewLayoutPB.Document
+              ..isLocked = item.isReadonly;
+            context.read<TabsBloc>().openPlugin(minimalView);
           },
         );
       },
