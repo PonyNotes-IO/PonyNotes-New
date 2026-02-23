@@ -352,27 +352,33 @@ abstract class EditorExporter {
     }
   }
 
-  /// 绘制普通图片
+  /// 绘制普通图片（支持旋转）
   static Future<void> _drawImage(Canvas canvas, EditorImage image) async {
     final dstRect = image.dstRect;
-    if (dstRect == null) return;
 
     if (image is PngEditorImage) {
       try {
-        // 解码图片
         final codec = await ui.instantiateImageCodec(image.imageBytes);
         final frame = await codec.getNextFrame();
         final uiImage = frame.image;
 
-        // 绘制图片
+        canvas.save();
+        if (image.rotation != 0.0) {
+          final center = dstRect.center;
+          canvas.translate(center.dx, center.dy);
+          canvas.rotate(image.rotation);
+          canvas.translate(-center.dx, -center.dy);
+        }
+
         canvas.drawImageRect(
           uiImage,
           Rect.fromLTWH(
               0, 0, uiImage.width.toDouble(), uiImage.height.toDouble()),
           dstRect,
-          Paint(),
+          Paint()..filterQuality = FilterQuality.high,
         );
 
+        canvas.restore();
         uiImage.dispose();
         codec.dispose();
       } catch (e) {

@@ -1146,7 +1146,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // ✅ 从后往前查找（最上层的图片优先）
     for (int i = page.images.length - 1; i >= 0; i--) {
       final image = page.images[i];
-      if (image.dstRect != null && image.dstRect!.contains(position)) {
+      if (image.dstRect.contains(position)) {
         return image;
       }
     }
@@ -2005,9 +2005,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
               // 处理常规图片
               for (final image in _selectResult!.regularImages) {
                 oldPage.images.remove(image);
-                if (image.dstRect != null) {
-                  image.dstRect = image.dstRect!.shift(pageToPageOffset);
-                }
+                image.dstRect = image.dstRect.shift(pageToPageOffset);
                 newPage.images.add(image);
               }
 
@@ -2351,7 +2349,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             extension: image.extension,
             pageIndex: targetPageIndex,
             pageSize: page.size,
-            dstRect: image.dstRect?.shift(pasteOffset),
+            dstRect: image.dstRect.shift(pasteOffset),
+            rotation: image.rotation,
           );
         } else if (image is SvgEditorImage) {
           pastedImage = SvgEditorImage(
@@ -2359,7 +2358,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             svgString: image.svgString,
             pageIndex: targetPageIndex,
             pageSize: page.size,
-            dstRect: image.dstRect?.shift(pasteOffset),
+            dstRect: image.dstRect.shift(pasteOffset),
+            rotation: image.rotation,
           );
         }
 
@@ -2944,7 +2944,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       // 检测常规图片
       for (final image in page.images) {
-        if (image.dstRect != null && rect.overlaps(image.dstRect!)) {
+        if (rect.overlaps(image.dstRect)) {
           result.regularImages.add(image);
         }
       }
@@ -2992,14 +2992,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       // 检测常规图片
       for (final image in page.images) {
-        if (image.dstRect != null) {
-          final r = image.dstRect!;
-          if (path.contains(r.topLeft) ||
-              path.contains(r.topRight) ||
-              path.contains(r.bottomLeft) ||
-              path.contains(r.bottomRight)) {
-            result.regularImages.add(image);
-          }
+        final r = image.dstRect;
+        if (path.contains(r.topLeft) ||
+            path.contains(r.topRight) ||
+            path.contains(r.bottomLeft) ||
+            path.contains(r.bottomRight)) {
+          result.regularImages.add(image);
         }
       }
 
@@ -3863,8 +3861,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           // ✅ 使用 DeferredPointerHandler 包裹 Stack，为 DeferPointer 提供上下文
           child: DeferredPointerHandler(
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                // debug: 输出当前页面与背景信息（使用受控日志，默认静默）
                 Builder(builder: (context) {
                   LogUtils.debug(
                       '🦋[HandwritingSaber] _buildSinglePageCanvas: pageIndex=$pageIndex, page.backgroundImage=${page.backgroundImage != null}, coreInfo.backgroundPattern=${_coreInfo.backgroundPattern}, currentBackgroundPattern=$_currentBackgroundPattern, page.strokes=${page.strokes.length}');
@@ -4062,10 +4060,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       key: ValueKey('image_${image.id}'),
       image: image,
       pageSize: _coreInfo.pages[pageIndex].size,
+      scale: scale,
       selected: _selectedImageIdNotifier.value == image.id,
-      // readOnly 为 true 时会忽略所有手势
       readOnly: !isSelectTool,
-      // ✅ shouldActivate：当图片被选中时自动激活
       shouldActivate: shouldActivate,
       onTap: () {
         // ✅ 点击图片时切换选中状态

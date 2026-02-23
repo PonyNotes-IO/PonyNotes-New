@@ -5,13 +5,14 @@ import 'package:flutter/material.dart';
 import '../../third_party/saber_core/components/canvas/image/editor_image.dart';
 import '../../third_party/saber_core/data/extensions/change_notifier_extensions.dart';
 
-/// ✅ CanvasImage 组件（从 Saber 项目移植）
-/// 支持图片的选中、拖动、缩放等交互操作
+/// CanvasImage 组件
+/// 支持图片的选中、拖动、缩放、旋转等交互操作
 class CanvasImage extends StatefulWidget {
   const CanvasImage({
     super.key,
     required this.image,
     required this.pageSize,
+    this.scale = 1.0,
     this.selected = false,
     this.readOnly = false,
     this.shouldActivate = false,
@@ -22,25 +23,39 @@ class CanvasImage extends StatefulWidget {
 
   final EditorImage image;
   final Size pageSize;
+
+  /// 页面坐标到屏幕坐标的缩放比例
+  final double scale;
   final bool selected;
   final bool readOnly;
-  /// ✅ 当此值为 true 时，图片将被激活（可拖动）
-  /// 父组件可以通过改变此值来控制图片的激活状态
   final bool shouldActivate;
   final void Function(EditorImage image, Rect offset)? onMoveImage;
   final void Function(EditorImage image)? onDeleteImage;
-  /// ✅ 点击回调，用于通知父组件更新选中状态
   final VoidCallback? onTap;
 
-  /// 当被通知时，所有 [CanvasImages] 的 [active] 属性都会被设置为 false
-  /// 用于在绘制开始时取消所有图片的激活状态
+  /// 当通知时，所有 CanvasImage 的 active 都会被取消
   static var activeListener = ChangeNotifier();
 
-  /// 交互区域的最小尺寸
   static const double minInteractiveSize = 50;
-
-  /// 图片本身的最小尺寸
   static const double minImageSize = 10;
+
+  static const double _handleSize = 14.0;
+  static const double _buttonSize = 26.0;
+  static const double _rotationHandleDistance = 36.0;
+
+  /// 旋转吸附阈值（弧度，约5度）
+  static const double _snapAngle = 5.0 * math.pi / 180.0;
+
+  static const List<double> _snapAngles = [
+    0,
+    math.pi / 4,
+    math.pi / 2,
+    3 * math.pi / 4,
+    math.pi,
+    -3 * math.pi / 4,
+    -math.pi / 2,
+    -math.pi / 4,
+  ];
 
   @override
   State<CanvasImage> createState() => _CanvasImageState();
@@ -50,51 +65,36 @@ class _CanvasImageState extends State<CanvasImage> {
   var _active = false;
   var _wasManuallyActivated = false;
 
-  /// 图片是否处于活动状态（可拖动）
   bool get active => _active;
   set active(bool value) {
     if (active == value) return;
-
     if (value) {
-      // 当激活一个图片时，取消所有其他图片的激活状态
-      CanvasImage.activeListener
-          .notifyListenersPlease();
-      
-      // 标记为手动激活
+      CanvasImage.activeListener.notifyListenersPlease();
       _wasManuallyActivated = true;
     }
-
     _active = value;
-
     if (mounted) {
       try {
         setState(() {});
-      } catch (e) {
-        // setState 在 widget 正在构建时可能会抛出错误
-      }
+      } catch (_) {}
     }
   }
 
-  /// 拖拽开始时的矩形
-  Rect panStartRect = Rect.zero;
+  Rect _panStartRect = Rect.zero;
 
-  /// 拖拽开始时的位置
-  Offset panStartPosition = Offset.zero;
+  Offset? _rotationCenter;
+  double _rotationStartAngle = 0.0;
+  double _initialPointerAngle = 0.0;
 
   @override
   void initState() {
     super.initState();
-
-    // 如果是新图片，自动激活
     if (widget.image.newImage) {
       active = true;
       widget.image.newImage = false;
       _wasManuallyActivated = false;
     }
-
-    // 添加监听器
     widget.image.addListener(_onImageChanged);
-    // 添加全局激活状态监听器
     CanvasImage.activeListener.addListener(_disableActive);
   }
 
@@ -107,36 +107,24 @@ class _CanvasImageState extends State<CanvasImage> {
     if (mounted) {
       try {
         setState(() {});
-      } catch (e) {
-        // 忽略构建过程中的错误
-      }
+      } catch (_) {}
     }
   }
 
   @override
   void didUpdateWidget(covariant CanvasImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-
     if (oldWidget.image != widget.image) {
       oldWidget.image.removeListener(_onImageChanged);
       widget.image.addListener(_onImageChanged);
     }
-
-    // ✅ 监听 shouldActivate 变化，自动激活/取消激活图片
-    if (widget.shouldActivate) {
-      // 当 shouldActivate 为 true 时，激活图片
-      if (!active) {
-        active = true;
-        _wasManuallyActivated = false;
-      }
+    if (widget.shouldActivate && !active) {
+      active = true;
+      _wasManuallyActivated = false;
     } else if (!widget.shouldActivate && _wasManuallyActivated) {
-      // 当 shouldActivate 为 false 且是手动激活时，取消激活
-      // 这样点击图片切换激活状态后才能正常工作
       active = false;
       _wasManuallyActivated = false;
     }
-
-    // 只读模式下取消激活
     if (widget.readOnly && active) {
       active = false;
       _wasManuallyActivated = false;
@@ -150,118 +138,83 @@ class _CanvasImageState extends State<CanvasImage> {
     super.dispose();
   }
 
+  double get _screenWidth => math.max(
+        widget.image.dstRect.width * widget.scale,
+        CanvasImage.minInteractiveSize,
+      );
+  double get _screenHeight => math.max(
+        widget.image.dstRect.height * widget.scale,
+        CanvasImage.minInteractiveSize,
+      );
+  double get _imgWidth => math.max(
+        widget.image.dstRect.width * widget.scale,
+        CanvasImage.minImageSize,
+      );
+  double get _imgHeight => math.max(
+        widget.image.dstRect.height * widget.scale,
+        CanvasImage.minImageSize,
+      );
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final image = widget.image;
+    final s = widget.scale;
 
-    // 计算屏幕位置和尺寸
-    final screenLeft = image.dstRect.left;
-    final screenTop = image.dstRect.top;
-    final screenWidth = math.max(image.dstRect.width, CanvasImage.minInteractiveSize);
-    final screenHeight = math.max(image.dstRect.height, CanvasImage.minInteractiveSize);
+    final screenLeft = image.dstRect.left * s;
+    final screenTop = image.dstRect.top * s;
 
-    final Widget unpositioned = IgnorePointer(
-      ignoring: widget.readOnly,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // 图片内容层
-          _buildImageContent(context, colorScheme),
-          // 选中时显示的半透明遮罩
-          if (widget.selected)
-            ColoredBox(color: colorScheme.primary.withValues(alpha: 0.3)),
-          // 控制手柄（拖动手柄和缩放手柄）
-          if (!widget.readOnly)
-            _buildControls(context, colorScheme, screenWidth, screenHeight),
-        ],
-      ),
-    );
-
-    // ✅ 直接使用 Positioned，移除 AnimatedPositioned 避免拖动时的动画冲突
     return Positioned(
       left: screenLeft,
       top: screenTop,
-      width: screenWidth,
-      height: screenHeight,
-      child: unpositioned,
+      width: _screenWidth,
+      height: _screenHeight,
+      child: IgnorePointer(
+        ignoring: widget.readOnly,
+        child: Transform.rotate(
+          angle: image.rotation,
+          child: Stack(
+            clipBehavior: Clip.none,
+            fit: StackFit.expand,
+            children: [
+              _buildImageContent(context, colorScheme),
+              if (widget.selected)
+                ColoredBox(
+                  color: colorScheme.primary.withValues(alpha: 0.15),
+                ),
+              if (!widget.readOnly) _buildControls(context, colorScheme),
+            ],
+          ),
+        ),
+      ),
     );
   }
+
+  // ──────────────────────── 图片内容层 ────────────────────────
 
   Widget _buildImageContent(BuildContext context, ColorScheme colorScheme) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        // ✅ 切换激活状态
         active = !active;
-        debugPrint('🦋[CanvasImage] onTap: imageId=${widget.image.id}, active=$active, selected=${widget.selected}');
-        // ✅ 通知父组件点击事件，用于更新选中状态
         widget.onTap?.call();
-        debugPrint('🦋[CanvasImage] onTap: 父组件回调已调用');
       },
       onLongPress: active ? _showOptionsMenu : null,
       onSecondaryTap: active ? _showOptionsMenu : null,
-      onPanStart: active
-          ? (details) {
-              panStartRect = widget.image.dstRect;
-            }
-          : null,
-      onPanUpdate: active
-          ? (details) {
-              setState(() {
-                final fivePercent = math.min(
-                  widget.pageSize.width * 0.05,
-                  widget.pageSize.height * 0.05,
-                );
-
-                widget.image.dstRect = Rect.fromLTWH(
-                  (widget.image.dstRect.left + details.delta.dx)
-                      .clamp(
-                        fivePercent - widget.image.dstRect.width,
-                        widget.pageSize.width - fivePercent,
-                      )
-                      .toDouble(),
-                  (widget.image.dstRect.top + details.delta.dy)
-                      .clamp(
-                        fivePercent - widget.image.dstRect.height,
-                        widget.pageSize.height - fivePercent,
-                      )
-                      .toDouble(),
-                  widget.image.dstRect.width,
-                  widget.image.dstRect.height,
-                );
-              });
-            }
-          : null,
-      onPanEnd: active
-          ? (details) {
-              if (panStartRect == widget.image.dstRect) return;
-              if (panStartRect != widget.image.dstRect) {
-                // 通知图片位置已更改
-                widget.onMoveImage?.call(
-                  widget.image,
-                  Rect.fromLTRB(
-                    widget.image.dstRect.left - panStartRect.left,
-                    widget.image.dstRect.top - panStartRect.top,
-                    widget.image.dstRect.right - panStartRect.right,
-                    widget.image.dstRect.bottom - panStartRect.bottom,
-                  ),
-                );
-              }
-              panStartRect = Rect.zero;
-            }
-          : null,
-      child: Container(
+      onPanStart: active ? _onMovePanStart : null,
+      onPanUpdate: active ? _onMovePanUpdate : null,
+      onPanEnd: active ? _onMovePanEnd : null,
+      child: DecoratedBox(
         decoration: BoxDecoration(
           border: Border.all(
             color: active ? colorScheme.primary : Colors.transparent,
-            width: 2,
+            width: active ? 2 : 0,
           ),
         ),
         child: Center(
           child: SizedBox(
-            width: math.max(widget.image.dstRect.width, CanvasImage.minImageSize),
-            height: math.max(widget.image.dstRect.height, CanvasImage.minImageSize),
+            width: _imgWidth,
+            height: _imgHeight,
             child: _buildImageWidget(),
           ),
         ),
@@ -269,7 +222,6 @@ class _CanvasImageState extends State<CanvasImage> {
     );
   }
 
-  /// 构建图片 widget
   Widget _buildImageWidget() {
     final image = widget.image;
     if (image is PngEditorImage) {
@@ -292,211 +244,401 @@ class _CanvasImageState extends State<CanvasImage> {
           child: Icon(Icons.image, color: Colors.white, size: 32),
         ),
       );
-    } else {
-      return const SizedBox.shrink();
     }
+    return const SizedBox.shrink();
   }
 
-  Widget _buildControls(
-      BuildContext context, ColorScheme colorScheme, double screenWidth, double screenHeight) {
+  // ──────────────────────── 移动手势 ────────────────────────
+
+  void _onMovePanStart(DragStartDetails details) {
+    _panStartRect = widget.image.dstRect;
+  }
+
+  void _onMovePanUpdate(DragUpdateDetails details) {
+    final s = widget.scale;
+    if (s <= 0) return;
+
+    final pageDx = details.delta.dx / s;
+    final pageDy = details.delta.dy / s;
+
+    final fivePercent = math.min(
+      widget.pageSize.width * 0.05,
+      widget.pageSize.height * 0.05,
+    );
+    final rect = widget.image.dstRect;
+
+    widget.image.dstRect = Rect.fromLTWH(
+      (rect.left + pageDx)
+          .clamp(
+            fivePercent - rect.width,
+            widget.pageSize.width - fivePercent,
+          )
+          .toDouble(),
+      (rect.top + pageDy)
+          .clamp(
+            fivePercent - rect.height,
+            widget.pageSize.height - fivePercent,
+          )
+          .toDouble(),
+      rect.width,
+      rect.height,
+    );
+  }
+
+  void _onMovePanEnd(DragEndDetails details) {
+    _notifyMoveIfChanged();
+  }
+
+  // ──────────────────────── 控制手柄层 ────────────────────────
+
+  Widget _buildControls(BuildContext context, ColorScheme colorScheme) {
+    if (!active) {
+      return const SizedBox.shrink();
+    }
+
+    final hs = CanvasImage._handleSize;
+    final sw = _screenWidth;
+    final sh = _screenHeight;
     final handles = <Widget>[];
 
-    // 8个方向的缩放手柄
-    for (double x = -20; x <= 20; x += 20) {
-      for (double y = -20; y <= 20; y += 20) {
-        if (x == 0 && y == 0) continue; // 跳过中心点
-
+    for (int xi = -1; xi <= 1; xi++) {
+      for (int yi = -1; yi <= 1; yi++) {
+        if (xi == 0 && yi == 0) continue;
+        final left = (xi + 1) / 2 * sw - hs / 2;
+        final top = (yi + 1) / 2 * sh - hs / 2;
         handles.add(
-          Positioned(
-            left: (x / 20 + 1) / 2 * screenWidth - 10,
-            top: (y / 20 + 1) / 2 * screenHeight - 10,
-            // ✅ 使用 DeferPointer 包裹 resize handle，实现点击穿透
-            child: DeferPointer(
-              paintOnTop: true,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onPanStart: active
-                    ? (details) {
-                        panStartRect = widget.image.dstRect;
-                        panStartPosition = details.localPosition;
-                        debugPrint('🦋[CanvasImage] resizeHandle onPanStart: active=$active, x=$x, y=$y');
-                      }
-                    : null,
-                onPanUpdate: active
-                    ? (details) {
-                        debugPrint('🦋[CanvasImage] resizeHandle onPanUpdate: active=$active');
-                        final delta = details.localPosition - panStartPosition;
-                        panStartPosition = details.localPosition;
-
-                        double newWidth = panStartRect.width;
-                        double newHeight = panStartRect.height;
-                        double left = panStartRect.left;
-                        double top = panStartRect.top;
-
-                        // 根据手柄位置调整宽度
-                        if (x < 0) {
-                          newWidth = panStartRect.width - delta.dx;
-                          left = panStartRect.right - newWidth;
-                        } else if (x > 0) {
-                          newWidth = panStartRect.width + delta.dx;
-                        }
-
-                        // 根据手柄位置调整高度
-                        if (y < 0) {
-                          newHeight = panStartRect.height - delta.dy;
-                          top = panStartRect.bottom - newHeight;
-                        } else if (y > 0) {
-                          newHeight = panStartRect.height + delta.dy;
-                        }
-
-                        // ✅ 限制最小尺寸（防止抖动：如果尺寸太小，逐步限制而不是直接返回）
-                        if (newWidth < CanvasImage.minImageSize) {
-                          newWidth = CanvasImage.minImageSize;
-                          if (x < 0) {
-                            left = panStartRect.right - newWidth;
-                          }
-                        }
-                        if (newHeight < CanvasImage.minImageSize) {
-                          newHeight = CanvasImage.minImageSize;
-                          if (y < 0) {
-                            top = panStartRect.bottom - newHeight;
-                          }
-                        }
-
-                        // 保持宽高比（对角线拖拽时）
-                        if (x != 0 && y != 0) {
-                          final aspectRatio = panStartRect.width / panStartRect.height;
-                          if (newWidth / newHeight > aspectRatio) {
-                            newHeight = newWidth / aspectRatio;
-                          } else {
-                            newWidth = newHeight * aspectRatio;
-                          }
-                          // 重新计算 left 和 top
-                          if (x < 0) {
-                            left = panStartRect.right - newWidth;
-                          }
-                          if (y < 0) {
-                            top = panStartRect.bottom - newHeight;
-                          }
-                        }
-
-                        setState(() {
-                          widget.image.dstRect = Rect.fromLTWH(
-                            left,
-                            top,
-                            newWidth,
-                            newHeight,
-                          );
-                        });
-                      }
-                    : null,
-                onPanEnd: active
-                    ? (details) {
-                        debugPrint('🦋[CanvasImage] resizeHandle onPanEnd: active=$active');
-                        if (panStartRect == widget.image.dstRect) return;
-                        if (panStartRect != widget.image.dstRect) {
-                          widget.onMoveImage?.call(
-                            widget.image,
-                            Rect.fromLTRB(
-                              widget.image.dstRect.left - panStartRect.left,
-                              widget.image.dstRect.top - panStartRect.top,
-                              widget.image.dstRect.right - panStartRect.right,
-                              widget.image.dstRect.bottom - panStartRect.bottom,
-                            ),
-                          );
-                        }
-                        panStartRect = Rect.zero;
-                      }
-                    : null,
-                // ✅ 使用 AnimatedOpacity 控制 resize handle 的可见性（基于 active 状态）
-                child: AnimatedOpacity(
-                  opacity: active ? 1 : 0,
-                  duration: const Duration(milliseconds: 100),
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: colorScheme.primary,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: colorScheme.surface,
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          _buildResizeHandle(
+            colorScheme,
+            left,
+            top,
+            xi.toDouble(),
+            yi.toDouble(),
           ),
         );
       }
     }
 
-    // 删除按钮
-    handles.add(
-      Positioned(
-        right: -10,
-        top: -10,
-        // ✅ 使用 DeferPointer 包裹按钮，实现点击穿透
-        child: DeferPointer(
-          paintOnTop: true,
-          child: GestureDetector(
-            onTap: () => _showDeleteConfirm(context),
-            child: AnimatedOpacity(
-              opacity: active ? 1 : 0,
-              duration: const Duration(milliseconds: 100),
-              child: Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: colorScheme.surface,
-                    width: 2,
-                  ),
-                ),
-                child: const Icon(Icons.close, color: Colors.white, size: 16),
+    handles.add(_buildRotationHandle(colorScheme, sw, sh));
+    handles.add(_buildDeleteButton(context, colorScheme, sw));
+    handles.add(_buildQuickRotateButton(colorScheme));
+
+    return Stack(clipBehavior: Clip.none, children: handles);
+  }
+
+  // ──────────────────────── 缩放手柄 ────────────────────────
+
+  Widget _buildResizeHandle(
+    ColorScheme colorScheme,
+    double left,
+    double top,
+    double hx,
+    double hy,
+  ) {
+    final hs = CanvasImage._handleSize;
+    return Positioned(
+      left: left,
+      top: top,
+      child: DeferPointer(
+        paintOnTop: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanStart: (_) {
+            _panStartRect = widget.image.dstRect;
+          },
+          onPanUpdate: (details) => _onResizePanUpdate(details, hx, hy),
+          onPanEnd: (_) => _notifyMoveIfChanged(),
+          child: MouseRegion(
+            cursor: _resizeCursor(hx, hy),
+            child: Container(
+              width: hs,
+              height: hs,
+              decoration: BoxDecoration(
+                color: colorScheme.primary,
+                shape: BoxShape.circle,
+                border: Border.all(color: colorScheme.surface, width: 2),
               ),
             ),
           ),
         ),
       ),
     );
+  }
 
-    // 旋转按钮
-    handles.add(
-      Positioned(
-        left: -10,
-        top: -10,
-        // ✅ 使用 DeferPointer 包裹按钮，实现点击穿透
-        child: DeferPointer(
-          paintOnTop: true,
-          child: GestureDetector(
-            onTap: () => _rotateImage(),
-            child: AnimatedOpacity(
-              opacity: active ? 1 : 0,
-              duration: const Duration(milliseconds: 100),
-              child: Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: colorScheme.primary,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: colorScheme.surface,
-                    width: 2,
+  void _onResizePanUpdate(DragUpdateDetails details, double hx, double hy) {
+    final s = widget.scale;
+    if (s <= 0) return;
+
+    final pageDelta = Offset(details.delta.dx / s, details.delta.dy / s);
+
+    // 将页面 delta 转换到图片本地坐标系（反向旋转）
+    final rot = widget.image.rotation;
+    final cosA = math.cos(-rot);
+    final sinA = math.sin(-rot);
+    final localDx = pageDelta.dx * cosA - pageDelta.dy * sinA;
+    final localDy = pageDelta.dx * sinA + pageDelta.dy * cosA;
+
+    final rect = widget.image.dstRect;
+    double newLeft = rect.left;
+    double newTop = rect.top;
+    double newWidth = rect.width;
+    double newHeight = rect.height;
+
+    if (hx < 0) {
+      newWidth -= localDx;
+      newLeft = rect.right - newWidth;
+    } else if (hx > 0) {
+      newWidth += localDx;
+    }
+
+    if (hy < 0) {
+      newHeight -= localDy;
+      newTop = rect.bottom - newHeight;
+    } else if (hy > 0) {
+      newHeight += localDy;
+    }
+
+    // 角点手柄保持宽高比
+    if (hx != 0 && hy != 0 && rect.height > 0) {
+      final aspectRatio = rect.width / rect.height;
+      if (newWidth / newHeight > aspectRatio) {
+        newHeight = newWidth / aspectRatio;
+      } else {
+        newWidth = newHeight * aspectRatio;
+      }
+      if (hx < 0) {
+        newLeft = rect.right - newWidth;
+      }
+      if (hy < 0) {
+        newTop = rect.bottom - newHeight;
+      }
+    }
+
+    if (newWidth < CanvasImage.minImageSize) {
+      newWidth = CanvasImage.minImageSize;
+      if (hx < 0) {
+        newLeft = rect.right - newWidth;
+      }
+    }
+    if (newHeight < CanvasImage.minImageSize) {
+      newHeight = CanvasImage.minImageSize;
+      if (hy < 0) {
+        newTop = rect.bottom - newHeight;
+      }
+    }
+
+    widget.image.dstRect = Rect.fromLTWH(newLeft, newTop, newWidth, newHeight);
+  }
+
+  MouseCursor _resizeCursor(double hx, double hy) {
+    if (hx == 0 && hy != 0) return SystemMouseCursors.resizeUpDown;
+    if (hx != 0 && hy == 0) return SystemMouseCursors.resizeLeftRight;
+    if ((hx > 0 && hy > 0) || (hx < 0 && hy < 0)) {
+      return SystemMouseCursors.resizeUpLeftDownRight;
+    }
+    return SystemMouseCursors.resizeUpRightDownLeft;
+  }
+
+  // ──────────────────────── 旋转手柄 ────────────────────────
+
+  Widget _buildRotationHandle(
+    ColorScheme colorScheme,
+    double sw,
+    double sh,
+  ) {
+    final hs = CanvasImage._handleSize;
+    final dist = CanvasImage._rotationHandleDistance;
+
+    return Positioned(
+      left: sw / 2 - hs / 2,
+      top: -dist - hs / 2,
+      child: DeferPointer(
+        paintOnTop: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanStart: _onRotationPanStart,
+          onPanUpdate: _onRotationPanUpdate,
+          onPanEnd: _onRotationPanEnd,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: hs,
+                  height: hs,
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: colorScheme.surface,
+                      width: 2,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.rotate_right,
+                    color: Colors.white,
+                    size: 10,
                   ),
                 ),
-                child: const Icon(Icons.rotate_right, color: Colors.white, size: 16),
+                Container(
+                  width: 1.5,
+                  height: dist - hs / 2,
+                  color: Colors.orange.withValues(alpha: 0.6),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _onRotationPanStart(DragStartDetails details) {
+    _panStartRect = widget.image.dstRect;
+    _rotationStartAngle = widget.image.rotation;
+
+    final box = context.findRenderObject() as RenderBox?;
+    if (box != null) {
+      _rotationCenter = box.localToGlobal(
+        Offset(_screenWidth / 2, _screenHeight / 2),
+      );
+    } else {
+      _rotationCenter = null;
+    }
+
+    if (_rotationCenter != null) {
+      _initialPointerAngle = math.atan2(
+        details.globalPosition.dy - _rotationCenter!.dy,
+        details.globalPosition.dx - _rotationCenter!.dx,
+      );
+    }
+  }
+
+  void _onRotationPanUpdate(DragUpdateDetails details) {
+    if (_rotationCenter == null) return;
+
+    final currentAngle = math.atan2(
+      details.globalPosition.dy - _rotationCenter!.dy,
+      details.globalPosition.dx - _rotationCenter!.dx,
+    );
+    var newRotation =
+        _rotationStartAngle + (currentAngle - _initialPointerAngle);
+
+    while (newRotation > math.pi) {
+      newRotation -= 2 * math.pi;
+    }
+    while (newRotation < -math.pi) {
+      newRotation += 2 * math.pi;
+    }
+
+    for (final snap in CanvasImage._snapAngles) {
+      if ((newRotation - snap).abs() < CanvasImage._snapAngle) {
+        newRotation = snap;
+        break;
+      }
+    }
+
+    widget.image.rotation = newRotation;
+  }
+
+  void _onRotationPanEnd(DragEndDetails details) {
+    _notifyMoveIfChanged();
+  }
+
+  // ──────────────────────── 删除按钮 ────────────────────────
+
+  Widget _buildDeleteButton(
+    BuildContext context,
+    ColorScheme colorScheme,
+    double sw,
+  ) {
+    final bs = CanvasImage._buttonSize;
+    return Positioned(
+      right: -bs / 2,
+      top: -bs / 2,
+      child: DeferPointer(
+        paintOnTop: true,
+        child: GestureDetector(
+          onTap: () => _showDeleteConfirm(context),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Container(
+              width: bs,
+              height: bs,
+              decoration: BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+                border: Border.all(color: colorScheme.surface, width: 2),
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 14),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ──────────────────────── 快速 90° 旋转按钮 ────────────────────────
+
+  Widget _buildQuickRotateButton(ColorScheme colorScheme) {
+    final bs = CanvasImage._buttonSize;
+    return Positioned(
+      left: -bs / 2,
+      top: -bs / 2,
+      child: DeferPointer(
+        paintOnTop: true,
+        child: GestureDetector(
+          onTap: _quickRotate90,
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Container(
+              width: bs,
+              height: bs,
+              decoration: BoxDecoration(
+                color: colorScheme.primary,
+                shape: BoxShape.circle,
+                border: Border.all(color: colorScheme.surface, width: 2),
+              ),
+              child: const Icon(
+                Icons.rotate_90_degrees_cw_outlined,
+                color: Colors.white,
+                size: 14,
               ),
             ),
           ),
         ),
       ),
     );
+  }
 
-    return Stack(children: handles);
+  void _quickRotate90() {
+    _panStartRect = widget.image.dstRect;
+    var newRotation = widget.image.rotation + math.pi / 2;
+    if (newRotation > math.pi) {
+      newRotation -= 2 * math.pi;
+    }
+    widget.image.rotation = newRotation;
+    _notifyMoveIfChanged();
+  }
+
+  // ──────────────────────── 通用工具方法 ────────────────────────
+
+  void _notifyMoveIfChanged() {
+    if (_panStartRect == widget.image.dstRect &&
+        _rotationStartAngle == widget.image.rotation) {
+      return;
+    }
+
+    widget.onMoveImage?.call(
+      widget.image,
+      Rect.fromLTRB(
+        widget.image.dstRect.left - _panStartRect.left,
+        widget.image.dstRect.top - _panStartRect.top,
+        widget.image.dstRect.right - _panStartRect.right,
+        widget.image.dstRect.bottom - _panStartRect.bottom,
+      ),
+    );
+    _panStartRect = Rect.zero;
   }
 
   void _showOptionsMenu() {
@@ -518,11 +660,21 @@ class _CanvasImageState extends State<CanvasImage> {
               },
             ),
             _buildOptionButton(
-              icon: Icons.rotate_right,
-              label: '旋转',
+              icon: Icons.rotate_90_degrees_cw_outlined,
+              label: '旋转90°',
               onTap: () {
                 Navigator.pop(context);
-                _rotateImage();
+                _quickRotate90();
+              },
+            ),
+            _buildOptionButton(
+              icon: Icons.restart_alt,
+              label: '重置旋转',
+              onTap: () {
+                Navigator.pop(context);
+                _panStartRect = widget.image.dstRect;
+                widget.image.rotation = 0.0;
+                _notifyMoveIfChanged();
               },
             ),
           ],
@@ -545,10 +697,7 @@ class _CanvasImageState extends State<CanvasImage> {
           Container(
             width: 50,
             height: 50,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             child: Icon(icon, color: Colors.white),
           ),
           const SizedBox(height: 4),
@@ -571,37 +720,16 @@ class _CanvasImageState extends State<CanvasImage> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('删除', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              '删除',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
     );
-
     if (confirmed == true) {
       widget.onDeleteImage?.call(widget.image);
     }
-  }
-
-  void _rotateImage() {
-    final rect = widget.image.dstRect;
-
-    // 交换宽度和高度（旋转 90 度）
-    final newWidth = rect.height;
-    final newHeight = rect.width;
-
-    // 保持中心点不变
-    final centerX = rect.left + rect.width / 2;
-    final centerY = rect.top + rect.height / 2;
-    final newLeft = centerX - newWidth / 2;
-    final newTop = centerY - newHeight / 2;
-
-    setState(() {
-      widget.image.dstRect = Rect.fromLTWH(
-        newLeft,
-        newTop,
-        newWidth,
-        newHeight,
-      );
-    });
   }
 }

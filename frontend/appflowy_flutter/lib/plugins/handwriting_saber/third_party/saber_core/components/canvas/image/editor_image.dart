@@ -2,9 +2,8 @@ import 'dart:typed_data';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-/// ✅ 编辑器图片基类
-/// 支持 PNG、JPG、SVG 等格式的图片
-/// 已修改为继承自 ChangeNotifier 以支持图片位置变化的监听
+/// 编辑器图片基类
+/// 支持 PNG、JPG、SVG 等格式的图片，以及缩放、移动、旋转
 abstract class EditorImage extends ChangeNotifier {
   EditorImage({
     required this.id,
@@ -12,23 +11,23 @@ abstract class EditorImage extends ChangeNotifier {
     required this.pageSize,
     this.newImage = true,
     Rect? dstRect,
-  }) : _dstRect = dstRect ?? Rect.zero;
+    double rotation = 0.0,
+  })  : _dstRect = dstRect ?? Rect.zero,
+        _rotation = rotation;
 
-  final String id; // 图片唯一标识符
-  final int pageIndex; // 所在页面索引
-  final Size pageSize; // 页面大小
+  final String id;
+  final int pageIndex;
+  final Size pageSize;
 
   /// 如果是新图片，加载时将处于 [active] 状态（可拖动）
   bool newImage;
 
   Rect _dstRect;
   Rect get dstRect => _dstRect;
-  static const double minImageSize = 10; // ✅ 最小图片尺寸（与 CanvasImage.minImageSize 保持一致）
-  
+  static const double minImageSize = 10;
+
   set dstRect(Rect value) {
-    // ✅ 确保最小尺寸限制（参考 Saber 原版实现）
-    if (value.width < minImageSize ||
-        value.height < minImageSize) {
+    if (value.width < minImageSize || value.height < minImageSize) {
       final scale = math.max(
         minImageSize / value.width,
         minImageSize / value.height,
@@ -42,21 +41,27 @@ abstract class EditorImage extends ChangeNotifier {
     } else {
       _dstRect = value;
     }
-    // 通知监听器（图片位置或尺寸已更改）
-    try {
-      notifyListeners();
-    } catch (e) {
-      // 忽略通知错误
-    }
+    _notifySafe();
   }
 
-  /// 获取图片类型
+  /// 旋转角度（弧度）
+  double _rotation;
+  double get rotation => _rotation;
+  set rotation(double value) {
+    _rotation = value;
+    _notifySafe();
+  }
+
+  void _notifySafe() {
+    try {
+      notifyListeners();
+    } catch (_) {}
+  }
+
   String get imageType;
 
-  /// 序列化为 JSON
   Map<String, dynamic> toJson();
 
-  /// 从 JSON 反序列化
   static EditorImage fromJson(Map<String, dynamic> json) {
     final String? type = json['type'] as String?;
     if (type == 'png' || type == 'jpg' || type == 'jpeg' || type == 'image') {
@@ -67,12 +72,10 @@ abstract class EditorImage extends ChangeNotifier {
     throw Exception('未知的图片类型: $type');
   }
 
-  /// 移动图片
   void move(Offset offset) {
     dstRect = dstRect.translate(offset.dx, offset.dy);
   }
 
-  /// 调整图片大小
   void resize(Size newSize) {
     dstRect = Rect.fromLTWH(
       dstRect.left,
@@ -81,9 +84,22 @@ abstract class EditorImage extends ChangeNotifier {
       newSize.height,
     );
   }
+
+  /// 获取旋转后的边界框（用于碰撞检测）
+  Rect get rotatedBounds {
+    if (_rotation == 0.0) return _dstRect;
+    final center = _dstRect.center;
+    final hw = _dstRect.width / 2;
+    final hh = _dstRect.height / 2;
+    final cosA = math.cos(_rotation).abs();
+    final sinA = math.sin(_rotation).abs();
+    final newHW = hw * cosA + hh * sinA;
+    final newHH = hw * sinA + hh * cosA;
+    return Rect.fromCenter(center: center, width: newHW * 2, height: newHH * 2);
+  }
 }
 
-/// ✅ PNG/JPG 图片
+/// PNG/JPG 图片
 class PngEditorImage extends EditorImage {
   PngEditorImage({
     required super.id,
@@ -93,15 +109,15 @@ class PngEditorImage extends EditorImage {
     required super.pageSize,
     super.newImage = true,
     super.dstRect,
+    super.rotation = 0.0,
   });
 
-  final Uint8List imageBytes; // 图片字节数据
-  final String extension; // 文件扩展名 (.png, .jpg, .jpeg等)
+  final Uint8List imageBytes;
+  final String extension;
 
   @override
   String get imageType => 'image';
 
-  /// 获取图片作为 ImageProvider
   ImageProvider get imageProvider => MemoryImage(imageBytes);
 
   @override
@@ -109,21 +125,20 @@ class PngEditorImage extends EditorImage {
     return {
       'type': imageType,
       'id': id,
-      'imageBytes': imageBytes.toList(), // 转换为 List<int> 以便序列化
+      'imageBytes': imageBytes.toList(),
       'extension': extension,
       'pageIndex': pageIndex,
+      'rotation': rotation,
       'pageSize': {
         'width': pageSize.width,
         'height': pageSize.height,
       },
-      'dstRect': dstRect != null
-          ? {
-              'left': dstRect!.left,
-              'top': dstRect!.top,
-              'width': dstRect!.width,
-              'height': dstRect!.height,
-            }
-          : null,
+      'dstRect': {
+        'left': dstRect.left,
+        'top': dstRect.top,
+        'width': dstRect.width,
+        'height': dstRect.height,
+      },
     };
   }
 
@@ -159,11 +174,12 @@ class PngEditorImage extends EditorImage {
       pageIndex: json['pageIndex'] as int? ?? 0,
       pageSize: pageSize,
       dstRect: dstRect,
+      rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }
 
-/// ✅ SVG 图片
+/// SVG 图片
 class SvgEditorImage extends EditorImage {
   SvgEditorImage({
     required super.id,
@@ -172,9 +188,10 @@ class SvgEditorImage extends EditorImage {
     required super.pageSize,
     super.newImage = true,
     super.dstRect,
+    super.rotation = 0.0,
   });
 
-  final String svgString; // SVG 字符串内容
+  final String svgString;
 
   @override
   String get imageType => 'svg';
@@ -186,18 +203,17 @@ class SvgEditorImage extends EditorImage {
       'id': id,
       'svgString': svgString,
       'pageIndex': pageIndex,
+      'rotation': rotation,
       'pageSize': {
         'width': pageSize.width,
         'height': pageSize.height,
       },
-      'dstRect': dstRect != null
-          ? {
-              'left': dstRect!.left,
-              'top': dstRect!.top,
-              'width': dstRect!.width,
-              'height': dstRect!.height,
-            }
-          : null,
+      'dstRect': {
+        'left': dstRect.left,
+        'top': dstRect.top,
+        'width': dstRect.width,
+        'height': dstRect.height,
+      },
     };
   }
 
@@ -227,6 +243,7 @@ class SvgEditorImage extends EditorImage {
       pageIndex: json['pageIndex'] as int? ?? 0,
       pageSize: pageSize,
       dstRect: dstRect,
+      rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }
