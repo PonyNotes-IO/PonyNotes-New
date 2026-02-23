@@ -72,7 +72,6 @@ pub fn upsert_chat_messages(
   mut conn: DBConnection,
   new_messages: &[ChatMessageTable],
 ) -> FlowyResult<()> {
-  //trace!("Upserting chat messages: {:?}", new_messages);
   conn.immediate_transaction(|conn| {
     for message in new_messages {
       let _ = insert_into(chat_message_table::table)
@@ -88,6 +87,72 @@ pub fn upsert_chat_messages(
           chat_message_table::reply_message_id.eq(excluded(chat_message_table::reply_message_id)),
         ))
         .execute(conn)?;
+    }
+    Ok::<(), FlowyError>(())
+  })?;
+
+  Ok(())
+}
+
+/// Upsert chat messages while preserving image metadata from existing records.
+/// When the existing record has image-related metadata ("images", "image_paths", "has_images")
+/// but the incoming record does not, the existing metadata is kept intact.
+/// This prevents remote message sync from overwriting locally-stored image data.
+pub fn upsert_chat_messages_preserve_images(
+  mut conn: DBConnection,
+  new_messages: &[ChatMessageTable],
+) -> FlowyResult<()> {
+  conn.immediate_transaction(|conn| {
+    for message in new_messages {
+      let existing_metadata: Option<Option<String>> = dsl::chat_message_table
+        .filter(chat_message_table::message_id.eq(message.message_id))
+        .select(chat_message_table::metadata)
+        .first::<Option<String>>(conn)
+        .optional()?;
+
+      let should_preserve_metadata = match &existing_metadata {
+        Some(Some(existing_meta)) => {
+          let existing_has_images = existing_meta.contains("\"images\"")
+            || existing_meta.contains("\"image_paths\"");
+          let new_has_images = message
+            .metadata
+            .as_ref()
+            .map_or(false, |m| m.contains("\"images\"") || m.contains("\"image_paths\""));
+          existing_has_images && !new_has_images
+        },
+        _ => false,
+      };
+
+      if should_preserve_metadata {
+        let _ = insert_into(chat_message_table::table)
+          .values(message)
+          .on_conflict(chat_message_table::message_id)
+          .do_update()
+          .set((
+            chat_message_table::content.eq(excluded(chat_message_table::content)),
+            chat_message_table::created_at.eq(excluded(chat_message_table::created_at)),
+            chat_message_table::author_type.eq(excluded(chat_message_table::author_type)),
+            chat_message_table::author_id.eq(excluded(chat_message_table::author_id)),
+            chat_message_table::reply_message_id
+              .eq(excluded(chat_message_table::reply_message_id)),
+          ))
+          .execute(conn)?;
+      } else {
+        let _ = insert_into(chat_message_table::table)
+          .values(message)
+          .on_conflict(chat_message_table::message_id)
+          .do_update()
+          .set((
+            chat_message_table::content.eq(excluded(chat_message_table::content)),
+            chat_message_table::metadata.eq(excluded(chat_message_table::metadata)),
+            chat_message_table::created_at.eq(excluded(chat_message_table::created_at)),
+            chat_message_table::author_type.eq(excluded(chat_message_table::author_type)),
+            chat_message_table::author_id.eq(excluded(chat_message_table::author_id)),
+            chat_message_table::reply_message_id
+              .eq(excluded(chat_message_table::reply_message_id)),
+          ))
+          .execute(conn)?;
+      }
     }
     Ok::<(), FlowyError>(())
   })?;

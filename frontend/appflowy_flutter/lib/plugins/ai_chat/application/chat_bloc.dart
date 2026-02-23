@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/plugins/ai_chat/presentation/chat_page/chat_animation_list_widget.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -820,11 +822,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  /// 等待模型设置完成后发送初始消息
-  /// 这是解决多模态模型（如豆包）选择后调用错误的关键修复
   Future<void> _sendInitialMessageAfterModelSet() async {
     try {
-      // 等待模型设置完成，最多等待3秒
       await _modelSettingCompleter.future.timeout(
         const Duration(seconds: 3),
         onTimeout: () {
@@ -834,14 +833,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       
       Log.info('✅ ChatBloc: 模型设置完成，开始发送初始消息');
       
-      // 准备metadata（包含图片）
       final metadata = <String, dynamic>{};
 
-      // 处理初始图片
       if (initialImagePaths != null && initialImagePaths!.isNotEmpty) {
         Log.info('📸 ChatBloc: 准备发送 ${initialImagePaths!.length} 张图片');
 
-        // 1. 转换图片为base64（用于发送到服务器）
+        // 1. 将图片拷贝到永久目录，防止源文件被删除
+        final permanentPaths = await _saveImagesToPermanentDir(initialImagePaths!);
+
+        // 2. 转换图片为base64（用于发送到AI服务器）
         final imageBase64List = await _convertImagesToBase64(initialImagePaths!);
         if (imageBase64List.isNotEmpty && !isClosed) {
           metadata['images'] = imageBase64List;
@@ -849,13 +849,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           Log.info('✅ ChatBloc: 已添加 ${imageBase64List.length} 张图片(base64)到metadata');
         }
 
-        // 2. 同时保存图片文件路径（作为备用，用于本地持久化）
-        // 这样即使base64数据在存储过程中丢失，也能从文件路径恢复图片
-        metadata['image_paths'] = initialImagePaths;
-        Log.info('✅ ChatBloc: 已添加 ${initialImagePaths!.length} 张图片路径到metadata');
+        // 3. 保存永久文件路径到metadata，用于跨会话持久化显示
+        if (permanentPaths.isNotEmpty) {
+          metadata['image_paths'] = permanentPaths;
+          Log.info('✅ ChatBloc: 已添加 ${permanentPaths.length} 张永久图片路径到metadata');
+        } else {
+          metadata['image_paths'] = initialImagePaths;
+        }
       }
       
-      // 发送消息
       if (!isClosed) {
         add(
           ChatEvent.sendMessage(
@@ -970,7 +972,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     add(ChatEvent.receiveMessage(questionStreamMessage));
 
-    // 从 metadata 中提取图片数据
     List<String>? images;
     bool hasImages = false;
     if (metadata != null) {
@@ -986,9 +987,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
 
-    // Send stream request (model is already set via _setPreferredModel)
-    // 【关键修复】传递图片数据到 Rust 层
-    // PonyNotes: 传递深度思考和联网搜索覆盖参数
     await _streamManager.sendStreamRequest(
       message, 
       format, 
@@ -1071,6 +1069,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       },
       (err) => Log.error("Failed to regenerate answer: ${err.msg}"),
     );
+  }
+
+  /// 将图片拷贝到永久目录，防止源文件（如临时文件）被清理
+  Future<List<String>> _saveImagesToPermanentDir(List<String> sourcePaths) async {
+    final permanentPaths = <String>[];
+    try {
+      final appDir = await getApplicationSupportDirectory();
+      final chatImagesDir = Directory('${appDir.path}/ai_chat_images/$chatId');
+      if (!chatImagesDir.existsSync()) {
+        chatImagesDir.createSync(recursive: true);
+      }
+
+      for (int i = 0; i < sourcePaths.length; i++) {
+        final sourceFile = File(sourcePaths[i]);
+        if (await sourceFile.exists()) {
+          final ext = path.extension(sourcePaths[i]).toLowerCase();
+          final ts = DateTime.now().millisecondsSinceEpoch;
+          final destPath = '${chatImagesDir.path}/${ts}_$i$ext';
+          await sourceFile.copy(destPath);
+          permanentPaths.add(destPath);
+          Log.info('📸 ChatBloc: 图片已拷贝到永久目录 - $destPath');
+        }
+      }
+    } catch (e) {
+      Log.error('❌ ChatBloc: 保存图片到永久目录失败: $e');
+    }
+    return permanentPaths;
   }
 
   /// 将图片文件路径列表转换为base64列表

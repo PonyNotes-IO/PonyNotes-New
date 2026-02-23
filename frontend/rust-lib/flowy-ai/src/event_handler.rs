@@ -41,7 +41,6 @@ pub(crate) async fn stream_chat_message_handler(
     has_images,
   } = data;
 
-  // 记录图片信息
   if has_images {
     tracing::info!("[EventHandler] 收到带图片的消息，图片数量: {}", images.len());
   }

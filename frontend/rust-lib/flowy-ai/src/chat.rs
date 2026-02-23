@@ -11,7 +11,7 @@ use flowy_ai_pub::cloud::{
 };
 use flowy_ai_pub::persistence::{
   ChatMessageTable, select_answer_where_match_reply_message_id, select_chat_messages,
-  upsert_chat_messages,
+  upsert_chat_messages, upsert_chat_messages_preserve_images,
 };
 use lib_infra::util::timestamp;
 use flowy_ai_pub::user_service::AIUserService;
@@ -139,8 +139,6 @@ impl Chat {
       .send(StreamMessage::MessageId(question.message_id).to_string())
       .await;
 
-    // 【关键修复】如果有图片数据，将其添加到消息的 metadata 中
-    // 这样 Rust 中间件层可以从数据库读取到图片数据
     let mut question_with_images = question.clone();
     if params.has_images && !params.images.is_empty() {
       tracing::info!(
@@ -149,14 +147,11 @@ impl Chat {
         question_with_images.message_id
       );
       
-      // 更新消息的 metadata，添加图片信息
-      // ChatMessage.metadata 是 serde_json::Value 类型
       let mut metadata = question_with_images.metadata.clone();
       if let Some(obj) = metadata.as_object_mut() {
         obj.insert("images".to_string(), serde_json::json!(params.images));
         obj.insert("has_images".to_string(), serde_json::json!(true));
       } else {
-        // metadata 不是对象，创建新的
         metadata = serde_json::json!({
           "images": params.images,
           "has_images": true,
@@ -699,7 +694,7 @@ fn save_chat_message_disk(
       is_sync,
     })
     .collect::<Vec<_>>();
-  upsert_chat_messages(conn, &records)?;
+  upsert_chat_messages_preserve_images(conn, &records)?;
   Ok(())
 }
 

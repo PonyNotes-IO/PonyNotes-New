@@ -35,16 +35,13 @@ class ChatStreamManager {
     questionStream = QuestionStream();
   }
 
-  /// Build the payload for a streaming message
   StreamChatPayloadPB buildStreamPayload(
     String message,
     PredefinedFormat? format,
     String? promptId, {
     List<String>? images,
     bool hasImages = false,
-    // PonyNotes: 可选的深度思考覆盖（为null时使用默认设置）
     bool? enableDeepThinkingOverride,
-    // PonyNotes: 可选的联网搜索覆盖（为null时使用默认设置）
     bool? enableWebSearchOverride,
   }) {
     final payload = StreamChatPayloadPB(
@@ -53,7 +50,6 @@ class ChatStreamManager {
       messageType: ChatMessageTypePB.User,
       questionStreamPort: Int64(questionStream!.nativePort),
       answerStreamPort: Int64(answerStream!.nativePort),
-      // PonyNotes: 使用覆盖参数或默认设置
       enableThinking: enableDeepThinkingOverride ?? enableDeepThinking,
       enableWebSearch: enableWebSearchOverride ?? enableWebSearch,
       hasImages: hasImages,
@@ -67,27 +63,20 @@ class ChatStreamManager {
       payload.promptId = promptId;
     }
 
-    // 添加图片数据
     if (images != null && images.isNotEmpty) {
       payload.images.addAll(images);
     }
 
-    // Note: Model selection is handled via AIEventUpdateSelectedModel
-    // and stored in the chat's active model, so we don't need to pass it here
-
     return payload;
   }
 
-  /// Send a streaming message request to the server
   Future<FlowyResult<ChatMessagePB, FlowyError>> sendStreamRequest(
     String message,
     PredefinedFormat? format,
     String? promptId, {
     List<String>? images,
     bool hasImages = false,
-    // PonyNotes: 可选的深度思考覆盖（为null时使用默认设置）
     bool? enableDeepThinkingOverride,
-    // PonyNotes: 可选的联网搜索覆盖（为null时使用默认设置）
     bool? enableWebSearchOverride,
   }) async {
     final payload = buildStreamPayload(
