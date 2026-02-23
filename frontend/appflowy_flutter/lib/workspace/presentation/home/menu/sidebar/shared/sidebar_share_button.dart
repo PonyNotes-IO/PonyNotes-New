@@ -149,16 +149,26 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         return;
       }
       
-      final sentNotes = await _fetchCollaborations(
-        baseUrl: baseUrl,
-        token: accessToken,
-        path: '/api/collab/me/sent',
-      );
-      final receivedNotes = await _fetchCollaborations(
-        baseUrl: baseUrl,
-        token: accessToken,
-        path: '/api/collab/me/received',
-      );
+      List<ViewPB> sentNotes = [];
+      try {
+        sentNotes = await _fetchCollaborations(
+          baseUrl: baseUrl,
+          token: accessToken,
+          path: '/api/collab/me/sent',
+        );
+      } catch (e) {
+        Log.warn('fetch sent collaborations failed (non-fatal): $e');
+      }
+      List<ViewPB> receivedNotes = [];
+      try {
+        receivedNotes = await _fetchCollaborations(
+          baseUrl: baseUrl,
+          token: accessToken,
+          path: '/api/collab/me/received',
+        );
+      } catch (e) {
+        Log.warn('fetch received collaborations failed (non-fatal): $e');
+      }
 
       final Map<String, ViewPB> combinedMap = {};
       for (final view in [...sentNotes, ...receivedNotes]) {
