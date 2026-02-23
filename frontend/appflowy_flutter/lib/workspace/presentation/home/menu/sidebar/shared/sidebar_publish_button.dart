@@ -155,9 +155,12 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
       // 优先使用全局发布列表 API（包含所有用户发布的笔记）
       // API返回的数据包含 is_received 标记，表示当前用户是否已接收
       try {
+        Log.info('[SidebarPublish] 开始调用 ListAllPublishedViews API...');
         final result = await FolderEventListAllPublishedViews().send();
         globalApiSuccess = result.fold((s) {
+          Log.info('[SidebarPublish] API 返回 ${s.items.length} 条数据');
           for (final item in s.items) {
+            Log.info('[SidebarPublish] item: name=${item.name}, publishName=${item.publishName}, isReceived=${item.isReceived}, publisherEmail=${item.publisherEmail}, publishedAt=${item.publishedAt}');
             // publishedAt 是 Int64 类型，需要转换为 int
             final publishedAtMs = item.publishedAt.toInt();
             final itemData = PublishedItemData(
@@ -179,13 +182,14 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
               myPublishedItems.add(itemData);
             }
           }
+          Log.info('[SidebarPublish] 分类完成: 我的发布=${myPublishedItems.length}, 接收的发布=${receivedPublishedItems.length}');
           return true;
         }, (f) {
-          Log.error('ListAllPublishedViews API error: $f');
+          Log.error('[SidebarPublish] ListAllPublishedViews API error: $f');
           return false;
         });
       } catch (e) {
-        Log.error('ListAllPublishedViews exception: $e');
+        Log.error('[SidebarPublish] ListAllPublishedViews exception: $e');
       }
 
       // 如果全局 API 失败，使用 workspace 级别的 API 作为备选
