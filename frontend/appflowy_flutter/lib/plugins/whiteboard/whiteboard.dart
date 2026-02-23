@@ -330,44 +330,28 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   @override
   void dispose() {
-    // ✅ 关键修复：dispose() 必须是同步方法
-    // 在 Flutter 中，dispose() 被框架同步调用，如果声明为 async，
-    // await 之后的代码（包括 super.dispose()）会被延迟执行，
-    // 导致新 widget 的 initState() 在旧 widget 的 dispose() 完成前就运行。
-    // 这会引起竞态条件，特别是在视图切换时。
     _isDisposing = true;
 
-    // ✅ 关键修复：使用 fire-and-forget 模式进行异步清理
-    // forceSync 和 closeWhiteboard 是异步操作，但我们不能在 dispose 中 await
-    // 解决方案：先同步完成关键清理，然后启动异步操作（不等待完成）
     print('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
     
-    // 1. 立即触发强制同步（fire-and-forget）
-    // 注意：此时 adapter 尚未 dispose，数据还在内存中
     final adapter = _collabAdapter;
+    _collabAdapter = null;
+
+    // 注销所有控制器（同步操作）
+    _unregisterControllers();
+
+    // fire-and-forget：先 forceSync 完成后再 dispose adapter
     if (adapter != null) {
-      // 使用 unawaited 模式：启动同步但不等待
       adapter.forceSync().then((_) {
-        print('[WhiteboardPage] ✅ Force sync completed (background)');
+        print('[WhiteboardPage] ✅ Force sync completed, disposing adapter');
+        adapter.dispose();
       }).catchError((e) {
-        print('[WhiteboardPage] ❌ Force sync failed (background): $e');
+        print('[WhiteboardPage] ❌ Force sync failed: $e');
+        adapter.dispose();
       });
     }
 
-    // 2. 注销所有控制器（同步操作）
-    _unregisterControllers();
-
-    // 3. 销毁 Collab 适配器
-    // 注意：forceSync 已经开始执行，但 dispose 会清空数据
-    // 由于 forceSync 内部会复制 _fullData 到局部变量 _syncData，
-    // 所以 adapter.dispose() 在 forceSync 之后调用是安全的
-    // 但为了更安全，我们延迟 dispose adapter
-    Future.delayed(const Duration(milliseconds: 200), () {
-      adapter?.dispose();
-    });
-    _collabAdapter = null;
-
-    // 4. 关闭白板以释放后端资源（fire-and-forget）
+    // 关闭白板以释放后端资源（fire-and-forget）
     final viewId = widget.view.id;
     Future(() async {
       try {

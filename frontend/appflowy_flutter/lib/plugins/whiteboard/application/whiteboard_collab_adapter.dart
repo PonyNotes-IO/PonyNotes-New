@@ -33,6 +33,7 @@ class WhiteboardCollabAdapter {
 
   bool _disposed = false;
   bool _isSyncing = false;
+  bool _hasUnsavedChanges = false;
   
   // 待同步的数据（增量）
   final Map<String, dynamic> _pendingData = {};
@@ -114,44 +115,27 @@ class WhiteboardCollabAdapter {
       return;
     }
 
-    // ✅ 调试日志 - 使用 print() 确保能写入日志文件
     print('[WhiteboardCollabAdapter] onWhiteboardDataChanged called, type: $type, keys: ${data.keys.toList()}');
 
     // 更新全量数据缓存
-    // Excalidraw 的 update 事件通常只包含变化的字段
-    // 我们需要将其合并到全量数据中
     data.forEach((key, value) {
       if (key == 'files' && value is Map) {
-        // ✅ 特殊处理 files：合并而非替换
         _fullData[key] = _mergeFiles(_fullData[key] as Map<String, dynamic>?, value as Map<String, dynamic>);
-        // 同时更新待同步的 files
         _pendingFiles.addAll(value);
       } else {
         _fullData[key] = value;
       }
     });
 
-    // 首先，data不能一样。
-    if (_pendingType == type && mapEquals(_pendingData, data)) {
-      return;
-    }
-
-    // 正在同步和等待同步的数据不一样
-    if (_pendingType == _syncType && !mapEquals(_pendingData, _syncData)) {
-      return;
-    }
-
-    // 缓存待同步的数据
+    _hasUnsavedChanges = true;
     _pendingData.addAll(data);
     _pendingType = type;
 
     // 通知上层数据已变更（用于 UI 更新）
     onDataChanged(data);
 
-    // 取消之前的防抖定时器
+    // 取消之前的防抖定时器，重新开始计时
     _debounceTimer?.cancel();
-
-    // ✅ 设置新的防抖定时器，延迟同步
     _debounceTimer = Timer(_debounceDuration, () {
       _syncImmediately();
     });
@@ -169,33 +153,28 @@ class WhiteboardCollabAdapter {
 
   /// 立即同步到 Collab 后端（模仿 TransactionAdapter.apply()）
   Future<void> _syncImmediately() async {
-    // 如果没有待同步的数据，跳过
-    if (_pendingData.isEmpty || _isSyncing || _disposed) {
+    if (!_hasUnsavedChanges || _isSyncing || _disposed) {
       return;
     }
 
     _isSyncing = true;
+    _hasUnsavedChanges = false;
     _syncData.addAll(_pendingData);
     _syncType = _pendingType;
     _pendingType = "";
-    _pendingData.clear(); // 清空待同步数据
+    _pendingData.clear();
 
-    // ✅ 同时处理 files
     _syncFiles.addAll(_pendingFiles);
     _pendingFiles.clear();
 
     try {
       var success = false;
 
-      // ✅ 始终保存全量数据 (_fullData)，而不是增量数据 (_syncData)
-      // 因为 WhiteboardDataService 和后端目前是覆盖式存储
       if (_syncType == 'update') {
-        // 确保 files 数据被包含在全量数据中
         if (_syncFiles.isNotEmpty) {
           _fullData['files'] = _mergeFiles(_fullData['files'] as Map<String, dynamic>?, _syncFiles);
         }
         
-        // ✅ 使用 print() 确保日志能写入文件
         print('[WhiteboardCollabAdapter] Saving whiteboard data, fullData keys: ${_fullData.keys.toList()}');
         if (_fullData.containsKey('files')) {
           final files = _fullData['files'] as Map<String, dynamic>;
@@ -204,12 +183,11 @@ class WhiteboardCollabAdapter {
         
         success = await _service.saveWhiteboardData(viewId, _fullData);
       } else {
-        // 删除操作可能需要特殊处理，但目前白板通常只有 update
         success = await _service.deleteWhiteboardData(viewId, _syncData);
       }
 
       if (!success) {
-        // 同步失败，重新缓存数据等待下次同步
+        _hasUnsavedChanges = true;
         _pendingData.addAll(_syncData);
         _pendingFiles.addAll(_syncFiles);
         print('[WhiteboardCollabAdapter] ⚠️ Sync failed, will retry');
@@ -217,7 +195,7 @@ class WhiteboardCollabAdapter {
         print('[WhiteboardCollabAdapter] ✅ Sync completed successfully');
       }
     } catch (e) {
-      // 发生错误，重新缓存数据等待下次同步
+      _hasUnsavedChanges = true;
       _pendingData.addAll(_syncData);
       _pendingFiles.addAll(_syncFiles);
       print('[WhiteboardCollabAdapter] ❌ Sync error: $e');
@@ -226,17 +204,35 @@ class WhiteboardCollabAdapter {
       _syncData.clear();
       _syncFiles.clear();
     }
+
+    // 同步期间如果有新变更积累，安排下一次同步
+    if (_hasUnsavedChanges && !_disposed) {
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(_debounceDuration, () {
+        _syncImmediately();
+      });
+    }
   }
 
-  /// ✅ 关键修复：强制立即同步（用于手动保存和 Widget 销毁前）
+  /// 强制立即同步（用于手动保存和 Widget 销毁前）
+  /// 会等待正在进行的同步完成，然后如果有未保存的变更则再次同步
   Future<void> forceSync() async {
     if (_disposed) {
       return;
     }
 
-    // 取消防抖定时器，立即同步
     _debounceTimer?.cancel();
-    await _syncImmediately();
+
+    // 等待正在进行的同步完成（最多等待 5 秒）
+    int attempts = 0;
+    while (_isSyncing && !_disposed && attempts < 100) {
+      await Future.delayed(const Duration(milliseconds: 50));
+      attempts++;
+    }
+
+    if (_hasUnsavedChanges && !_disposed) {
+      await _syncImmediately();
+    }
   }
 
   /// 销毁适配器
