@@ -933,8 +933,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   Offset? _shapeStartPoint;
 
   void _startStroke(Offset position, {int? pageIndex}) {
-    // ✅ 绘制开始时取消所有图片的激活状态（防止手势冲突）
-    CanvasImage.activeListener.notifyListenersPlease();
+    // 只在非选择工具时取消图片激活状态；选择工具下图片需保持激活以支持拖动/缩放/旋转
+    if (_currentToolNotifier.value.toolId != ToolId.select) {
+      CanvasImage.activeListener.notifyListenersPlease();
+    }
 
     // ✅ 设置当前页面索引
     _currentPageIndexNotifier.value = pageIndex ?? 0;
@@ -3858,119 +3860,141 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         child: SizedBox(
           width: pageDisplayWidth,
           height: pageDisplayHeight,
-          // ✅ 使用 DeferredPointerHandler 包裹 Stack，为 DeferPointer 提供上下文
-          child: DeferredPointerHandler(
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Builder(builder: (context) {
-                  LogUtils.debug(
-                      '🦋[HandwritingSaber] _buildSinglePageCanvas: pageIndex=$pageIndex, page.backgroundImage=${page.backgroundImage != null}, coreInfo.backgroundPattern=${_coreInfo.backgroundPattern}, currentBackgroundPattern=$_currentBackgroundPattern, page.strokes=${page.strokes.length}');
-                  return const SizedBox.shrink();
-                }),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Builder(builder: (context) {
+                LogUtils.debug(
+                    '🦋[HandwritingSaber] _buildSinglePageCanvas: pageIndex=$pageIndex, page.backgroundImage=${page.backgroundImage != null}, coreInfo.backgroundPattern=${_coreInfo.backgroundPattern}, currentBackgroundPattern=$_currentBackgroundPattern, page.strokes=${page.strokes.length}');
+                return const SizedBox.shrink();
+              }),
 
-                // ✅ [第1层] 背景层 (只绘制背景色、背景纹理或PDF背景)
-                SaberCoreCanvas(
-                  coreInfo: EditorCoreInfo(
-                    pages: [page], // ✅ 只传递当前页面
-                    backgroundColor: _coreInfo.backgroundColor,
-                    backgroundPattern: _currentBackgroundPattern,
-                    lineHeight: _coreInfo.lineHeight,
-                    lineThickness: _coreInfo.lineThickness,
-                    laserStrokes: [], // 背景层不需要激光笔
-                  ),
-                  drawBackground: true,
-                  drawStrokes: false, // ❌ 不绘制笔迹
-                  // 不需要监听任何变化，只显示静态背景
+              // ✅ [第1层] 背景层 (只绘制背景色、背景纹理或PDF背景)
+              SaberCoreCanvas(
+                coreInfo: EditorCoreInfo(
+                  pages: [page], // ✅ 只传递当前页面
+                  backgroundColor: _coreInfo.backgroundColor,
+                  backgroundPattern: _currentBackgroundPattern,
+                  lineHeight: _coreInfo.lineHeight,
+                  lineThickness: _coreInfo.lineThickness,
+                  laserStrokes: [], // 背景层不需要激光笔
                 ),
+                drawBackground: true,
+                drawStrokes: false, // ❌ 不绘制笔迹
+                // 不需要监听任何变化，只显示静态背景
+              ),
 
-                // ✅ [第2层] 图片层
-                if (page.images.isNotEmpty)
-                  ...page.images.map((image) => _buildImageWidget(
-                        image,
-                        pageIndex,
-                        pageDisplayWidth,
-                        pageDisplayHeight,
-                        scale,
-                      )),
+              // ✅ [第2层] 画布层 (笔迹层)
+              ValueListenableBuilder<String?>(
+                valueListenable: _editingTextBoxIdNotifier,
+                builder: (context, editingTextBoxId, _) {
+                  return ValueListenableBuilder<int?>(
+                    valueListenable: _currentPageIndexNotifier,
+                    builder: (context, currentPageIndex, _) {
+                      return SaberCoreCanvas(
+                        coreInfo: EditorCoreInfo(
+                          pages: [page], // ✅ 只传递当前页面
+                          backgroundColor: _coreInfo.backgroundColor,
+                          backgroundPattern: _currentBackgroundPattern,
+                          lineHeight: _coreInfo.lineHeight,
+                          lineThickness: _coreInfo.lineThickness,
+                          laserStrokes:
+                              _coreInfo.laserStrokes, // ✅ 直接传递引用，不复制！
+                        ),
+                        // ✅ 关键修复：只有当绘制在当前页面时，才监听实时笔迹
+                        currentStrokeListenable: currentPageIndex == pageIndex
+                            ? _currentStrokeNotifier
+                            : null,
+                        repaintListenable: Listenable.merge(
+                            [_repaintTick, _laserStrokesNotifier]),
+                        selectResult: _selectResult != null &&
+                                _selectResult!.pageIndex == pageIndex
+                            ? _selectResult
+                            : null,
+                        isSelecting: _isSelecting &&
+                            _selectResult != null &&
+                            _selectResult!.pageIndex == pageIndex,
+                        pdfTextSelectionRect: _pdfTextSelectionRect != null &&
+                                _pdfTextSelectionPageIndex == pageIndex
+                            ? _pdfTextSelectionRect
+                            : null,
+                        editingTextBoxId:
+                            editingTextBoxId, // ✅ 传递正在编辑的文本框ID，避免重影
+                        drawBackground: false, // ❌ 不绘制背景（已经在底层绘制了）
+                        drawStrokes: true, // ✅ 绘制笔迹
+                      );
+                    },
+                  );
+                },
+              ),
+              // ✅ 文本框编辑层（直接在画布上编辑，使用ValueListenableBuilder避免全局重建）
+              ValueListenableBuilder<String?>(
+                valueListenable: _editingTextBoxIdNotifier,
+                builder: (context, editingTextBoxId, _) {
+                  if (editingTextBoxId != null) {
+                    // ✅ 查找匹配的文本框，使用try-catch避免空列表访问错误
+                    try {
+                      final textBox = page.textBoxes.firstWhere(
+                        (tb) => tb.id == editingTextBoxId,
+                      );
+                      return _buildTextBoxEditor(textBox, pageIndex,
+                          screenWidth, pageDisplayWidth, pageDisplayHeight);
+                    } catch (e) {
+                      // ✅ 如果找不到匹配的文本框（列表为空或没有匹配项），返回空widget
+                      debugPrint(
+                          '🦋[HandwritingSaber] _buildSinglePageCanvas: textBox not found for id=$editingTextBoxId, error=$e');
+                      return const SizedBox.shrink();
+                    }
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+              // ✅ Quill 富文本编辑层（只在文本编辑模式下显示）
+              _buildQuillEditorLayer(page, pageIndex),
 
-                // ✅ [第3层] WebView层
-                if (page.webViews.isNotEmpty)
-                  ...page.webViews.map((webView) => _buildWebViewWidget(
-                        webView,
-                        pageIndex,
-                        scale,
-                      )),
-
-                // ✅ [第4层] 画布层 (笔迹层) - 移动到图片和 WebView 之上
-                ValueListenableBuilder<String?>(
-                  valueListenable: _editingTextBoxIdNotifier,
-                  builder: (context, editingTextBoxId, _) {
-                    return ValueListenableBuilder<int?>(
-                      valueListenable: _currentPageIndexNotifier,
-                      builder: (context, currentPageIndex, _) {
-                        return SaberCoreCanvas(
-                          coreInfo: EditorCoreInfo(
-                            pages: [page], // ✅ 只传递当前页面
-                            backgroundColor: _coreInfo.backgroundColor,
-                            backgroundPattern: _currentBackgroundPattern,
-                            lineHeight: _coreInfo.lineHeight,
-                            lineThickness: _coreInfo.lineThickness,
-                            laserStrokes:
-                                _coreInfo.laserStrokes, // ✅ 直接传递引用，不复制！
+              // ✅ [第3层] 图片+WebView 交互层（位于所有绘图层之上，独立处理手势）
+              // 关键架构：图片/WebView 的 GestureDetector 与绘图 GestureDetector 是平级关系
+              // 它们都在同一个 Stack 内，图片层在上方，用 HitTestBehavior.opaque 拦截触摸
+              // 这样当用户触摸图片区域时，图片的 GestureDetector 优先响应，不与绘图竞争
+              if (page.images.isNotEmpty || page.webViews.isNotEmpty)
+                ValueListenableBuilder<Tool>(
+                  valueListenable: _currentToolNotifier,
+                  builder: (context, currentTool, _) {
+                    return ValueListenableBuilder<String?>(
+                      valueListenable: _selectedImageIdNotifier,
+                      builder: (context, selectedImageId, _) {
+                        return DeferredPointerHandler(
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              // 图片层
+                              if (page.images.isNotEmpty)
+                                ...page.images.map(
+                                  (image) => _buildImageWidget(
+                                    image,
+                                    pageIndex,
+                                    pageDisplayWidth,
+                                    pageDisplayHeight,
+                                    scale,
+                                  ),
+                                ),
+                              // WebView层
+                              if (page.webViews.isNotEmpty)
+                                ...page.webViews.map(
+                                  (webView) => _buildWebViewWidget(
+                                    webView,
+                                    pageIndex,
+                                    scale,
+                                  ),
+                                ),
+                            ],
                           ),
-                          // ✅ 关键修复：只有当绘制在当前页面时，才监听实时笔迹
-                          currentStrokeListenable: currentPageIndex == pageIndex
-                              ? _currentStrokeNotifier
-                              : null,
-                          repaintListenable: Listenable.merge(
-                              [_repaintTick, _laserStrokesNotifier]),
-                          selectResult: _selectResult != null &&
-                                  _selectResult!.pageIndex == pageIndex
-                              ? _selectResult
-                              : null,
-                          isSelecting: _isSelecting &&
-                              _selectResult != null &&
-                              _selectResult!.pageIndex == pageIndex,
-                          pdfTextSelectionRect: _pdfTextSelectionRect != null &&
-                                  _pdfTextSelectionPageIndex == pageIndex
-                              ? _pdfTextSelectionRect
-                              : null,
-                          editingTextBoxId:
-                              editingTextBoxId, // ✅ 传递正在编辑的文本框ID，避免重影
-                          drawBackground: false, // ❌ 不绘制背景（已经在底层绘制了）
-                          drawStrokes: true, // ✅ 绘制笔迹
                         );
                       },
                     );
                   },
                 ),
-                // ✅ 文本框编辑层（直接在画布上编辑，使用ValueListenableBuilder避免全局重建）
-                ValueListenableBuilder<String?>(
-                  valueListenable: _editingTextBoxIdNotifier,
-                  builder: (context, editingTextBoxId, _) {
-                    if (editingTextBoxId != null) {
-                      // ✅ 查找匹配的文本框，使用try-catch避免空列表访问错误
-                      try {
-                        final textBox = page.textBoxes.firstWhere(
-                          (tb) => tb.id == editingTextBoxId,
-                        );
-                        return _buildTextBoxEditor(textBox, pageIndex,
-                            screenWidth, pageDisplayWidth, pageDisplayHeight);
-                      } catch (e) {
-                        // ✅ 如果找不到匹配的文本框（列表为空或没有匹配项），返回空widget
-                        debugPrint(
-                            '🦋[HandwritingSaber] _buildSinglePageCanvas: textBox not found for id=$editingTextBoxId, error=$e');
-                        return const SizedBox.shrink();
-                      }
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
-                // ✅ Quill 富文本编辑层（只在文本编辑模式下显示）
-                _buildQuillEditorLayer(page, pageIndex),
-              ],
-            ),
+            ],
           ),
         ),
       ),
