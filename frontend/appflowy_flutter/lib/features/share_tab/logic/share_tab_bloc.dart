@@ -4,6 +4,7 @@ import 'package:appflowy/core/notification/folder_notification.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/data/repositories/share_with_user_repository.dart';
+import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_event.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_state.dart';
 import 'package:appflowy/features/util/extensions.dart';
@@ -494,8 +495,8 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         Log.info('[ShareTabBloc] 创建邀请链接成功');
         
-        // 刷新共享列表
         _refreshSharedUsers();
+        ShareSectionRefreshNotifier.notify();
       } else {
         Log.warn('[ShareTabBloc] 创建邀请链接失败: HTTP ${response.statusCode}');
       }

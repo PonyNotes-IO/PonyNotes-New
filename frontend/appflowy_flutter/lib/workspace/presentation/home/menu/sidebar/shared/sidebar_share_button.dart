@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
 import 'package:appflowy/features/shared_section/data/repositories/rust_shared_pages_repository_impl.dart';
 import 'package:appflowy/features/shared_section/logic/shared_section_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -38,6 +39,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   String _workspaceId = '';
   DateTime _lastRefreshTime = DateTime.now();
   final Duration _minRefreshInterval = const Duration(seconds: 2);
+  StreamSubscription<void>? _shareSectionRefreshSub;
 
   @override
   void initState() {
@@ -47,12 +49,15 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ??
             '';
     _sharedSectionBloc = _createSharedSectionBloc(_workspaceId);
-    // 初始化时不显示加载状态，直接加载数据
     _loadUserSharedNotes(showLoading: false);
+    _shareSectionRefreshSub = ShareSectionRefreshNotifier.stream.listen((_) {
+      _loadUserSharedNotes(showLoading: false);
+    });
   }
 
   @override
   void dispose() {
+    _shareSectionRefreshSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _sharedSectionBloc.close();
     super.dispose();
