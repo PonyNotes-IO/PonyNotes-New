@@ -466,31 +466,75 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
 
   /// 通过 ViewBackendService 获取协作文档的名称
   /// 用于协作分享链接（非发布文档）的场景
+  /// 优先从本地 Folder 获取，如果失败则从服务端邀请记录获取
   Future<String> _getCollabViewName(String viewId, String workspaceId) async {
+    // 1. 先尝试从本地 Folder 获取
     try {
-      Log.info('[OpenNoteDeepLinkHandler] 尝试通过 ViewBackendService 获取协作文档名称: viewId=$viewId, workspaceId=$workspaceId');
-      
-      // 使用 ViewBackendService.getView 获取视图信息
+      Log.info('[OpenNoteDeepLinkHandler] 尝试通过 ViewBackendService 获取协作文档名称: viewId=$viewId');
       final result = await ViewBackendService.getView(viewId);
-      
-      return result.fold(
-        (view) {
-          if (view.name.isNotEmpty) {
-            Log.info('[OpenNoteDeepLinkHandler] 从 ViewBackendService 获取到标题: ${view.name}');
-            return view.name;
-          }
-          Log.warn('[OpenNoteDeepLinkHandler] ViewBackendService 返回的视图名称为空');
-          return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
-        },
-        (error) {
-          Log.error('[OpenNoteDeepLinkHandler] ViewBackendService 获取视图失败: ${error.msg}');
-          return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
-        },
+      final localName = result.fold(
+        (view) => view.name.isNotEmpty ? view.name : null,
+        (error) => null,
       );
-    } catch (e, stackTrace) {
-      Log.error('[OpenNoteDeepLinkHandler] 通过 ViewBackendService 获取视图名称时出错: $e', stackTrace);
-      return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
+      if (localName != null) {
+        Log.info('[OpenNoteDeepLinkHandler] 从本地 Folder 获取到标题: $localName');
+        return localName;
+      }
+    } catch (e) {
+      Log.warn('[OpenNoteDeepLinkHandler] 本地获取视图名称失败: $e');
     }
+
+    // 2. 本地没有，从服务端 /api/collab/me/received 获取邀请记录中的名称
+    try {
+      final name = await _getViewNameFromInviteApi(viewId);
+      if (name != null && name.isNotEmpty) {
+        Log.info('[OpenNoteDeepLinkHandler] 从服务端邀请记录获取到标题: $name');
+        return name;
+      }
+    } catch (e) {
+      Log.warn('[OpenNoteDeepLinkHandler] 从服务端邀请记录获取名称失败: $e');
+    }
+
+    return LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
+  }
+
+  /// 从服务端邀请记录 API 获取文档名称
+  Future<String?> _getViewNameFromInviteApi(String viewId) async {
+    final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+    final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+    if (baseUrl.isEmpty) return null;
+
+    final rawToken = await _getAuthTokenFromUserService();
+    final accessToken = _extractAccessToken(rawToken);
+    if (accessToken == null || accessToken.isEmpty) return null;
+
+    final uri = Uri.parse(baseUrl).replace(path: '/api/collab/me/received');
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+    ).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) return null;
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) return null;
+
+    final data = decoded['data'];
+    if (data is! List) return null;
+
+    for (final item in data) {
+      if (item is Map<String, dynamic>) {
+        final oid = (item['oid'] ?? '').toString();
+        if (oid == viewId) {
+          final name = (item['name'] ?? '').toString();
+          return name.isNotEmpty ? name : null;
+        }
+      }
+    }
+    return null;
   }
 
   /// 调用 receive_published_collab API 接收发布的文档
