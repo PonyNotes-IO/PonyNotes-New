@@ -121,7 +121,8 @@ class _ResizableDividerState extends State<ResizableDivider> {
                   ]
                 : null,
           ),
-          child: Center(
+          child: Align(
+            alignment: Alignment.centerLeft,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 100),
               width: _isDragging || _isHovered ? 3.0 : 1.0,

@@ -438,6 +438,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                   initialLeftWidth: _leftPanelWidth,
                   minLeftWidth: _minLeftWidth,
                   maxLeftWidth: _maxLeftWidth,
+                  dividerWidth: 1.0,
                   onResize: (newWidth) {
                     setState(() {
                       _leftPanelWidth = newWidth;
@@ -576,7 +577,8 @@ class _SpaceDocumentList extends StatelessWidget {
         '[SpaceHub] _SpaceDocumentList building, spaceBloc: ${spaceBloc != null}, spaceView: ${spaceView.name} (${spaceView.id})');
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12),
+      // 仅保留左侧留白，避免右侧产生与分割线之间的空白带
+      margin: const EdgeInsets.only(left: 12),
       child: Column(
         mainAxisSize: MainAxisSize.max,
         crossAxisAlignment: CrossAxisAlignment.stretch,
