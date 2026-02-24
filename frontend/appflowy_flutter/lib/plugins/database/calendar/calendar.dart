@@ -506,7 +506,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: Text('新建日记页'),
+              title: Text('新建笔记页'),
               content: TextField(
                 onChanged: (value) {
                   documentTitle = value;
@@ -930,7 +930,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 children: [
                   Icon(Icons.book, size: 18),
                   SizedBox(width: 8),
-                  Text('新建日记页', style: TextStyle(fontSize: 14)),
+                  Text('新建笔记页', style: TextStyle(fontSize: 14)),
                 ],
               ),
             ),

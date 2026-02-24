@@ -645,7 +645,7 @@ class _SpaceDocumentList extends StatelessWidget {
                     openAfterCreate: false, // 不自动打开新标签页
                     ext: ext,
                   );
-                  result.fold(
+                  await result.fold(
                     (view) async {
                       // ✅ 关键修复：强制更新 view_type，确保即使在 Space 下创建也能正确识别
                       // 某些情况下 Space 下创建 Document 可能会丢失 extra，这里二次确认
@@ -683,7 +683,7 @@ class _SpaceDocumentList extends StatelessWidget {
                     openAfterCreate: false, // 不自动打开新标签页
                     ext: ext,
                   );
-                  result.fold((view) async {
+                  await result.fold((view) async {
                     // ✅ 关键修复：强制更新 view_type (Fallback)
                     if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
                         try {
@@ -823,7 +823,7 @@ class _SpaceDocumentList extends StatelessWidget {
             itemBuilder: (context, index) {
               if (index == childViews.length) {
                 return AFGhostIconTextButton.primary(
-                  text: '新增日记页', // 临时使用硬编码文本
+                  text: '新增笔记页', // 临时使用硬编码文本
                   mainAxisAlignment: MainAxisAlignment.start,
                   size: AFButtonSize.l,
                   onTap: () => _createNewNote(context),
