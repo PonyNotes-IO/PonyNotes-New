@@ -149,11 +149,12 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
 
       Log.info('[OpenPublishedNoteDeepLinkHandler] 打开发布文档: viewId=$receivedViewId, isReadonly=$isReadonly');
 
-      // 创建最小化的 ViewPB 对象
+      // 创建最小化的 ViewPB 对象，发布文档始终只读
       final minimalView = ViewPB()
         ..id = receivedViewId
         ..name = viewName
-        ..layout = ViewLayoutPB.Document;
+        ..layout = ViewLayoutPB.Document
+        ..isLocked = isReadonly;
 
       // 等待应用初始化完成后再打开视图
       WidgetsBinding.instance.addPostFrameCallback((_) async {

@@ -2,6 +2,7 @@ import 'package:appflowy/features/page_access_level/data/repositories/page_acces
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/util/extensions.dart';
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -63,12 +64,13 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     );
   }
 
-  /// 1. local users have full access
-  /// 2. local workspace users have full access
-  /// 3. page creator has full access
-  /// 4. owner and members in public page have full access
-  /// 5. check the shared users list
-  /// 6. check if the page is a received published collab (should be readonly)
+  /// 权限检查优先级（从高到低）：
+  /// 1. local users → fullAccess
+  /// 2. local workspace → fullAccess
+  /// 3. **接收的发布文档 → readOnly**（必须在 creator 检查之前，因为复制后 createdBy 是接收者自己）
+  /// 4. page creator → fullAccess
+  /// 5. public page owner/member → fullAccess
+  /// 6. shared users list
   @override
   Future<FlowyResult<ShareAccessLevel, FlowyError>> getAccessLevel(
     String pageId,
@@ -89,16 +91,22 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     }
 
     if (user.userAuthType == AuthTypePB.Local) {
-      // Local user can always have full access.
       return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
     if (user.workspaceType == WorkspaceTypePB.LocalW) {
-      // Local workspace can always have full access.
       return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
-    // If the user is the creator of the page, they can always have full access.
+    // 关键修复：接收的发布文档检查必须在 creator 检查之前
+    // 因为 receive_published_collab 复制文档时 created_by 设为了接收者的 uid，
+    // 如果先检查 creator，接收者会被误判为"创建者"而获得 fullAccess
+    final receivedReadonlyResult = await _getReceivedPublishedCollabReadonly(pageId);
+    if (receivedReadonlyResult.isReceived && receivedReadonlyResult.isReadonly) {
+      Log.debug('page $pageId is a received published collab, setting to readonly');
+      return FlowyResult.success(ShareAccessLevel.readOnly);
+    }
+
     final viewResult = await getView(pageId);
     final view = viewResult.fold(
       (s) => s,
@@ -108,15 +116,6 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
-    // Check if the page is a received published collab
-    // If it is, it should be readonly regardless of other permissions
-    final receivedReadonlyResult = await _getReceivedPublishedCollabReadonly(pageId);
-    if (receivedReadonlyResult.isReceived && receivedReadonlyResult.isReadonly) {
-      Log.debug('page $pageId is a received published collab, setting to readonly');
-      return FlowyResult.success(ShareAccessLevel.readOnly);
-    }
-
-    // If the page is public, the user can always have full access.
     final workspaceResult = await getCurrentWorkspace();
     final workspace = workspaceResult.fold(
       (s) => s,
@@ -166,7 +165,6 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
           'failed to get user access level: $failure, in page: $pageId',
         );
 
-        // return the read access level if the user is not found
         return FlowyResult.success(ShareAccessLevel.readOnly);
       },
     );
@@ -231,45 +229,29 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     return (isReceived: false, isReadonly: false);
   }
 
-  /// 获取 auth token
   Future<String?> _getAuthToken() async {
     try {
-      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
-
-      if (baseUrl.isEmpty) {
-        return null;
-      }
-
-      // 构建 API URL: /api/user/me
-      final uri = Uri.parse(baseUrl).replace(
-        path: '/api/user/me',
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      return userResult.fold(
+        (user) {
+          final rawToken = user.authToken;
+          if (rawToken == null || rawToken.isEmpty) return null;
+          try {
+            final decoded = jsonDecode(rawToken);
+            if (decoded is Map<String, dynamic>) {
+              final accessToken = decoded['access_token'] as String?;
+              if (accessToken != null && accessToken.isNotEmpty) {
+                return accessToken;
+              }
+            }
+          } catch (_) {}
+          return rawToken;
+        },
+        (error) {
+          Log.warn('[PageAccessLevel] 获取用户信息失败: $error');
+          return null;
+        },
       );
-
-      final response = await http
-          .get(
-            uri,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          )
-          .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              throw Exception('请求超时');
-            },
-          );
-
-      if (response.statusCode == 200) {
-        final body = jsonDecode(response.body);
-        if (body is Map<String, dynamic>) {
-          final data = body['data'];
-          if (data is Map<String, dynamic>) {
-            final token = data['token'] as String?;
-            return token;
-          }
-        }
-      }
     } catch (e) {
       Log.error('[PageAccessLevel] 获取 token 时出错: $e');
     }

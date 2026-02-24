@@ -7,6 +7,11 @@ import '../../third_party/saber_core/data/extensions/change_notifier_extensions.
 
 /// CanvasImage 组件
 /// 支持图片的选中、拖动、缩放、旋转等交互操作
+///
+/// 架构说明：
+/// - 图片内容通过 Transform.rotate 视觉旋转
+/// - 手势处理和控制手柄在未旋转坐标空间中工作
+/// - 使用 DeferPointer 避免与父级画布手势的竞争
 class CanvasImage extends StatefulWidget {
   const CanvasImage({
     super.key,
@@ -23,8 +28,6 @@ class CanvasImage extends StatefulWidget {
 
   final EditorImage image;
   final Size pageSize;
-
-  /// 页面坐标到屏幕坐标的缩放比例
   final double scale;
   final bool selected;
   final bool readOnly;
@@ -33,7 +36,6 @@ class CanvasImage extends StatefulWidget {
   final void Function(EditorImage image)? onDeleteImage;
   final VoidCallback? onTap;
 
-  /// 当通知时，所有 CanvasImage 的 active 都会被取消
   static var activeListener = ChangeNotifier();
 
   static const double minInteractiveSize = 50;
@@ -43,9 +45,7 @@ class CanvasImage extends StatefulWidget {
   static const double _buttonSize = 26.0;
   static const double _rotationHandleDistance = 36.0;
 
-  /// 旋转吸附阈值（弧度，约5度）
   static const double _snapAngle = 5.0 * math.pi / 180.0;
-
   static const List<double> _snapAngles = [
     0,
     math.pi / 4,
@@ -81,6 +81,7 @@ class _CanvasImageState extends State<CanvasImage> {
   }
 
   Rect _panStartRect = Rect.zero;
+  double _panStartRotation = 0.0;
 
   Offset? _rotationCenter;
   double _rotationStartAngle = 0.0;
@@ -171,52 +172,65 @@ class _CanvasImageState extends State<CanvasImage> {
       height: _screenHeight,
       child: IgnorePointer(
         ignoring: widget.readOnly,
-        child: Transform.rotate(
-          angle: image.rotation,
-          child: Stack(
-            clipBehavior: Clip.none,
-            fit: StackFit.expand,
-            children: [
-              _buildImageContent(context, colorScheme),
-              if (widget.selected)
-                ColoredBox(
-                  color: colorScheme.primary.withValues(alpha: 0.15),
+        child: Stack(
+          clipBehavior: Clip.none,
+          fit: StackFit.expand,
+          children: [
+            // [层1] 图片内容 - 视觉旋转（IgnorePointer 不接收手势）
+            IgnorePointer(
+              child: Transform.rotate(
+                angle: image.rotation,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: active
+                          ? colorScheme.primary
+                          : Colors.transparent,
+                      width: active ? 2 : 0,
+                    ),
+                  ),
+                  child: Center(
+                    child: SizedBox(
+                      width: _imgWidth,
+                      height: _imgHeight,
+                      child: _buildImageWidget(),
+                    ),
+                  ),
                 ),
-              if (!widget.readOnly) _buildControls(context, colorScheme),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+              ),
+            ),
 
-  // ──────────────────────── 图片内容层 ────────────────────────
+            // [层2] 选中时显示的遮罩（旋转）
+            if (widget.selected)
+              IgnorePointer(
+                child: Transform.rotate(
+                  angle: image.rotation,
+                  child: ColoredBox(
+                    color: colorScheme.primary.withValues(alpha: 0.15),
+                  ),
+                ),
+              ),
 
-  Widget _buildImageContent(BuildContext context, ColorScheme colorScheme) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        active = !active;
-        widget.onTap?.call();
-      },
-      onLongPress: active ? _showOptionsMenu : null,
-      onSecondaryTap: active ? _showOptionsMenu : null,
-      onPanStart: active ? _onMovePanStart : null,
-      onPanUpdate: active ? _onMovePanUpdate : null,
-      onPanEnd: active ? _onMovePanEnd : null,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: active ? colorScheme.primary : Colors.transparent,
-            width: active ? 2 : 0,
-          ),
-        ),
-        child: Center(
-          child: SizedBox(
-            width: _imgWidth,
-            height: _imgHeight,
-            child: _buildImageWidget(),
-          ),
+            // [层3] 移动手势层（不旋转，DeferPointer 避免父级竞争）
+            DeferPointer(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  active = !active;
+                  widget.onTap?.call();
+                },
+                onLongPress: active ? _showOptionsMenu : null,
+                onSecondaryTap: active ? _showOptionsMenu : null,
+                onPanStart: active ? _onMovePanStart : null,
+                onPanUpdate: active ? _onMovePanUpdate : null,
+                onPanEnd: active ? _onMovePanEnd : null,
+                child: const SizedBox.expand(),
+              ),
+            ),
+
+            // [层4] 控制手柄（不旋转）
+            if (!widget.readOnly) _buildControls(context, colorScheme),
+          ],
         ),
       ),
     );
@@ -252,6 +266,7 @@ class _CanvasImageState extends State<CanvasImage> {
 
   void _onMovePanStart(DragStartDetails details) {
     _panStartRect = widget.image.dstRect;
+    _panStartRotation = widget.image.rotation;
   }
 
   void _onMovePanUpdate(DragUpdateDetails details) {
@@ -286,7 +301,7 @@ class _CanvasImageState extends State<CanvasImage> {
   }
 
   void _onMovePanEnd(DragEndDetails details) {
-    _notifyMoveIfChanged();
+    _notifyChangeIfNeeded();
   }
 
   // ──────────────────────── 控制手柄层 ────────────────────────
@@ -318,8 +333,8 @@ class _CanvasImageState extends State<CanvasImage> {
       }
     }
 
-    handles.add(_buildRotationHandle(colorScheme, sw, sh));
-    handles.add(_buildDeleteButton(context, colorScheme, sw));
+    handles.add(_buildRotationHandle(colorScheme, sw));
+    handles.add(_buildDeleteButton(context, colorScheme));
     handles.add(_buildQuickRotateButton(colorScheme));
 
     return Stack(clipBehavior: Clip.none, children: handles);
@@ -344,9 +359,10 @@ class _CanvasImageState extends State<CanvasImage> {
           behavior: HitTestBehavior.opaque,
           onPanStart: (_) {
             _panStartRect = widget.image.dstRect;
+            _panStartRotation = widget.image.rotation;
           },
           onPanUpdate: (details) => _onResizePanUpdate(details, hx, hy),
-          onPanEnd: (_) => _notifyMoveIfChanged(),
+          onPanEnd: (_) => _notifyChangeIfNeeded(),
           child: MouseRegion(
             cursor: _resizeCursor(hx, hy),
             child: Container(
@@ -397,7 +413,6 @@ class _CanvasImageState extends State<CanvasImage> {
       newHeight += localDy;
     }
 
-    // 角点手柄保持宽高比
     if (hx != 0 && hy != 0 && rect.height > 0) {
       final aspectRatio = rect.width / rect.height;
       if (newWidth / newHeight > aspectRatio) {
@@ -440,11 +455,7 @@ class _CanvasImageState extends State<CanvasImage> {
 
   // ──────────────────────── 旋转手柄 ────────────────────────
 
-  Widget _buildRotationHandle(
-    ColorScheme colorScheme,
-    double sw,
-    double sh,
-  ) {
+  Widget _buildRotationHandle(ColorScheme colorScheme, double sw) {
     final hs = CanvasImage._handleSize;
     final dist = CanvasImage._rotationHandleDistance;
 
@@ -495,8 +506,10 @@ class _CanvasImageState extends State<CanvasImage> {
 
   void _onRotationPanStart(DragStartDetails details) {
     _panStartRect = widget.image.dstRect;
+    _panStartRotation = widget.image.rotation;
     _rotationStartAngle = widget.image.rotation;
 
+    // 图片中心的全局位置（Positioned widget 的中心）
     final box = context.findRenderObject() as RenderBox?;
     if (box != null) {
       _rotationCenter = box.localToGlobal(
@@ -542,16 +555,12 @@ class _CanvasImageState extends State<CanvasImage> {
   }
 
   void _onRotationPanEnd(DragEndDetails details) {
-    _notifyMoveIfChanged();
+    _notifyChangeIfNeeded();
   }
 
   // ──────────────────────── 删除按钮 ────────────────────────
 
-  Widget _buildDeleteButton(
-    BuildContext context,
-    ColorScheme colorScheme,
-    double sw,
-  ) {
+  Widget _buildDeleteButton(BuildContext context, ColorScheme colorScheme) {
     final bs = CanvasImage._buttonSize;
     return Positioned(
       right: -bs / 2,
@@ -613,19 +622,20 @@ class _CanvasImageState extends State<CanvasImage> {
 
   void _quickRotate90() {
     _panStartRect = widget.image.dstRect;
+    _panStartRotation = widget.image.rotation;
     var newRotation = widget.image.rotation + math.pi / 2;
     if (newRotation > math.pi) {
       newRotation -= 2 * math.pi;
     }
     widget.image.rotation = newRotation;
-    _notifyMoveIfChanged();
+    _notifyChangeIfNeeded();
   }
 
   // ──────────────────────── 通用工具方法 ────────────────────────
 
-  void _notifyMoveIfChanged() {
+  void _notifyChangeIfNeeded() {
     if (_panStartRect == widget.image.dstRect &&
-        _rotationStartAngle == widget.image.rotation) {
+        _panStartRotation == widget.image.rotation) {
       return;
     }
 
@@ -639,12 +649,13 @@ class _CanvasImageState extends State<CanvasImage> {
       ),
     );
     _panStartRect = Rect.zero;
+    _panStartRotation = widget.image.rotation;
   }
 
   void _showOptionsMenu() {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
+      builder: (ctx) => Container(
         height: 100,
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -655,7 +666,7 @@ class _CanvasImageState extends State<CanvasImage> {
               label: '删除',
               color: Colors.red,
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(ctx);
                 _showDeleteConfirm(context);
               },
             ),
@@ -663,7 +674,7 @@ class _CanvasImageState extends State<CanvasImage> {
               icon: Icons.rotate_90_degrees_cw_outlined,
               label: '旋转90°',
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(ctx);
                 _quickRotate90();
               },
             ),
@@ -671,10 +682,11 @@ class _CanvasImageState extends State<CanvasImage> {
               icon: Icons.restart_alt,
               label: '重置旋转',
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(ctx);
                 _panStartRect = widget.image.dstRect;
+                _panStartRotation = widget.image.rotation;
                 widget.image.rotation = 0.0;
-                _notifyMoveIfChanged();
+                _notifyChangeIfNeeded();
               },
             ),
           ],
