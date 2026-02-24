@@ -55,6 +55,9 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
 
   Future<void> _openInviteDialog(BuildContext context) async {
     AFRolePB dialogSelectedRole = _selectedRole;
+    final memberBloc = context.read<WorkspaceMemberBloc>();
+    final currentUser = memberBloc.userProfile;
+    final existingMembers = memberBloc.state.members;
 
     await showDialog(
       context: context,
@@ -67,6 +70,45 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
         bool hasSearched = false;
 
         return StatefulBuilder(builder: (dialogCtx, setStateDialog) {
+          String normalizeIdentifier(String value) {
+            return value
+                .replaceAll(
+                    RegExp(r'[\u200B-\u200D\uFEFF\u200E\u200F\u00A0]'), '')
+                .trim()
+                .toLowerCase();
+          }
+
+          bool isCurrentLoginUser(SharedUser user) {
+            final userName = normalizeIdentifier(user.name);
+            final userEmail = normalizeIdentifier(user.email);
+            final currentName = normalizeIdentifier(currentUser.name);
+            final currentEmail = normalizeIdentifier(currentUser.email);
+            return (userName.isNotEmpty && userName == currentName) ||
+                (userEmail.isNotEmpty && userEmail == currentEmail);
+          }
+
+          bool isAlreadyWorkspaceMember(SharedUser user) {
+            final userName = normalizeIdentifier(user.name);
+            final userEmail = normalizeIdentifier(user.email);
+            return existingMembers.any((member) {
+              final memberName = normalizeIdentifier(member.name);
+              final memberEmail = normalizeIdentifier(member.email);
+              return (userName.isNotEmpty && userName == memberName) ||
+                  (userEmail.isNotEmpty && userEmail == memberEmail);
+            });
+          }
+
+          bool isAlreadySelected(SharedUser user) {
+            final userName = normalizeIdentifier(user.name);
+            final userEmail = normalizeIdentifier(user.email);
+            return selectedUsers.any((selected) {
+              final selectedName = normalizeIdentifier(selected.name);
+              final selectedEmail = normalizeIdentifier(selected.email);
+              return (userName.isNotEmpty && userName == selectedName) ||
+                  (userEmail.isNotEmpty && userEmail == selectedEmail);
+            });
+          }
+
           Future<void> performSearch(String q) async {
             // Normalize common invisible characters copied from DB, then trim
             final normalized = q
@@ -128,7 +170,18 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
             }
 
             setStateDialog(() {
-              searchResults = users;
+              searchResults = users.where((user) {
+                if (isCurrentLoginUser(user)) {
+                  return false;
+                }
+                if (isAlreadyWorkspaceMember(user)) {
+                  return false;
+                }
+                if (isAlreadySelected(user)) {
+                  return false;
+                }
+                return true;
+              }).toList();
               isSearching = false;
             });
 
