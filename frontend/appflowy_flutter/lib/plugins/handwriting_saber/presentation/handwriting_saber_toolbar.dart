@@ -39,8 +39,6 @@ class HandwritingSaberToolbar extends StatelessWidget {
     this.textEditingMode = false, // ✅ 文本编辑模式标志
     this.onToggleTextEditingMode, // ✅ 切换文本编辑模式回调
     this.quillFocus, // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
-    this.isFullWindow = false, // ✅ 是否处于全窗口模式
-    this.onToggleFullWindow, // ✅ 切换全窗口模式回调
     this.showPageManager = false, // ✅ 是否显示页面管理器
     this.onTogglePageManager, // ✅ 切换页面管理器显示回调
   });
@@ -70,8 +68,6 @@ class HandwritingSaberToolbar extends StatelessWidget {
   final bool textEditingMode; // ✅ 文本编辑模式标志
   final VoidCallback? onToggleTextEditingMode; // ✅ 切换文本编辑模式回调
   final QuillStruct? quillFocus; // ✅ 当前焦点的 Quill 结构（用于显示 Quill 工具栏）
-  final bool isFullWindow; // ✅ 是否处于全窗口模式
-  final VoidCallback? onToggleFullWindow; // ✅ 切换全窗口模式回调
   final bool showPageManager; // ✅ 是否显示页面管理器
   final VoidCallback? onTogglePageManager; // ✅ 切换页面管理器显示回调
 
@@ -89,63 +85,82 @@ class HandwritingSaberToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ✅ 主工具栏
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-                width: 1,
+    final compactTheme = Theme.of(context).copyWith(
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const EdgeInsets.all(4),
+          minimumSize: const Size(30, 30),
+        ),
+      ),
+    );
+
+    return Theme(
+      data: compactTheme,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ✅ 主工具栏
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              border: Border(
+                bottom: BorderSide(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outline
+                      .withValues(alpha: 0.2),
+                  width: 1,
+                ),
               ),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          // ✅ 使用SingleChildScrollView包裹整个工具栏，确保所有内容都可以横向滚动
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ✅ 撤销/恢复按钮
-                _buildUndoRedoButtons(),
-                _buildDivider(),
-                // ✅ 工具选择（分组显示）
-                _buildToolSelectorGrouped(),
-                // ✅ 分隔线
-                _buildDivider(),
-                // ✅ 颜色选择
-                _buildColorSelector(),
-                // ✅ 填充颜色选择（仅形状工具显示）
-                if (_isShapeTool(currentTool.toolId) && onFillColorChanged != null) ...[
-                  const SizedBox(width: 8),
-                  _buildFillColorSelector(),
-                ],
-                // ✅ 分隔线
-                _buildDivider(),
-                // ✅ 粗细调整
-                _buildStrokeWidthSelector(),
-                // ✅ 分隔线
-                _buildDivider(),
-                // ✅ 其他工具（PDF导入、背景模式、文本编辑）
-                _buildOtherToolsSection(),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
               ],
             ),
+            // ✅ 使用SingleChildScrollView包裹整个工具栏，确保所有内容都可以横向滚动
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ✅ 撤销/恢复按钮
+                  _buildUndoRedoButtons(),
+                  _buildDivider(),
+                  // ✅ 工具选择（分组显示）
+                  _buildToolSelectorGrouped(),
+                  // ✅ 分隔线
+                  _buildDivider(),
+                  // ✅ 颜色选择
+                  _buildColorSelector(),
+                  // ✅ 填充颜色选择（仅形状工具显示）
+                  if (_isShapeTool(currentTool.toolId) &&
+                      onFillColorChanged != null) ...[
+                    const SizedBox(width: 8),
+                    _buildFillColorSelector(),
+                  ],
+                  // ✅ 分隔线
+                  _buildDivider(),
+                  // ✅ 粗细调整
+                  _buildStrokeWidthSelector(),
+                  // ✅ 分隔线
+                  _buildDivider(),
+                  // ✅ 其他工具（PDF导入、背景模式、文本编辑）
+                  _buildOtherToolsSection(),
+                ],
+              ),
+            ),
           ),
-        ),
-        // ✅ Quill 富文本工具栏（只在文本编辑模式下显示）
-        _buildQuillToolbar(context),
-      ],
+          // ✅ Quill 富文本工具栏（只在文本编辑模式下显示）
+          _buildQuillToolbar(context),
+        ],
+      ),
     );
   }
   
@@ -154,8 +169,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
     return Builder(
       builder: (context) => Container(
         width: 1,
-        height: 32,
-        margin: const EdgeInsets.symmetric(horizontal: 6),
+        height: 28,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
         color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
       ),
     );
@@ -183,12 +198,12 @@ class HandwritingSaberToolbar extends StatelessWidget {
             Tooltip(
               message: '导入图片',
               child: IconButton(
-                icon: const Icon(FontAwesomeIcons.image, size: 20),
+                icon: const Icon(FontAwesomeIcons.image, size: 18),
                 onPressed: onImportImage,
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(4),
                 constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
+                  minWidth: 34,
+                  minHeight: 34,
                 ),
               ),
             ),
@@ -197,12 +212,12 @@ class HandwritingSaberToolbar extends StatelessWidget {
             Tooltip(
               message: '导入 PDF',
               child: IconButton(
-                icon: const Icon(FontAwesomeIcons.filePdf, size: 20),
+                icon: const Icon(FontAwesomeIcons.filePdf, size: 18),
                 onPressed: onImportPdf,
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(4),
                 constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
+                  minWidth: 34,
+                  minHeight: 34,
                 ),
               ),
             ),
@@ -230,12 +245,12 @@ class HandwritingSaberToolbar extends StatelessWidget {
             Tooltip(
               message: '嵌入网页',
               child: IconButton(
-                icon: const Icon(FontAwesomeIcons.globe, size: 20),
+                icon: const Icon(FontAwesomeIcons.globe, size: 18),
                 onPressed: onInsertWebView,
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(4),
                 constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
+                  minWidth: 34,
+                  minHeight: 34,
                 ),
               ),
             ),
@@ -247,49 +262,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
                   _buildDivider(),
                   _buildPageManagerButton(context),
                 ],
-                if (onToggleFullWindow != null) ...[
-                  _buildDivider(),
-                  _buildFullWindowButton(context),
-                ],
         ],
-      ),
-    );
-  }
-
-  /// ✅ 构建全窗口切换按钮
-  Widget _buildFullWindowButton(BuildContext context) {
-    final theme = Theme.of(context);
-    return Tooltip(
-      message: isFullWindow ? '退出全窗口显示' : '全窗口显示',
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest
-              .withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: IconButton(
-          iconSize: 18,
-          padding: const EdgeInsets.all(8),
-          constraints: const BoxConstraints(
-            minWidth: 40,
-            minHeight: 40,
-          ),
-          icon: Icon(
-            isFullWindow
-                ? Icons.fullscreen_exit_rounded
-                : Icons.fullscreen_rounded,
-            color: theme.colorScheme.onSurface,
-          ),
-          onPressed: onToggleFullWindow,
-        ),
       ),
     );
   }
@@ -547,10 +520,10 @@ class HandwritingSaberToolbar extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             onTap: () => onToolChanged(tool),
             child: Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(
-                minWidth: 32,
-                minHeight: 32,
+                minWidth: 28,
+                minHeight: 28,
               ),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(4),
@@ -579,7 +552,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
       // Material Symbols 图标
       return Icon(
         icon as IconData,
-        size: 20,
+        size: 18,
         color: iconColor,
       );
     } else {
@@ -732,7 +705,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             SizedBox(
-              width: 120,
+              width: 96,
               child: Slider(
                 value: clampedWidth,
                 min: 1,
@@ -1008,12 +981,12 @@ class HandwritingSaberToolbar extends StatelessWidget {
           Tooltip(
             message: '撤销',
             child: IconButton(
-              icon: const Icon(Icons.undo, size: 20),
+              icon: const Icon(Icons.undo, size: 18),
               onPressed: canUndo ? onUndo : null,
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(
-                minWidth: 40,
-                minHeight: 40,
+                minWidth: 34,
+                minHeight: 34,
               ),
               color: canUndo
                   ? Theme.of(context).colorScheme.onSurface
@@ -1024,12 +997,12 @@ class HandwritingSaberToolbar extends StatelessWidget {
           Tooltip(
             message: '恢复',
             child: IconButton(
-              icon: const Icon(Icons.redo, size: 20),
+              icon: const Icon(Icons.redo, size: 18),
               onPressed: canRedo ? onRedo : null,
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(
-                minWidth: 40,
-                minHeight: 40,
+                minWidth: 34,
+                minHeight: 34,
               ),
               color: canRedo
                   ? Theme.of(context).colorScheme.onSurface
@@ -1078,7 +1051,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
                     ));
                   },
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                     child: _getDashStyleIcon(currentDashStyle ?? DashStyle.solid, context),
                   ),
                 ),
@@ -1154,7 +1127,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
                   ),
                 ],
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1211,7 +1184,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
                     ));
                   },
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                     child: _getArrowStyleIcon(currentArrowStyle ?? ArrowStyle.filled),
                   ),
                 ),
@@ -1305,7 +1278,7 @@ class HandwritingSaberToolbar extends StatelessWidget {
                   ),
                 ],
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

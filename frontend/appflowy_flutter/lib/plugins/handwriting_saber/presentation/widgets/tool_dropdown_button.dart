@@ -105,10 +105,10 @@ class ToolDropdownButton extends StatelessWidget {
               ),
               onTap: () => onToolChanged(selectedOption.tool),
               child: Padding(
-                padding: const EdgeInsets.all(6),
+                padding: const EdgeInsets.all(4),
                 child: FaIcon(
                   displayIcon,
-                  size: 16,
+                  size: 14,
                   color: isSelected
                       ? Theme.of(context).colorScheme.onPrimaryContainer
                       : Theme.of(context).colorScheme.onSurface,
@@ -134,7 +134,7 @@ class ToolDropdownButton extends StatelessWidget {
                     children: [
                       FaIcon(
                         option.icon,
-                        size: 16,
+                        size: 14,
                         color: isOptionSelected
                             ? Theme.of(ctx).colorScheme.primary
                             : Theme.of(ctx).colorScheme.onSurface,
@@ -153,7 +153,7 @@ class ToolDropdownButton extends StatelessWidget {
                         const SizedBox(width: 8),
                         Icon(
                           Icons.check,
-                          size: 16,
+                          size: 14,
                           color: Theme.of(ctx).colorScheme.primary,
                         ),
                       ],
@@ -162,10 +162,10 @@ class ToolDropdownButton extends StatelessWidget {
                 );
               }).toList(),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
                 child: Icon(
                   Icons.arrow_drop_down,
-                  size: 16,
+                  size: 14,
                   color: isSelected
                       ? Theme.of(context).colorScheme.onPrimaryContainer
                       : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),

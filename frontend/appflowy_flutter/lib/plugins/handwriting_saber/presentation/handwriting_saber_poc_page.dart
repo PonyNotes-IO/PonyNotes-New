@@ -4,9 +4,9 @@ import 'dart:io' show File;
 import 'dart:math' as math;
 
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
-import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:defer_pointer/defer_pointer.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -4971,6 +4971,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         },
         child: Column(
           children: [
+            const VSpace(40),
             // ✅ 工具栏（移除状态提示区域）
             ValueListenableBuilder<Tool>(
               valueListenable: _currentToolNotifier,
@@ -4988,13 +4989,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                               valueListenable: _textEditingModeNotifier,
                               builder: (ctx3, textEditingMode, _) {
                                 return ValueListenableBuilder<bool>(
-                                  valueListenable:
-                                      FullWindowController.isFullWindow,
-                                  builder: (context, isFullWindow, __) {
-                                    return ValueListenableBuilder<bool>(
-                                      valueListenable: _showPageManagerNotifier,
-                                      builder: (context, showPageManager, ___) {
-                                        return HandwritingSaberToolbar(
+                                  valueListenable: _showPageManagerNotifier,
+                                  builder: (context, showPageManager, ___) {
+                                    return HandwritingSaberToolbar(
                                           currentTool: currentTool,
                                           onToolChanged: _onToolChanged,
                                           currentBackgroundPattern:
@@ -5038,17 +5035,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
                                               _toggleTextEditingMode, // ✅ 切换文本编辑模式回调
                                           quillFocus:
                                               _getActiveQuillStruct(), // ✅ 获取当前活动的 Quill 结构（可能来自页面或文本框）
-                                          isFullWindow:
-                                              isFullWindow, // ✅ 全窗口状态（与全局控制器同步）
-                                          onToggleFullWindow:
-                                              FullWindowController
-                                                  .toggle, // ✅ 全窗口切换回调
                                           showPageManager:
                                               showPageManager, // ✅ 页面管理器显示状态
                                           onTogglePageManager:
                                               _togglePageManager, // ✅ 切换页面管理器回调
-                                        );
-                                      },
                                     );
                                   },
                                 );

@@ -10,6 +10,7 @@ import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
@@ -176,6 +177,26 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
           ),
           const HSpace(4),
           MoreViewActions(view: view),
+          const HSpace(10),
+          ValueListenableBuilder<bool>(
+            valueListenable: FullWindowController.isFullWindow,
+            builder: (context, isFullWindow, _) {
+              return FlowyIconButton(
+                width: 28,
+                height: 28,
+                tooltipText: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+                radius: const BorderRadius.all(Radius.circular(999)),
+                icon: Icon(
+                  isFullWindow
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                onPressed: FullWindowController.toggle,
+              );
+            },
+          ),
         ],
       ),
     );
