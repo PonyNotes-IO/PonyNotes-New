@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
@@ -13,6 +14,7 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../../../generated/flowy_svgs.g.dart';
 import '../ai_welcome_theme.dart';
 import '../../services/image_service.dart';
 import '../../models/chat_image.dart';
@@ -808,7 +810,7 @@ class _AIInputAreaState extends State<AIInputArea> {
     // 有功能开关开启时禁用附件上传
     final isDisabled = _hasFeatureEnabled;
     final isDisabledReason = isDisabled ? '开启深度思考或联网搜索后不支持上传附件' : null;
-
+    final theme = AppFlowyTheme.of(context);
     return FlowyTooltip(
       message: isDisabledReason ??
           (hasAttachments ? '已添加 ${_attachments.length} 个附件' : '上传附件（支持图片和文件）'),
@@ -829,18 +831,16 @@ class _AIInputAreaState extends State<AIInputArea> {
                 child: FlowySvg(
                   // 根据禁用状态显示不同图标
                   isDisabled
-                      ? const FlowySvgData('assets/flowy_icons/32x/askAHBU.svg')
+                      ? FlowySvgs.askahbu_lg
                       : hasAttachments
-                          ? const FlowySvgData(
-                              'assets/flowy_icons/32x/askAHBU.svg')
-                          : const FlowySvgData(
-                              'assets/flowy_icons/32x/askNAU.svg'),
+                          ? FlowySvgs.askahbu_lg
+                          : FlowySvgs.asknau_lg,
                   size: Size.square(AIWelcomeTheme.iconSize * 0.8),
                   // 禁用时使用灰色（通过 color 参数设置）
                   color: isDisabled
-                      ? Theme.of(context).colorScheme.onSurface.withOpacity(0.4)
+                      ? theme.iconColorScheme.primary.withOpacity(0.4)
                       : null,
-                  blendMode: isDisabled ? BlendMode.srcIn : null,
+                  blendMode: isDisabled ? BlendMode.srcIn : BlendMode.srcIn,
                 ),
               ),
               // 禁用状态遮罩

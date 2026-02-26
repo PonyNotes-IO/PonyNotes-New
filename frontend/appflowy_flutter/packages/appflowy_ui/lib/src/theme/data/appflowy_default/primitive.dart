@@ -59,6 +59,9 @@ class AppFlowyPrimitiveTokens {
   /// 202020
   static Color get neutralBlack20 => Color(0xFF202020);
 
+  /// 2B2B2B
+  static Color get neutralBlack2b => Color(0xFF2B2B2B);
+
   /// #00000099
   static Color get neutralAlphaBlack60 => Color(0x99000000);
 

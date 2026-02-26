@@ -78,10 +78,12 @@ class HomePagePluginWidgetBuilder extends PluginWidgetBuilder
   Widget get leftBarItem => const SizedBox.shrink(); // 移除左侧栏显示的"主页"
 
   @override
-  Widget tabBarItem(String pluginId, [bool shortForm = false]) => const SizedBox.shrink(); // 移除标签栏显示的"主页"
+  Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
+      const SizedBox.shrink(); // 移除标签栏显示的"主页"
 
   @override
-  EdgeInsets get contentPadding => const EdgeInsets.fromLTRB(40, 0, 40, 28); // 只移除顶部内边距，保持左右和底部内边距
+  EdgeInsets get contentPadding =>
+      const EdgeInsets.fromLTRB(40, 0, 40, 28); // 只移除顶部内边距，保持左右和底部内边距
 
   @override
   Widget buildWidget({
@@ -90,7 +92,8 @@ class HomePagePluginWidgetBuilder extends PluginWidgetBuilder
     Map<String, dynamic>? data,
   }) =>
       BlocProvider(
-        create: (context) => RecentViewsBloc()..add(const RecentViewsEvent.initial()),
+        create: (context) =>
+            RecentViewsBloc()..add(const RecentViewsEvent.initial()),
         child: HomePage(userProfile: context.userProfile),
       );
 
@@ -113,18 +116,40 @@ class _HomePageState extends State<HomePage> {
     super.initState();
   }
 
+  // 最近访问卡片头部 5 色方案
+  static const List<Color> _recentHeaderColors = [
+    Color(0x0DE97418),
+    Color(0x0D6EA53B),
+    Color(0x0D4D7DF0),
+    Color(0x0DCC7A50),
+    Color(0x0D8A66D8),
+  ];
+
+  int _recentColorIndex(SectionViewPB sectionView) {
+    final mixed = (sectionView.timestamp.toInt() ^
+            sectionView.item.id.hashCode ^
+            sectionView.item.name.hashCode)
+        .abs();
+    return mixed % _recentHeaderColors.length;
+  }
+
   /// 处理来自AIInputArea的消息发送
   /// 改为创建原生AI Chat视图
-  void _handleMessageSent(String message, AIModel? selectedModel, List<ChatImage>? images, bool enableDeepThinking, bool enableWebSearch) async {
+  void _handleMessageSent(
+      String message,
+      AIModel? selectedModel,
+      List<ChatImage>? images,
+      bool enableDeepThinking,
+      bool enableWebSearch) async {
     if (message.isEmpty) return;
-    
+
     Log.info('🔄 主页: 处理消息发送');
     Log.info('   - 消息: $message');
     Log.info('   - 模型: ${selectedModel?.name} (${selectedModel?.id})');
     Log.info('   - 图片数: ${images?.length ?? 0}');
     Log.info('   - 深度思考: ${enableDeepThinking ? "开启" : "关闭"}');
     Log.info('   - 全网搜索: ${enableWebSearch ? "开启" : "关闭"}');
-    
+
     try {
       // 1. 获取当前workspace ID
       final workspaceId = await AIChatViewService.getCurrentWorkspaceId();
@@ -135,7 +160,7 @@ class _HomePageState extends State<HomePage> {
       }
 
       Log.info('✅ 主页: 获取到workspace ID: $workspaceId');
-      
+
       // 2. 创建并打开原生AI Chat视图
       final view = await AIChatViewService.createAndOpenAIChat(
         parentViewId: workspaceId,
@@ -143,7 +168,7 @@ class _HomePageState extends State<HomePage> {
         selectedModelId: selectedModel?.id,
         enableDeepThinking: enableDeepThinking,
         enableWebSearch: enableWebSearch,
-        initialImages: images,  // 传递图片数据
+        initialImages: images, // 传递图片数据
       );
 
       if (view == null) {
@@ -196,7 +221,7 @@ class _HomePageState extends State<HomePage> {
           context.read<RecentViewsBloc>().add(
                 const RecentViewsEvent.resetRecentViews(),
               );
-          
+
           // 刷新待办计划 - 需要找到 TodoBloc
           // 由于 TodoBloc 在 TodoPlanSection 内部创建，我们需要通过其他方式刷新
           // 这里先刷新最近访问，待办计划的刷新会在 TodoPlanSection 中处理
@@ -205,124 +230,132 @@ class _HomePageState extends State<HomePage> {
         }
       },
       child: Container(
-      color: Theme.of(context).colorScheme.surface,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(0, 80.0, 0, 32.0),
-        child: Column(
-          children: [
-            // 问候语区域 - 右对齐，与头像一起
-            _buildGreetingSection(greeting, userName),
-            const SizedBox(height: 50),
+        color: Theme.of(context).colorScheme.surface,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(90, 80.0, 90, 32.0),
+          child: Column(
+            children: [
+              // 问候语区域 - 右对齐，与头像一起
+              _buildGreetingSection(greeting, userName),
+              const SizedBox(height: 50),
 
-            // 问AI区域标题
-            Container(
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Row(
-                children: [
-                  Image.asset(
-                    'assets/images/home_ai_icon.png',
-                    width: 22,
-                    height: 18,
-                  ),
-                  const SizedBox(width: 8.0),
-                  const Text(
-                    "问AI",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF636363),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // 问AI区域 - 复用AIInputArea组件，为主页定制更宽的显示，并在下方展示使用次数/未订阅状态
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
+              // 问AI区域标题
+              Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Row(
                   children: [
-                    AIInputArea(
-                      onMessageSent: _handleMessageSent,
-                      customWidth: constraints
-                          .maxWidth, // 使用几乎全部可用宽度，只留8px左右边距
-                      customMargin:
-                          const EdgeInsets.symmetric(horizontal: 0.0), // 最小边距
-                      customToolbarPadding: const EdgeInsets.fromLTRB(
-                        20,
-                        15,
-                        20,
-                        13,
-                      ), // 左右边距各20px
-                      customToolbarWidth: constraints.maxWidth -
-                          40, // 工具栏宽度 = 容器宽度 - 左右边距(40)
+                    FlowySvg(
+                      FlowySvgs.home_ai_icon_s,
+                      size: Size(22, 18),
+                      blendMode: null,
+                    ),
+                    const SizedBox(width: 8.0),
+                    const Text(
+                      "问AI",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF636363),
+                      ),
                     ),
                   ],
-                );
-              },
-            ),
-            const SizedBox(height: 50),
-
-            // 最近访问标题
-            Container(
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.access_time,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  ),
-                  const SizedBox(width: 8.0),
-                  const Text(
-                    "最近访问",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF636363),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
 
-            // 最近访问
-            _buildRecentSection(),
-            const SizedBox(height: 50),
-
-            // 待办计划标题
-            Container(
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Row(
-                children: [
-                  FlowySvg(
-                    const FlowySvgData('assets/flowy_icons/20x/home_to_do.svg'),
-                    size: const Size.square(18),
-                    blendMode: null,
-                  ),
-                  const SizedBox(width: 8.0),
-                  const Text(
-                    "待办计划",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFF636363),
-                    ),
-                  ),
-                ],
+              // 问AI区域 - 复用AIInputArea组件，为主页定制更宽的显示，并在下方展示使用次数/未订阅状态
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AIInputArea(
+                        onMessageSent: _handleMessageSent,
+                        customWidth: constraints.maxWidth,
+                        // 使用几乎全部可用宽度，只留8px左右边距
+                        customMargin:
+                            const EdgeInsets.symmetric(horizontal: 0.0),
+                        // 最小边距
+                        customToolbarPadding: const EdgeInsets.fromLTRB(
+                          20,
+                          15,
+                          20,
+                          13,
+                        ),
+                        // 左右边距各20px
+                        customToolbarWidth: constraints.maxWidth -
+                            40, // 工具栏宽度 = 容器宽度 - 左右边距(40)
+                      ),
+                    ],
+                  );
+                },
               ),
-            ),
+              const SizedBox(height: 50),
 
-            // 待办计划
-            TodoPlanSection(
-              workspaceId:
-                  context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId,
-            ),
-          ],
+              // 最近访问标题
+              Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.access_time,
+                      size: 18,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.6),
+                    ),
+                    const SizedBox(width: 8.0),
+                    const Text(
+                      "最近访问",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF636363),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 最近访问
+              _buildRecentSection(),
+              const SizedBox(height: 50),
+
+              // 待办计划标题
+              Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Row(
+                  children: [
+                    FlowySvg(
+                      FlowySvgs.home_to_do_m,
+                      size: const Size.square(18),
+                      blendMode: null,
+                    ),
+                    const SizedBox(width: 8.0),
+                    const Text(
+                      "待办计划",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF636363),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 待办计划
+              TodoPlanSection(
+                workspaceId: context
+                    .read<UserWorkspaceBloc>()
+                    .state
+                    .currentWorkspace
+                    ?.workspaceId,
+              ),
+            ],
           ),
         ),
       ),
@@ -370,7 +403,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-
   Widget _buildRecentSection() {
     return BlocBuilder<RecentViewsBloc, RecentViewsState>(
       builder: (context, state) {
@@ -411,27 +443,29 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 获取或创建"最近访问"空间
-  Future<ViewPB> _getOrCreateRecentAccessSpace(String workspaceId, fixnum.Int64 userId) async {
+  Future<ViewPB> _getOrCreateRecentAccessSpace(
+      String workspaceId, fixnum.Int64 userId) async {
     const recentAccessName = '最近访问';
-    
+
     // 获取工作空间服务
     final workspaceService = WorkspaceService(
       workspaceId: workspaceId,
       userId: userId,
     );
-    
+
     // 获取私有空间和公共空间
     final privateViewsResult = await workspaceService.getPrivateViews();
-    
+
     final privateViews = privateViewsResult.fold(
       (views) => views,
       (error) => throw Exception('获取私有空间失败: $error'),
     );
 
     final allSpaces = privateViews.where((view) => view.isSpace).toList();
-    
+
     // 检查是否已存在"最近访问"空间
-    Log.info('检查私有空间中是否已存在"最近访问"，当前空间: ${allSpaces.map((v) => v.name).toList()}');
+    Log.info(
+        '检查私有空间中是否已存在"最近访问"，当前空间: ${allSpaces.map((v) => v.name).toList()}');
     final existingSpace = allSpaces.firstWhere(
       (space) => space.name == recentAccessName,
       orElse: () => ViewPB(),
@@ -444,7 +478,7 @@ class _HomePageState extends State<HomePage> {
 
     // 在私有空间中创建"最近访问"空间
     Log.info('在私有空间中创建新的"最近访问"空间');
-    
+
     // 创建空间（参考导入笔记的逻辑）
     final spaceExtra = {
       ViewExtKeys.isSpaceKey: true,
@@ -453,7 +487,7 @@ class _HomePageState extends State<HomePage> {
       ViewExtKeys.spacePermissionKey: SpacePermission.private.index,
       ViewExtKeys.spaceCreatedAtKey: DateTime.now().millisecondsSinceEpoch,
     };
-    
+
     final result = await workspaceService.createView(
       name: recentAccessName,
       viewSection: ViewSectionPB.Private,
@@ -476,14 +510,15 @@ class _HomePageState extends State<HomePage> {
     try {
       // 获取当前用户和工作空间信息
       final userResult = await UserBackendService.getCurrentUserProfile();
-      final workspaceResult = await FolderEventGetCurrentWorkspaceSetting().send();
-      
+      final workspaceResult =
+          await FolderEventGetCurrentWorkspaceSetting().send();
+
       final userProfile = userResult.fold((user) => user, (error) => null);
       final workspaceId = workspaceResult.fold(
         (setting) => setting.workspaceId,
         (error) => null,
       );
-      
+
       if (userProfile == null || workspaceId == null || workspaceId.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -498,7 +533,8 @@ class _HomePageState extends State<HomePage> {
       }
 
       // 先获取或创建"最近访问"空间
-      final recentAccessSpace = await _getOrCreateRecentAccessSpace(workspaceId, userProfile.id);
+      final recentAccessSpace =
+          await _getOrCreateRecentAccessSpace(workspaceId, userProfile.id);
 
       // 在"最近访问"空间中创建笔记本视图
       final result = await ViewBackendService.createView(
@@ -512,7 +548,7 @@ class _HomePageState extends State<HomePage> {
         (view) {
           // 成功创建，打开新创建的视图
           _openView(view);
-          
+
           // 显示成功消息
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -523,9 +559,11 @@ class _HomePageState extends State<HomePage> {
               ),
             );
           }
-          
-           // 刷新最近访问列表
-           context.read<RecentViewsBloc>().add(const RecentViewsEvent.fetchRecentViews());
+
+          // 刷新最近访问列表
+          context
+              .read<RecentViewsBloc>()
+              .add(const RecentViewsEvent.fetchRecentViews());
         },
         (error) {
           // 显示错误消息
@@ -558,16 +596,19 @@ class _HomePageState extends State<HomePage> {
   Widget _buildRecentViewCard(SectionViewPB sectionView) {
     final view = sectionView.item;
     final timestamp = sectionView.timestamp;
-    
+    final colorIndex = _recentColorIndex(sectionView);
+    final topHeaderColor = _recentHeaderColors[colorIndex];
+    final theme = AppFlowyTheme.of(context);
+
     return Container(
       width: 132,
       height: 132,
       margin: const EdgeInsets.only(right: 12),
       child: GestureDetector(
         onTap: () => _openView(view),
-        child: Container(
+        child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: theme.surfaceContainerColorScheme.layer01,
             borderRadius: BorderRadius.circular(12.0),
             border: Border.all(
               color: const Color(0xFFE9E9E9),
@@ -582,32 +623,17 @@ class _HomePageState extends State<HomePage> {
                 left: 1,
                 right: 1,
                 child: Container(
-                  height: 37,
+                  height: 30,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE97418).withValues(alpha: 0.05),
+                    color: topHeaderColor.withValues(alpha: 0.15),
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(11),
                       topRight: Radius.circular(11),
                     ),
                   ),
-                  child: Center(
-                    child: Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE97418).withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.description,
-                        size: 14,
-                        color: Color(0xFFE97418),
-                      ),
-                    ),
-                  ),
                 ),
               ),
-              
+
               // 底部名称和时间区域
               Positioned(
                 bottom: 0,
@@ -623,10 +649,10 @@ class _HomePageState extends State<HomePage> {
                       // 标题
                       Text(
                         view.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xFF333333),
+                          color: theme.textColorScheme.primary,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -659,6 +685,23 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
+              Positioned(
+                top: 20,
+                left: 16,
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE97418).withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.description,
+                    size: 14,
+                    color: Color(0xFFE97418),
+                  ),
+                ),
+              )
             ],
           ),
         ),
@@ -671,11 +714,12 @@ class _HomePageState extends State<HomePage> {
     if (timestamp.toInt() == 0) {
       return '未知';
     }
-    
+
     final now = DateTime.now();
-    final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp.toInt() * 1000);
+    final dateTime =
+        DateTime.fromMillisecondsSinceEpoch(timestamp.toInt() * 1000);
     final difference = now.difference(dateTime);
-    
+
     if (difference.inMinutes < 1) {
       return '刚刚';
     } else if (difference.inHours < 1) {
@@ -700,20 +744,20 @@ class _HomePageState extends State<HomePage> {
     if (userProfile == null) {
       return const SizedBox.shrink();
     }
-    
+
     // 检查是否是当前用户创建的视图
-    final isCurrentUser = view.hasCreatedBy() && 
-        view.createdBy == userProfile.id;
-    
+    final isCurrentUser =
+        view.hasCreatedBy() && view.createdBy == userProfile.id;
+
     if (!isCurrentUser) {
       return const SizedBox.shrink();
     }
-    
+
     final iconUrl = userProfile.iconUrl;
     if (iconUrl.isEmpty) {
       return const SizedBox.shrink();
     }
-    
+
     // 检查是否是URL
     if (isURL(iconUrl)) {
       return ClipRRect(
@@ -728,7 +772,7 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     }
-    
+
     // 如果是emoji或其他，使用UserAvatar组件
     return SizedBox(
       width: 15,
@@ -743,15 +787,16 @@ class _HomePageState extends State<HomePage> {
 
   /// 构建"添加笔记本"卡片
   Widget _buildAddNotebookCard() {
+    final theme = AppFlowyTheme.of(context);
     return Container(
       width: 132,
       height: 132,
       margin: const EdgeInsets.only(right: 12),
       child: GestureDetector(
         onTap: _handleAddNotebook,
-        child: Container(
+        child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: theme.surfaceContainerColorScheme.layer01,
             borderRadius: BorderRadius.circular(10.0),
             border: Border.all(
               color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
@@ -776,11 +821,12 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 12),
               Text(
-                "添加笔记本",
+                "新建笔记",
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -794,14 +840,14 @@ class _HomePageState extends State<HomePage> {
   /// 打开视图
   void _openView(ViewPB view) async {
     try {
-       // 使用TabsBloc来打开视图
-       final plugin = view.plugin();
-       context.read<TabsBloc>().add(
-         TabsEvent.openPlugin(
-           plugin: plugin,
-           view: view,
-         ),
-       );
+      // 使用TabsBloc来打开视图
+      final plugin = view.plugin();
+      context.read<TabsBloc>().add(
+            TabsEvent.openPlugin(
+              plugin: plugin,
+              view: view,
+            ),
+          );
     } catch (e) {
       // 显示错误消息
       if (mounted) {
@@ -830,7 +876,8 @@ class _RecentSectionWithArrows extends StatefulWidget {
   final Widget Function() buildAddCard;
 
   @override
-  State<_RecentSectionWithArrows> createState() => _RecentSectionWithArrowsState();
+  State<_RecentSectionWithArrows> createState() =>
+      _RecentSectionWithArrowsState();
 }
 
 class _RecentSectionWithArrowsState extends State<_RecentSectionWithArrows> {
@@ -860,11 +907,11 @@ class _RecentSectionWithArrowsState extends State<_RecentSectionWithArrows> {
     if (!_scrollController.hasClients) {
       return;
     }
-    
+
     final newShowLeft = _scrollController.offset > 10;
     final newShowRight = _scrollController.offset <
         _scrollController.position.maxScrollExtent - 10;
-    
+
     if (newShowLeft != _showLeftArrow || newShowRight != _showRightArrow) {
       setState(() {
         _showLeftArrow = newShowLeft;
@@ -1007,4 +1054,3 @@ class _HomeAIUsageIndicator extends StatelessWidget {
     );
   }
 }
-

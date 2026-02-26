@@ -1,3 +1,4 @@
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/plugins/homepage/application/todo_bloc.dart';
@@ -70,11 +71,12 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: theme.surfaceContainerColorScheme.layer01,
         borderRadius: BorderRadius.circular(10.0),
         border: Border.all(
           color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
@@ -136,7 +138,7 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
               Container(
                 width: dividerWidth,
                 margin: const EdgeInsets.symmetric(horizontal: dividerHorizontalMargin),
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.06),
+                color: theme.borderColorScheme.primary.withOpacity(0.06),
               ),
               Expanded(
                 flex: 1,

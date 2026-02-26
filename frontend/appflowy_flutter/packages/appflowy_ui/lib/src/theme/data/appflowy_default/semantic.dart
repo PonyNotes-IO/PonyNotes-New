@@ -407,7 +407,7 @@ class AppFlowyDefaultTheme implements AppFlowyThemeBuilder {
     );
 
     final surfaceColorScheme = AppFlowySurfaceColorScheme(
-      primary: AppFlowyPrimitiveTokens.neutral900,
+      primary: AppFlowyPrimitiveTokens.neutralBlack20,
       primaryHover: AppFlowyPrimitiveTokens.neutral800,
       layer01: AppFlowyPrimitiveTokens.neutral900,
       layer01Hover: AppFlowyPrimitiveTokens.neutral800,
@@ -423,7 +423,7 @@ class AppFlowyDefaultTheme implements AppFlowyThemeBuilder {
     );
 
     final surfaceContainerColorScheme = AppFlowySurfaceContainerColorScheme(
-      layer01: AppFlowyPrimitiveTokens.neutralBlack20,
+      layer01: AppFlowyPrimitiveTokens.neutralBlack2b,
       layer02: AppFlowyPrimitiveTokens.neutral800,
       layer03: AppFlowyPrimitiveTokens.neutral700,
     );

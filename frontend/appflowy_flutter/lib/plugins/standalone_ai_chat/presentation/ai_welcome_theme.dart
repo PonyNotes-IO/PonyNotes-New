@@ -1,3 +1,4 @@
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 
 /// AI欢迎页面的主题常量，基于设计图精确配置
@@ -5,7 +6,7 @@ import 'package:flutter/material.dart';
 class AIWelcomeTheme {
   /// 动态颜色配置 - 根据当前主题返回相应颜色
   static Color backgroundColor(BuildContext context) =>
-      Theme.of(context).colorScheme.surface;
+      AppFlowyTheme.of(context).surfaceContainerColorScheme.layer01;
   static Color primaryTextColor(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface;
   static Color secondaryTextColor(BuildContext context) =>

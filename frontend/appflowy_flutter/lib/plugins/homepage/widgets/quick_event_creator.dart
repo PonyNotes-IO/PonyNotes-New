@@ -1,3 +1,5 @@
+import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:appflowy/plugins/homepage/application/todo_models.dart';
@@ -5,6 +7,8 @@ import 'package:appflowy/plugins/homepage/application/todo_service.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../generated/flowy_svgs.g.dart';
 // kept no external svg here; using Material Icon for quick create header
 
 /// 快速创建事件/待办的组件
@@ -36,6 +40,10 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final now = DateTime.now();
+    final monthText = '${now.month}月';
+    final dayText = '${now.day}';
     // 简化为：图标 / 标题 / 描述 / 链接按钮（与设计图一致）
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -44,23 +52,43 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: theme.surfaceContainerColorScheme.layer01,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 58,
-                height: 51,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF8D69),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.calendar_today,
-                  size: 28,
-                  color: Colors.white,
+                width: 50,
+                height: 50,
+                child: Stack(
+                  children: [
+                    FlowySvg(
+                      FlowySvgs.image_home_todo_m,
+                      size: Size(50,50),
+                      blendMode: null,
+                    ),
+                    Positioned(
+                        top: 1,
+                        left: 0,
+                        right: 0,
+                        child: FlowyText.regular(
+                            monthText,
+                          textAlign: TextAlign.center,
+                          fontSize: 10,
+                          color: Colors.white,
+                        )),
+                    Positioned(
+                        bottom: 6,
+                        left: 0,
+                        right: 0,
+                        child: FlowyText.regular(
+                            dayText,
+                          textAlign: TextAlign.center,
+                          fontSize: 22,
+                          color: theme.textColorScheme.primary,
+                        )),
+                  ],
                 ),
               ),
               const SizedBox(height: 12),
