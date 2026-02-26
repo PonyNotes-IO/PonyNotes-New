@@ -105,32 +105,19 @@ class WhiteboardDataService {
     String viewId,
     Map<String, dynamic> data,
   ) async {
-    // ✅ 使用 print() 确保日志能写入文件
     print('[Whiteboard] =====================================================');
     print('[Whiteboard] saveWhiteboardData() called for viewId: $viewId');
     print('[Whiteboard] Data keys: ${data.keys.toList()}');
 
-    // ✅ 调试：检查 files 数据
+    // 调试：检查 files 数据
     if (data.containsKey('files') && data['files'] is Map) {
       final files = data['files'] as Map<String, dynamic>;
       print('[Whiteboard] 📸 Files count: ${files.length}');
-      if (files.isNotEmpty) {
-        print('[Whiteboard] 📸 First file key: ${files.keys.first}');
-        final firstFile = files.values.first;
-        if (firstFile is Map) {
-          final firstFileMap = firstFile as Map<String, dynamic>;
-          print('[Whiteboard] 📸 First file has dataURL: ${firstFileMap.containsKey('dataURL')}');
-          if (firstFileMap['dataURL'] is String) {
-            final dataUrl = firstFileMap['dataURL'] as String;
-            print('[Whiteboard] 📸 First file dataURL length: ${dataUrl.length}');
-          }
-        }
-      }
     } else {
       print('[Whiteboard] ⚠️ No files in data!');
     }
 
-    // ✅ 优化：先上传图片到云存储
+    // Step 0: 先上传图片到云存储（把 dataURL 转成云 URL）
     if (data.containsKey('files') && data['files'] is Map) {
       final files = data['files'] as Map<String, dynamic>;
       if (files.isNotEmpty) {
@@ -140,30 +127,79 @@ class WhiteboardDataService {
             files,
             forceUpload: false, // 只上传新的 dataURL，保留已有的 cloud URL
           );
-          // 更新 data 中的 files
           data['files'] = processedFiles;
           print('[Whiteboard] ✅ Images uploaded successfully');
         } catch (e) {
-          print('[Whiteboard] ⚠️ Image upload failed, keeping original dataURL: $e');
-          // 继续保存，不阻止用户操作
+          print('[Whiteboard] ⚠️ Image upload failed: $e');
         }
       }
     }
 
-    // 1. 尝试保存到 Collab 后端
+    // Step 1: 构建用于 Collab 存储的精简数据（去除 base64 dataURL，只保留云 URL）
+    // 这是解决同步失败的核心修复：base64 dataURL 可能高达数百 KB，
+    // 直接存入 Collab 会导致 Yrs CRDT 更新包过大，WebSocket 同步失败。
+    // 精简后只存云 URL，加载时再从云端下载图片。
+    final collabData = _stripDataURLsForCollab(data);
+
     print('[Whiteboard] Step 1: Trying to save to Collab backend...');
     final collabSuccess = await _saveToCollab(
-        viewId, jsonEncode({'type': 'update', 'data': jsonEncode(data)}));
+        viewId, jsonEncode({'type': 'update', 'data': jsonEncode(collabData)}));
     if (collabSuccess) {
       print('[Whiteboard] ✅ Saved to Collab successfully: $viewId');
       return true;
     }
 
-    // 2. 回退到文件系统（向后兼容）
+    // Step 2: 回退到文件系统（向后兼容），文件系统保存完整数据（含 dataURL）
     print('[Whiteboard] ⚠️ Collab save failed, falling back to file system');
     final fileSuccess = await _saveToFile(viewId, data);
     print('[Whiteboard] File save result: $fileSuccess');
     return fileSuccess;
+  }
+
+  /// 构建用于 Collab 存储的精简数据
+  ///
+  /// 核心逻辑：从 files 中去除 base64 dataURL 字段，只保留云存储 URL。
+  /// 这样 Collab 中存储的数据量大幅减小（图片只存元数据+云URL，不存几百KB的base64），
+  /// 从而解决 Collab/WebSocket 同步因数据包过大而失败的问题。
+  /// 加载时由 excalidraw_webview.dart 的 _preprocessFilesForLoading 从云端下载图片。
+  Map<String, dynamic> _stripDataURLsForCollab(Map<String, dynamic> data) {
+    final result = Map<String, dynamic>.from(data);
+
+    if (result.containsKey('files') && result['files'] is Map) {
+      final files = result['files'] as Map<String, dynamic>;
+      final slimFiles = <String, dynamic>{};
+
+      for (final entry in files.entries) {
+        final fileId = entry.key;
+        final fileData = entry.value;
+
+        if (fileData is! Map) {
+          slimFiles[fileId] = fileData;
+          continue;
+        }
+
+        final fileDataMap = Map<String, dynamic>.from(fileData as Map);
+        final hasCloudUrl = fileDataMap.containsKey('url') &&
+            fileDataMap['url'] is String &&
+            (fileDataMap['url'] as String).startsWith('http');
+
+        if (hasCloudUrl) {
+          // 有云 URL：去除 base64 dataURL，只保留云 URL 和元数据
+          fileDataMap.remove('dataURL');
+          slimFiles[fileId] = fileDataMap;
+          print('[Whiteboard] 📦 Storing file $fileId with cloud URL only (removed dataURL)');
+        } else {
+          // 没有云 URL（上传失败或尚未上传）：保留原始数据
+          // 这种情况下同步可能仍会因数据量大而失败，但不丢失数据
+          slimFiles[fileId] = fileDataMap;
+          print('[Whiteboard] ⚠️ File $fileId has no cloud URL, keeping original data');
+        }
+      }
+
+      result['files'] = slimFiles;
+    }
+
+    return result;
   }
 
   /// 保存白板数据（使用 Collab 后端，失败则回退到文件）

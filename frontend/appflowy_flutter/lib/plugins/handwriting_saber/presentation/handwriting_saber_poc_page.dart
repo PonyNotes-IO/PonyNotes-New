@@ -448,6 +448,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // ✅ 预加载所有页面的PDF背景图
       _preloadPdfBackgrounds();
 
+      // ✅ 从云端下载图片资源（跨设备同步后只有云 URL，需要下载字节才能显示）
+      // 异步执行，不阻塞页面加载，下载完成后触发局部刷新
+      unawaited(_downloadAssetsFromCloud());
+
       // ✅ 强制刷新界面，确保加载的数据能正确显示
       if (mounted) {
         setState(() {
@@ -483,8 +487,16 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       return;
     }
     try {
+      // 在序列化前上传所有尚未上传的图片和 PDF 底图到云存储
+      // 这是解决跨设备同步失败的核心修复：
+      // 上传前：图片以原始字节存储 JSON → sbn2 数据可能高达数 MB → Collab 同步失败
+      // 上传后：图片只存云 URL → sbn2 数据极小 → Collab 同步成功
+      await _uploadAssetsToCloud();
+
       final String json = _coreInfo.toJsonString();
       final List<int> bytes = utf8.encode(json);
+      debugPrint('🦋[HandwritingSaber] _saveToStorage: data size = ${bytes.length} bytes');
+
       final bool ok = await _dataService.saveHandwritingSaberData(
         widget.view.id,
         bytes,
@@ -499,7 +511,6 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           _status = ok ? '已保存' : '保存失败';
         }
       } else {
-        // 仅更新内部状态，不触发整页重建
         _status = ok ? '已保存' : '保存失败';
       }
     } catch (e) {
@@ -514,6 +525,86 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       } else {
         _status = '保存失败：$e';
       }
+    }
+  }
+
+  /// 上传所有尚未上传的图片和 PDF 底图到云存储
+  ///
+  /// 遍历所有页面的图片列表和 PDF 背景图片，
+  /// 对于还没有云 URL 的资源，上传并记录 URL。
+  /// 上传后对应的 toJson() 会使用轻量 URL 格式，大幅减少 Collab 同步数据量。
+  Future<void> _uploadAssetsToCloud() async {
+    for (final page in _coreInfo.pages) {
+      // 上传普通图片（PngEditorImage）
+      for (final img in page.images) {
+        if (img is PngEditorImage) {
+          if (img.imageUrl == null || !img.imageUrl!.startsWith('http')) {
+            if (img.imageBytes.isNotEmpty) {
+              debugPrint('🦋[HandwritingSaber] Uploading image ${img.id}...');
+              await img.uploadToCloud();
+            }
+          }
+        }
+      }
+
+      // 上传 PDF 底图
+      final bgImage = page.backgroundImage;
+      if (bgImage != null) {
+        if (bgImage.pdfUrl == null || !bgImage.pdfUrl!.startsWith('http')) {
+          // 只有本地文件路径的 PDF 才需要上传（云 URL 开头的不需要）
+          if (bgImage.pdfFilePath.isNotEmpty &&
+              !bgImage.pdfFilePath.startsWith('http') &&
+              File(bgImage.pdfFilePath).existsSync()) {
+            debugPrint('🦋[HandwritingSaber] Uploading PDF ${bgImage.pdfFilePath}...');
+            await bgImage.uploadToCloud();
+          }
+        }
+      }
+    }
+  }
+
+  /// 从云端下载图片资源（跨设备同步后的加载阶段）
+  ///
+  /// 当从另一台设备同步过来的数据中图片只有云 URL 时（无本地字节），
+  /// 异步下载字节数据后触发界面刷新，确保图片能正确显示。
+  Future<void> _downloadAssetsFromCloud() async {
+    bool hasDownloaded = false;
+
+    for (final page in _coreInfo.pages) {
+      // 下载普通图片
+      for (final img in page.images) {
+        if (img is PngEditorImage) {
+          if (img.imageBytes.isEmpty && img.imageUrl != null && img.imageUrl!.startsWith('http')) {
+            debugPrint('🦋[HandwritingSaber] Downloading image ${img.id} from cloud...');
+            await img.downloadFromCloud();
+            if (img.imageBytes.isNotEmpty) {
+              hasDownloaded = true;
+            }
+          }
+        }
+      }
+
+      // 下载 PDF 底图（如果本地缓存不存在）
+      final bgImage = page.backgroundImage;
+      if (bgImage != null) {
+        if (bgImage.pdfUrl != null && bgImage.pdfUrl!.startsWith('http')) {
+          if (bgImage.pdfFilePath.isEmpty || !File(bgImage.pdfFilePath).existsSync()) {
+            debugPrint('🦋[HandwritingSaber] Downloading PDF from cloud: ${bgImage.pdfUrl}');
+            await bgImage.downloadFromCloud();
+            if (bgImage.pdfFilePath.isNotEmpty) {
+              hasDownloaded = true;
+              // 重置 PDF 加载状态，触发重新加载
+              bgImage.resetLoadStateAndPreload();
+            }
+          }
+        }
+      }
+    }
+
+    // 如果有资源下载完成，刷新页面显示
+    if (hasDownloaded && mounted) {
+      debugPrint('🦋[HandwritingSaber] ✅ Assets downloaded, refreshing UI...');
+      setState(() {});
     }
   }
 

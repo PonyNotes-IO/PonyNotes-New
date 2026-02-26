@@ -64,9 +64,12 @@ class EditorPage {
       'taskListBoxes': taskListBoxes.map((saber_list.TaskListBox t) => t.toJson()).toList(), // ✅ 保存任务列表框列表
       'quill': quill.toJson(), // ✅ 保存 Quill 富文本内容
       // ✅ 保存 PDF 背景图片信息
+      // pdfFilePath 可能是本地路径或云 URL（http/https 开头）
+      // pdfUrl 字段专用于存储云 URL（优先用于跨设备同步）
       'backgroundImage': backgroundImage != null
           ? <String, dynamic>{
               'pdfFilePath': backgroundImage!.pdfFilePath,
+              'pdfUrl': backgroundImage!.pdfUrl, // 云存储 URL（跨设备同步用）
               'pdfPageIndex': backgroundImage!.pdfPageIndex,
               'naturalSize': <String, double>{
                 'width': backgroundImage!.naturalSize.width,
@@ -106,11 +109,16 @@ class EditorPage {
     final bgImageJson = json['backgroundImage'] as Map<String, dynamic>?;
     if (bgImageJson != null) {
       final pdfFilePath = bgImageJson['pdfFilePath'] as String?;
+      // 优先使用 pdfUrl（云存储 URL），没有时回退到 pdfFilePath（本地路径）
+      final pdfUrl = bgImageJson['pdfUrl'] as String?;
       final pdfPageIndex = bgImageJson['pdfPageIndex'] as int? ?? 0;
       final naturalSizeJson = bgImageJson['naturalSize'] as Map<String, dynamic>?;
       final dstRectJson = bgImageJson['dstRect'] as Map<String, dynamic>?;
       
-      if (pdfFilePath != null && naturalSizeJson != null) {
+      // 有云 URL 时使用云 URL，否则使用本地路径
+      final effectivePath = (pdfUrl != null && pdfUrl.isNotEmpty) ? pdfUrl : pdfFilePath;
+      
+      if (effectivePath != null && naturalSizeJson != null) {
         final naturalSize = Size(
           (naturalSizeJson['width'] as num?)?.toDouble() ?? 0,
           (naturalSizeJson['height'] as num?)?.toDouble() ?? 0,
@@ -127,7 +135,8 @@ class EditorPage {
         }
         
         backgroundImage = PdfEditorImage(
-          pdfFilePath: pdfFilePath,
+          pdfFilePath: effectivePath,
+          pdfUrl: pdfUrl,
           pdfPageIndex: pdfPageIndex,
           naturalSize: naturalSize,
           dstRect: dstRect,

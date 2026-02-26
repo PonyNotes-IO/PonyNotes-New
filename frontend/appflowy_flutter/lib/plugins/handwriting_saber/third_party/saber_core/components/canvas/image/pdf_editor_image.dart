@@ -1,8 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:appflowy/plugins/import_page/file_upload_service.dart';
+import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:uuid/uuid.dart';
 import '../../../../../../../util/log_utils.dart';
 
 /// PDF加载状态枚举
@@ -379,18 +387,101 @@ class PdfMultiPageManager {
 }
 
 /// ✅ 简化的 PDF 编辑器图片类，参考 Saber 的 PdfEditorImage
+///
+/// 支持两种存储模式：
+/// 1. 本地路径（pdfFilePath）：本地 PDF 文件，仅当前设备可访问
+/// 2. 云存储（pdfUrl）：PDF 上传至云存储，跨设备可访问
+///
+/// 跨设备同步策略：
+/// - 导入 PDF 时，上传到云存储并保存 pdfUrl
+/// - fromJson 时优先使用 pdfUrl，若为云 URL 则在本地下载缓存后使用
 class PdfEditorImage {
   PdfEditorImage({
     required this.pdfFilePath,
     required this.pdfPageIndex,  // PDF 页面索引（从 0 开始）
     required this.naturalSize,   // PDF 页面的自然尺寸
+    this.pdfUrl,                 // 云存储 URL（跨设备同步用）
+    this.pdfBytes,               // PDF 原始字节（用于云URL模式下的本地缓存）
     this.dstRect,                // 目标矩形（在画布上的位置和大小）
   });
 
-  final String pdfFilePath;      // PDF 文件路径
+  /// PDF 文件路径（本地路径 或 云 URL 本地缓存路径）
+  String pdfFilePath;
+  
+  /// 云存储 URL（优先用于跨设备同步；有此值时 pdfFilePath 可为本地缓存路径）
+  String? pdfUrl;
+  
+  /// PDF 原始字节（用于从云端下载后内存缓存，避免重复下载）
+  Uint8List? pdfBytes;
+  
   final int pdfPageIndex;         // PDF 页面索引（从 0 开始）
   final Size naturalSize;         // PDF 页面的自然尺寸
   Rect? dstRect;                  // 目标矩形（在画布上的位置和大小）
+
+  /// 上传 PDF 到云存储，返回云 URL
+  Future<String?> uploadToCloud() async {
+    if (pdfUrl != null && pdfUrl!.startsWith('http')) {
+      return pdfUrl; // 已上传
+    }
+
+    try {
+      // 读取本地 PDF 文件
+      final file = File(pdfFilePath);
+      if (!file.existsSync()) {
+        Log.error('[PdfEditorImage] PDF file not found: $pdfFilePath');
+        return null;
+      }
+
+      final bytes = await file.readAsBytes();
+      final fileName = 'handwriting_pdf_${const Uuid().v4().substring(0, 8)}.pdf';
+      Log.info('[PdfEditorImage] Uploading PDF: $fileName (${bytes.length} bytes)');
+
+      final url = await FileUploadService.uploadFile(bytes, fileName);
+      pdfUrl = url;
+      Log.info('[PdfEditorImage] ✅ PDF uploaded: $url');
+      return url;
+    } catch (e) {
+      Log.error('[PdfEditorImage] ❌ PDF upload failed: $e');
+      return null;
+    }
+  }
+
+  /// 从云 URL 下载 PDF 并缓存到本地（供 PdfDocument.openFile 使用）
+  Future<void> downloadFromCloud() async {
+    if (pdfUrl == null || !pdfUrl!.startsWith('http')) return;
+
+    // 检查本地缓存是否有效
+    if (pdfFilePath.isNotEmpty && File(pdfFilePath).existsSync()) return;
+
+    try {
+      Log.info('[PdfEditorImage] Downloading PDF from cloud: $pdfUrl');
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final token = userResult.fold((u) => u.token, (_) => '');
+
+      final response = await http.get(
+        Uri.parse(pdfUrl!),
+        headers: token.isNotEmpty ? {'Authorization': 'Bearer $token'} : {},
+      );
+
+      if (response.statusCode == 200) {
+        pdfBytes = response.bodyBytes;
+
+        // 将 PDF 写入本地临时缓存文件
+        final cacheDir = await getTemporaryDirectory();
+        final urlHash = pdfUrl!.hashCode.abs().toString();
+        final localPath = p.join(cacheDir.path, 'pdf_cache_$urlHash.pdf');
+        final cacheFile = File(localPath);
+        await cacheFile.writeAsBytes(pdfBytes!);
+        pdfFilePath = localPath;
+
+        Log.info('[PdfEditorImage] ✅ PDF cached at: $localPath (${pdfBytes!.length} bytes)');
+      } else {
+        Log.error('[PdfEditorImage] ❌ PDF download failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      Log.error('[PdfEditorImage] ❌ PDF download error: $e');
+    }
+  }
 
   /// 获取PDF文档缓存管理器
   PdfDocumentCacheManager get _cacheManager => PdfDocumentCacheManager();
@@ -419,10 +510,17 @@ class PdfEditorImage {
   /// 是否加载失败
   bool get isFailed => _loadState.value == PdfLoadState.failed;
 
-  /// 获取PDF文档（从缓存管理器获取，兼容旧接口）
+  /// 获取PDF文档（从缓存管理器获取，支持云 URL 先下载后加载）
   Future<PdfDocument?> get cachedPdfDocument async {
     try {
-      return await _cacheManager.load(pdfFilePath);
+      // 若是云 URL 且本地文件不存在，先下载
+      if (pdfUrl != null && pdfUrl!.startsWith('http')) {
+        if (pdfFilePath.isEmpty || !File(pdfFilePath).existsSync()) {
+          await downloadFromCloud();
+        }
+      }
+      if (pdfFilePath.isEmpty) return null;
+      return await _cacheManager.load(pdfFilePath, pdfBytes: pdfBytes);
     } catch (e) {
       debugPrint('❌ [PdfEditorImage] 获取缓存文档失败: $e');
       return null;
@@ -463,11 +561,23 @@ class PdfEditorImage {
   /// 异步加载 PDF 文档（参考saber的firstLoad实现）
   Future<void> _loadPdfDocumentAsync() async {
     try {
-      debugPrint('🦋[PdfEditorImage] 开始异步加载 PDF: $pdfFilePath');
+      debugPrint('🦋[PdfEditorImage] 开始异步加载 PDF: $pdfFilePath (pdfUrl: $pdfUrl)');
       final startTime = DateTime.now();
 
+      // 若是云 URL 场景，先下载到本地缓存
+      if (pdfUrl != null && pdfUrl!.startsWith('http')) {
+        if (pdfFilePath.isEmpty || !File(pdfFilePath).existsSync()) {
+          debugPrint('🦋[PdfEditorImage] Downloading PDF from cloud before loading...');
+          await downloadFromCloud();
+        }
+      }
+      
+      if (pdfFilePath.isEmpty) {
+        throw Exception('PDF file path is empty and cloud download failed');
+      }
+
       // 通过缓存管理器获取或加载文档
-      final document = await _cacheManager.load(pdfFilePath);
+      final document = await _cacheManager.load(pdfFilePath, pdfBytes: pdfBytes);
 
       // 检查页面索引是否有效
       if (pdfPageIndex < 0 || pdfPageIndex >= document.pages.length) {
