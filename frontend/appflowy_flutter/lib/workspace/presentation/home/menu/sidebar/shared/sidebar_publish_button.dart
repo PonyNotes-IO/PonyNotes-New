@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -52,14 +54,13 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
   List<PublishedItemData> _myPublishedItems = const [];
   List<PublishedItemData> _receivedPublishedItems = const [];
   bool _loading = false;
-  bool _needsRefresh = true;
   String _workspaceId = '';
+  Timer? _refreshTimer;
+
   void _onPublishPing() {
     if (!mounted) return;
     if (_isExpanded && !_loading) {
       _load();
-    } else {
-      _needsRefresh = true;
     }
   }
 
@@ -70,10 +71,17 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
     _workspaceId =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ??
             '';
+    // 每30秒定期刷新，确保及时感知取消发布事件
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_isExpanded && !_loading && mounted) {
+        _load();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     PublishRefresh.notifier.removeListener(_onPublishPing);
     super.dispose();
   }
@@ -103,7 +111,8 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
                     size: AFButtonSize.l,
                     onTap: () async {
                       setState(() => _isExpanded = !_isExpanded);
-                      if (_isExpanded && !_loading && _needsRefresh) {
+                      // 每次展开时都从服务器拉取最新数据，确保及时感知取消发布
+                      if (_isExpanded && !_loading) {
                         await _load();
                       }
                     },
@@ -232,7 +241,6 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         _myPublishedItems = myPublishedItems;
         _receivedPublishedItems = receivedPublishedItems;
         _loading = false;
-        _needsRefresh = false;
       });
     } catch (e, st) {
       Log.error('load published views unexpected error: $e', e, st);
@@ -241,7 +249,6 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         _myPublishedItems = [];
         _receivedPublishedItems = [];
         _loading = false;
-        _needsRefresh = false;
       });
     }
   }
@@ -313,11 +320,31 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
   }
 
   /// 通用的打开发布文档逻辑
-  /// 1. 先尝试 getView（本地 Folder 中查找）
-  /// 2. 如果找不到，说明是其他用户的文档，需要先调用 receive API 接收
-  /// 3. 接收成功后，使用接收后的 viewId 打开
+  /// 1. 对于接收的文档，先刷新列表验证文档是否仍然有效（发布者可能已取消发布）
+  /// 2. 先尝试 getView（本地 Folder 中查找）
+  /// 3. 如果找不到，说明是其他用户的文档，需要先调用 receive API 接收
+  /// 4. 接收成功后，使用接收后的 viewId 打开
   Future<void> _openPublishedView(BuildContext context, PublishedItemData item) async {
     try {
+      // 对于接收的文档，打开前先刷新列表，确认文档仍然处于发布状态
+      if (item.isReceived) {
+        await _load();
+        if (!mounted) return;
+        final stillExists = _receivedPublishedItems.any(
+          (i) => i.publishedViewId == item.publishedViewId,
+        );
+        if (!stillExists) {
+          Log.info('[PublishButton] 文档已被取消发布: publishedViewId=${item.publishedViewId}');
+          if (context.mounted) {
+            showToastNotification(
+              message: '该文档已被取消发布，无法打开',
+              type: ToastificationType.warning,
+            );
+          }
+          return;
+        }
+      }
+
       final viewOrErr = await ViewBackendService.getView(item.viewId);
       final opened = viewOrErr.fold(
         (view) {
@@ -348,17 +375,21 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         }
       } else {
         Log.error('[PublishButton] 接收失败: ${result.error}');
-        showToastNotification(
-          message: '打开发布笔记失败: ${result.error}',
-          type: ToastificationType.error,
-        );
+        if (context.mounted) {
+          showToastNotification(
+            message: '打开发布笔记失败: ${result.error}',
+            type: ToastificationType.error,
+          );
+        }
       }
     } catch (e, stackTrace) {
       Log.error('[PublishButton] 打开发布文档出错: $e', stackTrace);
-      showToastNotification(
-        message: '打开发布笔记失败: $e',
-        type: ToastificationType.error,
-      );
+      if (context.mounted) {
+        showToastNotification(
+          message: '打开发布笔记失败: $e',
+          type: ToastificationType.error,
+        );
+      }
     }
   }
 
@@ -441,7 +472,6 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
       _receivedPublishedItems = const [];
       _isExpanded = false;
       _loading = false;
-      _needsRefresh = true;
     });
   }
 }
