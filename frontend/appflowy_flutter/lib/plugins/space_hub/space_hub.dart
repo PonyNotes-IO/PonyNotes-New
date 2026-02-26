@@ -438,7 +438,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                   initialLeftWidth: _leftPanelWidth,
                   minLeftWidth: _minLeftWidth,
                   maxLeftWidth: _maxLeftWidth,
-                  dividerWidth: 1.0,
+                  dividerWidth: 4.0,
+                  dividerLineWidth: 2.0,
                   onResize: (newWidth) {
                     setState(() {
                       _leftPanelWidth = newWidth;
