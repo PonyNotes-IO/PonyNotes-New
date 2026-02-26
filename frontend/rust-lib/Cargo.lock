@@ -3024,6 +3024,7 @@ name = "flowy-handwriting-saber"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "bytes",
  "collab",
  "collab-entity",
@@ -3151,6 +3152,7 @@ dependencies = [
  "flowy-document-pub",
  "flowy-error",
  "flowy-folder-pub",
+ "flowy-handwriting-saber-pub",
  "flowy-search-pub",
  "flowy-server-pub",
  "flowy-sqlite",

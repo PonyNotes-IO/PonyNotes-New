@@ -2,7 +2,8 @@ use crate::af_cloud::define::LoggedUser;
 use crate::local_server::impls::{
   LocalChatServiceImpl, LocalSearchServiceImpl, LocalServerDatabaseCloudServiceImpl,
   LocalServerDocumentCloudServiceImpl, LocalServerFolderCloudServiceImpl,
-  LocalServerUserServiceImpl, LocalServerWhiteboardCloudServiceImpl,
+  LocalServerHandwritingSaberCloudServiceImpl, LocalServerUserServiceImpl,
+  LocalServerWhiteboardCloudServiceImpl,
 };
 use crate::{AppFlowyServer, EmbeddingWriter};
 use anyhow::Error;
@@ -89,6 +90,12 @@ impl AppFlowyServer for LocalServer {
 
   fn whiteboard_service(&self) -> Arc<dyn flowy_whiteboard_pub::cloud::WhiteboardCloudService> {
     Arc::new(LocalServerWhiteboardCloudServiceImpl())
+  }
+
+  fn handwriting_saber_service(
+    &self,
+  ) -> Arc<dyn flowy_handwriting_saber_pub::cloud::HandwritingSaberCloudService> {
+    Arc::new(LocalServerHandwritingSaberCloudServiceImpl())
   }
 
   fn chat_service(&self) -> Arc<dyn ChatCloudService> {

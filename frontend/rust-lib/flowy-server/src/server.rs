@@ -122,12 +122,12 @@ pub trait AppFlowyServer: Send + Sync + 'static {
   fn document_service(&self) -> Arc<dyn DocumentCloudService>;
 
   /// Provides a service for managing whiteboards in a cloud environment.
-  /// This includes operations for creating, updating, and retrieving whiteboard data.
-  ///
-  /// # Returns
-  ///
-  /// An `Arc` wrapping the `WhiteboardCloudService` interface.
   fn whiteboard_service(&self) -> Arc<dyn flowy_whiteboard_pub::cloud::WhiteboardCloudService>;
+
+  /// Provides a service for managing handwriting notes in a cloud environment.
+  fn handwriting_saber_service(
+    &self,
+  ) -> Arc<dyn flowy_handwriting_saber_pub::cloud::HandwritingSaberCloudService>;
 
   fn chat_service(&self) -> Arc<dyn ChatCloudService>;
 

@@ -7,6 +7,7 @@ use flowy_error::{FlowyError, FlowyResult};
 use flowy_folder::entities::ViewIdPB;
 use lib_dispatch::prelude::{data_result_ok, AFPluginData, AFPluginState, DataResult};
 use std::sync::{Arc, Weak};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{info, instrument};
 use uuid::Uuid;
 
@@ -18,6 +19,13 @@ fn upgrade_manager(
     .ok_or_else(|| {
       FlowyError::internal().with_context("The handwriting saber manager is already dropped")
     })
+}
+
+fn current_timestamp() -> i64 {
+  SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .unwrap_or_default()
+    .as_secs() as i64
 }
 
 /// 创建手写笔记处理器
@@ -35,7 +43,7 @@ pub(crate) async fn create_handwriting_saber_handler(
   manager
     .create_handwriting_saber(&view_id, payload.initial_data)
     .await?;
-  info!("[HandwritingSaber] Created handwriting saber: {}", view_id);
+  info!("[HandwritingSaber] Created: {}", view_id);
   Ok(())
 }
 
@@ -48,17 +56,10 @@ pub(crate) async fn open_handwriting_saber_handler(
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
 
-  info!("[HandwritingSaber] =====================================================");
-  info!("[HandwritingSaber] open_handwriting_saber_handler called");
-  info!("[HandwritingSaber] ViewID: {}", payload.value);
-
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
-  info!("[HandwritingSaber] Calling manager.open_handwriting_saber...");
   manager.open_handwriting_saber(&view_id).await?;
-  info!("[HandwritingSaber] ✅ Opened handwriting saber");
-  info!("[HandwritingSaber] =====================================================");
   Ok(())
 }
 
@@ -71,11 +72,9 @@ pub(crate) async fn save_handwriting_saber_handler(
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
 
-  info!("[HandwritingSaber] =====================================================");
-  info!("[HandwritingSaber] save_handwriting_saber_handler called");
-  info!("[HandwritingSaber] ViewID: {}", payload.view_id);
   info!(
-    "[HandwritingSaber] Version: {}, Data size: {} bytes",
+    "[HandwritingSaber] save: viewId={}, version={}, size={} bytes",
+    payload.view_id,
     payload.version,
     payload.sbn2_bytes.len()
   );
@@ -83,19 +82,11 @@ pub(crate) async fn save_handwriting_saber_handler(
   let view_id = Uuid::parse_str(&payload.view_id)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
-  info!("[HandwritingSaber] Calling manager.save_handwriting_saber_data...");
   let new_version = manager
     .save_handwriting_saber_data(&view_id, payload.sbn2_bytes, payload.version)
     .await?;
-  info!(
-    "[HandwritingSaber] ✅ Saved handwriting saber data, new version: {}",
-    new_version
-  );
-  info!("[HandwritingSaber] =====================================================");
 
-  data_result_ok(SaveHandwritingSaberResponsePB {
-    new_version,
-  })
+  data_result_ok(SaveHandwritingSaberResponsePB { new_version })
 }
 
 /// 获取手写笔记数据处理器
@@ -107,36 +98,21 @@ pub(crate) async fn get_handwriting_saber_data_handler(
   let manager = upgrade_manager(manager)?;
   let payload = data.into_inner();
 
-  info!("[HandwritingSaber] =====================================================");
-  info!("[HandwritingSaber] get_handwriting_saber_data_handler called");
-  info!("[HandwritingSaber] ViewID: {}", payload.value);
-
   let view_id = Uuid::parse_str(&payload.value)
     .map_err(|e| FlowyError::invalid_data().with_context(format!("Invalid view_id: {}", e)))?;
 
-  info!("[HandwritingSaber] Calling manager.get_handwriting_saber_data...");
   let sbn2_bytes = manager.get_handwriting_saber_data(&view_id).await?;
   info!(
-    "[HandwritingSaber] ✅ Got handwriting saber data, length: {} bytes",
+    "[HandwritingSaber] get data: {}, size={} bytes",
+    view_id,
     sbn2_bytes.len()
   );
-  info!("[HandwritingSaber] =====================================================");
-
-  // TODO: 获取实际的版本号、更新时间等信息
-  // TODO: 获取实际的版本号、更新时间等信息
-  use std::time::{SystemTime, UNIX_EPOCH};
-  let updated_at = SystemTime::now()
-    .duration_since(UNIX_EPOCH)
-    .unwrap()
-    .as_secs() as i64;
 
   data_result_ok(HandwritingSaberDataPB {
     view_id: payload.value,
     sbn2_bytes,
     version: 1,
-    preview_png: None,
-    updated_at,
-    updated_by: String::new(),
+    updated_at: current_timestamp(),
   })
 }
 
@@ -171,4 +147,3 @@ pub(crate) async fn delete_handwriting_saber_handler(
   manager.delete_handwriting_saber(&view_id).await?;
   Ok(())
 }
-

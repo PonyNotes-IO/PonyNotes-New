@@ -6,7 +6,7 @@ use collab::entity::EncodedCollab;
 use collab::lock::RwLock;
 use collab_entity::CollabType;
 use collab_integrate::collab_builder::{
-  AppFlowyCollabBuilder, CollabPersistenceImpl,
+  AppFlowyCollabBuilder, CollabBuilderConfig, CollabPersistenceImpl,
 };
 use collab_integrate::CollabKVAction;
 use collab_plugins::local_storage::kv::KVTransactionDB;
@@ -192,7 +192,7 @@ impl WhiteboardManager {
 
   /// 创建白板实例（内部方法）
   /// 
-  /// sync_enable: 是否启用云端同步
+  /// sync_enable: 是否启用云端同步（WebSocket 实时同步）
   async fn create_whiteboard_instance(
     &self,
     view_id: &Uuid,
@@ -201,6 +201,12 @@ impl WhiteboardManager {
     let uid = self.user_service.user_id()?;
     let workspace_id = self.user_service.workspace_id()?;
     let collab_db = self.user_service.collab_db(uid)?;
+
+    // 获取 CollabObject（用于 finalize 时添加云端同步插件）
+    let collab_builder = self.collab_builder()?;
+    let object = collab_builder
+      .collab_object(&workspace_id, uid, view_id, CollabType::Document)
+      .map_err(internal_error)?;
 
     // 检查白板是否已存在于本地磁盘
     let exists = self.is_whiteboard_exist(view_id).await.unwrap_or(false);
@@ -234,9 +240,9 @@ impl WhiteboardManager {
       }
     };
 
-    // ✅ 使用 build_collab 构建 Collab（会自动添加 RocksdbDiskPlugin）
+    // 使用 build_collab 构建 Collab（会自动添加 RocksdbDiskPlugin，但尚未 initialize）
     let collab = self
-      .build_collab(uid, view_id, data_source, sync_enable)
+      .build_collab(uid, view_id, data_source)
       .await?;
 
     // 尝试打开白板，如果失败则创建新的数据结构
@@ -255,14 +261,13 @@ impl WhiteboardManager {
         };
         
         let collab = self
-          .build_collab(uid, view_id, data_source, sync_enable)
+          .build_collab(uid, view_id, data_source)
           .await?;
           
         let wb = Whiteboard::create(collab)
           .map_err(|e| internal_error(format!("Failed to create whiteboard data structure: {}", e)))?;
         
         // 保存初始化后的数据结构到磁盘
-        // 注意：由于已经添加了 RocksdbDiskPlugin，这次保存后，后续的编辑会自动持久化
         let encoded = wb.encode_collab()
           .map_err(internal_error)?;
         self
@@ -275,7 +280,19 @@ impl WhiteboardManager {
       }
     };
 
-    Ok(Arc::new(RwLock::new(whiteboard)))
+    // 包装为 Arc<RwLock<Whiteboard>>
+    let arc_whiteboard = Arc::new(RwLock::new(whiteboard));
+
+    // ✅ 关键修复：调用 finalize() 添加 WebSocket 云端实时同步插件
+    // 这是 AppFlowy 实现多端实时同步的核心机制
+    // finalize() 会：1）添加 WebSocket 同步插件；2）调用 initialize() 启动所有插件
+    let builder_config = CollabBuilderConfig::default().sync_enable(sync_enable);
+    let arc_whiteboard = collab_builder
+      .finalize(object, builder_config, arc_whiteboard)
+      .map_err(internal_error)?;
+
+    info!("[Whiteboard] ✅ Whiteboard {} finalized with sync_enable={}", view_id, sync_enable);
+    Ok(arc_whiteboard)
   }
 
   /// 更新白板数据
@@ -373,39 +390,34 @@ impl WhiteboardManager {
     Ok(false)
   }
 
-  /// 为白板创建 Collab 对象（带自动持久化插件）
+  /// 为白板创建 Collab 对象（带 RocksDB 持久化插件，但尚未 initialize）
+  /// 
+  /// 注意：此方法只添加 RocksDB 插件，不添加 WebSocket 同步插件，也不调用 initialize()。
+  /// 调用者需要在构建完 Whiteboard 后，调用 collab_builder.finalize() 来添加同步插件并初始化。
   async fn build_collab(
     &self,
     uid: i64,
     view_id: &Uuid,
     data_source: DataSource,
-    sync_enable: bool,
   ) -> FlowyResult<collab::preclude::Collab> {
     let collab_builder = self.collab_builder()?;
     let workspace_id = self.user_service.workspace_id()?;
     let collab_db = self.user_service.collab_db(uid)?;
 
-    // 🔧 使用 Document 类型而不是 Unknown，确保持久化插件正常工作
-    // TODO: 在 collab-entity 中添加 CollabType::Whiteboard 变体后，改用 Whiteboard 类型
+    // 使用 Document 类型（TODO: 等 collab-entity 添加 CollabType::Whiteboard 后改用）
     let object = collab_builder.collab_object(&workspace_id, uid, view_id, CollabType::Document)
       .map_err(internal_error)?;
 
-    // ✅ 关键修复：使用 AppFlowyCollabBuilder::build_collab 而非直接构建
-    // 这会自动添加 RocksdbDiskPlugin，确保编辑后自动持久化
-    let mut collab = collab_builder
+    // 构建带 RocksdbDiskPlugin 的 Collab，但不 initialize（由 finalize() 统一处理）
+    let collab = collab_builder
       .build_collab(&object, &collab_db, data_source)
       .await
       .map_err(internal_error)?;
     
-    // ✅ 如果需要同步，初始化 collab（启动所有插件包括 RocksdbDiskPlugin）
-    if sync_enable {
-      collab.initialize();
-    }
-    
     Ok(collab)
   }
 
-  /// 获取编码的 Collab 数据
+  /// 获取编码的 Collab 数据（只读，不需要同步）
   pub async fn get_encoded_collab(
     &self,
     view_id: &Uuid,
@@ -417,9 +429,12 @@ impl WhiteboardManager {
     let data_source =
       CollabPersistenceImpl::new(collab_db.clone(), uid, workspace_id).into_data_source();
 
-    let collab = self
-      .build_collab(uid, view_id, data_source, false)
+    let mut collab = self
+      .build_collab(uid, view_id, data_source)
       .await?;
+
+    // 只读操作，只需 initialize RocksDB 插件即可（不需要 WebSocket 同步）
+    collab.initialize();
 
     let encoded_collab = collab
       .encode_collab_v1(|_collab| Ok::<(), collab::error::CollabError>(()))

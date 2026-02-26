@@ -28,8 +28,8 @@ use super::impls::AFCloudSearchCloudServiceImpl;
 use crate::AppFlowyServer;
 use crate::af_cloud::impls::{
   AFCloudDatabaseCloudServiceImpl, AFCloudDocumentCloudServiceImpl, AFCloudFileStorageServiceImpl,
-  AFCloudFolderCloudServiceImpl, AFCloudUserAuthServiceImpl, AFCloudWhiteboardCloudServiceImpl,
-  CloudChatServiceImpl,
+  AFCloudFolderCloudServiceImpl, AFCloudHandwritingSaberCloudServiceImpl,
+  AFCloudUserAuthServiceImpl, AFCloudWhiteboardCloudServiceImpl, CloudChatServiceImpl,
 };
 use flowy_ai::offline::offline_message_sync::AutoSyncChatService;
 use flowy_ai_pub::user_service::AIUserService;
@@ -252,6 +252,15 @@ impl AppFlowyServer for AppFlowyCloudServer {
 
   fn whiteboard_service(&self) -> Arc<dyn flowy_whiteboard_pub::cloud::WhiteboardCloudService> {
     Arc::new(AFCloudWhiteboardCloudServiceImpl {
+      inner: self.get_server_impl(),
+      logged_user: self.logged_user.clone(),
+    })
+  }
+
+  fn handwriting_saber_service(
+    &self,
+  ) -> Arc<dyn flowy_handwriting_saber_pub::cloud::HandwritingSaberCloudService> {
+    Arc::new(AFCloudHandwritingSaberCloudServiceImpl {
       inner: self.get_server_impl(),
       logged_user: self.logged_user.clone(),
     })

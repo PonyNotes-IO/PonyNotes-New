@@ -1050,40 +1050,52 @@ impl WhiteboardCloudService for ServerProvider {
 impl HandwritingSaberCloudService for ServerProvider {
   async fn get_handwriting_saber_doc_state(
     &self,
-    _handwriting_saber_id: &Uuid,
-    _workspace_id: &Uuid,
+    handwriting_saber_id: &Uuid,
+    workspace_id: &Uuid,
   ) -> Result<Vec<u8>, FlowyError> {
-    // TODO: 实现 Cloud 服务接口
-    Err(FlowyError::internal().with_context("HandwritingSaberCloudService not implemented yet"))
+    let server = self.get_server()?;
+    server
+      .handwriting_saber_service()
+      .get_handwriting_saber_doc_state(handwriting_saber_id, workspace_id)
+      .await
   }
 
   async fn get_handwriting_saber_data(
     &self,
-    _handwriting_saber_id: &Uuid,
-    _workspace_id: &Uuid,
+    handwriting_saber_id: &Uuid,
+    workspace_id: &Uuid,
   ) -> Result<Option<Vec<u8>>, FlowyError> {
-    // TODO: 实现 Cloud 服务接口
-    Ok(None)
+    let server = self.get_server()?;
+    server
+      .handwriting_saber_service()
+      .get_handwriting_saber_data(handwriting_saber_id, workspace_id)
+      .await
   }
 
   async fn create_handwriting_saber_collab(
     &self,
-    _workspace_id: &Uuid,
-    _handwriting_saber_id: &Uuid,
-    _encoded_collab: EncodedCollab,
+    workspace_id: &Uuid,
+    handwriting_saber_id: &Uuid,
+    encoded_collab: EncodedCollab,
   ) -> Result<(), FlowyError> {
-    // TODO: 实现 Cloud 服务接口
-    Err(FlowyError::internal().with_context("HandwritingSaberCloudService not implemented yet"))
+    let server = self.get_server()?;
+    server
+      .handwriting_saber_service()
+      .create_handwriting_saber_collab(workspace_id, handwriting_saber_id, encoded_collab)
+      .await
   }
 
   async fn save_handwriting_saber_data(
     &self,
-    _handwriting_saber_id: &Uuid,
-    _workspace_id: &Uuid,
-    _sbn2_bytes: Vec<u8>,
-    _version: i64,
+    handwriting_saber_id: &Uuid,
+    workspace_id: &Uuid,
+    sbn2_bytes: Vec<u8>,
+    version: i64,
   ) -> Result<i64, FlowyError> {
-    // TODO: 实现 Cloud 服务接口
-    Err(FlowyError::internal().with_context("HandwritingSaberCloudService not implemented yet"))
+    let server = self.get_server()?;
+    server
+      .handwriting_saber_service()
+      .save_handwriting_saber_data(handwriting_saber_id, workspace_id, sbn2_bytes, version)
+      .await
   }
 }
