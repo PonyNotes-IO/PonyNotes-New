@@ -332,9 +332,8 @@ class CircleStroke extends Stroke {
     final stroke = Stroke.fromJson(json);
     final fillColorValue = json['fillColor'] as int?;
     final fillColor =
-        fillColorValue != null ? Color(fillColorValue) : null; // ✅ 读取填充颜色
+        fillColorValue != null ? Color(fillColorValue) : null;
 
-    // ✅ 读取虚线样式
     DashStyle dashStyle = DashStyle.solid;
     if (json.containsKey('dashStyle')) {
       final styleStr = json['dashStyle'] as String?;
@@ -356,12 +355,24 @@ class CircleStroke extends Stroke {
         dashStyle: dashStyle,
       );
     }
-    // 从圆形点计算起始点和结束点
-    final firstPoint = stroke.points.first;
-    final lastPoint = stroke.points.last;
+
+    // ✅ 关键修复：从所有椭圆采样点的包围盒还原 startPoint/endPoint
+    // 旧代码用首尾点重建，但椭圆首尾点是同一坐标（角度0 ≈ 角度2π），
+    // 导致重建后半径为0，椭圆消失
+    double minX = double.infinity;
+    double minY = double.infinity;
+    double maxX = double.negativeInfinity;
+    double maxY = double.negativeInfinity;
+    for (final p in stroke.points) {
+      if (p.dx < minX) minX = p.dx;
+      if (p.dy < minY) minY = p.dy;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+
     return CircleStroke(
-      startPoint: firstPoint,
-      endPoint: lastPoint,
+      startPoint: Offset(minX, minY),
+      endPoint: Offset(maxX, maxY),
       color: stroke.color,
       strokeWidth: stroke.strokeWidth,
       toolId: stroke.toolId,

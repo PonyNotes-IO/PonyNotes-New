@@ -257,6 +257,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // ✅ 如果视图ID发生变化，重新加载数据
     if (oldWidget.view.id != widget.view.id) {
       debugPrint('🔄🔄🔄 [HandwritingSaber] ViewID CHANGED! Reloading data...');
+      // ✅ 关键修复：切换视图前立即保存旧视图的数据，防止数据丢失
+      _flushSaveForView(oldWidget.view.id);
       // 清理旧视图的状态
       _cleanupViewState();
       // 重新初始化数据
@@ -266,7 +268,59 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
   }
 
+  @override
+  void deactivate() {
+    // ✅ 关键修复：Widget从树中移除前立即保存数据，防止切换视图时数据丢失
+    debugPrint('🦋[HandwritingSaber] ===== deactivate: flushing save =====');
+    _flushSaveForView(widget.view.id);
+    super.deactivate();
+  }
+
+  /// ✅ 立即保存当前数据到指定视图（同步捕获数据，异步发送到Collab和本地文件）
+  /// 用于 deactivate / didUpdateWidget 等需要在状态清理前保存的场景
+  void _flushSaveForView(String viewId) {
+    _saveDebounceTimer?.cancel();
+    _saveDebounceTimer = null;
+
+    try {
+      final String json = _coreInfo.toJsonString();
+      final List<int> bytes = utf8.encode(json);
+
+      if (bytes.length <= 10) {
+        debugPrint('🦋[HandwritingSaber] _flushSaveForView: data too small (${ bytes.length} bytes), skipping');
+        return;
+      }
+
+      debugPrint('🦋[HandwritingSaber] _flushSaveForView: saving $viewId (${bytes.length} bytes)');
+
+      // 同时保存到 Collab 和本地文件（双保险）
+      _dataService.saveHandwritingSaberData(viewId, bytes).then((ok) {
+        debugPrint('🦋[HandwritingSaber] _flushSaveForView Collab: ${ok ? "✅" : "❌"} ($viewId)');
+      }).catchError((e) {
+        debugPrint('❌[HandwritingSaber] _flushSaveForView Collab error: $e');
+      });
+
+      // ✅ 同时写入本地文件作为备份（防止 Collab 同步失败导致数据丢失）
+      _saveToLocalFile(viewId, bytes);
+    } catch (e) {
+      debugPrint('❌[HandwritingSaber] _flushSaveForView serialization error: $e');
+    }
+  }
+
+  /// ✅ 将数据写入本地文件作为备份
+  Future<void> _saveToLocalFile(String viewId, List<int> bytes) async {
+    try {
+      final filePath = await _dataService.getHandwritingSaberFilePathForDebug(viewId);
+      final file = File(filePath);
+      await file.writeAsBytes(bytes);
+      debugPrint('🦋[HandwritingSaber] _saveToLocalFile: ✅ saved to $filePath (${bytes.length} bytes)');
+    } catch (e) {
+      debugPrint('❌[HandwritingSaber] _saveToLocalFile error: $e');
+    }
+  }
+
   /// ✅ 清理视图状态（切换视图时调用）
+  /// 注意：调用此方法前，必须先调用 _flushSaveForView() 保存当前数据
   void _cleanupViewState() {
     debugPrint('🦋[HandwritingSaber] _cleanupViewState called');
     // 清理当前笔迹
@@ -287,16 +341,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
     _textBoxControllers.clear();
     // 清理历史记录
-    _history.clear(); // ✅ 使用clear()方法而不是重新赋值
+    _history.clear();
     _updateUndoRedoState();
     // 清理页面notifier
     for (final notifier in _pageNotifiers) {
       notifier.dispose();
     }
     _pageNotifiers.clear();
-    // 取消待保存标记
+    // ✅ 取消待保存标记（_flushSaveForView 已经处理了保存和取消定时器）
     _pendingSave = false;
-    _saveDebounceTimer?.cancel();
 
     // ✅ 清理当前页面索引
     _currentPageIndexNotifier.value = null;
@@ -488,10 +541,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
     try {
       // 在序列化前上传所有尚未上传的图片和 PDF 底图到云存储
-      // 这是解决跨设备同步失败的核心修复：
-      // 上传前：图片以原始字节存储 JSON → sbn2 数据可能高达数 MB → Collab 同步失败
-      // 上传后：图片只存云 URL → sbn2 数据极小 → Collab 同步成功
-      await _uploadAssetsToCloud();
+      // 上传后对应的 toJson() 会使用轻量 URL 格式，大幅减少 Collab 同步数据量
+      try {
+        await _uploadAssetsToCloud();
+      } catch (uploadError) {
+        debugPrint('⚠️[HandwritingSaber] _uploadAssetsToCloud failed (non-fatal): $uploadError');
+      }
 
       final String json = _coreInfo.toJsonString();
       final List<int> bytes = utf8.encode(json);
@@ -501,6 +556,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         widget.view.id,
         bytes,
       );
+
+      // ✅ 同时写入本地文件作为备份（防止 Collab 同步丢失大数据）
+      unawaited(_saveToLocalFile(widget.view.id, bytes));
 
       if (!suppressStatusUpdate) {
         if (mounted) {
@@ -4909,6 +4967,10 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   @override
   void dispose() {
+    // ✅ 关键修复：dispose前最后一次保存（deactivate可能已保存，这里做双保险）
+    debugPrint('🦋[HandwritingSaber] ===== dispose: final flush save =====');
+    _flushSaveForView(widget.view.id);
+
     // ✅ 清理所有激光笔淡出定时器
     for (final timer in _laserFadeOutTimers.values) {
       timer.cancel();

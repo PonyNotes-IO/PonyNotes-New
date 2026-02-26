@@ -160,6 +160,20 @@ class PngEditorImage extends EditorImage {
     }
   }
 
+  /// 归一化token：如果是JSON字符串则提取access_token
+  static String _normalizeToken(String token) {
+    if (token.isEmpty) return token;
+    if (token.trim().startsWith('{')) {
+      try {
+        final map = jsonDecode(token);
+        if (map is Map && map['access_token'] is String) {
+          return map['access_token'] as String;
+        }
+      } catch (_) {}
+    }
+    return token;
+  }
+
   /// 从云 URL 下载图片字节（当 imageBytes 为空且有 imageUrl 时调用）
   Future<void> downloadFromCloud() async {
     if (imageBytes.isNotEmpty) return;
@@ -168,7 +182,8 @@ class PngEditorImage extends EditorImage {
     try {
       Log.info('[HandwritingImage] Downloading from cloud: $imageUrl');
       final userResult = await UserBackendService.getCurrentUserProfile();
-      final token = userResult.fold((u) => u.token, (_) => '');
+      final rawToken = userResult.fold((u) => u.token, (_) => '');
+      final token = _normalizeToken(rawToken);
 
       final response = await http.get(
         Uri.parse(imageUrl!),

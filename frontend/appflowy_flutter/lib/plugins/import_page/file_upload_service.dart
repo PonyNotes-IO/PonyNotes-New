@@ -214,14 +214,14 @@ class FileUploadService {
         throw Exception('用户未登录，token为空');
       }
       
-      // token 已经是 access_token 字符串，不需要解析
-      final accessToken = user.token;
+      // ✅ 关键修复：token 可能是 JSON 格式（包含 access_token），需要归一化提取
+      final accessToken = _normalizeToken(user.token);
       
       if (accessToken.isEmpty) {
         throw Exception('用户token为空，请重新登录');
       }
       
-      Log.info('Successfully retrieved access token');
+      Log.info('Successfully retrieved access token (length: ${accessToken.length})');
       return accessToken;
     } catch (e) {
       Log.error('Failed to get auth token: $e');
@@ -230,6 +230,20 @@ class FileUploadService {
       }
       throw Exception('无法获取认证token: $e');
     }
+  }
+  
+  /// ✅ 归一化token：如果是JSON字符串则提取access_token，否则直接返回
+  static String _normalizeToken(String token) {
+    if (token.isEmpty) return token;
+    if (token.trim().startsWith('{')) {
+      try {
+        final map = jsonDecode(token);
+        if (map is Map && map['access_token'] is String) {
+          return map['access_token'] as String;
+        }
+      } catch (_) {}
+    }
+    return token;
   }
   
   

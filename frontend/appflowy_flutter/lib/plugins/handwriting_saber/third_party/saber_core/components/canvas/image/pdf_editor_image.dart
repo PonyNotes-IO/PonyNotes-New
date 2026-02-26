@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -456,7 +457,8 @@ class PdfEditorImage {
     try {
       Log.info('[PdfEditorImage] Downloading PDF from cloud: $pdfUrl');
       final userResult = await UserBackendService.getCurrentUserProfile();
-      final token = userResult.fold((u) => u.token, (_) => '');
+      final rawToken = userResult.fold((u) => u.token, (_) => '');
+      final token = _normalizeToken(rawToken);
 
       final response = await http.get(
         Uri.parse(pdfUrl!),
@@ -766,12 +768,23 @@ class PdfEditorImage {
     );
   }
 
+  /// 归一化token：如果是JSON字符串则提取access_token
+  static String _normalizeToken(String token) {
+    if (token.isEmpty) return token;
+    if (token.trim().startsWith('{')) {
+      try {
+        final map = jsonDecode(token);
+        if (map is Map && map['access_token'] is String) {
+          return map['access_token'] as String;
+        }
+      } catch (_) {}
+    }
+    return token;
+  }
+
   /// 释放资源（参考Saber的dispose实现）
   void dispose() {
     _loadState.dispose();
-    // 注意：PDF文档现在由PdfDocumentCacheManager管理，不在这里释放
-    // PdfDocumentCacheManager是全局单例，会自动管理缓存
-    // 这里只需要释放ValueNotifier即可
   }
 }
 

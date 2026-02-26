@@ -144,7 +144,7 @@ class HandwritingSaberDataService {
     }
   }
 
-  /// 加载手写笔记数据（从 Rust Collab 接口）
+  /// 加载手写笔记数据（从 Rust Collab 接口，Collab 为空或失败时回退到本地文件）
   Future<List<int>> loadHandwritingSaberData(String viewId) async {
     Log.info('[HandwritingSaber] loadHandwritingSaberData() ViewID=$viewId');
 
@@ -153,12 +153,41 @@ class HandwritingSaberDataService {
       final result =
           await HandwritingSaberEventGetHandwritingSaberData(payload).send();
 
-      return result.fold(
-        (data) {
+      return await result.fold(
+        (data) async {
           Log.info(
             '[HandwritingSaber] ✅ Loaded from Rust/Collab: $viewId, '
             'size: ${data.sbn2Bytes.length} bytes',
           );
+
+          // ✅ 如果 Collab 返回空数据，尝试从本地文件恢复
+          // 场景：Collab 同步因数据过大失败，但本地文件有最新备份
+          if (data.sbn2Bytes.isEmpty) {
+            Log.warn(
+              '[HandwritingSaber] ⚠️ Collab returned empty data for $viewId, '
+              'trying local file backup',
+            );
+            final localData = await _loadFromFile(viewId);
+            if (localData.isNotEmpty) {
+              Log.info(
+                '[HandwritingSaber] ✅ Recovered from local file: $viewId, '
+                'size: ${localData.length} bytes',
+              );
+              return localData;
+            }
+          }
+
+          // ✅ 对比 Collab 和本地文件，使用数据更大（更完整）的那份
+          final localData = await _loadFromFile(viewId);
+          if (localData.length > data.sbn2Bytes.length) {
+            Log.warn(
+              '[HandwritingSaber] ⚠️ Local file ($viewId) has more data '
+              '(${localData.length} bytes) than Collab (${data.sbn2Bytes.length} bytes), '
+              'using local file',
+            );
+            return localData;
+          }
+
           return data.sbn2Bytes;
         },
         (error) {
@@ -172,7 +201,8 @@ class HandwritingSaberDataService {
     } catch (e, stackTrace) {
       Log.error('[HandwritingSaber] ❌ Exception in loadHandwritingSaberData: $e');
       Log.error('[HandwritingSaber] Stack trace: $stackTrace');
-      return <int>[];
+      // ✅ 异常时也尝试从本地文件恢复
+      return _loadFromFile(viewId);
     }
   }
 
