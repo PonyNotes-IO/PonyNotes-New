@@ -287,14 +287,14 @@ class HandwritingSaberToolbar extends StatelessWidget {
             ),
           ],
         ),
-        child: IconButton(
-          icon: Icon(
+        child: InkWell(
+          onTap: onTogglePageManager,
+          child: Icon(
             Icons.layers_outlined,
             color: showPageManager
                 ? theme.colorScheme.onPrimaryContainer
                 : theme.colorScheme.onSurface,
           ),
-          onPressed: onTogglePageManager,
         ),
       ),
     );
@@ -985,8 +985,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
               onPressed: canUndo ? onUndo : null,
               padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(
-                minWidth: 34,
-                minHeight: 34,
+                minWidth: 25,
+                minHeight: 25,
               ),
               color: canUndo
                   ? Theme.of(context).colorScheme.onSurface
@@ -1001,8 +1001,8 @@ class HandwritingSaberToolbar extends StatelessWidget {
               onPressed: canRedo ? onRedo : null,
               padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(
-                minWidth: 34,
-                minHeight: 34,
+                minWidth: 25,
+                minHeight: 25,
               ),
               color: canRedo
                   ? Theme.of(context).colorScheme.onSurface
