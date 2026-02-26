@@ -291,18 +291,21 @@ class _AccountManagementViewState extends State<AccountManagementView>
                 title: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
                 headerTrailingBuilder: (_) =>
                     // selectedTab == MembershipTab.upgrade ?
-                    OutlinedRoundedButton(
-                  text: '充值记录',
-                  onTap: () =>
-                      widget.changeSelectedPage(SettingsPage.rechargeRecords),
-                  // ) : OutlinedRoundedButton(
-                  //   text: '购买记录',
-                  //   onTap: () => context.read<SettingsDialogBloc>().add(
-                  //     const SettingsDialogEvent.setSelectedPage(
-                  //       SettingsPage.addonPurchaseRecords,
-                  //     ),
-                  //   ),
-                ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16.0),
+                      child: OutlinedRoundedButton(
+                                        text: '充值记录',
+                                        onTap: () =>
+                        widget.changeSelectedPage(SettingsPage.rechargeRecords),
+                                        // ) : OutlinedRoundedButton(
+                                        //   text: '购买记录',
+                                        //   onTap: () => context.read<SettingsDialogBloc>().add(
+                                        //     const SettingsDialogEvent.setSelectedPage(
+                                        //       SettingsPage.addonPurchaseRecords,
+                                        //     ),
+                                        //   ),
+                                      ),
+                    ),
                 children: [
                   // 顶部切换月付/年付（改版：不再在底部切换）
                   _buildDurationSwitcher(

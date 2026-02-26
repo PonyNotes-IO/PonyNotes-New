@@ -89,10 +89,10 @@ class FlowyDialog extends StatelessWidget {
                           shape: BoxShape.circle,
                           color: Colors.transparent, // keep no background
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.close,
                           size: 24,
-                          color: Theme.of(context).iconTheme.color,
+                          color: Colors.grey,
                         ),
                       ),
                     ),
