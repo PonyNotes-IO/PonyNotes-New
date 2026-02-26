@@ -104,7 +104,6 @@ class HandwritingSaberToolbar extends StatelessWidget {
         children: [
           // ✅ 主工具栏
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
               border: Border(
