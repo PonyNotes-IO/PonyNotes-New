@@ -6,6 +6,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -382,22 +383,25 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 
     debugPrint(
         '[SpaceHub] _SpaceHubContent building, selectedView: ${_selectedView?.name}');
-
     final rightPanel = Expanded(
-      child: Padding(
-        padding: EdgeInsets.only(
-          top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding,
-        ),
-        child: _selectedView != null
-            ? _buildSelectedViewContent(_selectedView!)
-            : _buildEmptyState(),
-      ),
+      child: _selectedView != null
+          ? _buildSelectedViewContent(_selectedView!)
+          : _buildEmptyState(),
     );
 
     // ✅ 全窗口模式：隐藏 SpaceHub 左侧菜单栏（文档列表）与拖拽分隔线
     Widget content = ValueListenableBuilder<bool>(
       valueListenable: FullWindowController.isFullWindow,
       builder: (context, isFullWindow, _) {
+        final menuStatus = context.select<HomeSettingBloc, MenuStatus>(
+          (bloc) => bloc.state.menuStatus,
+        );
+        final shouldApplyTopPadding =
+            !isFullWindow && menuStatus != MenuStatus.expanded;
+        final contentTopPadding = shouldApplyTopPadding
+            ? HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding
+            : 0.0;
+
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -405,6 +409,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             Visibility(
               visible: !isFullWindow,
               child: Container(
+                padding: EdgeInsets.only(top: contentTopPadding),
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 width: _leftPanelWidth,
                 child: _SpaceDocumentList(
