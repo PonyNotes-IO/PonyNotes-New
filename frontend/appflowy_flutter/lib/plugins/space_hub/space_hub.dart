@@ -25,6 +25,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy/workspace/presentation/widgets/resizable_divider.dart';
 import 'package:flutter/foundation.dart';
@@ -32,6 +33,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../generated/locale_keys.g.dart';
 import '../../workspace/application/tabs/tabs_bloc.dart';
 
 /// SpaceHubPluginBuilder 用于创建空间统一页面插件
@@ -409,30 +411,60 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             Visibility(
               visible: !isFullWindow,
               child: Container(
-                padding: EdgeInsets.only(top: contentTopPadding),
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 width: _leftPanelWidth,
-                child: _SpaceDocumentList(
-                  spaceView: widget.spaceView,
-                  selectedView: _selectedView,
-                  onViewSelected: (view) {
-                    debugPrint(
-                        '[SpaceHub] View selected: ${view.name} (${view.id})');
-                    setState(() {
-                      _selectedView = view;
-                    });
-                    // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-                    widget.selectedViewNotifier.value = view;
-                  },
-                  onViewCreated: (view) {
-                    debugPrint(
-                        '[SpaceHub] View created: ${view.name} (${view.id})');
-                    setState(() {
-                      _selectedView = view;
-                    });
-                    // 更新共享的选中视图状态，以便 rightBarItem 可以访问
-                    widget.selectedViewNotifier.value = view;
-                  },
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Visibility(
+                      visible: shouldApplyTopPadding,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: FlowyIconButton(
+                          width: 24,
+                          tooltipText: LocaleKeys.sideBar_closeSidebar.tr(),
+                          radius: const BorderRadius.all(Radius.circular(8.0)),
+                          icon: const FlowySvg(
+                            FlowySvgs.show_menu_s,
+                            size: Size.square(16),
+                          ),
+                          onPressed: () {
+                            // 如果当前处于全窗口模式，先退出全窗口，再显示侧边栏
+                            if (FullWindowController.isFullWindow.value) {
+                              FullWindowController.exit();
+                            }
+                            context.read<HomeSettingBloc>().add(
+                              HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: _SpaceDocumentList(
+                        spaceView: widget.spaceView,
+                        selectedView: _selectedView,
+                        onViewSelected: (view) {
+                          debugPrint(
+                              '[SpaceHub] View selected: ${view.name} (${view.id})');
+                          setState(() {
+                            _selectedView = view;
+                          });
+                          // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+                          widget.selectedViewNotifier.value = view;
+                        },
+                        onViewCreated: (view) {
+                          debugPrint(
+                              '[SpaceHub] View created: ${view.name} (${view.id})');
+                          setState(() {
+                            _selectedView = view;
+                          });
+                          // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+                          widget.selectedViewNotifier.value = view;
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

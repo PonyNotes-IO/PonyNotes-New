@@ -144,22 +144,6 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                           child: Icon(Icons.memory),
                         ),
                       const SizedBox(height: 12),
-                      if (isMenuHidden) ...[
-                        FloatingActionButton(
-                          tooltip: '显示侧边栏',
-                          onPressed: () {
-                            // 如果当前处于全窗口模式，先退出全窗口，再显示侧边栏
-                            if (FullWindowController.isFullWindow.value) {
-                              FullWindowController.exit();
-                            }
-                            context.read<HomeSettingBloc>().add(
-                                  HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
-                                );
-                          },
-                          child: const Icon(Icons.menu_open),
-                        ),
-                        const SizedBox(height: 50),
-                      ],
                     ],
                   );
                 },
