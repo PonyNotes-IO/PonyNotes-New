@@ -83,6 +83,7 @@ dart = [
   "flowy-ai/dart",
   "flowy-storage/dart",
   "flowy-whiteboard/dart",
+  "flowy-handwriting-saber/dart",
 ]
 openssl_vendored = ["flowy-sqlite/openssl_vendored"]
 
