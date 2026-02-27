@@ -1,9 +1,14 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
-import 'dart:io'; // Required for File access in Syncfusion logic
+import 'dart:io';
 
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdfrx/pdfrx.dart' as pdfrx;
@@ -178,24 +183,84 @@ abstract class EditorExporter {
     return byteData.buffer.asUint8List();
   }
 
-  /// ✅ 绘制PDF背景图
-  /// 说明：由于导入PDF时，pageSize已经按PDF宽高比计算
-  /// (pageSize.height = defaultWidth * pdfPage.height / pdfPage.width)
-  /// 所以PDF应该完美填充整个pageSize区域
-  /// 绘制 PDF 背景
+  /// 将云端URL的PDF下载到本地临时文件，返回本地路径
+  static Future<String> _ensureLocalPdfFile(PdfEditorImage pdfImage) async {
+    final path = pdfImage.pdfFilePath;
+    final pdfUrl = pdfImage.pdfUrl;
+
+    // 优先检查本地文件是否存在
+    if (!path.startsWith('http') && File(path).existsSync()) {
+      return path;
+    }
+
+    // 确定需要下载的URL
+    final downloadUrl = (pdfUrl != null && pdfUrl.startsWith('http'))
+        ? pdfUrl
+        : (path.startsWith('http') ? path : null);
+
+    if (downloadUrl == null) {
+      throw Exception('PDF文件不存在且无可用的下载URL: $path');
+    }
+
+    // 检查是否已有本地缓存
+    final cacheDir = await getTemporaryDirectory();
+    final urlHash = downloadUrl.hashCode.abs().toString();
+    final localPath = p.join(cacheDir.path, 'pdf_export_cache_$urlHash.pdf');
+    if (File(localPath).existsSync()) {
+      debugPrint('📄[EditorExporter] 使用已有本地缓存: $localPath');
+      return localPath;
+    }
+
+    // 下载PDF
+    debugPrint('📄[EditorExporter] 从云端下载PDF: $downloadUrl');
+    final userResult = await UserBackendService.getCurrentUserProfile();
+    final rawToken = userResult.fold((u) => u.token, (_) => '');
+    final token = _normalizeToken(rawToken);
+
+    final response = await http.get(
+      Uri.parse(downloadUrl),
+      headers: token.isNotEmpty ? {'Authorization': 'Bearer $token'} : {},
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('PDF下载失败: HTTP ${response.statusCode}');
+    }
+
+    final cacheFile = File(localPath);
+    await cacheFile.writeAsBytes(response.bodyBytes);
+    debugPrint('📄[EditorExporter] PDF已缓存到本地: $localPath (${response.bodyBytes.length} bytes)');
+    return localPath;
+  }
+
+  static String _normalizeToken(String token) {
+    if (token.isEmpty) return token;
+    if (token.trim().startsWith('{')) {
+      try {
+        final map = jsonDecode(token);
+        if (map is Map && map['access_token'] is String) {
+          return map['access_token'] as String;
+        }
+      } catch (_) {}
+    }
+    return token;
+  }
+
+  /// 绘制PDF背景
   static Future<void> _drawPdfBackground(
     ui.Canvas canvas,
     PdfEditorImage pdfImage,
     Size pageSize,
   ) async {
-    final String pdfFilePath = pdfImage.pdfFilePath;
     final int pdfPageIndex = pdfImage.pdfPageIndex;
 
+    // 确保PDF文件在本地（如果是URL则先下载）
+    final String localPdfPath = await _ensureLocalPdfFile(pdfImage);
+
     debugPrint(
-        '📄[EditorExporter] Drawing PDF background: $pdfFilePath (Page $pdfPageIndex) to fit $pageSize');
+        '📄[EditorExporter] Drawing PDF background: $localPdfPath (Page $pdfPageIndex) to fit $pageSize');
 
     // 1. 加载 pdfrx 文档用于渲染图像
-    final pdfrxDoc = await pdfrx.PdfDocument.openFile(pdfFilePath);
+    final pdfrxDoc = await pdfrx.PdfDocument.openFile(localPdfPath);
     try {
       final pdfrxPage = pdfrxDoc.pages[pdfPageIndex];
 
@@ -204,7 +269,7 @@ abstract class EditorExporter {
       Rect? cropBoxRect;
 
       try {
-        final File file = File(pdfFilePath);
+        final File file = File(localPdfPath);
         final List<int> bytes = await file.readAsBytes();
         final syncfusion.PdfDocument syncDoc =
             syncfusion.PdfDocument(inputBytes: bytes);
