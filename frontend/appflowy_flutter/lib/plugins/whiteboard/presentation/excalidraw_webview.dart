@@ -924,9 +924,21 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   }
 
   /// 下载云端图片（带认证）
+  static String _normalizeToken(String token) {
+    if (token.isEmpty) return token;
+    if (token.trim().startsWith('{')) {
+      try {
+        final map = jsonDecode(token);
+        if (map is Map && map['access_token'] is String) {
+          return map['access_token'] as String;
+        }
+      } catch (_) {}
+    }
+    return token;
+  }
+
   Future<Uint8List?> _downloadCloudImage(String url) async {
     try {
-      // 使用 FileUploadService 的认证机制
       final userResult = await UserBackendService.getCurrentUserProfile();
       final user = userResult.fold(
         (user) => user,
@@ -938,10 +950,11 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         return null;
       }
       
+      final token = _normalizeToken(user.token);
       final response = await http.get(
         Uri.parse(url),
         headers: {
-          'Authorization': 'Bearer ${user.token}',
+          'Authorization': 'Bearer $token',
         },
       );
       

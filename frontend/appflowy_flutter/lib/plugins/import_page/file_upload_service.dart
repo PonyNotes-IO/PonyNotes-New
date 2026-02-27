@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/env/env.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 
 /// File upload service for AppFlowy Cloud storage
@@ -38,8 +40,8 @@ class FileUploadService {
         (error) => throw Exception('无法获取当前工作区: $error'),
       );
       
-      // Get AppFlowy Cloud base URL
-      final baseUrl = await getAppFlowyCloudUrl();
+      // Get AppFlowy Cloud base URL from DI container (includes port for dev environments)
+      final baseUrl = _getCloudBaseUrl();
       final uri = Uri.parse(baseUrl);
       final String baseOrigin = _buildBaseOrigin(uri);
       
@@ -152,6 +154,23 @@ class FileUploadService {
       throw Exception('${prefix}服务器错误 ($statusCode)，稍后重试；详情：$responseBody');
     }
     throw Exception('${prefix}AppFlowy Cloud上传失败: $statusCode - $responseBody');
+  }
+
+  /// Get cloud base URL from DI container's AppFlowyCloudSharedEnv.
+  /// This returns the correct URL including port for dev environments
+  /// (e.g. http://8.152.101.166:8000 instead of http://8.152.101.166).
+  static String _getCloudBaseUrl() {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final configBaseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (configBaseUrl.isNotEmpty) {
+        Log.info('[FileUploadService] Using cloud config base_url: $configBaseUrl');
+        return configBaseUrl;
+      }
+    } catch (e) {
+      Log.warn('[FileUploadService] Failed to get cloud config, falling back: $e');
+    }
+    return Env.afCloudUrl.isNotEmpty ? Env.afCloudUrl : kAppflowyCloudUrl;
   }
 
   /// Build base origin without appending invalid default ports
