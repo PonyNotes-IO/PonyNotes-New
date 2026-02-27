@@ -147,7 +147,7 @@ impl FolderManager {
     info!("📢 Folder ready notifier sent, clients can now access folder data");
 
     let weak_mutex_folder = Arc::downgrade(&folder);
-    subscribe_folder_sync_state_changed(*workspace_id, folder_state_rx, Arc::downgrade(&self.user));
+    subscribe_folder_sync_state_changed(*workspace_id, folder_state_rx, weak_mutex_folder.clone(), Arc::downgrade(&self.user));
     subscribe_folder_trash_changed(
       *workspace_id,
       section_change_rx,

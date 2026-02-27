@@ -85,23 +85,27 @@ pub(crate) fn subscribe_folder_view_changed(
 pub(crate) fn subscribe_folder_sync_state_changed(
   workspace_id: Uuid,
   mut folder_sync_state_rx: WatchStream<SyncState>,
+  weak_mutex_folder: Weak<RwLock<Folder>>,
   user: Weak<dyn FolderUser>,
 ) {
   tokio::spawn(async move {
+    let mut was_syncing = false;
     while let Some(state) = folder_sync_state_rx.next().await {
       if let Some(user) = user.upgrade() {
         if let Ok(actual_workspace_id) = user.workspace_id() {
           if actual_workspace_id != workspace_id {
-            // break the loop when the workspace id is not matched.
             break;
           }
         }
       }
 
+      let is_syncing = state.is_syncing();
+      let is_finished = state.is_sync_finished();
+
       tracing::info!(
         "[FolderSyncState] 收到同步状态更新: is_syncing={}, is_finish={}",
-        state.is_syncing(),
-        state.is_sync_finished()
+        is_syncing,
+        is_finished
       );
       folder_notification_builder(
         workspace_id.to_string(),
@@ -109,6 +113,23 @@ pub(crate) fn subscribe_folder_sync_state_changed(
       )
       .payload(FolderSyncStatePB::from(state))
       .send();
+
+      if was_syncing && is_finished && !is_syncing {
+        tracing::info!(
+          "[FolderSyncState] ✅ 同步完成，强制刷新 workspace 视图和回收站"
+        );
+        if let Some(lock) = weak_mutex_folder.upgrade() {
+          let folder = lock.read().await;
+          notify_did_update_workspace(&workspace_id, &folder);
+          notify_did_update_section_views(&workspace_id, &folder);
+          let repeated_trash: RepeatedTrashPB = folder.get_my_trash_info().into();
+          folder_notification_builder("trash", FolderNotification::DidUpdateTrash)
+            .payload(repeated_trash)
+            .send();
+        }
+      }
+
+      was_syncing = is_syncing;
     }
   });
 }

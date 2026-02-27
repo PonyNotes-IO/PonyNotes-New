@@ -270,6 +270,7 @@ impl AppFlowyCore {
         Arc::downgrade(&database_manager),
         Arc::downgrade(&ai_manager),
         Arc::downgrade(&whiteboard_manager),
+        Arc::downgrade(&storage_manager),
       );
 
       (

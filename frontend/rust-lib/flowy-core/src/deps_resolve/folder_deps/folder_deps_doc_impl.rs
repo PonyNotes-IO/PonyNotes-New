@@ -15,6 +15,7 @@ use flowy_folder::view_operation::{
   FolderOperationHandler, GatherEncodedCollab, ImportedData, ViewData,
 };
 use flowy_search_pub::tantivy_state_init::get_document_tantivy_state;
+use flowy_storage::manager::StorageManager;
 use lib_dispatch::prelude::ToBytes;
 use lib_infra::async_trait::async_trait;
 use std::convert::TryFrom;
@@ -23,11 +24,14 @@ use std::sync::{Arc, Weak};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-pub struct DocumentFolderOperation(pub Weak<DocumentManager>);
+pub struct DocumentFolderOperation {
+  pub document_manager: Weak<DocumentManager>,
+  pub storage_manager: Weak<StorageManager>,
+}
 
 impl DocumentFolderOperation {
   fn document_manager(&self) -> Result<Arc<DocumentManager>, FlowyError> {
-    self.0.upgrade().ok_or_else(FlowyError::ref_drop)
+    self.document_manager.upgrade().ok_or_else(FlowyError::ref_drop)
   }
 }
 #[async_trait]
@@ -82,6 +86,13 @@ impl FolderOperationHandler for DocumentFolderOperation {
     let workspace_id = document_manager.user_service.workspace_id()?;
     if let Some(state) = get_document_tantivy_state(&workspace_id).and_then(|v| v.upgrade()) {
       let _ = state.write().await.delete_document(&view_id.to_string());
+    }
+
+    if let Some(storage) = self.storage_manager.upgrade() {
+      let parent_dir = view_id.to_string();
+      if let Err(err) = storage.delete_all_files_for_view(&parent_dir).await {
+        tracing::error!("🔴cleanup files for document {} failed: {}", view_id, err);
+      }
     }
 
     match document_manager.delete_document(view_id).await {

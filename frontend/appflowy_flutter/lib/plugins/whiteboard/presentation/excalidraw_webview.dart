@@ -7,10 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:appflowy/plugins/whiteboard/application/local_asset_server.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/user/application/user_service.dart';
 import 'package:http/http.dart' as http;
 
 import '../application/whiteboard_data_service.dart';
+import 'package:appflowy/plugins/import_page/file_upload_service.dart';
 import 'package:appflowy_backend/log.dart';
 
 // 全局InAppWebView实例计数器，确保每个InAppWebView的PlatformView ID全局唯一
@@ -923,35 +923,10 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     return result;
   }
 
-  /// 下载云端图片（带认证）
-  /// 归一化token：如果是JSON字符串则提取access_token
-  static String _normalizeToken(String token) {
-    if (token.isEmpty) return token;
-    if (token.trim().startsWith('{')) {
-      try {
-        final map = jsonDecode(token);
-        if (map is Map && map['access_token'] is String) {
-          return map['access_token'] as String;
-        }
-      } catch (_) {}
-    }
-    return token;
-  }
-
   Future<Uint8List?> _downloadCloudImage(String url) async {
     try {
-      final userResult = await UserBackendService.getCurrentUserProfile();
-      final user = userResult.fold(
-        (user) => user,
-        (error) => null,
-      );
+      final token = await FileUploadService.getValidAccessToken();
       
-      if (user == null || user.token.isEmpty) {
-        Log.warn('[ExcalidrawWebView] ⚠️ Cannot download cloud image: user not logged in');
-        return null;
-      }
-
-      final token = _normalizeToken(user.token);
       final response = await http.get(
         Uri.parse(url),
         headers: token.isNotEmpty
@@ -961,10 +936,26 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       
       if (response.statusCode == 200) {
         return response.bodyBytes;
-      } else {
-        Log.error('[ExcalidrawWebView] ❌ Cloud image download failed: ${response.statusCode} for $url');
-        return null;
       }
+      
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        Log.warn('[ExcalidrawWebView] ⚠️ Token expired (${response.statusCode}), refreshing and retrying...');
+        final freshToken = await FileUploadService.forceRefreshAccessToken();
+        if (freshToken != null && freshToken.isNotEmpty) {
+          final retryResponse = await http.get(
+            Uri.parse(url),
+            headers: {'Authorization': 'Bearer $freshToken'},
+          );
+          if (retryResponse.statusCode == 200) {
+            Log.info('[ExcalidrawWebView] ✅ Cloud image downloaded after token refresh');
+            return retryResponse.bodyBytes;
+          }
+          Log.error('[ExcalidrawWebView] ❌ Retry failed: ${retryResponse.statusCode}');
+        }
+      }
+      
+      Log.error('[ExcalidrawWebView] ❌ Cloud image download failed: ${response.statusCode} for $url');
+      return null;
     } catch (e) {
       Log.error('[ExcalidrawWebView] ❌ Cloud image download error: $e');
       return null;

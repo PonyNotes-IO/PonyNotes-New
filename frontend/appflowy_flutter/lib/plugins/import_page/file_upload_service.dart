@@ -8,9 +8,12 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/env/env.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/user/application/auth/auth_service.dart';
 
 /// File upload service for AppFlowy Cloud storage
 class FileUploadService {
+  static String? _cachedAccessToken;
+  static int? _tokenExpiresAt;
   
   /// Upload file to AppFlowy Cloud storage and get URL
   /// Requires user to be logged in to AppFlowy Cloud
@@ -218,37 +221,110 @@ class FileUploadService {
     return '';
   }
   
-  /// Get authentication token
-  static Future<String> _getAuthToken() async {
+  /// Get authentication token with automatic refresh
+  static Future<String> _getAuthToken({bool forceRefresh = false}) async {
     try {
-      // Get current user profile to get token
+      if (!forceRefresh && _cachedAccessToken != null && _tokenExpiresAt != null) {
+        final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        if (now < _tokenExpiresAt! - 60) {
+          return _cachedAccessToken!;
+        }
+        Log.info('[FileUploadService] Token expired or near expiry, refreshing...');
+      }
+
       final userResult = await UserBackendService.getCurrentUserProfile();
       final user = userResult.fold(
         (user) => user,
         (error) => throw Exception('用户未登录或登录已过期，请重新登录'),
       );
       
-      // Check if user token is empty or null
       if (user.token.isEmpty) {
         throw Exception('用户未登录，token为空');
       }
       
-      // ✅ 关键修复：token 可能是 JSON 格式（包含 access_token），需要归一化提取
       final accessToken = _normalizeToken(user.token);
       
       if (accessToken.isEmpty) {
         throw Exception('用户token为空，请重新登录');
       }
+
+      _cachedAccessToken = accessToken;
+      _tokenExpiresAt = _extractTokenExpiry(accessToken);
       
-      Log.info('Successfully retrieved access token (length: ${accessToken.length})');
+      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      if (_tokenExpiresAt != null && now >= _tokenExpiresAt! - 60) {
+        Log.info('[FileUploadService] Token expired, attempting refresh...');
+        final refreshed = await _tryRefreshToken();
+        if (refreshed != null) {
+          return refreshed;
+        }
+      }
+      
+      Log.info('[FileUploadService] Got valid access token (length: ${accessToken.length})');
       return accessToken;
     } catch (e) {
-      Log.error('Failed to get auth token: $e');
+      Log.error('[FileUploadService] Failed to get auth token: $e');
       if (e.toString().contains('未登录') || e.toString().contains('token')) {
         throw Exception('用户未登录或登录已过期，请先登录AppFlowy Cloud');
       }
       throw Exception('无法获取认证token: $e');
     }
+  }
+
+  /// Try to refresh the access token using the AuthService
+  static Future<String?> _tryRefreshToken() async {
+    try {
+      final authService = getIt<AuthService>();
+      final result = await authService.refreshToken();
+      return result.fold(
+        (tokenResponse) {
+          final newToken = tokenResponse.accessToken;
+          if (newToken.isNotEmpty) {
+            _cachedAccessToken = newToken;
+            _tokenExpiresAt = tokenResponse.expiresAt.toInt();
+            Log.info('[FileUploadService] ✅ Token refreshed successfully');
+            return newToken;
+          }
+          return null;
+        },
+        (error) {
+          Log.error('[FileUploadService] ❌ Token refresh failed: ${error.msg}');
+          return null;
+        },
+      );
+    } catch (e) {
+      Log.error('[FileUploadService] ❌ Token refresh error: $e');
+      return null;
+    }
+  }
+
+  /// Extract expiry from JWT token (decode payload without verification)
+  static int? _extractTokenExpiry(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return null;
+      String payload = parts[1];
+      while (payload.length % 4 != 0) {
+        payload += '=';
+      }
+      final decoded = utf8.decode(base64Url.decode(payload));
+      final map = jsonDecode(decoded) as Map<String, dynamic>;
+      return (map['exp'] as num?)?.toInt();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Get a valid access token, refreshing if necessary. Public for use by other services.
+  static Future<String> getValidAccessToken() async {
+    return _getAuthToken();
+  }
+
+  /// Force refresh and return a new token. Public for retry-on-401 pattern.
+  static Future<String?> forceRefreshAccessToken() async {
+    _cachedAccessToken = null;
+    _tokenExpiresAt = null;
+    return _tryRefreshToken() ?? _getAuthToken(forceRefresh: true).then((t) => t);
   }
   
   /// ✅ 归一化token：如果是JSON字符串则提取access_token，否则直接返回

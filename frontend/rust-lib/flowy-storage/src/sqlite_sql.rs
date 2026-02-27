@@ -239,6 +239,21 @@ pub fn batch_select_upload_file(
   Ok(results)
 }
 
+pub fn batch_select_upload_file_by_parent_dir(
+  mut conn: DBConnection,
+  workspace_id: &str,
+  parent_dir: &str,
+) -> FlowyResult<Vec<UploadFileTable>> {
+  let results = upload_file_table::dsl::upload_file_table
+    .filter(
+      upload_file_table::workspace_id
+        .eq(workspace_id)
+        .and(upload_file_table::parent_dir.eq(parent_dir)),
+    )
+    .load::<UploadFileTable>(&mut *conn)?;
+  Ok(results)
+}
+
 pub fn select_upload_file(
   conn: &mut SqliteConnection,
   workspace_id: &str,

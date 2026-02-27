@@ -27,13 +27,10 @@ use std::sync::{Arc, Weak};
 use crate::deps_resolve::folder_deps::folder_deps_chat_impl::ChatFolderOperation;
 use crate::deps_resolve::folder_deps::folder_deps_database_impl::DatabaseFolderOperation;
 use crate::deps_resolve::folder_deps::folder_deps_doc_impl::DocumentFolderOperation;
-// FolderFolderOperation and NotebookFolderOperation are no longer used
-// Folder and Notebook views reuse DocumentFolderOperation (only icons differ in UI)
-// use crate::deps_resolve::folder_deps::folder_deps_folder_impl::FolderFolderOperation;
-// use crate::deps_resolve::folder_deps::folder_deps_notebook_impl::NotebookFolderOperation;
 use crate::deps_resolve::folder_deps::folder_deps_whiteboard_impl::WhiteboardFolderOperation;
 use collab_plugins::local_storage::kv::KVTransactionDB;
 use flowy_folder_pub::query::{FolderQueryService, FolderService, FolderViewEdit, QueryCollab};
+use flowy_storage::manager::StorageManager;
 use lib_infra::async_trait::async_trait;
 use tracing::trace;
 use uuid::Uuid;
@@ -69,8 +66,12 @@ pub fn register_handlers(
   database_manager: Weak<DatabaseManager>,
   chat_manager: Weak<AIManager>,
   whiteboard_manager: Weak<flowy_whiteboard::manager::WhiteboardManager>,
+  storage_manager: Weak<StorageManager>,
 ) {
-  let document_folder_operation = Arc::new(DocumentFolderOperation(document_manager.clone()));
+  let document_folder_operation = Arc::new(DocumentFolderOperation {
+    document_manager: document_manager.clone(),
+    storage_manager,
+  });
   folder_manager.register_operation_handler(ViewLayout::Document, document_folder_operation);
 
   let database_folder_operation = Arc::new(DatabaseFolderOperation(database_manager));

@@ -2,10 +2,11 @@ use crate::entities::FileStatePB;
 use crate::file_cache::FileTempStorage;
 use crate::notification::{StorageNotification, make_notification};
 use crate::sqlite_sql::{
-  UploadFilePartTable, UploadFileTable, batch_select_upload_file, delete_all_upload_parts,
-  delete_upload_file, delete_upload_file_by_file_id, insert_upload_file, insert_upload_part,
-  is_upload_completed, is_upload_exist, select_upload_file, select_upload_parts,
-  update_upload_file_completed, update_upload_file_upload_id,
+  UploadFilePartTable, UploadFileTable, batch_select_upload_file,
+  batch_select_upload_file_by_parent_dir, delete_all_upload_parts, delete_upload_file,
+  delete_upload_file_by_file_id, insert_upload_file, insert_upload_part, is_upload_completed,
+  is_upload_exist, select_upload_file, select_upload_parts, update_upload_file_completed,
+  update_upload_file_upload_id,
 };
 use crate::uploader::{FileUploader, FileUploaderRunner, Signal, UploadTask, UploadTaskQueue};
 use allo_isolate::Isolate;
@@ -233,6 +234,46 @@ impl StorageManager {
   pub async fn get_all_tasks(&self) -> FlowyResult<Vec<UploadTask>> {
     let tasks = self.uploader.all_tasks().await;
     Ok(tasks)
+  }
+
+  pub async fn delete_all_files_for_view(&self, parent_dir: &str) -> FlowyResult<()> {
+    let uid = self.user_service.user_id()?;
+    let workspace_id = self.user_service.workspace_id()?;
+    let conn = self.user_service.sqlite_connection(uid)?;
+
+    let upload_files =
+      batch_select_upload_file_by_parent_dir(conn, &workspace_id.to_string(), parent_dir)?;
+
+    info!(
+      "[File] Cleaning up {} files for view: {}",
+      upload_files.len(),
+      parent_dir
+    );
+
+    for file in upload_files {
+      let url = self
+        .cloud_service
+        .get_object_url_v1(&workspace_id, &file.parent_dir, &file.file_id)
+        .await;
+      match url {
+        Ok(url) => {
+          if let Err(err) = self.storage_service.delete_object(url).await {
+            error!(
+              "[File] Failed to delete cloud file {}: {}",
+              file.file_id, err
+            );
+          }
+        },
+        Err(err) => {
+          error!(
+            "[File] Failed to get URL for file {}: {}",
+            file.file_id, err
+          );
+        },
+      }
+    }
+
+    Ok(())
   }
 }
 
