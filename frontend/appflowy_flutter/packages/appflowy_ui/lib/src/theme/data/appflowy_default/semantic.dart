@@ -136,7 +136,7 @@ class AppFlowyDefaultTheme implements AppFlowyThemeBuilder {
     );
 
     final surfaceContainerColorScheme = AppFlowySurfaceContainerColorScheme(
-      layer01: AppFlowyPrimitiveTokens.neutral100,
+      layer01: AppFlowyPrimitiveTokens.neutralWhite,
       layer02: AppFlowyPrimitiveTokens.neutral200,
       layer03: AppFlowyPrimitiveTokens.neutral300,
     );

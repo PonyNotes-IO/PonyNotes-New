@@ -126,7 +126,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.surfaceContainerColorScheme.layer01,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadiusDirectional.horizontal(
           start: Radius.circular(theme.spacing.m),
         ),
