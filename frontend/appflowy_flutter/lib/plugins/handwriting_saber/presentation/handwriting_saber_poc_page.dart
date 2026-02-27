@@ -323,6 +323,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   /// 注意：调用此方法前，必须先调用 _flushSaveForView() 保存当前数据
   void _cleanupViewState() {
     debugPrint('🦋[HandwritingSaber] _cleanupViewState called');
+
+    // 注意：数据保存由调用方（didUpdateWidget）在调用本方法前通过 _flushSaveForView() 完成
+    // 这里只负责清理内存状态，不再重复保存（避免双重保存）
+    _saveDebounceTimer?.cancel();
+    _saveDebounceTimer = null;
+
     // 清理当前笔迹
     _currentStrokeNotifier.value = null;
     _currentPageIndexNotifier.value = null;
@@ -530,8 +536,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   /// 将当前 EditorCoreInfo 保存到本地数据文件
   ///
-  /// PoC 阶段采用 JSON 文本保存，后续切换为 .sbn2 时只需调整序列化逻辑。
-  Future<void> _saveToStorage({bool suppressStatusUpdate = false}) async {
+  /// [suppressStatusUpdate] 为 true 时不触发界面刷新
+  /// [skipCloudUpload] 为 true 时跳过云上传（仅本地快速保存，用于 dispose 场景）
+  Future<void> _saveToStorage({
+    bool suppressStatusUpdate = false,
+    bool skipCloudUpload = false,
+  }) async {
     // 如果正在进行激光淡出，延迟保存以避免 I/O 干扰渲染
     if (_isLaserFadeInProgress) {
       _pendingSave = true;
@@ -542,15 +552,18 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     try {
       // 在序列化前上传所有尚未上传的图片和 PDF 底图到云存储
       // 上传后对应的 toJson() 会使用轻量 URL 格式，大幅减少 Collab 同步数据量
-      try {
-        await _uploadAssetsToCloud();
-      } catch (uploadError) {
-        debugPrint('⚠️[HandwritingSaber] _uploadAssetsToCloud failed (non-fatal): $uploadError');
+      // 跳过场景：dispose/deactivate 时调用，此时不做上传以避免延迟（数据已在内存，本地保存就够）
+      if (!skipCloudUpload) {
+        try {
+          await _uploadAssetsToCloud();
+        } catch (uploadError) {
+          debugPrint('⚠️[HandwritingSaber] _uploadAssetsToCloud failed (non-fatal): $uploadError');
+        }
       }
 
       final String json = _coreInfo.toJsonString();
       final List<int> bytes = utf8.encode(json);
-      debugPrint('🦋[HandwritingSaber] _saveToStorage: data size = ${bytes.length} bytes');
+      debugPrint('🦋[HandwritingSaber] _saveToStorage: data size = ${bytes.length} bytes, skipCloudUpload=$skipCloudUpload');
 
       final bool ok = await _dataService.saveHandwritingSaberData(
         widget.view.id,
@@ -4968,6 +4981,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   @override
   void dispose() {
     // ✅ 关键修复：dispose前最后一次保存（deactivate可能已保存，这里做双保险）
+    // _flushSaveForView 会同步序列化数据，同时异步写入 Collab 和本地文件
     debugPrint('🦋[HandwritingSaber] ===== dispose: final flush save =====');
     _flushSaveForView(widget.view.id);
 
