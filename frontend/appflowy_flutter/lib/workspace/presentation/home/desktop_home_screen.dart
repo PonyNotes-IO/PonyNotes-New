@@ -446,34 +446,22 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
       if (!isCurrentWorkspaceInList && !_hasShownRemovedDialog) {
         _hasShownRemovedDialog = true;
         Log.info(
-          'Current workspace ${currentWorkspace.workspaceId} not found in list, checking if it was created by current user',
+          'Current workspace ${currentWorkspace.workspaceId} not found in list, switching to an available workspace',
         );
-
-        // 检查当前工作区是否是登录用户创建的
-        // 如果当前工作区的 role 是 Owner，说明是登录用户创建的
-        final isCreatedByCurrentUser = currentWorkspace.role == AFRolePB.Owner;
         
         final workspaceBloc = context.read<UserWorkspaceBloc?>();
         if (workspaceBloc != null) {
-          UserWorkspacePB? targetWorkspace;
-          
-          if (isCreatedByCurrentUser) {
-            // 如果是登录用户创建的工作区被移除，切换到第一个工作区
-            targetWorkspace = workspaces.firstOrNull;
-            Log.info('Workspace was created by current user, switching to first available workspace');
-          } else {
-            // 如果当前工作区非登录用户创建被移除后，切换到登录用户自己创建的工作区
-            // 查找登录用户创建的工作区（role 为 Owner 的工作区）
-            targetWorkspace = workspaces.firstWhereOrNull(
-              (w) => w.role == AFRolePB.Owner,
-            );
-            
-            // 如果找不到登录用户创建的工作区，则切换到第一个工作区
-            targetWorkspace ??= workspaces.firstOrNull;
-            Log.info('Workspace was not created by current user, switching to user\'s own workspace or first available');
-          }
+          // 优先切换到用户自己的工作区（Owner），找不到再退回第一个可用工作区。
+          // 这样被移出协作区时，会自动回到用户自己的工作区。
+          UserWorkspacePB? targetWorkspace = workspaces.firstWhereOrNull(
+            (w) => w.role == AFRolePB.Owner,
+          );
+          targetWorkspace ??= workspaces.firstOrNull;
           
           if (targetWorkspace != null) {
+            Log.info(
+              'Switching workspace to ${targetWorkspace.workspaceId} (role: ${targetWorkspace.role}) after removal',
+            );
             workspaceBloc.add(
               UserWorkspaceEvent.openWorkspace(
                 workspaceId: targetWorkspace.workspaceId,
