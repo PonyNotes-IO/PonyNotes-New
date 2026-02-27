@@ -333,8 +333,11 @@ class DatabaseTabBarController {
   final ViewListener viewListener;
   OnViewUpdated? onViewUpdated;
   OnViewChildViewChanged? onViewChildViewChanged;
+  bool _isDisposed = false;
 
   Future<void> dispose() async {
+    if (_isDisposed) return;
+    _isDisposed = true;
     await Future.wait([viewListener.stop(), controller.dispose()]);
   }
 }
