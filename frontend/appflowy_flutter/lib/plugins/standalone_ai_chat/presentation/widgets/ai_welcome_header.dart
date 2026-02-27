@@ -15,12 +15,14 @@ class AIWelcomeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       margin: AIWelcomeTheme.welcomeAreaPadding,
+      alignment: Alignment.center,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 头像和主标题行（对应 block_1）
           Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // AI头像（对应 block_2 + group_1）
               Container(
@@ -49,11 +51,9 @@ class AIWelcomeHeader extends StatelessWidget {
               ),
               const SizedBox(width: 20), // 头像和文字之间的间距
               // 主标题（对应 text_15）
-              Expanded(
-                child: Text(
-                  '我是小马笔记AI，很高兴见到你！',
-                  style: AIWelcomeTheme.titleStyle(context),
-                ),
+              Text(
+                '我是小马笔记AI，很高兴见到你！',
+                style: AIWelcomeTheme.titleStyle(context),
               ),
               // 聊天记录按钮
               if (onChatHistoryTap != null)

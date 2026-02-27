@@ -63,7 +63,7 @@ class AIWelcomeTheme {
 
   /// 边距配置（基于设计图CSS）
   static const EdgeInsets welcomeAreaPadding =
-      EdgeInsets.fromLTRB(351, 215, 0, 0); // block_1 margin
+      EdgeInsets.fromLTRB(95, 150, 95, 0); // block_1 margin
   static const EdgeInsets subtitlePadding =
       EdgeInsets.fromLTRB(309, 20, 0, 0); // text_16 margin
   static const EdgeInsets inputContainerPadding =

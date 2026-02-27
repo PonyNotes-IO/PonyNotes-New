@@ -31,11 +31,13 @@ class AIWelcomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AIWelcomeTheme.backgroundColor(context),
+      // backgroundColor: AIWelcomeTheme.backgroundColor(context),
       body: Column(
         children: [
           // 顶部头像和欢迎文字区域
-          const AIWelcomeHeader(),
+          AIWelcomeHeader(
+            onChatHistoryTap: onChatHistoryTap,
+          ),
           // 输入交互区域 + 使用情况/未订阅提示
           AIInputArea(
             onMessageSent: onMessageSent,

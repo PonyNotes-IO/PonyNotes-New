@@ -218,6 +218,111 @@ class PaymentCreateResponse {
   }
 }
 
+/// 充值记录条目
+class PaymentRecordItem {
+  const PaymentRecordItem({
+    required this.orderNo,
+    required this.productName,
+    required this.amount,
+    required this.payTime,
+    required this.createTime,
+    required this.billingType,
+    required this.paymentType,
+    required this.status,
+  });
+
+  final String orderNo;
+  final String productName;
+  final double amount;
+  final String payTime;
+  final String createTime;
+  final String billingType;
+  final String paymentType;
+  final String status;
+
+  factory PaymentRecordItem.fromJson(Map<String, dynamic> json) {
+    double parseAmount(dynamic value) {
+      if (value == null) return 0.0;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString()) ?? 0.0;
+    }
+
+    String parseText(List<String> keys) {
+      for (final key in keys) {
+        final value = json[key];
+        if (value != null && value.toString().isNotEmpty) {
+          return value.toString();
+        }
+      }
+      return '';
+    }
+
+    return PaymentRecordItem(
+      orderNo: parseText(['orderNo', 'order_no', 'orderId', 'id']),
+      productName: parseText(['productName', 'product_name', 'planName', 'plan_name', 'subject']),
+      amount: parseAmount(json['amount'] ?? json['payAmount'] ?? json['pay_amount'] ?? json['price']),
+      payTime: parseText(['payTime', 'pay_time', 'paidTime', 'paid_time', 'startTime', 'start_time']),
+      createTime: parseText(['createTime', 'create_time', 'createdAt']),
+      billingType: parseText(['billingType', 'billing_type']),
+      paymentType: parseText(['paymentType', 'payment_type', 'payMethod', 'pay_method']),
+      status: parseText(['status', 'payStatus', 'pay_status']),
+    );
+  }
+
+  /// 兼容旧字段命名
+  String get startTime => payTime;
+  String get endTime => createTime;
+  String get payMethod => paymentType;
+}
+
+/// 充值记录分页结果
+class PaymentRecordPage {
+  const PaymentRecordPage({
+    required this.list,
+    required this.total,
+    required this.pageNum,
+    required this.pageSize,
+  });
+
+  final List<PaymentRecordItem> list;
+  final int total;
+  final int pageNum;
+  final int pageSize;
+
+  factory PaymentRecordPage.fromJson(
+    Map<String, dynamic> json, {
+    required int fallbackPageNum,
+    required int fallbackPageSize,
+  }) {
+    int parseInt(dynamic value, int fallback) {
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse(value?.toString() ?? '') ?? fallback;
+    }
+
+    final rawList = (json['list'] ?? json['rows']) as List<dynamic>? ?? const [];
+    final records = <PaymentRecordItem>[];
+    for (final item in rawList) {
+      if (item is Map<String, dynamic>) {
+        records.add(PaymentRecordItem.fromJson(item));
+      } else if (item is Map) {
+        records.add(
+          PaymentRecordItem.fromJson(
+            item.map((key, value) => MapEntry(key.toString(), value)),
+          ),
+        );
+      }
+    }
+
+    return PaymentRecordPage(
+      list: records,
+      total: parseInt(json['total'], records.length),
+      pageNum: parseInt(json['pageNum'] ?? json['page_num'], fallbackPageNum),
+      pageSize: parseInt(json['pageSize'] ?? json['page_size'], fallbackPageSize),
+    );
+  }
+}
+
 /// 支付相关云端 API 调用
 class PaymentApi {
   /// 存储测试模式下的模拟订单信息（用于关联 planId 和 billingType）
@@ -313,6 +418,112 @@ class PaymentApi {
 
     //旧版h5支付逻辑不通，不支持 -- todo 后期接入其他支付再使用
     return createOrder(request);
+  }
+
+  /// 查询当前用户充值记录
+  ///
+  /// GET https://www.xiaomabiji.com/prod-api/api/payment/myPaymentList?pageNum=1&pageSize=10
+  /// Header: X-Client-Authorization: <access_token>
+  static Future<FlowyResult<PaymentRecordPage, FlowyError>> getMyPaymentList({
+    required int pageNum,
+    required int pageSize,
+  }) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_web_domain;
+      final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+      final accessToken = _extractAccessToken(userProfile.token);
+      if (accessToken == null || accessToken.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = '缺少客户端 token',
+        );
+      }
+      final token = _normalizeToken(accessToken);
+      final uri = Uri.parse(
+        '$baseUrl/prod-api/api/payment/myPaymentList',
+      ).replace(
+        queryParameters: {
+          'pageNum': '$pageNum',
+          'pageSize': '$pageSize',
+        },
+      );
+
+      final response = await http.get(
+        uri,
+        headers: <String, String>{
+          'X-Client-Authorization': token,
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = '查询充值记录失败: HTTP ${response.statusCode}',
+        );
+      }
+
+      if (response.body.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = '充值记录响应为空',
+        );
+      }
+
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final code = decoded['code'] as int? ?? -1;
+      if (code != 200 && code != 0) {
+        final msg = decoded['msg']?.toString() ?? decoded['message']?.toString() ?? '查询充值记录失败';
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = msg,
+        );
+      }
+
+      final rawData = decoded['data'];
+      final Map<String, dynamic> pageData;
+      if (rawData is Map<String, dynamic>) {
+        pageData = rawData;
+      } else if (rawData is List) {
+        pageData = <String, dynamic>{
+          'rows': rawData,
+          'total': rawData.length,
+          'pageNum': pageNum,
+          'pageSize': pageSize,
+        };
+      } else {
+        // 兼容某些后端把分页字段直接放在顶层
+        pageData = <String, dynamic>{
+          'rows': decoded['rows'] ?? decoded['list'] ?? const [],
+          'total': decoded['total'] ?? 0,
+          'pageNum': decoded['pageNum'] ?? decoded['page_num'] ?? pageNum,
+          'pageSize': decoded['pageSize'] ?? decoded['page_size'] ?? pageSize,
+        };
+      }
+
+      final page = PaymentRecordPage.fromJson(
+        pageData,
+        fallbackPageNum: pageNum,
+        fallbackPageSize: pageSize,
+      );
+      return FlowyResult.success(page);
+    } catch (e, s) {
+      Log.error('[PaymentApi] 查询充值记录异常: $e\n$s');
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = '查询充值记录异常: $e',
+      );
+    }
   }
 
   static Future<FlowyResult<PaymentCreateResponse, FlowyError>> createOrder
@@ -701,5 +912,21 @@ class PaymentApi {
     }
   }
 
+
+  /// 将 token 归一化：如果是 JSON 字符串，提取 access_token；否则直接返回
+  static String _normalizeToken(String token) {
+    if (token.isEmpty) return token;
+    if (token.trim().startsWith('{')) {
+      try {
+        final map = jsonDecode(token);
+        if (map is Map && map['access_token'] is String) {
+          return map['access_token'] as String;
+        }
+      } catch (_) {
+        // ignore parse errors, fallback to raw token
+      }
+    }
+    return token;
+  }
 
 }
