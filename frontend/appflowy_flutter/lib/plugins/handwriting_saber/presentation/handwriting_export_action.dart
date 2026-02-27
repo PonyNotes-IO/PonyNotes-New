@@ -6,6 +6,7 @@ import 'package:appflowy/plugins/handwriting_saber/application/handwriting_saber
 import 'package:appflowy/plugins/handwriting_saber/services/editor_exporter.dart';
 import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/data/editor/editor_core_info.dart';
 import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/data/editor/page.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -14,6 +15,7 @@ import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
 /// 手写笔记专用的导出操作组件
@@ -122,7 +124,6 @@ class HandwritingExportAction extends StatelessWidget {
     try {
       Log.info('[HandwritingExport] 开始导出为 .ponynhw 格式...');
 
-      // 加载手写笔记数据
       final dataService = HandwritingSaberDataService();
       final sbnData = await dataService.loadHandwritingSaberData(view.id);
 
@@ -134,19 +135,106 @@ class HandwritingExportAction extends StatelessWidget {
         return;
       }
 
-      // 查找涉及到的 PDF 文件
-      final coreInfo = _parseEditorCoreInfo(sbnData);
-      final pdfPaths = <String>{};
-      for (final page in coreInfo.pages) {
-        if (page.backgroundImage != null) {
-          pdfPaths.add(page.backgroundImage!.pdfFilePath);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('正在准备导出，可能需要下载PDF资源...'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+
+      // 解析 JSON 获取所有 PDF 路径
+      final jsonString = utf8.decode(sbnData);
+      final jsonMap = jsonDecode(jsonString) as Map<String, dynamic>;
+      final pages = jsonMap['pages'] as List<dynamic>? ?? [];
+
+      // 收集所有唯一的 PDF 路径（可能是URL或本地路径）
+      final pdfPathSet = <String>{};
+      for (final page in pages) {
+        if (page is Map<String, dynamic> && page.containsKey('backgroundImage')) {
+          final bg = page['backgroundImage'] as Map<String, dynamic>?;
+          if (bg != null) {
+            final path = bg['pdfFilePath'] as String?;
+            final url = bg['pdfUrl'] as String?;
+            if (path != null && path.isNotEmpty) pdfPathSet.add(path);
+            if (url != null && url.isNotEmpty) pdfPathSet.add(url);
+          }
         }
       }
 
+      Log.info('[HandwritingExport] 找到 ${pdfPathSet.length} 个唯一PDF路径');
+
+      // 下载/读取所有 PDF 并按内容去重
+      final Map<String, List<int>> downloadedBytes = {};
+      for (final path in pdfPathSet) {
+        try {
+          List<int>? bytes;
+          if (path.startsWith('http')) {
+            bytes = await _downloadPdfFromUrl(path);
+          } else {
+            final file = File(path);
+            if (await file.exists()) bytes = await file.readAsBytes();
+          }
+          if (bytes != null && bytes.isNotEmpty) {
+            downloadedBytes[path] = bytes;
+          } else {
+            Log.warn('[HandwritingExport] PDF 获取失败: $path');
+          }
+        } catch (e) {
+          Log.error('[HandwritingExport] PDF 获取异常: $path, $e');
+        }
+      }
+
+      // 按内容去重：相同内容的PDF只保留一份
+      final Map<String, String> pathToArchiveName = {};
+      final Map<String, List<int>> archiveFiles = {};
+      int pdfCounter = 0;
+
+      for (final entry in downloadedBytes.entries) {
+        String? existingName;
+        for (final archiveEntry in archiveFiles.entries) {
+          if (archiveEntry.value.length == entry.value.length &&
+              _bytesEqual(archiveEntry.value, entry.value)) {
+            existingName = archiveEntry.key;
+            break;
+          }
+        }
+
+        if (existingName != null) {
+          pathToArchiveName[entry.key] = existingName;
+        } else {
+          final archiveName = 'pdf_$pdfCounter.pdf';
+          pdfCounter++;
+          archiveFiles[archiveName] = entry.value;
+          pathToArchiveName[entry.key] = archiveName;
+          Log.info('[HandwritingExport] 添加PDF资源: $archiveName (${entry.value.length} bytes)');
+        }
+      }
+
+      Log.info('[HandwritingExport] 去重后共 ${archiveFiles.length} 个PDF文件');
+
+      // 更新 JSON 中的 PDF 路径为归档文件名
+      for (final page in pages) {
+        if (page is Map<String, dynamic> && page.containsKey('backgroundImage')) {
+          final bg = page['backgroundImage'] as Map<String, dynamic>?;
+          if (bg != null) {
+            final path = bg['pdfFilePath'] as String?;
+            final url = bg['pdfUrl'] as String?;
+            final archiveName = pathToArchiveName[path] ??
+                pathToArchiveName[url];
+            if (archiveName != null) {
+              bg['pdfFilePath'] = archiveName;
+              bg['pdfUrl'] = null;
+            }
+          }
+        }
+      }
+
+      final modifiedSbnData = utf8.encode(jsonEncode(jsonMap));
+
       // 创建 .ponynhw 压缩包
-      Log.info(
-          '[HandwritingExport] 创建 .ponynhw 压缩包，数据大小: ${sbnData.length} 字节, 包含 ${pdfPaths.length} 个 PDF 资源');
-      final ponynhwBytes = await _createPonynhwArchive(sbnData, pdfPaths);
+      final ponynhwBytes = _createPonynhwArchive(modifiedSbnData, archiveFiles);
 
       if (ponynhwBytes.isEmpty) {
         Log.error('[HandwritingExport] 创建压缩包失败');
@@ -172,7 +260,6 @@ class HandwritingExportAction extends StatelessWidget {
         return;
       }
 
-      // 确保文件名有正确的扩展名
       final finalPath = savePath.endsWith(ponynhwExtension)
           ? savePath
           : '$savePath$ponynhwExtension';
@@ -194,36 +281,66 @@ class HandwritingExportAction extends StatelessWidget {
     }
   }
 
+  /// 从云端URL下载PDF
+  Future<List<int>?> _downloadPdfFromUrl(String url) async {
+    try {
+      Log.info('[HandwritingExport] 下载PDF: $url');
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final rawToken = userResult.fold((u) => u.token, (_) => '');
+      final token = _normalizeExportToken(rawToken);
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: token.isNotEmpty ? {'Authorization': 'Bearer $token'} : {},
+      );
+
+      if (response.statusCode == 200) {
+        Log.info('[HandwritingExport] PDF下载成功: ${response.bodyBytes.length} bytes');
+        return response.bodyBytes;
+      } else {
+        Log.error('[HandwritingExport] PDF下载失败: HTTP ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      Log.error('[HandwritingExport] PDF下载异常: $e');
+      return null;
+    }
+  }
+
+  static String _normalizeExportToken(String token) {
+    if (token.isEmpty) return token;
+    if (token.trim().startsWith('{')) {
+      try {
+        final map = jsonDecode(token);
+        if (map is Map && map['access_token'] is String) {
+          return map['access_token'] as String;
+        }
+      } catch (_) {}
+    }
+    return token;
+  }
+
+  static bool _bytesEqual(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
   /// 创建 .ponynhw 压缩包
-  /// 格式说明：
-  /// - main.sbn2: 主数据文件（与内部存储格式相同）
-  /// - meta.json: 元数据文件（包含版本、名称等信息）
-  /// - assets/: 资源文件夹（包含本地 PDF 文件等）
-  Future<List<int>> _createPonynhwArchive(
-      List<int> sbnData, Set<String> pdfPaths) async {
+  List<int> _createPonynhwArchive(
+      List<int> sbnData, Map<String, List<int>> pdfFiles) {
     final archive = Archive();
 
-    // 添加主数据文件
     archive.addFile(ArchiveFile('main.sbn2', sbnData.length, sbnData));
 
-    // 添加 PDF 资源
-    for (final path in pdfPaths) {
-      try {
-        final file = File(path);
-        if (await file.exists()) {
-          final bytes = await file.readAsBytes();
-          final fileName = p.basename(path);
-          archive.addFile(ArchiveFile('assets/$fileName', bytes.length, bytes));
-          Log.info('[HandwritingExport] 已将 PDF 资源添加到压缩包: $fileName');
-        } else {
-          Log.warn('[HandwritingExport] PDF 文件不存在，跳过: $path');
-        }
-      } catch (e) {
-        Log.error('[HandwritingExport] 读取 PDF 文件失败: $path, $e');
-      }
+    for (final entry in pdfFiles.entries) {
+      archive.addFile(
+        ArchiveFile('assets/${entry.key}', entry.value.length, entry.value),
+      );
     }
 
-    // 创建元数据
     final meta = {
       'version': ponynhwVersion,
       'format': 'ponynhw',
@@ -235,7 +352,6 @@ class HandwritingExportAction extends StatelessWidget {
     final metaBytes = utf8.encode(metaJson);
     archive.addFile(ArchiveFile('meta.json', metaBytes.length, metaBytes));
 
-    // 压缩并返回
     final encoded = ZipEncoder().encode(archive);
     return encoded ?? [];
   }
@@ -530,30 +646,57 @@ class HandwritingImportAction extends StatelessWidget {
 
       // 获取手写笔记数据目录
       final dataService = HandwritingSaberDataService();
-      // 通过 getHandwritingSaberFilePathForDebug 获取目录的一个变通方法
       final samplePath =
           await dataService.getHandwritingSaberFilePathForDebug('dummy');
       final targetDir = p.dirname(samplePath);
 
-      // 遍历页面查找 PDF 背景
+      // 确保目标目录存在
+      final dir = Directory(targetDir);
+      if (!dir.existsSync()) {
+        dir.createSync(recursive: true);
+      }
+
+      // 先将所有资源保存到本地，建立文件名->本地路径的映射
+      final Map<String, String> assetToLocalPath = {};
+      for (final entry in assets.entries) {
+        final newPath = p.join(targetDir, entry.key);
+        final file = File(newPath);
+        await file.writeAsBytes(entry.value);
+        assetToLocalPath[entry.key] = newPath;
+        Log.info('[HandwritingImport] 已保存资源到本地: $newPath (${entry.value.length} bytes)');
+      }
+
+      // 遍历页面查找 PDF 背景并更新路径
       for (final page in pages) {
         if (page is Map<String, dynamic> &&
             page.containsKey('backgroundImage')) {
-          final bg = page['backgroundImage'] as Map<String, dynamic>;
-          final oldPath = bg['pdfFilePath'] as String?;
-          if (oldPath != null) {
-            final fileName = p.basename(oldPath);
-            if (assets.containsKey(fileName)) {
-              // 将资源保存到本地
-              final newPath = p.join(targetDir, fileName);
-              final file = File(newPath);
-              await file.writeAsBytes(assets[fileName]!);
+          final bg = page['backgroundImage'] as Map<String, dynamic>?;
+          if (bg == null) continue;
 
-              // 更新路径
-              bg['pdfFilePath'] = newPath;
-              modified = true;
-              Log.info('[HandwritingImport] 已恢复 PDF 资源并更新路径: $newPath');
+          final oldPath = bg['pdfFilePath'] as String?;
+          if (oldPath == null || oldPath.isEmpty) continue;
+
+          // 尝试直接匹配文件名（新格式：pdf_0.pdf 等）
+          final fileName = p.basename(oldPath);
+          String? localPath = assetToLocalPath[fileName];
+
+          // 如果直接匹配失败，尝试遍历所有资源查找
+          if (localPath == null) {
+            for (final assetName in assetToLocalPath.keys) {
+              if (fileName == assetName || oldPath.endsWith(assetName)) {
+                localPath = assetToLocalPath[assetName];
+                break;
+              }
             }
+          }
+
+          if (localPath != null) {
+            bg['pdfFilePath'] = localPath;
+            bg['pdfUrl'] = null;
+            modified = true;
+            Log.info('[HandwritingImport] 更新PDF路径: $oldPath -> $localPath');
+          } else {
+            Log.warn('[HandwritingImport] 未找到匹配的PDF资源: $oldPath');
           }
         }
       }
