@@ -200,9 +200,15 @@ class HomeSideBar extends StatelessWidget {
                       if (page != null && 
                           page.id.isNotEmpty &&
                           currentSpace.childViews.any((v) => v.id == page.id)) {
-                        // 打开空间统一页面
-                        Log.info('[SIDEBAR] Opening space hub for space: ${currentSpace.name}');
-                        context.read<TabsBloc>().openPlugin(currentSpace);
+                        if (currentPlugin.pluginType == PluginType.blank) {
+                          // 仅在空白页阶段自动打开空间统一页面，避免抢占当前业务页面（如文件库/日历）
+                          Log.info('[SIDEBAR] Opening space hub for space: ${currentSpace.name}');
+                          context.read<TabsBloc>().openPlugin(currentSpace);
+                        } else {
+                          Log.info(
+                            '[SIDEBAR] Skip auto-open space hub with page because current plugin is ${currentPlugin.pluginType}',
+                          );
+                        }
                         if (state.isDuplicatingSpace) {
                           _duplicateSpaceLoading ??= Loading(context);
                           _duplicateSpaceLoading?.start();
@@ -216,8 +222,14 @@ class HomeSideBar extends StatelessWidget {
                       // 如果空间刚被设置为 currentSpace，但没有 lastCreatedPage
                       // 说明是工作区切换后自动加载的空间，应该打开空间统一页面
                       if (page == null || page.id.isEmpty) {
-                        Log.info('[SIDEBAR] Opening space hub after workspace switch: ${currentSpace.name}');
-                        context.read<TabsBloc>().openPlugin(currentSpace);
+                        if (currentPlugin.pluginType == PluginType.blank) {
+                          Log.info('[SIDEBAR] Opening space hub after workspace switch: ${currentSpace.name}');
+                          context.read<TabsBloc>().openPlugin(currentSpace);
+                        } else {
+                          Log.info(
+                            '[SIDEBAR] Skip auto-open space hub because current plugin is ${currentPlugin.pluginType}',
+                          );
+                        }
                         if (state.isDuplicatingSpace) {
                           _duplicateSpaceLoading ??= Loading(context);
                           _duplicateSpaceLoading?.start();

@@ -27,6 +27,7 @@ import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
 import '../../../features/workspace/logic/workspace_bloc.dart';
 import '../../../generated/locale_keys.g.dart';
 import '../../../workspace/application/sidebar/folder/folder_bloc.dart';
+import '../../../workspace/application/home/home_setting_bloc.dart';
 import '../../../workspace/application/sidebar/space/space_bloc.dart';
 import '../../../workspace/application/view/view_ext.dart';
 import '../../../workspace/application/view/view_listener.dart';
@@ -1048,6 +1049,15 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     return ValueListenableBuilder<bool>(
       valueListenable: FullWindowController.isFullWindow,
       builder: (context, isFullWindow, _) {
+        final menuStatus = context.select<HomeSettingBloc, MenuStatus>(
+          (bloc) => bloc.state.menuStatus,
+        );
+        final shouldApplyTopPadding =
+            !isFullWindow && menuStatus != MenuStatus.expanded;
+        final contentTopPadding = shouldApplyTopPadding
+            ? HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding
+            : 0.0;
+
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1064,7 +1074,31 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   minWidth: 0,
                   maxWidth: _isSidebarExpanded ? 300 : 60,
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      Visibility(
+                        visible: shouldApplyTopPadding,
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: FlowyIconButton(
+                            width: 24,
+                            tooltipText: LocaleKeys.sideBar_openSidebar.tr(),
+                            radius: const BorderRadius.all(Radius.circular(8.0)),
+                            icon: const FlowySvg(
+                              FlowySvgs.show_menu_s,
+                              size: Size.square(16),
+                            ),
+                            onPressed: () {
+                              if (FullWindowController.isFullWindow.value) {
+                                FullWindowController.exit();
+                              }
+                              context.read<HomeSettingBloc>().add(
+                                HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
                       // 顶部工具栏，包含收起/展开按钮和其他操作按钮
                       _buildTopWidget(),
                       // 右侧工具栏 - 已移除三个按钮
@@ -1083,7 +1117,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             Expanded(
               child: Padding(
                 padding: EdgeInsets.only(
-                  top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding,
+                  top: contentTopPadding,
                 ),
                 child: _selectedNote != null ||
                         _showNewEventPage ||

@@ -4,9 +4,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/media_entities.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -16,11 +18,14 @@ import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_block.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/custom_image_block_component/custom_image_block_component.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
+import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 
 import '../application/file_library_bloc.dart';
 import '../application/file_library_models.dart';
@@ -74,80 +79,121 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
           }
           // 移除成功和信息提示，只保留错误提示
         },
-        child: Container(
-          width: double.infinity,
-          height: double.infinity,
-          child: Row(
-            children: [
-              // 左侧文件分类侧边栏
-              Container(
-                width: 250,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                ),
-                clipBehavior: Clip.hardEdge,
-                child: Column(
-                  children: [
-                    // 顶部标题
-                    Container(
-                      height: 50,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Theme.of(context).dividerColor,
-                            width: 0.5,
-                          ),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const Text(
-                            '文件库',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
+        child: ValueListenableBuilder<bool>(
+          valueListenable: FullWindowController.isFullWindow,
+          builder: (context, isFullWindow, _) {
+            final menuStatus = context.select<HomeSettingBloc, MenuStatus>(
+              (bloc) => bloc.state.menuStatus,
+            );
+            final shouldApplyTopPadding =
+                !isFullWindow && menuStatus != MenuStatus.expanded;
+            final contentTopPadding = shouldApplyTopPadding
+                ? HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding
+                : 0.0;
+
+            return Container(
+              width: double.infinity,
+              height: double.infinity,
+              child: Row(
+                children: [
+                  // 左侧文件分类侧边栏
+                  Container(
+                    width: 250,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    ),
+                    clipBehavior: Clip.hardEdge,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Visibility(
+                          visible: shouldApplyTopPadding,
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: FlowyIconButton(
+                              width: 24,
+                              tooltipText: LocaleKeys.sideBar_openSidebar.tr(),
+                              radius: const BorderRadius.all(Radius.circular(8.0)),
+                              icon: const FlowySvg(
+                                FlowySvgs.show_menu_s,
+                                size: Size.square(16),
+                              ),
+                              onPressed: () {
+                                if (FullWindowController.isFullWindow.value) {
+                                  FullWindowController.exit();
+                                }
+                                context.read<HomeSettingBloc>().add(
+                                  HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                                );
+                              },
                             ),
                           ),
-                          const Spacer(),
-                          BlocBuilder<FileLibraryBloc, FileLibraryState>(
-                            builder: (context, state) {
-                              return FlowyIconButton(
-                                icon: const FlowySvg(
-                                  FlowySvgs.fl_upload_m,
-                                  size: Size.square(18),
-                                ),
-                                onPressed: state.isImporting
-                                    ? null
-                                    : () {
-                                        _bloc.add(const FileLibraryEvent.importPdfFile());
-                                      },
-                                tooltipText: '上传文件',
-                                hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                              );
-                            },
+                        ),
+                        // 顶部标题
+                        Container(
+                          height: 50,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Theme.of(context).dividerColor,
+                                width: 0.5,
+                              ),
+                            ),
                           ),
-                        ],
+                          child: Row(
+                            children: [
+                              const Text(
+                                '文件库',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const Spacer(),
+                              BlocBuilder<FileLibraryBloc, FileLibraryState>(
+                                builder: (context, state) {
+                                  return FlowyIconButton(
+                                    icon: const FlowySvg(
+                                      FlowySvgs.fl_upload_m,
+                                      size: Size.square(18),
+                                    ),
+                                    onPressed: state.isImporting
+                                        ? null
+                                        : () {
+                                            _bloc.add(const FileLibraryEvent.importPdfFile());
+                                          },
+                                    tooltipText: '上传文件',
+                                    hoverColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        // 分类列表
+                        Expanded(
+                          child: _buildCategoryList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 右侧文件列表区域
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: contentTopPadding),
+                      child: Container(
+                        width: double.infinity,
+                        height: double.infinity,
+                        color: Theme.of(context).colorScheme.surface,
+                        child: _buildMainContent(),
                       ),
                     ),
-                    // 分类列表
-                    Expanded(
-                      child: _buildCategoryList(),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              // 右侧文件列表区域
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  height: double.infinity,
-                  color: Theme.of(context).colorScheme.surface,
-                  child: _buildMainContent(),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -1218,7 +1264,7 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       // 注意：使用私有空间的ID作为parentViewId，section设为Private
       final result = await ViewBackendService.createView(
         layoutType: ViewLayoutPB.Document,
-        parentViewId: privateSpace!.id, // 使用私有空间ID作为parentViewId
+        parentViewId: privateSpace.id, // 使用私有空间ID作为parentViewId
         name: '', // 空标题，会显示为"未命名页面"
         openAfterCreate: false, // 先不自动打开，我们手动打开
         index: 0,

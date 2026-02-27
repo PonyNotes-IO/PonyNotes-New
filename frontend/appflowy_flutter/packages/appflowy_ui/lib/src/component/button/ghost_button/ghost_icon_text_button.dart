@@ -183,7 +183,7 @@ class AFGhostIconTextButton extends StatelessWidget {
                   style: size.buildTextStyle(context).copyWith(
                         color: textColor,
                     fontSize: 12,
-                    fontWeight: FontWeight.w600
+                    fontWeight: FontWeight.bold
                       ),
                 ),
               )
@@ -193,7 +193,7 @@ class AFGhostIconTextButton extends StatelessWidget {
                 style: size.buildTextStyle(context).copyWith(
                       color: textColor,
                     fontSize: 12,
-                    fontWeight: FontWeight.w600
+                    fontWeight: FontWeight.bold
                     ),
               ),
             // 箭头在文字后
