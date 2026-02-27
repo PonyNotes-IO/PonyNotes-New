@@ -175,8 +175,8 @@ class _RechargeRecordsViewState extends State<RechargeRecordsView> {
       ),
       child: Row(
         children: const [
-          Expanded(flex: 2,child: _HeaderCell('产品名称')),
-          Expanded(child: _HeaderCell('价格')),
+          Expanded(flex: 1,child: _HeaderCell('产品名称')),
+          Expanded(flex: 1,child: _HeaderCell('价格')),
           Expanded(flex: 2, child: _HeaderCell('支付时间')),
           Expanded(flex: 2, child: _HeaderCell('创建时间')),
           Expanded(child: _HeaderCell('计费类型')),
@@ -210,7 +210,7 @@ class _RechargeRecordsViewState extends State<RechargeRecordsView> {
       child: Row(
         children: [
           Expanded(
-            flex: 2,
+            flex: 1,
             child: Row(
               children: [
                 if (!isCompact) ...[
@@ -235,6 +235,7 @@ class _RechargeRecordsViewState extends State<RechargeRecordsView> {
             ),
           ),
           Expanded(
+            flex: 1,
             child: FlowyText(
               _formatAmount(record.amount),
               fontSize: isCompact ? 13 : 14,
@@ -282,12 +283,7 @@ class _RechargeRecordsViewState extends State<RechargeRecordsView> {
             ),
           ),
           Expanded(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildStatusChip(theme, record.status),
-              ],
-            ),
+            child: _buildStatusChip(theme, record.status),
           ),
         ],
       ),
@@ -401,6 +397,8 @@ class _RechargeRecordsViewState extends State<RechargeRecordsView> {
           label,
           fontSize: 12,
           color: textColor,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );
