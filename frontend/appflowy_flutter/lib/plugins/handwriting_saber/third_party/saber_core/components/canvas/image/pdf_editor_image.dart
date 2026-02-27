@@ -414,6 +414,9 @@ class PdfEditorImage {
   
   /// PDF 原始字节（用于从云端下载后内存缓存，避免重复下载）
   Uint8List? pdfBytes;
+
+  /// 是否已被 dispose，用于保护异步回调中对 _loadState 的访问
+  bool _isDisposed = false;
   
   final int pdfPageIndex;         // PDF 页面索引（从 0 开始）
   final Size naturalSize;         // PDF 页面的自然尺寸
@@ -538,6 +541,7 @@ class PdfEditorImage {
 
   /// 预加载 PDF 文档（非阻塞，不会等待结果）
   void preloadPdfDocument() {
+    if (_isDisposed) return;
     if (_loadState.value == PdfLoadState.notLoaded) {
       _loadState.value = PdfLoadState.loading;
       _loadPdfDocumentAsync();
@@ -546,17 +550,14 @@ class PdfEditorImage {
 
   /// ✅ 重置加载状态并预加载（用于视图切换后强制重新加载）
   void resetLoadStateAndPreload() {
+    if (_isDisposed) return;
     debugPrint('🔄[PdfEditorImage] 重置加载状态并预加载: $pdfFilePath (页面 $pdfPageIndex)');
     
-    // ✅ 关键修复：清理Widget缓存，确保重新构建ValueListenableBuilder
-    // 否则缓存的Widget中的ValueListenableBuilder监听的是旧对象的_loadState
     _cacheManager.clearPageWidgetCache(pdfFilePath, pdfPageIndex);
     
-    // 重置加载状态为notLoaded，触发ValueNotifier更新
     _loadState.value = PdfLoadState.notLoaded;
     _loadError = null;
     
-    // 立即触发预加载
     preloadPdfDocument();
   }
 
@@ -566,7 +567,6 @@ class PdfEditorImage {
       debugPrint('🦋[PdfEditorImage] 开始异步加载 PDF: $pdfFilePath (pdfUrl: $pdfUrl)');
       final startTime = DateTime.now();
 
-      // 若是云 URL 场景，先下载到本地缓存
       if (pdfUrl != null && pdfUrl!.startsWith('http')) {
         if (pdfFilePath.isEmpty || !File(pdfFilePath).existsSync()) {
           debugPrint('🦋[PdfEditorImage] Downloading PDF from cloud before loading...');
@@ -574,14 +574,16 @@ class PdfEditorImage {
         }
       }
       
+      if (_isDisposed) return;
+
       if (pdfFilePath.isEmpty) {
         throw Exception('PDF file path is empty and cloud download failed');
       }
 
-      // 通过缓存管理器获取或加载文档
       final document = await _cacheManager.load(pdfFilePath, pdfBytes: pdfBytes);
 
-      // 检查页面索引是否有效
+      if (_isDisposed) return;
+
       if (pdfPageIndex < 0 || pdfPageIndex >= document.pages.length) {
         throw Exception('PDF页面索引无效: $pdfPageIndex, 总页数: ${document.pages.length}');
       }
@@ -593,12 +595,13 @@ class PdfEditorImage {
       _loadError = null;
 
     } catch (e) {
+      if (_isDisposed) return;
       debugPrint('❌ [PdfEditorImage] PDF加载失败: $e');
       _loadState.value = PdfLoadState.failed;
       _loadError = e.toString();
 
-      // 简单的重试机制，延迟1秒后重试一次
       Future.delayed(const Duration(seconds: 1), () {
+        if (_isDisposed) return;
         if (_loadState.value == PdfLoadState.failed) {
           debugPrint('🦋[PdfEditorImage] 尝试重试加载 PDF: $pdfFilePath');
           _loadState.value = PdfLoadState.notLoaded;
@@ -610,28 +613,28 @@ class PdfEditorImage {
 
   /// 加载 PDF 文档（兼容旧接口，会等待加载完成）
   Future<void> loadPdfDocument() async {
+    if (_isDisposed) return;
+
     if (_loadState.value == PdfLoadState.loaded) {
-      return;  // 已经加载完成
+      return;
     }
 
     if (_loadState.value == PdfLoadState.loading) {
-      // 正在加载中，等待完成
       await _waitForLoading();
       return;
     }
 
-    // 开始加载
     _loadState.value = PdfLoadState.loading;
     await _loadPdfDocumentAsync();
   }
 
   /// 等待加载完成（用于兼容旧接口）
   Future<void> _waitForLoading() async {
-    if (_loadState.value != PdfLoadState.loading) return;
+    if (_isDisposed || _loadState.value != PdfLoadState.loading) return;
 
     await Future.doWhile(() async {
       await Future.delayed(const Duration(milliseconds: 50));
-      return _loadState.value == PdfLoadState.loading;
+      return !_isDisposed && _loadState.value == PdfLoadState.loading;
     });
   }
 
@@ -784,6 +787,7 @@ class PdfEditorImage {
 
   /// 释放资源（参考Saber的dispose实现）
   void dispose() {
+    _isDisposed = true;
     _loadState.dispose();
   }
 }
