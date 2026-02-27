@@ -51,25 +51,26 @@ class EditorPage {
   final List<saber_list.TaskListBox> taskListBoxes; // ✅ 任务列表框列表
   final QuillStruct quill; // ✅ Quill 富文本编辑器结构
 
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool forCollab = false}) {
     return <String, dynamic>{
       'width': size.width,
       'height': size.height,
       'strokes': strokes.map((Stroke s) => s.toJson()).toList(),
-      'images': images.map((EditorImage img) => img.toJson()).toList(), // ✅ 保存图片列表
+      'images': images.map((EditorImage img) => img.toJson(forCollab: forCollab)).toList(),
       if (webViews.isNotEmpty)
-        'webViews': webViews.map((WebViewEditorElement wv) => wv.toJson()).toList(), // ✅ 保存WebView列表
-      'textBoxes': textBoxes.map((saber_text.TextBox t) => t.toJson()).toList(), // ✅ 保存文本框列表
-      'listBoxes': listBoxes.map((saber_list.ListBox l) => l.toJson()).toList(), // ✅ 保存列表框列表
-      'taskListBoxes': taskListBoxes.map((saber_list.TaskListBox t) => t.toJson()).toList(), // ✅ 保存任务列表框列表
-      'quill': quill.toJson(), // ✅ 保存 Quill 富文本内容
-      // ✅ 保存 PDF 背景图片信息
-      // pdfFilePath 可能是本地路径或云 URL（http/https 开头）
-      // pdfUrl 字段专用于存储云 URL（优先用于跨设备同步）
+        'webViews': webViews.map((WebViewEditorElement wv) => wv.toJson()).toList(),
+      'textBoxes': textBoxes.map((saber_text.TextBox t) => t.toJson()).toList(),
+      'listBoxes': listBoxes.map((saber_list.ListBox l) => l.toJson()).toList(),
+      'taskListBoxes': taskListBoxes.map((saber_list.TaskListBox t) => t.toJson()).toList(),
+      'quill': quill.toJson(),
       'backgroundImage': backgroundImage != null
           ? <String, dynamic>{
-              'pdfFilePath': backgroundImage!.pdfFilePath,
-              'pdfUrl': backgroundImage!.pdfUrl, // 云存储 URL（跨设备同步用）
+              // forCollab 模式：只存 pdfUrl（云URL），不存本地路径
+              // 本地路径在其他设备上不可用，且避免无意义的数据同步
+              'pdfFilePath': forCollab
+                  ? (backgroundImage!.pdfUrl ?? '')
+                  : backgroundImage!.pdfFilePath,
+              'pdfUrl': backgroundImage!.pdfUrl,
               'pdfPageIndex': backgroundImage!.pdfPageIndex,
               'naturalSize': <String, double>{
                 'width': backgroundImage!.naturalSize.width,

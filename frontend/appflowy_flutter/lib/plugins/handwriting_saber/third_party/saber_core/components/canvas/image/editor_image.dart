@@ -66,7 +66,7 @@ abstract class EditorImage extends ChangeNotifier {
 
   String get imageType;
 
-  Map<String, dynamic> toJson();
+  Map<String, dynamic> toJson({bool forCollab = false});
 
   static EditorImage fromJson(Map<String, dynamic> json) {
     final String? type = json['type'] as String?;
@@ -202,7 +202,7 @@ class PngEditorImage extends EditorImage {
   }
 
   @override
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool forCollab = false}) {
     final pageSizeMap = {
       'width': pageSize.width,
       'height': pageSize.height,
@@ -215,7 +215,6 @@ class PngEditorImage extends EditorImage {
     };
 
     if (imageUrl != null && imageUrl!.startsWith('http')) {
-      // 轻量模式：只存云 URL，不存字节数据，大幅减少 Collab 同步数据量
       return {
         'type': imageType,
         'id': id,
@@ -228,9 +227,8 @@ class PngEditorImage extends EditorImage {
       };
     }
 
-    if (imageBytes.isNotEmpty) {
-      // 回退模式：base64 编码存储（数据量比整数数组小，但仍较大）
-      // 注意：这种模式下 Collab 同步可能因数据量过大而失败
+    // forCollab 模式下绝不包含 base64 数据，避免 Collab 同步数据过大导致 WebSocket 失败
+    if (!forCollab && imageBytes.isNotEmpty) {
       final base64Str = base64Encode(imageBytes);
       return {
         'type': imageType,
@@ -244,7 +242,6 @@ class PngEditorImage extends EditorImage {
       };
     }
 
-    // 空图片
     return {
       'type': imageType,
       'id': id,
@@ -330,7 +327,7 @@ class SvgEditorImage extends EditorImage {
   String get imageType => 'svg';
 
   @override
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool forCollab = false}) {
     return {
       'type': imageType,
       'id': id,

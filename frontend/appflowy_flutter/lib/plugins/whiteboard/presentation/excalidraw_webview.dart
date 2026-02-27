@@ -924,6 +924,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   }
 
   /// 下载云端图片（带认证）
+  /// 归一化token：如果是JSON字符串则提取access_token
   static String _normalizeToken(String token) {
     if (token.isEmpty) return token;
     if (token.trim().startsWith('{')) {
@@ -949,19 +950,19 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         Log.warn('[ExcalidrawWebView] ⚠️ Cannot download cloud image: user not logged in');
         return null;
       }
-      
+
       final token = _normalizeToken(user.token);
       final response = await http.get(
         Uri.parse(url),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
+        headers: token.isNotEmpty
+            ? {'Authorization': 'Bearer $token'}
+            : {},
       );
       
       if (response.statusCode == 200) {
         return response.bodyBytes;
       } else {
-        Log.error('[ExcalidrawWebView] ❌ Cloud image download failed: ${response.statusCode}');
+        Log.error('[ExcalidrawWebView] ❌ Cloud image download failed: ${response.statusCode} for $url');
         return null;
       }
     } catch (e) {

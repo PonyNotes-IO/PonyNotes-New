@@ -551,8 +551,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     }
     try {
       // 在序列化前上传所有尚未上传的图片和 PDF 底图到云存储
-      // 上传后对应的 toJson() 会使用轻量 URL 格式，大幅减少 Collab 同步数据量
-      // 跳过场景：dispose/deactivate 时调用，此时不做上传以避免延迟（数据已在内存，本地保存就够）
+      // 上传后 toJson() 会使用轻量 URL 格式，大幅减少 Collab 同步数据量
       if (!skipCloudUpload) {
         try {
           await _uploadAssetsToCloud();
@@ -561,17 +560,21 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         }
       }
 
-      final String json = _coreInfo.toJsonString();
-      final List<int> bytes = utf8.encode(json);
-      debugPrint('🦋[HandwritingSaber] _saveToStorage: data size = ${bytes.length} bytes, skipCloudUpload=$skipCloudUpload');
+      // Collab 同步用精简数据（不含 base64 图片，只含云 URL）
+      // 避免大量图片数据导致 Yrs CRDT 更新包过大、WebSocket 同步失败
+      final String collabJson = _coreInfo.toJsonStringForCollab();
+      final List<int> collabBytes = utf8.encode(collabJson);
+      debugPrint('🦋[HandwritingSaber] _saveToStorage: collab data size = ${collabBytes.length} bytes, skipCloudUpload=$skipCloudUpload');
 
       final bool ok = await _dataService.saveHandwritingSaberData(
         widget.view.id,
-        bytes,
+        collabBytes,
       );
 
-      // ✅ 同时写入本地文件作为备份（防止 Collab 同步丢失大数据）
-      unawaited(_saveToLocalFile(widget.view.id, bytes));
+      // 本地文件备份用完整数据（含 base64 图片，确保本机离线也能显示）
+      final String fullJson = _coreInfo.toJsonString();
+      final List<int> fullBytes = utf8.encode(fullJson);
+      unawaited(_saveToLocalFile(widget.view.id, fullBytes));
 
       if (!suppressStatusUpdate) {
         if (mounted) {
@@ -603,31 +606,42 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   ///
   /// 遍历所有页面的图片列表和 PDF 背景图片，
   /// 对于还没有云 URL 的资源，上传并记录 URL。
-  /// 上传后对应的 toJson() 会使用轻量 URL 格式，大幅减少 Collab 同步数据量。
+  /// 上传后 toJson(forCollab: true) 会使用轻量 URL 格式，
+  /// 大幅减少 Collab 同步数据量，避免 WebSocket 同步失败。
   Future<void> _uploadAssetsToCloud() async {
     for (final page in _coreInfo.pages) {
-      // 上传普通图片（PngEditorImage）
+      // 上传普通图片（PngEditorImage），失败时重试一次
       for (final img in page.images) {
         if (img is PngEditorImage) {
           if (img.imageUrl == null || !img.imageUrl!.startsWith('http')) {
             if (img.imageBytes.isNotEmpty) {
               debugPrint('🦋[HandwritingSaber] Uploading image ${img.id}...');
               await img.uploadToCloud();
+              // 首次失败则重试一次
+              if (img.imageUrl == null || !img.imageUrl!.startsWith('http')) {
+                debugPrint('🦋[HandwritingSaber] Retrying image upload ${img.id}...');
+                await Future.delayed(const Duration(milliseconds: 500));
+                await img.uploadToCloud();
+              }
             }
           }
         }
       }
 
-      // 上传 PDF 底图
+      // 上传 PDF 底图，失败时重试一次
       final bgImage = page.backgroundImage;
       if (bgImage != null) {
         if (bgImage.pdfUrl == null || !bgImage.pdfUrl!.startsWith('http')) {
-          // 只有本地文件路径的 PDF 才需要上传（云 URL 开头的不需要）
           if (bgImage.pdfFilePath.isNotEmpty &&
               !bgImage.pdfFilePath.startsWith('http') &&
               File(bgImage.pdfFilePath).existsSync()) {
             debugPrint('🦋[HandwritingSaber] Uploading PDF ${bgImage.pdfFilePath}...');
             await bgImage.uploadToCloud();
+            if (bgImage.pdfUrl == null || !bgImage.pdfUrl!.startsWith('http')) {
+              debugPrint('🦋[HandwritingSaber] Retrying PDF upload...');
+              await Future.delayed(const Duration(milliseconds: 500));
+              await bgImage.uploadToCloud();
+            }
           }
         }
       }

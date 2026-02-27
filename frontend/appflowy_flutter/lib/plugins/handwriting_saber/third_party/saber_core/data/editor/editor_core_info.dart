@@ -37,18 +37,22 @@ class EditorCoreInfo {
     return pages.first;
   }
 
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toJson({bool forCollab = false}) {
     return <String, dynamic>{
-      'pages': pages.map((EditorPage p) => p.toJson()).toList(),
+      'pages': pages.map((EditorPage p) => p.toJson(forCollab: forCollab)).toList(),
       'backgroundColor': backgroundColor?.value,
       'backgroundPattern': backgroundPattern.name,
       'lineHeight': lineHeight,
       'lineThickness': lineThickness,
-      'laserStrokes': laserStrokes.map((Stroke s) => s.toJson()).toList(),  // ✅ 保存激光笔笔迹
+      'laserStrokes': laserStrokes.map((Stroke s) => s.toJson()).toList(),
     };
   }
 
   String toJsonString() => jsonEncode(toJson());
+
+  /// 用于 Collab 同步的精简 JSON 字符串
+  /// 不包含 base64 图片数据和本地文件路径，只包含云 URL
+  String toJsonStringForCollab() => jsonEncode(toJson(forCollab: true));
 
   factory EditorCoreInfo.fromJson(Map<String, dynamic> json) {
     final List<dynamic> pageList = json['pages'] as List<dynamic>? ?? <dynamic>[];

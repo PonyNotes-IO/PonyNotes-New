@@ -160,8 +160,7 @@ class HandwritingSaberDataService {
             'size: ${data.sbn2Bytes.length} bytes',
           );
 
-          // ✅ 如果 Collab 返回空数据，尝试从本地文件恢复
-          // 场景：Collab 同步因数据过大失败，但本地文件有最新备份
+          // Collab 返回空数据时回退到本地文件
           if (data.sbn2Bytes.isEmpty) {
             Log.warn(
               '[HandwritingSaber] ⚠️ Collab returned empty data for $viewId, '
@@ -177,17 +176,8 @@ class HandwritingSaberDataService {
             }
           }
 
-          // ✅ 对比 Collab 和本地文件，使用数据更大（更完整）的那份
-          final localData = await _loadFromFile(viewId);
-          if (localData.length > data.sbn2Bytes.length) {
-            Log.warn(
-              '[HandwritingSaber] ⚠️ Local file ($viewId) has more data '
-              '(${localData.length} bytes) than Collab (${data.sbn2Bytes.length} bytes), '
-              'using local file',
-            );
-            return localData;
-          }
-
+          // Collab 有数据则优先使用（跨设备同步的数据源）
+          // Collab 中的数据是精简版（云 URL 模式），加载后会从云端下载图片
           return data.sbn2Bytes;
         },
         (error) {
