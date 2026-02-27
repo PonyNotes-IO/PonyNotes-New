@@ -207,7 +207,7 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                         child = Container(
                           padding: EdgeInsets.fromLTRB(
                             horizontalPadding + paddingLeft,
-                            0,
+                            25,
                             horizontalPadding,
                             0,
                           ),
