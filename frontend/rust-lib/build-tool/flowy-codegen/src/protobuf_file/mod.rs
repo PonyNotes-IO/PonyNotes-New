@@ -268,10 +268,19 @@ fn resolve_dart_output_base() -> Option<(PathBuf, String)> {
   let sdk_subpath = "appflowy_flutter/packages/appflowy_backend";
   loop {
     if dir.join("appflowy_flutter").exists() {
-      if let Ok(canon) = dir.canonicalize() {
-        return Some((canon, sdk_subpath.to_string()));
+      // On Windows, canonicalize() returns paths with \\?\ prefix which breaks protoc
+      // So we skip canonicalize on Windows and use the raw path
+      #[cfg(target_os = "windows")]
+      {
+        return Some((dir, sdk_subpath.to_string()));
       }
-      return Some((dir, sdk_subpath.to_string()));
+      #[cfg(not(target_os = "windows"))]
+      {
+        if let Ok(canon) = dir.canonicalize() {
+          return Some((canon, sdk_subpath.to_string()));
+        }
+        return Some((dir, sdk_subpath.to_string()));
+      }
     }
     if !dir.pop() {
       break;

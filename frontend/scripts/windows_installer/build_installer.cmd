@@ -82,7 +82,7 @@ if not exist "%INSTALL_DIR%\data" (
 )
 echo [OK] data directory verified
 
-REM Remove AppFlowy.exe to avoid confusion, keep only PonyNotes.exe
+REM Clean up any old AppFlowy files if they exist (for backward compatibility)
 if exist "%INSTALL_DIR%\AppFlowy.exe" del "%INSTALL_DIR%\AppFlowy.exe"
 if exist "%INSTALL_DIR%\AppFlowy.exp" del "%INSTALL_DIR%\AppFlowy.exp"
 if exist "%INSTALL_DIR%\AppFlowy.lib" del "%INSTALL_DIR%\AppFlowy.lib"
