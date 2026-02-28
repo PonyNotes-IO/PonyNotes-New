@@ -63,6 +63,7 @@ class DesktopPromptInput extends StatefulWidget {
 }
 
 class _DesktopPromptInputState extends State<DesktopPromptInput> {
+  static const double _extraInputHeight = 30.0;
   final textFieldKey = GlobalKey();
   final layerLink = LayerLink();
   final overlayController = OverlayPortalController();
@@ -165,11 +166,14 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
                   builder: (context, state) {
                     return Stack(
                       children: [
-                        ConstrainedBox(
-                          constraints: getTextFieldConstraints(
-                            state.showPredefinedFormats && !widget.hideFormats,
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: ConstrainedBox(
+                            constraints: getTextFieldConstraints(
+                              state.showPredefinedFormats && !widget.hideFormats,
+                            ),
+                            child: inputTextField(),
                           ),
-                          child: inputTextField(),
                         ),
                         if (state.showPredefinedFormats && !widget.hideFormats)
                           Positioned.fill(
@@ -476,7 +480,8 @@ class _DesktopPromptInputState extends State<DesktopPromptInput> {
   BoxConstraints getTextFieldConstraints(bool showPredefinedFormats) {
     double minHeight = DesktopAIPromptSizes.textFieldMinHeight +
         DesktopAIPromptSizes.actionBarSendButtonSize +
-        DesktopAIChatSizes.inputActionBarMargin.vertical;
+        DesktopAIChatSizes.inputActionBarMargin.vertical +
+        _extraInputHeight;
     double maxHeight = 300;
     if (showPredefinedFormats) {
       minHeight += DesktopAIPromptSizes.predefinedFormatButtonHeight;

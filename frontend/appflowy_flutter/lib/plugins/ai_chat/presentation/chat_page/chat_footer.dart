@@ -52,37 +52,25 @@ class _ChatFooterState extends State<ChatFooter> {
               ? const SizedBox.shrink()
               : Padding(
                   padding: AIChatUILayout.safeAreaInsets(context),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      BlocSelector<ChatBloc, ChatState, bool>(
-                        selector: (state) {
-                          return state.promptResponseState.isReady;
-                        },
-                        builder: (context, canSendMessage) {
-                          final chatBloc = context.read<ChatBloc>();
+                  child: BlocSelector<ChatBloc, ChatState, bool>(
+                    selector: (state) {
+                      return state.promptResponseState.isReady;
+                    },
+                    builder: (context, canSendMessage) {
+                      final chatBloc = context.read<ChatBloc>();
 
-                          return UniversalPlatform.isDesktop
-                              ? _buildDesktopInput(
-                                  context,
-                                  chatBloc,
-                                  canSendMessage,
-                                )
-                              : _buildMobileInput(
-                                  context,
-                                  chatBloc,
-                                  canSendMessage,
-                                );
-                        },
-                      ),
-                      // PonyNotes: 移除重复的使用次数显示，因为输入框内已经有了
-                      // BlocSelector<ChatBloc, ChatState, WorkspaceUsagePB?>(
-                      //   selector: (state) => state.usageInfo,
-                      //   builder: (context, usage) {
-                      //     return AIChatUsageIndicator(usage: usage);
-                      //   },
-                      // ),
-                    ],
+                      return UniversalPlatform.isDesktop
+                          ? _buildDesktopInput(
+                        context,
+                        chatBloc,
+                        canSendMessage,
+                      )
+                          : _buildMobileInput(
+                        context,
+                        chatBloc,
+                        canSendMessage,
+                      );
+                    },
                   ),
                 ),
         );
