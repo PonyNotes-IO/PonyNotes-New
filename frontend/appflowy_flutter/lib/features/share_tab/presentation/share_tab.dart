@@ -19,6 +19,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
 
 import 'package:appflowy/plugins/shared/share/share_bloc.dart';
+import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 
 import '../../../util/log_utils.dart';
 import '../../../workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
@@ -73,6 +74,7 @@ class _ShareTabState extends State<ShareTab> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final isReadOnly = _isReadOnlyFromContext(context);
 
     return BlocConsumer<ShareTabBloc, ShareTabState>(
       listener: (context, state) {
@@ -95,6 +97,21 @@ class _ShareTabState extends State<ShareTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (isReadOnly) ...[
+              VSpace(theme.spacing.l),
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(theme.spacing.m),
+                decoration: BoxDecoration(
+                  color: theme.surfaceContainerColorScheme.layer01,
+                  borderRadius: BorderRadius.circular(theme.spacing.m),
+                ),
+                child: FlowyText.regular(
+                  '该文档为接收的只读发布内容，不能复制分享链接或邀请协作者。',
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+            ] else ...[
             // share page with user by email
             // only user with full access can invite others
             VSpace(theme.spacing.l),
@@ -113,6 +130,7 @@ class _ShareTabState extends State<ShareTab> {
               state.shareLink,
               state.users.isNotEmpty,
             ),
+            ],
 
             // ShareWithUserWidget(
             //   controller: controller,
@@ -153,6 +171,16 @@ class _ShareTabState extends State<ShareTab> {
         );
       },
     );
+  }
+
+  bool _isReadOnlyFromContext(BuildContext context) {
+    try {
+      final pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
+      return !pageAccessLevelBloc.state.isLoadingLockStatus &&
+          pageAccessLevelBloc.state.isReadOnly;
+    } catch (_) {
+      return false;
+    }
   }
 
   PeopleWithAccessSectionCallbacks _buildPeopleWithAccessSectionCallbacks(

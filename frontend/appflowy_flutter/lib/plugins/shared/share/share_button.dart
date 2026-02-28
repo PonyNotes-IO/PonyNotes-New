@@ -1,3 +1,4 @@
+import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -31,6 +32,12 @@ class ShareButton extends StatelessWidget {
     final workspaceBloc = context.read<UserWorkspaceBloc>();
     final workspaceId = workspaceBloc.state.currentWorkspace?.workspaceId ?? '';
     final workspaceType = workspaceBloc.state.currentWorkspace?.workspaceType;
+    PageAccessLevelBloc? pageAccessLevelBloc;
+    try {
+      pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
+    } catch (_) {
+      pageAccessLevelBloc = null;
+    }
 
     return MultiBlocProvider(
       providers: [
@@ -78,6 +85,9 @@ class ShareButton extends StatelessWidget {
               builder: (context, snapshot) {
                 // 默认权限为publicToAll，确保在加载过程中也能显示分享按钮
                 SpacePermission spacePermission = SpacePermission.publicToAll;
+                final isReadOnly = pageAccessLevelBloc != null &&
+                    !pageAccessLevelBloc.state.isLoadingLockStatus &&
+                    pageAccessLevelBloc.state.isReadOnly;
                 
                 if (snapshot.connectionState == ConnectionState.done) {
                   if (snapshot.hasData) {
@@ -90,7 +100,7 @@ class ShareButton extends StatelessWidget {
                 }
 
                 final tabs = [
-                  if (state.enablePublish) ...[
+                  if (!isReadOnly && state.enablePublish) ...[
                     // 私有空间文档不支持共享和协作，只支持发布
                     if (spacePermission != SpacePermission.private) ...[
                       ShareMenuTab.share,
@@ -99,6 +109,17 @@ class ShareButton extends StatelessWidget {
                   ],
                   // ShareMenuTab.exportAs,
                 ];
+                if (isReadOnly) {
+                  return Tooltip(
+                    message: '该文档为只读内容，不能再次共享或发布',
+                    child: Opacity(
+                      opacity: 0.45,
+                      child: AbsorbPointer(
+                        child: ShareMenuButton(tabs: const []),
+                      ),
+                    ),
+                  );
+                }
 
                 return ShareMenuButton(tabs: tabs);
               },

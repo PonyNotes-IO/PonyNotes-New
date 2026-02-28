@@ -1,5 +1,6 @@
 import 'package:appflowy/features/share_tab/presentation/share_tab.dart'
     as share_section;
+import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -146,14 +147,29 @@ class _ShareMenuState extends State<ShareMenu> {
   }
 
   Widget _buildTab(BuildContext context) {
+    bool isReadOnly = false;
+    try {
+      final pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
+      isReadOnly = !pageAccessLevelBloc.state.isLoadingLockStatus &&
+          pageAccessLevelBloc.state.isReadOnly;
+    } catch (_) {
+      isReadOnly = false;
+    }
+
     switch (selectedTab) {
       case ShareMenuTab.publish:
+        if (isReadOnly) {
+          return _buildReadonlyHint(context);
+        }
         return PublishTab(
           viewName: widget.viewName,
         );
       case ShareMenuTab.exportAs:
         return const ExportTab();
       case ShareMenuTab.share:
+        if (isReadOnly) {
+          return _buildReadonlyHint(context);
+        }
         final workspace =
             context.read<UserWorkspaceBloc>().state.currentWorkspace;
         final workspaceId = workspace?.workspaceId ??
@@ -178,6 +194,25 @@ class _ShareMenuState extends State<ShareMenu> {
           },
         );
     }
+  }
+
+  Widget _buildReadonlyHint(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: theme.spacing.m,
+        vertical: theme.spacing.m,
+      ),
+      decoration: BoxDecoration(
+        color: theme.surfaceContainerColorScheme.layer01,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: FlowyText.regular(
+        '该文档为接收的只读发布内容，不能再次共享或发布。',
+        color: theme.textColorScheme.secondary,
+      ),
+    );
   }
 
   void _showUpgradeToProDialog(BuildContext context) {

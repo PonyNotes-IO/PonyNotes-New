@@ -39,6 +39,28 @@ class ShareMenuButton extends StatelessWidget {
   }
 
   Future<void> _openShareSettings(BuildContext context) async {
+    try {
+      final pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
+      if (!pageAccessLevelBloc.state.isLoadingLockStatus &&
+          pageAccessLevelBloc.state.isReadOnly) {
+        showToastNotification(
+          message: '该文档为只读内容，不能再次共享或发布',
+          type: ToastificationType.warning,
+        );
+        return;
+      }
+    } catch (_) {
+      // 当前场景可能没有注入 PageAccessLevelBloc，忽略并继续
+    }
+
+    if (tabs.isEmpty) {
+      showToastNotification(
+        message: '该文档为只读内容，不能再次共享或发布',
+        type: ToastificationType.warning,
+      );
+      return;
+    }
+
     final enableCloudShare =
         context.read<ShareBloc?>()?.state.enablePublish ?? false;
 
