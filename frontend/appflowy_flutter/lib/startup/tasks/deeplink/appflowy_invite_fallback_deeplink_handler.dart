@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/startup/startup.dart' show getIt;
 import 'package:appflowy/user/application/auth/auth_service.dart';
-import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart' show WorkspaceTypePB, UserProfilePB;
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart' show WorkspaceTypePB;
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart' show ClipboardService;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -17,6 +17,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart' show showToastNotification;
 import 'package:appflowy/shared/settings/show_settings.dart' show showSettingsDialog;
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart' show SettingsPage;
+import 'package:appflowy/startup/tasks/deeplink/deeplink_loading_overlay.dart';
 
 /// Very permissive fallback handler to catch invite deep links with unexpected URI shapes.
 class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
@@ -32,6 +33,7 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
     required DeepLinkStateHandler onStateChange,
   }) async {
     onStateChange(this, DeepLinkState.loading);
+    DeepLinkLoadingOverlay.show(message: '正在加入协作工作区...');
     try {
       // Try to extract code and ws from query or path with simple parsing
       String? code = uri.queryParameters['code'];
@@ -108,6 +110,7 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
 
         Log.info('[InviteFallback] Joined workspace $joinedWorkspaceId via invite $code');
         onStateChange(this, DeepLinkState.finish);
+        DeepLinkLoadingOverlay.hide();
 
         final context = AppGlobals.rootNavKey.currentState?.context;
         if (context != null) {
@@ -143,6 +146,7 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
       } else {
         Log.error('[InviteFallback] join workspace failed: status ${resp.statusCode}, body: ${resp.body}');
         onStateChange(this, DeepLinkState.error);
+        DeepLinkLoadingOverlay.hide();
 
         final context = AppGlobals.rootNavKey.currentState?.context;
         if (context != null) {
@@ -186,6 +190,8 @@ class AppflowyInviteFallbackDeepLinkHandler extends DeepLinkHandler<void> {
       Log.error('[InviteFallback] Exception: $e', st);
       onStateChange(this, DeepLinkState.error);
       return FlowyResult.failure(FlowyError(msg: 'Exception: $e'));
+    } finally {
+      DeepLinkLoadingOverlay.hide();
     }
   }
 }

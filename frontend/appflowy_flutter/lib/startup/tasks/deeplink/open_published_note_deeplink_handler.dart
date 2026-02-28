@@ -24,6 +24,7 @@ import '../../../generated/locale_keys.g.dart';
 import '../../../user/application/user_service.dart';
 import '../../../startup/startup.dart';
 import '../app_widget.dart';
+import 'deeplink_loading_overlay.dart';
 
 /// 处理发布笔记的深度链接
 /// 支持的URI格式: https://ponynotes.io/p/{namespace}/{publish_name}
@@ -51,6 +52,7 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
     required DeepLinkStateHandler onStateChange,
   }) async {
     onStateChange(this, DeepLinkState.loading);
+    DeepLinkLoadingOverlay.show(message: '正在打开发布内容...');
 
     try {
       // 解析路径获取 namespace 和 publish_name
@@ -187,6 +189,8 @@ class OpenPublishedNoteDeepLinkHandler extends DeepLinkHandler<void> {
           ..msg = '处理深度链接时出错: $e'
           ..code = ErrorCode.Internal,
       );
+    } finally {
+      DeepLinkLoadingOverlay.hide();
     }
   }
 

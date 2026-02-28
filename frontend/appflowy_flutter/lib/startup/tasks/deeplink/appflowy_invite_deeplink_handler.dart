@@ -18,6 +18,7 @@ import 'package:appflowy/startup/tasks/app_widget.dart' show AppGlobals;
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart' show showToastNotification;
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart' show SettingsPage;
 import 'package:appflowy/startup/tasks/appflowy_cloud_task.dart' show appflowyDeepLinkSchema;
+import 'package:appflowy/startup/tasks/deeplink/deeplink_loading_overlay.dart';
 
 /// Handles deep links like: appflowy://invite?code=...&ws=...
 class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
@@ -44,6 +45,7 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
     required DeepLinkStateHandler onStateChange,
   }) async {
     onStateChange(this, DeepLinkState.loading);
+    DeepLinkLoadingOverlay.show(message: '正在加入协作工作区...');
     try {
       final code = uri.queryParameters[paramCode];
       final ws = uri.queryParameters[paramWs];
@@ -104,6 +106,7 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
 
         Log.info('[InviteDeepLink] Joined workspace $joinedWorkspaceId via invite $code');
         onStateChange(this, DeepLinkState.finish);
+        DeepLinkLoadingOverlay.hide();
 
         final context = AppGlobals.rootNavKey.currentState?.context;
         if (context != null) {
@@ -148,6 +151,7 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
         final body = resp.body.isNotEmpty ? resp.body : '';
         Log.error('[InviteDeepLink] join workspace failed: status ${resp.statusCode}, body: $body');
         onStateChange(this, DeepLinkState.error);
+        DeepLinkLoadingOverlay.hide();
 
         final context = AppGlobals.rootNavKey.currentState?.context;
         if (context != null) {
@@ -161,7 +165,7 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
                 actions: [
                   TextButton(
                     onPressed: () async {
-                      await getIt<ClipboardService>().setPlainText(code!);
+                      await getIt<ClipboardService>().setPlainText(code);
                       Navigator.of(dialogCtx).pop();
                       // show toast
                       showToastNotification(message: '邀请码已复制到剪贴板');
@@ -195,6 +199,8 @@ class AppflowyInviteDeepLinkHandler extends DeepLinkHandler<void> {
       Log.error('[InviteDeepLink] Exception: $e', st);
       onStateChange(this, DeepLinkState.error);
       return FlowyResult.failure(FlowyError(msg: 'Exception: $e'));
+    } finally {
+      DeepLinkLoadingOverlay.hide();
     }
   }
 }

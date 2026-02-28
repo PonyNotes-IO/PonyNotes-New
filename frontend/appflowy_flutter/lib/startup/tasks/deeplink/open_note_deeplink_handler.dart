@@ -26,6 +26,7 @@ import '../../../generated/locale_keys.g.dart';
 import '../../../user/application/user_service.dart';
 import '../../startup.dart';
 import '../app_widget.dart';
+import 'deeplink_loading_overlay.dart';
 
 /// 处理打开笔记的深度链接
 /// 支持的URI格式: ponynotes://note?viewId=xxx
@@ -61,6 +62,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     required DeepLinkStateHandler onStateChange,
   }) async {
     onStateChange(this, DeepLinkState.loading);
+    DeepLinkLoadingOverlay.show(message: '正在打开共享内容...');
 
     try {
       // 从URI中获取参数
@@ -221,6 +223,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
           ..msg = '处理深度链接时出错: $e'
           ..code = ErrorCode.Internal,
       );
+    } finally {
+      DeepLinkLoadingOverlay.hide();
     }
   }
 
