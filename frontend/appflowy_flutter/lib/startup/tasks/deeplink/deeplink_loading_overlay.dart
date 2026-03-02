@@ -20,6 +20,33 @@ class DeepLinkLoadingOverlay {
       return;
     }
 
+    _insertOverlay(overlayState, message);
+  }
+
+  /// 在应用刚被深链拉起时，overlay 可能尚未就绪。
+  /// 这里做短时重试，确保加载浮层可见。
+  static Future<bool> showWhenReady({
+    String message = '正在加载，请稍候...',
+    Duration timeout = const Duration(seconds: 2),
+    Duration retryInterval = const Duration(milliseconds: 80),
+  }) async {
+    if (_overlayEntry != null) {
+      return true;
+    }
+
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final overlayState = AppGlobals.rootNavKey.currentState?.overlay;
+      if (overlayState != null) {
+        _insertOverlay(overlayState, message);
+        return true;
+      }
+      await Future.delayed(retryInterval);
+    }
+    return false;
+  }
+
+  static void _insertOverlay(OverlayState overlayState, String message) {
     _overlayEntry = OverlayEntry(
       builder: (context) {
         final theme = Theme.of(context);

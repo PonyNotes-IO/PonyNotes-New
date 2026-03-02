@@ -32,6 +32,8 @@ import 'deeplink_loading_overlay.dart';
 /// 支持的URI格式: ponynotes://note?viewId=xxx
 /// 或者: ponynotes://open?viewId=xxx
 class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
+  static const Duration _loadingDisplayDelay = Duration(milliseconds: 500);
+
   @override
   bool canHandle(Uri uri) {
     // 检查是否是打开笔记的深度链接（兼容 host 或 path 形式）
@@ -62,7 +64,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     required DeepLinkStateHandler onStateChange,
   }) async {
     onStateChange(this, DeepLinkState.loading);
-    DeepLinkLoadingOverlay.show(message: '正在打开共享内容...');
+    await DeepLinkLoadingOverlay.showWhenReady(message: '正在打开共享内容...');
+    await Future.delayed(_loadingDisplayDelay);
 
     try {
       // 从URI中获取参数
