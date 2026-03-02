@@ -363,6 +363,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildGreetingSection(String greeting, String userName) {
+    final theme = AppFlowyTheme.of(context);
     return SizedBox(
       width: double.infinity,
       child: Row(
@@ -392,10 +393,10 @@ class _HomePageState extends State<HomePage> {
           // 问候语文字
           Text(
             "$greeting，$userName～",
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF333333),
+              color: theme.textColorScheme.primary,
             ),
           ),
         ],
@@ -611,7 +612,7 @@ class _HomePageState extends State<HomePage> {
             color: theme.surfaceContainerColorScheme.layer01,
             borderRadius: BorderRadius.circular(12.0),
             border: Border.all(
-              color: const Color(0xFFE9E9E9),
+              color: theme.borderColorScheme.primary,
               width: 1,
             ),
           ),

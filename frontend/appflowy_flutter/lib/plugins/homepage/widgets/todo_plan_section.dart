@@ -11,6 +11,9 @@ import 'package:appflowy/plugins/homepage/widgets/calendar_event_list.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 
+import '../../../startup/plugin/plugin.dart';
+import '../../../workspace/application/tabs/tabs_bloc.dart';
+
 /// 主页待办计划区域的主组件
 /// 包含左侧的快速创建区域和右侧的待办列表展示
 class TodoPlanSection extends StatelessWidget {
@@ -69,6 +72,23 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
     }
   }
 
+  List<CalendarEvent> _withDemoEventIfEmpty(List<CalendarEvent> events) {
+    if (events.isNotEmpty) {
+      return events;
+    }
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day + 1, 9, 0);
+    return [
+      CalendarEvent(
+        id: 'homepage_demo_event',
+        title: 'Demo 日程：创建你的第一个待办计划',
+        start: start,
+        end: start.add(const Duration(minutes: 30)),
+        isAllDay: false,
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
@@ -119,9 +139,10 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
           // Avoid LayoutBuilder so height remains intrinsic inside the scrolling parent.
           const double dividerWidth = 1;
           const double dividerHorizontalMargin = 15;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
               Expanded(
                 flex: 1,
                 child: Align(
@@ -138,12 +159,12 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
               Container(
                 width: dividerWidth,
                 margin: const EdgeInsets.symmetric(horizontal: dividerHorizontalMargin),
-                color: theme.borderColorScheme.primary.withOpacity(0.06),
+                color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
               ),
               Expanded(
                 flex: 1,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 280),
+                  constraints: const BoxConstraints(maxHeight: 320),
                   child: FutureBuilder<List<TodoItem>>(
                     future: _eventsFuture,
                     builder: (context, snapshot) {
@@ -190,23 +211,93 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
                                 isAllDay: t.isAllDay,
                               ))
                           .toList();
+                      final displayEvents = _withDemoEventIfEmpty(calendarEvents);
 
-                      return SingleChildScrollView(
-                        child: CalendarEventList(
-                          events: calendarEvents,
-                          // display-only on the homepage; no click handler
-                          showHeader: false,
-                        ),
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Flexible(
+                            child: SingleChildScrollView(
+                              child: CalendarEventList(
+                                events: displayEvents,
+                                // display-only on the homepage; no click handler
+                                showHeader: false,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          const Spacer(),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: InkWell(
+                              onTap: _openCalendar,
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color.fromRGBO(255, 106, 77, 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  "创建待办计划",
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFFFF6A4D),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),
                 ),
               ),
-            ],
+              ],
+            ),
           );
         },
       ),
     );
+  }
+
+  void _openCalendar() {
+    try {
+      // 创建日历插件
+      final calendarPlugin = makePlugin(
+        pluginType: PluginType.calendar,
+        data: null,
+      );
+
+      // 在新标签页中打开日历
+      context.read<TabsBloc>().add(
+        TabsEvent.openPlugin(plugin: calendarPlugin),
+      );
+
+      // 显示成功消息
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("正在打开日历..."),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      // 显示错误信息
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("打开日历失败: $e"),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 }
 
