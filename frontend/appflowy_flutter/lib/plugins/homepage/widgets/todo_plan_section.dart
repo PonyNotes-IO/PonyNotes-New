@@ -4,10 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/plugins/homepage/application/todo_bloc.dart';
 import 'package:appflowy/plugins/homepage/application/todo_models.dart';
 import 'package:appflowy/plugins/homepage/widgets/quick_event_creator.dart';
-import 'package:appflowy/plugins/homepage/widgets/todo_list_display.dart';
 import 'package:appflowy/plugins/homepage/application/calendar_event.dart';
 import 'package:appflowy/plugins/homepage/application/todo_service.dart';
-import 'package:appflowy/plugins/homepage/widgets/calendar_event_list.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 
@@ -77,16 +75,129 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
       return events;
     }
     final now = DateTime.now();
-    final start = DateTime(now.year, now.month, now.day + 1, 9, 0);
+    final start = DateTime(now.year, now.month, now.day, 8, 0);
     return [
       CalendarEvent(
-        id: 'homepage_demo_event',
-        title: 'Demo 日程：创建你的第一个待办计划',
+        id: 'homepage_demo_event_1',
+        title: '起床与张总开会',
         start: start,
-        end: start.add(const Duration(minutes: 30)),
+        end: start.add(const Duration(hours: 1)),
+        isAllDay: false,
+      ),
+      CalendarEvent(
+        id: 'homepage_demo_event_2',
+        title: '读研分享会',
+        start: start.add(const Duration(hours: 3)),
+        end: start.add(const Duration(hours: 4)),
         isAllDay: false,
       ),
     ];
+  }
+
+  String _formatMonthDay(DateTime date) => '${date.month}月${date.day}日';
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  String _formatHourMinute(DateTime date) {
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  String _formatTimeRange(CalendarEvent event) {
+    if (event.isAllDay) {
+      return '全天';
+    }
+    final start = event.start;
+    final end = (event.end == null || !event.end!.isAfter(start))
+        ? start.add(const Duration(hours: 1))
+        : event.end!;
+    return '${_formatHourMinute(start)} - ${_formatHourMinute(end)}';
+  }
+
+  Widget _buildScheduleCard(BuildContext context, CalendarEvent event) {
+    final now = DateTime.now();
+    final isToday = _isSameDay(now, event.start);
+    final textColor = Theme.of(context).colorScheme.onSurface.withOpacity(0.72);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 78,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (isToday) ...[
+                  Text(
+                    '今天',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                ],
+                Text(
+                  _formatMonthDay(event.start),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            width: 4,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _formatTimeRange(event),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: textColor.withOpacity(0.92),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleList(BuildContext context, List<CalendarEvent> events) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: events.map((e) => _buildScheduleCard(context, e)).toList(),
+    );
   }
 
   @override
@@ -94,7 +205,6 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
     final theme = AppFlowyTheme.of(context);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: theme.surfaceContainerColorScheme.layer01,
         borderRadius: BorderRadius.circular(10.0),
@@ -145,13 +255,16 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
               children: [
               Expanded(
                 flex: 1,
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: QuickEventCreator(
-                    onEventCreated: (todoItem) {
-                      // 创建成功后刷新待办列表
-                      context.read<TodoBloc>().add(const TodoEvent.loadTodos());
-                    },
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: QuickEventCreator(
+                      onEventCreated: (todoItem) {
+                        // 创建成功后刷新待办列表
+                        context.read<TodoBloc>().add(const TodoEvent.loadTodos());
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -163,7 +276,8 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
               ),
               Expanded(
                 flex: 1,
-                child: ConstrainedBox(
+                child: Container(
+                  padding: EdgeInsets.all(16),
                   constraints: const BoxConstraints(maxHeight: 320),
                   child: FutureBuilder<List<TodoItem>>(
                     future: _eventsFuture,
@@ -207,7 +321,7 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
                                 id: t.id,
                                 title: t.title,
                                 start: t.dueDate!,
-                                end: t.dueDate,
+                                end: t.dueDate!.add(const Duration(hours: 1)),
                                 isAllDay: t.isAllDay,
                               ))
                           .toList();
@@ -216,17 +330,12 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Flexible(
+                          Expanded(
                             child: SingleChildScrollView(
-                              child: CalendarEventList(
-                                events: displayEvents,
-                                // display-only on the homepage; no click handler
-                                showHeader: false,
-                              ),
+                              child: _buildScheduleList(context, displayEvents),
                             ),
                           ),
                           const SizedBox(height: 12),
-                          const Spacer(),
                           Align(
                             alignment: Alignment.centerLeft,
                             child: InkWell(
