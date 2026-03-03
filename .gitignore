@@ -22,9 +22,6 @@ node_modules
 
 **/resources/proto
 
-# ignore personal settings.json (allow other .vscode files to be committed)
-frontend/.vscode/settings.json
-
 # Commit the highest level pubspec.lock, but ignore the others
 pubspec.lock
 !frontend/appflowy_flutter/pubspec.lock
@@ -109,9 +106,9 @@ frontend/*.deb
 **/*.log
 
 # IDE and editor files
-# Allow .vscode directory but ignore personal settings
-**/.vscode/settings.json
-!**/.vscode/settings.json.example
+# 忽略 .vscode 目录（个人/本地配置）
+.vscode/
+**/.vscode/
 **/.vs/
 
 # macOS specific
