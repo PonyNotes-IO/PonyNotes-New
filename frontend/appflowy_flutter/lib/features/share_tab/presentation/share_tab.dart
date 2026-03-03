@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
@@ -211,7 +212,7 @@ class _ShareTabState extends State<ShareTab> {
       },
       onTurnIntoMember: (user) {
         context.read<ShareTabBloc>().add(
-              ShareTabEvent.convertToMember(email: user.phone ?? user.email ?? ""),
+              ShareTabEvent.convertToMember(email: user.phone ?? user.email),
             );
       },
       onRemoveAccess: (user) {
@@ -606,6 +607,42 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
     super.dispose();
   }
 
+  String? _extractCurrentUserUuid(UserProfilePB? user) {
+    if (user == null) return null;
+    final rawToken = user.token;
+    if (rawToken.isEmpty) return null;
+
+    String? accessToken = rawToken;
+    // token 可能是 JSON（包含 access_token）或直接 JWT
+    if (rawToken.trimLeft().startsWith('{')) {
+      try {
+        final tokenMap = jsonDecode(rawToken) as Map<String, dynamic>;
+        accessToken = tokenMap['access_token'] as String?;
+      } catch (_) {
+        accessToken = null;
+      }
+    }
+    if (accessToken == null || accessToken.isEmpty) return null;
+
+    // JWT 格式：header.payload.signature，uuid 常在 sub
+    final parts = accessToken.split('.');
+    if (parts.length < 2) return null;
+    try {
+      final payload = parts[1];
+      final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+      final padding = (4 - normalized.length % 4) % 4;
+      final padded = normalized + ('=' * padding);
+      final decoded = utf8.decode(base64Decode(padded));
+      final payloadMap = jsonDecode(decoded) as Map<String, dynamic>;
+      final sub = payloadMap['sub']?.toString();
+      if (sub != null && sub.isNotEmpty) {
+        return sub;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   void _inviteUser(SharedUser user) {
     _bloc.add(
       ShareTabEvent.inviteUsers(
@@ -661,6 +698,20 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
             },
           );
         }
+
+        // 监听成员权限更新结果（updateMemberPermission）
+        final updateAccessLevelResult = state.updateAccessLevelResult;
+        if (updateAccessLevelResult != null) {
+          updateAccessLevelResult.fold(
+            (_) {},
+            (error) {
+              showToastNotification(
+                message: error.msg.isNotEmpty ? error.msg : '权限修改失败',
+                type: ToastificationType.error,
+              );
+            },
+          );
+        }
       },
       builder: (context, state) {
         final currentUser = state.currentUser;
@@ -671,11 +722,32 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
         final List<SharedUser> allUsers = users;
 
         // 从完整列表中查找当前登录用户（可能是拥有者，也可能是被邀请者）
+        final currentUid =
+            _extractCurrentUserUuid(currentUser) ?? currentUser?.id.toString();
+        final currentEmail = currentUser?.email;
         final currentSharedUser = currentUser == null
             ? null
             : allUsers.firstWhereOrNull(
-                (user) => user.name == currentUser.name,
+                (user) =>
+                    (currentUid != null &&
+                        currentUid.isNotEmpty &&
+                        user.userId == currentUid) ||
+                    (currentEmail != null &&
+                        currentEmail.isNotEmpty &&
+                        user.email == currentEmail),
               );
+        // 兜底：接口返回成员里找不到当前用户时，也要展示列表，避免整块空白。
+        // 这里使用最小权限(member + readOnly)作为安全默认值，防止误放权。
+        final effectiveCurrentSharedUser = currentSharedUser ??
+            SharedUser(
+              email: currentUser?.email ?? '',
+              name: (currentUser?.name.isNotEmpty ?? false)
+                  ? currentUser!.name
+                  : (currentUser?.email ?? 'current_user'),
+              role: ShareRole.member,
+              accessLevel: ShareAccessLevel.readOnly,
+              userId: currentUid,
+            );
 
         return Dialog(
           insetPadding: const EdgeInsets.all(24),
@@ -729,14 +801,7 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                               color: theme.textColorScheme.secondary,
                             ),
                           )
-                        : currentSharedUser == null
-                            ? Center(
-                                child: FlowyText.regular(
-                                  '无法获取当前用户信息',
-                                  color: theme.textColorScheme.error,
-                                ),
-                              )
-                            : ListView.separated(
+                        : ListView.separated(
                                 shrinkWrap: true,
                                 itemCount: allUsers.length,
                                 separatorBuilder: (_, __) => Divider(
@@ -748,7 +813,7 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                   final user = allUsers[index];
                                   return SharedUserWidget(
                                     user: user,
-                                    currentUser: currentSharedUser,
+                                    currentUser: effectiveCurrentSharedUser,
                                     /// 因为当前协作区都是公开，所有分享都是公开的文档，导致分享后不能编辑权限。
                                     // isInPublicPage: state.sectionType ==
                                     //     SharedSectionType.public,
@@ -764,13 +829,18 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                       onTurnIntoMember: () {
                                         _bloc.add(
                                           ShareTabEvent.convertToMember(
-                                            email: user.name,
+                                            email: user.email,
                                           ),
                                         );
                                       },
                                       onRemoveAccess: () {
                                         final removingSelf =
-                                            user.name == currentUser?.name;
+                                            (currentUid != null &&
+                                                currentUid.isNotEmpty &&
+                                                user.userId == currentUid) ||
+                                            (currentEmail != null &&
+                                                currentEmail.isNotEmpty &&
+                                                user.email == currentEmail);
                                         if (removingSelf) {
                                           showConfirmDialog(
                                             context: context,
