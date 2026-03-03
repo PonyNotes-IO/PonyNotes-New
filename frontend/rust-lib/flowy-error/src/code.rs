@@ -410,6 +410,9 @@ pub enum ErrorCode {
 
   #[error("Invalid guest")]
   InvalidGuest = 140,
+
+  #[error("Storage limit exceeded")]
+  PlanLimitExceeded = 141,
 }
 
 impl ErrorCode {

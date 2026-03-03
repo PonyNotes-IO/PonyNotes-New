@@ -115,5 +115,11 @@ extension FlowyErrorExtension on FlowyError {
   bool get isAIResponseLimitExceeded =>
       code == ErrorCode.AIResponseLimitExceeded;
 
-  bool get isStorageLimitExceeded => code == ErrorCode.FileStorageLimitExceeded;
+  // 检查存储限制超出错误
+  // 后端可能返回 FileStorageLimitExceeded (1028) 或 PlanLimitExceeded (1072)
+  // 注意：code 是枚举类型，需要通过 .value 来获取整数进行比较
+  bool get isStorageLimitExceeded =>
+      code == ErrorCode.FileStorageLimitExceeded ||
+      code.value == 1028 ||
+      code.value == 1072;
 }

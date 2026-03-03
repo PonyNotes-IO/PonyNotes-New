@@ -73,7 +73,13 @@ impl FlowyError {
   }
 
   pub fn is_file_limit_exceeded(&self) -> bool {
-    self.code == ErrorCode::FileStorageLimitExceeded
+    // 检查是否是存储限制错误
+    // 包括 FileStorageLimitExceeded (100) 和 PlanLimitExceeded (141)
+    // 也通过错误消息来检查，因为后端可能返回包含存储限制信息的错误
+    self.code == ErrorCode::FileStorageLimitExceeded 
+      || self.code == ErrorCode::PlanLimitExceeded
+      || self.msg.to_lowercase().contains("storage limit")
+      || self.msg.to_lowercase().contains("plan limit")
   }
 
   pub fn is_single_file_limit_exceeded(&self) -> bool {
@@ -81,10 +87,13 @@ impl FlowyError {
   }
 
   pub fn should_retry_upload(&self) -> bool {
-    !matches!(
-      self.code,
-      ErrorCode::FileStorageLimitExceeded | ErrorCode::SingleUploadLimitExceeded
-    )
+    // 存储限制错误不应该重试
+    // 包括 FileStorageLimitExceeded (100) 和 PlanLimitExceeded (141)
+    if self.is_file_limit_exceeded() {
+      return false;
+    }
+    // 其他情况允许重试
+    true
   }
 
   pub fn is_ai_response_limit_exceeded(&self) -> bool {
