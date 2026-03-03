@@ -94,7 +94,10 @@ pub(crate) fn subscribe_folder_sync_state_changed(
       if let Some(user) = user.upgrade() {
         if let Ok(actual_workspace_id) = user.workspace_id() {
           if actual_workspace_id != workspace_id {
-            break;
+            // 首次安装/首次登录阶段 workspace_id 可能短暂未对齐。
+            // 这里如果直接 break，会把同步状态监听永久退出，导致前端一直停留在“同步中”。
+            // 改为跳过本次事件，等待后续 workspace 状态稳定后继续接收同步更新。
+            continue;
           }
         }
       }

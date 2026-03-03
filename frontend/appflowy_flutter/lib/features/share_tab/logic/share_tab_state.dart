@@ -104,7 +104,8 @@ class ShareTabState {
         other.updateAccessLevelResult == updateAccessLevelResult &&
         other.turnIntoMemberResult == turnIntoMemberResult &&
         other.addCollaboratorResult == addCollaboratorResult &&
-        other.hasClickedUpgradeToPro == hasClickedUpgradeToPro;
+        other.hasClickedUpgradeToPro == hasClickedUpgradeToPro &&
+        other.selectedPermissionId == selectedPermissionId;
   }
 
   @override
@@ -126,11 +127,12 @@ class ShareTabState {
       turnIntoMemberResult,
       addCollaboratorResult,
       hasClickedUpgradeToPro,
+      selectedPermissionId,
     );
   }
 
   @override
   String toString() {
-    return 'ShareTabState(currentUser: $currentUser, users: $users, availableUsers: $availableUsers, isLoading: $isLoading, errorMessage: $errorMessage, shareLink: $shareLink, generalAccessRole: $generalAccessRole, shareSectionType: $SharedSectionType, linkCopied: $linkCopied, initialResult: $initialResult, shareResult: $shareResult, removeResult: $removeResult, updateAccessLevelResult: $updateAccessLevelResult, turnIntoMemberResult: $turnIntoMemberResult, addCollaboratorResult: $addCollaboratorResult, hasClickedUpgradeToPro: $hasClickedUpgradeToPro)';
+    return 'ShareTabState(currentUser: $currentUser, users: $users, availableUsers: $availableUsers, isLoading: $isLoading, errorMessage: $errorMessage, shareLink: $shareLink, generalAccessRole: $generalAccessRole, shareSectionType: $SharedSectionType, linkCopied: $linkCopied, initialResult: $initialResult, shareResult: $shareResult, removeResult: $removeResult, updateAccessLevelResult: $updateAccessLevelResult, turnIntoMemberResult: $turnIntoMemberResult, addCollaboratorResult: $addCollaboratorResult, hasClickedUpgradeToPro: $hasClickedUpgradeToPro, selectedPermissionId: $selectedPermissionId)';
   }
 }

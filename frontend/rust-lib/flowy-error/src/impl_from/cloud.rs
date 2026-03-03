@@ -43,7 +43,22 @@ impl From<AppResponseError> for FlowyError {
       AppErrorCode::FreePlanGuestLimitExceeded => ErrorCode::FreePlanGuestLimitExceeded,
       AppErrorCode::InvalidGuest => ErrorCode::InvalidGuest,
       AppErrorCode::PaidPlanGuestLimitExceeded => ErrorCode::PaidPlanGuestLimitExceeded,
-      _ => ErrorCode::Internal,
+      // 处理后端返回的 PlanLimitExceeded (错误码 1072) 和 FileStorageLimitExceeded (错误码 1028)
+      // 注意：由于后端的 ErrorCode 反序列化时会默认变成 Internal，
+      // 我们需要通过检查错误消息来判断是否是存储限制错误
+      _ => {
+        // 检查错误消息中是否包含存储限制相关关键词
+        let message = error.message.to_lowercase();
+        if message.contains("storage limit exceeded")
+          || message.contains("plan limit exceeded")
+          || message.contains("storage limit")
+          || message.contains("total storage limit")
+        {
+          ErrorCode::PlanLimitExceeded
+        } else {
+          ErrorCode::Internal
+        }
+      },
     };
 
     FlowyError::new(code, error.message)

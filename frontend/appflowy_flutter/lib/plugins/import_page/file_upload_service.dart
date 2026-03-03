@@ -73,26 +73,90 @@ class FileUploadService {
       Log.info('File upload (PUT) response: ${putResp.statusCode} - $putBody');
       
       if (putResp.statusCode == 200 || putResp.statusCode == 201) {
-        // Try to parse URL from response
-        try {
-          if (putBody.isNotEmpty) {
+        // 检查响应体中是否包含错误信息
+        if (putBody.isNotEmpty) {
+          try {
             final data = jsonDecode(putBody);
-            final fileUrl = (data is Map)
-                ? (data['url'] as String? ?? data['file_url'] as String? ?? data['link'] as String?)
-                : null;
-            if (fileUrl != null && fileUrl.isNotEmpty) {
-              Log.info('File uploaded successfully: $fileUrl');
-              return fileUrl;
+            if (data is Map) {
+              // 检查是否有错误代码
+              // 后端返回的数字错误代码：1028 (FileStorageLimitExceeded), 1072 (PlanLimitExceeded)
+              // 也可能返回字符串形式的错误代码
+              final dynamic codeValue = data['code'];
+              final errorMessage = data['message'] as String?;
+              
+              bool isStorageError = false;
+              String? errorCodeStr;
+              
+              if (codeValue is int) {
+                // 数字形式的错误代码
+                errorCodeStr = codeValue.toString();
+                if (codeValue == 1028 || codeValue == 1072) {
+                  isStorageError = true;
+                }
+              } else if (codeValue is String) {
+                // 字符串形式的错误代码
+                errorCodeStr = codeValue;
+                if (codeValue == 'PlanLimitExceeded' || codeValue == 'FileStorageLimitExceeded') {
+                  isStorageError = true;
+                }
+              }
+              
+              if (isStorageError) {
+                Log.error('File upload failed: Storage limit exceeded - $errorMessage');
+                throw Exception('云空间容量不足: $errorMessage');
+              } else if (errorCodeStr != null && errorCodeStr != 'ok' && errorCodeStr != 'success') {
+                // 其他错误
+                Log.error('File upload returned error: $errorCodeStr - $errorMessage');
+                throw Exception('文件上传失败: $errorMessage (code: $errorCodeStr)');
+              }
+              
+              // 尝试获取文件 URL
+              final fileUrl = data['url'] as String? ?? data['file_url'] as String? ?? data['link'] as String?;
+              if (fileUrl != null && fileUrl.isNotEmpty) {
+                Log.info('File uploaded successfully: $fileUrl');
+                return fileUrl;
+              }
             }
+          } catch (e) {
+            if (e.toString().contains('文件上传失败')) {
+              rethrow;
+            }
+            // 如果解析失败，继续尝试构造 URL
           }
-        } catch (_) {
-          // If parsing fails, construct URL from endpoint
         }
         
         // Construct accessible URL (same as upload endpoint)
         final constructed = '$baseOrigin/api/file_storage/$workspaceId/blob/$fileId';
         Log.info('File uploaded successfully (constructed URL): $constructed');
         return constructed;
+      }
+      
+      // 即使是非200/201状态码，也检查是否是存储限制错误
+      if (putBody.isNotEmpty) {
+        try {
+          final data = jsonDecode(putBody);
+          if (data is Map) {
+            final dynamic codeValue = data['code'];
+            final errorMessage = data['message'] as String?;
+            
+            bool isStorageError = false;
+            if (codeValue is int && (codeValue == 1028 || codeValue == 1072)) {
+              isStorageError = true;
+            } else if (codeValue is String && 
+                (codeValue == 'PlanLimitExceeded' || codeValue == 'FileStorageLimitExceeded')) {
+              isStorageError = true;
+            }
+            
+            if (isStorageError) {
+              Log.error('File upload failed: Storage limit exceeded (status ${putResp.statusCode}) - $errorMessage');
+              throw Exception('云空间容量不足: $errorMessage');
+            }
+          }
+        } catch (e) {
+          if (e.toString().contains('云空间容量不足')) {
+            rethrow;
+          }
+        }
       }
       
       _throwClassifiedUploadError(putResp.statusCode, putBody);

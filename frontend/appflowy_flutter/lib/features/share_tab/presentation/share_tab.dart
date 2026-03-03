@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:appflowy/features/share_tab/data/models/models.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/people_with_access_section.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/access_level_list_widget.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/shared_user_widget.dart';
+import 'package:appflowy/features/util/extensions.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -55,6 +57,19 @@ class ShareTab extends StatefulWidget {
 class _ShareTabState extends State<ShareTab> {
   final TextEditingController _inviteController = TextEditingController();
   late final ShareTabBloc _bloc;
+
+  int _permissionIdFromAccessLevel(ShareAccessLevel level) {
+    switch (level) {
+      case ShareAccessLevel.readOnly:
+        return 1;
+      case ShareAccessLevel.readAndComment:
+        return 2;
+      case ShareAccessLevel.readAndWrite:
+        return 3;
+      case ShareAccessLevel.fullAccess:
+        return 4;
+    }
+  }
 
   @override
   void initState() {
@@ -197,11 +212,10 @@ class _ShareTabState extends State<ShareTab> {
       },
       onTurnIntoMember: (user) {
         context.read<ShareTabBloc>().add(
-              ShareTabEvent.convertToMember(email: user.email),
+              ShareTabEvent.convertToMember(email: user.phone ?? user.email),
             );
       },
       onRemoveAccess: (user) {
-        // show a dialog to confirm the action when removing self access
         final theme = AppFlowyTheme.of(context);
         final shareTabBloc = context.read<ShareTabBloc>();
         final removingSelf =
@@ -218,13 +232,13 @@ class _ShareTabState extends State<ShareTab> {
             confirmLabel: LocaleKeys.button_delete.tr(),
             onConfirm: (_) {
               shareTabBloc.add(
-                ShareTabEvent.removeUsers(emails: [user.email]),
+                ShareTabEvent.removeCollabMember(user: user),
               );
             },
           );
         } else {
           shareTabBloc.add(
-            ShareTabEvent.removeUsers(emails: [user.email]),
+            ShareTabEvent.removeCollabMember(user: user),
           );
         }
       },
@@ -372,15 +386,22 @@ class _ShareTabState extends State<ShareTab> {
   /// 构建权限选择器
   Widget _buildPermissionSelector(BuildContext context, ShareTabState state) {
     final theme = AppFlowyTheme.of(context);
-    
-    // 权限选项
-    final permissions = [
-      {'id': 1, 'name': '可以查看', 'icon': Icons.visibility_outlined},
-      {'id': 2, 'name': '可以评论', 'icon': Icons.comment_outlined},
-      {'id': 3, 'name': '可以编辑', 'icon': Icons.edit_outlined},
-      {'id': 4, 'name': '全部权限', 'icon': Icons.admin_panel_settings_outlined},
-    ];
-    
+    final permissions = ShareAccessLevel.values
+        .where((level) => level != ShareAccessLevel.readAndComment)
+        .toList();
+    final permissionItems = permissions
+        .map((level) => MapEntry(_permissionIdFromAccessLevel(level), level))
+        .fold<Map<int, ShareAccessLevel>>(<int, ShareAccessLevel>{},
+            (acc, entry) {
+      acc.putIfAbsent(entry.key, () => entry.value);
+      return acc;
+    }).entries.toList();
+
+    final selectedPermissionId =
+        permissionItems.any((entry) => entry.key == state.selectedPermissionId)
+            ? state.selectedPermissionId
+            : (permissionItems.isNotEmpty ? permissionItems.first.key : null);
+
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: theme.spacing.m,
@@ -402,22 +423,28 @@ class _ShareTabState extends State<ShareTab> {
           const SizedBox(width: 8),
           Expanded(
             child: DropdownButton<int>(
-              value: state.selectedPermissionId,
+              value: selectedPermissionId,
               isExpanded: true,
               underline: const SizedBox(),
-              items: permissions.map((p) {
+              style: theme.textStyle.body.standard(
+                color: theme.textColorScheme.primary,
+              ),
+              dropdownColor: theme.surfaceContainerColorScheme.layer01,
+              borderRadius: BorderRadius.circular(8),
+              items: permissionItems.map((entry) {
+                final level = entry.value;
                 return DropdownMenuItem<int>(
-                  value: p['id'] as int,
+                  value: entry.key,
                   child: Row(
                     children: [
-                      Icon(
-                        p['icon'] as IconData,
-                        size: 18,
+                      FlowySvg(
+                    level.icon,
+                        size: const Size(18, 18),
                         color: theme.textColorScheme.primary,
                       ),
                       const SizedBox(width: 8),
                       FlowyText(
-                        p['name'] as String,
+                        level.title,
                         color: theme.textColorScheme.primary,
                       ),
                     ],
@@ -579,6 +606,42 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
     super.dispose();
   }
 
+  String? _extractCurrentUserUuid(UserProfilePB? user) {
+    if (user == null) return null;
+    final rawToken = user.token;
+    if (rawToken.isEmpty) return null;
+
+    String? accessToken = rawToken;
+    // token 可能是 JSON（包含 access_token）或直接 JWT
+    if (rawToken.trimLeft().startsWith('{')) {
+      try {
+        final tokenMap = jsonDecode(rawToken) as Map<String, dynamic>;
+        accessToken = tokenMap['access_token'] as String?;
+      } catch (_) {
+        accessToken = null;
+      }
+    }
+    if (accessToken == null || accessToken.isEmpty) return null;
+
+    // JWT 格式：header.payload.signature，uuid 常在 sub
+    final parts = accessToken.split('.');
+    if (parts.length < 2) return null;
+    try {
+      final payload = parts[1];
+      final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+      final padding = (4 - normalized.length % 4) % 4;
+      final padded = normalized + ('=' * padding);
+      final decoded = utf8.decode(base64Decode(padded));
+      final payloadMap = jsonDecode(decoded) as Map<String, dynamic>;
+      final sub = payloadMap['sub']?.toString();
+      if (sub != null && sub.isNotEmpty) {
+        return sub;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   void _inviteUser(SharedUser user) {
     _bloc.add(
       ShareTabEvent.inviteUsers(
@@ -634,6 +697,20 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
             },
           );
         }
+
+        // 监听成员权限更新结果（updateMemberPermission）
+        final updateAccessLevelResult = state.updateAccessLevelResult;
+        if (updateAccessLevelResult != null) {
+          updateAccessLevelResult.fold(
+            (_) {},
+            (error) {
+              showToastNotification(
+                message: error.msg.isNotEmpty ? error.msg : '权限修改失败',
+                type: ToastificationType.error,
+              );
+            },
+          );
+        }
       },
       builder: (context, state) {
         final currentUser = state.currentUser;
@@ -644,11 +721,32 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
         final List<SharedUser> allUsers = users;
 
         // 从完整列表中查找当前登录用户（可能是拥有者，也可能是被邀请者）
+        final currentUid =
+            _extractCurrentUserUuid(currentUser) ?? currentUser?.id.toString();
+        final currentEmail = currentUser?.email;
         final currentSharedUser = currentUser == null
             ? null
             : allUsers.firstWhereOrNull(
-                (user) => user.name == currentUser.name,
+                (user) =>
+                    (currentUid != null &&
+                        currentUid.isNotEmpty &&
+                        user.userId == currentUid) ||
+                    (currentEmail != null &&
+                        currentEmail.isNotEmpty &&
+                        user.email == currentEmail),
               );
+        // 兜底：接口返回成员里找不到当前用户时，也要展示列表，避免整块空白。
+        // 这里使用最小权限(member + readOnly)作为安全默认值，防止误放权。
+        final effectiveCurrentSharedUser = currentSharedUser ??
+            SharedUser(
+              email: currentUser?.email ?? '',
+              name: (currentUser?.name.isNotEmpty ?? false)
+                  ? currentUser!.name
+                  : (currentUser?.email ?? 'current_user'),
+              role: ShareRole.member,
+              accessLevel: ShareAccessLevel.readOnly,
+              userId: currentUid,
+            );
 
         return Dialog(
           insetPadding: const EdgeInsets.all(24),
@@ -702,14 +800,7 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                               color: theme.textColorScheme.secondary,
                             ),
                           )
-                        : currentSharedUser == null
-                            ? Center(
-                                child: FlowyText.regular(
-                                  '无法获取当前用户信息',
-                                  color: theme.textColorScheme.error,
-                                ),
-                              )
-                            : ListView.separated(
+                        : ListView.separated(
                                 shrinkWrap: true,
                                 itemCount: allUsers.length,
                                 separatorBuilder: (_, __) => Divider(
@@ -721,7 +812,7 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                   final user = allUsers[index];
                                   return SharedUserWidget(
                                     user: user,
-                                    currentUser: currentSharedUser,
+                                    currentUser: effectiveCurrentSharedUser,
                                     /// 因为当前协作区都是公开，所有分享都是公开的文档，导致分享后不能编辑权限。
                                     // isInPublicPage: state.sectionType ==
                                     //     SharedSectionType.public,
@@ -737,13 +828,18 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                       onTurnIntoMember: () {
                                         _bloc.add(
                                           ShareTabEvent.convertToMember(
-                                            email: user.name,
+                                            email: user.email,
                                           ),
                                         );
                                       },
                                       onRemoveAccess: () {
                                         final removingSelf =
-                                            user.name == currentUser?.name;
+                                            (currentUid != null &&
+                                                currentUid.isNotEmpty &&
+                                                user.userId == currentUid) ||
+                                            (currentEmail != null &&
+                                                currentEmail.isNotEmpty &&
+                                                user.email == currentEmail);
                                         if (removingSelf) {
                                           showConfirmDialog(
                                             context: context,
@@ -762,16 +858,17 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                                 LocaleKeys.button_delete.tr(),
                                             onConfirm: (_) {
                                               _bloc.add(
-                                                ShareTabEvent.removeUsers(
-                                                  emails: [user.email],
+                                                ShareTabEvent
+                                                    .removeCollabMember(
+                                                  user: user,
                                                 ),
                                               );
                                             },
                                           );
                                         } else {
                                           _bloc.add(
-                                            ShareTabEvent.removeUsers(
-                                              emails: [user.email],
+                                            ShareTabEvent.removeCollabMember(
+                                              user: user,
                                             ),
                                           );
                                         }

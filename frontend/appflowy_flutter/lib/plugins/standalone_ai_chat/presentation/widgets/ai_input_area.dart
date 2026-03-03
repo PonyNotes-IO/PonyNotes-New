@@ -483,7 +483,7 @@ class _AIInputAreaState extends State<AIInputArea> {
       key: _selectorKey, // 添加GlobalKey
       onTap: _toggleDropdown,
       child: Container(
-        width: showWarning ? 140 : 102, // 有警告时加宽
+        width: showWarning ? 140 : 122, // 有警告时加宽
         height: showWarning ? 42 : 30, // 有警告时加高
         decoration: BoxDecoration(
           color: _getButtonBackgroundColor(context),
@@ -528,18 +528,11 @@ class _AIInputAreaState extends State<AIInputArea> {
             ),
             const SizedBox(width: 4),
             Transform.rotate(
-              angle: _isDropdownOpen ? 3.14159 : 0, // 180度旋转
-              child: Image.asset(
-                'assets/images/icons/dropdown_arrow.png',
-                width: 9,
-                height: 7,
-                errorBuilder: (context, error, stackTrace) {
-                  return Icon(
-                    Icons.arrow_drop_down,
-                    size: 7,
-                    color: _getButtonTextColor(context, _selectedModel != null),
-                  );
-                },
+              angle: _isDropdownOpen ? 3.14159 : 0,
+              child: FlowySvg(
+                FlowySvgs.icon_down_arrow_s,
+                size: const Size.square(14),
+                color: _getButtonTextColor(context, _selectedModel != null),
               ),
             ),
             const SizedBox(width: 10),

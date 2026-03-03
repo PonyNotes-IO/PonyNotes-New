@@ -466,7 +466,7 @@
     "Spaces": "空间",
     "upgradeToPro": "升级至专业版",
     "upgradeToAIMax": "解锁无限制 AI",
-    "storageLimitDialogTitle": "你已用尽免费存储。升级以解锁无限制存储",
+    "storageLimitDialogTitle": "你已用尽云存储空间，升级以解锁更多云存储空间。",
     "storageLimitDialogTitleIOS": "你已用尽免费存储。",
     "aiResponseLimitTitle": "你已用尽免费 AI 回应。升级到专业版或者购买 AI 插件来解锁无限制回应",
     "aiResponseLimitDialogTitle": "已达到 AI 回应限额",

@@ -99,7 +99,7 @@ class SharedUserWidget extends StatelessWidget {
   }
 
   Widget _buildTrailing(BuildContext context) {
-    final isCurrentUser = user.name == currentUser.name;
+    final isCurrentUser = user.userId == currentUser.userId;
     final theme = AppFlowyTheme.of(context);
     final currentAccessLevel = currentUser.accessLevel;
 
@@ -155,16 +155,16 @@ class SharedUserWidget extends StatelessWidget {
     }
 
     // Owner's permissions can never be edited by others
-    if (user.role == ShareRole.owner) {
+    if (user.role == ShareRole.owner && isCurrentUser) {
       return disabledAccessButton();
     }
 
     // Managing others
-    if (currentAccessLevel == ShareAccessLevel.readOnly ||
-        currentAccessLevel == ShareAccessLevel.readAndWrite) {
-      // Cannot change others' access
-      return disabledAccessButton();
-    } else {
+    // if (currentAccessLevel == ShareAccessLevel.readOnly ||
+    //     currentAccessLevel == ShareAccessLevel.readAndWrite) {
+    //   // Cannot change others' access
+    //   return disabledAccessButton();
+    // } else {
       // Full access user can manage others
       final supportedAccessLevels = [
         ShareAccessLevel.readOnly,
@@ -172,6 +172,6 @@ class SharedUserWidget extends StatelessWidget {
         ShareAccessLevel.fullAccess,
       ];
       return editAccessWidget(supportedAccessLevels);
-    }
+    // }
   }
 }

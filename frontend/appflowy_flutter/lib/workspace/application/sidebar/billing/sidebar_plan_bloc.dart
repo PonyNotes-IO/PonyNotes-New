@@ -39,11 +39,12 @@ class SidebarPlanBloc extends Bloc<SidebarPlanEvent, SidebarPlanState> {
         }
       },
       onErrorIf: (error) {
+        // 后端返回 PlanLimitExceeded (1072) 或 FileStorageLimitExceeded (1028)
         const relevantErrorCodes = {
           ErrorCode.AIResponseLimitExceeded,
           ErrorCode.FileStorageLimitExceeded,
         };
-        return relevantErrorCodes.contains(error.code);
+        return relevantErrorCodes.contains(error.code) || error.code.value == 1072 || error.code.value == 1028;
       },
     );
 
@@ -106,7 +107,8 @@ class SidebarPlanBloc extends Bloc<SidebarPlanEvent, SidebarPlanState> {
               tierIndicator: const SidebarToastTierIndicator.aiMaxiLimitHit(),
             ),
           );
-        } else if (error.code == ErrorCode.FileStorageLimitExceeded) {
+        } else if (error.code == ErrorCode.FileStorageLimitExceeded || error.code.value == 1072 || error.code.value == 1028) {
+          // PlanLimitExceeded (1072) 也是存储限制错误
           emit(
             state.copyWith(
               tierIndicator: const SidebarToastTierIndicator.storageLimitHit(),

@@ -109,25 +109,25 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
                 ),
               ),
               const SizedBox(height: 42),
-              InkWell(
-                onTap: _openCalendar,
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color.fromRGBO(255, 106, 77, 0.12), // 半透明粉色背景
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    "链接我的日历",
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFFFF6A4D),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
+              // InkWell(
+              //   onTap: _openCalendar,
+              //   borderRadius: BorderRadius.circular(6),
+              //   child: Container(
+              //     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              //     decoration: BoxDecoration(
+              //       color: const Color.fromRGBO(255, 106, 77, 0.12), // 半透明粉色背景
+              //       borderRadius: BorderRadius.circular(6),
+              //     ),
+              //     child: Text(
+              //       "链接我的日历",
+              //       style: const TextStyle(
+              //         fontSize: 13,
+              //         color: Color(0xFFFF6A4D),
+              //         fontWeight: FontWeight.w600,
+              //       ),
+              //     ),
+              //   ),
+              // ),
             ],
           ),
         ),

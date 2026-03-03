@@ -100,6 +100,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
   final SubscriptionSuccessListenable _subscriptionSuccessListenable;
   late final VoidCallback _subscriptionSuccessListener;
   FolderSyncStateListener? _folderSyncStateListener;
+  String? _folderSyncWorkspaceId;
   DateTime? _lastStorageCheckTime; // 上次检查存储的时间
   static const Duration _storageCheckInterval = Duration(minutes: 5); // 存储检查间隔
 
@@ -119,6 +120,7 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     _subscriptionSuccessListenable.removeListener(_subscriptionSuccessListener);
     _listener.stop();
     _folderSyncStateListener?.stop();
+    _folderSyncWorkspaceId = null;
     return super.close();
   }
 
@@ -145,6 +147,12 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
       await cloudConfigResult.fold(
         (cloudConfig) async {
           final rustEnabled = cloudConfig.enableSync;
+
+          // 关键兜底：即使值没有变化，也要把 enable_sync 再次下发到 Rust 运行时。
+          // 首次安装启动时，可能出现「配置值已是 true，但运行时同步引擎尚未激活」的情况，
+          // 导致 SidebarCloudSyncButton 一直停留在“同步中”。
+          final config = UpdateCloudConfigPB.create()..enableSync = rustEnabled;
+          await UserEventSetCloudConfig(config).send();
           
           // 直接使用 Rust 层的值，不需要判断会员信息
           if (state.isCloudSyncEnabled != rustEnabled) {
@@ -154,6 +162,10 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
         (error) async {
           // 如果读取失败，使用默认值（开启）
           emit(state.copyWith(isCloudSyncEnabled: true));
+
+          // 读取失败时同样兜底激活运行时同步引擎
+          final config = UpdateCloudConfigPB.create()..enableSync = true;
+          await UserEventSetCloudConfig(config).send();
         },
       );
     } catch (e, stackTrace) {
@@ -840,11 +852,19 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
 
   /// 启动文件夹同步状态监听器
   void _startFolderSyncStateListener(String workspaceId) {
+    // 同一个 workspace 已在监听时，不要重复 stop/start。
+    // 首次启动会有多路事件并发触发该方法，重复重绑会造成监听空窗，容易丢失“同步完成”事件。
+    if (_folderSyncWorkspaceId == workspaceId && _folderSyncStateListener != null) {
+      return;
+    }
+
     // 停止之前的监听器
     _folderSyncStateListener?.stop();
+    _folderSyncWorkspaceId = null;
     
     // 创建新的监听器
     _folderSyncStateListener = FolderSyncStateListener(workspaceId: workspaceId);
+    _folderSyncWorkspaceId = workspaceId;
     _folderSyncStateListener!.start(
       didReceiveSyncState: (syncState) {
         if (!isClosed) {

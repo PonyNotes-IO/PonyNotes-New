@@ -94,42 +94,13 @@ class SidebarToast extends StatelessWidget {
     }
 
     final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
-    final role = userWorkspaceBloc.state.currentWorkspace?.role;
-    if (role == null) {
-      return Log.error(
-        "Member is null. It should not happen. If you see this error, it's a bug",
-      );
-    }
 
-    // Only if the user is the workspace owner will we navigate to the plan page.
-    if (role.isOwner) {
-      showSettingsDialog(
-        context,
-        userWorkspaceBloc: userWorkspaceBloc,
-        initPage: SettingsPage.plan,
-      );
-    } else {
-      final String message;
-      if (plan == SubscriptionPlanPB.AiMax) {
-        message = Platform.isIOS
-            ? LocaleKeys.sideBar_askOwnerToUpgradeToAIMaxIOS.tr()
-            : LocaleKeys.sideBar_askOwnerToUpgradeToAIMax.tr();
-      } else {
-        message = Platform.isIOS
-            ? LocaleKeys.sideBar_askOwnerToUpgradeToProIOS.tr()
-            : LocaleKeys.sideBar_askOwnerToUpgradeToPro.tr();
-      }
-
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        useRootNavigator: false,
-        builder: (dialogContext) => _AskOwnerToChangePlan(
-          message: message,
-          onOkPressed: () {},
-        ),
-      );
-    }
+    // 直接跳转到计划页面，不检查权限
+    showSettingsDialog(
+      context,
+      userWorkspaceBloc: userWorkspaceBloc,
+      initPage: SettingsPage.plan,
+    );
   }
 }
 

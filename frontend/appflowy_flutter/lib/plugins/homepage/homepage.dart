@@ -196,6 +196,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final appTheme = AppFlowyTheme.of(context);
     final now = DateTime.now();
     final hour = now.hour;
     String greeting;
@@ -230,7 +232,7 @@ class _HomePageState extends State<HomePage> {
         }
       },
       child: Container(
-        color: Theme.of(context).colorScheme.surface,
+        color: theme.colorScheme.surface,
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(90, 80.0, 90, 32.0),
           child: Column(
@@ -251,12 +253,12 @@ class _HomePageState extends State<HomePage> {
                       blendMode: null,
                     ),
                     const SizedBox(width: 8.0),
-                    const Text(
+                    Text(
                       "问AI",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF636363),
+                        color: appTheme.textColorScheme.primary,
                       ),
                     ),
                   ],
@@ -301,18 +303,15 @@ class _HomePageState extends State<HomePage> {
                     Icon(
                       Icons.access_time,
                       size: 18,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withOpacity(0.6),
+                      color: appTheme.iconColorScheme.primary,
                     ),
                     const SizedBox(width: 8.0),
-                    const Text(
+                    Text(
                       "最近访问",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF636363),
+                        color: appTheme.textColorScheme.primary,
                       ),
                     ),
                   ],
@@ -332,15 +331,15 @@ class _HomePageState extends State<HomePage> {
                     FlowySvg(
                       FlowySvgs.home_to_do_m,
                       size: const Size.square(18),
-                      blendMode: null,
+                      color: appTheme.iconColorScheme.primary,
                     ),
                     const SizedBox(width: 8.0),
-                    const Text(
+                    Text(
                       "待办计划",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF636363),
+                        color: appTheme.textColorScheme.primary,
                       ),
                     ),
                   ],
@@ -363,6 +362,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildGreetingSection(String greeting, String userName) {
+    final theme = AppFlowyTheme.of(context);
     return SizedBox(
       width: double.infinity,
       child: Row(
@@ -392,10 +392,10 @@ class _HomePageState extends State<HomePage> {
           // 问候语文字
           Text(
             "$greeting，$userName～",
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF333333),
+              color: theme.textColorScheme.primary,
             ),
           ),
         ],
@@ -611,7 +611,7 @@ class _HomePageState extends State<HomePage> {
             color: theme.surfaceContainerColorScheme.layer01,
             borderRadius: BorderRadius.circular(12.0),
             border: Border.all(
-              color: const Color(0xFFE9E9E9),
+              color: theme.borderColorScheme.primary,
               width: 1,
             ),
           ),

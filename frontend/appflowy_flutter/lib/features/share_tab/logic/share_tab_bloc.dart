@@ -43,6 +43,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     on<ShareTabEventUpgradeToProClicked>(_onUpgradeToProClicked);
     on<ShareTabEventAddCollaborator>(_onAddCollaborator);
     on<ShareTabEventUpdateMemberPermission>(_onUpdateMemberPermission);
+    on<ShareTabEventRemoveCollabMember>(_onRemoveCollabMember);
     on<ShareTabEventUpdateShareLinkPermission>(_onUpdateShareLinkPermission);
   }
 
@@ -705,8 +706,9 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
                 accessLevel = ShareAccessLevel.readOnly;
             }
 
-            // 根据权限大致判断角色，4 为 Owner/FullAccess
-            final role = permissionId == 4 ? ShareRole.owner : ShareRole.member;
+            // permission_id 只表示权限级别，不代表拥有者角色
+            // 拥有者由 buildUsersListWithOwner 根据当前登录用户来判定
+            const role = ShareRole.member;
 
             return SharedUser(
               email: email,
@@ -842,6 +844,57 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     }
   }
 
+  Future<void> _onRemoveCollabMember(
+    ShareTabEventRemoveCollabMember event,
+    Emitter<ShareTabState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        errorMessage: '',
+        removeResult: null,
+      ),
+    );
+
+    String? memberUserId = event.user.userId;
+    if (memberUserId == null || memberUserId.isEmpty) {
+      emit(
+        state.copyWith(
+          errorMessage: '无法获取用户ID',
+          removeResult: FlowyFailure(
+            FlowyError()..msg = '无法获取用户ID',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final (success, errorMessage) = await _removeCollabMember(
+      workspaceId: workspaceId,
+      objectId: pageId,
+      memberUserId: memberUserId,
+    );
+
+    if (success) {
+      final users = await _getSharedUsers();
+      emit(
+        state.copyWith(
+          removeResult: FlowySuccess(null),
+          users: users,
+        ),
+      );
+    } else {
+      emit(
+        state.copyWith(
+          errorMessage: errorMessage.isNotEmpty ? errorMessage : '移除成员失败',
+          removeResult: FlowyFailure(
+            FlowyError()
+              ..msg = errorMessage.isNotEmpty ? errorMessage : '移除成员失败',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _onAddCollaborator(
     ShareTabEventAddCollaborator event,
     Emitter<ShareTabState> emit,
@@ -873,6 +926,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       workspaceId: workspaceId,
       objectId: pageId,
       memberUserId: memberUserId,
+      permissionId: event.accessLevel.index
     );
 
     if (success) {
@@ -918,6 +972,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     required String workspaceId,
     required String objectId,
     required String memberUserId,
+    required int permissionId
   }) async {
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
@@ -970,7 +1025,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $accessToken',
         },
-        body: jsonEncode({'permission_id': 1}), // 默认只读权限
+        body: jsonEncode({'permission_id': permissionId}), // 默认只读权限
       ).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
@@ -1159,5 +1214,77 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
         shareLink: newShareLink,
       ),
     );
+  }
+
+  /// 通过 HTTP DELETE API 移除协作成员
+  Future<(bool, String)> _removeCollabMember({
+    required String workspaceId,
+    required String objectId,
+    required String memberUserId,
+  }) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+
+      if (baseUrl.isEmpty) {
+        return (false, '服务器配置错误');
+      }
+
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold(
+        (user) => user,
+        (error) => null,
+      );
+
+      if (userProfile == null) {
+        return (false, '用户未登录');
+      }
+
+      final rawToken = userProfile.token;
+      if (rawToken.isEmpty) {
+        return (false, '认证失败');
+      }
+
+      final accessToken = _extractAccessToken(rawToken);
+      if (accessToken == null || accessToken.isEmpty) {
+        return (false, 'Token 提取失败');
+      }
+
+      final uri = Uri.parse(baseUrl).replace(
+        path:
+            '/api/workspace/$workspaceId/collab/$objectId/members/$memberUserId',
+      );
+
+      Log.info('Removing collab member: $uri');
+
+      final response = await http
+          .delete(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+      )
+          .timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timeout');
+        },
+      );
+
+      Log.info('Remove collab member response: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return (true, '');
+      } else {
+        final errorMessage =
+            '移除成员失败: HTTP ${response.statusCode} ${response.body}';
+        Log.error(errorMessage);
+        return (false, errorMessage);
+      }
+    } catch (e, stackTrace) {
+      Log.error('Exception in _removeCollabMember: $e', e, stackTrace);
+      return (false, '移除成员失败: ${e.toString()}');
+    }
   }
 }

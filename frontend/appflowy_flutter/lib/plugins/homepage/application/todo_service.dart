@@ -1,16 +1,20 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:appflowy/plugins/homepage/application/todo_models.dart';
+import 'package:appflowy/plugins/database/application/field/field_info.dart';
+import 'package:appflowy/plugins/database/application/row/row_service.dart';
+import 'package:appflowy/plugins/database/application/cell/cell_controller.dart';
+import 'package:appflowy/plugins/database/domain/cell_service.dart';
+import 'package:appflowy/plugins/database/domain/date_cell_service.dart';
+import 'package:appflowy/plugins/database/domain/field_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/calendar_entities.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:flowy_infra/uuid.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class TodoService {
-  static const String _todosKey = 'homepage_todos';
   static TodoService? _instance;
   
   static TodoService get instance => _instance ??= TodoService._();
@@ -45,7 +49,7 @@ class TodoService {
         },
         (error) async {
           // 视图不存在，尝试创建
-          final createResult = await ViewBackendService.createOrphanView(
+      final createResult = await ViewBackendService.createOrphanView(
             viewId: _calendarViewId!,
             name: 'Todo Calendar View',
             layoutType: ViewLayoutPB.Calendar,
@@ -69,16 +73,7 @@ class TodoService {
   }
 
   Future<List<TodoItem>> getAllTodos() async {
-    if (_todos.isEmpty) {
-      await _loadTodos();
-    }
-    
-    // 合并本地待办和日历日程
-    final allTodos = List<TodoItem>.from(_todos);
-    final calendarTodos = await _loadCalendarTodos();
-    allTodos.addAll(calendarTodos);
-    
-    return List.unmodifiable(allTodos);
+    return _loadCalendarTodos();
   }
 
   Future<List<TodoItem>> getTodayTodos() async {
@@ -114,51 +109,43 @@ class TodoService {
   }
 
   Future<List<TodoItem>> getCompletedTodos() async {
-    return _todos.where((todo) => todo.isCompleted).toList();
+    final allTodos = await getAllTodos();
+    return allTodos.where((todo) => todo.isCompleted).toList();
   }
 
   Future<List<TodoItem>> getIncompleteTodos() async {
-    return _todos.where((todo) => !todo.isCompleted).toList();
+    final allTodos = await getAllTodos();
+    return allTodos.where((todo) => !todo.isCompleted).toList();
   }
 
   Future<void> addTodo(TodoItem todo) async {
-    final newTodo = todo.copyWith(
-      id: todo.id.isEmpty ? _generateId() : todo.id,
-      createdAt: todo.createdAt ?? DateTime.now(),
-    );
-    
-    _todos.add(newTodo);
-    await _saveTodos();
+    await _createCalendarTodo(todo);
+    await _loadTodos();
     _todosController.add(List.unmodifiable(_todos));
   }
 
   Future<void> updateTodo(TodoItem updatedTodo) async {
-    final index = _todos.indexWhere((todo) => todo.id == updatedTodo.id);
-    if (index != -1) {
-      _todos[index] = updatedTodo;
-      await _saveTodos();
-      _todosController.add(List.unmodifiable(_todos));
-    }
+    await _updateCalendarTodo(updatedTodo);
+    await _loadTodos();
+    _todosController.add(List.unmodifiable(_todos));
   }
 
   Future<void> deleteTodo(String id) async {
-    _todos.removeWhere((todo) => todo.id == id);
-    await _saveTodos();
+    await _deleteCalendarTodo(id);
+    await _loadTodos();
     _todosController.add(List.unmodifiable(_todos));
   }
 
   Future<void> toggleComplete(String id) async {
-    final index = _todos.indexWhere((todo) => todo.id == id);
-    if (index != -1) {
-      final todo = _todos[index];
-      final updatedTodo = todo.copyWith(
-        isCompleted: !todo.isCompleted,
-        completedAt: !todo.isCompleted ? DateTime.now() : null,
-      );
-      _todos[index] = updatedTodo;
-      await _saveTodos();
-      _todosController.add(List.unmodifiable(_todos));
-    }
+    final allTodos = await getAllTodos();
+    final index = allTodos.indexWhere((todo) => todo.id == id);
+    if (index == -1) return;
+    final todo = allTodos[index];
+    // 日历事件没有独立完成字段：用时间前/后移动实现“完成/未完成”切换。
+    final movedDueDate = todo.isCompleted
+        ? DateTime.now().add(const Duration(hours: 1))
+        : DateTime.now().subtract(const Duration(minutes: 1));
+    await updateTodo(todo.copyWith(dueDate: movedDueDate));
   }
 
   List<TodoItem> sortTodos(List<TodoItem> todos, TodoSort sort) {
@@ -194,98 +181,13 @@ class TodoService {
 
   Future<void> _loadTodos() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final todosJson = prefs.getString(_todosKey);
-      
-      if (todosJson != null) {
-        final List<dynamic> todosList = json.decode(todosJson);
-        _todos = todosList.map((json) {
-          try {
-            return TodoItem.fromJson(json);
-          } catch (e) {
-            // 处理旧版本数据，添加默认的source字段
-            final Map<String, dynamic> updatedJson = Map<String, dynamic>.from(json);
-            if (!updatedJson.containsKey('source')) {
-              updatedJson['source'] = 'manual'; // 默认为手动创建
-            }
-            return TodoItem.fromJson(updatedJson);
-          }
-        }).toList();
-      } else {
-        // 添加一些示例数据
-        _todos = _createSampleTodos();
-        await _saveTodos();
-      }
-      
+      _todos = await _loadCalendarTodos();
       _todosController.add(List.unmodifiable(_todos));
     } catch (e) {
       Log.error('加载待办事项时出错: $e');
-      // 清除可能损坏的数据
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_todosKey);
-      
-      _todos = _createSampleTodos();
-      await _saveTodos();
+      _todos = [];
       _todosController.add(List.unmodifiable(_todos));
     }
-  }
-
-  Future<void> _saveTodos() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final todosJson = json.encode(_todos.map((todo) => todo.toJson()).toList());
-      await prefs.setString(_todosKey, todosJson);
-    } catch (e) {
-      // 处理保存错误
-    }
-  }
-
-  String _generateId() {
-    return DateTime.now().millisecondsSinceEpoch.toString();
-  }
-
-  List<TodoItem> _createSampleTodos() {
-    final now = DateTime.now();
-    return [
-      TodoItem(
-        id: '1',
-        title: '完成项目报告',
-        description: '准备下周一的项目进度报告',
-        priority: TodoPriority.high,
-        dueDate: now.add(const Duration(days: 1)),
-        createdAt: now.subtract(const Duration(days: 2)),
-        tags: ['工作', '报告'],
-      ),
-      TodoItem(
-        id: '2',
-        title: '购买生活用品',
-        description: '牛奶、面包、水果',
-        priority: TodoPriority.medium,
-        dueDate: now.add(const Duration(hours: 6)),
-        createdAt: now.subtract(const Duration(days: 1)),
-        tags: ['生活', '购物'],
-      ),
-      TodoItem(
-        id: '3',
-        title: '锻炼身体',
-        description: '跑步30分钟',
-        priority: TodoPriority.medium,
-        dueDate: now.add(const Duration(days: 2)),
-        createdAt: now.subtract(const Duration(hours: 12)),
-        tags: ['健康', '运动'],
-      ),
-      TodoItem(
-        id: '4',
-        title: '学习新技能',
-        description: '完成Flutter教程第3章',
-        priority: TodoPriority.low,
-        dueDate: now.add(const Duration(days: 5)),
-        createdAt: now.subtract(const Duration(hours: 6)),
-        tags: ['学习', '技术'],
-        isCompleted: true,
-        completedAt: now.subtract(const Duration(hours: 2)),
-      ),
-    ];
   }
 
   // 从日历加载待办事项
@@ -334,7 +236,7 @@ class TodoService {
       final isCompleted = now.isAfter(dueDate);
       
       return TodoItem(
-        id: 'calendar_${eventPB.rowMeta.id}', // 加前缀区分日历事件
+        id: eventPB.rowMeta.id,
         title: eventPB.title.isNotEmpty ? eventPB.title : '日历事件',
         description: '来自日历的日程安排',
         priority: TodoPriority.medium,
@@ -348,6 +250,131 @@ class TodoService {
     } catch (e) {
       return null;
     }
+  }
+
+  Future<List<FieldInfo>> _loadFieldInfos(String viewId) async {
+    var fieldInfos = <FieldInfo>[];
+    final fetched = await FieldBackendService.getFields(viewId: viewId);
+    fieldInfos = fetched.fold(
+      (list) => list.map((f) => FieldInfo.initial(f)).toList(),
+      (_) => <FieldInfo>[],
+    );
+
+    if (fieldInfos.isEmpty) {
+      await FieldBackendService.createField(
+        viewId: viewId,
+        fieldType: FieldType.RichText,
+        fieldName: 'Title',
+      );
+      await FieldBackendService.createField(
+        viewId: viewId,
+        fieldType: FieldType.DateTime,
+        fieldName: 'Date',
+      );
+      final retry = await FieldBackendService.getFields(viewId: viewId);
+      fieldInfos = retry.fold(
+        (list) => list.map((f) => FieldInfo.initial(f)).toList(),
+        (_) => <FieldInfo>[],
+      );
+    }
+    return fieldInfos;
+  }
+
+  Future<void> _createCalendarTodo(TodoItem todo) async {
+    if (_calendarViewId == null) {
+      await _ensureCalendarViewExists();
+      if (_calendarViewId == null) {
+        throw Exception('日历视图不可用');
+      }
+    }
+    final viewId = _calendarViewId!;
+    final fields = await _loadFieldInfos(viewId);
+    final primaryField = fields.firstWhere(
+      (f) => f.isPrimary,
+      orElse: () => fields.first,
+    );
+    final dateField = fields.firstWhere(
+      (f) => f.fieldType == FieldType.DateTime,
+      orElse: () => fields.first,
+    );
+
+    final dueDate = todo.dueDate ?? DateTime.now().add(const Duration(hours: 1));
+    final createResult = await RowBackendService.createRow(
+      viewId: viewId,
+      withCells: (builder) {
+        if (primaryField.fieldType == FieldType.RichText) {
+          builder.insertText(primaryField, todo.title);
+        }
+        if (dateField.fieldType == FieldType.DateTime) {
+          builder.insertDate(dateField, dueDate);
+        }
+      },
+    );
+
+    final rowMeta = await createResult.fold(
+      (row) => row,
+      (error) => throw Exception(error.msg),
+    );
+
+    if (dateField.fieldType == FieldType.DateTime) {
+      final dateService = DateCellBackendService(
+        viewId: viewId,
+        fieldId: dateField.field.id,
+        rowId: rowMeta.id,
+      );
+      await dateService.update(
+        includeTime: !todo.isAllDay,
+        isRange: false,
+        date: dueDate,
+      );
+    }
+  }
+
+  Future<void> _updateCalendarTodo(TodoItem todo) async {
+    if (_calendarViewId == null) return;
+    final viewId = _calendarViewId!;
+    final fields = await _loadFieldInfos(viewId);
+    final primaryField = fields.firstWhere(
+      (f) => f.isPrimary,
+      orElse: () => fields.first,
+    );
+    final dateField = fields.firstWhere(
+      (f) => f.fieldType == FieldType.DateTime,
+      orElse: () => fields.first,
+    );
+
+    if (primaryField.fieldType == FieldType.RichText && todo.title.isNotEmpty) {
+      await CellBackendService.updateCell(
+        viewId: viewId,
+        cellContext: CellContext(
+          fieldId: primaryField.field.id,
+          rowId: todo.id,
+        ),
+        data: todo.title,
+      );
+    }
+
+    if (dateField.fieldType == FieldType.DateTime && todo.dueDate != null) {
+      final dateService = DateCellBackendService(
+        viewId: viewId,
+        fieldId: dateField.field.id,
+        rowId: todo.id,
+      );
+      await dateService.update(
+        includeTime: !todo.isAllDay,
+        isRange: false,
+        date: todo.dueDate,
+      );
+    }
+  }
+
+  Future<void> _deleteCalendarTodo(String rowId) async {
+    if (_calendarViewId == null) return;
+    final result = await RowBackendService.deleteRows(_calendarViewId!, [rowId]);
+    result.fold(
+      (_) {},
+      (error) => throw Exception(error.msg),
+    );
   }
 
   void dispose() {
