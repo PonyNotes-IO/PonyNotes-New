@@ -77,6 +77,11 @@ sealed class ShareTabEvent {
         accessLevel: accessLevel,
       );
 
+  factory ShareTabEvent.removeCollabMember({
+    required SharedUser user,
+  }) =>
+      ShareTabEventRemoveCollabMember(user: user);
+
   factory ShareTabEvent.updateShareLinkPermission({
     required int permissionId,
   }) =>
@@ -196,6 +201,15 @@ class ShareTabEventUpdateMemberPermission extends ShareTabEvent {
 
   final SharedUser user;
   final ShareAccessLevel accessLevel;
+}
+
+/// Removes a collaborator from the page using the collaboration API (HTTP DELETE).
+class ShareTabEventRemoveCollabMember extends ShareTabEvent {
+  const ShareTabEventRemoveCollabMember({
+    required this.user,
+  });
+
+  final SharedUser user;
 }
 
 /// Updates the selected permission for share link.

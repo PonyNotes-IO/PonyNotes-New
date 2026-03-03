@@ -216,7 +216,6 @@ class _ShareTabState extends State<ShareTab> {
             );
       },
       onRemoveAccess: (user) {
-        // show a dialog to confirm the action when removing self access
         final theme = AppFlowyTheme.of(context);
         final shareTabBloc = context.read<ShareTabBloc>();
         final removingSelf =
@@ -233,13 +232,13 @@ class _ShareTabState extends State<ShareTab> {
             confirmLabel: LocaleKeys.button_delete.tr(),
             onConfirm: (_) {
               shareTabBloc.add(
-                ShareTabEvent.removeUsers(emails: [user.phone ?? user.email]),
+                ShareTabEvent.removeCollabMember(user: user),
               );
             },
           );
         } else {
           shareTabBloc.add(
-            ShareTabEvent.removeUsers(emails: [user.phone ?? user.email]),
+            ShareTabEvent.removeCollabMember(user: user),
           );
         }
       },
@@ -859,16 +858,17 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                                 LocaleKeys.button_delete.tr(),
                                             onConfirm: (_) {
                                               _bloc.add(
-                                                ShareTabEvent.removeUsers(
-                                                  emails: [user.email],
+                                                ShareTabEvent
+                                                    .removeCollabMember(
+                                                  user: user,
                                                 ),
                                               );
                                             },
                                           );
                                         } else {
                                           _bloc.add(
-                                            ShareTabEvent.removeUsers(
-                                              emails: [user.email],
+                                            ShareTabEvent.removeCollabMember(
+                                              user: user,
                                             ),
                                           );
                                         }
