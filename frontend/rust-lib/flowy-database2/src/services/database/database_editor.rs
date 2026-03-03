@@ -91,7 +91,7 @@ impl DatabaseEditor {
           })
         })
         .build();
-    let notification_sender = Arc::new(DebounceNotificationSender::new(200));
+    let notification_sender = Arc::new(DebounceNotificationSender::new(50));
     let cell_cache = AnyTypeCache::<u64>::new();
     let database_id = database.read().await.get_database_id();
     let database_cancellation = Arc::new(RwLock::new(None));
