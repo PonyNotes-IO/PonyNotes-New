@@ -873,6 +873,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       workspaceId: workspaceId,
       objectId: pageId,
       memberUserId: memberUserId,
+      permissionId: event.accessLevel.index
     );
 
     if (success) {
@@ -918,6 +919,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     required String workspaceId,
     required String objectId,
     required String memberUserId,
+    required int permissionId
   }) async {
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
@@ -970,7 +972,7 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $accessToken',
         },
-        body: jsonEncode({'permission_id': 1}), // 默认只读权限
+        body: jsonEncode({'permission_id': permissionId}), // 默认只读权限
       ).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
