@@ -67,6 +67,17 @@ pub trait DatabaseCloudService: Send + Sync {
     object_id: &Uuid,
     limit: usize,
   ) -> Result<Vec<DatabaseSnapshot>, FlowyError>;
+
+  /// Resolve the database_id for a given view_id in a specific workspace.
+  /// Used when opening shared database views from other workspaces where the
+  /// local workspace_database doesn't have the view_id → database_id mapping.
+  async fn resolve_database_id_for_view(
+    &self,
+    _workspace_id: &Uuid,
+    _view_id: &Uuid,
+  ) -> Result<Option<String>, FlowyError> {
+    Ok(None)
+  }
 }
 
 pub struct DatabaseSnapshot {

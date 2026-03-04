@@ -100,4 +100,22 @@ impl DatabaseUser for DatabaseUserImpl {
   fn workspace_database_object_id(&self) -> Result<Uuid, FlowyError> {
     self.upgrade_user()?.workspace_database_object_id()
   }
+
+  fn shared_view_source_workspace_id(&self, view_id: &str) -> Option<String> {
+    use flowy_sqlite::prelude::*;
+    use flowy_sqlite::schema::workspace_shared_view;
+
+    let user = self.upgrade_user().ok()?;
+    let uid = user.user_id().ok()?;
+    let mut conn = user.get_sqlite_connection(uid).ok()?;
+
+    let result: Option<String> = workspace_shared_view::table
+      .filter(workspace_shared_view::view_id.eq(view_id))
+      .filter(workspace_shared_view::uid.eq(uid))
+      .select(workspace_shared_view::workspace_id)
+      .first::<String>(&mut conn)
+      .ok();
+
+    result
+  }
 }
