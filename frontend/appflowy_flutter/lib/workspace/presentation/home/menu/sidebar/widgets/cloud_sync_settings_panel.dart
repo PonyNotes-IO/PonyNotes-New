@@ -1,6 +1,8 @@
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 
@@ -8,7 +10,9 @@ import 'package:flutter/material.dart';
 enum CloudSyncMembershipStatus {
   notSubscribed, // 未开通会员
   active, // 会员有效中
-  expired, // 已到期
+  expiringSoon, // 即将到期（7天内）
+  gracePeriod, // 宽限期（到期或降级后15天内）
+  expired, // 已过期（含宽限期已过）
   storageFull, // 空间使用满
 }
 
@@ -73,12 +77,11 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 标题和开关（未开通会员时不显示开关）
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               FlowyText(
-                '云同步',
+                LocaleKeys.newSettings_cloudSync_title.tr(),
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: theme.textColorScheme.primary,
@@ -101,6 +104,10 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
         return _buildNotSubscribedContent(theme, context);
       case CloudSyncMembershipStatus.active:
         return _buildActiveContent(theme, context);
+      case CloudSyncMembershipStatus.expiringSoon:
+        return _buildExpiringSoonContent(theme, context);
+      case CloudSyncMembershipStatus.gracePeriod:
+        return _buildGracePeriodContent(theme, context);
       case CloudSyncMembershipStatus.expired:
       case CloudSyncMembershipStatus.storageFull:
         return _buildExpiredOrFullContent(theme, context);
@@ -124,40 +131,38 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
       return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
     }
 
-    final subscription = widget.currentSubscription?.subscription;
-    final planName = subscription?.planNameCn ?? '会员';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         const SizedBox(height: 12),
         FlowyText(
-          '剩余空间：${fmt(remainingGb)} / ${fmt(storageTotalGb)}',
+          LocaleKeys.newSettings_cloudSync_remainingSpace.tr(args: [fmt(remainingGb), fmt(storageTotalGb)]),
           fontSize: 12,
           color: theme.textColorScheme.secondary,
         ),
         const SizedBox(height: 4),
         FlowyText(
-          '最大可上传${widget.maxFileSize}文件',
+          LocaleKeys.newSettings_cloudSync_maxUploadSize.tr(args: [widget.maxFileSize]),
           fontSize: 12,
           color: theme.textColorScheme.secondary,
         ),
         const SizedBox(height: 12),
         Text(
-          '开通会员后即可享受云同步功能，数据安全备份，多设备同步',
+          LocaleKeys.newSettings_cloudSync_notSubscribedDesc.tr(),
           style: TextStyle(
             fontSize: 12,
             color: theme.textColorScheme.secondary,
-            height: 1.4, // 行高
+            height: 1.4,
           ),
-          softWrap: true, // 允许换行
-          maxLines: null, // 不限制行数
+          softWrap: true,
+          maxLines: null,
         ),
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           child: AFFilledTextButton.primary(
-            text: '立即开通',
+            text: LocaleKeys.newSettings_cloudSync_btnSubscribe.tr(),
             onTap: widget.onUpgrade ?? () {},
           ),
         ),
@@ -182,7 +187,7 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
     }
 
     final subscription = widget.currentSubscription?.subscription;
-    final planName = subscription?.planNameCn ?? '会员';
+    final planName = subscription?.planNameCn ?? '';
     final planCode = subscription?.planCode?.toLowerCase() ?? '';
     final isFreePlan = planCode == 'mfb' || planCode.contains('free');
 
@@ -208,7 +213,7 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
               const SizedBox(width: 8),
               Expanded(
                 child: FlowyText(
-                  '$planName有效中',
+                  LocaleKeys.newSettings_cloudSync_memberActive.tr(args: [planName]),
                   fontSize: 12,
                   color: const Color(0xFF4CAF50),
                 ),
@@ -218,13 +223,13 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
         ),
         const SizedBox(height: 12),
         FlowyText(
-          '剩余空间：${fmt(remainingGb)} / ${fmt(storageTotalGb)}',
+          LocaleKeys.newSettings_cloudSync_remainingSpace.tr(args: [fmt(remainingGb), fmt(storageTotalGb)]),
           fontSize: 12,
           color: theme.textColorScheme.secondary,
         ),
         const SizedBox(height: 4),
         FlowyText(
-          '最大可上传${widget.maxFileSize}文件',
+          LocaleKeys.newSettings_cloudSync_maxUploadSize.tr(args: [widget.maxFileSize]),
           fontSize: 12,
           color: theme.textColorScheme.secondary,
         ),
@@ -233,11 +238,182 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
           SizedBox(
             width: double.infinity,
             child: AFFilledTextButton.primary(
-              text: '升级空间',
+              text: LocaleKeys.newSettings_cloudSync_btnUpgradeSpace.tr(),
               onTap: widget.onUpgrade ?? () {},
             ),
           ),
         ],
+      ],
+    );
+  }
+
+  /// 即将到期的内容（7天内到期）
+  Widget _buildExpiringSoonContent(
+      AppFlowyThemeData theme, BuildContext context) {
+    final subscription = widget.currentSubscription?.subscription;
+    final planName = subscription?.planNameCn ?? '';
+    final daysLeft = subscription?.daysUntilExpiry ?? 0;
+    final usage = widget.currentSubscription?.usage;
+    final storageUsedGb = usage?.storageUsedGb ?? 0.0;
+    final storageTotalGb = usage?.storageTotalGb ?? 0.0;
+    final remainingGb =
+        (storageTotalGb - storageUsedGb).clamp(0.0, double.infinity);
+
+    String fmt(double gb) {
+      if (gb < 1) {
+        final mb = gb * 1024;
+        return '${mb.toStringAsFixed(0)}M';
+      }
+      return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.light
+                ? const Color(0xFFFFF3E0)
+                : theme.surfaceColorScheme.layer02,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.schedule,
+                size: 16,
+                color: Color(0xFFFF9800),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FlowyText(
+                  LocaleKeys.newSettings_cloudSync_expiringSoon.tr(args: [planName, '$daysLeft']),
+                  fontSize: 12,
+                  color: const Color(0xFFFF9800),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        FlowyText(
+          LocaleKeys.newSettings_cloudSync_remainingSpace.tr(args: [fmt(remainingGb), fmt(storageTotalGb)]),
+          fontSize: 12,
+          color: theme.textColorScheme.secondary,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          LocaleKeys.newSettings_cloudSync_expiringSoonDesc.tr(),
+          style: TextStyle(
+            fontSize: 12,
+            color: theme.textColorScheme.secondary,
+            height: 1.4,
+          ),
+          softWrap: true,
+          maxLines: null,
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: AFFilledTextButton.primary(
+            text: LocaleKeys.newSettings_cloudSync_btnRenew.tr(),
+            onTap: widget.onUpgrade ?? () {},
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 宽限期内的内容（到期或降级后15天宽限期）
+  Widget _buildGracePeriodContent(
+      AppFlowyThemeData theme, BuildContext context) {
+    final subscription = widget.currentSubscription?.subscription;
+    final isDowngraded = subscription?.isDowngraded ?? false;
+    final graceDaysLeft = subscription?.daysUntilGracePeriodEnd ?? 0;
+    final usage = widget.currentSubscription?.usage;
+    final storageUsedGb = usage?.storageUsedGb ?? 0.0;
+    final storageTotalGb = usage?.storageTotalGb ?? 0.0;
+    final remainingGb =
+        (storageTotalGb - storageUsedGb).clamp(0.0, double.infinity);
+
+    String fmt(double gb) {
+      if (gb < 1) {
+        final mb = gb * 1024;
+        return '${mb.toStringAsFixed(0)}M';
+      }
+      return '${gb.toStringAsFixed(gb >= 10 ? 0 : 1)}G';
+    }
+
+    final title = isDowngraded
+        ? LocaleKeys.newSettings_cloudSync_gracePeriodDowngraded.tr(args: ['$graceDaysLeft'])
+        : LocaleKeys.newSettings_cloudSync_gracePeriodExpired.tr(args: ['$graceDaysLeft']);
+    final desc = isDowngraded
+        ? LocaleKeys.newSettings_cloudSync_gracePeriodDowngradedDesc.tr()
+        : LocaleKeys.newSettings_cloudSync_gracePeriodExpiredDesc.tr();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.light
+                ? const Color(0xFFFFF8E1)
+                : theme.surfaceColorScheme.layer02,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.hourglass_bottom,
+                  size: 16,
+                  color: Color(0xFFF57C00),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FlowyText(
+                  title,
+                  fontSize: 12,
+                  color: const Color(0xFFF57C00),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        FlowyText(
+          LocaleKeys.newSettings_cloudSync_remainingSpace.tr(args: [fmt(remainingGb), fmt(storageTotalGb)]),
+          fontSize: 12,
+          color: theme.textColorScheme.secondary,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          desc,
+          style: TextStyle(
+            fontSize: 12,
+            color: theme.textColorScheme.secondary,
+            height: 1.4,
+          ),
+          softWrap: true,
+          maxLines: null,
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: AFFilledTextButton.primary(
+            text: isDowngraded
+                ? LocaleKeys.newSettings_cloudSync_btnUpgradePlan.tr()
+                : LocaleKeys.newSettings_cloudSync_btnRenew.tr(),
+            onTap: widget.onUpgrade ?? () {},
+          ),
+        ),
       ],
     );
   }
@@ -273,7 +449,9 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
               const SizedBox(width: 8),
               Expanded(
                 child: FlowyText(
-                  isExpired ? '会员已到期' : '空间使用已满',
+                  isExpired
+                      ? LocaleKeys.newSettings_cloudSync_memberExpired.tr()
+                      : LocaleKeys.newSettings_cloudSync_storageFull.tr(),
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.primary,
                 ),
@@ -284,8 +462,11 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
         const SizedBox(height: 12),
         FlowyText(
           isExpired
-              ? '您的会员已到期，请续费以继续使用云同步功能'
-              : '已使用 ${storageUsedGb.toStringAsFixed(1)}G / ${storageTotalGb.toStringAsFixed(1)}G，空间已满',
+              ? LocaleKeys.newSettings_cloudSync_memberExpiredDesc.tr()
+              : LocaleKeys.newSettings_cloudSync_storageFullDesc.tr(args: [
+                  '${storageUsedGb.toStringAsFixed(1)}G',
+                  '${storageTotalGb.toStringAsFixed(1)}G',
+                ]),
           fontSize: 12,
           color: theme.textColorScheme.secondary,
         ),
@@ -293,7 +474,9 @@ class _CloudSyncSettingsPanelState extends State<CloudSyncSettingsPanel> {
         SizedBox(
           width: double.infinity,
           child: AFFilledTextButton.primary(
-            text: isExpired ? '立即续费' : '扩容空间',
+            text: isExpired
+                ? LocaleKeys.newSettings_cloudSync_btnRenew.tr()
+                : LocaleKeys.newSettings_cloudSync_btnExpandSpace.tr(),
             onTap: widget.onUpgrade ?? () {},
           ),
         ),
