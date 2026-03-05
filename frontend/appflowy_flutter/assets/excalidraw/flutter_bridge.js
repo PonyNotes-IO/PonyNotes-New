@@ -34,8 +34,8 @@
         setItem: function (key, value) {
             originalLocalStorage.setItem(key, value);
             if (init) {
-                window.flutter_inappwebview.callHandler('localStorageOnSet', {key: key, value});
-                
+                window.flutter_inappwebview.callHandler('localStorageOnSet', { key: key, value });
+
                 // 📸 关键修复：当 elements 更新时，自动捕获 files 并同步
                 // Excalidraw 不会将 files 写入 localStorage，我们需要手动提取
                 if (key.endsWith('excalidraw') && window._excalidrawAPI) {
@@ -43,7 +43,7 @@
                         // ✅ 改进：使用更可靠的 API 获取 files
                         const api = window._excalidrawAPI;
                         let files = null;
-                        
+
                         // 尝试多种方式获取 files
                         if (typeof api.getFiles === 'function') {
                             files = api.getFiles();
@@ -64,7 +64,7 @@
                                 });
                             }
                         }
-                        
+
                         if (files && Object.keys(files).length > 0) {
                             // ✅ 关键修复：合并 _initPayload.files 中的 url 字段
                             // 问题：api.getFiles() 返回的数据不包含 url 字段（因为 addFiles 注入时只有 dataURL）
@@ -79,23 +79,23 @@
                                     }
                                 }
                             }
-                            
+
                             const filesKey = key + '-files'; // 定义一个虚拟key
                             const filesValue = JSON.stringify(files);
-                            
+
                             // 简单的防抖/去重，避免重复发送
                             if (window._lastSentFiles !== filesValue) {
                                 window._lastSentFiles = filesValue;
                                 window.flutter_inappwebview.callHandler('localStorageOnSet', {
-                                    key: filesKey, 
+                                    key: filesKey,
                                     value: filesValue
                                 });
-                                console.log('[PonyNotes] 📸 Synced files count:', Object.keys(files).length, 
+                                console.log('[PonyNotes] 📸 Synced files count:', Object.keys(files).length,
                                     'with url:', Object.values(files).filter(f => f.url).length);
                             }
                         }
                     } catch (e) {
-                         console.error('[PonyNotes] Failed to sync files:', e);
+                        console.error('[PonyNotes] Failed to sync files:', e);
                     }
                 }
             }
@@ -104,7 +104,7 @@
         removeItem: function (key) {
             originalLocalStorage.removeItem(key);
             if (init) {
-                window.flutter_inappwebview.callHandler('localStorageOnRemove', {key: key});
+                window.flutter_inappwebview.callHandler('localStorageOnRemove', { key: key });
             }
         },
 
@@ -144,32 +144,32 @@
     // 将数据保存到 _initPayload，用于后续恢复（不依赖 localStorage）
     try {
         _initPayload = await window.flutter_inappwebview.callHandler('initData');
-        console.log('[PonyNotes] ✅ initData completed, payload:', 
+        console.log('[PonyNotes] ✅ initData completed, payload:',
             _initPayload ? Object.keys(_initPayload) : 'null');
     } catch (e) {
         console.error('[PonyNotes] ❌ initData failed:', e);
         _initPayload = null;
     }
-    
+
     init = true;
-    
+
     // ✅ 关键修复：在 init=true 之后立即尝试恢复数据
     // 不再依赖 _safeEvalJs 的延迟调用，而是直接在 IIFE 中处理
     // 此时 localStorage 已被 initData 设置，且 _initPayload 已保存
     let _filesInjected = false;
-    
+
     // 等待 Excalidraw API 就绪后立即恢复数据
     const waitForExcalidrawAndRestore = async () => {
         let attempts = 0;
         const maxAttempts = 100; // 最多等待 20 秒
         const interval = 200;
-        
+
         while (attempts < maxAttempts) {
             const api = window.excalidrawAPI || window.__EXCALIDRAW_API__ || window._excalidrawAPI;
             if (api) {
                 window._excalidrawAPI = api;
                 console.log('[PonyNotes] ✅ Excalidraw API captured, restoring data...');
-                
+
                 if (!_filesInjected) {
                     _filesInjected = true;
                     try {
@@ -185,7 +185,7 @@
         }
         console.error('[PonyNotes] ❌ Excalidraw API not found after max attempts');
     };
-    
+
     // 启动异步恢复（不阻塞后续代码）
     waitForExcalidrawAndRestore();
 
@@ -222,9 +222,9 @@
     window.exportExcalidraw = async function (format = 'png') {
         try {
             const api = await waitForExcalidrawAPI();
-            
+
             console.log('[PonyNotes] 开始导出，格式:', format);
-            
+
             // 全面检查所有可能的导出API
             const exportAPIs = {
                 'window.exportToPng': typeof window.exportToPng,
@@ -233,9 +233,9 @@
                 'window.ExcalidrawLib': typeof window.ExcalidrawLib,
                 'window.Excalidraw': typeof window.Excalidraw,
             };
-            
+
             console.log('[PonyNotes] 检查可用的导出方法:', exportAPIs);
-            
+
             // 如果ExcalidrawLib存在，检查它的方法
             if (window.ExcalidrawLib) {
                 console.log('[PonyNotes] ExcalidrawLib 的方法:', Object.keys(window.ExcalidrawLib));
@@ -248,7 +248,7 @@
                     elementsCount: sceneData.elements?.length,
                     filesCount: Object.keys(sceneData.files || {}).length,
                 });
-                
+
                 // 方案1: 使用 window.exportToPng
                 if (typeof window.exportToPng === 'function') {
                     console.log('[PonyNotes] 方案1: 使用 window.exportToPng');
@@ -258,7 +258,7 @@
                             appState: sceneData.appState,
                             files: sceneData.files,
                         });
-                        
+
                         if (blob) {
                             const dataUrl = await new Promise((resolve, reject) => {
                                 const reader = new FileReader();
@@ -278,7 +278,7 @@
                         console.warn('[PonyNotes] 方案1失败:', e);
                     }
                 }
-                
+
                 // 方案2: 使用 ExcalidrawLib.exportToCanvas
                 if (window.ExcalidrawLib && window.ExcalidrawLib.exportToCanvas) {
                     console.log('[PonyNotes] 方案2: 使用 ExcalidrawLib.exportToCanvas');
@@ -288,7 +288,7 @@
                             appState: sceneData.appState,
                             files: sceneData.files,
                         });
-                        
+
                         if (canvas) {
                             const dataUrl = canvas.toDataURL('image/png', 0.95);
                             window.flutter_inappwebview?.callHandler('onExport', {
@@ -302,7 +302,7 @@
                         console.warn('[PonyNotes] 方案2失败:', e);
                     }
                 }
-                
+
                 // 方案3: 使用 exportToImage
                 if (typeof window.exportToImage === 'function') {
                     console.log('[PonyNotes] 方案3: 使用 window.exportToImage');
@@ -313,7 +313,7 @@
                             files: sceneData.files,
                             mimeType: 'image/png',
                         });
-                        
+
                         if (result) {
                             let dataUrl;
                             if (typeof result === 'string') {
@@ -326,7 +326,7 @@
                                     reader.readAsDataURL(result);
                                 });
                             }
-                            
+
                             if (dataUrl) {
                                 window.flutter_inappwebview?.callHandler('onExport', {
                                     format: 'png',
@@ -340,13 +340,13 @@
                         console.warn('[PonyNotes] 方案3失败:', e);
                     }
                 }
-                
+
                 // 方案4: 回退 - 直接使用canvas（可能不完整）
                 console.log('[PonyNotes] ⚠️ 方案4: 使用当前可见canvas（内容可能不完整）');
                 const canvas = document.querySelector('canvas.excalidraw__canvas');
                 if (canvas) {
                     console.log('[PonyNotes] Canvas尺寸:', canvas.width, 'x', canvas.height);
-                    
+
                     const dataUrl = canvas.toDataURL('image/png', 0.95);
                     window.flutter_inappwebview?.callHandler('onExport', {
                         format: 'png',
@@ -355,14 +355,14 @@
                     console.log('[PonyNotes] ⚠️ PNG 导出完成（仅可见区域，请确保滚动查看所有内容）');
                     return;
                 }
-                
+
                 throw new Error('所有PNG导出方案都失败了');
             }
 
             if (format === 'svg') {
                 // 获取场景数据
                 const sceneData = getSceneData(api);
-                
+
                 // 检查是否有全局的exportToSvg函数
                 if (typeof window.exportToSvg === 'function') {
                     console.log('[PonyNotes] 使用 window.exportToSvg');
@@ -371,11 +371,11 @@
                         appState: sceneData.appState,
                         files: sceneData.files,
                     });
-                    
+
                     if (!svg) {
                         throw new Error('exportToSvg 返回空结果');
                     }
-                    
+
                     // 序列化SVG为字符串
                     let svgString;
                     if (typeof svg === 'string') {
@@ -399,7 +399,7 @@
                     } else {
                         throw new Error(`exportToSvg 返回了未知类型: ${typeof svg}`);
                     }
-                    
+
                     console.log('[PonyNotes] SVG 字符串长度:', svgString.length);
 
                     window.flutter_inappwebview?.callHandler('onExport', {
@@ -409,7 +409,7 @@
                     console.log('[PonyNotes] SVG 导出成功');
                     return;
                 }
-                
+
                 // 回退方案1：尝试使用 exportToImage 导出SVG
                 console.log('[PonyNotes] 回退方案1：尝试使用 window.exportToImage');
                 if (typeof window.exportToImage === 'function') {
@@ -420,7 +420,7 @@
                             files: sceneData.files,
                             mimeType: 'image/svg+xml',
                         });
-                        
+
                         if (result) {
                             let svgString;
                             if (typeof result === 'string') {
@@ -436,7 +436,7 @@
                                 const serializer = new XMLSerializer();
                                 svgString = serializer.serializeToString(result);
                             }
-                            
+
                             if (svgString) {
                                 console.log('[PonyNotes] SVG 导出成功（使用exportToImage）, 长度:', svgString.length);
                                 window.flutter_inappwebview?.callHandler('onExport', {
@@ -450,7 +450,7 @@
                         console.warn('[PonyNotes] exportToImage 失败:', e.message);
                     }
                 }
-                
+
                 // 回退方案2：使用PNG嵌入SVG（不理想但可用）
                 console.log('[PonyNotes] 回退方案2：将PNG嵌入SVG');
                 const canvas = document.querySelector('canvas.excalidraw__canvas');
@@ -458,7 +458,7 @@
                     const pngDataUrl = canvas.toDataURL('image/png', 0.95);
                     const width = canvas.width;
                     const height = canvas.height;
-                    
+
                     // 创建包含PNG的SVG
                     const svgString = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" 
@@ -467,7 +467,7 @@
   <desc>Exported from PonyNotes Whiteboard</desc>
   <image width="${width}" height="${height}" xlink:href="${pngDataUrl}"/>
 </svg>`;
-                    
+
                     console.log('[PonyNotes] SVG生成成功（PNG嵌入方式）, 长度:', svgString.length);
                     window.flutter_inappwebview?.callHandler('onExport', {
                         format: 'svg',
@@ -475,7 +475,7 @@
                     });
                     return;
                 }
-                
+
                 throw new Error('所有SVG导出方案都失败了');
             }
 
@@ -510,263 +510,176 @@
         }
     };
 
-    // ✅ 关键修复：白板数据恢复函数
-    // 使用 _initPayload（从 initData 返回的权威数据）而非 localStorage
-    // 这彻底解决了竞态条件：Excalidraw 可能在 initData 完成前就读取 localStorage 并写入空数据
+    /**
+     * ✅ 关键修复：白板数据恢复函数
+     * 整合了 elements 恢复和文件注入逻辑
+     */
     async function _restoreWhiteboardData(api) {
         try {
             console.log('[PonyNotes] 🔄 Starting whiteboard data restoration...');
-            
-            // ============================================================
-            // 📝 步骤 1：恢复 elements
-            // ✅ 关键改进：使用 _initPayload 中的权威数据，而非 localStorage
-            // 原因：Excalidraw 可能已经将空数据写入 localStorage，覆盖了 initData 设置的值
-            // ============================================================
-            let elementsToRestore = null;
-            
-            // 优先使用 _initPayload 中的数据（最可靠，不受竞态条件影响）
+
+            // 1. 恢复场景 (elements & appState)
             if (_initPayload) {
-                // _initPayload 的 elements 可能是数组或 JSON 字符串
-                if (_initPayload.elements) {
-                    if (typeof _initPayload.elements === 'string') {
-                        try {
-                            elementsToRestore = JSON.parse(_initPayload.elements);
-                        } catch (e) {
-                            console.error('[PonyNotes] ❌ Failed to parse elements from payload:', e);
-                        }
-                    } else if (Array.isArray(_initPayload.elements)) {
-                        elementsToRestore = _initPayload.elements;
-                    }
+                const elements = _initPayload.elements || _initPayload.excalidraw;
+                const appState = _initPayload.appState || _initPayload['excalidraw-state'];
+
+                let elementsToRestore = elements;
+                if (typeof elements === 'string') {
+                    try { elementsToRestore = JSON.parse(elements); } catch (e) { }
                 }
-                // 也检查 excalidraw 键（保持向后兼容）
-                if (!elementsToRestore && _initPayload.excalidraw) {
-                    if (typeof _initPayload.excalidraw === 'string') {
-                        try {
-                            elementsToRestore = JSON.parse(_initPayload.excalidraw);
-                        } catch (e) {
-                            console.error('[PonyNotes] ❌ Failed to parse excalidraw from payload:', e);
-                        }
-                    } else if (Array.isArray(_initPayload.excalidraw)) {
-                        elementsToRestore = _initPayload.excalidraw;
-                    }
+
+                let appStateToRestore = appState;
+                if (typeof appState === 'string') {
+                    try { appStateToRestore = JSON.parse(appState); } catch (e) { }
                 }
-            }
-            
-            // 回退：从 localStorage 读取（仅当 _initPayload 不可用时）
-            if (!elementsToRestore || !Array.isArray(elementsToRestore) || elementsToRestore.length === 0) {
-                const elementsStr = originalLocalStorage.getItem('excalidraw');
-                if (elementsStr && elementsStr !== '[]' && elementsStr !== 'null') {
-                    try {
-                        elementsToRestore = JSON.parse(elementsStr);
-                    } catch (e) {
-                        console.error('[PonyNotes] ❌ Failed to parse elements from localStorage:', e);
-                    }
+
+                if (elementsToRestore || appStateToRestore) {
+                    console.log('[PonyNotes] 🎨 Applying scene from payload');
+                    api.updateScene({
+                        elements: elementsToRestore || [],
+                        appState: appStateToRestore || {},
+                        commitToHistory: false
+                    });
                 }
-            }
-            
-            // 恢复 elements
-            if (elementsToRestore && Array.isArray(elementsToRestore) && elementsToRestore.length > 0) {
-                const currentElements = api.getSceneElements ? api.getSceneElements() : [];
-                console.log('[PonyNotes] 📝 Current elements:', currentElements.length, 
-                    'Payload elements:', elementsToRestore.length);
-                
-                // ✅ 关键改进：总是使用权威数据恢复
-                // 即使 Excalidraw 当前有元素，也用 _initPayload 中的数据覆盖
-                // 因为 Excalidraw 可能读取了不完整或过时的 localStorage 数据
-                if (currentElements.length === 0 || 
-                    (currentElements.length !== elementsToRestore.length && _initPayload)) {
-                    console.log('[PonyNotes] 📝 Restoring', elementsToRestore.length, 'elements via API...');
-                    api.updateScene({ elements: elementsToRestore });
-                    console.log('[PonyNotes] ✅ Elements restored successfully');
-                } else {
-                    console.log('[PonyNotes] 📝 Elements already loaded correctly (' + currentElements.length + ')');
-                }
-            } else {
-                console.log('[PonyNotes] 📝 No elements to restore (empty whiteboard)');
             }
 
-            // ============================================================
-            // 📸 步骤 2：恢复图片文件
-            // ============================================================
-            let filesMap = null;
-            
-            // 优先从 _initPayload 获取 files
-            if (_initPayload && _initPayload.files) {
-                if (typeof _initPayload.files === 'string') {
-                    try {
-                        filesMap = JSON.parse(_initPayload.files);
-                    } catch (e) {
-                        console.error('[PonyNotes] ❌ Failed to parse files from payload:', e);
-                    }
-                } else if (typeof _initPayload.files === 'object') {
-                    filesMap = _initPayload.files;
-                }
-            }
-            
-            // 回退：从 localStorage 读取
-            if (!filesMap) {
-                const filesStr = originalLocalStorage.getItem('excalidraw-files');
-                if (filesStr && filesStr !== '{}' && filesStr !== 'null') {
-                    try {
-                        filesMap = JSON.parse(filesStr);
-                    } catch (e) {
-                        console.error('[PonyNotes] ❌ Failed to parse files from localStorage:', e);
-                    }
-                }
-            }
-            
-            if (!filesMap || typeof filesMap !== 'object') {
-                console.log('[PonyNotes] 📸 No files to inject');
-                return;
-            }
-            
-            const fileEntries = Object.entries(filesMap);
-            if (fileEntries.length === 0) {
-                console.log('[PonyNotes] 📸 Files map is empty');
-                return;
-            }
-            
-            console.log('[PonyNotes] 📸 Found ' + fileEntries.length + ' files to inject');
-            
-            const filesToAdd = [];
-            const cloudFilesToFetch = [];
-            
-            for (const [fileId, fileData] of fileEntries) {
-                if (!fileData || typeof fileData !== 'object') {
-                    console.warn('[PonyNotes] ⚠️ Invalid file data for:', fileId);
-                    continue;
-                }
-                
-                let dataURL = null;
-                
-                // 优先使用 base64 dataURL（最可靠）
-                if (fileData.dataURL && typeof fileData.dataURL === 'string' && fileData.dataURL.startsWith('data:')) {
-                    dataURL = fileData.dataURL;
-                } else if (fileData.data && typeof fileData.data === 'string' && fileData.data.startsWith('data:')) {
-                    dataURL = fileData.data;
-                }
-                
-                if (dataURL) {
-                    filesToAdd.push({
-                        id: fileId,
-                        dataURL: dataURL,
-                        mimeType: fileData.mimeType || 'image/png',
-                        created: fileData.created || Date.now(),
-                    });
-                } else if (fileData.url && typeof fileData.url === 'string' && fileData.url.startsWith('http')) {
-                    cloudFilesToFetch.push({ fileId, fileData });
-                    console.log('[PonyNotes] 📸 File ' + fileId + ' has cloud URL, will request download from Flutter');
-                } else if (fileData.data && typeof fileData.data === 'string' && fileData.data.startsWith('http')) {
-                    cloudFilesToFetch.push({ fileId, fileData: { ...fileData, url: fileData.data } });
-                    console.log('[PonyNotes] 📸 File ' + fileId + ' has cloud URL in data field');
-                } else {
-                    console.warn('[PonyNotes] ⚠️ No valid dataURL or cloud URL for file:', fileId, 
-                        'keys:', Object.keys(fileData));
-                }
-            }
-            
-            // 注入已有 dataURL 的文件
-            if (filesToAdd.length > 0) {
-                console.log('[PonyNotes] 📸 Injecting ' + filesToAdd.length + ' files with dataURL...');
-                if (typeof api.addFiles === 'function') {
-                    api.addFiles(filesToAdd);
-                    console.log('[PonyNotes] ✅ Injected ' + filesToAdd.length + ' files via addFiles()');
-                    
-                    // ✅ 关键修复：注入图片后立即通知 Flutter 端文件状态
-                    // 问题：addFiles 只接受 {id, dataURL, mimeType, created}，不包含 url 字段
-                    // 后续 api.getFiles() 返回的数据也没有 url，导致 Flutter 端丢失了云 URL 信息
-                    // 修复：注入完成后，用完整的 filesMap（含 url 字段）通知 Flutter 端
-                    // 这样 _collabAdapter._fullData['files'] 中包含 url，避免重复上传
-                    try {
-                        const filesMapForFlutter = {};
-                        for (const [fileId, fileData] of fileEntries) {
-                            // 合并 filesToAdd 数据 + 原始 fileData（含 url）
-                            const matchingInjected = filesToAdd.find(f => f.id === fileId);
-                            if (matchingInjected) {
-                                filesMapForFlutter[fileId] = {
-                                    ...fileData,
-                                    dataURL: matchingInjected.dataURL,
-                                    mimeType: matchingInjected.mimeType,
-                                    created: matchingInjected.created,
-                                };
-                            } else {
-                                filesMapForFlutter[fileId] = fileData;
-                            }
-                        }
-                        if (Object.keys(filesMapForFlutter).length > 0) {
-                            window.flutter_inappwebview.callHandler('localStorageOnSet', {
-                                key: 'excalidraw-files',
-                                value: JSON.stringify(filesMapForFlutter),
-                            });
-                            window._lastSentFiles = JSON.stringify(filesMapForFlutter);
-                            console.log('[PonyNotes] 📸 Notified Flutter of injected files with url info, count:', Object.keys(filesMapForFlutter).length);
-                        }
-                    } catch (notifyErr) {
-                        console.warn('[PonyNotes] ⚠️ Failed to notify Flutter of injected files:', notifyErr);
-                    }
-                } else {
-                    console.warn('[PonyNotes] ⚠️ addFiles not available');
-                }
-            }
-            
-            // 对于需要从云端下载的文件，通知 Flutter 下载
-            if (cloudFilesToFetch.length > 0) {
-                console.log('[PonyNotes] 📸 Requesting Flutter to download ' + cloudFilesToFetch.length + ' cloud images...');
-                try {
-                    const cloudFileIds = cloudFilesToFetch.map(f => ({
-                        fileId: f.fileId,
-                        url: f.fileData.url,
-                        mimeType: f.fileData.mimeType || 'image/png',
-                    }));
-                    const result = await window.flutter_inappwebview.callHandler('downloadCloudImages', cloudFileIds);
-                    if (result && Array.isArray(result)) {
-                        const downloadedFiles = [];
-                        const downloadedFilesMapForFlutter = {};
-                        for (const item of result) {
-                            if (item && item.fileId && item.dataURL) {
-                                downloadedFiles.push({
-                                    id: item.fileId,
-                                    dataURL: item.dataURL,
-                                    mimeType: item.mimeType || 'image/png',
-                                    created: item.created || Date.now(),
-                                });
-                                // ✅ 关键修复：保留原始 url 字段（从 cloudFilesToFetch 中获取）
-                                const originalCloudFile = cloudFilesToFetch.find(f => f.fileId === item.fileId);
-                                downloadedFilesMapForFlutter[item.fileId] = {
-                                    ...(originalCloudFile ? originalCloudFile.fileData : {}),
-                                    dataURL: item.dataURL,
-                                    mimeType: item.mimeType || 'image/png',
-                                    created: item.created || Date.now(),
-                                };
-                            }
-                        }
-                        if (downloadedFiles.length > 0 && typeof api.addFiles === 'function') {
-                            api.addFiles(downloadedFiles);
-                            console.log('[PonyNotes] ✅ Injected ' + downloadedFiles.length + ' downloaded cloud images');
-                            
-                            // ✅ 通知 Flutter 端云端下载的文件状态（含 url）
-                            if (Object.keys(downloadedFilesMapForFlutter).length > 0) {
-                                try {
-                                    window.flutter_inappwebview.callHandler('localStorageOnSet', {
-                                        key: 'excalidraw-files',
-                                        value: JSON.stringify(downloadedFilesMapForFlutter),
-                                    });
-                                    window._lastSentFiles = JSON.stringify(downloadedFilesMapForFlutter);
-                                    console.log('[PonyNotes] 📸 Notified Flutter of cloud downloaded files with url, count:', downloadedFiles.length);
-                                } catch (notifyErr) {
-                                    console.warn('[PonyNotes] ⚠️ Failed to notify Flutter:', notifyErr);
-                                }
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.error('[PonyNotes] ❌ Failed to download cloud images:', e);
-                }
-            }
-            
-            console.log('[PonyNotes] 📸 File injection complete. Total: ' + filesToAdd.length + ' local + ' + cloudFilesToFetch.length + ' cloud');
+            // 2. 注入文件
+            await _injectFilesFromStorage(api);
+
+            console.log('[PonyNotes] ✅ Restoration finished');
         } catch (e) {
             console.error('[PonyNotes] ❌ Failed to restore whiteboard data:', e);
         }
     }
+
+    /**
+     * 从存储加载并注入文件
+     */
+    async function _injectFilesFromStorage(api) {
+        let filesMap = null;
+        if (_initPayload) {
+            filesMap = _initPayload.files || _initPayload['excalidraw-files'];
+            if (typeof filesMap === 'string') {
+                try {
+                    filesMap = JSON.parse(filesMap);
+                } catch (e) {
+                    console.error('[PonyNotes] ❌ Failed to parse files from payload:', e);
+                }
+            }
+        }
+
+        if (!filesMap) {
+            const lsFiles = originalLocalStorage.getItem('excalidraw-files');
+            if (lsFiles && lsFiles !== '{}' && lsFiles !== 'null') {
+                try {
+                    filesMap = JSON.parse(lsFiles);
+                } catch (e) { }
+            }
+        }
+
+        if (filesMap) {
+            await _injectFiles(api, filesMap);
+        }
+    }
+
+    /**
+     * 注入文件到 Excalidraw，处理 dataURL 和云端下载
+     */
+    async function _injectFiles(api, filesMap) {
+        if (!filesMap || typeof filesMap !== 'object') return;
+
+        const entries = Object.entries(filesMap);
+        if (entries.length === 0) return;
+
+        console.log('[PonyNotes] 📸 Injecting ' + entries.length + ' files...');
+        const toAdd = [];
+        const toFetch = [];
+
+        for (const [id, data] of entries) {
+            if (!data) continue;
+            const dataURL = data.dataURL || (typeof data.data === 'string' && data.data.startsWith('data:') ? data.data : null);
+            const url = data.url || (typeof data.data === 'string' && data.data.startsWith('http') ? data.data : null);
+
+            if (dataURL) {
+                toAdd.push({ id, dataURL, mimeType: data.mimeType || 'image/png', created: data.created || Date.now() });
+            } else if (url) {
+                toFetch.push({ fileId: id, url, mimeType: data.mimeType || 'image/png' });
+            }
+        }
+
+        if (toAdd.length > 0 && typeof api.addFiles === 'function') {
+            api.addFiles(toAdd);
+            console.log('[PonyNotes] ✅ Added ' + toAdd.length + ' dataURL files');
+            // 回传给 Flutter 补全 dataURL
+            _syncFilesToFlutter(filesMap, toAdd);
+        }
+
+        if (toFetch.length > 0) {
+            console.log('[PonyNotes] 📸 Fetching ' + toFetch.length + ' cloud files...');
+            try {
+                const results = await window.flutter_inappwebview.callHandler('downloadCloudImages', toFetch);
+                if (results && Array.isArray(results) && results.length > 0) {
+                    const downloaded = results.map(r => ({
+                        id: r.fileId,
+                        dataURL: r.dataURL,
+                        mimeType: r.mimeType || 'image/png',
+                        created: r.created || Date.now()
+                    }));
+                    api.addFiles(downloaded);
+                    console.log('[PonyNotes] ✅ Injected ' + downloaded.length + ' downloaded files');
+                    _syncFilesToFlutter(filesMap, downloaded);
+                }
+            } catch (e) {
+                console.error('[PonyNotes] ❌ Cloud download failed:', e);
+            }
+        }
+    }
+
+    /**
+     * 将文件状态同步回 Flutter，保护 URL 字段
+     */
+    function _syncFilesToFlutter(baseMap, newItems) {
+        try {
+            const fullMap = { ...baseMap };
+            newItems.forEach(item => {
+                if (fullMap[item.id]) {
+                    fullMap[item.id] = { ...fullMap[item.id], dataURL: item.dataURL };
+                } else {
+                    fullMap[item.id] = item;
+                }
+            });
+            const val = JSON.stringify(fullMap);
+            if (window._lastSentFiles !== val) {
+                window._lastSentFiles = val;
+                window.flutter_inappwebview.callHandler('localStorageOnSet', { key: 'excalidraw-files', value: val });
+            }
+        } catch (e) { }
+    }
+
+    /**
+     * ✅ 关键接口：Dart 端主动推送到 WebView
+     */
+    window.pushWhiteboardData = async function (data) {
+        if (!data || !data.key) return;
+        const api = window._excalidrawAPI;
+        if (!api) {
+            console.warn('[PonyNotes] 🔔 Push received but API not ready, saving to payload');
+            if (!_initPayload) _initPayload = {};
+            _initPayload[data.key] = data.value;
+            return;
+        }
+
+        console.log('[PonyNotes] 🔔 Applying push update for:', data.key);
+        try {
+            if (data.key === 'elements') {
+                api.updateScene({ elements: data.value, commitToHistory: false });
+            } else if (data.key === 'appState') {
+                api.updateScene({ appState: data.value, commitToHistory: false });
+            } else if (data.key === 'files') {
+                await _injectFiles(api, data.value);
+            }
+        } catch (e) {
+            console.error('[PonyNotes] ❌ Push update failed:', e);
+        }
+    };
 })();
