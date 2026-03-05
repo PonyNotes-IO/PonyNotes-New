@@ -187,10 +187,19 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 Log.info('[ExcalidrawWebView] 📝 Elements is string, length: ${elements.length}');
               }
             }
-            if (normalizedData.containsKey('files')) {
-              final files = normalizedData['files'];
-              if (files is Map) {
-                print('[ExcalidrawWebView] 📸 Files count: ${files.length}');
+            // 预下载云端图片：对于只有云 URL 的文件，在 Flutter 端下载并转为 base64
+            // 这样返回给 JS 的数据中已经包含 dataURL，避免 JS 端再次异步下载
+            if (normalizedData.containsKey('files') && normalizedData['files'] is Map) {
+              final files = normalizedData['files'] as Map<String, dynamic>;
+              Log.info('[ExcalidrawWebView] 📸 Files count: ${files.length}');
+              if (files.isNotEmpty) {
+                try {
+                  final processedFiles = await _preprocessFilesForLoading(files);
+                  normalizedData['files'] = processedFiles;
+                  Log.info('[ExcalidrawWebView] 📸 Files preprocessed for loading');
+                } catch (e) {
+                  Log.warn('[ExcalidrawWebView] ⚠️ Files preprocessing failed: $e');
+                }
               }
             }
 

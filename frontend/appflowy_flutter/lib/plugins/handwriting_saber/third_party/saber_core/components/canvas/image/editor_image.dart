@@ -227,8 +227,16 @@ class PngEditorImage extends EditorImage {
       };
     }
 
-    // forCollab 模式下绝不包含 base64 数据，避免 Collab 同步数据过大导致 WebSocket 失败
-    if (!forCollab && imageBytes.isNotEmpty) {
+    // 没有云 URL 但有图片数据 → 必须包含 base64（无论是否 forCollab）
+    // 关键修复：forCollab 模式下如果没有 imageUrl，仍然包含 base64 数据，
+    // 否则图片在跨设备 Collab 同步时会完全丢失（B设备既没有 URL 也没有字节数据）。
+    // 虽然 base64 会增大 Collab 同步数据，但丢失数据比同步慢更严重。
+    if (imageBytes.isNotEmpty) {
+      if (forCollab) {
+        Log.warn(
+          '[PngEditorImage] toJson(forCollab): 图片 $id 无云URL，回退包含 base64 (${imageBytes.length} bytes)',
+        );
+      }
       final base64Str = base64Encode(imageBytes);
       return {
         'type': imageType,
