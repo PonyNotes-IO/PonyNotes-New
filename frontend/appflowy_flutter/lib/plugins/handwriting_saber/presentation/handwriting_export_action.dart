@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:appflowy/plugins/handwriting_saber/application/handwriting_saber_data_service.dart';
 import 'package:appflowy/plugins/handwriting_saber/services/editor_exporter.dart';
+import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/components/canvas/image/editor_image.dart';
 import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/data/editor/editor_core_info.dart';
 import 'package:appflowy/plugins/handwriting_saber/third_party/saber_core/data/editor/page.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -383,6 +384,46 @@ class HandwritingExportAction extends StatelessWidget {
           _showError(context, '导出失败：手写笔记没有页面');
         }
         return;
+      }
+
+      // 预下载所有云端图片
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('正在准备图片资源，请稍候...'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+
+      int downloadedImages = 0;
+      int failedImages = 0;
+      for (final page in coreInfo.pages) {
+        for (final image in page.images) {
+          if (image is PngEditorImage &&
+              image.imageBytes.isEmpty &&
+              image.imageUrl != null &&
+              image.imageUrl!.startsWith('http')) {
+            Log.info(
+                '[HandwritingExport] 预下载云端图片: ${image.imageUrl}');
+            try {
+              await image.downloadFromCloud();
+              if (image.imageBytes.isNotEmpty) {
+                downloadedImages++;
+              } else {
+                failedImages++;
+              }
+            } catch (e) {
+              failedImages++;
+              Log.error('[HandwritingExport] 图片下载失败: $e');
+            }
+          }
+        }
+      }
+
+      if (downloadedImages > 0 || failedImages > 0) {
+        Log.info(
+            '[HandwritingExport] 图片预下载完成: 成功 $downloadedImages, 失败 $failedImages');
       }
 
       // 显示加载提示

@@ -50,6 +50,9 @@ abstract class EditorExporter {
       throw Exception('没有可导出的页面');
     }
 
+    // 预下载所有云端图片，确保导出时图片数据可用
+    await _ensureAllImagesDownloaded(pages, pageNotifiers);
+
     final pdf = pw.Document();
     final totalPages = pages.length;
 
@@ -99,6 +102,50 @@ abstract class EditorExporter {
     final elapsed = DateTime.now().difference(startTime);
     debugPrint('📄[EditorExporter] PDF生成完成，耗时: ${elapsed.inMilliseconds}ms');
     return pdf;
+  }
+
+  /// 预下载所有云端图片，确保导出时 imageBytes 不为空
+  static Future<void> _ensureAllImagesDownloaded(
+    List<EditorPage> pages,
+    List<EditorPageNotifier>? pageNotifiers,
+  ) async {
+    int downloadCount = 0;
+    int failCount = 0;
+
+    for (int i = 0; i < pages.length; i++) {
+      final page = pageNotifiers != null && i < pageNotifiers.length
+          ? pageNotifiers[i].page
+          : pages[i];
+
+      for (final image in page.images) {
+        if (image is PngEditorImage) {
+          if (image.imageBytes.isEmpty &&
+              image.imageUrl != null &&
+              image.imageUrl!.startsWith('http')) {
+            try {
+              debugPrint(
+                  '📄[EditorExporter] 预下载云端图片: ${image.imageUrl}');
+              await image.downloadFromCloud();
+              if (image.imageBytes.isNotEmpty) {
+                downloadCount++;
+              } else {
+                failCount++;
+                debugPrint(
+                    '⚠️ [EditorExporter] 图片下载后数据仍为空: ${image.imageUrl}');
+              }
+            } catch (e) {
+              failCount++;
+              debugPrint('⚠️ [EditorExporter] 预下载图片失败: $e');
+            }
+          }
+        }
+      }
+    }
+
+    if (downloadCount > 0 || failCount > 0) {
+      debugPrint(
+          '📄[EditorExporter] 图片预下载完成: 成功 $downloadCount, 失败 $failCount');
+    }
   }
 
   /// 检查页面是否为空
@@ -417,11 +464,30 @@ abstract class EditorExporter {
     }
   }
 
-  /// 绘制普通图片（支持旋转）
+  /// 绘制普通图片（支持旋转，支持 PNG/JPG 和 SVG）
   static Future<void> _drawImage(Canvas canvas, EditorImage image) async {
     final dstRect = image.dstRect;
 
     if (image is PngEditorImage) {
+      // 兜底：如果 imageBytes 为空但有云端 URL，尝试下载
+      if (image.imageBytes.isEmpty &&
+          image.imageUrl != null &&
+          image.imageUrl!.startsWith('http')) {
+        debugPrint(
+            '📄[EditorExporter] _drawImage 兜底下载云端图片: ${image.imageUrl}');
+        try {
+          await image.downloadFromCloud();
+        } catch (e) {
+          debugPrint('⚠️ [EditorExporter] 兜底下载失败: $e');
+        }
+      }
+
+      if (image.imageBytes.isEmpty) {
+        debugPrint(
+            '⚠️ [EditorExporter] 跳过空图片 (id=${image.id}, url=${image.imageUrl})');
+        return;
+      }
+
       try {
         final codec = await ui.instantiateImageCodec(image.imageBytes);
         final frame = await codec.getNextFrame();
@@ -447,8 +513,105 @@ abstract class EditorExporter {
         uiImage.dispose();
         codec.dispose();
       } catch (e) {
-        debugPrint('⚠️ [EditorExporter] 绘制图片失败: $e');
+        debugPrint('⚠️ [EditorExporter] 绘制PNG/JPG图片失败: $e');
       }
+    } else if (image is SvgEditorImage) {
+      try {
+        final svgString = image.svgString;
+        if (svgString.isEmpty) {
+          debugPrint('⚠️ [EditorExporter] SVG 内容为空，跳过');
+          return;
+        }
+
+        final svgPicture = await _renderSvgToPicture(svgString, dstRect.size);
+        if (svgPicture != null) {
+          final svgImage = await svgPicture.toImage(
+            dstRect.width.toInt().clamp(1, 4096),
+            dstRect.height.toInt().clamp(1, 4096),
+          );
+
+          canvas.save();
+          if (image.rotation != 0.0) {
+            final center = dstRect.center;
+            canvas.translate(center.dx, center.dy);
+            canvas.rotate(image.rotation);
+            canvas.translate(-center.dx, -center.dy);
+          }
+
+          canvas.drawImageRect(
+            svgImage,
+            Rect.fromLTWH(0, 0, svgImage.width.toDouble(),
+                svgImage.height.toDouble()),
+            dstRect,
+            Paint()..filterQuality = FilterQuality.high,
+          );
+
+          canvas.restore();
+          svgImage.dispose();
+          svgPicture.dispose();
+        } else {
+          debugPrint('⚠️ [EditorExporter] SVG 渲染失败，跳过');
+        }
+      } catch (e) {
+        debugPrint('⚠️ [EditorExporter] 绘制SVG图片失败: $e');
+      }
+    }
+  }
+
+  /// 将 SVG 字符串渲染为 Picture
+  static Future<ui.Picture?> _renderSvgToPicture(
+      String svgString, Size size) async {
+    try {
+      // 使用 dart:ui 解码 SVG（Flutter 3.x 支持）
+      final recorder = ui.PictureRecorder();
+      final canvas =
+          Canvas(recorder, Rect.fromLTWH(0, 0, size.width, size.height));
+
+      // 尝试将 SVG 作为 UTF-8 编码的图片数据加载
+      final svgBytes = Uint8List.fromList(utf8.encode(svgString));
+      try {
+        final codec = await ui.instantiateImageCodec(svgBytes);
+        final frame = await codec.getNextFrame();
+        final uiImage = frame.image;
+        canvas.drawImageRect(
+          uiImage,
+          Rect.fromLTWH(
+              0, 0, uiImage.width.toDouble(), uiImage.height.toDouble()),
+          Rect.fromLTWH(0, 0, size.width, size.height),
+          Paint()..filterQuality = FilterQuality.high,
+        );
+        uiImage.dispose();
+        codec.dispose();
+        return recorder.endRecording();
+      } catch (_) {
+        // SVG 无法直接被 instantiateImageCodec 解码，绘制占位矩形
+        final borderPaint = Paint()
+          ..color = const Color(0xFFCCCCCC)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0;
+        canvas.drawRect(
+            Rect.fromLTWH(0, 0, size.width, size.height), borderPaint);
+
+        final textPainter = TextPainter(
+          text: const TextSpan(
+            text: '[SVG]',
+            style: TextStyle(color: Color(0xFF999999), fontSize: 12),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+        textPainter.paint(
+          canvas,
+          Offset(
+            (size.width - textPainter.width) / 2,
+            (size.height - textPainter.height) / 2,
+          ),
+        );
+        return recorder.endRecording();
+      }
+    } catch (e) {
+      debugPrint('⚠️ [EditorExporter] SVG Picture 渲染失败: $e');
+      return null;
     }
   }
 
