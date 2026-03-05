@@ -244,6 +244,7 @@ class _CalendarContentState extends State<CalendarContent> {
   }
 
   Future<void> _loadNotesForDate() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -251,6 +252,9 @@ class _CalendarContentState extends State<CalendarContent> {
     try {
       // 获取所有视图
       final allViewsResult = await ViewBackendService.getAllViews();
+
+      // await 后检查 mounted，避免 setState() called after dispose()
+      if (!mounted) return;
 
       await allViewsResult.fold(
             (allViews) async {
@@ -287,6 +291,7 @@ class _CalendarContentState extends State<CalendarContent> {
           // 按创建时间排序，从新到旧
           notesForDate.sort((a, b) => b.createTime.compareTo(a.createTime));
 
+          if (!mounted) return;
           setState(() {
             _realNotes = notesForDate;
             _isLoading = false;
@@ -300,6 +305,7 @@ class _CalendarContentState extends State<CalendarContent> {
           }
         },
             (error) {
+          if (!mounted) return;
           setState(() {
             _realNotes = [];
             _isLoading = false;
@@ -307,6 +313,7 @@ class _CalendarContentState extends State<CalendarContent> {
         },
       );
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _realNotes = [];
         _isLoading = false;
