@@ -13,6 +13,7 @@ import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
@@ -123,10 +124,21 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
       (error) => SharedSectionType.unknown,
     );
 
+    // 获取视图布局类型，用于生成分享链接
+    int? viewLayout;
+    try {
+      final viewResult = await ViewBackendService.getView(pageId);
+      viewResult.fold(
+        (view) => viewLayout = view.layout.value,
+        (error) => viewLayout = null,
+      );
+    } catch (_) {}
+
     final shareLink = ShareConstants.buildShareUrl(
       workspaceId: workspaceId,
       viewId: pageId,
-      permissionId: state.selectedPermissionId, // 传递选中的权限
+      permissionId: state.selectedPermissionId,
+      layout: viewLayout,
     );
 
     final users = await _getSharedUsers();
@@ -1201,11 +1213,20 @@ class ShareTabBloc extends Bloc<ShareTabEvent, ShareTabState> {
     ShareTabEventUpdateShareLinkPermission event,
     Emitter<ShareTabState> emit,
   ) async {
-    // 更新选中的权限
+    int? viewLayout;
+    try {
+      final viewResult = await ViewBackendService.getView(pageId);
+      viewResult.fold(
+        (view) => viewLayout = view.layout.value,
+        (error) => viewLayout = null,
+      );
+    } catch (_) {}
+
     final newShareLink = ShareConstants.buildShareUrl(
       workspaceId: workspaceId,
       viewId: pageId,
       permissionId: event.permissionId,
+      layout: viewLayout,
     );
 
     emit(

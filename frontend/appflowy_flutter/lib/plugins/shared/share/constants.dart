@@ -42,7 +42,8 @@ class ShareConstants {
     required String workspaceId,
     required String viewId,
     String? blockId,
-    int? permissionId, // 新增：权限参数，1=查看，2=评论，3=编辑，4=全部权限
+    int? permissionId,
+    int? layout,
   }) {
     final baseShareDomain =
         getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig.base_web_domain;
@@ -52,9 +53,10 @@ class ShareConstants {
       queryParameters: <String, String>{
         'viewId': viewId,
         'workspaceId': workspaceId,
-        'type': 'share', // 添加类型参数，标识这是分享链接
+        'type': 'share',
         if (blockId != null && blockId.isNotEmpty) 'blockId': blockId,
-        if (permissionId != null) 'permission': permissionId.toString(), // 添加权限参数
+        if (permissionId != null) 'permission': permissionId.toString(),
+        if (layout != null) 'layout': layout.toString(),
       },
     ).query;
 

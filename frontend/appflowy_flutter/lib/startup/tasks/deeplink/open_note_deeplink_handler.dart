@@ -71,12 +71,16 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       // 从URI中获取参数
       final viewId = uri.queryParameters['viewId'];
       final targetWorkspaceId = uri.queryParameters['workspaceId'];
-      final linkType = uri.queryParameters['type']; // 获取链接类型：share 或 publish
-      final permissionParam = uri.queryParameters['permission']; // 获取分享链接权限参数
-      // 解析权限ID，默认只读权限(1)
+      final linkType = uri.queryParameters['type'];
+      final permissionParam = uri.queryParameters['permission'];
+      final layoutParam = uri.queryParameters['layout'];
       final permissionId = permissionParam != null 
           ? int.tryParse(permissionParam) ?? 1 
           : 1;
+      // 解析视图布局类型：0=Document, 1=Grid, 2=Board, 3=Calendar
+      final viewLayoutValue = layoutParam != null 
+          ? int.tryParse(layoutParam) ?? 0 
+          : 0;
 
       if (viewId == null || viewId.isEmpty) {
         Log.error('[OpenNoteDeepLinkHandler] viewId参数为空');
@@ -143,54 +147,72 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         }
       }
 
-      // 直接通过 DocumentService 打开文档，不依赖 ViewBackendService.getView
-      // 因为某些情况下 getView 可能获取不到，但 openDocument 可以成功
-      bool documentOpened = false;
-      try {
-        final docResult = await DocumentService().openDocument(
-          documentId: effectiveViewId,
-        );
-        await docResult.fold(
-          (_) async {
-            documentOpened = true;
-            // 等待一小段时间，确保文档数据已经加载完成
-            await Future.delayed(const Duration(milliseconds: 300));
-          },
-          (error) async {
-            Log.warn(
-              '📝 [OpenNoteDeepLinkHandler] open_document 失败: ${error.msg}',
-            );
-            documentOpened = false;
-          },
-        );
-      } catch (e, stackTrace) {
-        Log.error(
-            '[OpenNoteDeepLinkHandler] 调用 open_document 时异常: $e', stackTrace);
-        documentOpened = false;
+      // 根据视图布局类型决定打开方式
+      final isDatabaseView = viewLayoutValue >= 1 && viewLayoutValue <= 3;
+      
+      if (!isDatabaseView) {
+        // 文档类视图：通过 DocumentService 预加载文档数据
+        bool documentOpened = false;
+        try {
+          final docResult = await DocumentService().openDocument(
+            documentId: effectiveViewId,
+          );
+          await docResult.fold(
+            (_) async {
+              documentOpened = true;
+              await Future.delayed(const Duration(milliseconds: 300));
+            },
+            (error) async {
+              Log.warn(
+                '📝 [OpenNoteDeepLinkHandler] open_document 失败: ${error.msg}',
+              );
+              documentOpened = false;
+            },
+          );
+        } catch (e, stackTrace) {
+          Log.error(
+              '[OpenNoteDeepLinkHandler] 调用 open_document 时异常: $e', stackTrace);
+          documentOpened = false;
+        }
+
+        if (!documentOpened) {
+          Log.warn('📝 [OpenNoteDeepLinkHandler] 文档打开失败，无法显示视图');
+          onStateChange(this, DeepLinkState.error);
+          return FlowyResult.failure(
+            FlowyError()
+              ..msg = '文档打开失败，无法显示笔记'
+              ..code = ErrorCode.Internal,
+          );
+        }
+      } else {
+        Log.info('[OpenNoteDeepLinkHandler] 数据库类视图(layout=$viewLayoutValue)，跳过 DocumentService 预加载');
+        await Future.delayed(const Duration(milliseconds: 300));
       }
 
-      // 只有在文档成功打开后，才在UI中显示视图
-      if (!documentOpened) {
-        Log.warn('📝 [OpenNoteDeepLinkHandler] 文档打开失败，无法显示视图');
-        onStateChange(this, DeepLinkState.error);
-        return FlowyResult.failure(
-          FlowyError()
-            ..msg = '文档打开失败，无法显示笔记'
-            ..code = ErrorCode.Internal,
-        );
-      }
-
-      // 获取发布笔记的真实标题（用于发布链接或协作分享链接）
-      // 传入 viewId 和 workspaceId，以便获取协作文档的真实名称
+      // 获取发布笔记的真实标题
       final viewName = await _getViewName(viewId, workspaceId);
 
-      // 创建最小化的 ViewPB 对象，用于在UI中打开视图
-      // 如果是发布的文档（只读），设置 is_locked = true
+      // 根据 layout 值映射到 ViewLayoutPB
+      ViewLayoutPB viewLayoutPB;
+      switch (viewLayoutValue) {
+        case 1:
+          viewLayoutPB = ViewLayoutPB.Grid;
+          break;
+        case 2:
+          viewLayoutPB = ViewLayoutPB.Board;
+          break;
+        case 3:
+          viewLayoutPB = ViewLayoutPB.Calendar;
+          break;
+        default:
+          viewLayoutPB = ViewLayoutPB.Document;
+      }
+
       final minimalView = ViewPB()
-        ..id = effectiveViewId // 使用接收后的 viewId
-        ..name = viewName // 使用真实标题，如果没有则使用默认名称
-        ..layout = ViewLayoutPB.Document
-        ..isLocked = isReadonly; // 设置只读锁定状态
+        ..id = effectiveViewId
+        ..name = viewName
+        ..layout = viewLayoutPB
+        ..isLocked = isReadonly;
 
       // 等待应用初始化完成后再打开视图
       // 使用WidgetsBinding确保在UI线程中执行

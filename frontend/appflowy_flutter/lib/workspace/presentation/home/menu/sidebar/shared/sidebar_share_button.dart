@@ -336,10 +336,28 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       final name = (entry['name'] ?? '').toString();
       final displayName = name.isNotEmpty ? name : '加载中...';
 
-      // 创建基本的 ViewPB
+      // 解析视图布局类型（0=文档, 1=网格, 2=看板, 3=日历）
+      final viewLayoutRaw = entry['view_layout'] ?? entry['viewLayout'] ?? 0;
+      final viewLayoutInt = viewLayoutRaw is int ? viewLayoutRaw : (int.tryParse(viewLayoutRaw.toString()) ?? 0);
+      ViewLayoutPB viewLayout;
+      switch (viewLayoutInt) {
+        case 1:
+          viewLayout = ViewLayoutPB.Grid;
+          break;
+        case 2:
+          viewLayout = ViewLayoutPB.Board;
+          break;
+        case 3:
+          viewLayout = ViewLayoutPB.Calendar;
+          break;
+        default:
+          viewLayout = ViewLayoutPB.Document;
+      }
+
       final view = ViewPB()
         ..id = oid
         ..name = displayName
+        ..layout = viewLayout
         ..createTime = fixnum.Int64(createdSeconds);
       views.add(view);
     }
@@ -348,6 +366,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   }
 
   /// 异步加载笔记的详细信息（包括标题）
+  /// 注意：保留从 API 获取的 layout 信息，因为 ViewBackendService 对跨工作区共享视图可能失败
   Future<List<ViewPB>> _loadViewDetails(List<ViewPB> views) async {
     if (views.isEmpty) {
       return views;
@@ -362,20 +381,17 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       }
 
       try {
-        // 尝试通过 ViewBackendService 获取笔记详细信息
         final viewResult = await ViewBackendService.getView(view.id);
         viewResult.fold(
           (detailedView) {
-            // 如果成功获取到详细信息，使用真实的标题
             if (detailedView.name.isNotEmpty) {
               updatedViews.add(detailedView);
             } else {
-              // 如果标题为空，保持原视图
               updatedViews.add(view);
             }
           },
           (error) {
-            // 如果获取失败，保持原视图（使用临时标题）
+            // 获取失败时保持原视图（包含从 API 获取的 layout 信息）
             updatedViews.add(view);
           },
         );
@@ -520,6 +536,21 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     
     return Column(
       children: _userSharedNotes.map((view) {
+        // 根据视图布局类型选择图标
+        final FlowySvgData iconData;
+        switch (view.layout) {
+          case ViewLayoutPB.Grid:
+            iconData = FlowySvgs.grid_s;
+            break;
+          case ViewLayoutPB.Board:
+            iconData = FlowySvgs.board_s;
+            break;
+          case ViewLayoutPB.Calendar:
+            iconData = FlowySvgs.date_s;
+            break;
+          default:
+            iconData = FlowySvgs.document_s;
+        }
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 2.0),
           child: InkWell(
@@ -532,7 +563,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
               child: Row(
                 children: [
                   FlowySvg(
-                    FlowySvgs.document_s,
+                    iconData,
                     size: const Size.square(16.0),
                     color: Theme.of(context).textTheme.bodyMedium?.color,
                   ),
