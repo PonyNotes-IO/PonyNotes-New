@@ -3,7 +3,6 @@ import 'dart:ui';
 
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_window_size_manager.dart';
-import 'package:bitsdojo_window/bitsdojo_window.dart';
 import 'package:flutter/material.dart';
 import 'package:scaled_app/scaled_app.dart';
 import 'package:window_manager/window_manager.dart';
@@ -51,21 +50,19 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
     if (UniversalPlatform.isWindows) {
       await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-
-      doWhenWindowReady(() async {
-        appWindow.minSize = windowOptions.minimumSize;
-        appWindow.maxSize = windowOptions.maximumSize;
-        appWindow.size = windowSize;
-
-        if (position != null) {
-          appWindow.position = position;
-        }
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
 
         /// on Windows we maximize the window if it was previously closed
         /// from a maximized state.
         final isMaximized = await windowSizeManager.getWindowMaximized();
         if (isMaximized) {
-          appWindow.maximize();
+          await windowManager.maximize();
+        } else {
+          // Avoid restoring stale coordinates from previous monitor layouts
+          // that can place the window in a visually "half-screen" position.
+          await windowManager.center();
         }
       });
     } else {
