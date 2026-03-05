@@ -2154,12 +2154,12 @@
         "renameFile": {
           "description": "Enter the new name for this file",
           "nameEmptyError": "File name cannot be left empty.",
-          "title": "Rename file"
+          "title": "文件重命名"
         },
         "uploadMobile": "Choose a file",
         "uploadMobileGallery": "From Photo Gallery",
         "uploadTab": "上传",
-        "uploadedAt": "Uploaded on {}"
+        "uploadedAt": "更新于 {}"
       },
       "math": {
         "copiedToPasteBoard": "The math equation has been copied to the clipboard"
