@@ -3,7 +3,7 @@ use crate::entities::{
   AFAccessLevelPB, AFRolePB, CreateViewParams, DeletedViewPB, DuplicateViewParams,
   FolderSnapshotPB, MoveNestedViewParams, RepeatedSharedUserPB, RepeatedSharedViewResponsePB,
   RepeatedTrashPB, RepeatedViewIdPB, RepeatedViewPB, SharedUserPB, SharedViewPB,
-  SharedViewSectionPB, UpdateViewParams, ViewLayoutPB, ViewPB, ViewSectionPB, WorkspaceLatestPB,
+  SaveSharedViewMetaPB, SharedViewSectionPB, UpdateViewParams, ViewLayoutPB, ViewPB, ViewSectionPB, WorkspaceLatestPB,
   WorkspacePB, view_pb_with_all_child_views, view_pb_with_child_views, view_pb_without_child_views,
   view_pb_without_child_views_from_arc,
 };
