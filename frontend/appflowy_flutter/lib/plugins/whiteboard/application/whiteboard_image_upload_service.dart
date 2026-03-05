@@ -124,6 +124,18 @@ class WhiteboardImageUploadService {
       }
 
       final fileDataMap = Map<String, dynamic>.from(fileData as Map);
+
+      // ✅ 关键修复：如果文件已有云 URL 且 forceUpload=false，跳过上传
+      // 问题：之前每次打开白板操作后，api.getFiles() 返回的数据可能带有 url 字段（修复后合并了 url），
+      // 但也可能仍然有 dataURL（base64），导致即使已有云 URL 也重新上传。
+      // 修复：优先检查 url 字段，已有云 URL 则直接保留，不重新上传。
+      final existingUrl = fileDataMap['url'] as String?;
+      if (!forceUpload && existingUrl != null && isCloudUrl(existingUrl)) {
+        // 已有云 URL，直接保留，不重新上传（无论是否有 dataURL）
+        result[fileId] = fileDataMap;
+        Log.info('[WhiteboardImage] File $fileId already has cloud URL, skipping upload');
+        continue;
+      }
       
       // ✅ 修复：同时检查 'dataURL' 和 'data' 字段
       // Excalidraw 使用 'dataURL'，而之前的代码只检查了 'data'

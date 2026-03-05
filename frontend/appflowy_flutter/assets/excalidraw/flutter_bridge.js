@@ -66,6 +66,20 @@
                         }
                         
                         if (files && Object.keys(files).length > 0) {
+                            // ✅ 关键修复：合并 _initPayload.files 中的 url 字段
+                            // 问题：api.getFiles() 返回的数据不包含 url 字段（因为 addFiles 注入时只有 dataURL）
+                            // 这会导致 Flutter 端的 _fullData['files'] 中的 url 被丢弃，
+                            // 造成每次操作都重新上传已有云 URL 的图片，上传失败时写入 base64 导致 Collab 同步失败
+                            // 修复：将 _initPayload.files 中保存的 url 合并回文件数据
+                            if (_initPayload && _initPayload.files && typeof _initPayload.files === 'object') {
+                                for (const fileId of Object.keys(files)) {
+                                    const initFile = _initPayload.files[fileId];
+                                    if (initFile && initFile.url && typeof initFile.url === 'string' && initFile.url.startsWith('http')) {
+                                        files[fileId].url = initFile.url;
+                                    }
+                                }
+                            }
+                            
                             const filesKey = key + '-files'; // 定义一个虚拟key
                             const filesValue = JSON.stringify(files);
                             
@@ -76,7 +90,8 @@
                                     key: filesKey, 
                                     value: filesValue
                                 });
-                                console.log('[PonyNotes] 📸 Synced files count:', Object.keys(files).length);
+                                console.log('[PonyNotes] 📸 Synced files count:', Object.keys(files).length, 
+                                    'with url:', Object.values(files).filter(f => f.url).length);
                             }
                         }
                     } catch (e) {
@@ -656,6 +671,39 @@
                 if (typeof api.addFiles === 'function') {
                     api.addFiles(filesToAdd);
                     console.log('[PonyNotes] ✅ Injected ' + filesToAdd.length + ' files via addFiles()');
+                    
+                    // ✅ 关键修复：注入图片后立即通知 Flutter 端文件状态
+                    // 问题：addFiles 只接受 {id, dataURL, mimeType, created}，不包含 url 字段
+                    // 后续 api.getFiles() 返回的数据也没有 url，导致 Flutter 端丢失了云 URL 信息
+                    // 修复：注入完成后，用完整的 filesMap（含 url 字段）通知 Flutter 端
+                    // 这样 _collabAdapter._fullData['files'] 中包含 url，避免重复上传
+                    try {
+                        const filesMapForFlutter = {};
+                        for (const [fileId, fileData] of fileEntries) {
+                            // 合并 filesToAdd 数据 + 原始 fileData（含 url）
+                            const matchingInjected = filesToAdd.find(f => f.id === fileId);
+                            if (matchingInjected) {
+                                filesMapForFlutter[fileId] = {
+                                    ...fileData,
+                                    dataURL: matchingInjected.dataURL,
+                                    mimeType: matchingInjected.mimeType,
+                                    created: matchingInjected.created,
+                                };
+                            } else {
+                                filesMapForFlutter[fileId] = fileData;
+                            }
+                        }
+                        if (Object.keys(filesMapForFlutter).length > 0) {
+                            window.flutter_inappwebview.callHandler('localStorageOnSet', {
+                                key: 'excalidraw-files',
+                                value: JSON.stringify(filesMapForFlutter),
+                            });
+                            window._lastSentFiles = JSON.stringify(filesMapForFlutter);
+                            console.log('[PonyNotes] 📸 Notified Flutter of injected files with url info, count:', Object.keys(filesMapForFlutter).length);
+                        }
+                    } catch (notifyErr) {
+                        console.warn('[PonyNotes] ⚠️ Failed to notify Flutter of injected files:', notifyErr);
+                    }
                 } else {
                     console.warn('[PonyNotes] ⚠️ addFiles not available');
                 }
@@ -673,6 +721,7 @@
                     const result = await window.flutter_inappwebview.callHandler('downloadCloudImages', cloudFileIds);
                     if (result && Array.isArray(result)) {
                         const downloadedFiles = [];
+                        const downloadedFilesMapForFlutter = {};
                         for (const item of result) {
                             if (item && item.fileId && item.dataURL) {
                                 downloadedFiles.push({
@@ -681,11 +730,33 @@
                                     mimeType: item.mimeType || 'image/png',
                                     created: item.created || Date.now(),
                                 });
+                                // ✅ 关键修复：保留原始 url 字段（从 cloudFilesToFetch 中获取）
+                                const originalCloudFile = cloudFilesToFetch.find(f => f.fileId === item.fileId);
+                                downloadedFilesMapForFlutter[item.fileId] = {
+                                    ...(originalCloudFile ? originalCloudFile.fileData : {}),
+                                    dataURL: item.dataURL,
+                                    mimeType: item.mimeType || 'image/png',
+                                    created: item.created || Date.now(),
+                                };
                             }
                         }
                         if (downloadedFiles.length > 0 && typeof api.addFiles === 'function') {
                             api.addFiles(downloadedFiles);
                             console.log('[PonyNotes] ✅ Injected ' + downloadedFiles.length + ' downloaded cloud images');
+                            
+                            // ✅ 通知 Flutter 端云端下载的文件状态（含 url）
+                            if (Object.keys(downloadedFilesMapForFlutter).length > 0) {
+                                try {
+                                    window.flutter_inappwebview.callHandler('localStorageOnSet', {
+                                        key: 'excalidraw-files',
+                                        value: JSON.stringify(downloadedFilesMapForFlutter),
+                                    });
+                                    window._lastSentFiles = JSON.stringify(downloadedFilesMapForFlutter);
+                                    console.log('[PonyNotes] 📸 Notified Flutter of cloud downloaded files with url, count:', downloadedFiles.length);
+                                } catch (notifyErr) {
+                                    console.warn('[PonyNotes] ⚠️ Failed to notify Flutter:', notifyErr);
+                                }
+                            }
                         }
                     }
                 } catch (e) {
