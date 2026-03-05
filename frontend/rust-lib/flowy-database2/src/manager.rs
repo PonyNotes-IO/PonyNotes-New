@@ -50,6 +50,12 @@ pub trait DatabaseUser: Send + Sync {
   fn collab_db(&self, uid: i64) -> Result<Weak<CollabKVDB>, FlowyError>;
   fn workspace_id(&self) -> Result<Uuid, FlowyError>;
   fn workspace_database_object_id(&self) -> Result<Uuid, FlowyError>;
+  /// Get the source workspace_id for a shared view.
+  /// Returns None if the view is not a shared view from another workspace.
+  fn shared_view_source_workspace_id(&self, view_id: &str) -> Option<String> {
+    let _ = view_id;
+    None
+  }
 }
 
 pub(crate) type DatabaseEditorMap = HashMap<String, Arc<DatabaseEditor>>;
@@ -210,13 +216,63 @@ impl DatabaseManager {
   }
 
   pub async fn get_database_id_with_view_id(&self, view_id: &str) -> FlowyResult<String> {
-    let lock = self.workspace_database()?;
-    let wdb = lock.read().await;
-    let database_id = wdb.get_database_id_with_view_id(view_id);
-    database_id.ok_or_else(|| {
+    // 1. Try local workspace_database lookup first
+    {
+      let lock = self.workspace_database()?;
+      let wdb = lock.read().await;
+      if let Some(database_id) = wdb.get_database_id_with_view_id(view_id) {
+        return Ok(database_id);
+      }
+    }
+
+    // 2. Local lookup failed - try cloud fallback for shared database views
+    info!(
+      "[Database] Local mapping not found for view_id: {}, trying cloud fallback",
+      view_id
+    );
+
+    if let Some(source_workspace_id) = self.user.shared_view_source_workspace_id(view_id) {
+      if let Ok(source_ws_uuid) = Uuid::from_str(&source_workspace_id) {
+        if let Ok(view_uuid) = Uuid::from_str(view_id) {
+          match self
+            .cloud_service
+            .resolve_database_id_for_view(&source_ws_uuid, &view_uuid)
+            .await
+          {
+            Ok(Some(database_id)) => {
+              info!(
+                "[Database] Resolved database_id: {} for shared view: {} from workspace: {}",
+                database_id, view_id, source_workspace_id
+              );
+
+              // Update local workspace_database with the new mapping
+              let lock = self.workspace_database()?;
+              let mut wdb = lock.write().await;
+              wdb.track_database(&database_id, vec![view_id.to_string()]);
+
+              return Ok(database_id);
+            },
+            Ok(None) => {
+              info!(
+                "[Database] Cloud returned no database_id for view: {} in workspace: {}",
+                view_id, source_workspace_id
+              );
+            },
+            Err(e) => {
+              error!(
+                "[Database] Cloud resolve failed for view: {} - {}",
+                view_id, e
+              );
+            },
+          }
+        }
+      }
+    }
+
+    Err(
       FlowyError::record_not_found()
-        .with_context(format!("The database for view id: {} not found", view_id))
-    })
+        .with_context(format!("The database for view id: {} not found", view_id)),
+    )
   }
 
   pub async fn encode_database(&self, view_id: &Uuid) -> FlowyResult<EncodedDatabase> {

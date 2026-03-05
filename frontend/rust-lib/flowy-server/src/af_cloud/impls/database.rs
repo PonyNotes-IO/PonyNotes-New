@@ -135,6 +135,45 @@ where
   ) -> Result<Vec<DatabaseSnapshot>, FlowyError> {
     Ok(vec![])
   }
+
+  async fn resolve_database_id_for_view(
+    &self,
+    workspace_id: &Uuid,
+    view_id: &Uuid,
+  ) -> Result<Option<String>, FlowyError> {
+    let client = self.inner.try_get_client()?;
+    let url = format!(
+      "{}/api/workspace/{}/database/view/{}/resolve",
+      client.base_url, workspace_id, view_id
+    );
+
+    let access_token = client.access_token().map_err(FlowyError::from)?;
+    let resp = client
+      .cloud_client
+      .get(&url)
+      .bearer_auth(access_token)
+      .send()
+      .await
+      .map_err(|e| {
+        FlowyError::internal().with_context(format!("resolve database_id failed: {}", e))
+      })?;
+
+    if !resp.status().is_success() {
+      return Ok(None);
+    }
+
+    let body: serde_json::Value = resp.json().await.map_err(|e| {
+      FlowyError::internal().with_context(format!("parse response failed: {}", e))
+    })?;
+
+    let database_id = body
+      .get("data")
+      .and_then(|d| d.get("database_id"))
+      .and_then(|v| v.as_str())
+      .map(|s| s.to_string());
+
+    Ok(database_id)
+  }
 }
 
 #[async_trait]

@@ -2874,6 +2874,28 @@
       "syncing": "Syncing",
       "synced": "Synced",
       "noNetworkConnected": "No network connected"
+    },
+    "cloudSync": {
+      "title": "Cloud Sync",
+      "memberActive": "{} Active",
+      "memberExpired": "Membership Expired",
+      "memberExpiredDesc": "Your membership has expired. Please renew to continue using cloud sync.",
+      "storageFull": "Storage Full",
+      "storageFullDesc": "Used {} / {}, storage is full",
+      "expiringSoon": "{} expires in {} days",
+      "expiringSoonDesc": "After expiration, there will be a 15-day grace period. Data will be retained during the grace period. If not renewed, excess data will be cleaned up.",
+      "gracePeriodExpired": "Expired, {} days of grace period remaining",
+      "gracePeriodDowngraded": "Downgraded, {} days of grace period remaining",
+      "gracePeriodExpiredDesc": "Your membership has expired. You are currently in a 15-day grace period. Data is still retained. After the grace period, excess data will be cleaned up.",
+      "gracePeriodDowngradedDesc": "You have downgraded your plan. You are in a 15-day grace period. Data exceeding the new plan quota is still available. Excess data will be cleaned up after the grace period.",
+      "notSubscribedDesc": "Subscribe to enjoy cloud sync, secure data backup, and multi-device sync.",
+      "remainingSpace": "Remaining: {} / {}",
+      "maxUploadSize": "Max upload size: {}",
+      "btnSubscribe": "Subscribe Now",
+      "btnRenew": "Renew Now",
+      "btnUpgradeSpace": "Upgrade Space",
+      "btnUpgradePlan": "Upgrade Plan",
+      "btnExpandSpace": "Expand Space"
     }
   },
   "pageStyle": {

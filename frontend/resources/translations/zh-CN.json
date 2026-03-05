@@ -2933,6 +2933,28 @@
       "syncing": "同步中",
       "synced": "已同步",
       "noNetworkConnected": "未连接网络"
+    },
+    "cloudSync": {
+      "title": "云同步",
+      "memberActive": "{}有效中",
+      "memberExpired": "会员已到期",
+      "memberExpiredDesc": "您的会员已到期，请续费以继续使用云同步功能",
+      "storageFull": "空间使用已满",
+      "storageFullDesc": "已使用 {} / {}，空间已满",
+      "expiringSoon": "{}将在{}天后到期",
+      "expiringSoonDesc": "到期后将有15天宽限期，宽限期内数据保留。过期不续费将按免费版额度清理超出的数据。",
+      "gracePeriodExpired": "会员已到期，宽限期剩余{}天",
+      "gracePeriodDowngraded": "套餐已降级，宽限期剩余{}天",
+      "gracePeriodExpiredDesc": "您的会员已到期，当前处于15天宽限期内，数据仍然保留。宽限期结束后将按免费版额度清理超出的数据。",
+      "gracePeriodDowngradedDesc": "您已降级套餐，当前处于15天宽限期内，超出新套餐额度的数据仍可使用。宽限期结束后将自动清理超出部分。",
+      "notSubscribedDesc": "开通会员后即可享受云同步功能，数据安全备份，多设备同步",
+      "remainingSpace": "剩余空间：{} / {}",
+      "maxUploadSize": "最大可上传{}文件",
+      "btnSubscribe": "立即开通",
+      "btnRenew": "立即续费",
+      "btnUpgradeSpace": "升级空间",
+      "btnUpgradePlan": "升级套餐",
+      "btnExpandSpace": "扩容空间"
     }
   },
   "pageStyle": {

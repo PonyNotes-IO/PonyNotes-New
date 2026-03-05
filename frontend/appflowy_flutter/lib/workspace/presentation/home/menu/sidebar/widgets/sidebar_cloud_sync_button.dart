@@ -59,6 +59,11 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
             }
           }
 
+          final membershipStatus = _determineMembershipStatus(
+            subscriptionInfo,
+            currentSubscription,
+          );
+
           return _buildCloudSyncIcon(
             context,
             () => _showCloudSyncSettings(
@@ -69,11 +74,11 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
             ),
             folderSyncState: workspaceState.folderSyncState,
             isCloudSyncEnabled: isCloudSyncEnabled,
+            membershipStatus: membershipStatus,
           );
         },
       );
     } catch (e) {
-      // 如果 UserWorkspaceBloc 不存在，直接显示按钮（不传递会员信息）
       Log.warn('[云同步按钮] UserWorkspaceBloc 不可用: $e');
       return _buildCloudSyncIcon(
         context,
@@ -85,6 +90,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
         ),
         folderSyncState: null,
         isCloudSyncEnabled: false,
+        membershipStatus: CloudSyncMembershipStatus.notSubscribed,
       );
     }
   }
@@ -249,21 +255,40 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     WorkspaceSubscriptionInfoPB? subscriptionInfo,
     CurrentSubscription? currentSubscription,
   ) {
-    // 优先使用 currentSubscription 判断会员状态（更准确，包含使用量信息）
     final subscription = currentSubscription?.subscription;
     final usage = currentSubscription?.usage;
 
-    // 如果 currentSubscription 有数据，优先使用它判断
     if (subscription != null &&
         subscription.planCode != null &&
         subscription.planCode!.isNotEmpty) {
-      // 检查是否已到期
+      final now = DateTime.now();
       final endDate = subscription.endDate;
-      if (endDate != null && endDate.isBefore(DateTime.now())) {
+      final gracePeriodEnd = subscription.gracePeriodEnd;
+
+      // 1) 降级宽限期：套餐降级后 grace_period_end 尚未过期
+      if (subscription.isDowngraded && subscription.isInGracePeriod) {
+        return CloudSyncMembershipStatus.gracePeriod;
+      }
+
+      // 2) 到期宽限期：订阅已过期，但仍在宽限期内
+      if (endDate != null && endDate.isBefore(now)) {
+        if (gracePeriodEnd != null && now.isBefore(gracePeriodEnd)) {
+          return CloudSyncMembershipStatus.gracePeriod;
+        }
         return CloudSyncMembershipStatus.expired;
       }
 
-      // 检查空间是否已满
+      // 3) 即将到期：7天内到期（仅付费套餐）
+      final planCode = subscription.planCode?.toLowerCase() ?? '';
+      final isFreePlan = planCode == 'mfb' || planCode.contains('free');
+      if (!isFreePlan && endDate != null) {
+        final daysLeft = endDate.difference(now).inDays;
+        if (daysLeft <= 7) {
+          return CloudSyncMembershipStatus.expiringSoon;
+        }
+      }
+
+      // 4) 空间已满
       final storageUsedGb = usage?.storageUsedGb;
       final storageTotalGb = usage?.storageTotalGb;
       if (storageUsedGb != null &&
@@ -272,17 +297,14 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
         return CloudSyncMembershipStatus.storageFull;
       }
 
-      // 会员有效中（包含免费版 mfb）
+      // 5) 有效中
       return CloudSyncMembershipStatus.active;
     }
 
-    // 如果 currentSubscription 没有数据，使用 subscriptionInfo 判断（降级方案）
     if (subscriptionInfo != null) {
-      // 这里的 subscriptionInfo 只要有值，就认为是有效状态（包括免费版）
       return CloudSyncMembershipStatus.active;
     }
 
-    // 两个数据源都没有，或者没有明确的计划信息，认为未登录或未开通
     return CloudSyncMembershipStatus.notSubscribed;
   }
 
@@ -291,53 +313,58 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     VoidCallback onTap, {
     required FolderSyncStatePB? folderSyncState,
     required bool isCloudSyncEnabled,
+    required CloudSyncMembershipStatus membershipStatus,
   }) {
-    // 如果云同步未启用，只显示默认图标
+    final hasWarning = membershipStatus == CloudSyncMembershipStatus.expiringSoon ||
+        membershipStatus == CloudSyncMembershipStatus.gracePeriod ||
+        membershipStatus == CloudSyncMembershipStatus.expired ||
+        membershipStatus == CloudSyncMembershipStatus.storageFull;
+
     if (!isCloudSyncEnabled) {
       return SizedBox.square(
         key: _buttonKey,
         dimension: 28.0,
-        child: FlowyButton(
-          useIntrinsicWidth: true,
-          margin: EdgeInsets.zero,
-          text: FlowySvg(
-            FlowySvgs.cloud_sync_m,
-            color:
-                widget.isHover ? Theme.of(context).colorScheme.onSurface : null,
-            opacity: 0.7,
-          ),
-          onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            FlowyButton(
+              useIntrinsicWidth: true,
+              margin: EdgeInsets.zero,
+              text: FlowySvg(
+                FlowySvgs.cloud_sync_m,
+                color:
+                    widget.isHover ? Theme.of(context).colorScheme.onSurface : null,
+                opacity: 0.7,
+              ),
+              onTap: onTap,
+            ),
+            if (hasWarning) _buildWarningDot(membershipStatus),
+          ],
         ),
       );
     }
 
-    // 根据同步状态选择图标和样式
     FlowySvgData iconData;
     Color iconColor;
     Color labelColor;
     String labelText;
 
-    // 根据同步状态选择图标
     if (folderSyncState == null) {
-      // 状态未知，使用默认图标
       iconData = FlowySvgs.cloud_sync_m;
       iconColor = Colors.grey;
       labelColor = Colors.grey;
       labelText = LocaleKeys.newSettings_syncState_syncing.tr();
     } else if (folderSyncState.isSyncing) {
-      // 同步中，使用同步中图标（红色）
       iconData = FlowySvgs.cloud_syncing_m;
       iconColor = Colors.red;
       labelColor = Colors.red;
       labelText = LocaleKeys.newSettings_syncState_syncing.tr();
     } else if (folderSyncState.isFinish) {
-      // 已同步，使用同步完成图标（绿色）
       iconData = FlowySvgs.cloud_sync_finish_m;
       iconColor = Colors.green;
       labelColor = Colors.green;
       labelText = LocaleKeys.newSettings_syncState_synced.tr();
     } else {
-      // 其他状态，使用默认图标
       iconData = FlowySvgs.cloud_sync_m;
       iconColor = Colors.grey;
       labelColor = Colors.grey;
@@ -365,47 +392,77 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
               onTap: onTap,
             ),
           ),
-          // 右上角文字标签
-          Positioned(
-            top: -8.0,
-            right: -12.0,
-            child: Container(
-              constraints: const BoxConstraints(
-                maxWidth: 40.0,
-                minWidth: 20.0,
-                maxHeight: 14.0,
-              ),
-              padding: const EdgeInsets.only(
-                  left: 5.0, top: 2.0, right: 5.0, bottom: 1.0),
-              decoration: BoxDecoration(
-                color: labelColor,
-                borderRadius: BorderRadius.circular(7.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 2.0,
-                    offset: const Offset(0, 1.0),
+          if (hasWarning)
+            _buildWarningDot(membershipStatus)
+          else
+            Positioned(
+              top: -8.0,
+              right: -12.0,
+              child: Container(
+                constraints: const BoxConstraints(
+                  maxWidth: 40.0,
+                  minWidth: 20.0,
+                  maxHeight: 14.0,
+                ),
+                padding: const EdgeInsets.only(
+                    left: 5.0, top: 2.0, right: 5.0, bottom: 1.0),
+                decoration: BoxDecoration(
+                  color: labelColor,
+                  borderRadius: BorderRadius.circular(7.0),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 2.0,
+                      offset: const Offset(0, 1.0),
+                    ),
+                  ],
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Text(
+                    labelText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12.0,
+                      fontWeight: FontWeight.w600,
+                      height: 1.0,
+                    ),
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
                   ),
-                ],
-              ),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.center,
-                child: Text(
-                  labelText,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12.0,
-                    fontWeight: FontWeight.w600,
-                    height: 1.0,
-                  ),
-                  maxLines: 1,
-                  textAlign: TextAlign.center,
                 ),
               ),
             ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWarningDot(CloudSyncMembershipStatus status) {
+    Color dotColor;
+    switch (status) {
+      case CloudSyncMembershipStatus.expiringSoon:
+        dotColor = const Color(0xFFFF9800);
+      case CloudSyncMembershipStatus.gracePeriod:
+        dotColor = const Color(0xFFF57C00);
+      case CloudSyncMembershipStatus.expired:
+      case CloudSyncMembershipStatus.storageFull:
+        dotColor = Colors.red;
+      default:
+        dotColor = Colors.transparent;
+    }
+    return Positioned(
+      top: -2.0,
+      right: -2.0,
+      child: Container(
+        width: 8.0,
+        height: 8.0,
+        decoration: BoxDecoration(
+          color: dotColor,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 1.0),
+        ),
       ),
     );
   }

@@ -245,6 +245,8 @@ class SubscriptionSummary {
     required this.status,
     required this.startDate,
     required this.endDate,
+    this.gracePeriodEnd,
+    this.downgradedFromPlanId,
   });
 
   final String? planCode;
@@ -253,6 +255,25 @@ class SubscriptionSummary {
   final String? status;
   final DateTime? startDate;
   final DateTime? endDate;
+  final DateTime? gracePeriodEnd;
+  final int? downgradedFromPlanId;
+
+  bool get isInGracePeriod {
+    if (gracePeriodEnd == null) return false;
+    return DateTime.now().isBefore(gracePeriodEnd!);
+  }
+
+  bool get isDowngraded => downgradedFromPlanId != null;
+
+  int get daysUntilExpiry {
+    if (endDate == null) return -1;
+    return endDate!.difference(DateTime.now()).inDays;
+  }
+
+  int get daysUntilGracePeriodEnd {
+    if (gracePeriodEnd == null) return -1;
+    return gracePeriodEnd!.difference(DateTime.now()).inDays;
+  }
 
   factory SubscriptionSummary.fromJson(Map<String, dynamic>? json) {
     if (json == null) return const SubscriptionSummary(
@@ -275,6 +296,8 @@ class SubscriptionSummary {
       status: json['status'] as String?,
       startDate: _parseDate(json['start_date'] as String?),
       endDate: _parseDate(json['end_date'] as String?),
+      gracePeriodEnd: _parseDate(json['grace_period_end'] as String?),
+      downgradedFromPlanId: json['downgraded_from_plan_id'] as int?,
     );
   }
 }
