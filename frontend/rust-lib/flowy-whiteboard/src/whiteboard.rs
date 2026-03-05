@@ -1,15 +1,15 @@
-use crate::entities::{WhiteboardData, WhiteboardEventPB};
+use crate::entities::{WhiteboardData, WhiteboardDataPB};
 use crate::notification::{whiteboard_notification_builder, WhiteboardNotification};
 use anyhow::{anyhow, Error};
 use collab::core::collab::DataSource;
-use collab::preclude::{Collab, CollabBuilder, Map, MapRef};
+use collab::preclude::{Collab, CollabBuilder, DeepObservable, Map, MapRef};
 use collab::util::MapExt;
 use collab_entity::EncodedCollab;
 use collab_entity::define::DOCUMENT_ROOT;
-use serde::{Deserialize, Serialize};
+
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
-use tracing::{trace, info};
+use tracing::trace;
 
 /// Whiteboard Collab 对象
 /// 使用 CRDT (Yrs) 来管理白板数据
@@ -172,47 +172,56 @@ impl Whiteboard {
     
     trace!("[Whiteboard] subscribing to data changes for view: {}", view_id);
     
-    self.data.observe_deep(move |txn, event| {
-      let is_remote = !txn.is_local();
-      
+    self.data.observe_deep(move |txn, events| {
+      let is_remote = txn.origin().is_some();
+
       // 我们只关心远程变更的实时通知，本地变更由前端自己维护 UI
       if !is_remote {
         return;
       }
 
-      for change in event.delta(txn) {
-        match change {
-          collab::preclude::Delta::Added(values, _) | collab::preclude::Delta::Retained(values, _) => {
-             // 对于 Map，Delta 可能包含 Key/Value 变更
-             // 但 Yrs 的 observe_deep 在 Map 上通常通过 keys 遍历
-          },
-          _ => {}
-        }
-      }
-      
-      // 遍历事件中受影响的 Key
-      for key in event.keys(txn).keys() {
-        if let Some(value) = event.keys(txn).get(key) {
-           // 获取最新的值
-           let new_value_str = value.to_string(txn);
-           
-           trace!("[Whiteboard] 🔔 Remote change detected! key: {}, view: {}", key, view_id_clone);
-           
-           // 发送通知给前端
-           // ✅ 优化：使用已有的 WhiteboardDataPB 避免 Dart 端 PB 不匹配
-           // 将变更细节封装在 json_data 中
-           let event_json = serde_json::json!({
-             "key": key.to_string(),
-             "value": new_value_str,
-             "is_remote": true,
-           }).to_string();
+      for event in events.iter() {
+        if let collab::preclude::Event::Map(map_event) = event {
+          for (key, change) in map_event.keys(txn) {
+            match change {
+              collab::preclude::EntryChange::Inserted(value)
+              | collab::preclude::EntryChange::Updated(_, value) => {
+                let new_value_str = value.to_string();
 
-           whiteboard_notification_builder(&view_id_clone, WhiteboardNotification::DidReceiveUpdate)
-             .payload(WhiteboardDataPB {
-               view_id: view_id_clone.clone(),
-               json_data: event_json,
-             })
-             .send();
+                trace!(
+                  "[Whiteboard] 🔔 Remote change detected! key: {}, view: {}",
+                  key,
+                  view_id_clone
+                );
+
+                // 发送通知给前端
+                let event_json = serde_json::json!({
+                  "key": key.to_string(),
+                  "value": new_value_str,
+                  "is_remote": true,
+                })
+                .to_string();
+
+                whiteboard_notification_builder(
+                  view_id_clone.clone(),
+                  WhiteboardNotification::DidReceiveUpdate,
+                )
+                .payload(WhiteboardDataPB {
+                  view_id: view_id_clone.clone(),
+                  json_data: event_json,
+                })
+                .send();
+              },
+              collab::preclude::EntryChange::Removed(_) => {
+                trace!(
+                  "[Whiteboard] 🔔 Remote delete detected! key: {}, view: {}",
+                  key,
+                  view_id_clone
+                );
+                // 可以根据需要发送删除通知
+              },
+            }
+          }
         }
       }
     });

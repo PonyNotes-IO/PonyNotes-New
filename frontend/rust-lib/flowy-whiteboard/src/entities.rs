@@ -2,6 +2,8 @@ use flowy_derive::ProtoBuf;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WhiteboardData(pub HashMap<String, serde_json::Value>);
 
