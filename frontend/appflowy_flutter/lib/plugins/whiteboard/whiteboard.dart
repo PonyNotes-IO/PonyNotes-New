@@ -174,7 +174,6 @@ class WhiteboardPage extends StatefulWidget {
 
 // 全局WebView实例计数器，确保每个WebView的Key绝对唯一
 
-
 class _WhiteboardPageState extends State<WhiteboardPage> {
   Map<String, dynamic>? _initialData;
   bool _isLoadingData = true;
@@ -333,7 +332,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     _isDisposing = true;
 
     print('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
-    
+
     final adapter = _collabAdapter;
     _collabAdapter = null;
 
@@ -359,7 +358,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         final result = await service.closeWhiteboard(viewId: viewId);
         result.fold(
           (_) => print('[WhiteboardPage] ✅ Whiteboard closed: $viewId'),
-          (error) => print('[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
+          (error) => print(
+              '[WhiteboardPage] Failed to close whiteboard: ${error.msg}'),
         );
       } catch (e) {
         print('[WhiteboardPage] Exception closing whiteboard: $e');
@@ -378,17 +378,21 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
       // 注销导出控制器
       if (getIt.isRegistered<WhiteboardExportController>(
-          instanceName: '${viewId}_export',)) {
+        instanceName: '${viewId}_export',
+      )) {
         getIt.unregister<WhiteboardExportController>(
-            instanceName: '${viewId}_export',);
+          instanceName: '${viewId}_export',
+        );
         Log.info('[Whiteboard] 注销导出控制器: $viewId');
       }
 
       // 注销导入控制器
       if (getIt.isRegistered<WhiteboardImportController>(
-          instanceName: '${viewId}_import',)) {
+        instanceName: '${viewId}_import',
+      )) {
         getIt.unregister<WhiteboardImportController>(
-            instanceName: '${viewId}_import',);
+          instanceName: '${viewId}_import',
+        );
         Log.info('[Whiteboard] 注销导入控制器: $viewId');
       }
     } catch (e) {
@@ -398,19 +402,18 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   /// 初始化 Collab 适配器（完全模仿 DocumentBloc 的 TransactionAdapter）
   void _initCollabAdapter() {
-    // debug log removed
     _collabAdapter = WhiteboardCollabAdapter(
       viewId: widget.view.id,
       onDataChanged: (data) {
-        // 更新当前数据缓存（用于 UI 显示）
-        // if (mounted && !_isDisposing) {
-        //   setState(() {
-        //     _currentData = data;
-        //   });
-        // }
+        // ✅ 关键：当收到远程同步更新时，将其推送到 WebView
+        if (!_isDisposing && mounted) {
+          for (final entry in data.entries) {
+            Log.info('[Whiteboard] 🔔 Pushing remote update: ${entry.key}');
+            _webViewKey.currentState?.pushData(entry.key, entry.value);
+          }
+        }
       },
     );
-    // debug log removed
   }
 
   Future<void> _loadInitialData() async {
@@ -622,7 +625,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   /// 手动保存白板数据（现在通过 CollabAdapter 自动处理）
   Future<void> _saveWhiteboard() async {
     Log.debug(
-      '💾 [Whiteboard] Manual save triggered - forcing immediate sync (like DocumentBloc)',);
+      '💾 [Whiteboard] Manual save triggered - forcing immediate sync (like DocumentBloc)',
+    );
 
     // 强制立即同步（模仿 DocumentBloc 的行为）
     await _collabAdapter?.forceSync();
@@ -914,10 +918,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       onError: _onWhiteboardError,
     );
   }
-
-
-
-
 
   /// 导出为源文件
   /// 修复：使用WebView的导出API获取标准格式的Excalidraw数据，而不是直接从服务加载
