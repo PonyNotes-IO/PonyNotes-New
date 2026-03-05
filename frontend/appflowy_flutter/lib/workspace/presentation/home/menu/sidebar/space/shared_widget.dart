@@ -95,10 +95,10 @@ class _SpacePermissionSwitchState extends State<SpacePermissionSwitch> {
             permission: SpacePermission.private,
             onTap: () => _onPermissionChanged(SpacePermission.private),
           ),
-          SpacePermissionButton(
-            permission: SpacePermission.closed,
-            onTap: () => _onPermissionChanged(SpacePermission.closed),
-          ),
+          // SpacePermissionButton(
+          //   permission: SpacePermission.closed,
+          //   onTap: () => _onPermissionChanged(SpacePermission.closed),
+          // ),
         ],
       ),
     );
