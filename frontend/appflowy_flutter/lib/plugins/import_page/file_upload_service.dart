@@ -104,8 +104,8 @@ class FileUploadService {
               if (isStorageError) {
                 Log.error('File upload failed: Storage limit exceeded - $errorMessage');
                 throw Exception('云空间容量不足: $errorMessage');
-              } else if (errorCodeStr != null && errorCodeStr != 'ok' && errorCodeStr != 'success') {
-                // 其他错误
+              } else if (errorCodeStr != null && errorCodeStr != 'ok' && errorCodeStr != 'success' && errorCodeStr != '0') {
+                // 其他错误（code=0 是成功，AppFlowy Cloud API 约定 0 = Ok）
                 Log.error('File upload returned error: $errorCodeStr - $errorMessage');
                 throw Exception('文件上传失败: $errorMessage (code: $errorCodeStr)');
               }

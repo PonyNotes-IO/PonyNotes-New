@@ -255,6 +255,21 @@ impl std::convert::From<ViewLayout> for ViewLayoutPB {
   }
 }
 
+impl From<i32> for ViewLayoutPB {
+  fn from(val: i32) -> Self {
+    match val {
+      1 => ViewLayoutPB::Grid,
+      2 => ViewLayoutPB::Board,
+      3 => ViewLayoutPB::Calendar,
+      4 => ViewLayoutPB::Chat,
+      5 => ViewLayoutPB::Folder,
+      6 => ViewLayoutPB::Notebook,
+      7 => ViewLayoutPB::Whiteboard,
+      _ => ViewLayoutPB::Document,
+    }
+  }
+}
+
 impl From<client_api::entity::workspace_dto::ViewLayout> for ViewLayoutPB {
   fn from(val: client_api::entity::workspace_dto::ViewLayout) -> Self {
     match val {
@@ -993,6 +1008,26 @@ pub enum SharedViewSectionPB {
 pub struct GetSharedViewSectionResponsePB {
   #[pb(index = 1)]
   pub section: SharedViewSectionPB,
+}
+
+#[derive(Default, ProtoBuf, Clone, Debug)]
+pub struct SaveSharedViewMetaPB {
+  #[pb(index = 1)]
+  pub view_id: String,
+
+  #[pb(index = 2)]
+  pub workspace_id: String,
+
+  #[pb(index = 3)]
+  pub view_name: String,
+
+  /// 0=Document, 1=Grid, 2=Board, 3=Calendar
+  #[pb(index = 4)]
+  pub view_layout: i32,
+
+  /// 1=ReadOnly, 2=ReadAndComment, 3=ReadAndWrite, 4=FullAccess
+  #[pb(index = 5)]
+  pub permission_id: i32,
 }
 
 // impl<'de> Deserialize<'de> for ViewDataType {

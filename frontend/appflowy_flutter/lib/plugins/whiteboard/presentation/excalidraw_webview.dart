@@ -165,40 +165,48 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     controller.addJavaScriptHandler(
         handlerName: "initData",
         callback: (args) async {
-          Log.info('[ExcalidrawWebView] 🚀 initData called, loading whiteboard data...');
-          
+          Log.info(
+              '[ExcalidrawWebView] 🚀 initData called, loading whiteboard data...');
+
           try {
             final service = WhiteboardDataService();
             final data = await service.loadWhiteboardData(widget.viewId);
-            
-            Log.info('[ExcalidrawWebView] ✅ Data loaded, ${data.keys.length} keys found');
-            
+
+            Log.info(
+                '[ExcalidrawWebView] ✅ Data loaded, ${data.keys.length} keys found');
+
             // ✅ 关键修复：标准化数据键名
             // 后端可能返回 localStorage 原始键名（excalidraw, excalidraw-state）
             // 也可能返回标准键名（elements, appState）
             // 统一转换为标准键名，避免重复存储
             final normalizedData = _normalizeDataKeys(data);
-            
+
             if (normalizedData.containsKey('elements')) {
               final elements = normalizedData['elements'];
               if (elements is List) {
-                Log.info('[ExcalidrawWebView] 📝 Elements count: ${elements.length}');
+                Log.info(
+                    '[ExcalidrawWebView] 📝 Elements count: ${elements.length}');
               } else if (elements is String) {
-                Log.info('[ExcalidrawWebView] 📝 Elements is string, length: ${elements.length}');
+                Log.info(
+                    '[ExcalidrawWebView] 📝 Elements is string, length: ${elements.length}');
               }
             }
             // 预下载云端图片：对于只有云 URL 的文件，在 Flutter 端下载并转为 base64
             // 这样返回给 JS 的数据中已经包含 dataURL，避免 JS 端再次异步下载
-            if (normalizedData.containsKey('files') && normalizedData['files'] is Map) {
+            if (normalizedData.containsKey('files') &&
+                normalizedData['files'] is Map) {
               final files = normalizedData['files'] as Map<String, dynamic>;
               Log.info('[ExcalidrawWebView] 📸 Files count: ${files.length}');
               if (files.isNotEmpty) {
                 try {
-                  final processedFiles = await _preprocessFilesForLoading(files);
+                  final processedFiles =
+                      await _preprocessFilesForLoading(files);
                   normalizedData['files'] = processedFiles;
-                  Log.info('[ExcalidrawWebView] 📸 Files preprocessed for loading');
+                  Log.info(
+                      '[ExcalidrawWebView] 📸 Files preprocessed for loading');
                 } catch (e) {
-                  Log.warn('[ExcalidrawWebView] ⚠️ Files preprocessing failed: $e');
+                  Log.warn(
+                      '[ExcalidrawWebView] ⚠️ Files preprocessing failed: $e');
                 }
               }
             }
@@ -208,12 +216,12 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             for (final entry in normalizedData.entries) {
               final key = entry.key;
               final value = entry.value;
-              
+
               // 跳过非白板数据键
               if (key == 'viewId' || key == 'savedAt' || key == '__test__') {
                 continue;
               }
-              
+
               // 修复：确保 value 是 JSON 字符串
               final stringValue = value is String ? value : jsonEncode(value);
 
@@ -233,14 +241,15 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               );
               setCount++;
             }
-            
-            Log.info('[ExcalidrawWebView] ✅ Set $setCount items to localStorage');
-            
+
+            Log.info(
+                '[ExcalidrawWebView] ✅ Set $setCount items to localStorage');
+
             // ✅ 标记初始化完成
             if (!_initializationCompleter!.isCompleted) {
               _initializationCompleter!.complete();
             }
-            
+
             // ✅ 关键修复：将加载的数据作为返回值传给 JavaScript
             // flutter_bridge.js 会将此数据保存到 _initPayload 变量中
             // 用于在 Excalidraw API 就绪后恢复数据（不依赖 localStorage，避免竞态条件）
@@ -267,7 +276,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               // ✅ 关键修复：标准化所有 localStorage 键名
               // 将 Excalidraw 的 localStorage 键名转换为后端存储使用的标准键名
               // 避免 _fullData 中出现重复键（elements + excalidraw 同时存在导致数据混乱）
-              
+
               // 📸 拦截 excalidraw-files 并转换为标准的 files 键
               if (key.endsWith('excalidraw-files') && value is String) {
                 try {
@@ -283,7 +292,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       '⚠️ [ExcalidrawWebView] Failed to parse files JSON: $e');
                 }
               }
-              
+
               // ✅ 标准化 excalidraw -> elements（解析 JSON 字符串为实际数据）
               if (key == 'excalidraw' || key.endsWith('_excalidraw')) {
                 if (value is String) {
@@ -292,22 +301,25 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                     widget.onDataChanged?.call('update', {'elements': parsed});
                     return;
                   } catch (e) {
-                    Log.warn('⚠️ [ExcalidrawWebView] Failed to parse elements: $e');
+                    Log.warn(
+                        '⚠️ [ExcalidrawWebView] Failed to parse elements: $e');
                   }
                 }
                 widget.onDataChanged?.call('update', {'elements': value});
                 return;
               }
-              
+
               // ✅ 标准化 excalidraw-state -> appState（解析 JSON 字符串为实际数据）
-              if (key == 'excalidraw-state' || key.endsWith('_excalidraw-state')) {
+              if (key == 'excalidraw-state' ||
+                  key.endsWith('_excalidraw-state')) {
                 if (value is String) {
                   try {
                     final parsed = jsonDecode(value);
                     widget.onDataChanged?.call('update', {'appState': parsed});
                     return;
                   } catch (e) {
-                    Log.warn('⚠️ [ExcalidrawWebView] Failed to parse appState: $e');
+                    Log.warn(
+                        '⚠️ [ExcalidrawWebView] Failed to parse appState: $e');
                   }
                 }
                 widget.onDataChanged?.call('update', {'appState': value});
@@ -343,48 +355,55 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           if (args.isEmpty) return [];
           final cloudFiles = args[0];
           if (cloudFiles is! List) return [];
-          
-          Log.info('[ExcalidrawWebView] 📸 downloadCloudImages: ${cloudFiles.length} files to download');
-          
+
+          Log.info(
+              '[ExcalidrawWebView] 📸 downloadCloudImages: ${cloudFiles.length} files to download');
+
           final results = <Map<String, dynamic>>[];
           for (final item in cloudFiles) {
             if (item is! Map) continue;
             final fileId = item['fileId'] as String?;
             final url = item['url'] as String?;
             final mimeType = item['mimeType'] as String? ?? 'image/png';
-            
+
             if (fileId == null || url == null) continue;
-            
+
             try {
-              Log.info('[ExcalidrawWebView] 📸 Downloading cloud image: $fileId from $url');
-              
+              Log.info(
+                  '[ExcalidrawWebView] 📸 Downloading cloud image: $fileId from $url');
+
               // 使用 HTTP 下载图片（带认证）
               final imageBytes = await _downloadCloudImage(url);
               if (imageBytes != null && imageBytes.isNotEmpty) {
                 // 转换为 base64 dataURL
                 final base64Data = base64Encode(imageBytes);
                 final dataURL = 'data:$mimeType;base64,$base64Data';
-                
+
                 results.add({
                   'fileId': fileId,
                   'dataURL': dataURL,
                   'mimeType': mimeType,
                   'created': DateTime.now().millisecondsSinceEpoch,
                 });
-                
-                Log.info('[ExcalidrawWebView] ✅ Downloaded cloud image: $fileId (${imageBytes.length} bytes)');
+
+                Log.info(
+                    '[ExcalidrawWebView] ✅ Downloaded cloud image: $fileId (${imageBytes.length} bytes)');
               } else {
-                Log.warn('[ExcalidrawWebView] ⚠️ Downloaded empty image for: $fileId');
+                Log.warn(
+                    '[ExcalidrawWebView] ⚠️ Downloaded empty image for: $fileId');
               }
             } catch (e) {
-              Log.error('[ExcalidrawWebView] ❌ Failed to download cloud image $fileId: $e');
+              Log.error(
+                  '[ExcalidrawWebView] ❌ Failed to download cloud image $fileId: $e');
             }
           }
-          
-          Log.info('[ExcalidrawWebView] 📸 Downloaded ${results.length}/${cloudFiles.length} cloud images');
+
+          Log.info(
+              '[ExcalidrawWebView] 📸 Downloaded ${results.length}/${cloudFiles.length} cloud images');
           return results;
         } catch (e) {
-          Log.error('[ExcalidrawWebView] ❌ downloadCloudImages handler error: $e');
+          Log.error(
+              '[ExcalidrawWebView] ❌ downloadCloudImages handler error: $e');
           return [];
         }
       },
@@ -799,15 +818,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// excalidraw -> elements, excalidraw-state -> appState, excalidraw-files -> files
   Map<String, dynamic> _normalizeDataKeys(Map<String, dynamic> data) {
     final normalized = <String, dynamic>{};
-    
+
     for (final entry in data.entries) {
       final key = entry.key;
       final value = entry.value;
-      
+
       if (key == 'excalidraw' || key.endsWith('_excalidraw')) {
         // excalidraw -> elements（如果 elements 键已存在且有效，跳过）
-        if (!normalized.containsKey('elements') || 
-            (normalized['elements'] is List && (normalized['elements'] as List).isEmpty)) {
+        if (!normalized.containsKey('elements') ||
+            (normalized['elements'] is List &&
+                (normalized['elements'] as List).isEmpty)) {
           if (value is String) {
             try {
               normalized['elements'] = jsonDecode(value);
@@ -818,10 +838,12 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             normalized['elements'] = value;
           }
         }
-      } else if (key == 'excalidraw-state' || key.endsWith('_excalidraw-state')) {
+      } else if (key == 'excalidraw-state' ||
+          key.endsWith('_excalidraw-state')) {
         // excalidraw-state -> appState
         if (!normalized.containsKey('appState') ||
-            (normalized['appState'] is Map && (normalized['appState'] as Map).isEmpty)) {
+            (normalized['appState'] is Map &&
+                (normalized['appState'] as Map).isEmpty)) {
           if (value is String) {
             try {
               normalized['appState'] = jsonDecode(value);
@@ -832,10 +854,12 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             normalized['appState'] = value;
           }
         }
-      } else if (key == 'excalidraw-files' || key.endsWith('_excalidraw-files')) {
+      } else if (key == 'excalidraw-files' ||
+          key.endsWith('_excalidraw-files')) {
         // excalidraw-files -> files
         if (!normalized.containsKey('files') ||
-            (normalized['files'] is Map && (normalized['files'] as Map).isEmpty)) {
+            (normalized['files'] is Map &&
+                (normalized['files'] as Map).isEmpty)) {
           if (value is String) {
             try {
               normalized['files'] = jsonDecode(value);
@@ -848,7 +872,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         }
       } else if (key == 'elements' || key == 'appState' || key == 'files') {
         // 标准键名直接使用（优先级高于 localStorage 键名）
-        if (value is String && (key == 'elements' || key == 'appState' || key == 'files')) {
+        if (value is String &&
+            (key == 'elements' || key == 'appState' || key == 'files')) {
           try {
             normalized[key] = jsonDecode(value);
           } catch (e) {
@@ -862,7 +887,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         normalized[key] = value;
       }
     }
-    
+
     return normalized;
   }
 
@@ -872,51 +897,55 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     Map<String, dynamic> files,
   ) async {
     final result = <String, dynamic>{};
-    
+
     for (final entry in files.entries) {
       final fileId = entry.key;
       final fileData = entry.value;
-      
+
       if (fileData is! Map) {
         result[fileId] = fileData;
         continue;
       }
-      
+
       final fileDataMap = Map<String, dynamic>.from(fileData as Map);
-      
+
       // 检查是否已有有效的 base64 dataURL
       final dataURL = fileDataMap['dataURL'] as String?;
       final data = fileDataMap['data'] as String?;
-      
-      final hasValidDataURL = (dataURL != null && dataURL.startsWith('data:')) ||
-                               (data != null && data.startsWith('data:'));
-      
+
+      final hasValidDataURL =
+          (dataURL != null && dataURL.startsWith('data:')) ||
+              (data != null && data.startsWith('data:'));
+
       if (hasValidDataURL) {
         // 已有 base64 dataURL，直接使用
         result[fileId] = fileDataMap;
         Log.info('[ExcalidrawWebView] 📸 File $fileId has valid dataURL');
         continue;
       }
-      
+
       // 检查是否有云 URL
-      final cloudUrl = fileDataMap['url'] as String? ?? 
-                       (data != null && data.startsWith('http') ? data : null);
-      
+      final cloudUrl = fileDataMap['url'] as String? ??
+          (data != null && data.startsWith('http') ? data : null);
+
       if (cloudUrl != null && cloudUrl.startsWith('http')) {
         // 需要从云端下载
-        Log.info('[ExcalidrawWebView] 📸 Downloading cloud image for $fileId: $cloudUrl');
+        Log.info(
+            '[ExcalidrawWebView] 📸 Downloading cloud image for $fileId: $cloudUrl');
         try {
           final imageBytes = await _downloadCloudImage(cloudUrl);
           if (imageBytes != null && imageBytes.isNotEmpty) {
             final mimeType = fileDataMap['mimeType'] as String? ?? 'image/png';
             final base64Data = base64Encode(imageBytes);
             final newDataURL = 'data:$mimeType;base64,$base64Data';
-            
+
             fileDataMap['dataURL'] = newDataURL;
             result[fileId] = fileDataMap;
-            Log.info('[ExcalidrawWebView] ✅ Downloaded and converted cloud image: $fileId (${imageBytes.length} bytes)');
+            Log.info(
+                '[ExcalidrawWebView] ✅ Downloaded and converted cloud image: $fileId (${imageBytes.length} bytes)');
           } else {
-            Log.warn('[ExcalidrawWebView] ⚠️ Empty download for $fileId, keeping original');
+            Log.warn(
+                '[ExcalidrawWebView] ⚠️ Empty download for $fileId, keeping original');
             result[fileId] = fileDataMap;
           }
         } catch (e) {
@@ -924,31 +953,31 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           result[fileId] = fileDataMap;
         }
       } else {
-        Log.warn('[ExcalidrawWebView] ⚠️ File $fileId has no valid dataURL or cloud URL');
+        Log.warn(
+            '[ExcalidrawWebView] ⚠️ File $fileId has no valid dataURL or cloud URL');
         result[fileId] = fileDataMap;
       }
     }
-    
+
     return result;
   }
 
   Future<Uint8List?> _downloadCloudImage(String url) async {
     try {
       final token = await FileUploadService.getValidAccessToken();
-      
+
       final response = await http.get(
         Uri.parse(url),
-        headers: token.isNotEmpty
-            ? {'Authorization': 'Bearer $token'}
-            : {},
+        headers: token.isNotEmpty ? {'Authorization': 'Bearer $token'} : {},
       );
-      
+
       if (response.statusCode == 200) {
         return response.bodyBytes;
       }
-      
+
       if (response.statusCode == 401 || response.statusCode == 403) {
-        Log.warn('[ExcalidrawWebView] ⚠️ Token expired (${response.statusCode}), refreshing and retrying...');
+        Log.warn(
+            '[ExcalidrawWebView] ⚠️ Token expired (${response.statusCode}), refreshing and retrying...');
         final freshToken = await FileUploadService.forceRefreshAccessToken();
         if (freshToken != null && freshToken.isNotEmpty) {
           final retryResponse = await http.get(
@@ -956,14 +985,17 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             headers: {'Authorization': 'Bearer $freshToken'},
           );
           if (retryResponse.statusCode == 200) {
-            Log.info('[ExcalidrawWebView] ✅ Cloud image downloaded after token refresh');
+            Log.info(
+                '[ExcalidrawWebView] ✅ Cloud image downloaded after token refresh');
             return retryResponse.bodyBytes;
           }
-          Log.error('[ExcalidrawWebView] ❌ Retry failed: ${retryResponse.statusCode}');
+          Log.error(
+              '[ExcalidrawWebView] ❌ Retry failed: ${retryResponse.statusCode}');
         }
       }
-      
-      Log.error('[ExcalidrawWebView] ❌ Cloud image download failed: ${response.statusCode} for $url');
+
+      Log.error(
+          '[ExcalidrawWebView] ❌ Cloud image download failed: ${response.statusCode} for $url');
       return null;
     } catch (e) {
       Log.error('[ExcalidrawWebView] ❌ Cloud image download error: $e');
@@ -1049,6 +1081,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   }
 
   /// 加载数据（公共方法，供外部调用）
+  /// 注意：此方法会重置整个场景
   Future<void> loadData(Map<String, dynamic> data) async {
     try {
       await _safeEvalJs('''
@@ -1061,6 +1094,28 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       await reinitializeUI();
     } catch (e) {
       widget.onError?.call('加载数据失败: $e');
+    }
+  }
+
+  /// 推送数据（公共方法，供外部调用）
+  /// 用于实时、增量的同步变更（不刷新页面）
+  Future<void> pushData(String key, dynamic value) async {
+    if (!mounted || _controller == null) return;
+
+    try {
+      // ✅ 关键：包装为 {key, value} 结构，与 JS 接口匹配
+      final pushPayload = {
+        'key': key,
+        'value': value,
+      };
+
+      await _safeEvalJs('''
+        if (window.pushWhiteboardData) {
+          window.pushWhiteboardData(${jsonEncode(pushPayload)});
+        }
+      ''', tag: 'pushWhiteboardData');
+    } catch (e) {
+      Log.error('❌ [ExcalidrawWebView] pushData failed for key $key: $e');
     }
   }
 
@@ -1204,31 +1259,36 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 _isLoading = false;
                 _pageLoaded = true;
               });
-              
+
               // ✅ 关键：等待 initData 完成后再初始化 UI
-              if (_initializationCompleter != null && !_initializationCompleter!.isCompleted) {
-                Log.info('[ExcalidrawWebView] ⏳ Waiting for data initialization...');
+              if (_initializationCompleter != null &&
+                  !_initializationCompleter!.isCompleted) {
+                Log.info(
+                    '[ExcalidrawWebView] ⏳ Waiting for data initialization...');
                 _isInitializing = true;
                 setState(() {});
-                
+
                 try {
                   await _initializationCompleter!.future.timeout(
                     const Duration(seconds: 10),
                     onTimeout: () {
-                      Log.warn('[ExcalidrawWebView] ⏰ initData timeout, proceeding anyway');
+                      Log.warn(
+                          '[ExcalidrawWebView] ⏰ initData timeout, proceeding anyway');
                     },
                   );
-                  Log.info('[ExcalidrawWebView] ✅ Data initialization complete');
+                  Log.info(
+                      '[ExcalidrawWebView] ✅ Data initialization complete');
                 } catch (e) {
-                  Log.warn('[ExcalidrawWebView] ⚠️ initData error: $e, proceeding anyway');
+                  Log.warn(
+                      '[ExcalidrawWebView] ⚠️ initData error: $e, proceeding anyway');
                 }
-                
+
                 _isInitializing = false;
                 if (mounted) {
                   setState(() {});
                 }
               }
-              
+
               await _initializeExcalidraw();
             }
             Log.debug('✅ [ExcalidrawWebView] Loading finished: $url');
@@ -1327,9 +1387,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        _isInitializing
-                            ? '正在恢复图片和画布内容...'
-                            : '正在加载白板编辑器...',
+                        _isInitializing ? '正在恢复图片和画布内容...' : '正在加载白板编辑器...',
                         style: TextStyle(
                           fontSize: 14,
                           color: isDark ? Colors.white54 : Colors.grey.shade500,

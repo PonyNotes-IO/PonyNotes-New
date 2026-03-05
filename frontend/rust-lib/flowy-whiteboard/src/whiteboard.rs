@@ -1,4 +1,5 @@
-use crate::entities::WhiteboardData;
+use crate::entities::{WhiteboardData, WhiteboardEventPB};
+use crate::notification::{whiteboard_notification_builder, WhiteboardNotification};
 use anyhow::{anyhow, Error};
 use collab::core::collab::DataSource;
 use collab::preclude::{Collab, CollabBuilder, Map, MapRef};
@@ -8,7 +9,7 @@ use collab_entity::define::DOCUMENT_ROOT;
 use serde::{Deserialize, Serialize};
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
-use tracing::trace;
+use tracing::{trace, info};
 
 /// Whiteboard Collab 对象
 /// 使用 CRDT (Yrs) 来管理白板数据
@@ -162,6 +163,59 @@ impl Whiteboard {
   /// 获取底层 Collab 对象的引用
   pub fn get_collab(&self) -> &Collab {
     &self.collab
+  }
+
+  /// 订阅白板数据变更
+  pub fn subscribe_changed(&self) {
+    let view_id = self.object_id();
+    let view_id_clone = view_id.clone();
+    
+    trace!("[Whiteboard] subscribing to data changes for view: {}", view_id);
+    
+    self.data.observe_deep(move |txn, event| {
+      let is_remote = !txn.is_local();
+      
+      // 我们只关心远程变更的实时通知，本地变更由前端自己维护 UI
+      if !is_remote {
+        return;
+      }
+
+      for change in event.delta(txn) {
+        match change {
+          collab::preclude::Delta::Added(values, _) | collab::preclude::Delta::Retained(values, _) => {
+             // 对于 Map，Delta 可能包含 Key/Value 变更
+             // 但 Yrs 的 observe_deep 在 Map 上通常通过 keys 遍历
+          },
+          _ => {}
+        }
+      }
+      
+      // 遍历事件中受影响的 Key
+      for key in event.keys(txn).keys() {
+        if let Some(value) = event.keys(txn).get(key) {
+           // 获取最新的值
+           let new_value_str = value.to_string(txn);
+           
+           trace!("[Whiteboard] 🔔 Remote change detected! key: {}, view: {}", key, view_id_clone);
+           
+           // 发送通知给前端
+           // ✅ 优化：使用已有的 WhiteboardDataPB 避免 Dart 端 PB 不匹配
+           // 将变更细节封装在 json_data 中
+           let event_json = serde_json::json!({
+             "key": key.to_string(),
+             "value": new_value_str,
+             "is_remote": true,
+           }).to_string();
+
+           whiteboard_notification_builder(&view_id_clone, WhiteboardNotification::DidReceiveUpdate)
+             .payload(WhiteboardDataPB {
+               view_id: view_id_clone.clone(),
+               json_data: event_json,
+             })
+             .send();
+        }
+      }
+    });
   }
 }
 

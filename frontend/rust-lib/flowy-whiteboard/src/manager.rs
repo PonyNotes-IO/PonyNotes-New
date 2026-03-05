@@ -291,6 +291,12 @@ impl WhiteboardManager {
       .finalize(object, builder_config, arc_whiteboard)
       .map_err(internal_error)?;
 
+    // ✅ 开启数据变更订阅，监听来自云端的同步数据
+    {
+      let wb = arc_whiteboard.read().await;
+      wb.subscribe_changed();
+    }
+
     info!("[Whiteboard] ✅ Whiteboard {} finalized with sync_enable={}", view_id, sync_enable);
     Ok(arc_whiteboard)
   }

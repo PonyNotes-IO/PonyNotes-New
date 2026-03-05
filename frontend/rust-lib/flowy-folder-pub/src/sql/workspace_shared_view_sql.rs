@@ -1,4 +1,4 @@
-use diesel::{RunQueryDsl, insert_into};
+use diesel::{RunQueryDsl, insert_into, OptionalExtension};
 use flowy_error::FlowyResult;
 use flowy_sqlite::schema::workspace_shared_view;
 use flowy_sqlite::schema::workspace_shared_view::dsl;
@@ -13,6 +13,8 @@ pub struct WorkspaceSharedViewTable {
   pub view_id: String,
   pub permission_id: i32,
   pub created_at: Option<chrono::NaiveDateTime>,
+  pub view_name: String,
+  pub view_layout: i32,
 }
 
 pub fn upsert_workspace_shared_view<T: Into<WorkspaceSharedViewTable>>(
@@ -62,6 +64,33 @@ pub fn select_all_workspace_shared_views(
   Ok(shared_views)
 }
 
+/// Select ALL shared views for a uid regardless of workspace_id.
+/// This is needed because cross-workspace shared views are stored with
+/// the source workspace's ID, not the current user's workspace ID.
+pub fn select_all_shared_views_for_uid(
+  mut conn: DBConnection,
+  uid: i64,
+) -> FlowyResult<Vec<WorkspaceSharedViewTable>> {
+  let shared_views = dsl::workspace_shared_view
+    .filter(workspace_shared_view::uid.eq(uid))
+    .load::<WorkspaceSharedViewTable>(&mut conn)?;
+  Ok(shared_views)
+}
+
+/// Select a shared view by view_id and uid (no workspace_id filter).
+pub fn select_shared_view_by_view_id(
+  mut conn: DBConnection,
+  view_id: &str,
+  uid: i64,
+) -> FlowyResult<Option<WorkspaceSharedViewTable>> {
+  let shared_view = dsl::workspace_shared_view
+    .filter(workspace_shared_view::view_id.eq(view_id))
+    .filter(workspace_shared_view::uid.eq(uid))
+    .first::<WorkspaceSharedViewTable>(&mut conn)
+    .optional()?;
+  Ok(shared_view)
+}
+
 pub fn upsert_workspace_shared_views<T: Into<WorkspaceSharedViewTable> + Clone>(
   conn: &mut SqliteConnection,
   _workspace_id: &str,
@@ -84,22 +113,22 @@ pub fn upsert_workspace_shared_views<T: Into<WorkspaceSharedViewTable> + Clone>(
   Ok(())
 }
 
-/// Removes all workspace_shared_view items for the given workspace_id and uid, then inserts the provided new items.
+/// Removes all workspace_shared_view items for the given uid, then inserts the provided new items.
+/// Note: We delete by uid only (not by workspace_id) because shared views from different
+/// workspaces are stored with their source workspace_id, not the current user's workspace_id.
 pub fn replace_all_workspace_shared_views<T: Into<WorkspaceSharedViewTable> + Clone>(
   conn: &mut SqliteConnection,
-  workspace_id: &str,
+  _workspace_id: &str,
   uid: i64,
   new_shared_views: &[T],
 ) -> FlowyResult<()> {
-  // Remove all existing items for the workspace_id and uid
   delete(
     workspace_shared_view::table
-      .filter(workspace_shared_view::workspace_id.eq(workspace_id))
       .filter(workspace_shared_view::uid.eq(uid)),
   )
   .execute(conn)?;
 
-  upsert_workspace_shared_views(conn, workspace_id, uid, new_shared_views)?;
+  upsert_workspace_shared_views(conn, _workspace_id, uid, new_shared_views)?;
 
   Ok(())
 }
