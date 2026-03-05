@@ -530,7 +530,7 @@ class _AIInputAreaState extends State<AIInputArea> {
             Transform.rotate(
               angle: _isDropdownOpen ? 3.14159 : 0,
               child: FlowySvg(
-                FlowySvgs.icon_down_arrow_s,
+                FlowySvgs.arrow_down_s,
                 size: const Size.square(14),
                 color: _getButtonTextColor(context, _selectedModel != null),
               ),

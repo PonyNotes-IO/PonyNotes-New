@@ -3,6 +3,8 @@ project(appflowy_flutter LANGUAGES CXX)
 
 set(BINARY_NAME "AppFlowy")
 
+# 抑制 flutter_inappwebview_windows、media_kit_libs_windows_video 等插件的 CMP0175 警告
+cmake_policy(SET CMP0175 OLD)
 cmake_policy(SET CMP0063 NEW)
 
 set(CMAKE_INSTALL_RPATH "$ORIGIN/lib")
