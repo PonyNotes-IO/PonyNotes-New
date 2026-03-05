@@ -60,6 +60,7 @@ pub fn init(folder: Weak<FolderManager>) -> AFPlugin {
     .event(FolderEvent::GetSharedUsers, get_shared_users_handler)
     .event(FolderEvent::GetSharedViews, get_shared_views_handler)
     .event(FolderEvent::GetSharedViewSection, get_shared_view_section_handler)
+    .event(FolderEvent::SaveSharedViewMeta, save_shared_view_meta_handler)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Display, Hash, ProtoBuf_Enum, Flowy_Event)]
@@ -250,4 +251,7 @@ pub enum FolderEvent {
 
   #[event(input = "ViewIdPB", output = "GetSharedViewSectionResponsePB")]
   GetSharedViewSection = 60,
+
+  #[event(input = "SaveSharedViewMetaPB")]
+  SaveSharedViewMeta = 62,
 }

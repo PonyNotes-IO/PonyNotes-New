@@ -48,7 +48,8 @@ use flowy_folder_pub::sql::workspace_shared_user_sql::{
   select_all_workspace_shared_users,
 };
 use flowy_folder_pub::sql::workspace_shared_view_sql::{
-  WorkspaceSharedViewTable, replace_all_workspace_shared_views, select_all_workspace_shared_views,
+  WorkspaceSharedViewTable, replace_all_workspace_shared_views,
+  select_all_shared_views_for_uid, select_shared_view_by_view_id,
 };
 use flowy_sqlite::DBConnection;
 use flowy_sqlite::kv::KVStorePreferences;
@@ -790,15 +791,6 @@ impl FolderManager {
     }
 
     match folder.get_view(&view_id) {
-      None => {
-        // 使用 warn 级别，因为这是一个常见的场景（如视图已被删除或尚未同步完成）
-        // 不应该用 error 级别来记录这类情况
-        tracing::warn!(
-          "View not found: {} (this is normal if the view was deleted or hasn't synced yet)",
-          view_id
-        );
-        Err(FlowyError::record_not_found())
-      },
       Some(view) => {
         let child_views = folder
           .get_views_belong_to(&view.id)
@@ -807,6 +799,34 @@ impl FolderManager {
           .collect::<Vec<_>>();
         let view_pb = view_pb_with_child_views(view, child_views);
         Ok(view_pb)
+      },
+      None => {
+        // View not in local folder - check if it's a cross-workspace shared view
+        drop(folder);
+        let uid = self.user.user_id()?;
+        if let Ok(conn) = self.user.sqlite_connection(uid) {
+          if let Ok(Some(shared_view)) = select_shared_view_by_view_id(conn, &view_id, uid) {
+            tracing::info!(
+              "View {} not in local folder, but found in shared_view table (workspace: {}, layout: {})",
+              view_id, shared_view.workspace_id, shared_view.view_layout
+            );
+            let layout = ViewLayoutPB::from(shared_view.view_layout);
+            let view_pb = ViewPB {
+              id: shared_view.view_id,
+              name: shared_view.view_name,
+              layout,
+              workspace_id: Some(shared_view.workspace_id),
+              ..Default::default()
+            };
+            return Ok(view_pb);
+          }
+        }
+
+        tracing::warn!(
+          "View not found: {} (this is normal if the view was deleted or hasn't synced yet)",
+          view_id
+        );
+        Err(FlowyError::record_not_found())
       },
     }
   }
@@ -2610,44 +2630,54 @@ impl FolderManager {
       .load_full()
       .ok_or_else(folder_not_init_error)?;
     let folder = lock.read().await;
-    // filter the views that are in the trash
     let trash_ids = Self::get_all_trash_ids(&folder);
     let all_views = all_views
       .into_iter()
       .filter(|view| !trash_ids.contains(&view.id))
       .collect::<Vec<Arc<View>>>();
 
-    // 1. Get the data from the local database first
-    if let Ok(shared_views) =
-      select_all_workspace_shared_views(conn, &workspace_id.to_string(), uid)
-    {
+    // 1. Get ALL shared views for this uid from local DB (not filtered by workspace_id,
+    //    because cross-workspace shared views are stored with the source workspace's ID)
+    if let Ok(shared_views) = select_all_shared_views_for_uid(conn, uid) {
       local_shared_views = shared_views
         .into_iter()
-        .filter_map(|shared_view| {
-          let view = all_views
-            .iter()
-            .find(|view| view.id == shared_view.view_id)?;
-          let mut view_pb = view_pb_with_all_child_views(view.clone(), &|parent_id| {
-            all_views
-              .iter()
-              .filter(|v| v.parent_view_id == *parent_id)
-              .cloned()
-              .collect()
-          });
-          // Set workspace_id on the view itself
-          view_pb.workspace_id = Some(shared_view.workspace_id.clone());
-          Some(SharedViewPB {
-            view: view_pb,
-            access_level: AFAccessLevelPB::from(shared_view.permission_id),
-            workspace_id: Some(shared_view.workspace_id),
-          })
+        .map(|shared_view| {
+          // Try to find the view in local folder first
+          if let Some(view) = all_views.iter().find(|v| v.id == shared_view.view_id) {
+            let mut view_pb = view_pb_with_all_child_views(view.clone(), &|parent_id| {
+              all_views
+                .iter()
+                .filter(|v| v.parent_view_id == *parent_id)
+                .cloned()
+                .collect()
+            });
+            view_pb.workspace_id = Some(shared_view.workspace_id.clone());
+            SharedViewPB {
+              view: view_pb,
+              access_level: AFAccessLevelPB::from(shared_view.permission_id),
+              workspace_id: Some(shared_view.workspace_id),
+            }
+          } else {
+            // Cross-workspace view: construct a minimal ViewPB from stored metadata
+            let layout = ViewLayoutPB::from(shared_view.view_layout);
+            let view_pb = ViewPB {
+              id: shared_view.view_id.clone(),
+              name: shared_view.view_name.clone(),
+              layout,
+              workspace_id: Some(shared_view.workspace_id.clone()),
+              ..Default::default()
+            };
+            SharedViewPB {
+              view: view_pb,
+              access_level: AFAccessLevelPB::from(shared_view.permission_id),
+              workspace_id: Some(shared_view.workspace_id),
+            }
+          }
         })
         .collect();
     }
 
-    // 2. Fetch the data from the cloud service and persist to the local database
-    // 注意：这里使用当前用户的 workspace_id 来调用 API
-    // 但 API 返回的文档可能属于不同的 workspace_id
+    // 2. Fetch from cloud in background and persist to local DB
     let cloud_workspace_id = workspace_id;
     let user = self.user.clone();
     let cloud_service = self.cloud_service.clone();
@@ -2658,28 +2688,28 @@ impl FolderManager {
             let shared_views: Vec<WorkspaceSharedViewTable> = resp
               .shared_views
               .iter()
-              .filter_map(|shared_view| {
-                // 使用返回的 workspace_id，而不是当前用户的 workspace_id
+              .map(|shared_view| {
                 let doc_workspace_id = shared_view.workspace_id
                   .as_ref()
                   .map(|id| id.to_string())
                   .unwrap_or_else(|| cloud_workspace_id.to_string());
-                
-                // Get the highest access level from shared_users
+
                 let access_level = shared_view
                   .shared_users
                   .iter()
                   .map(|u| u.access_level as i32)
                   .max()
                   .unwrap_or(AFAccessLevel::ReadOnly as i32);
-                
-                Some(WorkspaceSharedViewTable {
+
+                WorkspaceSharedViewTable {
                   uid,
                   workspace_id: doc_workspace_id,
                   view_id: shared_view.view_id.to_string(),
                   permission_id: access_level,
                   created_at: None,
-                })
+                  view_name: shared_view.view_name.clone(),
+                  view_layout: 0, // will be resolved below or from invite records
+                }
               })
               .collect();
             let _ = replace_all_workspace_shared_views(
@@ -2689,23 +2719,25 @@ impl FolderManager {
               &shared_views,
             );
 
-            let repeated_shared_view_response = RepeatedSharedViewResponsePB {
-              shared_views: resp
-                .shared_views
-                .into_iter()
-                .filter_map(|shared_view| {
-                  let view = all_views
-                    .iter()
-                    .find(|view| view.id == shared_view.view_id.to_string())?;
-                  
-                  // Get the highest access level from shared_users
-                  let access_level = shared_view
-                    .shared_users
-                    .iter()
-                    .map(|u| u.access_level)
-                    .max()
-                    .unwrap_or(AFAccessLevel::ReadOnly);
-                  
+            // Build notification payload for UI
+            let notification_views: Vec<SharedViewPB> = resp
+              .shared_views
+              .into_iter()
+              .map(|shared_view| {
+                let access_level = shared_view
+                  .shared_users
+                  .iter()
+                  .map(|u| u.access_level)
+                  .max()
+                  .unwrap_or(AFAccessLevel::ReadOnly);
+
+                let workspace_id_str = shared_view.workspace_id
+                  .as_ref()
+                  .map(|id| id.to_string())
+                  .unwrap_or_else(|| cloud_workspace_id.to_string());
+
+                // Use local folder view if available, otherwise create minimal ViewPB
+                if let Some(view) = all_views.iter().find(|v| v.id == shared_view.view_id.to_string()) {
                   let mut view_pb = view_pb_with_all_child_views(view.clone(), &|parent_id| {
                     all_views
                       .iter()
@@ -2713,21 +2745,32 @@ impl FolderManager {
                       .cloned()
                       .collect()
                   });
-                  // 使用返回的 workspace_id
-                  let workspace_id_str = shared_view.workspace_id
-                    .as_ref()
-                    .map(|id| id.to_string())
-                    .unwrap_or_else(|| cloud_workspace_id.to_string());
-                  Some(SharedViewPB {
+                  view_pb.workspace_id = Some(workspace_id_str.clone());
+                  SharedViewPB {
                     view: view_pb,
                     access_level: AFAccessLevelPB::from(access_level),
                     workspace_id: Some(workspace_id_str),
-                  })
-                })
-                .collect(),
+                  }
+                } else {
+                  let view_pb = ViewPB {
+                    id: shared_view.view_id.to_string(),
+                    name: shared_view.view_name.clone(),
+                    workspace_id: Some(workspace_id_str.clone()),
+                    ..Default::default()
+                  };
+                  SharedViewPB {
+                    view: view_pb,
+                    access_level: AFAccessLevelPB::from(access_level),
+                    workspace_id: Some(workspace_id_str),
+                  }
+                }
+              })
+              .collect();
+
+            let repeated_shared_view_response = RepeatedSharedViewResponsePB {
+              shared_views: notification_views,
             };
 
-            // Notify UI to refresh the shared views
             folder_notification_builder(workspace_id, FolderNotification::DidUpdateSharedViews)
               .payload(repeated_shared_view_response)
               .send();
@@ -2737,8 +2780,13 @@ impl FolderManager {
     });
 
     let local_result = RepeatedSharedViewResponsePB {
-      shared_views: local_shared_views.clone(),
+      shared_views: local_shared_views,
     };
+
+    tracing::debug!(
+      "get shared pages: {} items (including cross-workspace)",
+      local_result.shared_views.len()
+    );
 
     Ok(local_result)
   }
@@ -2862,6 +2910,34 @@ impl FolderManager {
 
       current_view_id = parent_view_id;
     }
+  }
+
+  /// Save shared view metadata to local SQLite.
+  /// Called by the deep link handler to ensure cross-workspace shared view
+  /// metadata is available before opening the view.
+  pub async fn save_shared_view_meta(&self, params: SaveSharedViewMetaPB) -> FlowyResult<()> {
+    let uid = self.user.user_id()?;
+    let mut conn = self.user.sqlite_connection(uid)?;
+
+    let shared_view = WorkspaceSharedViewTable {
+      uid,
+      workspace_id: params.workspace_id.clone(),
+      view_id: params.view_id.clone(),
+      permission_id: params.permission_id,
+      created_at: None,
+      view_name: params.view_name.clone(),
+      view_layout: params.view_layout,
+    };
+
+    use flowy_folder_pub::sql::workspace_shared_view_sql::upsert_workspace_shared_view;
+    upsert_workspace_shared_view(&mut conn, shared_view)?;
+
+    tracing::info!(
+      "[FOLDER] Saved shared view meta: view_id={}, workspace_id={}, name={}, layout={}",
+      params.view_id, params.workspace_id, params.view_name, params.view_layout
+    );
+
+    Ok(())
   }
 
   fn flatten_child_views(views: &[ViewPB], flattened_views: &mut Vec<ViewPB>) {

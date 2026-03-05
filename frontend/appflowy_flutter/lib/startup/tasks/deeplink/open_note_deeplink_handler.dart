@@ -159,9 +159,26 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       }
 
       final isDatabaseView = effectiveLayout >= 1 && effectiveLayout <= 3;
-      
+
+      // For share links, save shared view metadata to local DB BEFORE opening
+      // This ensures get_view_pb() and database handler can find the view
+      if (linkType == 'share' &&
+          workspaceId != null &&
+          workspaceId.isNotEmpty) {
+        final viewName = await _getViewName(viewId, workspaceId);
+        Log.info('[OpenNoteDeepLinkHandler] 保存共享视图元数据到本地: viewId=$effectiveViewId, layout=$effectiveLayout, name=$viewName');
+        final savePayload = SaveSharedViewMetaPB()
+          ..viewId = effectiveViewId
+          ..workspaceId = workspaceId
+          ..viewName = viewName
+          ..viewLayout = effectiveLayout
+          ..permissionId = permissionId;
+        await FolderEventSaveSharedViewMeta(savePayload).send();
+        // Also trigger background sync for sidebar updates
+        FolderEventGetSharedViews().send();
+      }
+
       if (!isDatabaseView) {
-        // 文档类视图：通过 DocumentService 预加载文档数据
         bool documentOpened = false;
         try {
           final docResult = await DocumentService().openDocument(
@@ -195,15 +212,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
           );
         }
       } else {
-        Log.info('[OpenNoteDeepLinkHandler] 数据库类视图(layout=$effectiveLayout)，跳过 DocumentService 预加载');
-        // 对于分享链接中的数据库视图，先触发共享视图同步
-        if (linkType == 'share') {
-          Log.info('[OpenNoteDeepLinkHandler] 触发共享视图同步...');
-          await FolderEventGetSharedViews().send();
-          await Future.delayed(const Duration(milliseconds: 1500));
-        } else {
-          await Future.delayed(const Duration(milliseconds: 300));
-        }
+        Log.info('[OpenNoteDeepLinkHandler] 数据库类视图(layout=$effectiveLayout)，等待数据同步');
+        await Future.delayed(const Duration(milliseconds: 500));
       }
 
       // 获取发布笔记的真实标题
