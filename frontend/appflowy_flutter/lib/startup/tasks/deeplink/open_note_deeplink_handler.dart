@@ -44,18 +44,18 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     final isNotePath =
         host == 'note' || host == 'open' || path == 'note' || path == 'open';
 
-    // 新格式: https://www.xiaomabiji.com/share?viewId=xxx&type=publish
-    // 支持任意域名下的 /share 路径，带 viewId 和 type=publish 参数
+    // 新格式: https://www.xiaomabiji.com/share?viewId=xxx&type=publish|share
     final isSharePath = path == '/share' || path == 'share';
     final hasViewId = uri.queryParameters.containsKey('viewId');
     final linkType = uri.queryParameters['type'];
-    final isPublishType = linkType == 'publish';
+    final isPublishOrShareType = linkType == 'publish' || linkType == 'share';
 
-    // 支持两种格式：
+    // 支持三种格式：
     // 1. ponynotes://note?viewId=xxx 或 ponynotes://open?viewId=xxx
     // 2. https://domain/share?viewId=xxx&type=publish
+    // 3. https://domain/share?viewId=xxx&type=share
     return (isNotePath && hasViewId) ||
-        (isSharePath && hasViewId && isPublishType);
+        (isSharePath && hasViewId && isPublishOrShareType);
   }
 
   @override
@@ -147,8 +147,18 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         }
       }
 
-      // 根据视图布局类型决定打开方式
-      final isDatabaseView = viewLayoutValue >= 1 && viewLayoutValue <= 3;
+      // 对于分享链接，如果 layout 参数缺失，尝试从服务端邀请记录获取正确布局
+      int effectiveLayout = viewLayoutValue;
+      if (linkType == 'share' && effectiveLayout == 0 && workspaceId != null) {
+        Log.info('[OpenNoteDeepLinkHandler] 分享链接 layout 缺失，从服务端查询');
+        final serverLayout = await _getViewLayoutFromInviteApi(viewId);
+        if (serverLayout != null && serverLayout > 0) {
+          effectiveLayout = serverLayout;
+          Log.info('[OpenNoteDeepLinkHandler] 从服务端获取到 layout=$effectiveLayout');
+        }
+      }
+
+      final isDatabaseView = effectiveLayout >= 1 && effectiveLayout <= 3;
       
       if (!isDatabaseView) {
         // 文档类视图：通过 DocumentService 预加载文档数据
@@ -185,8 +195,15 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
           );
         }
       } else {
-        Log.info('[OpenNoteDeepLinkHandler] 数据库类视图(layout=$viewLayoutValue)，跳过 DocumentService 预加载');
-        await Future.delayed(const Duration(milliseconds: 300));
+        Log.info('[OpenNoteDeepLinkHandler] 数据库类视图(layout=$effectiveLayout)，跳过 DocumentService 预加载');
+        // 对于分享链接中的数据库视图，先触发共享视图同步
+        if (linkType == 'share') {
+          Log.info('[OpenNoteDeepLinkHandler] 触发共享视图同步...');
+          await FolderEventGetSharedViews().send();
+          await Future.delayed(const Duration(milliseconds: 1500));
+        } else {
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
       }
 
       // 获取发布笔记的真实标题
@@ -194,7 +211,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
 
       // 根据 layout 值映射到 ViewLayoutPB
       ViewLayoutPB viewLayoutPB;
-      switch (viewLayoutValue) {
+      switch (effectiveLayout) {
         case 1:
           viewLayoutPB = ViewLayoutPB.Grid;
           break;
@@ -704,6 +721,51 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       Log.error('[OpenNoteDeepLinkHandler] 获取 token 时出错: $e');
       return null;
     }
+  }
+
+  /// 从服务端邀请记录获取视图的布局类型
+  /// 返回 null 表示获取失败，0=Document, 1=Grid, 2=Board, 3=Calendar
+  Future<int?> _getViewLayoutFromInviteApi(String viewId) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (baseUrl.isEmpty) return null;
+
+      final rawToken = await _getAuthTokenFromUserService();
+      final accessToken = _extractAccessToken(rawToken);
+      if (accessToken == null || accessToken.isEmpty) return null;
+
+      final uri = Uri.parse(baseUrl).replace(path: '/api/collab/me/received');
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) return null;
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) return null;
+
+      final data = decoded['data'];
+      if (data is! List) return null;
+
+      for (final item in data) {
+        if (item is Map<String, dynamic>) {
+          final oid = (item['oid'] ?? '').toString();
+          if (oid == viewId) {
+            final viewLayout = item['view_layout'];
+            if (viewLayout is int) return viewLayout;
+            if (viewLayout is String) return int.tryParse(viewLayout);
+          }
+        }
+      }
+    } catch (e) {
+      Log.warn('[OpenNoteDeepLinkHandler] 获取视图布局失败: $e');
+    }
+    return null;
   }
 
   /// 生成 UUID v4

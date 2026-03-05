@@ -174,6 +174,52 @@ where
 
     Ok(database_id)
   }
+
+  async fn get_shared_view_owner_workspace_id(
+    &self,
+    view_id: &Uuid,
+  ) -> Result<Option<String>, FlowyError> {
+    let client = self.inner.try_get_client()?;
+    let url = format!("{}/api/collab/me/received", client.base_url);
+
+    let access_token = client.access_token().map_err(FlowyError::from)?;
+    let resp = client
+      .cloud_client
+      .get(&url)
+      .bearer_auth(access_token)
+      .send()
+      .await
+      .map_err(|e| {
+        FlowyError::internal()
+          .with_context(format!("get received invites failed: {}", e))
+      })?;
+
+    if !resp.status().is_success() {
+      return Ok(None);
+    }
+
+    let body: serde_json::Value = resp.json().await.map_err(|e| {
+      FlowyError::internal().with_context(format!("parse received invites failed: {}", e))
+    })?;
+
+    let view_id_str = view_id.to_string();
+    if let Some(data) = body.get("data").and_then(|d| d.as_array()) {
+      for item in data {
+        let oid = item.get("oid").and_then(|v| v.as_str()).unwrap_or("");
+        if oid == view_id_str {
+          let workspace_id = item
+            .get("owner_workspace_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+          if workspace_id.is_some() {
+            return Ok(workspace_id);
+          }
+        }
+      }
+    }
+
+    Ok(None)
+  }
 }
 
 #[async_trait]

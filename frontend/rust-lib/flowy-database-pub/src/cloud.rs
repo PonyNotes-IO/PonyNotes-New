@@ -78,6 +78,15 @@ pub trait DatabaseCloudService: Send + Sync {
   ) -> Result<Option<String>, FlowyError> {
     Ok(None)
   }
+
+  /// Get the owner workspace_id for a shared view by querying the server's invite records.
+  /// Returns None if the view is not a shared view or the invite record is not found.
+  async fn get_shared_view_owner_workspace_id(
+    &self,
+    _view_id: &Uuid,
+  ) -> Result<Option<String>, FlowyError> {
+    Ok(None)
+  }
 }
 
 pub struct DatabaseSnapshot {

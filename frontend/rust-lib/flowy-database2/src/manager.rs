@@ -231,7 +231,46 @@ impl DatabaseManager {
       view_id
     );
 
-    if let Some(source_workspace_id) = self.user.shared_view_source_workspace_id(view_id) {
+    let mut source_ws_id: Option<String> = self.user.shared_view_source_workspace_id(view_id);
+
+    // 2a. If local workspace_shared_view table has no record, query the server's
+    //     invite records to discover the owner_workspace_id.
+    if source_ws_id.is_none() {
+      info!(
+        "[Database] workspace_shared_view not populated for view_id: {}, querying invite records",
+        view_id
+      );
+      if let Ok(view_uuid) = Uuid::from_str(view_id) {
+        match self
+          .cloud_service
+          .get_shared_view_owner_workspace_id(&view_uuid)
+          .await
+        {
+          Ok(Some(ws_id)) => {
+            info!(
+              "[Database] Found owner_workspace_id: {} for view: {} from invite records",
+              ws_id, view_id
+            );
+            source_ws_id = Some(ws_id);
+          },
+          Ok(None) => {
+            info!(
+              "[Database] No invite record found for view: {}",
+              view_id
+            );
+          },
+          Err(e) => {
+            error!(
+              "[Database] Failed to query invite records for view: {} - {}",
+              view_id, e
+            );
+          },
+        }
+      }
+    }
+
+    // 2b. With the source workspace_id, resolve the database_id
+    if let Some(source_workspace_id) = source_ws_id {
       if let Ok(source_ws_uuid) = Uuid::from_str(&source_workspace_id) {
         if let Ok(view_uuid) = Uuid::from_str(view_id) {
           match self
