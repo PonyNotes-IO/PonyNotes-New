@@ -11,7 +11,6 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
-import 'package:appflowy_backend/protobuf/flowy-user/workspace.pbserver.dart';
 import 'package:bloc/bloc.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';

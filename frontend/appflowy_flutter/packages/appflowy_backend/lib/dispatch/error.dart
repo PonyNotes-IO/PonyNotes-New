@@ -1,7 +1,7 @@
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/dart-ffi/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
-import 'package:appflowy_backend/protobuf/flowy-error/errors.pbserver.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:flutter/foundation.dart';
 
 class FlowyInternalError {

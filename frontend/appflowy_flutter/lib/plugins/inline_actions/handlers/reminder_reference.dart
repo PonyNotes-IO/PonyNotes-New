@@ -239,13 +239,13 @@ class ReminderReferenceService extends InlineActionsDelegate {
       objectId: viewId,
       title: LocaleKeys.reminderNotification_title.tr(),
       message: LocaleKeys.reminderNotification_message.tr(),
-      meta: {
+      meta: <String, String>{
         ReminderMetaKeys.includeTime: false.toString(),
         ReminderMetaKeys.blockId: node.id,
         ReminderMetaKeys.createdAt:
             DateTime.now().millisecondsSinceEpoch.toString(),
         ReminderMetaKeys.notificationType: 'reminder',
-      },
+      }.entries.toList(),
       scheduledAt: Int64(date.millisecondsSinceEpoch ~/ 1000),
       isAck: date.isBefore(DateTime.now()),
     );

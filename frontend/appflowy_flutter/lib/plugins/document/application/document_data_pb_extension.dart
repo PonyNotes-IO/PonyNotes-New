@@ -71,14 +71,12 @@ extension DocumentDataPBFromTo on DocumentDataPB {
         childrenMap[childrenId]!.children.add(value.id);
       }
     });
-    // 注意：MetaPB 构造函数期望的是 Map<String, ChildrenPB>，
-    // 这里不能传入 childrenMap.entries（Iterable<MapEntry<...>>），否则会类型不匹配。
-    final meta = MetaPB(childrenMap: childrenMap);
+    // MetaPB 构造函数期望 Iterable<MapEntry<String, ChildrenPB>>
+    final meta = MetaPB(childrenMap: childrenMap.entries.toList());
 
     return DocumentDataPB(
-      // DocumentDataPB 的 blocks 字段同样是 Map<String, BlockPB>，
-      // 直接传 blocks 即可，不能使用 blocks.entries。
-      blocks: blocks,
+      // DocumentDataPB 的 blocks 字段期望 Iterable<MapEntry<String, BlockPB>>
+      blocks: blocks.entries.toList(),
       pageId: pageId,
       meta: meta,
     );

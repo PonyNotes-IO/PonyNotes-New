@@ -1,7 +1,6 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
-import 'package:appflowy_backend/protobuf/flowy-user/workspace.pbserver.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 /// 按枚举数值判断，兼容旧/新生成的 Dart 枚举名（StudentPlan/StandardPlan/TeamPlan 或 StandPlan/ProPlan/HiclassPlan）
