@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_window_size_manager.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +15,7 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
   final String title;
   final windowSizeManager = WindowSizeManager();
+  static const Size _windowsSafeStartupSize = Size(1280, 720);
 
   @override
   Future<void> initialize(LaunchContext context) async {
@@ -32,7 +35,13 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
     await windowManager.ensureInitialized();
     windowManager.addListener(this);
 
-    final windowSize = await windowSizeManager.getSize();
+    final storedWindowSize = await windowSizeManager.getSize();
+    final windowSize = UniversalPlatform.isWindows
+        ? Size(
+            math.min(storedWindowSize.width, _windowsSafeStartupSize.width),
+            math.min(storedWindowSize.height, _windowsSafeStartupSize.height),
+          )
+        : storedWindowSize;
     final windowOptions = WindowOptions(
       size: windowSize,
       minimumSize: const Size(
@@ -49,7 +58,9 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
     final position = await windowSizeManager.getPosition();
 
     if (UniversalPlatform.isWindows) {
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      await windowManager.setTitleBarStyle(
+        useCustomWindowTitleBar ? TitleBarStyle.hidden : TitleBarStyle.normal,
+      );
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.show();
         await windowManager.focus();
@@ -118,6 +129,10 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
   @override
   Future<void> onWindowResize() async {
     super.onWindowResize();
+
+    if (await windowManager.isMaximized()) {
+      return;
+    }
 
     final currentWindowSize = await windowManager.getSize();
     return windowSizeManager.setSize(currentWindowSize);

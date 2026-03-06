@@ -6,6 +6,7 @@ import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/blank/blank.dart';
+import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -71,7 +72,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
               children: [
                 Column(
                   children: [
-                    if (UniversalPlatform.isWindows)
+                    if (UniversalPlatform.isWindows && useCustomWindowTitleBar)
                       WindowTitleBar(leftChildren: [_buildToggleMenuButton(context)]),
                     Padding(
                       padding: EdgeInsets.only(left: widget.layout.menuSpacing),

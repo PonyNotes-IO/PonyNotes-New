@@ -4,6 +4,7 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/settings/show_settings.dart';
+import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
@@ -421,9 +422,11 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
   }
 
   PreferredSize _buildAppBar() {
+    final useCustomTitleBar =
+        UniversalPlatform.isWindows && useCustomWindowTitleBar;
     return PreferredSize(
-      preferredSize: Size.fromHeight(UniversalPlatform.isWindows ? 40 : 60),
-      child: UniversalPlatform.isWindows
+      preferredSize: Size.fromHeight(useCustomTitleBar ? 40 : 60),
+      child: useCustomTitleBar
           ? const WindowTitleBar()
           : const MoveWindowDetector(),
     );
