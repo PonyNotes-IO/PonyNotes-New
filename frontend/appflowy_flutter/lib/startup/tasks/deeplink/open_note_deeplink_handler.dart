@@ -7,6 +7,7 @@ import 'package:appflowy/workspace/application/action_navigation/action_navigati
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/plugins/database/domain/database_view_service.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
@@ -33,6 +34,13 @@ import 'deeplink_loading_overlay.dart';
 /// 或者: ponynotes://open?viewId=xxx
 class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
   static const Duration _loadingDisplayDelay = Duration(milliseconds: 500);
+  static const List<Duration> _databaseOpenRetryDelays = [
+    Duration(milliseconds: 400),
+    Duration(milliseconds: 800),
+    Duration(milliseconds: 1500),
+    Duration(seconds: 2),
+    Duration(seconds: 3),
+  ];
 
   @override
   bool canHandle(Uri uri) {
@@ -74,13 +82,11 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       final linkType = uri.queryParameters['type'];
       final permissionParam = uri.queryParameters['permission'];
       final layoutParam = uri.queryParameters['layout'];
-      final permissionId = permissionParam != null 
-          ? int.tryParse(permissionParam) ?? 1 
-          : 1;
+      final permissionId =
+          permissionParam != null ? int.tryParse(permissionParam) ?? 1 : 1;
       // 解析视图布局类型：0=Document, 1=Grid, 2=Board, 3=Calendar
-      final viewLayoutValue = layoutParam != null 
-          ? int.tryParse(layoutParam) ?? 0 
-          : 0;
+      final viewLayoutValue =
+          layoutParam != null ? int.tryParse(layoutParam) ?? 0 : 0;
 
       if (viewId == null || viewId.isEmpty) {
         Log.error('[OpenNoteDeepLinkHandler] viewId参数为空');
@@ -159,14 +165,15 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       }
 
       final isDatabaseView = effectiveLayout >= 1 && effectiveLayout <= 3;
+      final viewName = await _getViewName(viewId, workspaceId);
 
       // For share links, save shared view metadata to local DB BEFORE opening
       // This ensures get_view_pb() and database handler can find the view
       if (linkType == 'share' &&
           workspaceId != null &&
           workspaceId.isNotEmpty) {
-        final viewName = await _getViewName(viewId, workspaceId);
-        Log.info('[OpenNoteDeepLinkHandler] 保存共享视图元数据到本地: viewId=$effectiveViewId, layout=$effectiveLayout, name=$viewName');
+        Log.info(
+            '[OpenNoteDeepLinkHandler] 保存共享视图元数据到本地: viewId=$effectiveViewId, layout=$effectiveLayout, name=$viewName');
         final savePayload = SaveSharedViewMetaPB()
           ..viewId = effectiveViewId
           ..workspaceId = workspaceId
@@ -212,12 +219,26 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
           );
         }
       } else {
-        Log.info('[OpenNoteDeepLinkHandler] 数据库类视图(layout=$effectiveLayout)，等待数据同步');
-        await Future.delayed(const Duration(milliseconds: 500));
+        Log.info(
+          '[OpenNoteDeepLinkHandler] 数据库类视图(layout=$effectiveLayout)，开始预热数据库对象',
+        );
+        final databaseReady = await _prepareDatabaseViewForOpening(
+          viewId: effectiveViewId,
+          workspaceId: workspaceId,
+          viewName: viewName,
+          viewLayout: effectiveLayout,
+          permissionId: permissionId,
+          linkType: linkType,
+        );
+        if (!databaseReady.$1) {
+          onStateChange(this, DeepLinkState.error);
+          return FlowyResult.failure(
+            FlowyError()
+              ..msg = databaseReady.$2
+              ..code = databaseReady.$3,
+          );
+        }
       }
-
-      // 获取发布笔记的真实标题
-      final viewName = await _getViewName(viewId, workspaceId);
 
       // 根据 layout 值映射到 ViewLayoutPB
       ViewLayoutPB viewLayoutPB;
@@ -278,6 +299,93 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     } finally {
       DeepLinkLoadingOverlay.hide();
     }
+  }
+
+  Future<(bool, String, ErrorCode)> _prepareDatabaseViewForOpening({
+    required String viewId,
+    required String? workspaceId,
+    required String viewName,
+    required int viewLayout,
+    required int permissionId,
+    required String? linkType,
+  }) async {
+    final dbService = DatabaseViewBackendService(viewId: viewId);
+    FlowyError? lastError;
+
+    for (var i = 0; i < _databaseOpenRetryDelays.length; i++) {
+      final attempt = i + 1;
+      try {
+        if (linkType == 'share' &&
+            workspaceId != null &&
+            workspaceId.isNotEmpty) {
+          final savePayload = SaveSharedViewMetaPB()
+            ..viewId = viewId
+            ..workspaceId = workspaceId
+            ..viewName = viewName
+            ..viewLayout = viewLayout
+            ..permissionId = permissionId;
+          await FolderEventSaveSharedViewMeta(savePayload).send();
+        }
+
+        final databaseIdResult = await dbService.getDatabaseId();
+        final databaseId = databaseIdResult.fold(
+          (id) => id,
+          (error) {
+            lastError = error;
+            return null;
+          },
+        );
+
+        if (databaseId == null || databaseId.isEmpty) {
+          Log.warn(
+            '[OpenNoteDeepLinkHandler] 第$attempt次解析 databaseId 失败: '
+            '${lastError?.msg ?? 'databaseId 为空'}',
+          );
+        } else {
+          Log.info(
+            '[OpenNoteDeepLinkHandler] 第$attempt次解析 databaseId 成功: $databaseId',
+          );
+
+          final openResult = await dbService.openDatabase();
+          final openSucceeded = openResult.fold(
+            (_) => true,
+            (error) {
+              lastError = error;
+              return false;
+            },
+          );
+
+          if (openSucceeded) {
+            Log.info(
+              '[OpenNoteDeepLinkHandler] 第$attempt次数据库预热成功: viewId=$viewId',
+            );
+            return (true, '', ErrorCode.Internal);
+          }
+
+          Log.warn(
+            '[OpenNoteDeepLinkHandler] 第$attempt次数据库预热失败: '
+            '${lastError?.msg ?? lastError?.code.toString() ?? '未知错误'}',
+          );
+        }
+      } catch (e, stackTrace) {
+        Log.error(
+          '[OpenNoteDeepLinkHandler] 第$attempt次数据库预热异常: $e',
+          stackTrace,
+        );
+      }
+
+      FolderEventGetSharedViews().send();
+      await Future.delayed(_databaseOpenRetryDelays[i]);
+    }
+
+    final code = lastError?.code ?? ErrorCode.RecordNotFound;
+    final message = lastError?.msg.isNotEmpty == true
+        ? lastError!.msg
+        : '数据库视图尚未完成同步，请稍后重试打开';
+    Log.error(
+      '[OpenNoteDeepLinkHandler] 数据库视图预热失败: viewId=$viewId, code=$code, msg=$message',
+    );
+    return (false, message, code);
   }
 
   /// 打开视图
@@ -360,7 +468,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
 
       // 发送 POST 请求，传递 permission_id 参数（默认只读权限 = 1）
       // 这样后端会正确创建 af_collab_member 和 af_collab_member_invite 记录
-      final response = await http.post(
+      final response = await http
+          .post(
         uri,
         headers: {
           'Content-Type': 'application/json',
@@ -369,7 +478,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         body: jsonEncode({
           'permission_id': permissionId, // 使用分享链接中的权限参数
         }),
-      ).timeout(
+      )
+          .timeout(
         const Duration(seconds: 10),
         onTimeout: () {
           throw Exception('请求超时');
@@ -439,7 +549,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
   Future<String> _getViewName(String viewId, String? workspaceId) async {
     // 首先尝试从发布元数据获取名称
     final publishName = await _getViewNameFromPublishInfo(viewId);
-    
+
     // 如果获取到的是空字符串（说明是协作分享链接），或者获取到的是默认名称，尝试通过 ViewBackendService 获取
     final defaultName = LocaleKeys.menuAppHeader_defaultNewNotebookName.tr();
     if (publishName.isEmpty || publishName == defaultName) {
@@ -447,12 +557,12 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         return _getCollabViewName(viewId, workspaceId);
       }
     }
-    
+
     // 如果获取到了有效的名称，直接返回
     if (publishName.isNotEmpty) {
       return publishName;
     }
-    
+
     // 否则返回默认名称
     return defaultName;
   }
@@ -526,7 +636,8 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
   Future<String> _getCollabViewName(String viewId, String workspaceId) async {
     // 1. 先尝试从本地 Folder 获取
     try {
-      Log.info('[OpenNoteDeepLinkHandler] 尝试通过 ViewBackendService 获取协作文档名称: viewId=$viewId');
+      Log.info(
+          '[OpenNoteDeepLinkHandler] 尝试通过 ViewBackendService 获取协作文档名称: viewId=$viewId');
       final result = await ViewBackendService.getView(viewId);
       final localName = result.fold(
         (view) => view.name.isNotEmpty ? view.name : null,
@@ -654,7 +765,12 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
 
       if (response.body.isEmpty) {
         Log.error('[OpenNoteDeepLinkHandler] 服务器返回空响应体');
-        return (false, '服务器返回空响应 (HTTP ${response.statusCode})', publishedViewId, true);
+        return (
+          false,
+          '服务器返回空响应 (HTTP ${response.statusCode})',
+          publishedViewId,
+          true
+        );
       }
 
       final responseBody = jsonDecode(response.body);
