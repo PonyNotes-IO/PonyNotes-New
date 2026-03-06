@@ -162,11 +162,15 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                     ),
                   ],
                 ),
-                Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: NotificationPermissionBanner())
+                Visibility(
+                  visible: UniversalPlatform.isMacOS,
+                  child: Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: NotificationPermissionBanner()
+                  ),
+                )
               ],
             );
           },
