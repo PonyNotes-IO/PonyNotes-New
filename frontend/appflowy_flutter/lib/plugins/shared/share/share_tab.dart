@@ -111,7 +111,7 @@ class _ShareTabContentState extends State<_ShareTabContent> {
     final result = await ViewBackendService.getView(state.viewId);
     result.fold((view) {
       _viewPB = view;
-      
+
       // Check if the view is in private list (which means it's "shared" - hidden from workspace)
       _checkIfViewIsPrivate(state.viewId);
     }, (err) {
@@ -126,8 +126,9 @@ class _ShareTabContentState extends State<_ShareTabContent> {
     try {
       // Get current workspace ID
       final workspaceBloc = context.read<UserWorkspaceBloc>();
-      final workspaceId = workspaceBloc.state.currentWorkspace?.workspaceId ?? '';
-      
+      final workspaceId =
+          workspaceBloc.state.currentWorkspace?.workspaceId ?? '';
+
       if (workspaceId.isEmpty) {
         setState(() {
           _isPublic = false;
@@ -135,15 +136,16 @@ class _ShareTabContentState extends State<_ShareTabContent> {
         });
         return;
       }
-      
+
       // Get private views to check if current view is in the list
       final payload = GetWorkspaceViewPB.create()..value = workspaceId;
       final result = await FolderEventReadPrivateViews(payload).send();
-      
+
       result.fold(
         (privateViews) {
           // If the view is in private list, it means it's "shared" (hidden from workspace)
-          final isInPrivateList = privateViews.items.any((view) => view.id == viewId);
+          final isInPrivateList =
+              privateViews.items.any((view) => view.id == viewId);
           setState(() {
             _isPublic = isInPrivateList;
             _loading = false;
@@ -173,66 +175,68 @@ class _ShareTabContentState extends State<_ShareTabContent> {
       },
       child: BlocBuilder<ShareBloc, ShareState>(
         builder: (context, state) {
-        if (_loading) {
-          return const SizedBox(
-            height: 36,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          if (_loading) {
+            return const SizedBox(
+              height: 36,
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            );
+          }
+
+          final shareUrl = ShareConstants.buildShareUrl(
+            workspaceId: state.workspaceId,
+            viewId: state.viewId,
+            layout: _viewPB?.layout.value,
           );
-        }
 
-        final shareUrl = ShareConstants.buildShareUrl(
-          workspaceId: state.workspaceId,
-          viewId: state.viewId,
-        );
+          if (!_isPublic) {
+            return Container(
+              width: double.infinity,
+              alignment: Alignment.centerLeft,
+              child: PrimaryRoundedButton(
+                margin: const EdgeInsets.symmetric(vertical: 9.0),
+                text: '共享',
+                useIntrinsicWidth: false,
+                figmaLineHeight: 18.0,
+                onTap: () async {
+                  await _setVisibility(false);
+                },
+              ),
+            );
+          }
 
-        if (!_isPublic) {
-          return Container(
-            width: double.infinity,
-            alignment: Alignment.centerLeft,
-            child: PrimaryRoundedButton(
-              margin: const EdgeInsets.symmetric(vertical: 9.0),
-              text: '共享',
-              useIntrinsicWidth: false,
-              figmaLineHeight: 18.0,
-              onTap: () async {
-                await _setVisibility(false);
-              },
-            ),
-          );
-        }
-
-        return Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 36,
-                child: FlowyTextField(
-                  text: shareUrl,
-                  readOnly: true,
-                  borderRadius: BorderRadius.circular(10),
+          return Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 36,
+                  child: FlowyTextField(
+                    text: shareUrl,
+                    readOnly: true,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
-            ),
-            const HSpace(8.0),
-            PrimaryRoundedButton(
-              margin: const EdgeInsets.symmetric(vertical: 9.0, horizontal: 14.0),
-              text: LocaleKeys.button_copyLink.tr(),
-              figmaLineHeight: 18.0,
-              leftIcon: FlowySvg(
-                FlowySvgs.share_tab_copy_s,
-                color: Theme.of(context).colorScheme.onPrimary,
+              const HSpace(8.0),
+              PrimaryRoundedButton(
+                margin:
+                    const EdgeInsets.symmetric(vertical: 9.0, horizontal: 14.0),
+                text: LocaleKeys.button_copyLink.tr(),
+                figmaLineHeight: 18.0,
+                leftIcon: FlowySvg(
+                  FlowySvgs.share_tab_copy_s,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
+                onTap: () => _copy(context, shareUrl),
               ),
-              onTap: () => _copy(context, shareUrl),
-            ),
-            const HSpace(8.0),
-            TextButton(
-              onPressed: () async {
-                await _setVisibility(true);
-              },
-              child: const Text('取消共享'),
-            ),
-          ],
-        );
+              const HSpace(8.0),
+              TextButton(
+                onPressed: () async {
+                  await _setVisibility(true);
+                },
+                child: const Text('取消共享'),
+              ),
+            ],
+          );
         },
       ),
     );
@@ -243,20 +247,21 @@ class _ShareTabContentState extends State<_ShareTabContent> {
       await _loadVisibility();
       if (_viewPB == null) return;
     }
-    
+
     // 保存操作前的状态，以便失败时恢复
     final previousIsPublic = _isPublic;
-    
+
     // 先更新UI状态（乐观更新）
     setState(() {
       _loading = true;
       _isPublic = !public; // UI状态与实际可见性相反
     });
-    
+
     // 修复逻辑：public=true时显示在工作区，public=false时隐藏在工作区
     // 但UI状态_isPublic表示是否显示分享链接，与实际的可见性相反
-    final result = await ViewBackendService.updateViewsVisibility([_viewPB!], public);
-    
+    final result =
+        await ViewBackendService.updateViewsVisibility([_viewPB!], public);
+
     result.fold(
       (_) {
         // 成功：保持当前状态
@@ -274,21 +279,20 @@ class _ShareTabContentState extends State<_ShareTabContent> {
           _loading = false;
           _isPublic = previousIsPublic; // 恢复操作前的状态
         });
-        
+
         // 提供详细的错误提示，包括权限原因
         String errorMessage = await _getDetailedErrorMessage(err);
-        
+
         showToastNotification(
           message: errorMessage,
           type: ToastificationType.error,
         );
-        
+
         // 重新加载状态以确认实际状态
         _checkIfViewIsPrivate(_viewPB!.id);
       },
     );
   }
-
 
   /// 获取详细的错误消息，包括权限原因
   Future<String> _getDetailedErrorMessage(FlowyError err) async {
@@ -296,76 +300,75 @@ class _ShareTabContentState extends State<_ShareTabContent> {
     if (err.msg.isNotEmpty) {
       return '分享失败: ${err.msg}';
     }
-    
+
     // 根据错误代码提供更友好的提示
     switch (err.code) {
       case ErrorCode.Internal:
         return '分享失败: 服务器内部错误，请稍后重试';
-        
+
       case ErrorCode.RecordNotFound:
         return '分享失败: 笔记不存在或已被删除';
-        
+
       case ErrorCode.ViewIsLocked:
         return '分享失败: 笔记已锁定，无法分享。请先解锁笔记后再试';
-        
+
       case ErrorCode.NotEnoughPermissions:
       case ErrorCode.UserUnauthorized:
         // 检查具体的权限原因
         return await _getPermissionErrorMessage();
-        
+
       case ErrorCode.NetworkError:
       case ErrorCode.RequestTimeout:
         return '分享失败: 网络连接超时，请检查网络后重试';
-        
+
       default:
         return '分享失败: 未知错误，请稍后重试';
     }
   }
-  
+
   /// 获取权限错误的详细原因
   Future<String> _getPermissionErrorMessage() async {
     if (_viewPB == null) {
       return '分享失败: 没有权限执行此操作';
     }
-    
+
     try {
       // 检查笔记是否被锁定
       if (_viewPB!.isLocked) {
         return '分享失败: 笔记已锁定，无法分享。请先解锁笔记后再试';
       }
-      
+
       // 获取当前用户信息
       final userResult = await UserBackendService.getCurrentUserProfile();
       final user = userResult.fold(
         (user) => user,
         (_) => null,
       );
-      
+
       if (user == null) {
         return '分享失败: 无法获取用户信息，请重新登录后重试';
       }
-      
+
       // 检查用户是否是笔记的创建者
       final isCreator = _viewPB!.createdBy == user.id;
-      
+
       // 检查用户类型
       final isLocalUser = user.userAuthType == AuthTypePB.Local;
       final isLocalWorkspace = user.workspaceType == WorkspaceTypePB.LocalW;
-      
+
       // 构建详细的错误消息
       if (isLocalUser || isLocalWorkspace) {
         // 本地用户或本地工作空间应该有权限，可能是其他原因
         return '分享失败: 权限不足。请确认您有权限分享此笔记';
       }
-      
+
       if (!isCreator) {
         // 不是创建者，可能是只读权限
         return '分享失败: 您不是此笔记的创建者，没有分享权限。只有笔记创建者或拥有完整权限的用户才能分享笔记';
       }
-      
+
       // 是创建者但仍然没有权限，可能是其他限制
       return '分享失败: 权限不足。即使您是笔记创建者，也可能因为工作空间权限设置而无法分享。请联系工作空间管理员';
-      
     } catch (e) {
       return '分享失败: 没有权限执行此操作。请确认您有权限分享此笔记';
     }

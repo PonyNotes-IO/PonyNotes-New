@@ -40,6 +40,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
     Duration(milliseconds: 1500),
     Duration(seconds: 2),
     Duration(seconds: 3),
+    Duration(seconds: 5),
   ];
 
   @override
