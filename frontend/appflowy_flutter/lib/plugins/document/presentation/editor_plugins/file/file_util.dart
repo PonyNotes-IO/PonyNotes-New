@@ -73,6 +73,12 @@ Future<(String? path, String? errorMessage)> saveFileToCloudStorage(
       return (s.url, null);
     },
     (err) {
+      // 检查单文件大小限制错误
+      if (err.isSingleFileLimitExceeded) {
+        final message = LocaleKeys.sideBar_singleFileSizeLimitExceeded.tr();
+        return (null, message);
+      }
+      // 检查存储空间限制错误
       final message = Platform.isIOS
           ? LocaleKeys.sideBar_storageLimitDialogTitleIOS.tr()
           : LocaleKeys.sideBar_storageLimitDialogTitle.tr();

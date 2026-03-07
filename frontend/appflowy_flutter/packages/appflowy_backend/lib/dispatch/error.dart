@@ -122,4 +122,10 @@ extension FlowyErrorExtension on FlowyError {
       code == ErrorCode.FileStorageLimitExceeded ||
       code.value == 1028 ||
       code.value == 1072;
+
+  // 检查单文件上传大小限制超出错误
+  // 后端返回 SingleUploadLimitExceeded (1037)
+  bool get isSingleFileLimitExceeded =>
+      code == ErrorCode.SingleUploadLimitExceeded ||
+      code.value == 1037;
 }

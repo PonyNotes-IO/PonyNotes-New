@@ -483,7 +483,8 @@
     "upgradeToAILocalDesc": "使用本地 AI 用 PDF 聊天、改善写作、自动填充表格",
     "expandSidebar": "展开为全页",
     "purchaseAIMax": "您的工作区已用完AI图像响应额度。请联系工作区所有者购买AI Max",
-    "singleFileProPlanLimitationDescription": "您已超过免费计划允许的最大文件上传大小。请升级到专业版以上传更大的文件"
+    "singleFileProPlanLimitationDescription": "您已超过免费计划允许的最大文件上传大小。请升级到专业版以上传更大的文件",
+    "singleFileSizeLimitExceeded": "单文件大小不能超过 3GB"
   },
   "notifications": {
     "export": {
