@@ -306,7 +306,7 @@ class _MentionDateBlockState extends State<MentionDateBlock> {
                 ReminderMetaKeys.createdAt:
                     DateTime.now().millisecondsSinceEpoch.toString(),
                 ReminderMetaKeys.notificationType: 'reminder',
-              },
+              }.entries.toList(),
               scheduledAt: Int64(parsedDate!.millisecondsSinceEpoch ~/ 1000),
               isAck: parsedDate!.isBefore(DateTime.now()),
             ),

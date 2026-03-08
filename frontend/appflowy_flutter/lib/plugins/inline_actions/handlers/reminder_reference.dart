@@ -245,7 +245,7 @@ class ReminderReferenceService extends InlineActionsDelegate {
         ReminderMetaKeys.createdAt:
             DateTime.now().millisecondsSinceEpoch.toString(),
         ReminderMetaKeys.notificationType: 'reminder',
-      },
+      }.entries.toList(),
       scheduledAt: Int64(date.millisecondsSinceEpoch ~/ 1000),
       isAck: date.isBefore(DateTime.now()),
     );

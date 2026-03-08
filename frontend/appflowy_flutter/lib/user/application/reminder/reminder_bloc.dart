@@ -197,7 +197,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 message: LocaleKeys.reminderNotification_message.tr(),
                 scheduledAt: scheduledAt,
                 isAck: scheduledAt.toDateTime().isBefore(DateTime.now()),
-                meta: meta,
+                meta: meta?.entries.toList(),
               ),
             ),
           ),
@@ -652,18 +652,20 @@ class ReminderUpdate {
         ? scheduledAt!.isBefore(DateTime.now())
         : a.isAck;
 
-    final meta = {...a.meta};
+    final metaMap = {...a.meta};
     if (includeTime != a.includeTime) {
-      meta[ReminderMetaKeys.includeTime] = includeTime.toString();
+      metaMap[ReminderMetaKeys.includeTime] = includeTime.toString();
     }
 
     if (isArchived != a.isArchived) {
-      meta[ReminderMetaKeys.isArchived] = isArchived.toString();
+      metaMap[ReminderMetaKeys.isArchived] = isArchived.toString();
     }
 
     if (date != a.date && date != null) {
-      meta[ReminderMetaKeys.date] = date!.millisecondsSinceEpoch.toString();
+      metaMap[ReminderMetaKeys.date] = date!.millisecondsSinceEpoch.toString();
     }
+
+    final meta = metaMap.entries.toList();
 
     return ReminderPB(
       id: a.id,
