@@ -226,21 +226,17 @@ impl DatabaseManager {
     }
 
     // 2. Local lookup failed - try cloud fallback for shared database views
-    error!(
+    info!(
       "[Database] Local mapping not found for view_id: {}, trying cloud fallback",
       view_id
     );
 
     let mut source_ws_id: Option<String> = self.user.shared_view_source_workspace_id(view_id);
-    error!(
-      "[Database] shared_view_source_workspace_id result for view_id: {} => {:?}",
-      view_id, source_ws_id
-    );
 
     // 2a. If local workspace_shared_view table has no record, query the server's
     //     invite records to discover the owner_workspace_id.
     if source_ws_id.is_none() {
-      error!(
+      info!(
         "[Database] workspace_shared_view not populated for view_id: {}, querying invite records",
         view_id
       );
@@ -251,14 +247,14 @@ impl DatabaseManager {
           .await
         {
           Ok(Some(ws_id)) => {
-            error!(
+            info!(
               "[Database] Found owner_workspace_id: {} for view: {} from invite records",
               ws_id, view_id
             );
             source_ws_id = Some(ws_id);
           },
           Ok(None) => {
-            error!(
+            info!(
               "[Database] No invite record found for view: {}",
               view_id
             );
@@ -274,12 +270,8 @@ impl DatabaseManager {
     }
 
     // 2b. With the source workspace_id, resolve the database_id
-    if let Some(ref source_workspace_id) = source_ws_id {
-      error!(
-        "[Database] Attempting to resolve database_id via cloud: view_id={}, workspace_id={}",
-        view_id, source_workspace_id
-      );
-      if let Ok(source_ws_uuid) = Uuid::from_str(source_workspace_id) {
+    if let Some(source_workspace_id) = source_ws_id {
+      if let Ok(source_ws_uuid) = Uuid::from_str(&source_workspace_id) {
         if let Ok(view_uuid) = Uuid::from_str(view_id) {
           match self
             .cloud_service
@@ -287,7 +279,7 @@ impl DatabaseManager {
             .await
           {
             Ok(Some(database_id)) => {
-              error!(
+              info!(
                 "[Database] Resolved database_id: {} for shared view: {} from workspace: {}",
                 database_id, view_id, source_workspace_id
               );
@@ -300,7 +292,7 @@ impl DatabaseManager {
               return Ok(database_id);
             },
             Ok(None) => {
-              error!(
+              info!(
                 "[Database] Cloud returned no database_id for view: {} in workspace: {}",
                 view_id, source_workspace_id
               );
@@ -314,11 +306,6 @@ impl DatabaseManager {
           }
         }
       }
-    } else {
-      error!(
-        "[Database] No source_workspace_id available for view: {}, cannot resolve database_id",
-        view_id
-      );
     }
 
     Err(

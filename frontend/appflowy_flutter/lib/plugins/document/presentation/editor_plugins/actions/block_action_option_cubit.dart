@@ -3,6 +3,7 @@ import 'package:appflowy/plugins/document/application/document_data_pb_extension
 import 'package:appflowy/plugins/document/presentation/editor_notification.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/resource_node_cleanup.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/plugins/trash/application/prelude.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -29,7 +30,7 @@ class BlockActionOptionCubit extends Cubit<BlockActionOptionState> {
     final transaction = editorState.transaction;
     switch (action) {
       case OptionAction.delete:
-        _deleteBlocks(transaction, node);
+        await _deleteBlocks(transaction, node);
         break;
       case OptionAction.duplicate:
         await _duplicateBlock(transaction, node);
@@ -63,13 +64,17 @@ class BlockActionOptionCubit extends Cubit<BlockActionOptionState> {
 
   /// If the selection is a block selection, delete the selected blocks.
   /// Otherwise, delete the selected block.
-  void _deleteBlocks(Transaction transaction, Node selectedNode) {
+  Future<void> _deleteBlocks(Transaction transaction, Node selectedNode) async {
     final selection = editorState.selection;
     final selectionType = editorState.selectionType;
+    List<Node> nodesToDelete;
     if (selectionType == SelectionType.block && selection != null) {
-      final nodes = editorState.getNodesInSelection(selection.normalized);
-      transaction.deleteNodes(nodes);
+      nodesToDelete = editorState.getNodesInSelection(selection.normalized);
+      await cleanupResourceNodesBeforeDelete(editorState, nodesToDelete);
+      transaction.deleteNodes(nodesToDelete);
     } else {
+      nodesToDelete = [selectedNode];
+      await cleanupResourceNodesBeforeDelete(editorState, nodesToDelete);
       transaction.deleteNode(selectedNode);
     }
   }

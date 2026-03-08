@@ -193,6 +193,19 @@ class DocumentService {
     });
   }
 
+  /// Delete a file from cloud storage.
+  Future<FlowyResult<void, FlowyError>> deleteFile({
+    required String url,
+  }) async {
+    final workspace = await FolderEventReadCurrentWorkspace().send();
+    return workspace.fold((_) async {
+      final payload = DeleteFilePB(url: url);
+      return DocumentEventDeleteFile(payload).send();
+    }, (_) async {
+      return FlowyResult.failure(FlowyError(msg: 'Workspace not found'));
+    });
+  }
+
   /// Sync the awareness states
   /// For example, the cursor position, selection, who is viewing the document.
   Future<FlowyResult<void, FlowyError>> syncAwarenessStates({

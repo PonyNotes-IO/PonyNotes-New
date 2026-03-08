@@ -9,6 +9,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_p
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/custom_image_block_component/unsupport_image_widget.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_placeholder.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/resizeable_image.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/resource_node_cleanup.dart';
 import 'package:appflowy/shared/custom_image_cache_manager.dart';
 import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -200,6 +201,7 @@ class CustomImageBlockComponentState extends State<CustomImageBlockComponent>
             imageProvider: AFBlockImageProvider(
               images: [ImageBlockData(url: src, type: imageType)],
               onDeleteImage: (_) async {
+                await cleanupResourceNodesBeforeDelete(editorState, [node]);
                 final transaction = editorState.transaction..deleteNode(node);
                 await editorState.apply(transaction);
               },

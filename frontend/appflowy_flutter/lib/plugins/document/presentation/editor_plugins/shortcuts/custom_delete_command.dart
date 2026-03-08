@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/resource_node_cleanup.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/simple_table/simple_table_block_component.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/simple_table/simple_table_cell_block_component.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -62,6 +64,7 @@ CommandShortcutEventHandler _deleteInCollapsedSelection = (editorState) {
     // table nodes should be deleted using the table menu
     // in-table paragraphs should only be deleted inside the table
     if (next != null && tableParent == nextTableParent) {
+      unawaited(cleanupResourceNodesBeforeDelete(editorState, [next]));
       if (next.children.isNotEmpty) {
         final path = node.path + [node.children.length];
         transaction.insertNodes(path, next.children);
@@ -111,6 +114,10 @@ CommandShortcutEventHandler _deleteInBlockSelection = (editorState) {
   final selection = editorState.selection;
   if (selection == null || editorState.selectionType != SelectionType.block) {
     return KeyEventResult.ignored;
+  }
+  final deletingNode = editorState.getNodeAtPath(selection.start.path);
+  if (deletingNode != null) {
+    unawaited(cleanupResourceNodesBeforeDelete(editorState, [deletingNode]));
   }
   final transaction = editorState.transaction;
   transaction.deleteNodesAtPath(selection.start.path);

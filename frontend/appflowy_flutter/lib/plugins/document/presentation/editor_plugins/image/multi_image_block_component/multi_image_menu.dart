@@ -7,6 +7,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/block_menu
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_util.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/multi_image_block_component/multi_image_block_component.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/resource_node_cleanup.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/upload_image_menu/upload_image_menu.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/string_extension.dart';
@@ -225,6 +226,7 @@ class _MultiImageMenuState extends State<MultiImageMenu> {
   Future<void> deleteImage() async {
     final node = widget.node;
     final editorState = context.read<EditorState>();
+    await cleanupResourceNodesBeforeDelete(editorState, [node]);
     final transaction = editorState.transaction;
     transaction.deleteNode(node);
     transaction.afterSelection = null;

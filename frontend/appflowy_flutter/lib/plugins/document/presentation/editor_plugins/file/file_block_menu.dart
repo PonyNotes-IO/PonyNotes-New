@@ -3,6 +3,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/prelude.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_block.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_util.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/resource_node_cleanup.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/application/settings/date_time/date_format_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -122,10 +123,14 @@ class _FileBlockMenuState extends State<FileBlockMenu> {
           itemHeight: 20,
           leftIcon: const FlowySvg(FlowySvgs.delete_s),
           name: LocaleKeys.button_delete.tr(),
-          onTap: () {
+          onTap: () async {
+            await cleanupResourceNodesBeforeDelete(
+              widget.editorState,
+              [widget.node],
+            );
             final transaction = widget.editorState.transaction
               ..deleteNode(widget.node);
-            widget.editorState.apply(transaction);
+            await widget.editorState.apply(transaction);
             widget.controller.close();
           },
         ),
@@ -170,6 +175,7 @@ class _FileBlockMenuState extends State<FileBlockMenu> {
       Navigator.of(renameContext!).pop();
     }
   }
+
 }
 
 class FileRenameTextField extends StatefulWidget {

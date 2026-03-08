@@ -9,6 +9,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_p
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/resizeable_image.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/resource_node_cleanup.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/image_viewer/image_provider.dart';
@@ -134,6 +135,7 @@ class _ImageMenuState extends State<ImageMenu> {
   Future<void> deleteImage() async {
     final node = widget.node;
     final editorState = context.read<EditorState>();
+    await cleanupResourceNodesBeforeDelete(editorState, [node]);
     final transaction = editorState.transaction;
     transaction.deleteNode(node);
     transaction.afterSelection = null;
@@ -157,6 +159,10 @@ class _ImageMenuState extends State<ImageMenu> {
           ],
           onDeleteImage: widget.state.editorState.editable
               ? (_) async {
+                  await cleanupResourceNodesBeforeDelete(
+                    widget.state.editorState,
+                    [widget.node],
+                  );
                   final transaction = widget.state.editorState.transaction;
                   transaction.deleteNode(widget.node);
                   await widget.state.editorState.apply(transaction);

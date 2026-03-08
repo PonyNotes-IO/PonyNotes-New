@@ -8,6 +8,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/image/comm
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_util.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/multi_image_block_component/layouts/multi_image_layouts.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/multi_image_block_component/multi_image_block_component.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/resource_node_cleanup.dart';
 import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy/shared/patterns/file_type_patterns.dart';
 import 'package:appflowy/workspace/presentation/widgets/image_viewer/image_provider.dart';
@@ -293,6 +294,10 @@ class _ImageBrowserLayoutState extends State<ImageBrowserLayout> {
                   },
                 );
               } else {
+                await cleanupResourceNodesBeforeDelete(
+                  widget.editorState,
+                  [widget.node],
+                );
                 transaction.deleteNode(widget.node);
               }
 
