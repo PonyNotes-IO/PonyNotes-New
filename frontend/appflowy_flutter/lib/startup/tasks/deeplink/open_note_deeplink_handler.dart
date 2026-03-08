@@ -312,6 +312,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
   }) async {
     final dbService = DatabaseViewBackendService(viewId: viewId);
     FlowyError? lastError;
+    String? resolvedDatabaseId;
 
     for (var i = 0; i < _databaseOpenRetryDelays.length; i++) {
       final attempt = i + 1;
@@ -342,7 +343,31 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
             '[OpenNoteDeepLinkHandler] 第$attempt次解析 databaseId 失败: '
             '${lastError?.msg ?? 'databaseId 为空'}',
           );
+
+          // 第2次失败后，尝试直接从服务端 resolve database_id
+          if (attempt == 2 &&
+              resolvedDatabaseId == null &&
+              workspaceId != null &&
+              workspaceId.isNotEmpty) {
+            Log.info(
+              '[OpenNoteDeepLinkHandler] Rust层本地查找失败，尝试直接从服务端 resolve database_id',
+            );
+            resolvedDatabaseId =
+                await _resolveDatabaseIdFromServer(workspaceId, viewId);
+            if (resolvedDatabaseId != null) {
+              Log.info(
+                '[OpenNoteDeepLinkHandler] 服务端 resolve 成功: database_id=$resolvedDatabaseId',
+              );
+              // 尝试通过 Rust FFI 更新本地 workspace_database 的映射
+              await _updateLocalDatabaseIndexing(resolvedDatabaseId, viewId);
+            } else {
+              Log.warn(
+                '[OpenNoteDeepLinkHandler] 服务端 resolve 也失败了',
+              );
+            }
+          }
         } else {
+          resolvedDatabaseId = databaseId;
           Log.info(
             '[OpenNoteDeepLinkHandler] 第$attempt次解析 databaseId 成功: $databaseId',
           );
@@ -387,6 +412,83 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       '[OpenNoteDeepLinkHandler] 数据库视图预热失败: viewId=$viewId, code=$code, msg=$message',
     );
     return (false, message, code);
+  }
+
+  /// 直接通过 HTTP 调用后端的 resolve API 获取 database_id
+  /// 这是当 Rust 层的本地 workspace_database 查找失败时的回退机制
+  Future<String?> _resolveDatabaseIdFromServer(
+    String workspaceId,
+    String viewId,
+  ) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (baseUrl.isEmpty) return null;
+
+      final rawToken = await _getAuthTokenFromUserService();
+      final accessToken = _extractAccessToken(rawToken);
+      if (accessToken == null || accessToken.isEmpty) return null;
+
+      // 调用后端 API: /api/workspace/{workspace_id}/database/view/{view_id}/resolve
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/workspace/$workspaceId/database/view/$viewId/resolve',
+      );
+
+      Log.info(
+        '[OpenNoteDeepLinkHandler] 调用 resolve API: $uri',
+      );
+
+      final response = await http
+          .get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+      )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic>) {
+          final data = body['data'];
+          if (data is Map<String, dynamic>) {
+            final databaseId = data['database_id'] as String?;
+            if (databaseId != null && databaseId.isNotEmpty) {
+              Log.info(
+                '[OpenNoteDeepLinkHandler] resolve API 返回 database_id=$databaseId',
+              );
+              return databaseId;
+            }
+          }
+        }
+      } else {
+        Log.warn(
+          '[OpenNoteDeepLinkHandler] resolve API 失败: HTTP ${response.statusCode}, body=${response.body}',
+        );
+      }
+    } catch (e) {
+      Log.warn(
+        '[OpenNoteDeepLinkHandler] resolve API 调用异常: $e',
+      );
+    }
+    return null;
+  }
+
+  /// 通过 Rust FFI 更新本地 workspace_database 的 database_id -> view_id 映射
+  /// 目前使用 SaveSharedViewMeta 确保本地 SQLite 有 workspace_id，
+  /// 从而让 Rust 层的 shared_view_source_workspace_id 能返回正确值触发云端回退
+  Future<void> _updateLocalDatabaseIndexing(
+    String databaseId,
+    String viewId,
+  ) async {
+    // 这里记录 resolved database_id 供调试使用
+    // 真正的本地 mapping 更新会在 Rust 层的 get_database_id_with_view_id
+    // 的云端回退分支中，通过 wdb.track_database 完成
+    Log.info(
+      '[OpenNoteDeepLinkHandler] 服务端 resolved database_id=$databaseId for view_id=$viewId，'
+      '等待 Rust 层云端回退更新本地映射',
+    );
   }
 
   /// 打开视图

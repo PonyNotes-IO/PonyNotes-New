@@ -71,12 +71,12 @@ extension DocumentDataPBFromTo on DocumentDataPB {
         childrenMap[childrenId]!.children.add(value.id);
       }
     });
-    // MetaPB 构造函数期望 Iterable<MapEntry<String, ChildrenPB>>
-    final meta = MetaPB(childrenMap: childrenMap.entries.toList());
+    // MetaPB 构造函数期望 Map<String, ChildrenPB>?
+    final meta = MetaPB(childrenMap: childrenMap);
 
     return DocumentDataPB(
-      // DocumentDataPB 的 blocks 字段期望 Iterable<MapEntry<String, BlockPB>>
-      blocks: blocks.entries.toList(),
+      // DocumentDataPB 的 blocks 字段期望 Map<String, BlockPB>?
+      blocks: blocks,
       pageId: pageId,
       meta: meta,
     );
