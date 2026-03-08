@@ -147,6 +147,11 @@ where
       client.base_url, workspace_id, view_id
     );
 
+    tracing::info!(
+      "[Database] resolve_database_id_for_view: requesting URL={}",
+      url
+    );
+
     let access_token = client.access_token().map_err(FlowyError::from)?;
     let resp = client
       .cloud_client
@@ -155,14 +160,39 @@ where
       .send()
       .await
       .map_err(|e| {
+        tracing::error!(
+          "[Database] resolve_database_id_for_view: HTTP request failed: {}",
+          e
+        );
         FlowyError::internal().with_context(format!("resolve database_id failed: {}", e))
       })?;
 
-    if !resp.status().is_success() {
+    let status = resp.status();
+    tracing::info!(
+      "[Database] resolve_database_id_for_view: response status={}",
+      status
+    );
+
+    if !status.is_success() {
+      let error_body = resp.text().await.unwrap_or_default();
+      tracing::warn!(
+        "[Database] resolve_database_id_for_view: non-success status={}, body={}",
+        status,
+        error_body
+      );
       return Ok(None);
     }
 
-    let body: serde_json::Value = resp.json().await.map_err(|e| {
+    let body_text = resp.text().await.map_err(|e| {
+      FlowyError::internal().with_context(format!("read response body failed: {}", e))
+    })?;
+
+    tracing::info!(
+      "[Database] resolve_database_id_for_view: response body={}",
+      body_text
+    );
+
+    let body: serde_json::Value = serde_json::from_str(&body_text).map_err(|e| {
       FlowyError::internal().with_context(format!("parse response failed: {}", e))
     })?;
 
@@ -171,6 +201,11 @@ where
       .and_then(|d| d.get("database_id"))
       .and_then(|v| v.as_str())
       .map(|s| s.to_string());
+
+    tracing::info!(
+      "[Database] resolve_database_id_for_view: parsed database_id={:?}",
+      database_id
+    );
 
     Ok(database_id)
   }
