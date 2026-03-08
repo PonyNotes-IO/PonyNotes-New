@@ -49,13 +49,20 @@ impl From<AppResponseError> for FlowyError {
       _ => {
         // 检查错误消息中是否包含存储限制相关关键词
         let message = error.message.to_lowercase();
-        // 单文件大小限制检查（优先检查，因为单文件限制更具体）
-        if message.contains("single upload limit") || message.contains("single file size") {
+        // 单文件大小限制检查（优先且更精确的检查）
+        // 只有当消息明确表示"超过单文件限制"时才认为是单文件限制错误
+        if message.contains("exceeds single upload limit") 
+            || message.contains("exceeds single file size")
+            || message.contains("single upload limit")
+            || message.contains("single file size") && message.contains("3gb") 
+        {
           ErrorCode::SingleUploadLimitExceeded
         } else if message.contains("storage limit exceeded")
           || message.contains("plan limit exceeded")
-          || message.contains("storage limit")
           || message.contains("total storage limit")
+        {
+          ErrorCode::PlanLimitExceeded
+        } else if message.contains("storage limit")
         {
           ErrorCode::PlanLimitExceeded
         } else {

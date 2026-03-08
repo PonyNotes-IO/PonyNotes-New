@@ -618,6 +618,14 @@ async fn start_upload(
     .map(|metadata| metadata.len())
     .unwrap_or(0);
 
+  // 调试日志：打印本地文件大小
+  info!(
+    "[RUST_SDK_DEBUG] Local file size: {} bytes ({:.2} GB), path: {}",
+    file_size,
+    file_size as f64 / (1024.0 * 1024.0 * 1024.0),
+    local_file_path
+  );
+
   let mut chunked_bytes =
     ChunkedBytes::from_file(&upload_file.local_file_path, MIN_CHUNK_SIZE).await?;
   let total_parts = chunked_bytes.total_chunks();
