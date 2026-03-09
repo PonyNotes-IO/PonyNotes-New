@@ -623,7 +623,7 @@ async fn start_upload(
     "[RUST_SDK_DEBUG] Local file size: {} bytes ({:.2} GB), path: {}",
     file_size,
     file_size as f64 / (1024.0 * 1024.0 * 1024.0),
-    local_file_path
+    upload_file.local_file_path
   );
 
   let mut chunked_bytes =

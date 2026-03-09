@@ -117,11 +117,14 @@ extension FlowyErrorExtension on FlowyError {
 
   // 检查存储限制超出错误
   // 后端可能返回 FileStorageLimitExceeded (1028) 或 PlanLimitExceeded (1072)
+  // Rust SDK 中 PlanLimitExceeded 的值是 141
   // 注意：code 是枚举类型，需要通过 .value 来获取整数进行比较
   bool get isStorageLimitExceeded =>
       code == ErrorCode.FileStorageLimitExceeded ||
+      code == ErrorCode.PlanLimitExceeded ||
       code.value == 1028 ||
-      code.value == 1072;
+      code.value == 1072 ||
+      code.value == 141;
 
   // 检查单文件上传大小限制超出错误
   // 后端返回 SingleUploadLimitExceeded (1037)
