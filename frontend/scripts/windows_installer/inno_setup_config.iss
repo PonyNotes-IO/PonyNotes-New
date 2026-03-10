@@ -32,7 +32,7 @@ Name: "{group}\PonyNotes"; Filename: "{app}\PonyNotes.exe"
 ; Filename: "{app}\vc_redist_x64.exe"; Parameters: "/install /quiet /norestart"; Description: "Installing Visual C++ Redistributable..."; Flags: shellexec waituntilterminated
 
 [Registry]
-Root: HKCR; Subkey: "PonyNotes"; ValueType: "string"; ValueData: "URL:Custom Protocol"; Flags: uninsdeletekey
-Root: HKCR; Subkey: "PonyNotes"; ValueType: "string"; ValueName: "URL Protocol"; ValueData: ""
-Root: HKCR; Subkey: "PonyNotes\DefaultIcon"; ValueType: "string"; ValueData: "{app}\PonyNotes.exe,0"
-Root: HKCR; Subkey: "PonyNotes\shell\open\command"; ValueType: "string"; ValueData: """{app}\PonyNotes.exe"" ""%1"""
+Root: HKCR; Subkey: "ponynotes"; ValueType: "string"; ValueData: "URL:Custom Protocol"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "ponynotes"; ValueType: "string"; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCR; Subkey: "ponynotes\DefaultIcon"; ValueType: "string"; ValueData: "{app}\PonyNotes.exe,0"
+Root: HKCR; Subkey: "ponynotes\shell\open\command"; ValueType: "string"; ValueData: """{app}\PonyNotes.exe"" ""%1"""

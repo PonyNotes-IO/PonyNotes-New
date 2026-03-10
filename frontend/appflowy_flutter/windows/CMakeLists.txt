@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
 project(appflowy_flutter LANGUAGES CXX)
 
-set(BINARY_NAME "AppFlowy")
+set(BINARY_NAME "PonyNotes")
 
 # 抑制 flutter_inappwebview_windows、media_kit_libs_windows_video 等插件的 CMP0175 警告
 cmake_policy(SET CMP0175 OLD)
