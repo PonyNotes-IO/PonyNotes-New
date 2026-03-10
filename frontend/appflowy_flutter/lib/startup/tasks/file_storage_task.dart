@@ -68,8 +68,22 @@ class FileStorageService {
     );
     _notifierList[fileUrl] = notifier;
 
-    // trigger the initial file state
-    getFileState(fileUrl);
+    // Trigger the initial file state and sync it back to notifier immediately.
+    // This avoids UI being stuck at 0 when stream events are missed.
+    getFileState(fileUrl).then((result) {
+      result.fold(
+        (state) {
+          final currentNotifier = _notifierList[fileUrl];
+          if (currentNotifier != null) {
+            currentNotifier.value = FileProgress(
+              fileUrl: fileUrl,
+              progress: state.isFinish ? 1.0 : 0.0,
+            );
+          }
+        },
+        (_) {},
+      );
+    });
 
     return notifier;
   }

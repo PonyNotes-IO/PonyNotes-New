@@ -125,6 +125,7 @@ class _FileUploadLocal extends StatefulWidget {
 
 class _FileUploadLocalState extends State<_FileUploadLocal> {
   bool isDragging = false;
+  bool _isPickingFile = false;
 
   @override
   Widget build(BuildContext context) {
@@ -184,16 +185,24 @@ class _FileUploadLocalState extends State<_FileUploadLocal> {
   }
 
   Future<void> _uploadFile(BuildContext context) async {
-    final result = await getIt<FilePickerService>().pickFiles(
-      dialogTitle: '',
-      allowMultiple: widget.allowMultipleFiles,
-    );
+    if (_isPickingFile) {
+      return;
+    }
+    _isPickingFile = true;
+    try {
+      final result = await getIt<FilePickerService>().pickFiles(
+        dialogTitle: '',
+        allowMultiple: widget.allowMultipleFiles,
+      );
 
-    final List<XFile> files = result?.files.isNotEmpty ?? false
-        ? result!.files.map((f) => f.xFile).toList()
-        : const [];
+      final List<XFile> files = result?.files.isNotEmpty ?? false
+          ? result!.files.map((f) => f.xFile).toList()
+          : const [];
 
-    widget.onFilesPicked(files);
+      widget.onFilesPicked(files);
+    } finally {
+      _isPickingFile = false;
+    }
   }
 }
 

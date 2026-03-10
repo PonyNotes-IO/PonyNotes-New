@@ -8,6 +8,7 @@ import 'package:appflowy/plugins/document/presentation/editor_drop_manager.dart'
 import 'package:appflowy/plugins/document/presentation/editor_plugins/actions/mobile_block_action_buttons.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/copy_and_paste/clipboard_service.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_util.dart';
+import 'package:appflowy/startup/tasks/file_storage_task.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/file_entities.pbenum.dart';
@@ -187,6 +188,66 @@ class FileBlockComponentState extends State<FileBlockComponent>
   bool alwaysShowMenu = false;
   bool isDragging = false;
   bool isHovering = false;
+  bool _isUploadingFromLocal = false;
+  AutoRemoveNotifier<FileProgress>? _uploadProgressNotifier;
+  String? _progressFileUrl;
+
+  bool get _isUploading {
+    final value = _uploadProgressNotifier?.value;
+    if (value == null || value.error != null) {
+      return false;
+    }
+    return value.progress >= 0 && value.progress < 1;
+  }
+
+  double get _uploadProgressValue {
+    final value = _uploadProgressNotifier?.value.progress ?? 0;
+    return value.clamp(0.0, 1.0).toDouble();
+  }
+
+  void _onUploadProgressChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _disposeUploadProgressNotifier() {
+    final notifier = _uploadProgressNotifier;
+    if (notifier != null) {
+      notifier.removeListener(_onUploadProgressChanged);
+      notifier.dispose();
+    }
+    _uploadProgressNotifier = null;
+    _progressFileUrl = null;
+  }
+
+  void _syncUploadProgressNotifier() {
+    final url = node.attributes[FileBlockKeys.url] as String?;
+    final urlType =
+        FileUrlType.fromIntValue(node.attributes[FileBlockKeys.urlType] ?? 0);
+    final shouldTrack = urlType == FileUrlType.cloud && url?.isNotEmpty == true;
+    if (!shouldTrack) {
+      _disposeUploadProgressNotifier();
+      return;
+    }
+
+    final fileUrl = url!;
+    if (_progressFileUrl == fileUrl && _uploadProgressNotifier != null) {
+      return;
+    }
+
+    _disposeUploadProgressNotifier();
+    final notifier = getIt<FileStorageService>().onFileProgress(fileUrl: fileUrl);
+    notifier.addListener(_onUploadProgressChanged);
+    _uploadProgressNotifier = notifier;
+    _progressFileUrl = fileUrl;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _syncUploadProgressNotifier();
+  }
 
   @override
   void didChangeDependencies() {
@@ -194,6 +255,12 @@ class FileBlockComponentState extends State<FileBlockComponent>
       dropManagerState = context.read<EditorDropManagerState?>();
     }
     super.didChangeDependencies();
+  }
+
+  @override
+  void didUpdateWidget(covariant FileBlockComponent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncUploadProgressNotifier();
   }
 
   @override
@@ -238,10 +305,29 @@ class FileBlockComponentState extends State<FileBlockComponent>
             child: Row(
               children: [
                 const HSpace(10),
-                FlowySvg(
-                  FlowySvgs.slash_menu_icon_file_s,
-                  color: Theme.of(context).hintColor,
-                  size: const Size.square(24),
+                SizedBox.square(
+                  dimension: 36,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      FlowySvg(
+                        FlowySvgs.slash_menu_icon_file_s,
+                        color: Theme.of(context).hintColor,
+                        size: const Size.square(24),
+                      ),
+                      if (_isUploading)
+                        SizedBox.square(
+                          dimension: 34,
+                          child: CircularProgressIndicator(
+                            value: _uploadProgressValue,
+                            strokeWidth: 3,
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.outline.withValues(alpha: 0.25),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
                 const HSpace(10),
                 ..._buildTrailing(context),
@@ -494,40 +580,47 @@ class FileBlockComponentState extends State<FileBlockComponent>
   }
 
   Future<void> insertFileFromLocal(List<XFile> files) async {
-    if (files.isEmpty) return;
-
-    final file = files.first;
-    final path = file.path;
-    final documentBloc = context.read<DocumentBloc>();
-    final isLocalMode = documentBloc.isLocalMode;
-    final urlType = isLocalMode ? FileUrlType.local : FileUrlType.cloud;
-
-    String? url;
-    String? errorMsg;
-    if (isLocalMode) {
-      url = await saveFileToLocalStorage(path);
-    } else {
-      final result =
-          await saveFileToCloudStorage(path, documentBloc.documentId);
-      url = result.$1;
-      errorMsg = result.$2;
+    if (files.isEmpty || _isUploadingFromLocal) {
+      return;
     }
 
-    if (errorMsg != null && mounted) {
-      return showSnackBarMessage(context, errorMsg);
+    _isUploadingFromLocal = true;
+    try {
+      final file = files.first;
+      final path = file.path;
+      final documentBloc = context.read<DocumentBloc>();
+      final isLocalMode = documentBloc.isLocalMode;
+      final urlType = isLocalMode ? FileUrlType.local : FileUrlType.cloud;
+
+      String? url;
+      String? errorMsg;
+      if (isLocalMode) {
+        url = await saveFileToLocalStorage(path);
+      } else {
+        final result = await saveFileToCloudStorage(path, documentBloc.documentId);
+        url = result.$1;
+        errorMsg = result.$2;
+      }
+
+      if (errorMsg != null && mounted) {
+        showSnackBarMessage(context, errorMsg);
+        return;
+      }
+
+      // Remove the file block from the drop state manager
+      dropManagerState?.remove(FileBlockKeys.type);
+
+      final transaction = editorState.transaction;
+      transaction.updateNode(widget.node, {
+        FileBlockKeys.url: url,
+        FileBlockKeys.urlType: urlType.toIntValue(),
+        FileBlockKeys.name: file.name,
+        FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
+      });
+      await editorState.apply(transaction);
+    } finally {
+      _isUploadingFromLocal = false;
     }
-
-    // Remove the file block from the drop state manager
-    dropManagerState?.remove(FileBlockKeys.type);
-
-    final transaction = editorState.transaction;
-    transaction.updateNode(widget.node, {
-      FileBlockKeys.url: url,
-      FileBlockKeys.urlType: urlType.toIntValue(),
-      FileBlockKeys.name: file.name,
-      FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
-    });
-    await editorState.apply(transaction);
   }
 
   Future<void> insertNetworkFile(String url) async {
@@ -629,6 +722,13 @@ class FileBlockComponentState extends State<FileBlockComponent>
     bool shiftWithBaseOffset = false,
   }) =>
       _renderBox!.localToGlobal(offset);
+
+  @override
+  void dispose() {
+    _disposeUploadProgressNotifier();
+    showActionsNotifier.dispose();
+    super.dispose();
+  }
 }
 
 @visibleForTesting
