@@ -35,6 +35,8 @@ import 'package:flutter/material.dart';
 import 'package:url_protocol/url_protocol.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'package:appflowy/main.dart' show getInitialDeepLink;
+
 const appflowyDeepLinkSchema = 'ponynotes';
 
 class AppFlowyCloudDeepLink {
@@ -52,8 +54,15 @@ class AppFlowyCloudDeepLink {
       ..register(WeChatDeepLinkHandler())
       ..register(DouYinDeepLinkHandler());
 
+    // 保存初始 URL，在应用初始化完成后再处理
+    _saveInitialUrl();
+
+    // 启动轮询检查 deep link（用于单实例模式下的跨实例通信）
+    _startDeepLinkPolling();
+
     _deepLinkSubscription = _AppLinkWrapper.instance.listen(
       (Uri? uri) async {
+        Log.info('DeepLink: Received from stream: $uri');
         await _handleUri(uri);
       },
       onError: (Object err, StackTrace stackTrace) {
@@ -64,6 +73,83 @@ class AppFlowyCloudDeepLink {
     if (Platform.isWindows) {
       // register deep link for Windows
       registerProtocolHandler(appflowyDeepLinkSchema);
+    }
+  }
+
+  // 轮询检查 deep link 文件（用于单实例模式）
+  Timer? _pollingTimer;
+
+  String get _pipeFilePath {
+    final appData = Platform.environment['APPDATA'] ?? 
+                    Platform.environment['LOCALAPPDATA'] ?? 
+                    '.';
+    return '$appData\\PonyNotes\\deep_link.txt';
+  }
+
+  void _startDeepLinkPolling() {
+    // 每秒检查一次是否有新的 deep link
+    _pollingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      await _checkForDeepLinkFile();
+    });
+  }
+
+  Future<void> _checkForDeepLinkFile() async {
+    try {
+      final pipeFile = File(_pipeFilePath);
+      if (await pipeFile.exists()) {
+        final content = await pipeFile.readAsString();
+        if (content.startsWith('ponynotes://')) {
+          Log.info('DeepLink: [Polling] Found pending deep link: $content');
+          // 清空文件
+          await pipeFile.writeAsString('');
+          // 处理 URL
+          final uri = Uri.parse(content);
+          await _handleUri(uri);
+        }
+      }
+    } catch (e) {
+      // 忽略错误，不影响主流程
+    }
+  }
+
+  void _stopDeepLinkPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  String? _pendingInitialUrl;
+
+  // 保存从命令行参数传入的 URL
+  void _saveInitialUrl() {
+    final initialUrl = getInitialDeepLink();
+    if (initialUrl != null && initialUrl.startsWith('$appflowyDeepLinkSchema://')) {
+      Log.info('DeepLink: Saved initial URL from function: $initialUrl');
+      _pendingInitialUrl = initialUrl;
+    } else {
+      // Windows 上尝试从环境变量获取
+      final envArgs = Platform.environment['CMDLINEARGS'];
+      if (envArgs != null && envArgs.startsWith('$appflowyDeepLinkSchema://')) {
+        Log.info('DeepLink: Saved initial URL from CMDLINEARGS: $envArgs');
+        _pendingInitialUrl = envArgs;
+      } else {
+        // Windows 上尝试从其他环境变量获取
+        Log.info('DeepLink: No initial URL found. Available env vars: ${Platform.environment.keys.where((k) => k.toLowerCase().contains('url') || k.toLowerCase().contains('link') || k.toLowerCase().contains('arg')).join(', ')}');
+      }
+    }
+  }
+
+  // 处理保存的初始 URL（在应用初始化完成后调用）
+  Future<void> processInitialDeepLink() async {
+    if (_pendingInitialUrl != null) {
+      final url = _pendingInitialUrl!;
+      _pendingInitialUrl = null;
+      Log.info('DeepLink: Processing pending initial URL: $url');
+      try {
+        final uri = Uri.parse(url);
+        await _handleUri(uri);
+      } catch (e) {
+        Log.error('DeepLink: Failed to parse initial URL: $e');
+      }
     }
   }
 
@@ -80,6 +166,9 @@ class AppFlowyCloudDeepLink {
   late final DeepLinkHandlerRegistry _deepLinkHandlerRegistry;
 
   Future<void> dispose() async {
+    // 停止轮询
+    _stopDeepLinkPolling();
+    
     // debug log removed
     await _deepLinkSubscription.cancel();
 

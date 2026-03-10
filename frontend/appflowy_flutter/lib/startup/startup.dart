@@ -122,6 +122,15 @@ class FlowyRunner {
     await initGetIt(getIt, mode, f, config);
     await didInitGetItCallback?.call();
 
+    // 处理 Windows deep link（在 getIt 初始化完成后）
+    if (Platform.isWindows && isAppFlowyCloudEnabled) {
+      try {
+        getIt<AppFlowyCloudDeepLink>().processInitialDeepLink();
+      } catch (e) {
+        Log.error('Failed to process initial deep link: $e');
+      }
+    }
+
     final applicationDataDirectory =
         await getIt<ApplicationDataStorage>().getPath().then(
               (value) => Directory(value),

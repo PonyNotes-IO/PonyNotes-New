@@ -25,6 +25,7 @@ apply_standard_settings(${BINARY_NAME})
 # Disable C4819 warning (file encoding issue)
 if(MSVC)
   target_compile_options(${BINARY_NAME} PRIVATE /wd4819)
+  target_compile_definitions(${BINARY_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
 # Add preprocessor definitions for the build version.
@@ -39,7 +40,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
-target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
+target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app shlwapi.lib)
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.
