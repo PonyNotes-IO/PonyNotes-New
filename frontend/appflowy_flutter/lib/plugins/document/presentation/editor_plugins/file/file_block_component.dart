@@ -265,6 +265,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
 
   @override
   Widget build(BuildContext context) {
+    _syncUploadProgressNotifier();
     final url = node.attributes[FileBlockKeys.url];
     final FileUrlType urlType =
         FileUrlType.fromIntValue(node.attributes[FileBlockKeys.urlType] ?? 0);
@@ -375,8 +376,16 @@ class FileBlockComponentState extends State<FileBlockComponent>
               FileBlockComponent.uploadDragKey,
             ),
             popupBuilder: (_) => FileUploadMenu(
-              onInsertLocalFile: insertFileFromLocal,
-              onInsertNetworkFile: insertNetworkFile,
+              onInsertLocalFile: (files) {
+                insertFileFromLocal(files);
+                controller.close();
+                dropManagerState?.remove(FileBlockComponent.uploadDragKey);
+              },
+              onInsertNetworkFile: (url) {
+                insertNetworkFile(url);
+                controller.close();
+                dropManagerState?.remove(FileBlockComponent.uploadDragKey);
+              },
             ),
             child: child,
           ),
@@ -618,6 +627,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
         FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
       });
       await editorState.apply(transaction);
+      _syncUploadProgressNotifier();
     } finally {
       _isUploadingFromLocal = false;
     }
@@ -655,6 +665,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
       FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
     });
     await editorState.apply(transaction);
+    _syncUploadProgressNotifier();
   }
 
   @override
