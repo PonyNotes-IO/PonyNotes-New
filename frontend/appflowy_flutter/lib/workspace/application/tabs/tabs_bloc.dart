@@ -194,21 +194,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
             _setLatestOpenView();
           },
           switchWorkspace: (workspaceId) {
-            final pluginId = state.currentPageManager.plugin.id;
-
-            // Close all tabs except current
-            final pagesToClose = [
-              ...state._pageManagers
-                  .where((pm) => pm.plugin.id != pluginId && !pm.isPinned),
-            ];
-
-            if (pagesToClose.isNotEmpty) {
-              final newstate = state;
-              for (final pm in pagesToClose) {
-                newstate.closeView(pm.plugin.id);
-              }
-              emit(newstate.copyWith(currentIndex: 0));
-            }
+            // Workspace context changed: reset tabs to a clean blank page,
+            // then HomeBloc can open the latest view for the new workspace.
+            state.dispose();
+            _lastAddedRecentViewId = null;
+            emit(TabsState());
           },
           initial: () {
             // 在应用初始化时，检查当前打开的视图并添加到最近访问

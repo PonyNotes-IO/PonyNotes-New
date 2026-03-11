@@ -24,6 +24,7 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
+import 'package:appflowy/workspace/application/home/home_bloc.dart';
 import 'package:appflowy/workspace/presentation/command_palette/command_palette.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/header/sidebar_top_menu.dart';
@@ -271,9 +272,19 @@ class HomeSideBar extends StatelessWidget {
                       previous.currentWorkspace?.workspaceId !=
                       current.currentWorkspace?.workspaceId,
                   listener: (context, state) {
-                    // 当工作区切换时，刷新侧边栏区域（包括"我的空间"）
-                    if (state.currentWorkspace != null) {
-                      final workspaceId = state.currentWorkspace!.workspaceId;
+                    final currentWorkspace = state.currentWorkspace;
+                    if (currentWorkspace != null) {
+                      final workspaceId = currentWorkspace.workspaceId;
+                      // Keep home data stream in sync with workspace switch.
+                      context
+                          .read<HomeBloc>()
+                          .add(HomeEvent.switchWorkspace(workspaceId));
+                      // Reset opened tabs so old workspace pages are not retained.
+                      context
+                          .read<TabsBloc>()
+                          .add(TabsEvent.switchWorkspace(workspaceId));
+
+                      // 当工作区切换时，刷新侧边栏区域（包括"我的空间"）
                       context.read<SidebarSectionsBloc>().add(
                             SidebarSectionsEvent.reset(
                               userProfile,

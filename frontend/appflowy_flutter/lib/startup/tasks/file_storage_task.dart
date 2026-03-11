@@ -94,8 +94,8 @@ class FileStorageService {
   }
 
   Future<void> dispose() async {
-    // dispose all notifiers
-    for (final notifier in _notifierList.values) {
+    // Copy first because each notifier dispose removes itself from the map.
+    for (final notifier in _notifierList.values.toList()) {
       notifier.dispose();
     }
 
