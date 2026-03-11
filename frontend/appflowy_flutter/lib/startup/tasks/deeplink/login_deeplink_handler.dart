@@ -32,7 +32,7 @@ class LoginDeepLinkHandler extends DeepLinkHandler<UserProfilePB> {
       map: <String, String>{
         AuthServiceMapKeys.signInURL: uri.toString(),
         AuthServiceMapKeys.deviceId: deviceId,
-      }.entries.toList(),
+      },
     );
 
     onStateChange(this, DeepLinkState.loading);
