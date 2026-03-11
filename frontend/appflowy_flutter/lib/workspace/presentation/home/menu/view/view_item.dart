@@ -1193,10 +1193,27 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               }
               break;
             case ViewMoreActionType.duplicateToMySpace:
+              // 触发复制到我的空间操作
               context
                   .read<ViewBloc>()
                   .add(const ViewEvent.duplicateToMySpace());
               // 复制后刷新列表（通过 BlocListener 监听成功）
+              // 使用 addPostFrameCallback 延迟显示成功提示，确保在状态更新后执行
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('已复制到我的空间'),
+                          backgroundColor: Colors.green,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  });
+                }
+              });
               break;
             case ViewMoreActionType.openInNewTab:
               // 使用addPostFrameCallback延迟执行，避免在渲染周期中触发UI状态变化
