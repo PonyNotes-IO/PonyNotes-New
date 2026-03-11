@@ -35,6 +35,10 @@ class PublishTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<ShareBloc, ShareState>(
+      listenWhen: (previous, current) =>
+          previous.publishResult != current.publishResult ||
+          previous.unpublishResult != current.unpublishResult ||
+          previous.updatePathNameResult != current.updatePathNameResult,
       listener: (context, state) {
         _showToast(context, state);
       },
@@ -88,35 +92,40 @@ class PublishTab extends StatelessWidget {
       state.publishResult!.fold(
         (value) => showToastNotification(
           message: LocaleKeys.publish_publishSuccessfully.tr(),
+          alignment: Alignment.center,
         ),
         (error) => showToastNotification(
           message: '${LocaleKeys.publish_publishFailed.tr()}: ${error.code}',
           type: ToastificationType.error,
+          alignment: Alignment.center,
         ),
       );
     } else if (state.unpublishResult != null) {
       state.unpublishResult!.fold(
         (value) => showToastNotification(
           message: LocaleKeys.publish_unpublishSuccessfully.tr(),
+          alignment: Alignment.center,
         ),
         (error) => showToastNotification(
           message: LocaleKeys.publish_unpublishFailed.tr(),
           description: error.msg,
           type: ToastificationType.error,
+          alignment: Alignment.center,
         ),
       );
     } else if (state.updatePathNameResult != null) {
       state.updatePathNameResult!.fold(
         (value) => showToastNotification(
           message: LocaleKeys.settings_sites_success_updatePathNameSuccess.tr(),
+          alignment: Alignment.center,
         ),
         (error) {
           Log.error('update path name failed: $error');
-
           showToastNotification(
             message: LocaleKeys.settings_sites_error_updatePathNameFailed.tr(),
             type: ToastificationType.error,
             description: error.code.publishErrorMessage,
+            alignment: Alignment.center,
           );
         },
       );

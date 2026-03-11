@@ -414,28 +414,38 @@ ToastificationItem showToastNotification({
   ToastificationType type = ToastificationType.success,
   ToastificationCallbacks? callbacks,
   double bottomPadding = 100,
+  Alignment alignment = Alignment.bottomCenter,
+  Offset offset = Offset.zero,
 }) {
   assert(
     (message == null) != (richMessage == null),
     "Exactly one of message or richMessage must be non-null.",
   );
   return toastification.showCustom(
-    alignment: Alignment.bottomCenter,
+    alignment: alignment,
     autoCloseDuration: const Duration(milliseconds: 3000),
     callbacks: callbacks ?? const ToastificationCallbacks(),
     builder: (_, item) {
       return UniversalPlatform.isMobile
-          ? _MobileToast(
-              message: message,
-              type: type,
-              bottomPadding: bottomPadding,
-              description: description,
+          ? Transform.translate(
+              offset: offset,
+              child: _MobileToast(
+                message: message,
+                type: type,
+                bottomPadding: bottomPadding,
+                description: description,
+                alignment: alignment,
+              ),
             )
-          : DesktopToast(
-              message: message,
-              richMessage: richMessage,
-              type: type,
-              onDismiss: () => toastification.dismiss(item),
+          : Transform.translate(
+              offset: offset,
+              child: DesktopToast(
+                message: message,
+                richMessage: richMessage,
+                type: type,
+                onDismiss: () => toastification.dismiss(item),
+                alignment: alignment,
+              ),
             );
     },
   );
@@ -447,12 +457,14 @@ class _MobileToast extends StatelessWidget {
     this.type = ToastificationType.success,
     this.bottomPadding = 100,
     this.description,
+    this.alignment = Alignment.bottomCenter,
   });
 
   final String? message;
   final ToastificationType type;
   final double bottomPadding;
   final String? description;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -474,10 +486,11 @@ class _MobileToast extends StatelessWidget {
             maxLines: 10,
           )
         : null;
+    final isCenter = alignment == Alignment.center;
     return Container(
-      alignment: Alignment.bottomCenter,
+      alignment: alignment,
       padding: EdgeInsets.only(
-        bottom: bottomPadding,
+        bottom: isCenter ? 0 : bottomPadding,
         left: 16,
         right: 16,
       ),
@@ -538,20 +551,23 @@ class DesktopToast extends StatelessWidget {
     this.richMessage,
     required this.type,
     this.onDismiss,
+    this.alignment = Alignment.bottomCenter,
   });
 
   final String? message;
   final TextSpan? richMessage;
   final ToastificationType type;
   final void Function()? onDismiss;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    final isCenter = alignment == Alignment.center;
+    return Align(
+      alignment: alignment,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 360.0),
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-        margin: const EdgeInsets.only(bottom: 32.0),
+        margin: isCenter ? EdgeInsets.zero : const EdgeInsets.only(bottom: 32.0),
         decoration: BoxDecoration(
           color: Theme.of(context).isLightMode
               ? const Color(0xFF333333)
@@ -575,7 +591,8 @@ class DesktopToast extends StatelessWidget {
             ),
             const HSpace(8.0),
             // text
-            Flexible(
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 220.0),
               child: message != null
                   ? FlowyText(
                       message!,
