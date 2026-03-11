@@ -1,5 +1,6 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/util/int64_extension.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/style_widget/icon_button.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
@@ -63,9 +64,8 @@ class TrashCell extends StatelessWidget {
   }
 
   String dateFormatter($fixnum.Int64 inputTimestamps) {
-    final outputFormat = DateFormat('MM/dd/yyyy hh:mm a');
-    final date =
-        DateTime.fromMillisecondsSinceEpoch(inputTimestamps.toInt() * 1000);
+    final outputFormat = DateFormat('MM/dd/yyyy HH:mm');
+    final date = inputTimestamps.toDateTime();
     final outputDate = outputFormat.format(date);
     return outputDate;
   }
