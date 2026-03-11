@@ -107,6 +107,7 @@ class AIChatPagePluginWidgetBuilder extends PluginWidgetBuilder
   final ChatSelectMessageBloc chatMessageSelectorBloc;
   final ViewPluginNotifier notifier;
   int? deletedViewIndex;
+  bool _deleteListenerAttached = false;
 
   @override
   String? get viewName => notifier.view.nameOrDefault;
@@ -129,7 +130,19 @@ class AIChatPagePluginWidgetBuilder extends PluginWidgetBuilder
     required bool shrinkWrap,
     Map<String, dynamic>? data,
   }) {
-    notifier.isDeleted.addListener(_onDeleted);
+    if (!_deleteListenerAttached) {
+      notifier.isDeleted.addListener(() {
+        final deletedView = notifier.isDeleted.value;
+        if (deletedView == null) {
+          return;
+        }
+        if (deletedView.hasIndex()) {
+          deletedViewIndex = deletedView.index;
+        }
+        context.onDeleted?.call(notifier.view, deletedViewIndex);
+      });
+      _deleteListenerAttached = true;
+    }
 
     if (context.userProfile == null) {
       Log.error("User profile is null when opening AI Chat plugin");
@@ -146,17 +159,9 @@ class AIChatPagePluginWidgetBuilder extends PluginWidgetBuilder
         userProfile: context.userProfile!,
         key: ValueKey(notifier.view.id),
         view: notifier.view,
-        onDeleted: () =>
-            context.onDeleted?.call(notifier.view, deletedViewIndex),
+        onDeleted: () {},
       ),
     );
-  }
-
-  void _onDeleted() {
-    final deletedView = notifier.isDeleted.value;
-    if (deletedView != null && deletedView.hasIndex()) {
-      deletedViewIndex = deletedView.index;
-    }
   }
 
   @override
@@ -169,6 +174,7 @@ class AIChatPagePluginWidgetBuilder extends PluginWidgetBuilder
   Widget? get rightBarItem => MultiBlocProvider(
         providers: [
           BlocProvider.value(value: viewInfoBloc),
+          BlocProvider.value(value: pageAccessLevelBloc),
           BlocProvider.value(value: chatMessageSelectorBloc),
         ],
         child: BlocBuilder<ChatSelectMessageBloc, ChatSelectMessageState>(
