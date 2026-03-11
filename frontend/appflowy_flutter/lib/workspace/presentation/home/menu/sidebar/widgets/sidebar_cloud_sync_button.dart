@@ -392,49 +392,52 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
               onTap: onTap,
             ),
           ),
-          if (hasWarning)
-            _buildWarningDot(membershipStatus)
-          else
+          if (hasWarning) _buildWarningDot(membershipStatus),
+          if (!hasWarning)
             Positioned(
-              top: -8.0,
-              right: -12.0,
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 40.0,
-                  minWidth: 20.0,
-                  maxHeight: 14.0,
-                ),
-                padding: const EdgeInsets.only(
-                    left: 5.0, top: 2.0, right: 5.0, bottom: 1.0),
-                decoration: BoxDecoration(
-                  color: labelColor,
-                  borderRadius: BorderRadius.circular(7.0),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 2.0,
-                      offset: const Offset(0, 1.0),
-                    ),
-                  ],
-                ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.center,
-                  child: Text(
-                    labelText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12.0,
-                      fontWeight: FontWeight.w600,
-                      height: 1.0,
-                    ),
-                    maxLines: 1,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
+              left: -6.0,
+              top: 24.0,
+              child: _buildStatusLabel(labelText, labelColor),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatusLabel(String labelText, Color labelColor) {
+    return Container(
+      constraints: const BoxConstraints(
+        maxWidth: 48.0,
+        minWidth: 24.0,
+        maxHeight: 14.0,
+      ),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 5.0, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: labelColor,
+        borderRadius: BorderRadius.circular(7.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 2.0,
+            offset: const Offset(0, 1.0),
+          ),
+        ],
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.center,
+        child: Text(
+          labelText,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12.0,
+            fontWeight: FontWeight.w600,
+            height: 1.0,
+          ),
+          maxLines: 1,
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }
