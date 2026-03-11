@@ -1,3 +1,4 @@
+import 'package:appflowy/plugins/document/presentation/editor_plugins/resource_node_cleanup.dart';
 import 'package:appflowy/plugins/trash/application/trash_listener.dart';
 import 'package:appflowy/plugins/trash/application/trash_service.dart';
 import 'package:appflowy_backend/log.dart';
@@ -46,10 +47,12 @@ class TrashBloc extends Bloc<TrashEvent, TrashState> {
           await _handleResult(result, emit);
         },
         delete: (e) async {
+          await _cleanupTrashResources([e.trash]);
           final result = await _service.deleteViews([e.trash.id]);
           await _handleResult(result, emit);
         },
         deleteAll: (e) async {
+          await _cleanupTrashResources(state.objects);
           final result = await _service.deleteAll();
           await _handleResult(result, emit);
         },
@@ -59,6 +62,18 @@ class TrashBloc extends Bloc<TrashEvent, TrashState> {
         },
       );
     });
+  }
+
+  Future<void> _cleanupTrashResources(Iterable<TrashPB> trashList) async {
+    for (final trash in trashList) {
+      try {
+        await cleanupDocumentResourcesBeforeDelete(documentId: trash.id);
+      } catch (e) {
+        Log.error(
+          'cleanup trash document resources before permanent delete failed, trashId=${trash.id}, error=$e',
+        );
+      }
+    }
   }
 
   Future<void> _handleResult(

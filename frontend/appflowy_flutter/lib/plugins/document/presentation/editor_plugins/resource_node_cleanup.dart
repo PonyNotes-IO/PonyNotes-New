@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_block_component.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
@@ -55,6 +56,42 @@ Future<void> cleanupResourceNodesBeforeDelete(
     )) {
       continue;
     }
+    await _deleteResourceCandidate(candidate);
+  }
+}
+
+/// Cleanup all deletable resources inside a document before deleting the page itself.
+/// This is used by page-level delete flows where we don't have an editor instance.
+Future<void> cleanupDocumentResourcesBeforeDelete({
+  required String documentId,
+  String? workspaceId,
+}) async {
+  final result = await DocumentService().getDocument(
+    documentId: documentId,
+    workspaceId: workspaceId,
+  );
+
+  final documentData = result.toNullable();
+  if (documentData == null) {
+    return;
+  }
+  final document = documentData.toDocument();
+  if (document == null) {
+    return;
+  }
+
+  final candidates = <_ResourceCandidate>[];
+  final seen = <String>{};
+  _walkNode(document.root, (current) {
+    for (final candidate in _extractDeletableCandidatesFromNode(current)) {
+      final key = '${candidate.kind.name}:${candidate.url}';
+      if (seen.add(key)) {
+        candidates.add(candidate);
+      }
+    }
+  });
+
+  for (final candidate in candidates) {
     await _deleteResourceCandidate(candidate);
   }
 }

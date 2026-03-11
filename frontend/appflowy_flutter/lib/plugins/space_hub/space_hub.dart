@@ -535,7 +535,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 
       return plugin.widgetBuilder.buildWidget(
         context: PluginContext(
-          onDeleted: widget.onDeleted,
+          onDeleted: _onChildViewDeleted,
           userProfile: userProfile, // 传入用户配置
         ),
         shrinkWrap: false,
@@ -562,6 +562,27 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         ),
       );
     }
+  }
+
+  void _onChildViewDeleted(ViewPB deletedView, int? index) {
+    // Clear current selection first, then ask SpaceBloc to reload child views.
+    if (_selectedView?.id == deletedView.id) {
+      setState(() {
+        _selectedView = null;
+      });
+      widget.selectedViewNotifier.value = null;
+    }
+
+    try {
+      final spaceBloc = context.read<SpaceBloc>();
+      if (!spaceBloc.isClosed) {
+        spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+      }
+    } catch (_) {
+      // Ignore when SpaceBloc is unavailable in current context.
+    }
+
+    widget.onDeleted?.call(deletedView, index);
   }
 
   Widget _buildEmptyState() {

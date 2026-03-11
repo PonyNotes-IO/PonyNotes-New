@@ -9,6 +9,7 @@ import 'package:appflowy/plugins/document/application/document_listener.dart';
 import 'package:appflowy/plugins/document/application/document_rules.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/plugins/document/application/editor_transaction_adapter.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/resource_node_cleanup.dart';
 import 'package:appflowy/plugins/trash/application/trash_service.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -188,9 +189,19 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
       },
       deletePermanently: () async {
         if (databaseViewId == null && rowId == null) {
-          // 在删除文档前，先清理 editorState，避免渲染错误
+          // 在彻底删除前先清理文档节点中的资源附件，释放服务端存储。
           final currentEditorState = state.editorState;
           if (currentEditorState != null) {
+            try {
+              await cleanupResourceNodesBeforeDelete(
+                currentEditorState,
+                [currentEditorState.document.root],
+              );
+            } catch (e) {
+              Log.error('cleanup document resources before permanent delete failed: $e');
+            }
+
+            // 在删除文档前，先清理 editorState，避免渲染错误
             // 先清理 editorState 相关的监听器和资源
             _updateSelectionDebounce.dispose();
             _syncThrottle.dispose();
