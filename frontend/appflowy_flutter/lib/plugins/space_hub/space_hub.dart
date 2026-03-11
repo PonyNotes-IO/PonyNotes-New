@@ -149,10 +149,9 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           if (toolbar != null) {
             return toolbar;
           }
-        } catch (e) {
-          debugPrint(
-              '[SpaceHub] Error getting rightBarItem for ${selectedView.name}: $e');
-        }
+          } catch (e) {
+            // 静默处理错误
+          }
 
         // 没有可用的工具栏时，返回一个空占位，避免报错
         return const SizedBox.shrink();
@@ -271,8 +270,6 @@ class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
       _spaceBloc!.add(const SpaceEvent.initial(openFirstPage: false));
       _lastWorkspaceId = workspaceId;
       _lastSpaceViewId = spaceViewId;
-      debugPrint(
-          '[SpaceHub] Created SpaceBloc once for workspace: $workspaceId, space: ${widget.spaceView.name}');
     }
 
     final providers = <BlocProvider>[
@@ -339,9 +336,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       try {
         final recentService = getIt<CachedRecentService>();
         await recentService.updateRecentViews([viewId], true);
-        debugPrint('[SpaceHub] Added to recent views: $viewId');
       } catch (e) {
-        debugPrint('[SpaceHub] Failed to add to recent views: $e');
+        // 静默处理错误，避免影响 UI
       }
     });
   }
@@ -349,8 +345,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   @override
   void initState() {
     super.initState();
-    debugPrint(
-        '[SpaceHub] _SpaceHubContentState initState, spaceView: ${widget.spaceView.name} (${widget.spaceView.id})');
     // 尝试从 SpaceBloc 获取当前空间的第一个文档作为默认选中
     _trySelectFirstDocument();
   }
@@ -360,8 +354,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     super.didUpdateWidget(oldWidget);
     // 如果空间切换了，重置选中文档状态
     if (oldWidget.spaceView.id != widget.spaceView.id) {
-      debugPrint(
-          '[SpaceHub] Space changed from ${oldWidget.spaceView.name} to ${widget.spaceView.name}, resetting selected view');
       setState(() {
         _selectedView = null;
       });
@@ -377,13 +369,10 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       try {
         final spaceBloc = context.read<SpaceBloc>();
         final currentSpace = spaceBloc.state.currentSpace;
-        debugPrint(
-            '[SpaceHub] _trySelectFirstDocument: currentSpace=${currentSpace?.id}, targetSpace=${widget.spaceView.id}');
         if (currentSpace?.id == widget.spaceView.id &&
             currentSpace!.childViews.isNotEmpty &&
             _selectedView == null) {
           final firstView = currentSpace.childViews.first;
-          debugPrint('[SpaceHub] Selecting first document: ${firstView.name}');
           setState(() {
             _selectedView = firstView;
           });
@@ -393,7 +382,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           _addToRecentViews(firstView.id);
         }
       } catch (e) {
-        debugPrint('[SpaceHub] _trySelectFirstDocument error: $e');
         // SpaceBloc 不存在，稍后通过 FutureBuilder 加载
       }
     });
@@ -409,8 +397,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       spaceBloc = null;
     }
 
-    debugPrint(
-        '[SpaceHub] _SpaceHubContent building, selectedView: ${_selectedView?.name}');
     final rightPanel = Expanded(
       child: _selectedView != null
           ? _buildSelectedViewContent(_selectedView!)
@@ -471,8 +457,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                         spaceView: widget.spaceView,
                         selectedView: _selectedView,
                         onViewSelectedWithRecent: (view) {
-                          debugPrint(
-                              '[SpaceHub] View selected: ${view.name} (${view.id})');
                           setState(() {
                             _selectedView = view;
                           });
@@ -482,8 +466,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                           _addToRecentViews(view.id);
                         },
                         onViewCreated: (view) {
-                          debugPrint(
-                              '[SpaceHub] View created: ${view.name} (${view.id})');
                           setState(() {
                             _selectedView = view;
                           });
@@ -559,7 +541,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
         userProfile = userWorkspaceBloc.state.userProfile;
       } catch (e) {
-        debugPrint('[SpaceHub] Failed to get userProfile: $e');
+        // 静默处理
       }
 
       return plugin.widgetBuilder.buildWidget(
@@ -570,8 +552,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         shrinkWrap: false,
       );
     } catch (e, stackTrace) {
-      debugPrint('[SpaceHub] Error loading view ${view.name} (${view.id}): $e');
-      debugPrint('[SpaceHub] Stack trace: $stackTrace');
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -697,10 +677,6 @@ class _SpaceDocumentList extends StatelessWidget {
     } catch (_) {
       spaceBloc = null;
     }
-
-    // 调试信息
-    debugPrint(
-        '[SpaceHub] _SpaceDocumentList building, spaceBloc: ${spaceBloc != null}, spaceView: ${spaceView.name} (${spaceView.id})');
 
     return Container(
       // 仅保留左侧留白，避免右侧产生与分割线之间的空白带
@@ -860,8 +836,6 @@ class _SpaceDocumentList extends StatelessWidget {
         if (state.isInitialized) {
           final currentSpace = state.currentSpace;
           if (currentSpace?.id != spaceView.id) {
-            debugPrint(
-                '[SpaceHub] SpaceBloc initialized, opening target space: ${spaceView.name} (${spaceView.id}), currentSpace=${currentSpace?.id}');
             // 使用 Future.microtask 确保在下一帧执行，避免在 listener 中直接修改状态
             Future.microtask(() {
               if (!spaceBloc.isClosed) {
@@ -869,18 +843,10 @@ class _SpaceDocumentList extends StatelessWidget {
                 // 再次检查，避免重复打开
                 if (currentState.isInitialized &&
                     currentState.currentSpace?.id != spaceView.id) {
-                  debugPrint(
-                      '[SpaceHub] Dispatching SpaceEvent.open for ${spaceView.name}');
                   spaceBloc.add(SpaceEvent.open(space: spaceView));
-                } else {
-                  debugPrint(
-                      '[SpaceHub] Skipping open event, currentSpace already matches or SpaceBloc closed');
                 }
               }
             });
-          } else {
-            debugPrint(
-                '[SpaceHub] Current space already matches target space: ${spaceView.name}');
           }
         }
       },
