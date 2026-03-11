@@ -169,8 +169,14 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
             );
           },
           delete: (e) async {
-            // unpublish the page and all its child pages if they are published
-            await _unpublishPage(view);
+            // AI chat views are not publishable, so skip unpublish for chat only.
+            if (view.layout != ViewLayoutPB.Chat) {
+              try {
+                await _unpublishPage(view);
+              } catch (e) {
+                Log.error('unpublish before delete failed: $e');
+              }
+            }
 
             final result = await ViewBackendService.deleteView(viewId: view.id);
 

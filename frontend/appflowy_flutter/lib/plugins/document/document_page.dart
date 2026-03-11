@@ -248,9 +248,9 @@ class _DocumentPageState extends State<DocumentPage>
     }
 
     if (state.isDeleted && UniversalPlatform.isDesktop) {
-      final shouldCloseDeletedDocInSpaceHub =
-          _shouldCloseDeletedDocInSpaceHub(context);
-      if (shouldCloseDeletedDocInSpaceHub && !_handledDeletedInSpaceHub) {
+      final shouldHandleDeletedInSpaceHub =
+          _shouldHandleDeletedInSpaceHub(context);
+      if (shouldHandleDeletedInSpaceHub && !_handledDeletedInSpaceHub) {
         _handledDeletedInSpaceHub = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) {
@@ -404,19 +404,14 @@ class _DocumentPageState extends State<DocumentPage>
     }
   }
 
-  bool _shouldCloseDeletedDocInSpaceHub(BuildContext context) {
+  bool _shouldHandleDeletedInSpaceHub(BuildContext context) {
     try {
       final spaceBloc = context.read<SpaceBloc>();
       if (spaceBloc.isClosed) {
         return false;
       }
       final currentSpace = spaceBloc.state.currentSpace;
-      if (currentSpace == null) {
-        return false;
-      }
-      final hasOtherNotes =
-          currentSpace.childViews.any((v) => v.id != widget.view.id);
-      return hasOtherNotes;
+      return currentSpace != null;
     } catch (_) {
       return false;
     }

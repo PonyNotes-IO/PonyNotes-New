@@ -493,22 +493,21 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     if (spaceBloc != null) {
       return BlocListener<SpaceBloc, SpaceState>(
         bloc: spaceBloc,
-        listenWhen: (prev, curr) =>
-            curr.currentSpace?.id == widget.spaceView.id &&
-            curr.currentSpace!.childViews.isNotEmpty &&
-            _selectedView == null,
-        listener: (context, state) {
-          // 当空间文档列表加载完成后，自动选中第一个文档
-          final currentSpace = state.currentSpace;
-          if (currentSpace?.id == widget.spaceView.id &&
-              currentSpace!.childViews.isNotEmpty) {
-            final firstView = currentSpace.childViews.first;
-            setState(() {
-              _selectedView = firstView;
-            });
-            // 更新共享的选中视图状态
-            widget.selectedViewNotifier.value = firstView;
+        listenWhen: (prev, curr) {
+          if (!curr.isInitialized) {
+            return false;
           }
+          if (curr.currentSpace?.id != widget.spaceView.id) {
+            return false;
+          }
+          final prevIds = prev.currentSpace?.childViews.map((v) => v.id).join(',');
+          final currIds = curr.currentSpace?.childViews.map((v) => v.id).join(',');
+          return prev.currentSpace?.id != curr.currentSpace?.id ||
+              prevIds != currIds ||
+              prev.isInitialized != curr.isInitialized;
+        },
+        listener: (context, state) {
+          _syncSelectedViewWithCurrentSpace(state);
         },
         child: content,
       );
@@ -602,6 +601,46 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         ],
       ),
     );
+  }
+
+  void _syncSelectedViewWithCurrentSpace(SpaceState state) {
+    final currentSpace = state.currentSpace;
+    if (currentSpace?.id != widget.spaceView.id) {
+      return;
+    }
+
+    final childViews = currentSpace?.childViews ?? const <ViewPB>[];
+    if (childViews.isEmpty) {
+      if (_selectedView != null) {
+        setState(() {
+          _selectedView = null;
+        });
+        widget.selectedViewNotifier.value = null;
+      }
+      return;
+    }
+
+    if (_selectedView == null) {
+      final firstView = childViews.first;
+      setState(() {
+        _selectedView = firstView;
+      });
+      widget.selectedViewNotifier.value = firstView;
+      return;
+    }
+
+    final selectedId = _selectedView!.id;
+    final stillExists = childViews.any((v) => v.id == selectedId);
+    if (stillExists) {
+      return;
+    }
+
+    // Selected view was deleted or moved out; switch right panel to first available.
+    final fallbackView = childViews.first;
+    setState(() {
+      _selectedView = fallbackView;
+    });
+    widget.selectedViewNotifier.value = fallbackView;
   }
 }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
@@ -13,11 +14,14 @@ import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../../application/recent/cached_recent_service.dart';
 
 class ViewAction extends StatelessWidget {
   const ViewAction({
@@ -38,7 +42,6 @@ class ViewAction extends StatelessWidget {
       view,
       (controller, data) async {
         if (type == ViewMoreActionType.delete) {
-          final viewBloc = context.read<ViewBloc>();
           final dialogContext = AppGlobals.rootNavKey.currentContext ?? context;
           FocusManager.instance.primaryFocus?.unfocus();
           mutex?.close();
@@ -46,7 +49,6 @@ class ViewAction extends StatelessWidget {
           await _handleDeleteAction(
             actionContext: context,
             dialogContext: dialogContext,
-            viewBloc: viewBloc,
           );
           return;
         }
@@ -106,7 +108,6 @@ class ViewAction extends StatelessWidget {
     {
     required BuildContext actionContext,
     required BuildContext dialogContext,
-    required ViewBloc viewBloc,
   }
   ) async {
     final (containPublishedPage, _) =
@@ -118,19 +119,16 @@ class ViewAction extends StatelessWidget {
         name: view.nameOrDefault,
         description: LocaleKeys.publish_containsPublishedPage.tr(),
         onConfirm: () {
-          unawaited(_onDeleteConfirmed(actionContext, viewBloc));
+          unawaited(_onDeleteConfirmed(actionContext));
         },
       );
     } else {
-      await _onDeleteConfirmed(actionContext, viewBloc);
+      await _onDeleteConfirmed(actionContext);
     }
   }
 
-  Future<void> _onDeleteConfirmed(
-    BuildContext actionContext,
-    ViewBloc viewBloc,
-  ) async {
-    final didTriggerDelete = await _triggerDelete(viewBloc);
+  Future<void> _onDeleteConfirmed(BuildContext actionContext) async {
+    final didTriggerDelete = await _triggerDelete();
     if (didTriggerDelete) {
       _refreshSpaceListIfNeeded(actionContext);
     }
@@ -154,29 +152,34 @@ class ViewAction extends StatelessWidget {
     });
   }
 
-  Future<bool> _triggerDelete(ViewBloc viewBloc) async {
-    if (!viewBloc.isClosed) {
-      viewBloc.add(const ViewEvent.delete());
-      return true;
+  Future<bool> _triggerDelete() async {
+    if (view.layout != ViewLayoutPB.Chat) {
+      try {
+        final (_, publishedPages) =
+            await ViewBackendService.containPublishedPage(view);
+        await Future.wait(
+          publishedPages.map(
+            (publishedView) => ViewBackendService.unpublish(publishedView),
+          ),
+        );
+      } catch (e) {
+        Log.error('unpublish before delete failed in more actions: $e');
+      }
     }
 
-    // Fallback path: the source view bloc might be disposed after popover closes.
-    // Execute direct delete flow to avoid user-facing failure.
-    Log.warn('ViewBloc already closed, fallback to direct delete for view=${view.id}');
-
-    final (_, publishedPages) = await ViewBackendService.containPublishedPage(view);
-    await Future.wait(
-      publishedPages.map((publishedView) => ViewBackendService.unpublish(publishedView)),
-    );
-
     final deleteResult = await ViewBackendService.deleteView(viewId: view.id);
-    return deleteResult.fold(
-      (_) => true,
+    await deleteResult.fold(
+      (_) async {
+        await getIt<CachedRecentService>().updateRecentViews(
+          [view.id],
+          false,
+        );
+      },
       (error) {
-        Log.error('fallback delete view failed: $error');
-        return false;
+        Log.error('delete view failed in more actions: $error');
       },
     );
+    return deleteResult.isSuccess;
   }
 }
 
