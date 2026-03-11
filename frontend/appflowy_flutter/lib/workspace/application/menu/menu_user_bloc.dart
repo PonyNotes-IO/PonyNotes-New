@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:appflowy/user/application/user_listener.dart';
+import 'package:appflowy/user/application/user_profile_event.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -19,6 +22,7 @@ class MenuUserBloc extends Bloc<MenuUserEvent, MenuUserState> {
         _userService = UserBackendService(userId: userProfile.id),
         super(MenuUserState.initial(userProfile)) {
     _dispatch();
+    _subscribeToGlobalUserProfileUpdates();
   }
 
   final String workspaceId;
@@ -26,9 +30,19 @@ class MenuUserBloc extends Bloc<MenuUserEvent, MenuUserState> {
   final UserListener _userListener;
   final FolderListener _userWorkspaceListener;
   final UserProfilePB userProfile;
+  StreamSubscription<UserProfileUpdatedEvent>? _globalProfileSubscription;
+
+  void _subscribeToGlobalUserProfileUpdates() {
+    _globalProfileSubscription = userProfileEventBus.on<UserProfileUpdatedEvent>().listen((event) {
+      if (!isClosed) {
+        add(MenuUserEvent.didReceiveUserProfile(event.userProfile));
+      }
+    });
+  }
 
   @override
   Future<void> close() async {
+    await _globalProfileSubscription?.cancel();
     await _userListener.stop();
     await _userWorkspaceListener.stop();
     return super.close();

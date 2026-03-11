@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/user/application/user_service.dart';
@@ -292,18 +294,40 @@ class _SettingsMenuState extends State<SettingsMenu> {
         (_subscriptionInfo?.planSubscription.endDate != null &&
             (currentPlan?.value ?? 0) != 0);
 
+    Widget _buildAvatarImage(String url, double size) {
+      // 判断是本地路径还是网络 URL
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        return Image.network(
+          url,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
+        );
+      } else {
+        // 本地文件路径
+        final file = File(url);
+        if (file.existsSync()) {
+          return Image.file(
+            file,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
+          );
+        }
+        return _buildDefaultAvatar(size);
+      }
+    }
+
     Widget buildAvatar() {
       final double size = 48;
+      final iconUrl = widget.userProfile.iconUrl;
+      
       return ClipRRect(
         borderRadius: BorderRadius.circular(size / 2),
-        child: widget.userProfile.iconUrl.isNotEmpty
-            ? Image.network(
-                widget.userProfile.iconUrl,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
-              )
+        child: iconUrl.isNotEmpty
+            ? _buildAvatarImage(iconUrl, size)
             : _buildDefaultAvatar(size),
       );
     }

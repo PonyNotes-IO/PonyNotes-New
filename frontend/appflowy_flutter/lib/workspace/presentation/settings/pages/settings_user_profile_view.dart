@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_util.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/user_profile_event.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
@@ -295,8 +296,8 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
         iconUrl: finalAvatarUrl,
       );
 
-      updateResult.fold(
-        (success) {
+      await updateResult.fold(
+        (success) async {
           Log.info('User profile updated successfully');
           if (mounted) {
             // 更新原始值
@@ -306,6 +307,10 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
               _avatarUrl = finalAvatarUrl;
               _pendingAvatarPath = null;
             });
+            
+            // 刷新用户配置并通知 SettingsDialogBloc，让整个应用立即更新
+            await _refreshUserProfile();
+            
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('保存成功')),
             );
@@ -331,6 +336,31 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
       if (mounted) {
         setState(() => _isSaving = false);
       }
+    }
+  }
+
+  // 刷新用户配置并通知所有监听者
+  Future<void> _refreshUserProfile() async {
+    try {
+      final result = await UserBackendService.getCurrentUserProfile();
+      result.fold(
+        (newProfile) {
+          if (mounted) {
+            // 通知 SettingsDialogBloc 更新用户配置
+            context.read<SettingsDialogBloc>().add(
+              SettingsDialogEvent.didReceiveUserProfile(newProfile),
+            );
+            
+            // 发送全局事件，通知侧边栏等其他组件更新
+            userProfileEventBus.fire(UserProfileUpdatedEvent(newProfile));
+            
+            Log.info('User profile refreshed and notified globally');
+          }
+        },
+        (error) => Log.error('Failed to refresh user profile: ${error.msg}'),
+      );
+    } catch (e) {
+      Log.error('Refresh user profile exception: $e');
     }
   }
 
