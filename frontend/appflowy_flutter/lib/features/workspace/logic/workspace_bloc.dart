@@ -630,9 +630,52 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     WorkspaceEventEmitWorkspaces event,
     Emitter<UserWorkspaceState> emit,
   ) async {
+    final sortedWorkspaces = _sortWorkspaces(event.workspaces);
+    final currentWorkspace = state.currentWorkspace;
+    final currentWorkspaceId = currentWorkspace?.workspaceId;
+    final isCurrentWorkspaceRemoved = currentWorkspaceId != null &&
+        sortedWorkspaces.every((w) => w.workspaceId != currentWorkspaceId);
+
+    if (isCurrentWorkspaceRemoved) {
+      // Current workspace has been removed from the latest list (e.g. member removed).
+      // Pick a fallback workspace immediately to prevent stale workspace content.
+      final fallbackWorkspace = sortedWorkspaces.firstOrNull;
+
+      if (fallbackWorkspace != null) {
+        emit(
+          state.copyWith(
+            workspaces: sortedWorkspaces,
+            currentWorkspace: fallbackWorkspace,
+          ),
+        );
+        _safeAdd(
+          UserWorkspaceEvent.openWorkspace(
+            workspaceId: fallbackWorkspace.workspaceId,
+            workspaceType: fallbackWorkspace.workspaceType,
+          ),
+        );
+      } else {
+        // No available workspace left. Clear current workspace to avoid showing stale data.
+        emit(
+          UserWorkspaceState(
+            currentWorkspace: null,
+            workspaces: sortedWorkspaces,
+            actionResult: state.actionResult,
+            isCollabWorkspaceOn: state.isCollabWorkspaceOn,
+            userProfile: state.userProfile,
+            workspaceSubscriptionInfo: state.workspaceSubscriptionInfo,
+            currentSubscription: state.currentSubscription,
+            isCloudSyncEnabled: state.isCloudSyncEnabled,
+            folderSyncState: state.folderSyncState,
+          ),
+        );
+      }
+      return;
+    }
+
     emit(
       state.copyWith(
-        workspaces: _sortWorkspaces(event.workspaces),
+        workspaces: sortedWorkspaces,
       ),
     );
   }

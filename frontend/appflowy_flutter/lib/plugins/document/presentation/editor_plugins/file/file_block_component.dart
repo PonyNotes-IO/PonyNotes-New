@@ -192,6 +192,22 @@ class FileBlockComponentState extends State<FileBlockComponent>
   AutoRemoveNotifier<FileProgress>? _uploadProgressNotifier;
   String? _progressFileUrl;
 
+  String? get _uploadedByUserId {
+    final value = node.attributes[FileBlockKeys.uploadedBy];
+    if (value == null) {
+      return null;
+    }
+    return value.toString();
+  }
+
+  String? get _currentUserId {
+    final user = context.read<DocumentBloc?>()?.state.userProfilePB;
+    if (user == null) {
+      return null;
+    }
+    return user.id.toString();
+  }
+
   bool get _isUploading {
     final value = _uploadProgressNotifier?.value;
     if (value == null || value.error != null) {
@@ -203,6 +219,26 @@ class FileBlockComponentState extends State<FileBlockComponent>
   double get _uploadProgressValue {
     final value = _uploadProgressNotifier?.value.progress ?? 0;
     return value.clamp(0.0, 1.0).toDouble();
+  }
+
+  bool get _shouldShowUploadProgress {
+    if (!_isUploading) {
+      return false;
+    }
+    // Always allow showing progress in the local upload session.
+    if (_isUploadingFromLocal) {
+      return true;
+    }
+
+    final uploadedBy = _uploadedByUserId;
+    final currentUserId = _currentUserId;
+    if (uploadedBy == null ||
+        uploadedBy.isEmpty ||
+        currentUserId == null ||
+        currentUserId.isEmpty) {
+      return false;
+    }
+    return uploadedBy == currentUserId;
   }
 
   void _onUploadProgressChanged() {
@@ -225,7 +261,11 @@ class FileBlockComponentState extends State<FileBlockComponent>
     final url = node.attributes[FileBlockKeys.url] as String?;
     final urlType =
         FileUrlType.fromIntValue(node.attributes[FileBlockKeys.urlType] ?? 0);
-    final shouldTrack = urlType == FileUrlType.cloud && url?.isNotEmpty == true;
+    final shouldTrack = urlType == FileUrlType.cloud &&
+        url?.isNotEmpty == true &&
+        (_isUploadingFromLocal ||
+            (_uploadedByUserId?.isNotEmpty == true &&
+                _uploadedByUserId == _currentUserId));
     if (!shouldTrack) {
       _disposeUploadProgressNotifier();
       return;
@@ -316,7 +356,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
                         color: Theme.of(context).hintColor,
                         size: const Size.square(24),
                       ),
-                      if (_isUploading)
+                      if (_shouldShowUploadProgress)
                         SizedBox.square(
                           dimension: 34,
                           child: CircularProgressIndicator(
@@ -620,11 +660,13 @@ class FileBlockComponentState extends State<FileBlockComponent>
       dropManagerState?.remove(FileBlockKeys.type);
 
       final transaction = editorState.transaction;
+      final currentUserId = documentBloc.state.userProfilePB?.id.toString();
       transaction.updateNode(widget.node, {
         FileBlockKeys.url: url,
         FileBlockKeys.urlType: urlType.toIntValue(),
         FileBlockKeys.name: file.name,
         FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
+        FileBlockKeys.uploadedBy: currentUserId,
       });
       await editorState.apply(transaction);
       _syncUploadProgressNotifier();
@@ -658,11 +700,14 @@ class FileBlockComponentState extends State<FileBlockComponent>
     }
 
     final transaction = editorState.transaction;
+    final currentUserId =
+        context.read<DocumentBloc?>()?.state.userProfilePB?.id.toString();
     transaction.updateNode(widget.node, {
       FileBlockKeys.url: url,
       FileBlockKeys.urlType: FileUrlType.network.toIntValue(),
       FileBlockKeys.name: name,
       FileBlockKeys.uploadedAt: DateTime.now().millisecondsSinceEpoch,
+      FileBlockKeys.uploadedBy: currentUserId,
     });
     await editorState.apply(transaction);
     _syncUploadProgressNotifier();
