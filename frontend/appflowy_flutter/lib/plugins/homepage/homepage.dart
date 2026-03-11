@@ -116,6 +116,18 @@ class _HomePageState extends State<HomePage> {
     super.initState();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context
+            .read<RecentViewsBloc>()
+            .add(const RecentViewsEvent.fetchRecentViews());
+      }
+    });
+  }
+
   // 最近访问卡片头部 5 色方案
   static const List<Color> _recentHeaderColors = [
     Color(0x0DE97418),
@@ -217,26 +229,30 @@ class _HomePageState extends State<HomePage> {
           previous.currentWorkspace?.workspaceId !=
           current.currentWorkspace?.workspaceId,
       listener: (context, state) {
-        // 当工作区切换时，刷新最近访问和待办计划
         try {
-          // 刷新最近访问
-          context.read<RecentViewsBloc>().add(
-                const RecentViewsEvent.resetRecentViews(),
-              );
-
-          // 刷新待办计划 - 需要找到 TodoBloc
-          // 由于 TodoBloc 在 TodoPlanSection 内部创建，我们需要通过其他方式刷新
-          // 这里先刷新最近访问，待办计划的刷新会在 TodoPlanSection 中处理
+          context
+              .read<RecentViewsBloc>()
+              .add(const RecentViewsEvent.resetRecentViews());
         } catch (e) {
           Log.warn('刷新首页内容失败: $e');
         }
       },
-      child: Container(
-        color: theme.colorScheme.surface,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(90, 80.0, 90, 32.0),
-          child: Column(
-            children: [
+      child: BlocListener<TabsBloc, TabsState>(
+        listenWhen: (previous, current) =>
+            previous.currentPageManager.plugin.pluginType !=
+                PluginType.homepage &&
+            current.currentPageManager.plugin.pluginType == PluginType.homepage,
+        listener: (context, state) {
+          context
+              .read<RecentViewsBloc>()
+              .add(const RecentViewsEvent.resetRecentViews());
+        },
+        child: Container(
+          color: theme.colorScheme.surface,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(90, 80.0, 90, 32.0),
+            child: Column(
+              children: [
               // 问候语区域 - 右对齐，与头像一起
               _buildGreetingSection(greeting, userName),
               const SizedBox(height: 50),
@@ -358,7 +374,8 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildGreetingSection(String greeting, String userName) {

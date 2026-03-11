@@ -145,27 +145,30 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               viewId: view.id,
               name: e.newName,
             );
-            emit(
-              result.fold(
-                (l) {
-                  final view = state.view;
-                  view.freeze();
-                  final newView = view.rebuild(
-                    (b) => b.name = e.newName,
-                  );
-                  Log.info('rename view: ${newView.id} to ${newView.name}');
-                  return state.copyWith(
+            await result.fold(
+              (l) async {
+                final view = state.view;
+                view.freeze();
+                final newView = view.rebuild(
+                  (b) => b.name = e.newName,
+                );
+                Log.info('rename view: ${newView.id} to ${newView.name}');
+                await getIt<CachedRecentService>().reset();
+                return emit(
+                  state.copyWith(
                     successOrFailure: FlowyResult.success(null),
                     view: newView,
-                  );
-                },
-                (error) {
-                  Log.error('rename view failed: $error');
-                  return state.copyWith(
+                  ),
+                );
+              },
+              (error) async {
+                Log.error('rename view failed: $error');
+                return emit(
+                  state.copyWith(
                     successOrFailure: FlowyResult.failure(error),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             );
           },
           delete: (e) async {
