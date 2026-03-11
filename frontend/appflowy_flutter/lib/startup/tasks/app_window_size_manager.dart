@@ -7,7 +7,7 @@ import 'package:appflowy/startup/startup.dart';
 
 class WindowSizeManager {
   static const double minWindowHeight = 720.0;
-  static const double minWindowWidth = 1024.0;
+  static const double minWindowWidth = 1200.0;
   // Preventing failed assertion due to Texture Descriptor Validation
   static const double maxWindowHeight = 8192.0;
   static const double maxWindowWidth = 8192.0;

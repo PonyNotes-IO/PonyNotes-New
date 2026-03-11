@@ -59,6 +59,9 @@ class DesktopHomeScreen extends StatefulWidget {
 }
 
 class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
+  static const double _minContentWidth = 760;
+  static const double _minContentHeight = 420;
+
   late final Future<List<FlowyResult>> _initFuture;
   bool _hasShownRemovedDialog = false;
 
@@ -337,7 +340,10 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     return Stack(
       children: [
         homeStack
-            .constrained(minWidth: 500)
+            .constrained(
+              minWidth: _minContentWidth,
+              minHeight: _minContentHeight,
+            )
             .positioned(
               left: homeStackLeft,
               right: homeStackRight,

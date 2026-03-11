@@ -418,7 +418,7 @@ class _HomePageState extends State<HomePage> {
         // 过滤掉可能的无效视图，并限制显示数量
         final validRecentViews = state.views
             .where((sectionView) => sectionView.item.name.isNotEmpty) // 基本验证
-            .take(6)
+            .take(4)
             .toList();
 
         if (validRecentViews.isEmpty) {
