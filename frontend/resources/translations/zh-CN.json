@@ -2451,7 +2451,7 @@
       "showWeekends": "显示周末",
       "firstDayOfWeek": "一周开始于",
       "layoutDateField": "以……为日历布局",
-      "noDateTitle": "没有日期",
+      "noDateTitle": "没有事件",
       "unscheduledEventsTitle": "未安排的事件",
       "clickToAdd": "单击以添加到日历",
       "name": "日历布局",
