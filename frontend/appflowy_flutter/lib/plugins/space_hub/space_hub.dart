@@ -581,8 +581,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     } catch (_) {
       // Ignore when SpaceBloc is unavailable in current context.
     }
-
-    widget.onDeleted?.call(deletedView, index);
   }
 
   Widget _buildEmptyState() {

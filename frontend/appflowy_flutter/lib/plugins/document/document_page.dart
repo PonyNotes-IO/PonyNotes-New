@@ -63,6 +63,7 @@ class _DocumentPageState extends State<DocumentPage>
     with WidgetsBindingObserver {
   EditorState? editorState;
   Selection? initialSelection;
+  bool _handledDeletedInSpaceHub = false;
   late final documentBloc = DocumentBloc(documentId: widget.view.id, workspaceId: widget.view.workspaceId)
     ..add(const DocumentEvent.initial());
 
@@ -161,6 +162,10 @@ class _DocumentPageState extends State<DocumentPage>
                 return const SizedBox.shrink();
               }
 
+              if (!state.isDeleted) {
+                _handledDeletedInSpaceHub = false;
+              }
+
               return MultiBlocListener(
                 listeners: [
                   BlocListener<PageAccessLevelBloc, PageAccessLevelState>(
@@ -240,6 +245,22 @@ class _DocumentPageState extends State<DocumentPage>
                   : '',
         ),
       );
+    }
+
+    if (state.isDeleted && UniversalPlatform.isDesktop) {
+      final shouldCloseDeletedDocInSpaceHub =
+          _shouldCloseDeletedDocInSpaceHub(context);
+      if (shouldCloseDeletedDocInSpaceHub && !_handledDeletedInSpaceHub) {
+        _handledDeletedInSpaceHub = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) {
+            return;
+          }
+          _refreshSpaceBlocIfNeeded(context);
+          widget.onDeleted();
+        });
+        return const SizedBox.shrink();
+      }
     }
 
     return Provider(
@@ -380,6 +401,24 @@ class _DocumentPageState extends State<DocumentPage>
       }
     } catch (_) {
       // SpaceBloc 不存在，忽略
+    }
+  }
+
+  bool _shouldCloseDeletedDocInSpaceHub(BuildContext context) {
+    try {
+      final spaceBloc = context.read<SpaceBloc>();
+      if (spaceBloc.isClosed) {
+        return false;
+      }
+      final currentSpace = spaceBloc.state.currentSpace;
+      if (currentSpace == null) {
+        return false;
+      }
+      final hasOtherNotes =
+          currentSpace.childViews.any((v) => v.id != widget.view.id);
+      return hasOtherNotes;
+    } catch (_) {
+      return false;
     }
   }
 
