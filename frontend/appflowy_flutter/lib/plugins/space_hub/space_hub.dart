@@ -7,6 +7,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
+import 'package:appflowy/workspace/application/recent/cached_recent_service.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -322,6 +323,29 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   /// 左侧面板最大宽度
   static const double _maxLeftWidth = 450.0;
 
+  /// 上次添加到最近访问的视图 ID（用于防抖）
+  String? _lastAddedRecentViewId;
+
+  /// 添加视图到最近访问列表（带防抖）
+  void _addToRecentViews(String viewId) {
+    // 防抖：如果是同一个视图，跳过
+    if (_lastAddedRecentViewId == viewId) {
+      return;
+    }
+    _lastAddedRecentViewId = viewId;
+
+    // 使用异步方式更新最近访问，避免阻塞UI
+    Future.microtask(() async {
+      try {
+        final recentService = getIt<CachedRecentService>();
+        await recentService.updateRecentViews([viewId], true);
+        debugPrint('[SpaceHub] Added to recent views: $viewId');
+      } catch (e) {
+        debugPrint('[SpaceHub] Failed to add to recent views: $e');
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -365,6 +389,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           });
           // 更新共享的选中视图状态
           widget.selectedViewNotifier.value = firstView;
+          // 添加到最近访问
+          _addToRecentViews(firstView.id);
         }
       } catch (e) {
         debugPrint('[SpaceHub] _trySelectFirstDocument error: $e');
@@ -444,7 +470,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                       child: _SpaceDocumentList(
                         spaceView: widget.spaceView,
                         selectedView: _selectedView,
-                        onViewSelected: (view) {
+                        onViewSelectedWithRecent: (view) {
                           debugPrint(
                               '[SpaceHub] View selected: ${view.name} (${view.id})');
                           setState(() {
@@ -452,6 +478,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                           });
                           // 更新共享的选中视图状态，以便 rightBarItem 可以访问
                           widget.selectedViewNotifier.value = view;
+                          // 添加到最近访问
+                          _addToRecentViews(view.id);
                         },
                         onViewCreated: (view) {
                           debugPrint(
@@ -461,6 +489,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                           });
                           // 更新共享的选中视图状态，以便 rightBarItem 可以访问
                           widget.selectedViewNotifier.value = view;
+                          // 添加到最近访问
+                          _addToRecentViews(view.id);
                         },
                       ),
                     ),
@@ -649,14 +679,14 @@ class _SpaceDocumentList extends StatelessWidget {
   const _SpaceDocumentList({
     required this.spaceView,
     required this.selectedView,
-    required this.onViewSelected,
     required this.onViewCreated,
+    required this.onViewSelectedWithRecent,
   });
 
   final ViewPB spaceView;
   final ViewPB? selectedView;
-  final ValueChanged<ViewPB> onViewSelected;
   final ValueChanged<ViewPB> onViewCreated;
+  final void Function(ViewPB view) onViewSelectedWithRecent;
 
   @override
   Widget build(BuildContext context) {
@@ -950,7 +980,7 @@ class _SpaceDocumentList extends StatelessWidget {
                   // 在空间统一页面中，点击文档只更新选中状态，不打开新 tab
                   // 更新 MenuSharedState 以便 ViewItem 显示选中状态
                   getIt<MenuSharedState>().latestOpenView = selectedView;
-                  onViewSelected(selectedView);
+                  onViewSelectedWithRecent(selectedView);
                 },
                 isFeedback: false,
                 shouldRenderChildren: true,
@@ -1010,7 +1040,7 @@ class _SpaceDocumentList extends StatelessWidget {
               onSelected: (itemContext, selectedView) {
                 // 更新 MenuSharedState 以便 ViewItem 显示选中状态
                 getIt<MenuSharedState>().latestOpenView = selectedView;
-                onViewSelected(selectedView);
+                onViewSelectedWithRecent(selectedView);
               },
               isFeedback: false,
               shouldRenderChildren: true,

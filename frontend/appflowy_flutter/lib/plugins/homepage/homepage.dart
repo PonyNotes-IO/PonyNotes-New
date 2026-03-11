@@ -432,9 +432,10 @@ class _HomePageState extends State<HomePage> {
           );
         }
 
-        // 过滤掉可能的无效视图，并限制显示数量
+        // 允许显示空标题的文档，空标题时显示"无标题笔记"
+        // 过滤掉 Space 视图，并限制显示数量
         final validRecentViews = state.views
-            .where((sectionView) => sectionView.item.name.isNotEmpty) // 基本验证
+            .where((sectionView) => !sectionView.item.isSpace) // 过滤掉 Space
             .take(4)
             .toList();
 
@@ -663,9 +664,9 @@ class _HomePageState extends State<HomePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // 标题
+                      // 标题：如果为空则显示"无标题笔记"
                       Text(
-                        view.name,
+                        view.name.isEmpty ? '无标题笔记' : view.name,
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,

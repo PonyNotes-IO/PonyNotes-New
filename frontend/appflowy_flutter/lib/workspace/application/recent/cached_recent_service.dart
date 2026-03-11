@@ -5,6 +5,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/recent/recent_listener.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
@@ -62,6 +63,7 @@ class CachedRecentService {
         }
       }
     }
+    
     return FolderEventUpdateRecentViews(
       UpdateRecentViewPayloadPB(
         viewIds: addInRecent ? viewIds : duplicatedViewIds,
@@ -78,9 +80,9 @@ class CachedRecentService {
       (recentViews) {
         return FlowyResult.success(
           RepeatedRecentViewPB(
-            // filter the space view and the orphan view
+            // 只过滤 Space 视图，允许显示空标题的文档和孤儿视图
             items: recentViews.items.where(
-              (e) => !e.item.isSpace && e.item.id != e.item.parentViewId,
+              (e) => !e.item.isSpace,
             ),
           ),
         );

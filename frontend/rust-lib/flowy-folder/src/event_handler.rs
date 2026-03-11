@@ -3,7 +3,7 @@ use flowy_error::{FlowyError, FlowyResult};
 use lib_dispatch::prelude::{AFPluginData, AFPluginState, DataResult, data_result_ok};
 use std::str::FromStr;
 use std::sync::{Arc, Weak};
-use tracing::instrument;
+use tracing::{instrument, info};
 use uuid::Uuid;
 
 use crate::entities::*;
@@ -191,11 +191,15 @@ pub(crate) async fn update_recent_views_handler(
   folder: AFPluginState<Weak<FolderManager>>,
 ) -> Result<(), FlowyError> {
   let params: UpdateRecentViewPayloadPB = data.into_inner();
+  info!("[Recent] update_recent_views_handler: add_in_recent={}, view_ids={:?}", params.add_in_recent, params.view_ids);
   let folder = upgrade_folder(folder)?;
+  let view_ids_len = params.view_ids.len();
   if params.add_in_recent {
     let _ = folder.add_recent_views(params.view_ids).await;
+    info!("[Recent] added {} views to recent", view_ids_len);
   } else {
     let _ = folder.remove_recent_views(params.view_ids).await;
+    info!("[Recent] removed {} views from recent", view_ids_len);
   }
   Ok(())
 }
@@ -280,7 +284,14 @@ pub(crate) async fn read_recent_views_handler(
   folder: AFPluginState<Weak<FolderManager>>,
 ) -> DataResult<RepeatedRecentViewPB, FlowyError> {
   let folder = upgrade_folder(folder)?;
+  
+  // Get recent sections with filtering (excludes trash and other private views)
   let recent_items = folder.get_my_recent_sections().await;
+  info!("[Recent] read_recent_views_handler: got {} recent items", recent_items.len());
+  for item in &recent_items {
+    info!("[Recent]   - id: {}, timestamp: {}", item.id, item.timestamp);
+  }
+  
   let start = data.start;
   let limit = data.limit;
   let ids = recent_items
@@ -290,7 +301,12 @@ pub(crate) async fn read_recent_views_handler(
     .skip(start as usize)
     .take(limit as usize)
     .collect::<Vec<_>>();
+  info!("[Recent] requesting view details for ids: {:?}", ids);
   let views = folder.get_view_pbs_without_children(ids).await?;
+  info!("[Recent] got {} views after filtering", views.len());
+  for view in &views {
+    info!("[Recent]   - view id: {}, name: '{}'", view.id, view.name);
+  }
   let items = views
     .into_iter()
     .zip(recent_items.into_iter().rev())
