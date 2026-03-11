@@ -408,31 +408,34 @@ class _CustomRepeatDialogState extends State<CustomRepeatDialog> {
               ),
             ),
             const SizedBox(height: 8),
-            Container(
-              height: 36,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: RichText(
-                text: TextSpan(
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
-                  children: [
-                    const TextSpan(text: '频率  '),
-                    TextSpan(
-                      text: _previewSummary(),
-                      style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            // 选择「每周」且尚未选择星期几时，不显示上方的频率预览，避免出现两个「频率」且上方为空
+            if (unit != 1 || selectedWeekdays.isNotEmpty) ...[
+              Container(
+                height: 36,
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: RichText(
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).textTheme.bodyMedium?.color,
                     ),
-                  ],
+                    children: [
+                      const TextSpan(text: '频率  '),
+                      TextSpan(
+                        text: _previewSummary(),
+                        style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
+            ],
             if (unit == 1) ...[
               Align(alignment: Alignment.centerLeft, child: const Text('频率')),
               const SizedBox(height: 6),
