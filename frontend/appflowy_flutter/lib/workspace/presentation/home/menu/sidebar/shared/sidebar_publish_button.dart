@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -9,6 +10,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -402,12 +404,7 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
         item.name,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: item.publishName.isNotEmpty
-          ? FlowyText.small(
-              item.publishName,
-              color: Theme.of(context).hintColor,
-            )
-          : null,
+      subtitle: null,
       trailing: item.publisherEmail != null
           ? Text(
               item.publisherEmail!,
