@@ -4,6 +4,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/shared_con
 import 'package:appflowy/shared/text_field/text_filed_with_metric_lines.dart';
 import 'package:appflowy/workspace/application/appearance_defaults.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_name_constants.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -108,6 +109,9 @@ class _InnerCoverTitleState extends State<_InnerCoverTitle> {
               enabled: editorState.editable,
               focusNode: titleFocusNode,
               style: fontStyle,
+              inputFormatters: [
+                ViewNameLengthLimitingFormatter(kMaxViewNameGraphemeLength),
+              ],
               onLineCountChange: (count) => lineCount = count,
               decoration: InputDecoration(
                 border: InputBorder.none,

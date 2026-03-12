@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class TextFieldWithMetricLines extends StatefulWidget {
   const TextFieldWithMetricLines({
@@ -6,6 +7,8 @@ class TextFieldWithMetricLines extends StatefulWidget {
     this.controller,
     this.focusNode,
     this.maxLines,
+    this.maxLength,
+    this.inputFormatters,
     this.style,
     this.decoration,
     this.onLineCountChange,
@@ -15,6 +18,8 @@ class TextFieldWithMetricLines extends StatefulWidget {
   final TextEditingController? controller;
   final FocusNode? focusNode;
   final int? maxLines;
+  final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
   final TextStyle? style;
   final InputDecoration? decoration;
   final void Function(int count)? onLineCountChange;
@@ -55,6 +60,8 @@ class _TextFieldWithMetricLinesState extends State<TextFieldWithMetricLines> {
       controller: widget.controller,
       focusNode: widget.focusNode,
       maxLines: widget.maxLines,
+      maxLength: widget.maxLength,
+      inputFormatters: widget.inputFormatters,
       style: widget.style,
       decoration: widget.decoration,
       onChanged: (_) => updateDisplayedLineCount(context),
