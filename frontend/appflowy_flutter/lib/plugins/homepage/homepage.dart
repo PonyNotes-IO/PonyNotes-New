@@ -617,6 +617,7 @@ class _HomePageState extends State<HomePage> {
     final colorIndex = _recentColorIndex(sectionView);
     final topHeaderColor = _recentHeaderColors[colorIndex];
     final theme = AppFlowyTheme.of(context);
+    final displayTitle = view.name.isEmpty ? '无标题笔记' : view.name;
 
     return Container(
       width: 132,
@@ -665,15 +666,19 @@ class _HomePageState extends State<HomePage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       // 标题：如果为空则显示"无标题笔记"
-                      Text(
-                        view.name.isEmpty ? '无标题笔记' : view.name,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: theme.textColorScheme.primary,
+                      Tooltip(
+                        message: displayTitle,
+                        waitDuration: const Duration(milliseconds: 300),
+                        child: Text(
+                          displayTitle,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: theme.textColorScheme.primary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
                       ),
                       // 时间和头像
                       Row(
