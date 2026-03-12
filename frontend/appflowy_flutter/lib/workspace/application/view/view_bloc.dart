@@ -390,9 +390,6 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
               unawaited(_unpublishPage(view));
             }
           },
-          clearDuplicateToMySpaceSuccess: (_) {
-            // 不再使用此事件，保留以兼容旧生成的代码
-          },
         );
       },
     );
@@ -575,9 +572,6 @@ class ViewEvent with _$ViewEvent {
   const factory ViewEvent.duplicate({String? parentViewId}) = Duplicate;
 
   const factory ViewEvent.duplicateToMySpace() = DuplicateToMySpace;
-
-  const factory ViewEvent.clearDuplicateToMySpaceSuccess() =
-      ClearDuplicateToMySpaceSuccess;
 
   const factory ViewEvent.move(
     ViewPB from,

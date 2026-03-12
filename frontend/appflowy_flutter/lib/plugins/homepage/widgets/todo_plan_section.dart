@@ -47,13 +47,21 @@ class TodoPlanSectionContent extends StatefulWidget {
 }
 
 class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
-  Future<List<TodoItem>>? _eventsFuture;
+  late Future<List<TodoItem>> _eventsFuture;
 
   Future<List<TodoItem>> _loadEvents() async {
     try {
       await TodoService.instance.initialize();
     } catch (_) {}
-    return TodoService.instance.getUpcomingTodos();
+    // 首页左侧日期卡当前展示“今天”，右侧日程按同一基准日过滤。
+    final displayDate = DateTime.now();
+    return TodoService.instance.getTodosForDate(displayDate);
+  }
+
+  void _refreshEvents() {
+    setState(() {
+      _eventsFuture = _loadEvents();
+    });
   }
 
   @override
@@ -66,7 +74,7 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
   void didUpdateWidget(covariant TodoPlanSectionContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.workspaceId != widget.workspaceId) {
-      _eventsFuture = _loadEvents();
+      _refreshEvents();
     }
   }
 
@@ -261,8 +269,8 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
                     alignment: Alignment.topLeft,
                     child: QuickEventCreator(
                       onEventCreated: (todoItem) {
-                        // 创建成功后刷新待办列表
-                        context.read<TodoBloc>().add(const TodoEvent.loadTodos());
+                        // 创建成功后仅刷新右侧日程，避免整块区域重复 loading 闪动。
+                        _refreshEvents();
                       },
                     ),
                   ),
@@ -303,9 +311,7 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
                               const SizedBox(height: 8),
                               ElevatedButton(
                                 onPressed: () {
-                                  setState(() {
-                                    _eventsFuture = _loadEvents();
-                                  });
+                                  _refreshEvents();
                                 },
                                 child: const Text('重试'),
                               ),
