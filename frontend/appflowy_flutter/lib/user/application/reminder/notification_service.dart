@@ -122,9 +122,9 @@ class NotificationService {
     try {
       await _initialize();
 
-      // 验证时间
-      if (scheduledTime.isBefore(DateTime.now().subtract(const Duration(minutes: 5)))) {
-        LogUtils.warning('Scheduled time is in the past: $scheduledTime');
+      // Only schedule notifications for future time points.
+      if (!scheduledTime.isAfter(DateTime.now())) {
+        LogUtils.warning('Skip non-future notification time: $scheduledTime');
         return;
       }
 

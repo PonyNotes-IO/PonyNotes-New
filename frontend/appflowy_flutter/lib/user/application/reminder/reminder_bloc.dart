@@ -180,8 +180,11 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                   emit(state.copyWith(reminders: reminders));
                 }
                 
-                // 安排系统通知
-                await NotificationService().scheduleReminderNotification(reminder);
+                // Only schedule future unread reminders for system notifications.
+                if (!reminder.isRead) {
+                  await NotificationService()
+                      .scheduleReminderNotification(reminder);
+                }
               },
               (error) {
                 Log.error('Failed to add reminder: $error');
@@ -196,7 +199,9 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 title: LocaleKeys.reminderNotification_title.tr(),
                 message: LocaleKeys.reminderNotification_message.tr(),
                 scheduledAt: scheduledAt,
-                isAck: scheduledAt.toDateTime().isBefore(DateTime.now()),
+                isAck: !scheduledAt.toDateTime().isAfter(DateTime.now()),
+                // Historical reminders should not trigger unread messages.
+                isRead: !scheduledAt.toDateTime().isAfter(DateTime.now()),
                 meta: meta,
               ),
             ),
@@ -651,6 +656,12 @@ class ReminderUpdate {
     final isAcknowledged = isAck == null && scheduledAt != null
         ? scheduledAt!.isBefore(DateTime.now())
         : a.isAck;
+    final isReadValue = switch (isRead) {
+      bool value => value,
+      null => scheduledAt != null && !scheduledAt!.isAfter(DateTime.now())
+          ? true
+          : a.isRead,
+    };
 
     final metaMap = {...a.meta};
     if (includeTime != a.includeTime) {
@@ -672,7 +683,7 @@ class ReminderUpdate {
           ? Int64(scheduledAt!.millisecondsSinceEpoch)
           : a.scheduledAt,
       isAck: isAcknowledged,
-      isRead: isRead ?? a.isRead,
+      isRead: isReadValue,
       title: a.title,
       message: a.message,
       meta: metaMap,
