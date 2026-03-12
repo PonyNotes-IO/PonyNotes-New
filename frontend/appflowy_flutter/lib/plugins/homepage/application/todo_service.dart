@@ -96,38 +96,39 @@ class TodoService {
               continue;
             }
 
-            final recurrence = await _loadRecurrenceInfo(
+            final dateMeta = await _loadDateMeta(
               viewId: viewId,
               rowId: eventPB.rowMeta.id,
               dateFieldId: eventPB.dateFieldId,
+              fallbackStart: todo.dueDate!,
             );
-
-            final start = todo.dueDate!;
             final isMatch = _matchesDisplayDate(
-              start: start,
+              start: dateMeta.start,
+              end: dateMeta.end,
               target: target,
-              repeatType: recurrence.$1,
-              repeatRuleJson: recurrence.$2,
+              repeatType: dateMeta.repeatType,
+              repeatRuleJson: dateMeta.repeatRuleJson,
             );
             if (!isMatch) {
               continue;
             }
 
-            // 对重复实例，将时间映射到目标展示日期上，保持原有时分。
+            // 将匹配实例映射到目标日期，保留时分，确保首页按目标日展示。
             final mappedDate = DateTime(
               target.year,
               target.month,
               target.day,
-              start.hour,
-              start.minute,
-              start.second,
-              start.millisecond,
-              start.microsecond,
+              dateMeta.start.hour,
+              dateMeta.start.minute,
+              dateMeta.start.second,
+              dateMeta.start.millisecond,
+              dateMeta.start.microsecond,
             );
 
             todos.add(
               todo.copyWith(
                 dueDate: mappedDate,
+                isAllDay: !dateMeta.includeTime,
                 isCompleted: false,
                 completedAt: null,
               ),
@@ -314,10 +315,11 @@ class TodoService {
     return <String>[];
   }
 
-  Future<(int, String?)> _loadRecurrenceInfo({
+  Future<_CalendarDateMeta> _loadDateMeta({
     required String viewId,
     required String rowId,
     required String dateFieldId,
+    required DateTime fallbackStart,
   }) async {
     try {
       final cellResult = await CellBackendService.getCell(
@@ -332,40 +334,142 @@ class TodoService {
         (cell) {
           final pb = DateCellDataParser().parserData(cell.data);
           if (pb == null) {
-            return (0, null);
+            return _CalendarDateMeta(
+              start: fallbackStart,
+              end: fallbackStart,
+              includeTime: true,
+              repeatType: 0,
+              repeatRuleJson: null,
+            );
           }
+
+          final start = pb.hasTimestamp()
+              ? DateTime.fromMillisecondsSinceEpoch(pb.timestamp.toInt() * 1000)
+              : fallbackStart;
+          final end = (pb.isRange && pb.hasEndTimestamp())
+              ? DateTime.fromMillisecondsSinceEpoch(
+                  pb.endTimestamp.toInt() * 1000,
+                )
+              : start;
+          final normalizedEnd = end.isBefore(start) ? start : end;
           final repeatType = pb.hasRepeatType() ? pb.repeatType : 0;
-          final repeatRuleJson = (pb.hasRepeatRuleJson() && pb.repeatRuleJson.isNotEmpty)
-              ? pb.repeatRuleJson
-              : null;
-          return (repeatType, repeatRuleJson);
+          final repeatRuleJson =
+              (pb.hasRepeatRuleJson() && pb.repeatRuleJson.isNotEmpty)
+                  ? pb.repeatRuleJson
+                  : null;
+
+          return _CalendarDateMeta(
+            start: start,
+            end: normalizedEnd,
+            includeTime: pb.includeTime,
+            repeatType: repeatType,
+            repeatRuleJson: repeatRuleJson,
+          );
         },
-        (error) => (0, null),
+        (error) => _CalendarDateMeta(
+          start: fallbackStart,
+          end: fallbackStart,
+          includeTime: true,
+          repeatType: 0,
+          repeatRuleJson: null,
+        ),
       );
     } catch (_) {
-      return (0, null);
+      return _CalendarDateMeta(
+        start: fallbackStart,
+        end: fallbackStart,
+        includeTime: true,
+        repeatType: 0,
+        repeatRuleJson: null,
+      );
     }
   }
 
   bool _matchesDisplayDate({
     required DateTime start,
+    required DateTime end,
     required DateTime target,
     required int repeatType,
     required String? repeatRuleJson,
   }) {
-    final startDay = DateTime(start.year, start.month, start.day);
-    if (_isSameDay(startDay, target)) {
-      return true;
-    }
-    if (target.isBefore(startDay) || repeatType == 0) {
+    final startDay = _dateOnly(start);
+    final endDay = _dateOnly(end.isBefore(start) ? start : end);
+    final durationDays = endDay.difference(startDay).inDays;
+    // 优先使用规则中的截止日期；若无，则以该日程结束日期作为重复截止。
+    final recurrenceEnd = _extractRecurrenceEndDate(repeatRuleJson) ?? endDay;
+    if (_dateOnly(target).isAfter(_dateOnly(recurrenceEnd))) {
       return false;
     }
-    return _matchesRepeatRule(
-      date: target,
-      startDate: startDay,
-      repeatType: repeatType,
-      repeatRuleJson: repeatRuleJson,
-    );
+
+    // 非重复：目标日落在原始开始-结束区间内即命中。
+    if (repeatType == 0) {
+      return _isWithinDateRange(target, startDay, endDay);
+    }
+
+    if (target.isBefore(startDay)) {
+      return false;
+    }
+
+    // 重复 + 区间：检查“可能的实例开始日”窗口，只要目标日落在某个实例区间内即命中。
+    final windowStart = target.subtract(Duration(days: durationDays));
+    for (var cursor = _dateOnly(windowStart);
+        !cursor.isAfter(target);
+        cursor = cursor.add(const Duration(days: 1))) {
+      if (cursor.isBefore(startDay)) {
+        continue;
+      }
+      final isOccurrenceStart = _isSameDay(cursor, startDay) ||
+          _matchesRepeatRule(
+            date: cursor,
+            startDate: startDay,
+            repeatType: repeatType,
+            repeatRuleJson: repeatRuleJson,
+          );
+      if (!isOccurrenceStart) {
+        continue;
+      }
+      final occurrenceEnd = cursor.add(Duration(days: durationDays));
+      if (_isWithinDateRange(target, cursor, occurrenceEnd)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  DateTime? _extractRecurrenceEndDate(String? repeatRuleJson) {
+    if (repeatRuleJson == null || repeatRuleJson.isEmpty) {
+      return null;
+    }
+    try {
+      final rule = jsonDecode(repeatRuleJson);
+      if (rule is! Map<String, dynamic>) {
+        return null;
+      }
+      final raw = rule['endDate'] ??
+          rule['until'] ??
+          rule['untilDate'] ??
+          rule['end_at'] ??
+          rule['endTimestamp'];
+      if (raw == null) {
+        return null;
+      }
+      if (raw is int) {
+        // 同时兼容秒和毫秒时间戳
+        final millis = raw > 1000000000000 ? raw : raw * 1000;
+        return DateTime.fromMillisecondsSinceEpoch(millis);
+      }
+      if (raw is String && raw.isNotEmpty) {
+        final asInt = int.tryParse(raw);
+        if (asInt != null) {
+          final millis = asInt > 1000000000000 ? asInt : asInt * 1000;
+          return DateTime.fromMillisecondsSinceEpoch(millis);
+        }
+        return DateTime.tryParse(raw);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   bool _matchesRepeatRule({
@@ -453,6 +557,17 @@ class TodoService {
 
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  bool _isWithinDateRange(DateTime target, DateTime start, DateTime end) {
+    final t = _dateOnly(target);
+    final s = _dateOnly(start);
+    final e = _dateOnly(end);
+    return !t.isBefore(s) && !t.isAfter(e);
   }
 
   // 将日历事件转换为待办事项
@@ -614,5 +729,21 @@ class TodoService {
   void dispose() {
     _todosController.close();
   }
+}
+
+class _CalendarDateMeta {
+  const _CalendarDateMeta({
+    required this.start,
+    required this.end,
+    required this.includeTime,
+    required this.repeatType,
+    required this.repeatRuleJson,
+  });
+
+  final DateTime start;
+  final DateTime end;
+  final bool includeTime;
+  final int repeatType;
+  final String? repeatRuleJson;
 }
 

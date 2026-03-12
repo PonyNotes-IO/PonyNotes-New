@@ -172,11 +172,13 @@ class RecurrenceRule {
   final int repeatType; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
   final String? repeatRuleJson; // 自定义规则JSON
   final DateTime startDate; // 原始开始日期
+  final DateTime? endDate; // 结束日期（重复截止）
 
   RecurrenceRule({
     required this.repeatType,
     this.repeatRuleJson,
     required this.startDate,
+    this.endDate,
   });
 
   // 判断某个日期是否匹配重复规则
@@ -187,9 +189,15 @@ class RecurrenceRule {
 
     final dateOnly = _getDateOnly(date);
     final startDateOnly = _getDateOnly(startDate);
+    final ruleEndDate = _getRuleEndDate() ?? endDate;
 
     // 如果日期在原始日期之前，不匹配
     if (dateOnly.isBefore(startDateOnly)) {
+      return false;
+    }
+
+    // 如果规则设置了截止日期，截止日期之后不再重复
+    if (ruleEndDate != null && dateOnly.isAfter(_getDateOnly(ruleEndDate))) {
       return false;
     }
 
@@ -303,6 +311,41 @@ class RecurrenceRule {
     } catch (e) {
       print('⚠️ [RecurrenceRule] 解析自定义规则失败: $e');
       return false;
+    }
+  }
+
+  DateTime? _getRuleEndDate() {
+    if (repeatRuleJson == null || repeatRuleJson!.isEmpty) {
+      return null;
+    }
+    try {
+      final rule = jsonDecode(repeatRuleJson!);
+      if (rule is! Map<String, dynamic>) {
+        return null;
+      }
+      final raw = rule['endDate'] ??
+          rule['until'] ??
+          rule['untilDate'] ??
+          rule['end_at'] ??
+          rule['endTimestamp'];
+      if (raw == null) {
+        return null;
+      }
+      if (raw is int) {
+        final millis = raw > 1000000000000 ? raw : raw * 1000;
+        return DateTime.fromMillisecondsSinceEpoch(millis);
+      }
+      if (raw is String && raw.isNotEmpty) {
+        final asInt = int.tryParse(raw);
+        if (asInt != null) {
+          final millis = asInt > 1000000000000 ? asInt : asInt * 1000;
+          return DateTime.fromMillisecondsSinceEpoch(millis);
+        }
+        return DateTime.tryParse(raw);
+      }
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -1757,6 +1800,7 @@ class ScheduleModel extends ChangeNotifier {
           repeatType: schedule.repeatType,
           repeatRuleJson: schedule.repeatRuleJson,
           startDate: schedule.startTime,
+          endDate: schedule.endTime,
         );
 
         if (rule.matchesDate(targetDate)) {
