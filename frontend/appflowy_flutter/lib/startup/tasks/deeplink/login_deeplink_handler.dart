@@ -24,7 +24,7 @@ class LoginDeepLinkHandler extends DeepLinkHandler<UserProfilePB> {
   Future<FlowyResult<UserProfilePB, FlowyError>> handle({
     required Uri uri,
     required DeepLinkStateHandler onStateChange,
-  }  ) async {
+  }) async {
     final deviceId = await getDeviceId();
     
     final payload = OauthSignInPB(
