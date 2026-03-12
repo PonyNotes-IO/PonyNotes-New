@@ -474,14 +474,14 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
   }) async {
     /// check if schedule time is coming
     final scheduledAt = reminder.scheduledAt.toDateTime();
-    
-    // 修正逻辑：当当前时间已到或超过提醒时间，并且提醒未读时，返回true
+
+    // Only show reminders that have reached their scheduled time.
     if (!DateTime.now().isAfter(scheduledAt)) {
       return false;
     }
-    
-    // 只有未读的提醒才显示
-    if (reminder.isRead) {
+
+    // Archived reminders should not be shown in the notification list.
+    if (reminder.isArchived) {
       return false;
     }
 
