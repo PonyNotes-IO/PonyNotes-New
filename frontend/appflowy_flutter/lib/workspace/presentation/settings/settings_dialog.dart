@@ -102,10 +102,11 @@ class SettingsDialog extends StatelessWidget {
               backgroundColor: theme.backgroundColorScheme.primary,
               body: BlocBuilder<UserWorkspaceBloc, UserWorkspaceState>(
                 builder: (context, workspaceState) {
+                  final currentWorkspace = workspaceState.currentWorkspace;
                   return BlocProvider<SpaceBloc>(
                     create: (context) => SpaceBloc(
                       userProfile: user,
-                      workspaceId: workspaceState.currentWorkspace?.workspaceId ?? '',
+                      workspaceId: currentWorkspace?.workspaceId ?? '',
                     )..add(const SpaceEvent.initial(openFirstPage: false)),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,13 +140,20 @@ class SettingsDialog extends StatelessWidget {
                           child: Padding(
                             // Only reduce right padding to avoid visible gap on dialog edge.
                             padding: const EdgeInsets.only(right: 12),
-                            child: getSettingsView(
-                              workspaceState.currentWorkspace!,
-                              context.read<SettingsDialogBloc>().state.page,
-                              state.userProfile,
-                              workspaceState.currentWorkspace?.role,
-                              context,
-                            ),
+                            child: currentWorkspace == null
+                                ? const Center(
+                                    child: CircularProgressIndicator.adaptive(),
+                                  )
+                                : getSettingsView(
+                                    currentWorkspace,
+                                    context
+                                        .read<SettingsDialogBloc>()
+                                        .state
+                                        .page,
+                                    state.userProfile,
+                                    currentWorkspace.role,
+                                    context,
+                                  ),
                           ),
                         ),
                       ),

@@ -1092,7 +1092,7 @@ class _AIInputAreaState extends State<AIInputArea> {
             remainingText = '';
           });
         }
-
+        if (remainingText.isEmpty) return SizedBox.shrink();
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
@@ -1106,7 +1106,6 @@ class _AIInputAreaState extends State<AIInputArea> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (remainingText.isNotEmpty)
                 Text(
                   remainingText,
                   style: TextStyle(

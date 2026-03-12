@@ -156,29 +156,36 @@ class NotificationReminderBloc
     required UserDateFormatPB dateFormate,
     required UserTimeFormatPB timeFormat,
   }) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-    final String date;
+    try {
+      final now = DateTime.now();
+      final difference = now.difference(dateTime);
+      final String date;
 
-    if (dateTime.isAfter(now)) {
-      // Future reminders should display explicit time/date instead of "just now".
-      date = dateTime.isToday
-          ? timeFormat.formatTime(dateTime)
-          : dateFormate.formatDate(dateTime, false);
-    } else if (difference.inMinutes < 1) {
-      date = LocaleKeys.sideBar_justNow.tr();
-    } else if (difference.inHours < 1 && dateTime.isToday) {
-      // Less than 1 hour
-      date = LocaleKeys.sideBar_minutesAgo
-          .tr(namedArgs: {'count': difference.inMinutes.toString()});
-    } else if (difference.inHours >= 1 && dateTime.isToday) {
-      // in same day
-      date = timeFormat.formatTime(dateTime);
-    } else {
-      date = dateFormate.formatDate(dateTime, false);
+      if (dateTime.isAfter(now)) {
+        // Future reminders should display explicit time/date instead of "just now".
+        date = dateTime.isToday
+            ? timeFormat.formatTime(dateTime)
+            : dateFormate.formatDate(dateTime, false);
+      } else if (difference.inMinutes < 1) {
+        date = LocaleKeys.sideBar_justNow.tr();
+      } else if (difference.inHours < 1 && dateTime.isToday) {
+        // Less than 1 hour
+        date = LocaleKeys.sideBar_minutesAgo
+            .tr(namedArgs: {'count': difference.inMinutes.toString()});
+      } else if (difference.inHours >= 1 && dateTime.isToday) {
+        // in same day
+        date = timeFormat.formatTime(dateTime);
+      } else {
+        date = dateFormate.formatDate(dateTime, false);
+      }
+
+      return date;
+    } catch (_) {
+      // Never crash the notification panel for date formatting edge cases.
+      return dateTime.isToday
+          ? DateFormat.Hm().format(dateTime)
+          : DateFormat('yyyy-MM-dd').format(dateTime);
     }
-
-    return date;
   }
 }
 
