@@ -13,6 +13,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
 import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
+import 'package:appflowy/workspace/presentation/home/toast.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -224,14 +225,17 @@ class _AddAttachmentMenu extends StatelessWidget {
     if (file != null) {
       FileUrlType type = FileUrlType.local;
       String? path;
+      String? errorMsg;
       if (isLocalMode) {
         path = await saveFileToLocalStorage(file.path);
       } else {
-        (path, _) = await saveFileToCloudStorage(file.path, documentId);
+        (path, errorMsg) = await saveFileToCloudStorage(file.path, documentId);
         type = FileUrlType.cloud;
       }
 
-      if (path != null) {
+      if (errorMsg != null && context.mounted) {
+        showSnackBarMessage(context, errorMsg);
+      } else if (path != null) {
         final node = fileNode(url: path, type: type, name: file.name);
         await _insertNode(node);
       }

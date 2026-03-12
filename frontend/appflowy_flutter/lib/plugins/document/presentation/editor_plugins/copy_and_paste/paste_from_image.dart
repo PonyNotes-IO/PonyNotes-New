@@ -35,13 +35,22 @@ extension PasteFromImage on EditorState {
 
     for (final file in imageFiles) {
       String? path;
+      String? errorMsg;
       CustomImageType? type;
       if (isLocalMode) {
         path = await saveImageToLocalStorage(file.path);
         type = CustomImageType.local;
       } else {
-        (path, _) = await saveImageToCloudStorage(file.path, documentId);
+        (path, errorMsg) = await saveImageToCloudStorage(file.path, documentId);
         type = CustomImageType.internal;
+      }
+
+      if (errorMsg != null) {
+        showToastNotification(
+          message: errorMsg,
+          type: ToastificationType.error,
+        );
+        return;
       }
 
       if (path == null) {

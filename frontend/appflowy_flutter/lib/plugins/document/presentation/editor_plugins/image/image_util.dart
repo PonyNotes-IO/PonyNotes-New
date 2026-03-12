@@ -60,14 +60,17 @@ Future<(String? path, String? errorMessage)> saveImageToCloudStorage(
       return (s.url, null);
     },
     (err) {
-      final message = Platform.isIOS
-          ? LocaleKeys.sideBar_storageLimitDialogTitleIOS.tr()
-          : LocaleKeys.sideBar_storageLimitDialogTitle.tr();
-      if (err.isStorageLimitExceeded) {
+      if (err.isSingleFileLimitExceeded) {
+        final message = LocaleKeys.sideBar_singleFileSizeLimitExceeded.tr();
         return (null, message);
-      } else {
-        return (null, err.msg);
       }
+      if (err.isStorageLimitExceeded) {
+        final message = Platform.isIOS
+            ? LocaleKeys.sideBar_storageLimitDialogTitleIOS.tr()
+            : LocaleKeys.sideBar_storageLimitDialogTitle.tr();
+        return (null, message);
+      }
+      return (null, err.msg);
     },
   );
 }
@@ -79,7 +82,7 @@ Future<List<ImageBlockData>> extractAndUploadImages(
 ) async {
   final List<ImageBlockData> images = [];
 
-  bool hasError = false;
+  String? lastErrorMsg;
   for (final url in urls) {
     if (url == null || url.isEmpty) {
       continue;
@@ -89,11 +92,9 @@ Future<List<ImageBlockData>> extractAndUploadImages(
     String? errorMsg;
     CustomImageType imageType = CustomImageType.local;
 
-    // If the user is using local authenticator, we save the image to local storage
     if (isLocalMode) {
       path = await saveImageToLocalStorage(url);
     } else {
-      // Else we save the image to cloud storage
       (path, errorMsg) = await saveImageToCloudStorage(
         url,
         context.read<DocumentBloc>().documentId,
@@ -104,15 +105,12 @@ Future<List<ImageBlockData>> extractAndUploadImages(
     if (path != null && errorMsg == null) {
       images.add(ImageBlockData(url: path, type: imageType));
     } else {
-      hasError = true;
+      lastErrorMsg = errorMsg;
     }
   }
 
-  if (context.mounted && hasError) {
-    showSnackBarMessage(
-      context,
-      LocaleKeys.document_imageBlock_error_multipleImagesFailed.tr(),
-    );
+  if (context.mounted && lastErrorMsg != null) {
+    showSnackBarMessage(context, lastErrorMsg);
   }
 
   return images;
