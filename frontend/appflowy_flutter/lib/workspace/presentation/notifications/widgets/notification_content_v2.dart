@@ -27,21 +27,27 @@ class NotificationItemContentV2 extends StatelessWidget {
           return const SizedBox.shrink();
         }
         final theme = AppFlowyTheme.of(context);
+        final isRead = reminder.isRead;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(state.scheduledAt, theme),
-            _buildPageName(context, state.isLocked, state.pageTitle, theme),
-            _buildContent(view, state.nodes, theme),
-          ],
+        return Opacity(
+          opacity: isRead ? 0.6 : 1.0,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(state.scheduledAt, theme, isRead),
+              _buildPageName(context, state.isLocked, state.pageTitle, theme),
+              _buildContent(view, state.nodes, theme),
+            ],
+          ),
         );
       },
     );
   }
 
-  Widget _buildHeader(String createAt, AppFlowyThemeData theme) {
+  Widget _buildHeader(String createAt, AppFlowyThemeData theme, bool isRead) {
+    final primaryTextColor =
+        isRead ? theme.textColorScheme.secondary : theme.textColorScheme.primary;
     return SizedBox(
       height: 22,
       child: Row(
@@ -50,7 +56,7 @@ class NotificationItemContentV2 extends StatelessWidget {
             LocaleKeys.settings_notifications_titles_reminder.tr(),
             fontSize: 14,
             figmaLineHeight: 22,
-            color: theme.textColorScheme.primary,
+            color: primaryTextColor,
           ),
           Spacer(),
           if (createAt.isNotEmpty)

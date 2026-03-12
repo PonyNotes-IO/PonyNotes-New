@@ -149,12 +149,21 @@ class _NotificationContentState extends State<NotificationContent> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // title & time
-            _buildHeader(state.scheduledAt, !widget.reminder.isRead),
-            // page name
-            _buildPageName(context, state.isLocked, state.pageTitle),
-            // content
-            _buildContent(view, nodes: state.nodes),
+            Opacity(
+              opacity: widget.reminder.isRead ? 0.6 : 1.0,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // title & time
+                  _buildHeader(state.scheduledAt, !widget.reminder.isRead),
+                  // page name
+                  _buildPageName(context, state.isLocked, state.pageTitle),
+                  // content
+                  _buildContent(view, nodes: state.nodes),
+                ],
+              ),
+            ),
           ],
         );
       },

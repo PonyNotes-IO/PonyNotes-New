@@ -2,6 +2,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
+import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/settings/date_time/date_format_ext.dart';
 import 'package:appflowy/workspace/application/settings/date_time/time_format_ext.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
@@ -95,7 +96,7 @@ class NotificationReminderBloc
     UserTimeFormatPB timeFormat,
   ) async {
     return _formatTimestamp(
-      reminder.scheduledAt.toInt() * 1000,
+      reminder.scheduledAt.toDateTime(),
       timeFormat: timeFormat,
       dateFormate: dateFormat,
     );
@@ -151,16 +152,20 @@ class NotificationReminderBloc
   }
 
   String _formatTimestamp(
-    int timestamp, {
+    DateTime dateTime, {
     required UserDateFormatPB dateFormate,
     required UserTimeFormatPB timeFormat,
   }) {
     final now = DateTime.now();
-    final dateTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
     final difference = now.difference(dateTime);
     final String date;
 
-    if (difference.inMinutes < 1) {
+    if (dateTime.isAfter(now)) {
+      // Future reminders should display explicit time/date instead of "just now".
+      date = dateTime.isToday
+          ? timeFormat.formatTime(dateTime)
+          : dateFormate.formatDate(dateTime, false);
+    } else if (difference.inMinutes < 1) {
       date = LocaleKeys.sideBar_justNow.tr();
     } else if (difference.inHours < 1 && dateTime.isToday) {
       // Less than 1 hour
