@@ -294,6 +294,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   late Map<String, dynamic>? _cachedContent;
   late DateTime? _lastLoadedDate;
   late ViewListener? _viewListener;
+  DateTime? _pendingLoadDate;
 
   @override
   void initState() {
@@ -398,6 +399,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               _currentViewId = view.id;
             });
           }
+          // 视图就绪后主动加载当天内容，确保首次进入可自动选中日程/笔记
+          final selectedDate = _selectedDay ?? _focusedDay;
+          await _loadContentForDate(selectedDate);
         },
         (error) async {
           // 视图不存在，创建新视图
@@ -409,12 +413,14 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           );
 
           createResult.fold(
-            (view) {
+            (view) async {
               if (mounted) {
                 setState(() {
                   _currentViewId = view.id;
                 });
               }
+              final selectedDate = _selectedDay ?? _focusedDay;
+              await _loadContentForDate(selectedDate);
             },
             (createError) {
               // 如果创建失败，使用固定ID作为后备
@@ -1205,9 +1211,12 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   _focusedDay = focused;
                   // 切换日期时清空右侧区域，让_buildDefaultView自动选择内容
                   _selectedNote = null;
+                  widget.selectedViewNotifier.value = null;
                   _showNewEventPage = false;
                   _showEditEventPage = false;
                   _editingSchedule = null;
+                  // 先重置为非日程模式，待数据加载后再按内容决定显示模式
+                  widget.calendarWidgetBuilder.setIsViewingSchedule(false);
                   // 清除缓存，强制重新加载新日期的内容
                   _cachedContent = null;
                   _lastLoadedDate = null;
@@ -1286,7 +1295,12 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   // 异步加载内容数据
   Future<void> _loadContentForDate(DateTime date) async {
-    if (_isLoadingContent) return; // 防止重复加载
+    if (_isLoadingContent) {
+      // 首次进入时可能先发起了一次“无 viewId”的加载，这里把后续请求排队，
+      // 等当前加载结束后再用最新日期重跑，避免请求被吞掉。
+      _pendingLoadDate = date;
+      return;
+    }
 
     if (!mounted) return; // 组件已销毁，直接返回
 
@@ -1318,6 +1332,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           _lastLoadedDate = date;
           _isLoadingContent = false;
         });
+        _syncDetailPanelWithLoadedContent(notes, schedules);
       }
     } catch (e) {
       // 无论是否mounted，都尝试重置加载状态
@@ -1330,6 +1345,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           _lastLoadedDate = date;
           _isLoadingContent = false;
         });
+        _syncDetailPanelWithLoadedContent(const <ViewPB>[], const <ScheduleItem>[]);
       }
     } finally {
       // 确保在任何情况下都能重置加载状态
@@ -1338,7 +1354,59 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           _isLoadingContent = false;
         });
       }
+      if (mounted && _pendingLoadDate != null) {
+        final queuedDate = _pendingLoadDate!;
+        _pendingLoadDate = null;
+        Future.microtask(() => _loadContentForDate(queuedDate));
+      }
     }
+  }
+
+  /// 按当天加载结果同步右侧详情面板与右上工具栏显示状态。
+  /// 规则：
+  /// 1) 有笔记：显示第一条笔记并展示工具栏；
+  /// 2) 无笔记但有日程：自动打开第一条日程并隐藏工具栏；
+  /// 3) 都没有：清空右侧选中并隐藏工具栏。
+  void _syncDetailPanelWithLoadedContent(
+    List<ViewPB> notes,
+    List<ScheduleItem> schedules,
+  ) {
+    if (!mounted) return;
+
+    if (notes.isNotEmpty) {
+      final firstNote = notes.first;
+      setState(() {
+        _selectedNote = firstNote;
+        _showNewEventPage = false;
+        _showEditEventPage = false;
+        _editingSchedule = null;
+      });
+      widget.selectedViewNotifier.value = firstNote;
+      widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+      return;
+    }
+
+    if (schedules.isNotEmpty) {
+      final firstSchedule = schedules.first;
+      setState(() {
+        _selectedNote = null;
+        _showNewEventPage = false;
+        _showEditEventPage = true;
+        _editingSchedule = firstSchedule;
+      });
+      widget.selectedViewNotifier.value = null;
+      widget.calendarWidgetBuilder.setIsViewingSchedule(true);
+      return;
+    }
+
+    setState(() {
+      _selectedNote = null;
+      _showNewEventPage = false;
+      _showEditEventPage = false;
+      _editingSchedule = null;
+    });
+    widget.selectedViewNotifier.value = null;
+    widget.calendarWidgetBuilder.setIsViewingSchedule(false);
   }
 
   // 比较两个日期是否为同一天
@@ -1565,7 +1633,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       // 确保视图ID已设置（只在未设置时设置一次，避免重复触发刷新）
       if (_currentViewId != null && _scheduleModel.currentViewId != _currentViewId) {
         _scheduleModel.setViewId(_currentViewId!);
-        // setViewId 内部会异步刷新，这里不等待，直接使用当前内存数据
+        // 首次绑定视图时等待一次刷新，避免首次进入拿到空列表。
+        await _scheduleModel.refresh();
       }
 
       // 使用 ScheduleModel.getSchedulesForDate 方法，该方法会自动展开重复日程
