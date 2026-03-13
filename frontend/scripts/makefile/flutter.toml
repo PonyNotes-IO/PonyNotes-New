@@ -274,8 +274,10 @@ script_runner = "@shell"
 script = [
   """
   cd appflowy_flutter
-  exec cmd.exe /c flutter pub get
-  exec cmd.exe /c flutter build ${TARGET_OS} --${BUILD_FLAG} --build-name=${APP_VERSION}
+  result = exec cmd.exe /c flutter pub get
+  assert_eq ${result.code} 0 "flutter pub get failed"
+  result = exec cmd.exe /c flutter build ${TARGET_OS} --${BUILD_FLAG} --build-name=${APP_VERSION}
+  assert_eq ${result.code} 0 "flutter build failed"
   """,
 ]
 script_runner = "@duckscript"
@@ -307,7 +309,8 @@ script = ["""
 [tasks.code_generation.windows]
 script_runner = "@duckscript"
 script = ["""
-  exec scripts/code_generation/generate.cmd
+  result = exec scripts/code_generation/generate.cmd
+  assert_eq ${result.code} 0 "code generation failed"
   """]
 
 [tasks.dry_code_generation]
