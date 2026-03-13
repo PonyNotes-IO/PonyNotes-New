@@ -200,22 +200,33 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
             } catch (e) {
               Log.error('cleanup document resources before permanent delete failed: $e');
             }
-
-            // 在删除文档前，先清理 editorState，避免渲染错误
-            // 先清理 editorState 相关的监听器和资源
-            _updateSelectionDebounce.dispose();
-            _syncThrottle.dispose();
-            _syncTimer?.cancel();
-            _syncTimer = null;
-            currentEditorState.selectionNotifier
-                .removeListener(_debounceOnSelectionUpdate);
-            currentEditorState.service.keyboardService?.closeKeyboard();
-            currentEditorState.dispose();
           }
           final result = await _trashService.deleteViews([documentId]);
-          final forceClose = result.fold((l) => true, (r) => false);
-          // 设置 forceClose 时，同时清空 editorState，避免渲染已销毁的组件
-          emit(state.copyWith(forceClose: forceClose, editorState: null));
+          result.fold(
+            (_) {
+              if (currentEditorState != null) {
+                // 删除成功后再销毁 editor 资源，避免失败时落入错误页。
+                _updateSelectionDebounce.dispose();
+                _syncThrottle.dispose();
+                _syncTimer?.cancel();
+                _syncTimer = null;
+                currentEditorState.selectionNotifier
+                    .removeListener(_debounceOnSelectionUpdate);
+                currentEditorState.service.keyboardService?.closeKeyboard();
+                currentEditorState.dispose();
+              }
+              emit(state.copyWith(forceClose: true, editorState: null));
+            },
+            (error) {
+              Log.error('delete document permanently failed: $error');
+              showToastNotification(
+                message: '彻底删除失败，请重试',
+                type: ToastificationType.error,
+              );
+              // 删除失败时保持当前页面状态，避免出现空 editor 错误页。
+              emit(state.copyWith(forceClose: false, error: null));
+            },
+          );
         }
       },
       restorePage: () async {

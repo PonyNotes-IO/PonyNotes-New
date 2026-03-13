@@ -19,6 +19,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
@@ -34,6 +35,8 @@ import 'package:universal_platform/universal_platform.dart';
 import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
 import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
+
+import '../../startup/plugin/plugin.dart';
 
 class DocumentPage extends StatefulWidget {
   const DocumentPage({
@@ -64,6 +67,7 @@ class _DocumentPageState extends State<DocumentPage>
   EditorState? editorState;
   Selection? initialSelection;
   bool _handledDeletedInSpaceHub = false;
+  bool _handledForceCloseNavigation = false;
   late final documentBloc = DocumentBloc(documentId: widget.view.id, workspaceId: widget.view.workspaceId)
     ..add(const DocumentEvent.initial());
 
@@ -125,6 +129,29 @@ class _DocumentPageState extends State<DocumentPage>
                 );
               }
 
+              if (state.forceClose) {
+                // 永久删除后，优先切回主页，避免停留在已删除文档导致错误页。
+                if (!_handledForceCloseNavigation) {
+                  _handledForceCloseNavigation = true;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) {
+                      return;
+                    }
+                    try {
+                      context.read<TabsBloc>().add(
+                            TabsEvent.openPlugin(
+                              plugin: makePlugin(pluginType: PluginType.homepage),
+                            ),
+                          );
+                    } catch (_) {
+                      // Fallback: if opening homepage fails, close the current tab.
+                      context.read<TabsBloc>().add(const TabsEvent.closeCurrentTab());
+                    }
+                  });
+                }
+                return const SizedBox.shrink();
+              }
+
               final editorState = state.editorState;
               this.editorState = editorState;
               final error = state.error;
@@ -149,17 +176,6 @@ class _DocumentPageState extends State<DocumentPage>
                 }
                 Log.error('editorState is null and not initializing');
                 return Center(child: AppFlowyErrorPage(error: error));
-              }
-
-              if (state.forceClose) {
-                // 使用 addPostFrameCallback 延迟关闭页面，确保当前帧完成后再关闭
-                // 这样可以避免在渲染过程中关闭页面导致的断言错误
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) {
-                    widget.onDeleted();
-                  }
-                });
-                return const SizedBox.shrink();
               }
 
               if (!state.isDeleted) {
