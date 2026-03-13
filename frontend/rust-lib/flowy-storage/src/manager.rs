@@ -670,6 +670,13 @@ async fn start_upload(
 
   if let Err(err) = create_upload_resp_result.as_ref() {
     handle_upload_error(storage_service, err, &file_url).await;
+    if let Err(send_err) = global_notifier.send(FileProgress::new_error(
+      file_url.clone(),
+      upload_file.file_id.clone(),
+      err.msg.clone(),
+    )) {
+      error!("[File] send global notifier failed: {}", send_err);
+    }
   }
   let create_upload_resp = create_upload_resp_result?;
 

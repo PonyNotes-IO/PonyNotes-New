@@ -5,11 +5,14 @@ import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-storage/protobuf.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:fixnum/fixnum.dart';
 
 import '../startup.dart';
@@ -38,6 +41,11 @@ class FileStorageService {
           Log.debug(
             "FileStorageService upload file: ${fileProgress.fileUrl} ${fileProgress.progress}",
           );
+
+          if (fileProgress.error != null) {
+            _showUploadErrorToast(fileProgress.error!);
+          }
+
           final notifier = _notifierList[fileProgress.fileUrl];
           if (notifier != null) {
             notifier.value = fileProgress;
@@ -57,6 +65,39 @@ class FileStorageService {
   final RawReceivePort _port = RawReceivePort();
   final StreamController<String> _controller = StreamController.broadcast();
   late StreamSubscription<String> _subscription;
+  DateTime? _lastErrorToastTime;
+
+  void _showUploadErrorToast(String errorMsg) {
+    final now = DateTime.now();
+    if (_lastErrorToastTime != null &&
+        now.difference(_lastErrorToastTime!).inSeconds < 5) {
+      return;
+    }
+    _lastErrorToastTime = now;
+
+    final String displayMessage;
+    final lowerMsg = errorMsg.toLowerCase();
+    if (lowerMsg.contains('single upload limit') ||
+        lowerMsg.contains('single file size') ||
+        lowerMsg.contains('exceeds single')) {
+      displayMessage =
+          LocaleKeys.sideBar_singleFileSizeLimitExceeded.tr();
+    } else if (lowerMsg.contains('storage limit') ||
+        lowerMsg.contains('plan limit') ||
+        lowerMsg.contains('total storage')) {
+      displayMessage =
+          LocaleKeys.sideBar_storageLimitDialogTitle.tr();
+    } else {
+      displayMessage =
+          '${LocaleKeys.button_uploadFailed.tr()}: $errorMsg';
+    }
+
+    Log.error('[FileUpload] upload error: $errorMsg');
+    showToastNotification(
+      message: displayMessage,
+      type: ToastificationType.error,
+    );
+  }
 
   AutoRemoveNotifier<FileProgress> onFileProgress({required String fileUrl}) {
     _notifierList.remove(fileUrl)?.dispose();
