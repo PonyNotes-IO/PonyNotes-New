@@ -212,9 +212,8 @@ class _EditEventPageState extends State<EditEventPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('请添加日程描述'),
-          backgroundColor: Theme.of(context).brightness == Brightness.dark 
-            ? Colors.grey[800] 
-            : Colors.grey[900],
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
         ),
       );
       return false;
@@ -249,11 +248,11 @@ class _EditEventPageState extends State<EditEventPage> {
       return false;
     }
 
-    // 检查结束时间是否在开始时间之后
-    if (!_isAllDay && (endDateTime.isBefore(startDateTime) || endDateTime.isAtSameMomentAs(startDateTime))) {
+    // 检查结束时间不能小于开始时间
+    if (endDateTime.isBefore(startDateTime)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('❌ 结束时间必须在开始时间之后'),
+          content: Text('结束时间不能小于开始时间'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 3),
         ),
@@ -700,29 +699,6 @@ class _EditEventPageState extends State<EditEventPage> {
         } else {
           _endDate = result['date'];
           _endTime = result['time'];
-          // 确保开始时间在结束时间之前
-          final startDateTime = DateTime(
-            _startDate.year,
-            _startDate.month,
-            _startDate.day,
-            _startTime.hour,
-            _startTime.minute,
-          );
-          final endDateTime = DateTime(
-            _endDate.year,
-            _endDate.month,
-            _endDate.day,
-            _endTime.hour,
-            _endTime.minute,
-          );
-          
-          if (startDateTime.isAfter(endDateTime) || startDateTime.isAtSameMomentAs(endDateTime)) {
-            _startDate = _endDate;
-            _startTime = TimeOfDay(
-              hour: (_endTime.hour - 1 + 24) % 24,
-              minute: _endTime.minute,
-            );
-          }
         }
       });
     }
