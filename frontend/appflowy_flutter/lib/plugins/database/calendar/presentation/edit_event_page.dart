@@ -815,25 +815,25 @@ class _EditEventPageState extends State<EditEventPage> {
                   ),
                   
                   // 我的日历选项
-                  ListTile(
-                    leading: FlowySvg(
-                      FlowySvgs.icon_calendar_m,
-                      color: theme.iconTheme.color,
-                      size: const Size.square(24),
-                    ),
-                    title: Text(
-                      '我的日历',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: theme.textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    onTap: () {
-                      // 显示日历选择器
-                    },
-                    horizontalTitleGap: 8.0,
-                    minLeadingWidth: 0,
-                  ),
+                  // ListTile(
+                  //   leading: FlowySvg(
+                  //     FlowySvgs.icon_calendar_m,
+                  //     color: theme.iconTheme.color,
+                  //     size: const Size.square(24),
+                  //   ),
+                  //   title: Text(
+                  //     '我的日历',
+                  //     style: TextStyle(
+                  //       fontSize: 16,
+                  //       color: theme.textTheme.bodyLarge?.color,
+                  //     ),
+                  //   ),
+                  //   onTap: () {
+                  //     // 显示日历选择器
+                  //   },
+                  //   horizontalTitleGap: 8.0,
+                  //   minLeadingWidth: 0,
+                  // ),
                   
                   // 添加说明选项
                   ListTile(
