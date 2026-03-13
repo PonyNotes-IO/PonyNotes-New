@@ -131,8 +131,22 @@ impl FileUploader {
   pub async fn process_next(&self) -> Option<()> {
     // Do not proceed if the uploader is paused.
     if self.pause_sync.load(std::sync::atomic::Ordering::Relaxed) {
-      info!("[File] Uploader is paused");
-      return None;
+      // If disable_upload was reset to false (by a new explicit upload attempt in
+      // create_upload), auto-resume so the queued task can be processed.
+      // pause_sync and disable_upload are always set together by disable_storage_write(),
+      // so if disable_upload is now false, it is safe to clear the pause too.
+      if !self
+        .disable_upload
+        .load(std::sync::atomic::Ordering::SeqCst)
+      {
+        info!("[File] Storage limit was reset by new upload attempt, auto-resuming uploader");
+        self
+          .pause_sync
+          .store(false, std::sync::atomic::Ordering::SeqCst);
+      } else {
+        info!("[File] Uploader is paused");
+        return None;
+      }
     }
 
     let current_uploads = self
