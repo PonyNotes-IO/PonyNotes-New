@@ -10,6 +10,9 @@ class ReminderMetaKeys {
   static String notificationType = "notification_type";
   static String isRecurring = "is_recurring";
   static String recurrenceInstanceId = "recurrence_instance_id";
+  // For system notifications
+  static String workspaceId = "workspace_id";
+  static String removedMemberUid = "removed_member_uid";
 }
 
 enum ReminderType {
@@ -86,4 +89,14 @@ extension ReminderExtension on ReminderPB {
       return 'system';
     }
   }
+
+  /// Get workspace ID from system notification meta
+  String? get workspaceId => meta[ReminderMetaKeys.workspaceId];
+
+  /// Get removed member UID from system notification meta
+  String? get removedMemberUid => meta[ReminderMetaKeys.removedMemberUid];
+
+  /// Check if this is a workspace member removed notification
+  bool get isWorkspaceMemberRemoved =>
+      notificationType == 'workspace_member_removed';
 }

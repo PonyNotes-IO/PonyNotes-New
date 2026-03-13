@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:appflowy/core/notification/user_notification.dart';
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
@@ -8,6 +10,7 @@ import 'package:appflowy/shared/list_extension.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/notification_service.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
+import 'package:appflowy/user/application/reminder/reminder_listener.dart';
 import 'package:appflowy/user/application/reminder/reminder_service.dart';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
@@ -44,7 +47,42 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       },
     );
 
+    // Listen for system notifications (e.g., workspace_member_removed)
+    _setupSystemNotificationListener();
+
     _dispatch();
+  }
+
+  // UserAwarenessListener for system notifications
+  UserAwarenessListener? _systemNotificationListener;
+
+  void _setupSystemNotificationListener() {
+    // Create a listener with empty workspace ID since we want global notifications
+    _systemNotificationListener = UserAwarenessListener(
+      workspaceId: '',
+    );
+
+    _systemNotificationListener?.start(
+      onDidUpdateReminder: (reminder) {
+        if (isClosed) return;
+
+        Log.info('Received system notification: ${reminder.notificationType}');
+
+        // Check if this is a workspace member removed notification
+        if (reminder.isWorkspaceMemberRemoved) {
+          Log.info('Workspace member removed notification received, refreshing workspaces');
+
+          // Trigger workspace list refresh
+          try {
+            getIt<UserWorkspaceBloc>().add(
+              UserWorkspaceEvent.fetchWorkspaces(),
+            );
+          } catch (e) {
+            Log.error('Failed to trigger workspace refresh: $e');
+          }
+        }
+      },
+    );
   }
 
   late final ActionNavigationBloc _actionBloc;
@@ -199,10 +237,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 title: LocaleKeys.reminderNotification_title.tr(),
                 message: LocaleKeys.reminderNotification_message.tr(),
                 scheduledAt: scheduledAt,
-                isAck: !scheduledAt.toDateTime().isAfter(DateTime.now()),
-                // Historical reminders should not trigger unread messages.
-                isRead: !scheduledAt.toDateTime().isAfter(DateTime.now()),
-                meta: meta,
+                isAck: scheduledAt.toDateTime().isBefore(DateTime.now()),
+                meta: meta?.entries,
               ),
             ),
           ),
@@ -370,6 +406,8 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
     Log.info('ReminderBloc closed');
     _listener.dispose();
     timer?.cancel();
+    // Cleanup system notification listener
+    _systemNotificationListener?.stop();
     await super.close();
   }
 
@@ -686,7 +724,7 @@ class ReminderUpdate {
       isRead: isReadValue,
       title: a.title,
       message: a.message,
-      meta: metaMap,
+      meta: metaMap.entries,
     );
   }
 }

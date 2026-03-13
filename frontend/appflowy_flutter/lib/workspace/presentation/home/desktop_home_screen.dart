@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:appflowy/features/workspace/data/repositories/rust_workspace_repository_impl.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/blank/blank.dart';
@@ -512,11 +514,34 @@ class _WorkspaceLifecycleRefresherState
     extends State<_WorkspaceLifecycleRefresher> with WidgetsBindingObserver {
   DateTime? _lastRefreshTime;
   static const _refreshDebounceDuration = Duration(seconds: 2);
+  
+  /// 定期刷新定时器，用于检测用户是否被踢出工作区
+  /// 间隔设置为 5 分钟，作为 WebSocket 实时通知的后备机制
+  /// WebSocket 连接断开时，此定时器可以确保用户最终会被踢出
+  Timer? _periodicRefreshTimer;
+  static const _periodicRefreshInterval = Duration(minutes: 5);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    
+    // 启动定期刷新定时器，用于检测用户是否被踢出工作区
+    _startPeriodicRefresh();
+  }
+  
+  /// 启动定期刷新定时器
+  void _startPeriodicRefresh() {
+    _periodicRefreshTimer?.cancel();
+    _periodicRefreshTimer = Timer.periodic(
+      _periodicRefreshInterval,
+      (_) {
+        if (mounted) {
+          _refreshWorkspaceList();
+        }
+      },
+    );
+    LogUtils.info('WorkspaceLifecycleRefresher: started periodic refresh timer');
   }
 
   @override
@@ -557,6 +582,8 @@ class _WorkspaceLifecycleRefresherState
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _periodicRefreshTimer?.cancel();
+    _periodicRefreshTimer = null;
     super.dispose();
   }
 
