@@ -125,6 +125,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     final storageUsage = _buildStorageUsageText();
+    final isQuickEntryUser = widget.userProfile.userAuthType != AuthTypePB.Server;
 
     return Container(
       decoration: BoxDecoration(
@@ -213,7 +214,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
                 label: LocaleKeys.settings_sites_title.tr(),
                 changeSelectedPage: widget.changeSelectedPage,
               ),
-            if (FeatureFlag.planBilling.isOn && widget.isBillingEnabled) ...[
+            if (!isQuickEntryUser &&
+                FeatureFlag.planBilling.isOn &&
+                widget.isBillingEnabled) ...[
               SettingsMenuElement(
                 page: SettingsPage.plan,
                 selectedPage: widget.currentPage,
@@ -236,15 +239,16 @@ class _SettingsMenuState extends State<SettingsMenu> {
               changeSelectedPage: widget.changeSelectedPage,
             ),
             
-            // 会员升级入口
-            SettingsMenuElement(
-              page: SettingsPage.accountManagement,
-              selectedPage: widget.currentPage,
-              label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
-              changeSelectedPage: widget.changeSelectedPage,
-              showIcon: true,
-              showArrow: false,
-            ),
+            if (!isQuickEntryUser)
+              // 会员升级入口
+              SettingsMenuElement(
+                page: SettingsPage.accountManagement,
+                selectedPage: widget.currentPage,
+                label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
+                changeSelectedPage: widget.changeSelectedPage,
+                showIcon: true,
+                showArrow: false,
+              ),
           ],
         ),
       ),

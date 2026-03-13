@@ -11,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../features/workspace/logic/workspace_bloc.dart';
 import '../../../shared/settings/show_settings.dart';
 import '../../presentation/widgets/dialogs.dart';
+import '../../presentation/widgets/dialog_v2.dart';
 import 'package:appflowy/workspace/presentation/settings/settings_dialog.dart' as setting;
 
 import '../settings/settings_dialog_bloc.dart';
@@ -46,6 +47,28 @@ class MembershipCheckerService {
   factory MembershipCheckerService() => _instance;
 
   MembershipCheckerService._internal();
+
+  bool _isQuickEntryUser(UserProfilePB userProfile) {
+    return userProfile.userAuthType != AuthTypePB.Server;
+  }
+
+  Future<void> showFeatureRestrictedDialog(
+    BuildContext context, {
+    String? featureName,
+  }) async {
+    if (!context.mounted) {
+      return;
+    }
+    final targetFeature = (featureName == null || featureName.isEmpty)
+        ? '该功能'
+        : featureName;
+    await showSimpleAFDialog(
+      context: context,
+      title: '功能受限',
+      content: '$targetFeature 需要登录后开通会员可用。',
+      primaryAction: ('我知道了', null),
+    );
+  }
 
   /// 检查会员状态是否过期
   Future<bool> checkMembershipStatus({required UserProfilePB userProfile, required BuildContext context, String? workspaceId}) async {
@@ -192,6 +215,10 @@ class MembershipCheckerService {
     String? featureName,
   }) async {
     try {
+      if (_isQuickEntryUser(userProfile)) {
+        await showFeatureRestrictedDialog(context, featureName: featureName);
+        return;
+      }
       showSettingsDialog(
         context,
           userProfile,

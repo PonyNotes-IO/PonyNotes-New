@@ -3,9 +3,11 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/settings/show_settings.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/widgets/cloud_sync_settings_panel.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -42,6 +44,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
           final subscriptionInfo = workspaceState.workspaceSubscriptionInfo;
           final isCloudSyncEnabled =
               workspaceState.isCloudSyncEnabled; // 从 Bloc 状态中获取云同步开关状态
+          final isQuickEntryUser =
+              workspaceState.userProfile.userAuthType != AuthTypePB.Server;
 
           // 如果会员信息还没有加载，触发获取
           if (currentSubscription == null) {
@@ -66,15 +70,25 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
 
           return _buildCloudSyncIcon(
             context,
-            () => _showCloudSyncSettings(
-              context,
-              subscriptionInfo: subscriptionInfo,
-              currentSubscription: currentSubscription,
-              isCloudSyncEnabled: isCloudSyncEnabled,
-            ),
+            () {
+              if (isQuickEntryUser) {
+                MembershipCheckerService().showFeatureRestrictedDialog(
+                  context,
+                  featureName: '云同步功能',
+                );
+                return;
+              }
+              _showCloudSyncSettings(
+                context,
+                subscriptionInfo: subscriptionInfo,
+                currentSubscription: currentSubscription,
+                isCloudSyncEnabled: isCloudSyncEnabled,
+              );
+            },
             folderSyncState: workspaceState.folderSyncState,
             isCloudSyncEnabled: isCloudSyncEnabled,
             membershipStatus: membershipStatus,
+            hideSyncState: isQuickEntryUser,
           );
         },
       );
@@ -314,7 +328,26 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
     required FolderSyncStatePB? folderSyncState,
     required bool isCloudSyncEnabled,
     required CloudSyncMembershipStatus membershipStatus,
+    bool hideSyncState = false,
   }) {
+    if (hideSyncState) {
+      return SizedBox.square(
+        key: _buttonKey,
+        dimension: 28.0,
+        child: FlowyButton(
+          useIntrinsicWidth: true,
+          margin: EdgeInsets.zero,
+          text: FlowySvg(
+            FlowySvgs.cloud_sync_m,
+            color:
+                widget.isHover ? Theme.of(context).colorScheme.onSurface : null,
+            opacity: 0.7,
+          ),
+          onTap: onTap,
+        ),
+      );
+    }
+
     final hasWarning = membershipStatus == CloudSyncMembershipStatus.expiringSoon ||
         membershipStatus == CloudSyncMembershipStatus.gracePeriod ||
         membershipStatus == CloudSyncMembershipStatus.expired ||
