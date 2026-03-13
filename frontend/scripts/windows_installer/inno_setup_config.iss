@@ -18,10 +18,10 @@ OutputBaseFilename=PonyNotesSetup
 OutputDir=Output
 
 [Files]
-Source: "AppFlowy\PonyNotes.exe"; DestDir: "{app}"; DestName: "PonyNotes.exe"; Flags: ignoreversion
+Source: "PonyNotes\PonyNotes.exe"; DestDir: "{app}"; DestName: "PonyNotes.exe"; Flags: ignoreversion
 ; Note: vc_redist_x64.exe is optional - uncomment if you have it
-; Source: "AppFlowy\vc_redist_x64.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "AppFlowy\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+; Source: "PonyNotes\vc_redist_x64.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "PonyNotes\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 
 [Icons]
 Name: "{userdesktop}\PonyNotes"; Filename: "{app}\PonyNotes.exe"
