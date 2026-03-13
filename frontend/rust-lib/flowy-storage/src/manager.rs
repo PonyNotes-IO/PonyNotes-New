@@ -412,15 +412,14 @@ impl StorageService for StorageServiceImpl {
     let parent_dir = parent_dir.to_string();
     let file_path = file_path.to_string();
 
-    let is_exceed_limit = self
+    // Reset the storage limit flag on each new explicit upload attempt.
+    // The server is the source of truth — if the limit is still exceeded,
+    // start_upload will report the real error and disable background uploads again.
+    if self
       .is_exceed_storage_limit
-      .load(std::sync::atomic::Ordering::Relaxed);
-    if is_exceed_limit {
-      make_notification(StorageNotification::FileStorageLimitExceeded)
-        .payload(FlowyError::file_storage_limit())
-        .send();
-
-      return Err(FlowyError::file_storage_limit());
+      .swap(false, std::sync::atomic::Ordering::SeqCst)
+    {
+      info!("[File] Resetting storage limit flag for new upload attempt");
     }
 
     let local_file_path = self

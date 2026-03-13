@@ -183,9 +183,8 @@ impl FileUploader {
       } => {
         let record = BoxAny::new(record);
         if let Err(err) = self.storage_service.start_upload(&record).await {
-          // 只有总存储空间满时才禁用后续上传，单文件超限不影响其他文件上传
           if err.is_file_limit_exceeded() && !err.is_single_file_limit_exceeded() {
-            self.disable_storage_write();
+            error!("[File] Storage limit exceeded for task, skipping (won't retry)");
           }
 
           if err.should_retry_upload() {
@@ -215,10 +214,8 @@ impl FileUploader {
           .resume_upload(&workspace_id, &parent_dir, &file_id)
           .await
         {
-          // 单个文件超限不应禁用后续上传，只有总存储空间真正耗尽才应禁用
           if err.is_file_limit_exceeded() && !err.is_single_file_limit_exceeded() {
-            error!("[File] failed to upload file: {}", err);
-            self.disable_storage_write();
+            error!("[File] Storage limit exceeded during resume, skipping (won't retry)");
           }
 
           if err.should_retry_upload() {
