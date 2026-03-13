@@ -73,13 +73,17 @@ impl FlowyError {
   }
 
   pub fn is_file_limit_exceeded(&self) -> bool {
-    // 检查是否是存储限制错误
-    // 包括 FileStorageLimitExceeded (100) 和 PlanLimitExceeded (141)
-    // 也通过错误消息来检查，因为后端可能返回包含存储限制信息的错误
-    self.code == ErrorCode::FileStorageLimitExceeded 
+    // 检查是否是总存储空间耗尽错误（不包含单文件超限）
+    // FileStorageLimitExceeded (100): 总存储已满
+    // PlanLimitExceeded (141): 套餐存储限制（总量超限）
+    // 注意：不能匹配 "plan limit" 关键词，因为单文件超限消息中也可能含有该词
+    if self.code == ErrorCode::SingleUploadLimitExceeded {
+      return false;
+    }
+    self.code == ErrorCode::FileStorageLimitExceeded
       || self.code == ErrorCode::PlanLimitExceeded
-      || self.msg.to_lowercase().contains("storage limit")
-      || self.msg.to_lowercase().contains("plan limit")
+      || self.msg.to_lowercase().contains("total storage limit")
+      || self.msg.to_lowercase().contains("storage limit exceeded")
   }
 
   pub fn is_single_file_limit_exceeded(&self) -> bool {
