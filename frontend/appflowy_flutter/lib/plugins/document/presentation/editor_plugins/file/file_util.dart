@@ -8,6 +8,7 @@ import 'package:appflowy/shared/custom_image_cache_manager.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/xfile_ext.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
+import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/error.dart';
@@ -24,6 +25,38 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:universal_platform/universal_platform.dart';
+
+// 单文件最大上传限制：3GB
+const int _kMaxUploadFileSizeBytes = 3 * 1024 * 1024 * 1024;
+
+/// 检查云存储空间是否足够
+///
+/// 返回 true 表示有足够空间，返回 false 表示空间不足。
+/// 获取订阅信息失败时默认允许上传（放行到服务端检查）。
+Future<bool> _hasEnoughCloudStorage(
+  UserProfilePB userProfile,
+  int fileSizeInBytes,
+) async {
+  try {
+    final subscriptionService = SubscriptionService();
+    final subscription = await subscriptionService.getCurrentSubscription(
+      userProfile: userProfile,
+      caller: 'file_util._hasEnoughCloudStorage',
+    );
+
+    final storageUsedGb = subscription?.usage?.storageUsedGb ?? 0.0;
+    final storageTotalGb = subscription?.usage?.storageTotalGb ?? 0.0;
+
+    // 无法获取订阅信息时，允许上传（由服务端决策）
+    if (storageTotalGb <= 0) return true;
+
+    final fileSizeGb = fileSizeInBytes / (1024 * 1024 * 1024);
+    return (storageUsedGb + fileSizeGb) <= storageTotalGb;
+  } catch (e) {
+    Log.error('Failed to check cloud storage quota: $e');
+    return true; // 检查失败时默认允许上传
+  }
+}
 
 Future<String?> saveFileToLocalStorage(String localFilePath) async {
   final path = await getIt<ApplicationDataStorage>().getPath();
@@ -199,6 +232,23 @@ Future<void> insertLocalFile(
   if (isLocalMode) {
     path = await saveFileToLocalStorage(file.path);
   } else {
+    // 检查1：单文件大小不能超过 3GB（客户端立即拒绝，无需请求服务端）
+    final fileSize = File(file.path).lengthSync();
+    if (fileSize > _kMaxUploadFileSizeBytes) {
+      showSnackBarMessage(context, '对不起，您最大可上传的单个文件不能超过3GB');
+      return;
+    }
+
+    // 检查2：已用空间 + 本次文件大小 不能超过订阅计划允许的最大云存储空间
+    if (userProfile != null) {
+      final hasEnoughSpace =
+          await _hasEnoughCloudStorage(userProfile, fileSize);
+      if (!hasEnoughSpace) {
+        if (context.mounted) showSnackBarMessage(context, '您当前可用的云存储空间不足');
+        return;
+      }
+    }
+
     (path, errorMsg) = await saveFileToCloudStorage(
       file.path,
       documentId,
@@ -248,6 +298,27 @@ Future<void> insertLocalFiles(
     if (isLocalMode) {
       path = await saveFileToLocalStorage(file.path);
     } else {
+      // 检查1：单文件大小不能超过 3GB（客户端立即拒绝）
+      final fileSize = File(file.path).lengthSync();
+      if (fileSize > _kMaxUploadFileSizeBytes) {
+        if (context.mounted) {
+          showSnackBarMessage(context, '对不起，您最大可上传的单个文件不能超过3GB');
+        }
+        continue;
+      }
+
+      // 检查2：已用空间 + 本次文件大小 不能超过订阅计划允许的最大云存储空间
+      if (userProfile != null) {
+        final hasEnoughSpace =
+            await _hasEnoughCloudStorage(userProfile, fileSize);
+        if (!hasEnoughSpace) {
+          if (context.mounted) {
+            showSnackBarMessage(context, '您当前可用的云存储空间不足');
+          }
+          continue;
+        }
+      }
+
       (path, errorMsg) = await saveFileToCloudStorage(
         file.path,
         documentId,

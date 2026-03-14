@@ -9,6 +9,7 @@ import 'package:appflowy/env/env.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 
 /// File upload service for AppFlowy Cloud storage
 class FileUploadService {
@@ -17,15 +18,18 @@ class FileUploadService {
   
   /// Upload file to AppFlowy Cloud storage and get URL
   /// Requires user to be logged in to AppFlowy Cloud
-  /// Maximum file size: 50MB
+  /// Maximum file size: 3GB
   static Future<String> uploadFile(Uint8List fileBytes, String fileName) async {
     try {
       Log.info('Uploading file to AppFlowy Cloud: $fileName (${getFileSizeString(fileBytes.length)})');
       
-      // Check file size first - maximum 50MB
-      if (!isFileSizeValid(fileBytes.length)) {
-        throw Exception('文件大小超过限制（最大50MB），当前文件大小：${getFileSizeString(fileBytes.length)}');
+      // 检查1：单文件大小不能超过 3GB（客户端立即拒绝）
+      if (fileBytes.length > 3 * 1024 * 1024 * 1024) {
+        throw Exception('对不起，您最大可上传的单个文件不能超过3GB');
       }
+
+      // 检查2：已用空间 + 本次文件大小 不能超过订阅计划允许的最大云存储空间
+      await _checkCloudStorageQuota(fileBytes.length);
       
       // Check if user is logged in first - required for file upload
       try {
@@ -251,10 +255,42 @@ class FileUploadService {
     return '${uri.scheme}://${uri.host}:${uri.port}';
   }
   
+  /// 检查云存储配额：已用空间 + 本次文件 是否超出订阅计划上限
+  ///
+  /// 获取订阅信息失败时默认放行（由服务端决策）。
+  static Future<void> _checkCloudStorageQuota(int fileSizeInBytes) async {
+    try {
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold((user) => user, (_) => null);
+      if (userProfile == null) return;
+
+      final subscriptionService = SubscriptionService();
+      final subscription = await subscriptionService.getCurrentSubscription(
+        userProfile: userProfile,
+        caller: 'FileUploadService._checkCloudStorageQuota',
+      );
+
+      final storageUsedGb = subscription?.usage?.storageUsedGb ?? 0.0;
+      final storageTotalGb = subscription?.usage?.storageTotalGb ?? 0.0;
+
+      // 无法获取订阅限额时放行
+      if (storageTotalGb <= 0) return;
+
+      final fileSizeGb = fileSizeInBytes / (1024 * 1024 * 1024);
+      if ((storageUsedGb + fileSizeGb) > storageTotalGb) {
+        throw Exception('您当前可用的云存储空间不足');
+      }
+    } catch (e) {
+      if (e.toString().contains('云存储空间不足')) rethrow;
+      Log.error('[FileUploadService] Failed to check storage quota: $e');
+      // 检查失败时放行，由服务端决策
+    }
+  }
+
   /// Check if file size is within limits
-  /// Maximum file size: 50MB
+  /// Maximum file size: 3GB
   static bool isFileSizeValid(int fileSizeInBytes) {
-    const int maxFileSize = 50 * 1024 * 1024; // 50MB
+    const int maxFileSize = 3 * 1024 * 1024 * 1024; // 3GB
     return fileSizeInBytes <= maxFileSize;
   }
   
@@ -408,6 +444,11 @@ class FileUploadService {
   
   /// Upload file from File object
   static Future<String> uploadFileFromFile(File file) async {
+    // 在读入内存之前先检查文件大小，避免 OOM
+    final fileSize = await file.length();
+    if (fileSize > 3 * 1024 * 1024 * 1024) {
+      throw Exception('对不起，您最大可上传的单个文件不能超过3GB');
+    }
     final bytes = await file.readAsBytes();
     final fileName = file.path.split('/').last;
     return uploadFile(bytes, fileName);
