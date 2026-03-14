@@ -1,6 +1,8 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_util.dart';
 import 'package:appflowy/shared/patterns/common_patterns.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/presentation/home/toast.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:dotted_border/dotted_border.dart';
@@ -254,6 +256,18 @@ class _FileUploadLocalState extends State<_FileUploadLocal> {
         dialogTitle: '',
         allowMultiple: widget.allowMultipleFiles,
       );
+
+      if (result?.files.isNotEmpty ?? false) {
+        // PlatformFile.size is OS metadata from the file picker — zero disk I/O, instant check
+        final hasOversized =
+            result!.files.any((f) => f.size > kMaxUploadFileSizeBytes);
+        if (hasOversized) {
+          if (context.mounted) {
+            showSnackBarMessage(context, '对不起，您最大可上传的单个文件不能超过3GB');
+          }
+          return;
+        }
+      }
 
       final List<XFile> files = result?.files.isNotEmpty ?? false
           ? result!.files.map((f) => f.xFile).toList()
