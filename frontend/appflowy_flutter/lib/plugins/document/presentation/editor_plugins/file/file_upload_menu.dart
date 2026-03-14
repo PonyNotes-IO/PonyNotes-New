@@ -3,6 +3,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_
 import 'package:appflowy/shared/patterns/common_patterns.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:dotted_border/dotted_border.dart';
@@ -262,9 +263,10 @@ class _FileUploadLocalState extends State<_FileUploadLocal> {
         final hasOversized =
             result!.files.any((f) => f.size > kMaxUploadFileSizeBytes);
         if (hasOversized) {
-          // 使用 showMessageToast（全局 FToast）而非 showSnackBarMessage，
-          // 避免原生文件选择器打开期间 popover 被关闭导致 context 失效而静默失败。
-          showMessageToast('对不起，您最大可上传的单个文件不能超过3GB');
+          showToastNotification(
+            message: '对不起，您最大可上传的单个文件不能超过3GB',
+            type: ToastificationType.error,
+          );
           return;
         }
       }

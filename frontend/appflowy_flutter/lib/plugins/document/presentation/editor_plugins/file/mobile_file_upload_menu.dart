@@ -4,6 +4,7 @@ import 'package:appflowy/shared/patterns/common_patterns.dart';
 import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
@@ -201,7 +202,10 @@ class _FileUploadLocalState extends State<_FileUploadLocal> {
         final hasOversized =
             result!.files.any((f) => f.size > kMaxUploadFileSizeBytes);
         if (hasOversized) {
-          showMessageToast('对不起，您最大可上传的单个文件不能超过3GB');
+          showToastNotification(
+            message: '对不起，您最大可上传的单个文件不能超过3GB',
+            type: ToastificationType.error,
+          );
           return;
         }
       }
