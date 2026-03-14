@@ -351,7 +351,10 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                             // include that input as a single invite target.
                             final typed = _inputController.text.trim();
                             if (typed.isNotEmpty &&
-                                selectedUsers.every((u) => u.name != typed) &&
+                                selectedUsers.every((u) =>
+                                    u.name != typed &&
+                                    u.email != typed &&
+                                    u.phone != typed) &&
                                 _isValidEmailOrPhone(typed)) {
                               selectedUsers.add(SharedUser(
                                   email: typed,
@@ -362,8 +365,12 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
 
                             // Dispatch invite events for all selected users
                             for (final u in selectedUsers) {
-                              final identifier = u.name;
-                              // Validate email or phone format before inviting
+                              // 优先使用邮箱，其次手机号，最后用户名作为邀请标识符
+                              final identifier = u.email.isNotEmpty
+                                  ? u.email
+                                  : (u.phone?.isNotEmpty == true
+                                      ? u.phone!
+                                      : u.name);
                               if (!_isValidEmailOrPhone(identifier)) {
                                 showToastNotification(
                                   type: ToastificationType.error,
