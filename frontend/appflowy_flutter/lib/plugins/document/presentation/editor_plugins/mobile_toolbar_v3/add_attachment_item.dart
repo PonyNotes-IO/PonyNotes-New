@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -13,6 +14,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
 import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -221,22 +223,53 @@ class _AddAttachmentMenu extends StatelessWidget {
 
   Future<void> selectFile(BuildContext context) async {
     final result = await getIt<FilePickerService>().pickFiles();
-    final file = result?.files.first.xFile;
+    final file = result?.files.first;
     if (file != null) {
+      if (file.size > kMaxUploadFileSizeBytes) {
+        if (context.mounted) {
+          showSnackBarMessage(context, '对不起，您最大可上传的单个文件不能超过3GB');
+        }
+        if (context.mounted) Navigator.pop(context);
+        return;
+      }
+
+      final xFile = file.xFile;
       FileUrlType type = FileUrlType.local;
       String? path;
       String? errorMsg;
       if (isLocalMode) {
-        path = await saveFileToLocalStorage(file.path);
+        path = await saveFileToLocalStorage(xFile.path);
       } else {
-        (path, errorMsg) = await saveFileToCloudStorage(file.path, documentId);
+        final fileSize = File(xFile.path).lengthSync();
+        try {
+          final userResult =
+              await UserBackendService.getCurrentUserProfile();
+          final userProfile =
+              userResult.fold((user) => user, (_) => null);
+          if (userProfile != null) {
+            final hasSpace =
+                await hasEnoughCloudStorage(userProfile, fileSize);
+            if (!hasSpace) {
+              if (context.mounted) {
+                showSnackBarMessage(context, '您当前可用的云存储空间不足');
+              }
+              if (context.mounted) Navigator.pop(context);
+              return;
+            }
+          }
+        } catch (e) {
+          Log.error('Failed to check cloud storage in selectFile: $e');
+        }
+
+        (path, errorMsg) =
+            await saveFileToCloudStorage(xFile.path, documentId);
         type = FileUrlType.cloud;
       }
 
       if (errorMsg != null && context.mounted) {
         showSnackBarMessage(context, errorMsg);
       } else if (path != null) {
-        final node = fileNode(url: path, type: type, name: file.name);
+        final node = fileNode(url: path, type: type, name: xFile.name);
         await _insertNode(node);
       }
     }
