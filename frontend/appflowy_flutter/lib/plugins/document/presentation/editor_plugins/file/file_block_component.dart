@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -646,6 +648,27 @@ class FileBlockComponentState extends State<FileBlockComponent>
       if (isLocalMode) {
         url = await saveFileToLocalStorage(path);
       } else {
+        // 检查1：单文件大小不能超过 3GB（客户端立即拒绝，无 I/O，仅读元数据）
+        final fileSize = File(path).lengthSync();
+        if (fileSize > kMaxUploadFileSizeBytes) {
+          if (mounted) {
+            showSnackBarMessage(context, '对不起，您最大可上传的单个文件不能超过3GB');
+          }
+          return;
+        }
+
+        // 检查2：已用空间 + 本次文件大小 不能超过订阅计划允许的最大云存储空间
+        final userProfile = documentBloc.state.userProfilePB;
+        if (userProfile != null) {
+          final hasSpace = await hasEnoughCloudStorage(userProfile, fileSize);
+          if (!hasSpace) {
+            if (mounted) {
+              showSnackBarMessage(context, '您当前可用的云存储空间不足');
+            }
+            return;
+          }
+        }
+
         final result = await saveFileToCloudStorage(path, documentBloc.documentId);
         url = result.$1;
         errorMsg = result.$2;
