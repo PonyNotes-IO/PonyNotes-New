@@ -262,9 +262,9 @@ class _FileUploadLocalState extends State<_FileUploadLocal> {
         final hasOversized =
             result!.files.any((f) => f.size > kMaxUploadFileSizeBytes);
         if (hasOversized) {
-          if (context.mounted) {
-            showSnackBarMessage(context, '对不起，您最大可上传的单个文件不能超过3GB');
-          }
+          // 使用 showMessageToast（全局 FToast）而非 showSnackBarMessage，
+          // 避免原生文件选择器打开期间 popover 被关闭导致 context 失效而静默失败。
+          showMessageToast('对不起，您最大可上传的单个文件不能超过3GB');
           return;
         }
       }
