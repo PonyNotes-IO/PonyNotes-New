@@ -72,23 +72,23 @@ Future<void> showSimpleAFDialog({
                   AFOutlinedTextButton.normal(
                     text: secondaryAction.$1,
                     onTap: () {
-                      secondaryAction.$2?.call(context);
                       Navigator.of(context).pop();
+                      secondaryAction.$2?.call(context);
                     },
                   ),
                 isDestructive
                     ? AFFilledTextButton.destructive(
                         text: primaryAction.$1,
                         onTap: () {
-                          primaryAction.$2?.call(context);
                           Navigator.of(context).pop();
+                          primaryAction.$2?.call(context);
                         },
                       )
                     : AFFilledTextButton.primary(
                         text: primaryAction.$1,
                         onTap: () {
-                          primaryAction.$2?.call(context);
                           Navigator.of(context).pop();
+                          primaryAction.$2?.call(context);
                         },
                       ),
               ],

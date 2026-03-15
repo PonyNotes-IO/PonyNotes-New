@@ -15,7 +15,9 @@ import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -251,7 +253,20 @@ class _AddAttachmentMenu extends StatelessWidget {
                 await hasEnoughCloudStorage(userProfile, fileSize);
             if (!hasSpace) {
               if (context.mounted) {
-                showSnackBarMessage(context, '您当前可用的云存储空间不足');
+                final userProfileForDialog = userProfile;
+                await showSimpleAFDialog(
+                  context: context,
+                  title: '云存储空间不足',
+                  content: '您当前可用的云存储空间不足，无法上传文件。请升级会员以获得更多存储空间。',
+                  primaryAction: (
+                    '升级',
+                    (ctx) => MembershipCheckerService().navigateToUpgradePage(
+                      ctx,
+                      userProfile: userProfileForDialog,
+                    ),
+                  ),
+                  secondaryAction: ('取消', null),
+                );
               }
               if (context.mounted) Navigator.pop(context);
               return;

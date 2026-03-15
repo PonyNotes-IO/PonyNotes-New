@@ -27,8 +27,25 @@ class SidebarCloudSyncButton extends StatefulWidget {
   State<SidebarCloudSyncButton> createState() => _SidebarCloudSyncButtonState();
 }
 
-class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
+class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
+    with SingleTickerProviderStateMixin {
   final GlobalKey _buttonKey = GlobalKey(); // 用于获取按钮位置
+  late final AnimationController _rotationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
+  }
+
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -392,16 +409,29 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
       iconColor = Colors.red;
       labelColor = Colors.red;
       labelText = LocaleKeys.newSettings_syncState_syncing.tr();
+      if (!_rotationController.isAnimating) {
+        _rotationController.repeat();
+      }
     } else if (folderSyncState.isFinish) {
       iconData = FlowySvgs.cloud_sync_finish_m;
       iconColor = Colors.green;
       labelColor = Colors.green;
       labelText = LocaleKeys.newSettings_syncState_synced.tr();
+      if (_rotationController.isAnimating) {
+        _rotationController
+          ..stop()
+          ..reset();
+      }
     } else {
       iconData = FlowySvgs.cloud_sync_m;
       iconColor = Colors.grey;
       labelColor = Colors.grey;
       labelText = LocaleKeys.newSettings_syncState_syncing.tr();
+      if (_rotationController.isAnimating) {
+        _rotationController
+          ..stop()
+          ..reset();
+      }
     }
 
     return SizedBox.square(
@@ -412,26 +442,35 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton> {
         children: [
           Positioned(
             left: 0,
-            child: FlowyButton(
-              useIntrinsicWidth: true,
-              margin: EdgeInsets.zero,
-              text: FlowySvg(
-                iconData,
-                color: widget.isHover
-                    ? Theme.of(context).colorScheme.onSurface
-                    : iconColor,
-                opacity: widget.isHover ? 0.7 : 1.0,
+            child: Tooltip(
+              message: labelText,
+              waitDuration: const Duration(milliseconds: 300),
+              child: FlowyButton(
+                useIntrinsicWidth: true,
+                margin: EdgeInsets.zero,
+                text: folderSyncState != null && folderSyncState.isSyncing
+                    ? RotationTransition(
+                        turns: _rotationController,
+                        child: FlowySvg(
+                          iconData,
+                          color: widget.isHover
+                              ? Theme.of(context).colorScheme.onSurface
+                              : iconColor,
+                          opacity: widget.isHover ? 0.7 : 1.0,
+                        ),
+                      )
+                    : FlowySvg(
+                        iconData,
+                        color: widget.isHover
+                            ? Theme.of(context).colorScheme.onSurface
+                            : iconColor,
+                        opacity: widget.isHover ? 0.7 : 1.0,
+                      ),
+                onTap: onTap,
               ),
-              onTap: onTap,
             ),
           ),
           if (hasWarning) _buildWarningDot(membershipStatus),
-          if (!hasWarning)
-            Positioned(
-              left: -6.0,
-              top: 24.0,
-              child: _buildStatusLabel(labelText, labelColor),
-            ),
         ],
       ),
     );

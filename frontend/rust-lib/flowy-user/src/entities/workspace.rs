@@ -167,11 +167,15 @@ pub struct WorkspaceMemberPB {
 
   #[pb(index = 5, one_of)]
   pub joined_at: Option<i64>,
+
+  #[pb(index = 6)]
+  pub uid: i64,
 }
 
 impl From<WorkspaceMember> for WorkspaceMemberPB {
   fn from(value: WorkspaceMember) -> Self {
     Self {
+      uid: value.uid,
       email: value.email,
       name: value.name,
       role: value.role.into(),
@@ -406,8 +410,9 @@ pub struct UpdateWorkspaceMemberPB {
   #[validate(custom(function = "required_not_empty_str"))]
   pub workspace_id: String,
 
+  /// 支持邮箱、手机号或uid字符串（服务端自动识别）
   #[pb(index = 2)]
-  #[validate(email)]
+  #[validate(custom(function = "required_not_empty_str"))]
   pub email: String,
 
   #[pb(index = 3)]
