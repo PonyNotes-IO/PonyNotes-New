@@ -2,6 +2,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/toolbar_item/custom_link_toolbar_item.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -174,12 +175,22 @@ class _LinkCreateMenuState extends State<LinkCreateMenu> {
   }
 
   void onSubmittedPageLink(ViewPB view) async {
-    final workspaceId = context
+    String workspaceId = context
             .read<UserWorkspaceBloc?>()
             ?.state
             .currentWorkspace
             ?.workspaceId ??
         '';
+    
+    // 如果 context 拿不到，尝试从 getIt 获取（但可能失败，需要 try-catch）
+    if (workspaceId.isEmpty) {
+      try {
+        workspaceId = getIt<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ?? '';
+      } catch (_) {
+        // getIt 可能没有注册 UserWorkspaceBloc，忽略错误
+      }
+    }
+    
     final link = ShareConstants.buildShareUrl(
       workspaceId: workspaceId,
       viewId: view.id,

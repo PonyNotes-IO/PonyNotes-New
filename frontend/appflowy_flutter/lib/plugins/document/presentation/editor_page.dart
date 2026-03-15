@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/document/presentation/editor_configuration.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/background_color/theme_background_color.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/i18n/editor_i18n.dart';
@@ -14,12 +15,17 @@ import 'package:appflowy/plugins/inline_actions/handlers/inline_page_reference.d
 import 'package:appflowy/plugins/inline_actions/handlers/reminder_reference.dart';
 import 'package:appflowy/plugins/inline_actions/handlers/user_reference.dart';
 import 'package:appflowy/plugins/inline_actions/inline_actions_service.dart';
+import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy/shared/feature_flags.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/application/settings/shortcuts/settings_shortcuts_service.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/af_focus_manager.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart' hide QuoteBlockKeys;
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:collection/collection.dart';
@@ -184,7 +190,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
 
     editorLaunchUrl = (url) {
       if (url != null) {
-        afLaunchUrlString(url, addingHttpSchemeWhenFailed: true);
+        _handleLinkClick(url);
       }
 
       return Future.value(true);
@@ -559,6 +565,88 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
   }
 
   void _initEditorL10n() => AppFlowyEditorL10n.current = EditorI18n();
+
+  /// 处理编辑器中的链接点击事件
+  /// 如果是分享链接（type=share），则尝试在应用内打开目标笔记
+  /// 否则使用外部浏览器打开
+  Future<void> _handleLinkClick(String url) async {
+    Log.info('[EditorPage] _handleLinkClick called with url: $url');
+    try {
+      final uri = Uri.parse(url);
+      Log.info('[EditorPage] URI parsed - host: ${uri.host}, path: ${uri.path}, query: ${uri.query}');
+      final path = uri.path;
+      final queryParams = uri.queryParameters;
+      final linkType = queryParams['type'];
+      var viewId = queryParams['viewId'];
+      final workspaceId = queryParams['workspaceId'];
+
+      Log.info('[EditorPage] Before processing - path: $path, type: $linkType, viewId: $viewId, workspaceId: $workspaceId');
+
+      // 兼容处理：若 viewId 包含 & 或 ?，说明 query string 解析有问题
+      // 例如：URL 可能被错误编码或者 query 参数格式异常
+      if (viewId != null && (viewId.contains('&') || viewId.contains('?') || viewId.contains('/'))) {
+        Log.info('[EditorPage] viewId contains invalid chars, trying to extract correct viewId');
+        // 尝试从整个 URL 中提取正确的 viewId
+        final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
+        if (match != null) {
+          viewId = match.group(1);
+          Log.info('[EditorPage] After fix - extracted viewId: $viewId');
+        }
+      }
+
+      // 检查是否为分享链接：path 包含 /share 且 type 为 share 或 publish
+      final isSharePath = path == '/share' || path == 'share';
+      final isShareOrPublishType = linkType == 'share' || linkType == 'publish';
+
+      Log.info('[EditorPage] isSharePath: $isSharePath, isShareOrPublishType: $isShareOrPublishType');
+
+      if (isSharePath && isShareOrPublishType && queryParams.containsKey('viewId')) {
+        if (viewId != null && viewId.isNotEmpty) {
+          // 这是分享链接，尝试在应用内打开
+          Log.info('[EditorPage] Opening view in app: $viewId');
+          await _openViewInApp(viewId, workspaceId, url);
+          return;
+        }
+      }
+
+      // 不是分享链接，使用外部浏览器打开
+      Log.info('[EditorPage] Not a share link, opening in browser');
+      await afLaunchUrlString(url, addingHttpSchemeWhenFailed: true);
+    } catch (e) {
+      Log.error('[EditorPage] Error: $e');
+      // 解析失败，使用外部浏览器打开
+      await afLaunchUrlString(url, addingHttpSchemeWhenFailed: true);
+    }
+  }
+
+  /// 在应用内打开笔记视图
+  Future<void> _openViewInApp(String viewId, String? workspaceId, String url) async {
+    Log.info('[EditorPage] _openViewInApp called with viewId: $viewId, workspaceId: $workspaceId');
+    try {
+      // 通过 ViewBackendService 获取视图信息
+      final result = await ViewBackendService.getView(viewId);
+      final view = result.fold(
+        (view) => view,
+        (error) {
+          Log.error('Failed to get view: $viewId, error: $error');
+          return null;
+        },
+      );
+
+      if (view != null) {
+        // 找到了视图，使用 tabsBloc 打开
+        final tabsBloc = getIt<TabsBloc>();
+        tabsBloc.openPlugin(view);
+      } else {
+        // 视图不存在，使用外部浏览器打开
+        await afLaunchUrlString(url, addingHttpSchemeWhenFailed: true);
+      }
+    } catch (e) {
+      Log.error('Error opening view in app: $e');
+      // 打开失败，尝试使用外部浏览器打开
+      await afLaunchUrlString(url, addingHttpSchemeWhenFailed: true);
+    }
+  }
 
   Future<void> _focusOnLastEmptyParagraph() async {
     final editorState = widget.editorState;

@@ -52,7 +52,7 @@ class ShareConstants {
     final query = Uri(
       queryParameters: <String, String>{
         'viewId': viewId,
-        'workspaceId': workspaceId,
+        if (workspaceId.isNotEmpty) 'workspaceId': workspaceId,
         'type': 'share',
         if (blockId != null && blockId.isNotEmpty) 'blockId': blockId,
         if (permissionId != null) 'permission': permissionId.toString(),

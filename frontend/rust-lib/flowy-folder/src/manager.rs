@@ -93,6 +93,30 @@ impl Drop for FolderManager {
 }
 
 impl FolderManager {
+  /// 解析分享链接中的 viewId
+  /// 支持以下格式：
+  /// - https://www.xiaomabiji.com/share?viewId=xxx&type=share
+  /// - share?viewId=xxx&type=share
+  /// - xxx (直接传递 viewId，不做处理)
+  fn resolve_share_link_view_id(view_id: &str) -> String {
+    if !view_id.contains("viewId=") {
+      return view_id.to_string();
+    }
+
+    // 使用正则表达式提取 viewId
+    if let Some(captures) = regex::Regex::new(r"[?&]viewId=([^&]+)")
+      .ok()
+      .and_then(|r| r.captures(view_id))
+    {
+      if let Some(view_id_match) = captures.get(1) {
+        let extracted_view_id = view_id_match.as_str().to_string();
+        return extracted_view_id;
+      }
+    }
+
+    view_id.to_string()
+  }
+
   pub fn new(
     user: Arc<dyn FolderUser>,
     collab_builder: Arc<AppFlowyCollabBuilder>,
@@ -754,6 +778,10 @@ impl FolderManager {
   /// again using the ID of the child view you wish to access.
   #[tracing::instrument(level = "debug", skip(self))]
   pub async fn get_view_pb(&self, view_id: &str) -> FlowyResult<ViewPB> {
+    // 尝试解析分享链接中的 viewId
+    let resolved_view_id = Self::resolve_share_link_view_id(view_id);
+    let view_id = resolved_view_id;
+    
     let workspace = self.user.get_active_user_workspace()?;
     let role = workspace.role;
 
