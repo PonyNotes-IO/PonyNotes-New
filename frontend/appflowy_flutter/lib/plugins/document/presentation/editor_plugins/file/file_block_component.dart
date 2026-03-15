@@ -13,6 +13,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_
 import 'package:appflowy/startup/tasks/file_storage_task.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/file_entities.pbenum.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:cross_file/cross_file.dart';
@@ -663,7 +664,12 @@ class FileBlockComponentState extends State<FileBlockComponent>
           final hasSpace = await hasEnoughCloudStorage(userProfile, fileSize);
           if (!hasSpace) {
             if (mounted) {
-              showSnackBarMessage(context, '您当前可用的云存储空间不足');
+              await showSimpleAFDialog(
+                context: context,
+                title: '云存储空间不足',
+                content: '您当前可用的云存储空间不足，无法上传文件。',
+                primaryAction: ('确定', null),
+              );
             }
             return;
           }

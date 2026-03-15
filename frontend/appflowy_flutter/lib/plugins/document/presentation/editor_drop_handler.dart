@@ -76,7 +76,7 @@ class EditorDropHandler extends StatelessWidget {
                   editorState.selectionService.removeDropTarget(),
               onDragUpdated: (details) =>
                   _onDragUpdated(details.globalPosition),
-              onDragDone: _onDragDone,
+              onDragDone: (details) => _onDragDone(details, context),
               child: child,
             );
           },
@@ -126,7 +126,7 @@ class EditorDropHandler extends StatelessWidget {
     }
   }
 
-  Future<void> _onDragDone(DropDoneDetails details) async {
+  Future<void> _onDragDone(DropDoneDetails details, BuildContext context) async {
     editorState.selectionService.removeDropTarget();
 
     final data = editorState.selectionService
@@ -147,7 +147,7 @@ class EditorDropHandler extends StatelessWidget {
               false || imgExtensionRegex.hasMatch(fileName)) {
             await editorState.dropImages(dropPath, [file], viewId, isLocalMode);
           } else {
-            await editorState.dropFiles(dropPath, [file], viewId, isLocalMode);
+            await editorState.dropFiles(dropPath, [file], viewId, isLocalMode, context: context);
           }
         }
       }

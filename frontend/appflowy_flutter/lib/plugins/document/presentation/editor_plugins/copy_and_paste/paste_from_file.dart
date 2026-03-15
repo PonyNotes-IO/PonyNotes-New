@@ -3,18 +3,21 @@ import 'dart:io';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_block.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_util.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:flutter/material.dart';
 
 extension PasteFromFile on EditorState {
   Future<void> dropFiles(
     List<int> dropPath,
     List<XFile> files,
     String documentId,
-    bool isLocalMode,
-  ) async {
+    bool isLocalMode, {
+    BuildContext? context,
+  }) async {
     for (final file in files) {
       String? path;
       String? errorMsg;
@@ -41,10 +44,19 @@ extension PasteFromFile on EditorState {
             final hasSpace =
                 await hasEnoughCloudStorage(userProfile, fileSize);
             if (!hasSpace) {
-              showToastNotification(
-                message: '您当前可用的云存储空间不足',
-                type: ToastificationType.error,
-              );
+              if (context != null && context.mounted) {
+                await showSimpleAFDialog(
+                  context: context,
+                  title: '云存储空间不足',
+                  content: '您当前可用的云存储空间不足，无法上传文件。',
+                  primaryAction: ('确定', null),
+                );
+              } else {
+                showToastNotification(
+                  message: '您当前可用的云存储空间不足',
+                  type: ToastificationType.error,
+                );
+              }
               continue;
             }
           }
