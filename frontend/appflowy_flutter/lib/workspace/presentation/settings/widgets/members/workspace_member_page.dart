@@ -497,6 +497,15 @@ class _WorkspaceMembersPageState extends State<WorkspaceMembersPage> {
           );
         },
       );
+    } else if (actionType == WorkspaceMemberActionType.removeByEmail) {
+      result.fold(
+        (s) {
+          showToastNotification(message: '成员已删除');
+        },
+        (f) {
+          // 错误已在 BLoC 内通过 showToastNotification 展示
+        },
+      );
     } else if (actionType == WorkspaceMemberActionType.resetInviteLink) {
       result.fold(
         (s) async {
@@ -701,15 +710,20 @@ class _MemberItemState extends State<_MemberItem> {
         ),
         Expanded(
           flex: 2,
-          child:member.role.isOwner || !myRole.canUpdate
-              ? FlowyText.regular(
-            member.role.description,
-            color: theme.textColorScheme.primary,
-            fontSize: 14,
-          )
-              : _MemberRoleActionList(
-            member: member,
-          ),
+          child: () {
+            // 不能修改自己的角色；myRole 无权限时也只显示文本
+            final isSelf = member.uid.toInt() != 0
+                ? member.uid.toInt() == userProfile.id.toInt()
+                : (member.email.isNotEmpty && member.email == userProfile.email) ||
+                    member.name == userProfile.name;
+            return (!myRole.canUpdate || isSelf)
+                ? FlowyText.regular(
+                    member.role.description,
+                    color: theme.textColorScheme.primary,
+                    fontSize: 14,
+                  )
+                : _MemberRoleActionList(member: member);
+          }(),
         ),
         // 群组 列（placeholder，目前 backend 未提供 group 字段）
         // Expanded(
@@ -730,7 +744,7 @@ class _MemberItemState extends State<_MemberItem> {
                   member.name != userProfile.name // can't delete self
               ? _MemberMoreActionList(member: member)
               : SizedBox(width: 24.0),
-        )
+        ),
       ],
     );
   }
@@ -813,7 +827,7 @@ class _MemberMoreActionListState extends State<_MemberMoreActionList> {
                       WorkspaceMemberEvent.removeWorkspaceMemberByEmail(identifier),
                     );
               },
-              closeOnAction: true
+              closeOnAction: true,
             );
             break;
         }
@@ -894,7 +908,7 @@ class _MemberRoleActionList extends StatelessWidget {
                 color: theme.textColorScheme.primary,
                 fontSize: 14,
               ),
-              FlowySvg(FlowySvgs.arrow_down_s,)
+              FlowySvg(FlowySvgs.arrow_down_s),
             ],
           ),
         );

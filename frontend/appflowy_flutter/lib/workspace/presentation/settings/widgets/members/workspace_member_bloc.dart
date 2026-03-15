@@ -353,7 +353,11 @@ class WorkspaceMemberBloc
         Log.info('删除成功，更新成员列表，移除 identifier=$identifier');
         // identifier 可能是 email、phone 或 name，需要同时匹配所有字段
         return state.members.where((e) {
-          return e.email != identifier && e.name != identifier;
+          // identifier 可能是 uid 字符串、email 或 name
+          final uidStr = e.uid.toInt() != 0 ? e.uid.toString() : null;
+          return uidStr != identifier &&
+              e.email != identifier &&
+              e.name != identifier;
         }).toList();
       },
       (e) {
