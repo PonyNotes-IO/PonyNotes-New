@@ -10,6 +10,7 @@ import 'package:appflowy/util/xfile_ext.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
 import 'package:appflowy/workspace/application/subscription/subscription_service.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/error.dart';
 import 'package:appflowy_backend/log.dart';
@@ -244,7 +245,14 @@ Future<void> insertLocalFile(
       final hasEnoughSpace =
           await hasEnoughCloudStorage(userProfile, fileSize);
       if (!hasEnoughSpace) {
-        if (context.mounted) showSnackBarMessage(context, '您当前可用的云存储空间不足');
+        if (context.mounted) {
+          await showSimpleAFDialog(
+            context: context,
+            title: '云存储空间不足',
+            content: '您当前可用的云存储空间不足，无法上传文件。',
+            primaryAction: ('确定', null),
+          );
+        }
         return;
       }
     }
@@ -313,7 +321,12 @@ Future<void> insertLocalFiles(
             await hasEnoughCloudStorage(userProfile, fileSize);
         if (!hasEnoughSpace) {
           if (context.mounted) {
-            showSnackBarMessage(context, '您当前可用的云存储空间不足');
+            await showSimpleAFDialog(
+              context: context,
+              title: '云存储空间不足',
+              content: '您当前可用的云存储空间不足，无法上传文件。',
+              primaryAction: ('确定', null),
+            );
           }
           continue;
         }
