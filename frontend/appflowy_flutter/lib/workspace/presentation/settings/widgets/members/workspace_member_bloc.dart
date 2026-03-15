@@ -429,7 +429,7 @@ class WorkspaceMemberBloc
 
   Future<void> _onUpdateWorkspaceMember(
     Emitter<WorkspaceMemberState> emit,
-    String name,
+    String identifier,
     AFRolePB role,
   ) async {
     final workspaceId = _workspaceId.value;
@@ -440,12 +440,17 @@ class WorkspaceMemberBloc
 
     final result = await _userBackendService.updateWorkspaceMember(
       workspaceId,
-      name,
+      identifier,
       role,
     );
+    // identifier 可能是 uid 字符串、email 或 name，匹配时都需要尝试
+    final parsedUid = int.tryParse(identifier);
     final members = result.fold(
       (s) => state.members.map((e) {
-        if (e.name == name) {
+        final matchByUid = parsedUid != null && e.uid.toInt() == parsedUid;
+        final matchByEmail = e.email == identifier;
+        final matchByName = e.name == identifier;
+        if (matchByUid || matchByEmail || matchByName) {
           e.freeze();
           return e.rebuild((p0) => p0.role = role);
         }
@@ -546,9 +551,15 @@ class WorkspaceMemberBloc
   }
 
   AFRolePB _getMyRole(List<WorkspaceMemberPB> members) {
+    // 优先通过 uid 匹配（最准确），兜底通过 email 或 name 匹配
+    // UserProfilePB 中用户唯一标识为 id 字段
+    final myId = userProfile.id.toInt();
     final role = members
         .firstWhereOrNull(
-          (e) => e.name == userProfile.name,
+          (e) =>
+              (myId != 0 && e.uid.toInt() == myId) ||
+              (e.email.isNotEmpty && e.email == userProfile.email) ||
+              e.name == userProfile.name,
         )
         ?.role;
     if (role == null) {

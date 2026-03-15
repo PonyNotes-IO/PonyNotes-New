@@ -758,8 +758,13 @@ class _MemberMoreActionListState extends State<_MemberMoreActionList> {
   void initState() {
     super.initState();
     final member = widget.member;
-    // 优先使用 email，否则用 name 做标识（避免 N+1 API 查询）
-    _memberIdentifier = member.email.isNotEmpty ? member.email : member.name;
+    // 优先使用 uid（最可靠），其次 email，最后 name（作为兜底）
+    // uid=0 说明服务端未返回 uid（旧版本），退回 email/name 逻辑
+    if (member.uid.toInt() != 0) {
+      _memberIdentifier = member.uid.toString();
+    } else {
+      _memberIdentifier = member.email.isNotEmpty ? member.email : member.name;
+    }
   }
 
   @override
@@ -900,10 +905,13 @@ class _MemberRoleActionList extends StatelessWidget {
           return;
         }
         
-        // Dispatch update event
+        // 优先使用 uid 字符串，确保无 email 的手机号用户也能正确更新角色
+        final memberIdentifier = member.uid.toInt() != 0
+            ? member.uid.toString()
+            : (member.email.isNotEmpty ? member.email : member.name);
         context.read<WorkspaceMemberBloc>().add(
               WorkspaceMemberEvent.updateWorkspaceMember(
-                member.name,
+                memberIdentifier,
                 action.role,
               ),
             );

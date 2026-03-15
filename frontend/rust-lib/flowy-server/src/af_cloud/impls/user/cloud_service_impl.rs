@@ -332,17 +332,16 @@ where
     workspace_id: Uuid,
     role: Role,
   ) -> Result<(), FlowyError> {
-    // Get the client once and reuse it
     let client = self
       .server
       .try_get_client()
       .map_err(|e| anyhow!("Failed to get client: {}", e))?;
-    // First, get the uid from the identifier (email or phone)
-    let uid = client
-      .get_user_uid(&user_identifier)
-      .await
-      .map_err(|e| anyhow!("Failed to get user uid: {}", e))?;
-    // Use uid instead of email for WorkspaceMemberChangeset
+
+    // user_identifier 现在统一传 uid 字符串（i64 格式）
+    let uid: i64 = user_identifier
+      .parse()
+      .map_err(|e| anyhow!("Failed to parse uid from identifier '{}': {}", user_identifier, e))?;
+
     let changeset = WorkspaceMemberChangeset::new(uid).with_role(to_af_role(role));
     client
       .update_workspace_member(&workspace_id, changeset)
