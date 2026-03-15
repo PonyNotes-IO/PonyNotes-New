@@ -570,27 +570,19 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
   /// 如果是分享链接（type=share），则尝试在应用内打开目标笔记
   /// 否则使用外部浏览器打开
   Future<void> _handleLinkClick(String url) async {
-    Log.info('[EditorPage] _handleLinkClick called with url: $url');
     try {
       final uri = Uri.parse(url);
-      Log.info('[EditorPage] URI parsed - host: ${uri.host}, path: ${uri.path}, query: ${uri.query}');
       final path = uri.path;
       final queryParams = uri.queryParameters;
       final linkType = queryParams['type'];
       var viewId = queryParams['viewId'];
       final workspaceId = queryParams['workspaceId'];
 
-      Log.info('[EditorPage] Before processing - path: $path, type: $linkType, viewId: $viewId, workspaceId: $workspaceId');
-
       // 兼容处理：若 viewId 包含 & 或 ?，说明 query string 解析有问题
-      // 例如：URL 可能被错误编码或者 query 参数格式异常
       if (viewId != null && (viewId.contains('&') || viewId.contains('?') || viewId.contains('/'))) {
-        Log.info('[EditorPage] viewId contains invalid chars, trying to extract correct viewId');
-        // 尝试从整个 URL 中提取正确的 viewId
         final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
         if (match != null) {
           viewId = match.group(1);
-          Log.info('[EditorPage] After fix - extracted viewId: $viewId');
         }
       }
 
@@ -598,22 +590,16 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
       final isSharePath = path == '/share' || path == 'share';
       final isShareOrPublishType = linkType == 'share' || linkType == 'publish';
 
-      Log.info('[EditorPage] isSharePath: $isSharePath, isShareOrPublishType: $isShareOrPublishType');
-
       if (isSharePath && isShareOrPublishType && queryParams.containsKey('viewId')) {
         if (viewId != null && viewId.isNotEmpty) {
-          // 这是分享链接，尝试在应用内打开
-          Log.info('[EditorPage] Opening view in app: $viewId');
           await _openViewInApp(viewId, workspaceId, url);
           return;
         }
       }
 
       // 不是分享链接，使用外部浏览器打开
-      Log.info('[EditorPage] Not a share link, opening in browser');
       await afLaunchUrlString(url, addingHttpSchemeWhenFailed: true);
     } catch (e) {
-      Log.error('[EditorPage] Error: $e');
       // 解析失败，使用外部浏览器打开
       await afLaunchUrlString(url, addingHttpSchemeWhenFailed: true);
     }
@@ -621,14 +607,12 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
 
   /// 在应用内打开笔记视图
   Future<void> _openViewInApp(String viewId, String? workspaceId, String url) async {
-    Log.info('[EditorPage] _openViewInApp called with viewId: $viewId, workspaceId: $workspaceId');
     try {
       // 通过 ViewBackendService 获取视图信息
       final result = await ViewBackendService.getView(viewId);
       final view = result.fold(
         (view) => view,
         (error) {
-          Log.error('Failed to get view: $viewId, error: $error');
           return null;
         },
       );

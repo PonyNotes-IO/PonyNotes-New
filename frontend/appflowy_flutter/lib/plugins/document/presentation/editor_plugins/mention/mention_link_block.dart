@@ -235,8 +235,31 @@ class _MentionLinkBlockState extends State<MentionLinkBlock> {
 
   Size getSizeFromKey() => box?.size ?? Size.zero;
 
+  /// 若 [url] 为分享链接（/share?viewId=xxx&type=share），返回应用内链接 ponynotes://open?viewId=xxx；
+  /// 否则返回原 [url]。
+  String _toInAppLinkIfShareUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final path = uri.path;
+      final queryParams = uri.queryParameters;
+      final linkType = queryParams['type'];
+      var viewId = queryParams['viewId'];
+      if (viewId != null && (viewId.contains('&') || viewId.contains('?'))) {
+        final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
+        if (match != null) viewId = match.group(1);
+      }
+      final isSharePath = path == '/share' || path == 'share';
+      final isShareOrPublish = linkType == 'share' || linkType == 'publish';
+      if (isSharePath && isShareOrPublish && viewId != null && viewId.isNotEmpty) {
+        return 'ponynotes://open?viewId=$viewId';
+      }
+    } catch (_) {}
+    return url;
+  }
+
   Future<void> copyLink(BuildContext context) async {
-    await context.copyLink(url);
+    final linkToCopy = _toInAppLinkIfShareUrl(url);
+    await context.copyLink(linkToCopy);
     previewController.close();
   }
 
@@ -248,26 +271,28 @@ class _MentionLinkBlockState extends State<MentionLinkBlock> {
   /// 如果是分享链接（type=share），则尝试在应用内打开目标笔记
   /// 否则使用外部浏览器打开
   Future<void> _handleLinkClick(String url) async {
-    Log.info('[MentionLinkBlock] _handleLinkClick called with url: $url');
+    // 支持 ponynotes://open?viewId=xxx 格式的链接
+    if (url.startsWith('ponynotes://open?viewId=')) {
+      final uri = Uri.parse(url);
+      final viewId = uri.queryParameters['viewId'];
+      if (viewId != null && viewId.isNotEmpty) {
+        await _openViewInApp(viewId, null);
+        return;
+      }
+    }
+
     try {
       final uri = Uri.parse(url);
-      Log.info('[MentionLinkBlock] URI parsed - host: ${uri.host}, path: ${uri.path}, query: ${uri.query}');
       final path = uri.path;
       final queryParams = uri.queryParameters;
       final linkType = queryParams['type'];
       var viewId = queryParams['viewId'];
 
-      Log.info('[MentionLinkBlock] Before fix - path: $path, type: $linkType, viewId: $viewId');
-
       // 兼容处理：若 viewId 包含 & 或 ?，说明 query string 解析有问题
-      // 例如：URL 可能被错误编码或者 query 参数格式异常
       if (viewId != null && (viewId.contains('&') || viewId.contains('?') || viewId.contains('/'))) {
-        Log.info('[MentionLinkBlock] viewId contains invalid chars, trying to extract correct viewId');
-        // 尝试从整个 URL 中提取正确的 viewId
         final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
         if (match != null) {
           viewId = match.group(1);
-          Log.info('[MentionLinkBlock] After fix - extracted viewId: $viewId');
         }
       }
 
@@ -277,15 +302,12 @@ class _MentionLinkBlockState extends State<MentionLinkBlock> {
 
       if (isSharePath && isShareOrPublishType && viewId != null && viewId.isNotEmpty) {
         // 这是分享链接，尝试在应用内打开
-        Log.info('[MentionLinkBlock] Opening view in app: $viewId');
         await _openViewInApp(viewId, queryParams['workspaceId']);
       } else {
         // 不是分享链接，使用外部浏览器打开
-        Log.info('[MentionLinkBlock] Not a share link, opening in browser');
         await afLaunchUrlString(url, addingHttpSchemeWhenFailed: true);
       }
     } catch (e) {
-      Log.error('[MentionLinkBlock] Error: $e');
       // 解析失败，使用外部浏览器打开
       await afLaunchUrlString(url, addingHttpSchemeWhenFailed: true);
     }
@@ -293,14 +315,12 @@ class _MentionLinkBlockState extends State<MentionLinkBlock> {
 
   /// 在应用内打开笔记视图
   Future<void> _openViewInApp(String viewId, String? workspaceId) async {
-    Log.info('[MentionLinkBlock] _openViewInApp called with viewId: $viewId, workspaceId: $workspaceId');
     try {
       // 通过 ViewBackendService 获取视图信息
       final result = await ViewBackendService.getView(viewId);
       final view = result.fold(
         (view) => view,
         (error) {
-          Log.error('Failed to get view: $viewId, error: $error');
           return null;
         },
       );

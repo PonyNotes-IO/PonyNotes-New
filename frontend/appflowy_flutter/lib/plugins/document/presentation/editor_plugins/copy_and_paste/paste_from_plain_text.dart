@@ -32,6 +32,28 @@ extension PasteFromPlainText on EditorState {
       return;
     }
 
+    // 粘贴 ponynotes://open?viewId=xxx 时作为可点击链接插入
+    final trimmed = plainText.trim();
+    if (ponynotesOpenLinkRegex.hasMatch(trimmed) &&
+        trimmed.split(RegExp(r'\s')).length == 1) {
+      await deleteSelectionIfNeeded();
+      final selection = this.selection;
+      if (selection != null) {
+        final node = getNodeAtPath(selection.start.path);
+        if (node != null) {
+          final transaction = this.transaction
+            ..insertText(
+              node,
+              selection.startIndex,
+              trimmed,
+              attributes: {AppFlowyRichTextKeys.href: trimmed},
+            );
+          await apply(transaction);
+          return;
+        }
+      }
+    }
+
     await deleteSelectionIfNeeded();
 
     /// try to parse the plain text as markdown

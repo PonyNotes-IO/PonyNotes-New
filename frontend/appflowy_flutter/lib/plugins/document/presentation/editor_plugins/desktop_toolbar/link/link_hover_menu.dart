@@ -229,6 +229,19 @@ class _LinkHoverTriggerState extends State<LinkHoverTrigger> {
   Future<void> openLink() async {
     final href = widget.attribute.href ?? '', isPage = widget.attribute.isPage;
 
+    // 支持 ponynotes://open?viewId=xxx 格式的链接
+    if (href.startsWith('ponynotes://open?viewId=')) {
+      final viewId = Uri.parse(href).queryParameters['viewId'];
+      if (viewId != null && viewId.isNotEmpty) {
+        final (view, isInTrash, isDeleted) =
+            await ViewBackendService.getMentionPageStatus(viewId);
+        if (view != null) {
+          await handleMentionBlockTap(context, widget.editorState, view);
+          return;
+        }
+      }
+    }
+
     if (isPage) {
       final viewId = href.split('/').lastOrNull ?? '';
       if (viewId.isEmpty) {
@@ -245,9 +258,31 @@ class _LinkHoverTriggerState extends State<LinkHoverTrigger> {
     }
   }
 
+  /// 若为分享链接（/share?viewId=xxx&type=share），返回应用内链接 ponynotes://open?viewId=xxx
+  static String _toInAppLinkIfShareUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final path = uri.path;
+      final queryParams = uri.queryParameters;
+      final linkType = queryParams['type'];
+      var viewId = queryParams['viewId'];
+      if (viewId != null && (viewId.contains('&') || viewId.contains('?'))) {
+        final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
+        if (match != null) viewId = match.group(1);
+      }
+      final isSharePath = path == '/share' || path == 'share';
+      final isShareOrPublish = linkType == 'share' || linkType == 'publish';
+      if (isSharePath && isShareOrPublish && viewId != null && viewId.isNotEmpty) {
+        return 'ponynotes://open?viewId=$viewId';
+      }
+    } catch (_) {}
+    return url;
+  }
+
   Future<void> copyLink(BuildContext context) async {
     final href = widget.attribute.href ?? '';
-    await context.copyLink(href);
+    final linkToCopy = _toInAppLinkIfShareUrl(href);
+    await context.copyLink(linkToCopy);
     hoverMenuController.close();
   }
 

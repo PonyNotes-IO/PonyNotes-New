@@ -5,6 +5,9 @@ const _hrefPattern =
     r'https?://(?:www\.)?[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}(?:/[^\s]*)?';
 final hrefRegex = RegExp(_hrefPattern);
 
+/// 应用内链接，用于识别粘贴后需带 href 的 ponynotes://open?viewId=xxx
+final ponynotesOpenLinkRegex = RegExp(r'^ponynotes://open\?viewId=[^\s&]+');
+
 /// This pattern allows for both HTTP and HTTPS Scheme
 /// It allows for query parameters
 /// It only allows the following image extensions: .png, .jpg, .jpeg, .gif, .webm, .webp, .bmp
