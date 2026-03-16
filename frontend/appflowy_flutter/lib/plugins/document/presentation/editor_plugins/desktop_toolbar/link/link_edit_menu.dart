@@ -250,7 +250,7 @@ class _LinkEditMenuState extends State<LinkEditMenu> {
               valueListenable: linkNameController,
               builder: (context, _, __) {
                 return FlowyTextButton(
-                  LocaleKeys.settings_appearance_documentSettings_apply.tr(),
+                  LocaleKeys.button_save.tr(),
                   padding: EdgeInsets.zero,
                   mainAxisAlignment: MainAxisAlignment.center,
                   constraints: BoxConstraints(maxWidth: 78, minHeight: 32),
