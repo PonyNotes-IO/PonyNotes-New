@@ -135,8 +135,17 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
       (s) => s,
       (_) => null,
     );
-    if (sectionType == SharedSectionType.public &&
-        workspace.role != AFRolePB.Guest) {
+
+    // Non-Guest workspace members get fullAccess for public section documents.
+    // When sectionType is null (getSectionType failed because the folder collab
+    // hadn't finished initializing yet), we also grant fullAccess. This handles
+    // the timing issue where B opens A's old documents before the folder is ready:
+    //   - Private docs explicitly return PrivateSection when the folder IS loaded
+    //   - SharedSection docs (cross-workspace explicit shares) should go through
+    //     the explicit shared-users permission check below
+    //   - The backend Casbin enforces actual write access regardless of this flag
+    if (workspace.role != AFRolePB.Guest &&
+        (sectionType == SharedSectionType.public || sectionType == null)) {
       return FlowyResult.success(ShareAccessLevel.fullAccess);
     }
 
