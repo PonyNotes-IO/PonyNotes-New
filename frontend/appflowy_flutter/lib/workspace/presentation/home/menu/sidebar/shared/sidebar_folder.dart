@@ -119,7 +119,7 @@ class SidebarFolder extends StatelessWidget {
 class PrivateSectionFolder extends SectionFolder {
   PrivateSectionFolder({super.key, required super.views})
       : super(
-          title: LocaleKeys.space_mySpace.tr(),
+          title: LocaleKeys.space_privateSpace.tr(),
           spaceType: FolderSpaceType.private,
           expandButtonTooltip: LocaleKeys.sideBar_clickToHidePrivate.tr(),
           addButtonTooltip: LocaleKeys.sideBar_addAPageToPrivate.tr(),

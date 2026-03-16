@@ -2967,6 +2967,7 @@
     "enableSpacesForYourWorkspace": "Enable Spaces for your workspace",
     "title": "Spaces",
     "defaultSpaceName": "General",
+    "privateSpace": "Private Space",
     "mySpace": "My Space",
     "upgradeSpaceTitle": "Enable Spaces",
     "upgradeSpaceDescription": "Create multiple public and private Spaces to better organize your workspace.",
