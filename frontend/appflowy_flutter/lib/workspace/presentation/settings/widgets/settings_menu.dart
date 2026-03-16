@@ -6,6 +6,7 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/settings_menu_element.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
@@ -196,7 +197,19 @@ class _SettingsMenuState extends State<SettingsMenu> {
               page: SettingsPage.notifications,
               selectedPage: widget.currentPage,
               label: "通知设置",
-              changeSelectedPage: widget.changeSelectedPage,
+              changeSelectedPage: (page) {
+                if (isQuickEntryUser) {
+                  showSimpleConfirmDialog(
+                    context: context,
+                    message: '当前为快速进入模式，暂不支持修改通知设置。',
+                    confirmText: '我知道了',
+                    onConfirm: () {},
+                    cancelText: null,
+                  );
+                  return;
+                }
+                widget.changeSelectedPage(page);
+              },
             ),
             SettingsMenuElement(
               page: SettingsPage.storage,

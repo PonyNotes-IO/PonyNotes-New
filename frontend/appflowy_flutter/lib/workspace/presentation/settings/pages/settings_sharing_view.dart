@@ -366,6 +366,17 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
   }
 
   Future<void> _loadPublishedViews() async {
+    // 快速进入 / 本地用户不支持发布站点，这里直接展示空列表即可，不显示错误
+    if (widget.userProfile.userAuthType != AuthTypePB.Server) {
+      if (!mounted) return;
+      setState(() {
+        _publishedViews = const [];
+        _isLoadingPublished = false;
+        _loadError = null;
+      });
+      return;
+    }
+
     setState(() {
       _isLoadingPublished = true;
       _loadError = null;
