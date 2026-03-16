@@ -154,30 +154,62 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         }
       }
 
-      // 对于分享链接，如果 layout 参数缺失，尝试从服务端邀请记录获取正确布局
+      // 对于 layout 参数缺失（=0）的情况，从服务端查询正确布局
+      // 无论 linkType 和 workspaceId 是否存在，只要 layout=0 就尝试查询
       int effectiveLayout = viewLayoutValue;
-      if (linkType == 'share' && effectiveLayout == 0 && workspaceId != null) {
-        Log.info('[OpenNoteDeepLinkHandler] 分享链接 layout 缺失，从服务端查询');
+      String? resolvedWorkspaceId = workspaceId;
+      if (effectiveLayout == 0) {
+        Log.info('[OpenNoteDeepLinkHandler] layout 缺失或为0，从服务端查询');
+        // 先尝试通过 received 列表获取（如果已加入协作）
         final serverLayout = await _getViewLayoutFromInviteApi(viewId);
         if (serverLayout != null && serverLayout > 0) {
           effectiveLayout = serverLayout;
-          Log.info('[OpenNoteDeepLinkHandler] 从服务端获取到 layout=$effectiveLayout');
+          Log.info('[OpenNoteDeepLinkHandler] 从 received 记录获取到 layout=$effectiveLayout');
+        } else {
+          // 再尝试通过邀请模板接口获取（不需要先接受邀请）
+          final shareInfo = await _getShareInfoFromTemplate(viewId);
+          if (shareInfo != null) {
+            final templateLayout = shareInfo['view_layout'];
+            if (templateLayout is int && templateLayout > 0) {
+              effectiveLayout = templateLayout;
+              Log.info('[OpenNoteDeepLinkHandler] 从邀请模板获取到 layout=$effectiveLayout');
+            }
+            // 如果 URL 没有 workspaceId，从模板中获取 owner_workspace_id
+            if (resolvedWorkspaceId == null || resolvedWorkspaceId.isEmpty) {
+              final ownerWsId = shareInfo['owner_workspace_id'];
+              if (ownerWsId is String && ownerWsId.isNotEmpty) {
+                resolvedWorkspaceId = ownerWsId;
+                Log.info('[OpenNoteDeepLinkHandler] 从邀请模板获取到 workspaceId=$resolvedWorkspaceId');
+              }
+            }
+          }
+        }
+        // 如果通过模板获取到了 workspaceId，补充调用 _addUserToCollaboration
+        if (resolvedWorkspaceId != null &&
+            resolvedWorkspaceId.isNotEmpty &&
+            (linkType == null || linkType == 'share') &&
+            workspaceId == null) {
+          // 之前没有调用过 _addUserToCollaboration（因为 workspaceId 或 linkType 缺失），现在补充调用
+          Log.info('[OpenNoteDeepLinkHandler] 补充调用 _addUserToCollaboration，workspaceId=$resolvedWorkspaceId');
+          await _addUserToCollaboration(
+            workspaceId: resolvedWorkspaceId,
+            viewId: viewId,
+            permissionId: permissionId,
+          );
         }
       }
 
       final isDatabaseView = effectiveLayout >= 1 && effectiveLayout <= 3;
-      final viewName = await _getViewName(viewId, workspaceId);
+      final viewName = await _getViewName(viewId, resolvedWorkspaceId);
 
       // For share links, save shared view metadata to local DB BEFORE opening
       // This ensures get_view_pb() and database handler can find the view
-      if (linkType == 'share' &&
-          workspaceId != null &&
-          workspaceId.isNotEmpty) {
+      if (resolvedWorkspaceId != null && resolvedWorkspaceId.isNotEmpty) {
         Log.info(
             '[OpenNoteDeepLinkHandler] 保存共享视图元数据到本地: viewId=$effectiveViewId, layout=$effectiveLayout, name=$viewName');
         final savePayload = SaveSharedViewMetaPB()
           ..viewId = effectiveViewId
-          ..workspaceId = workspaceId
+          ..workspaceId = resolvedWorkspaceId
           ..viewName = viewName
           ..viewLayout = effectiveLayout
           ..permissionId = permissionId;
@@ -225,7 +257,7 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
         );
         final databaseReady = await _prepareDatabaseViewForOpening(
           viewId: effectiveViewId,
-          workspaceId: workspaceId,
+          workspaceId: resolvedWorkspaceId,
           viewName: viewName,
           viewLayout: effectiveLayout,
           permissionId: permissionId,
@@ -891,6 +923,47 @@ class OpenNoteDeepLinkHandler extends DeepLinkHandler<void> {
       }
     } catch (e) {
       Log.warn('[OpenNoteDeepLinkHandler] 获取视图布局失败: $e');
+    }
+    return null;
+  }
+
+  /// 从服务端邀请模板接口获取分享信息（view_layout, owner_workspace_id, name）
+  /// 不需要用户先接受邀请，适用于 URL 缺少 workspaceId 的情况
+  /// 返回 null 表示获取失败或无邀请模板
+  Future<Map<String, dynamic>?> _getShareInfoFromTemplate(String viewId) async {
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
+      if (baseUrl.isEmpty) return null;
+
+      final rawToken = await _getAuthTokenFromUserService();
+      final accessToken = _extractAccessToken(rawToken);
+      if (accessToken == null || accessToken.isEmpty) return null;
+
+      final uri = Uri.parse(baseUrl).replace(
+        path: '/api/collab/share-info',
+        queryParameters: {'view_id': viewId},
+      );
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        Log.info('[OpenNoteDeepLinkHandler] 邀请模板接口返回 ${response.statusCode}，可能无邀请模板');
+        return null;
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) return null;
+
+      final data = decoded['data'];
+      if (data is Map<String, dynamic>) return data;
+    } catch (e) {
+      Log.warn('[OpenNoteDeepLinkHandler] 获取邀请模板信息失败: $e');
     }
     return null;
   }
