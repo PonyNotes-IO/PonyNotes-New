@@ -5,6 +5,8 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/desktop_to
 import 'package:appflowy/plugins/document/presentation/editor_plugins/desktop_toolbar/link/link_replace_menu.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/link_preview/shared.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/menu/menu_extension.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_block.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_page_block.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -163,6 +165,8 @@ class _LinkEmbedMenuState extends State<LinkEmbedMenu> {
                   convertUrlPreviewNodeToMention(editorState, node);
                 } else if (command == LinkEmbedConvertCommand.toURL) {
                   convertUrlPreviewNodeToLink(editorState, node);
+                } else if (command == LinkEmbedConvertCommand.toPage) {
+                  _convertUrlPreviewNodeToPage(editorState, node, url);
                 }
               },
             ),
@@ -286,11 +290,16 @@ class _LinkEmbedMenuState extends State<LinkEmbedMenu> {
             as RenderBox?;
         if (box == null) return;
         final p = box.localToGlobal(Offset.zero);
+        // 检查 URL 是否是本地笔记链接，如果是则转换为 ponynotes:// 格式
+        final viewId = _extractViewIdFromUrl(url);
+        final displayUrl = viewId != null
+            ? 'ponynotes://open?viewId=$viewId'
+            : url;
         showReplaceMenu(
           context: context,
           editorState: editorState,
           node: node,
-          url: url,
+          url: displayUrl,
           ltrb: LTRB(left: p.dx - 330, top: p.dy),
           onReplace: (url) async {
             await convertLinkBlockToOtherLinkBlock(
@@ -345,7 +354,8 @@ enum LinkEmbedMenuCommand {
 enum LinkEmbedConvertCommand {
   toMention,
   toURL,
-  toBookmark;
+  toBookmark,
+  toPage;
 
   String get title {
     switch (this) {
@@ -359,6 +369,61 @@ enum LinkEmbedConvertCommand {
         return LocaleKeys
             .document_plugins_linkPreview_linkPreviewMenu_toBookmark
             .tr();
+      case toPage:
+        return 'Embed as Page';
     }
   }
+}
+
+/// 将 URL 预览节点转换为嵌入本地笔记
+Future<void> _convertUrlPreviewNodeToPage(
+  EditorState editorState,
+  Node node,
+  String url,
+) async {
+  // 从 URL 中解析 viewId
+  final viewId = _extractViewIdFromUrl(url);
+  if (viewId == null) {
+    return;
+  }
+
+  // 创建嵌入本地笔记的节点
+  final pageNode = pageMentionNode(viewId);
+
+  final transaction = editorState.transaction;
+  transaction
+    ..insertNode(node.path, pageNode)
+    ..deleteNode(node);
+  transaction.afterSelection = Selection.collapsed(
+    Position(
+      path: node.path,
+      offset: 1,
+    ),
+  );
+  return editorState.apply(transaction);
+}
+
+/// 从 URL 中提取 viewId
+String? _extractViewIdFromUrl(String url) {
+  try {
+    if (url.startsWith('ponynotes://open?')) {
+      final match = RegExp(r'viewId=([^\s&]+)').firstMatch(url);
+      return match?.group(1);
+    }
+    final uri = Uri.parse(url);
+    final path = uri.path;
+    final queryParams = uri.queryParameters;
+    final linkType = queryParams['type'];
+    var viewId = queryParams['viewId'];
+    if (viewId != null && (viewId.contains('&') || viewId.contains('?'))) {
+      final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
+      if (match != null) viewId = match.group(1);
+    }
+    final isSharePath = path == '/share' || path == 'share';
+    final isShareOrPublish = linkType == 'share' || linkType == 'publish';
+    if (isSharePath && isShareOrPublish && viewId != null && viewId.isNotEmpty) {
+      return viewId;
+    }
+  } catch (_) {}
+  return null;
 }
