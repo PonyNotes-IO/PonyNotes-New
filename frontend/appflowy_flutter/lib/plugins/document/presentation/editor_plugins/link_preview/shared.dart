@@ -136,12 +136,14 @@ Future<void> convertUrlToMention(
   final delta = node.delta;
   if (delta == null) return;
   String url = '';
+  String originalText = '';
   int index = 0;
   for (final insert in delta.whereType<TextInsert>()) {
     if (index >= selection.startIndex && index < selection.endIndex) {
       final href = insert.attributes?.href ?? '';
       if (href.isNotEmpty) {
         url = href;
+        originalText = insert.text;
         break;
       }
     }
@@ -157,6 +159,7 @@ Future<void> convertUrlToMention(
       MentionBlockKeys.mention: {
         MentionBlockKeys.type: MentionType.externalLink.name,
         MentionBlockKeys.url: url,
+        MentionBlockKeys.originalText: originalText,
       },
     },
   );

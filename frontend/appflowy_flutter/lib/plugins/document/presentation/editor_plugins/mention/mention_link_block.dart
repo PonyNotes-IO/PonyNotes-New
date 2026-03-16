@@ -22,6 +22,7 @@ import 'package:universal_platform/universal_platform.dart';
 
 import 'mention_link_error_preview.dart';
 import 'mention_link_preview.dart';
+import 'mention_block.dart';
 
 class MentionLinkBlock extends StatefulWidget {
   const MentionLinkBlock({
@@ -387,8 +388,23 @@ class _MentionLinkBlockState extends State<MentionLinkBlock> {
   }
 
   Future<void> removeLink() async {
+    // 尝试获取原始文字来恢复
+    final attributes = widget.node.delta?.toList();
+    String? originalText;
+    if (attributes != null && widget.index < attributes.length) {
+      final op = attributes[widget.index];
+      if (op is TextInsert) {
+        final mention = op.attributes?[MentionBlockKeys.mention];
+        if (mention is Map) {
+          originalText = mention[MentionBlockKeys.originalText] as String?;
+        }
+      }
+    }
+
+    // 如果有原始文字就恢复，否则保留 @ 字符作为纯文本
+    final textToRestore = originalText ?? MentionBlockKeys.mentionChar;
     final transaction = editorState.transaction
-      ..replaceText(widget.node, widget.index, 1, url, attributes: {});
+      ..replaceText(widget.node, widget.index, 1, textToRestore, attributes: {});
     await editorState.apply(transaction);
   }
 

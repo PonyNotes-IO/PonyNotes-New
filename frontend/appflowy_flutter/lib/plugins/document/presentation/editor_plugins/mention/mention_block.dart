@@ -55,6 +55,7 @@ class MentionBlockKeys {
   static const pageId = 'page_id';
   static const blockId = 'block_id';
   static const url = 'url';
+  static const originalText = 'original_text'; // 原始文字，用于移除链接后恢复
 
   // Related to Reminder and Date blocks
   static const date = 'date'; // Start Date
