@@ -1,6 +1,7 @@
 import 'package:appflowy/plugins/document/presentation/editor_plugins/callout/callout_block_component.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/link_embed/link_embed_block_component.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/link_preview/custom_link_parser.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:flutter/material.dart';
@@ -72,6 +73,7 @@ class CustomLinkPreviewBlockComponentState
   final parser = LinkParser();
   LinkLoadingStatus status = LinkLoadingStatus.loading;
   late LinkInfo linkInfo = LinkInfo(url: url);
+  String? displayUrlForPreview;
 
   final showActionsNotifier = ValueNotifier<bool>(false);
   bool isMenuShowing = false, isHovering = false;
@@ -92,7 +94,68 @@ class CustomLinkPreviewBlockComponentState
         });
       }
     });
-    parser.start(url);
+
+    final viewId = _getViewIdFromUrl(url);
+    if (viewId != null && viewId.isNotEmpty) {
+      ViewBackendService.getMentionPageStatus(viewId).then((result) {
+        final (view, _, _) = result;
+        if (mounted && view != null && view.name.isNotEmpty) {
+          setState(() {
+            linkInfo = LinkInfo(url: url, title: view.name, siteName: view.name);
+            displayUrlForPreview = _toInAppLinkIfShareUrl(url);
+            status = LinkLoadingStatus.idle;
+          });
+          return;
+        }
+        if (mounted) parser.start(url);
+      });
+    } else {
+      parser.start(url);
+    }
+  }
+
+  static String? _getViewIdFromUrl(String url) {
+    try {
+      if (url.startsWith('ponynotes://open?')) {
+        final match = RegExp(r'viewId=([^\s&]+)').firstMatch(url);
+        return match?.group(1);
+      }
+      final uri = Uri.parse(url);
+      final path = uri.path;
+      final queryParams = uri.queryParameters;
+      final linkType = queryParams['type'];
+      var viewId = queryParams['viewId'];
+      if (viewId != null && (viewId.contains('&') || viewId.contains('?'))) {
+        final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
+        if (match != null) viewId = match.group(1);
+      }
+      final isSharePath = path == '/share' || path == 'share';
+      final isShareOrPublish = linkType == 'share' || linkType == 'publish';
+      if (isSharePath && isShareOrPublish && viewId != null && viewId.isNotEmpty) {
+        return viewId;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static String _toInAppLinkIfShareUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final path = uri.path;
+      final queryParams = uri.queryParameters;
+      final linkType = queryParams['type'];
+      var viewId = queryParams['viewId'];
+      if (viewId != null && (viewId.contains('&') || viewId.contains('?'))) {
+        final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
+        if (match != null) viewId = match.group(1);
+      }
+      final isSharePath = path == '/share' || path == 'share';
+      final isShareOrPublish = linkType == 'share' || linkType == 'publish';
+      if (isSharePath && isShareOrPublish && viewId != null && viewId.isNotEmpty) {
+        return 'ponynotes://open?viewId=$viewId';
+      }
+    } catch (_) {}
+    return url;
   }
 
   @override
@@ -131,6 +194,7 @@ class CustomLinkPreviewBlockComponentState
       key: widgetKey,
       node: node,
       url: url,
+      displayUrl: displayUrlForPreview,
       isHovering: showActions,
       title: linkInfo.siteName,
       description: linkInfo.description,

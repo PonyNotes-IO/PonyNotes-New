@@ -26,6 +26,7 @@ class CustomLinkPreviewWidget extends StatelessWidget {
     this.title,
     this.description,
     this.imageUrl,
+    this.displayUrl,
     this.isHovering = false,
     this.status = LinkLoadingStatus.loading,
   });
@@ -35,6 +36,8 @@ class CustomLinkPreviewWidget extends StatelessWidget {
   final String? description;
   final String? imageUrl;
   final String url;
+  /// 底部显示的链接，若为空则使用 [url]（用于分享链接时显示本地链接）
+  final String? displayUrl;
   final bool isHovering;
   final LinkLoadingStatus status;
 
@@ -103,7 +106,7 @@ class CustomLinkPreviewWidget extends StatelessWidget {
                               ),
                             ),
                           FlowyText(
-                            url.toString(),
+                            (displayUrl ?? url).toString(),
                             overflow: TextOverflow.ellipsis,
                             color: textScheme.secondary,
                             fontSize: fontSize - 4,
