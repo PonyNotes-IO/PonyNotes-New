@@ -87,7 +87,49 @@ class _MentionLinkBlockState extends State<MentionLinkBlock> {
         });
       }
     });
-    parser.start(url);
+
+    final viewId = _getViewIdFromUrl(url);
+    if (viewId != null && viewId.isNotEmpty) {
+      final inAppLink = _toInAppLinkIfShareUrl(url);
+      ViewBackendService.getMentionPageStatus(viewId).then((result) {
+        final (view, _, _) = result;
+        if (mounted && view != null && view.name.isNotEmpty) {
+          setState(() {
+            linkInfo = LinkInfo(url: url, title: view.name, siteName: inAppLink);
+            status = _LoadingStatus.idle;
+          });
+          return;
+        }
+        if (mounted) parser.start(url);
+      });
+    } else {
+      parser.start(url);
+    }
+  }
+
+  /// 从分享链接或 ponynotes://open?viewId=xxx 中解析出 viewId；否则返回 null。
+  static String? _getViewIdFromUrl(String url) {
+    try {
+      if (url.startsWith('ponynotes://open?')) {
+        final match = RegExp(r'viewId=([^\s&]+)').firstMatch(url);
+        return match?.group(1);
+      }
+      final uri = Uri.parse(url);
+      final path = uri.path;
+      final queryParams = uri.queryParameters;
+      final linkType = queryParams['type'];
+      var viewId = queryParams['viewId'];
+      if (viewId != null && (viewId.contains('&') || viewId.contains('?'))) {
+        final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
+        if (match != null) viewId = match.group(1);
+      }
+      final isSharePath = path == '/share' || path == 'share';
+      final isShareOrPublish = linkType == 'share' || linkType == 'publish';
+      if (isSharePath && isShareOrPublish && viewId != null && viewId.isNotEmpty) {
+        return viewId;
+      }
+    } catch (_) {}
+    return null;
   }
 
   @override
@@ -168,7 +210,11 @@ class _MentionLinkBlockState extends State<MentionLinkBlock> {
 
   Widget buildIconWithTitle(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final siteName = linkInfo.siteName, linkTitle = linkInfo.title ?? url;
+    // 若 siteName 为本地应用链接（ponynotes://），则不显示，只显示标题
+    final siteName = (linkInfo.siteName?.startsWith('ponynotes://') ?? false)
+        ? null
+        : linkInfo.siteName;
+    final linkTitle = linkInfo.title ?? url;
 
     return GestureDetector(
       onTap: () async {
