@@ -3,6 +3,14 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 
+Node _linkPreviewNode({required String url, String? originalText}) => Node(
+      type: LinkPreviewBlockKeys.type,
+      attributes: {
+        LinkPreviewBlockKeys.url: url,
+        if (originalText != null) LinkEmbedKeys.originalText: originalText,
+      },
+    );
+
 Future<void> convertUrlPreviewNodeToLink(
   EditorState editorState,
   Node node,
@@ -72,8 +80,11 @@ Future<void> removeUrlPreviewLink(
     return;
   }
 
-  final url = node.attributes[LinkPreviewBlockKeys.url];
-  final delta = Delta()..insert(url);
+  final url = node.attributes[LinkPreviewBlockKeys.url] ?? '';
+  // 尝试获取原始文字
+  final originalText = node.attributes[LinkEmbedKeys.originalText] as String?;
+  final textToRestore = originalText ?? url;
+  final delta = Delta()..insert(textToRestore);
   final transaction = editorState.transaction;
   transaction
     ..insertNode(node.path, paragraphNode(delta: delta))
@@ -100,12 +111,16 @@ Future<void> convertUrlToLinkPreview(
   final delta = node.delta;
   if (delta == null) return;
   final List<TextInsert> beforeOperations = [], afterOperations = [];
+  String selectedText = '';
   int index = 0;
   for (final insert in delta.whereType<TextInsert>()) {
     if (index < selection.startIndex) {
       beforeOperations.add(insert);
     } else if (index >= selection.endIndex) {
       afterOperations.add(insert);
+    } else {
+      // 保存选中的文本（原始文字）
+      selectedText = insert.text;
     }
     index += insert.length;
   }
@@ -116,9 +131,9 @@ Future<void> convertUrlToLinkPreview(
       if (beforeOperations.isNotEmpty)
         paragraphNode(delta: Delta(operations: beforeOperations)),
       if (previewType == LinkEmbedKeys.embed)
-        linkEmbedNode(url: url)
+        linkEmbedNode(url: url, originalText: selectedText)
       else
-        linkPreviewNode(url: url),
+        _linkPreviewNode(url: url, originalText: selectedText),
       if (afterOperations.isNotEmpty)
         paragraphNode(delta: Delta(operations: afterOperations)),
     ]);

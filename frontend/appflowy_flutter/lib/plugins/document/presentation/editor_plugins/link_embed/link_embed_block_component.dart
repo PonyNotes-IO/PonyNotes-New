@@ -26,13 +26,15 @@ class LinkEmbedKeys {
   static const String previewType = 'preview_type';
   static const String embed = 'embed';
   static const String align = 'align';
+  static const String originalText = 'original_text';
 }
 
-Node linkEmbedNode({required String url}) => Node(
+Node linkEmbedNode({required String url, String? originalText}) => Node(
       type: LinkPreviewBlockKeys.type,
       attributes: {
         LinkPreviewBlockKeys.url: url,
         LinkEmbedKeys.previewType: LinkEmbedKeys.embed,
+        if (originalText != null) LinkEmbedKeys.originalText: originalText,
       },
     );
 
