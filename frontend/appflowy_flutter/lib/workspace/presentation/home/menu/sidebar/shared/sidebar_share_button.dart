@@ -189,15 +189,22 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         return;
       }
 
-      // 加载详细信息（包括标题）
+      // 加载详细信息（包括标题，但保留 API 返回的 layout）
       final updatedViews = await _loadViewDetails(combined);
-      
+
       if (!mounted) {
         return;
       }
-      
+
+      // 对 layout=0 的视图，从 share-info 接口获取正确的布局类型（兼容旧记录）
+      final enrichedViews = await _enrichViewLayouts(updatedViews, baseUrl, accessToken);
+
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
-        _userSharedNotes = updatedViews;
+        _userSharedNotes = enrichedViews;
         _isLoading = false;
         _isRefreshing = false;
       });
@@ -385,7 +392,13 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         viewResult.fold(
           (detailedView) {
             if (detailedView.name.isNotEmpty) {
-              updatedViews.add(detailedView);
+              // Preserve the API-derived layout; only take the name from local cache
+              final enriched = ViewPB()
+                ..id = view.id
+                ..name = detailedView.name
+                ..layout = view.layout
+                ..createTime = view.createTime;
+              updatedViews.add(enriched);
             } else {
               updatedViews.add(view);
             }
@@ -402,6 +415,74 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     }
 
     return updatedViews;
+  }
+
+  /// For views whose layout is still Document (view_layout=0 from old DB records),
+  /// query /api/collab/share-info to retrieve the correct layout from the invite template.
+  Future<List<ViewPB>> _enrichViewLayouts(
+    List<ViewPB> views,
+    String baseUrl,
+    String accessToken,
+  ) async {
+    final result = <ViewPB>[];
+    for (final view in views) {
+      if (view.layout != ViewLayoutPB.Document) {
+        result.add(view);
+        continue;
+      }
+      try {
+        final uri = Uri.parse(baseUrl).replace(
+          path: '/api/collab/share-info',
+          queryParameters: {'view_id': view.id},
+        );
+        final response = await http.get(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $accessToken',
+          },
+        ).timeout(const Duration(seconds: 5));
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic>) {
+            final data = decoded['data'];
+            if (data is Map<String, dynamic>) {
+              final layoutRaw = data['view_layout'];
+              final layoutInt = layoutRaw is int
+                  ? layoutRaw
+                  : (int.tryParse(layoutRaw.toString()) ?? 0);
+              if (layoutInt > 0) {
+                ViewLayoutPB correctedLayout;
+                switch (layoutInt) {
+                  case 1:
+                    correctedLayout = ViewLayoutPB.Grid;
+                    break;
+                  case 2:
+                    correctedLayout = ViewLayoutPB.Board;
+                    break;
+                  case 3:
+                    correctedLayout = ViewLayoutPB.Calendar;
+                    break;
+                  default:
+                    correctedLayout = ViewLayoutPB.Document;
+                }
+                final corrected = ViewPB()
+                  ..id = view.id
+                  ..name = view.name
+                  ..layout = correctedLayout
+                  ..createTime = view.createTime;
+                result.add(corrected);
+                continue;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        Log.warn('Failed to enrich layout for ${view.id}: $e');
+      }
+      result.add(view);
+    }
+    return result;
   }
 
   int _parseTimestampSeconds(dynamic raw) {
