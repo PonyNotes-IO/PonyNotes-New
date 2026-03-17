@@ -1775,16 +1775,25 @@ class ScheduleModel extends ChangeNotifier {
     print('  - 总日程数: ${_schedules.length}');
 
     for (final schedule in _schedules) {
-      // 检查是否在原始日期
-      final scheduleDate = DateTime(
+      // 日程的起止日期（仅日期，用于跨天判断）
+      final scheduleStartDate = DateTime(
         schedule.startTime.year,
         schedule.startTime.month,
         schedule.startTime.day,
       );
-      final isOriginalDate = scheduleDate.isAtSameMomentAs(targetDate);
+      final scheduleEndDate = DateTime(
+        schedule.endTime.year,
+        schedule.endTime.month,
+        schedule.endTime.day,
+      );
 
-      if (isOriginalDate) {
-        print('  ✅ 找到原始日期的日程: ${schedule.title} (${schedule.id})');
+      // 1) 选中日期落在日程的 [开始日期, 结束日期] 内（跨天日程在每一天都显示）
+      final isInRange = (targetDate.isAtSameMomentAs(scheduleStartDate) ||
+              targetDate.isAfter(scheduleStartDate)) &&
+          (targetDate.isAtSameMomentAs(scheduleEndDate) ||
+              targetDate.isBefore(scheduleEndDate));
+      if (isInRange) {
+        print('  ✅ 日期在范围内: ${schedule.title} (${schedule.id})');
         result.add(schedule);
         continue;
       }
@@ -1792,7 +1801,7 @@ class ScheduleModel extends ChangeNotifier {
       // 如果日程设置了重复，检查是否匹配重复规则
       if (schedule.repeatType != 0) {
         print('  🔁 检查重复日程: ${schedule.title}');
-        print('    - 开始日期: $scheduleDate');
+        print('    - 开始日期: $scheduleStartDate');
         print('    - 重复类型: ${schedule.repeatType}');
         print('    - 目标日期: $targetDate');
         
