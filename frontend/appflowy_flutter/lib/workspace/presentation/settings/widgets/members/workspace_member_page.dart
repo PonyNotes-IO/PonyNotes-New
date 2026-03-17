@@ -48,7 +48,10 @@ class _WorkspaceMembersPageState extends State<WorkspaceMembersPage> {
   @override
   Widget build(BuildContext context) {
     return BlocProvider<WorkspaceMemberBloc>(
-      create: (context) => WorkspaceMemberBloc(userProfile: widget.userProfile)
+      create: (context) => WorkspaceMemberBloc(
+        userProfile: widget.userProfile,
+        workspaceId: widget.workspaceId,
+      )
         ..add(const WorkspaceMemberEvent.initial())
         ..add(const WorkspaceMemberEvent.getInviteCode()),
       child: BlocConsumer<WorkspaceMemberBloc, WorkspaceMemberState>(
