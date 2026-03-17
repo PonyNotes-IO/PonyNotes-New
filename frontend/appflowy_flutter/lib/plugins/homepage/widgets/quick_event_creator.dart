@@ -14,10 +14,16 @@ import '../../../generated/flowy_svgs.g.dart';
 /// 快速创建事件/待办的组件
 /// 直接使用TodoService创建待办事项并保存到数据库
 class QuickEventCreator extends StatefulWidget {
+  /// 当前展示的日期（左侧日历图标与右侧待办列表同步）
+  final DateTime? displayDate;
+  /// 用户通过左侧日历选择新日期时回调
+  final ValueChanged<DateTime>? onDisplayDateChanged;
   final Function(TodoItem)? onEventCreated;
 
   const QuickEventCreator({
     super.key,
+    this.displayDate,
+    this.onDisplayDateChanged,
     this.onEventCreated,
   });
 
@@ -41,9 +47,55 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final now = DateTime.now();
-    final monthText = '${now.month}月';
-    final dayText = '${now.day}';
+    final displayDate = widget.displayDate ?? DateTime.now();
+    final monthText = '${displayDate.month}月';
+    final dayText = '${displayDate.day}';
+    final canChangeDate = widget.onDisplayDateChanged != null;
+
+    Widget calendarIcon = Container(
+      width: 50,
+      height: 50,
+      child: Stack(
+        children: [
+          FlowySvg(
+            FlowySvgs.image_home_todo_m,
+            size: Size(50, 50),
+            blendMode: null,
+          ),
+          Positioned(
+            top: 1,
+            left: 0,
+            right: 0,
+            child: FlowyText.regular(
+              monthText,
+              textAlign: TextAlign.center,
+              fontSize: 10,
+              color: Colors.white,
+            ),
+          ),
+          Positioned(
+            bottom: 6,
+            left: 0,
+            right: 0,
+            child: FlowyText.regular(
+              dayText,
+              textAlign: TextAlign.center,
+              fontSize: 22,
+              color: theme.textColorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (canChangeDate) {
+      calendarIcon = InkWell(
+        onTap: _showDisplayDatePicker,
+        borderRadius: BorderRadius.circular(8),
+        child: calendarIcon,
+      );
+    }
+
     // 简化为：图标 / 标题 / 描述 / 链接按钮（与设计图一致）
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -58,39 +110,7 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 50,
-                height: 50,
-                child: Stack(
-                  children: [
-                    FlowySvg(
-                      FlowySvgs.image_home_todo_m,
-                      size: Size(50,50),
-                      blendMode: null,
-                    ),
-                    Positioned(
-                        top: 1,
-                        left: 0,
-                        right: 0,
-                        child: FlowyText.regular(
-                            monthText,
-                          textAlign: TextAlign.center,
-                          fontSize: 10,
-                          color: Colors.white,
-                        )),
-                    Positioned(
-                        bottom: 6,
-                        left: 0,
-                        right: 0,
-                        child: FlowyText.regular(
-                            dayText,
-                          textAlign: TextAlign.center,
-                          fontSize: 22,
-                          color: theme.textColorScheme.primary,
-                        )),
-                  ],
-                ),
-              ),
+              calendarIcon,
               const SizedBox(height: 12),
               Text(
                 "用日历连接你的生活",
@@ -390,6 +410,32 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
         ),
       ),
     );
+  }
+
+  /// 点击左侧日历图标时弹出日期选择，选择后通知父组件并更新右侧待办列表
+  Future<void> _showDisplayDatePicker() async {
+    final initial = widget.displayDate ?? DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(initial.year - 1),
+      lastDate: DateTime(initial.year + 2),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: const Color(0xFFFF8D69),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && mounted) {
+      widget.onDisplayDateChanged?.call(
+        DateTime(picked.year, picked.month, picked.day),
+      );
+    }
   }
 
   void _openCalendar() {

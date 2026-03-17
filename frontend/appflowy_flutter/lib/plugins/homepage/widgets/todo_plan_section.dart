@@ -1,6 +1,7 @@
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import 'package:appflowy/plugins/homepage/application/todo_bloc.dart';
 import 'package:appflowy/plugins/homepage/application/todo_models.dart';
 import 'package:appflowy/plugins/homepage/widgets/quick_event_creator.dart';
@@ -11,6 +12,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 
 import '../../../startup/plugin/plugin.dart';
 import '../../../workspace/application/tabs/tabs_bloc.dart';
+import '../../database/calendar/calendar.dart' hide CalendarEvent;
 
 /// 主页待办计划区域的主组件
 /// 包含左侧的快速创建区域和右侧的待办列表展示
@@ -48,18 +50,25 @@ class TodoPlanSectionContent extends StatefulWidget {
 
 class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
   late Future<List<TodoItem>> _eventsFuture;
+  /// 当前选中的展示日期，左侧日历图标与右侧待办列表均以此为准
+  DateTime _displayDate = DateTime.now();
 
   Future<List<TodoItem>> _loadEvents() async {
     try {
       await TodoService.instance.initialize();
     } catch (_) {}
-    // 首页左侧日期卡当前展示“今天”，右侧日程按同一基准日过滤。
-    final displayDate = DateTime.now();
-    return TodoService.instance.getTodosForDate(displayDate);
+    return TodoService.instance.getTodosForDate(_displayDate);
   }
 
   void _refreshEvents() {
     setState(() {
+      _eventsFuture = _loadEvents();
+    });
+  }
+
+  void _onDisplayDateChanged(DateTime date) {
+    setState(() {
+      _displayDate = DateTime(date.year, date.month, date.day);
       _eventsFuture = _loadEvents();
     });
   }
@@ -268,6 +277,8 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: QuickEventCreator(
+                      displayDate: _displayDate,
+                      onDisplayDateChanged: _onDisplayDateChanged,
                       onEventCreated: (todoItem) {
                         // 创建成功后仅刷新右侧日程，避免整块区域重复 loading 闪动。
                         _refreshEvents();
@@ -332,10 +343,28 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
                               ))
                           .toList();
                       final displayEvents = _withDemoEventIfEmpty(calendarEvents);
+                      final isToday = _isSameDay(DateTime.now(), _displayDate);
+                      final dateLabel = isToday
+                          ? '今天 ${_formatMonthDay(_displayDate)}'
+                          : _formatMonthDay(_displayDate);
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              dateLabel,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withOpacity(0.72),
+                              ),
+                            ),
+                          ),
                           Expanded(
                             child: SingleChildScrollView(
                               child: _buildScheduleList(context, displayEvents),
@@ -345,7 +374,7 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
                           Align(
                             alignment: Alignment.centerLeft,
                             child: InkWell(
-                              onTap: _openCalendar,
+                              onTap: () => _openCalendar(_displayDate),
                               borderRadius: BorderRadius.circular(6),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -378,12 +407,17 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
     );
   }
 
-  void _openCalendar() {
+  /// 打开日历插件，并跳转到指定日期，自动打开新建日程页面
+  void _openCalendar(DateTime date) {
     try {
-      // 创建日历插件
+      // 创建日历插件，带上日期参数
+      final pluginData = CalendarPluginData(
+        initialDate: date,
+        openNewEvent: true,
+      );
       final calendarPlugin = makePlugin(
         pluginType: PluginType.calendar,
-        data: null,
+        data: pluginData,
       );
 
       // 在新标签页中打开日历
@@ -413,6 +447,284 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
         );
       }
     }
+  }
+}
+
+/// 创建待办计划底部面板，日期默认使用左侧所选日期
+class _CreateTodoSheet extends StatefulWidget {
+  const _CreateTodoSheet({
+    required this.displayDate,
+    required this.onCreated,
+  });
+
+  final DateTime displayDate;
+  final VoidCallback onCreated;
+
+  @override
+  State<_CreateTodoSheet> createState() => _CreateTodoSheetState();
+}
+
+class _CreateTodoSheetState extends State<_CreateTodoSheet> {
+  late TextEditingController _titleController;
+  late DateTime _selectedDate;
+  late TimeOfDay _selectedTime;
+  bool _isAllDay = false;
+  bool _isCreating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController();
+    _selectedDate = DateTime(
+      widget.displayDate.year,
+      widget.displayDate.month,
+      widget.displayDate.day,
+    );
+    _selectedTime = const TimeOfDay(hour: 9, minute: 0);
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(_selectedDate.year - 1),
+      lastDate: DateTime(_selectedDate.year + 2),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: const Color(0xFFFF8D69),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: const Color(0xFFFF8D69),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedTime = picked);
+    }
+  }
+
+  Future<void> _submit() async {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('请输入待办标题')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isCreating = true);
+
+    try {
+      final dueDate = _isAllDay
+          ? DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day)
+          : DateTime(
+              _selectedDate.year,
+              _selectedDate.month,
+              _selectedDate.day,
+              _selectedTime.hour,
+              _selectedTime.minute,
+            );
+
+      final item = TodoItem(
+        id: '',
+        title: title,
+        description: '',
+        priority: TodoPriority.medium,
+        dueDate: dueDate,
+        isAllDay: _isAllDay,
+        source: TodoSource.manual,
+        createdAt: DateTime.now(),
+      );
+
+      await TodoService.instance.addTodo(item);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('待办计划已创建')),
+        );
+        widget.onCreated();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('创建失败: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCreating = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(context).viewPadding.bottom + 16,
+      ),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '创建待办计划',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _titleController,
+            decoration: InputDecoration(
+              hintText: '输入待办事项…',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+            autofocus: true,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: _isAllDay ? null : _pickDate,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withOpacity(0.3),
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      DateFormat('yyyy/MM/dd').format(_selectedDate),
+                      style: TextStyle(
+                        color: _isAllDay
+                            ? theme.colorScheme.onSurface.withOpacity(0.5)
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: InkWell(
+                  onTap: _isAllDay ? null : _pickTime,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withOpacity(0.3),
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _isAllDay ? '全天' : _selectedTime.format(context),
+                      style: TextStyle(
+                        color: _isAllDay
+                            ? theme.colorScheme.onSurface.withOpacity(0.5)
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Switch.adaptive(
+                value: _isAllDay,
+                onChanged: (v) => setState(() => _isAllDay = v),
+                activeColor: const Color(0xFFFF8D69),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '全天',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _isCreating ? null : _submit,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFF8D69),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: _isCreating
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text('创建'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -70,6 +70,9 @@ class CalendarPluginBuilder extends PluginBuilder {
   Plugin build(dynamic data) {
     if (data is ViewPB) {
       return DatabaseTabBarViewPlugin(pluginType: pluginType, view: data);
+    } else if (data is CalendarPluginData) {
+      // 支持传递 CalendarPluginData 来打开指定日期的新建日程页面
+      return CalendarMainPlugin(pluginData: data);
     } else {
       // 支持无data时返回主日历页面
       return CalendarMainPlugin();
@@ -89,28 +92,28 @@ class CalendarPluginBuilder extends PluginBuilder {
   ViewLayoutPB get layoutType => ViewLayoutPB.Calendar;
 }
 
+/// 日历插件数据，可包含初始日期
+class CalendarPluginData {
+  final DateTime? initialDate;
+  final bool openNewEvent;
+
+  CalendarPluginData({
+    this.initialDate,
+    this.openNewEvent = false,
+  });
+}
+
 // 新增主日历插件
 class CalendarMainPlugin extends Plugin {
-  CalendarMainPlugin() {
-    // 创建一个默认的日历视图
-    _defaultView = ViewPB(
-      id: fixedUuid(12345, UuidType.privateSpace),
-      name: '日历',
-      layout: ViewLayoutPB.Calendar,
-    );
-    
-    // 初始化blocs
-    _viewInfoBloc = ViewInfoBloc(view: _defaultView)
-      ..add(const ViewInfoEvent.started());
-    _pageAccessLevelBloc = PageAccessLevelBloc(view: _defaultView)
-      ..add(const PageAccessLevelEvent.initial());
-  }
+  CalendarMainPlugin({this.pluginData});
 
-  late final ViewPB _defaultView;
-  late final ViewInfoBloc _viewInfoBloc;
-  late final PageAccessLevelBloc _pageAccessLevelBloc;
+  final CalendarPluginData? pluginData;
+
+  late ViewPB _defaultView;
+  late ViewInfoBloc _viewInfoBloc;
+  late PageAccessLevelBloc _pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> _selectedViewNotifier = ValueNotifier<ViewPB?>(null);
-  late final CalendarMainWidgetBuilder _widgetBuilder;
+  late CalendarMainWidgetBuilder _widgetBuilder;
 
   @override
   PluginType get pluginType => PluginType.calendar;
@@ -118,11 +121,25 @@ class CalendarMainPlugin extends Plugin {
   @override
   void init() {
     super.init();
+    // 创建一个默认的日历视图
+    _defaultView = ViewPB(
+      id: fixedUuid(12345, UuidType.privateSpace),
+      name: '日历',
+      layout: ViewLayoutPB.Calendar,
+    );
+
+    // 初始化blocs
+    _viewInfoBloc = ViewInfoBloc(view: _defaultView)
+      ..add(const ViewInfoEvent.started());
+    _pageAccessLevelBloc = PageAccessLevelBloc(view: _defaultView)
+      ..add(const PageAccessLevelEvent.initial());
+
     // 初始化widgetBuilder实例
     _widgetBuilder = CalendarMainWidgetBuilder(
       viewInfoBloc: _viewInfoBloc,
       pageAccessLevelBloc: _pageAccessLevelBloc,
       selectedViewNotifier: _selectedViewNotifier,
+      pluginData: pluginData,
     );
   }
 
@@ -147,15 +164,17 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder{
     required this.viewInfoBloc,
     required this.pageAccessLevelBloc,
     required this.selectedViewNotifier,
+    this.pluginData,
   });
 
   final ViewInfoBloc viewInfoBloc;
   final PageAccessLevelBloc pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
-  
+  final CalendarPluginData? pluginData;
+
   // 状态变量：跟踪是否正在查看日程视图
   final ValueNotifier<bool> _isViewingSchedule = ValueNotifier<bool>(false);
-  
+
   // 设置是否正在查看日程视图
   void setIsViewingSchedule(bool value) {
     // 使用 Future.microtask 延迟更新，避免在构建过程中触发重建
@@ -243,6 +262,7 @@ class CalendarMainWidgetBuilder extends PluginWidgetBuilder{
             selectedViewNotifier: selectedViewNotifier,
             onDeleted: context.onDeleted,
             calendarWidgetBuilder: this, // 传递自己的引用
+            pluginData: pluginData,
           ),
         );
       },
@@ -257,11 +277,13 @@ class CalendarMainPanel extends StatefulWidget {
     required this.selectedViewNotifier,
     this.onDeleted,
     required this.calendarWidgetBuilder,
+    this.pluginData,
   });
 
   final ValueNotifier<ViewPB?> selectedViewNotifier;
   final Function(ViewPB, int?)? onDeleted;
   final CalendarMainWidgetBuilder calendarWidgetBuilder;
+  final CalendarPluginData? pluginData;
 
   @override
   State<CalendarMainPanel> createState() => _CalendarMainPanelState();
@@ -332,7 +354,27 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       if (mounted) {
         _calendarContentCubit = context.read<CalendarContentCubit>();
         // 初始化完成后加载当前日期的内容
-        _loadContentForDate(_selectedDay ?? _focusedDay);
+        final initialDate = widget.pluginData?.initialDate;
+        if (initialDate != null) {
+          // 切换到指定日期
+          setState(() {
+            _focusedDay = initialDate;
+            _selectedDay = initialDate;
+          });
+          _loadContentForDate(initialDate);
+          // 如果需要打开新建日程页面
+          if (widget.pluginData?.openNewEvent == true) {
+            Future.delayed(const Duration(milliseconds: 300), () {
+              if (mounted) {
+                setState(() {
+                  _showNewEventPage = true;
+                });
+              }
+            });
+          }
+        } else {
+          _loadContentForDate(_selectedDay ?? _focusedDay);
+        }
       }
     });
 
