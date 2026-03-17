@@ -36,28 +36,32 @@ class _InlineMathEquationState extends State<InlineMathEquation> {
 
   @override
   Widget build(BuildContext context) {
-    return _IgnoreParentPointer(
-      child: AppFlowyPopover(
-        controller: popoverController,
-        direction: PopoverDirection.bottomWithLeftAligned,
-        popupBuilder: (_) {
-          return MathInputTextField(
-            initialText: widget.formula,
-            onSubmit: (value) async {
-              popoverController.close();
-              if (value == widget.formula) {
-                return;
-              }
-              final editorState = context.read<EditorState>();
-              final transaction = editorState.transaction
-                ..formatText(widget.node, widget.index, 1, {
-                  InlineMathEquationKeys.formula: value,
-                });
-              await editorState.apply(transaction);
-            },
-          );
+    return AppFlowyPopover(
+      controller: popoverController,
+      direction: PopoverDirection.bottomWithLeftAligned,
+      popupBuilder: (_) {
+        return MathInputTextField(
+          initialText: widget.formula,
+          onSubmit: (value) async {
+            popoverController.close();
+            if (value == widget.formula) {
+              return;
+            }
+            final editorState = context.read<EditorState>();
+            final transaction = editorState.transaction
+              ..formatText(widget.node, widget.index, 1, {
+                InlineMathEquationKeys.formula: value,
+              });
+            await editorState.apply(transaction);
+          },
+        );
+      },
+      offset: const Offset(0, 10),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          popoverController.show();
         },
-        offset: const Offset(0, 10),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 2.0),
           child: MouseRegion(
@@ -163,22 +167,54 @@ class _MathInputTextFieldState extends State<MathInputTextField> {
   }
 }
 
-class _IgnoreParentPointer extends StatelessWidget {
-  const _IgnoreParentPointer({
-    required this.child,
+class _InlineMathEquationWidget extends StatelessWidget {
+  const _InlineMathEquationWidget({
+    required this.formula,
+    required this.node,
+    required this.index,
+    this.textStyle,
+    required this.popoverController,
   });
 
-  final Widget child;
+  final String formula;
+  final Node node;
+  final int index;
+  final TextStyle? textStyle;
+  final PopoverController popoverController;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () {},
-      onTapDown: (_) {},
-      onDoubleTap: () {},
-      onLongPress: () {},
-      child: child,
+      onTap: () {
+        popoverController.show();
+      },
+      child: _buildMathEquationContent(context),
     );
+  }
+
+  Widget _buildMathEquationContent(BuildContext context) {
+    final theme = Theme.of(context);
+    final longEq = Math.tex(
+      formula,
+      textStyle: textStyle,
+      mathStyle: MathStyle.text,
+      options: MathOptions(
+        style: MathStyle.text,
+        mathFontOptions: const FontOptions(
+          fontShape: FontStyle.italic,
+        ),
+        fontSize: textStyle?.fontSize ?? 14.0,
+        color: textStyle?.color ?? theme.colorScheme.onSurface,
+      ),
+      onErrorFallback: (errmsg) {
+        return FlowyText(
+          errmsg.message,
+          fontSize: textStyle?.fontSize ?? 14.0,
+          color: textStyle?.color ?? theme.colorScheme.onSurface,
+        );
+      },
+    );
+    return longEq;
   }
 }

@@ -7,6 +7,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
+import 'package:flowy_infra_ui/style_widget/text_input.dart';
 import 'package:flowy_infra_ui/widget/buttons/primary_button.dart';
 import 'package:flowy_infra_ui/widget/buttons/secondary_button.dart';
 import 'package:flutter/material.dart';
@@ -55,7 +56,7 @@ SelectionMenuItem mathEquationItem = SelectionMenuItem.node(
           editorState.getNodeAtPath(path)?.key.currentState;
       if (mathEquationState != null &&
           mathEquationState is MathEquationBlockComponentWidgetState) {
-        mathEquationState.showEditingDialog();
+        mathEquationState.showEditingOverlay();
       }
     });
     return null;
@@ -124,8 +125,11 @@ class MathEquationBlockComponentWidgetState
 
   late final controller = TextEditingController(text: formula);
 
+  OverlayEntry? _overlayEntry;
+
   @override
   void dispose() {
+    _overlayEntry?.remove();
     controller.dispose();
     super.dispose();
   }
@@ -134,7 +138,7 @@ class MathEquationBlockComponentWidgetState
   Widget build(BuildContext context) {
     return InkWell(
       onHover: (value) => isHover.value = value,
-      onTap: showEditingDialog,
+      onTap: showEditingOverlay,
       child: _build(context),
     );
   }
@@ -241,6 +245,76 @@ class MathEquationBlockComponentWidgetState
     );
   }
 
+  void showEditingOverlay() {
+    dismissOverlay();
+
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final position = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+
+    final editorOffset = editorState.renderBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final editorSize = editorState.renderBox?.size ?? Size.zero;
+
+    const editorWidth = 400.0;
+    const editorHeight = 120.0;
+
+    double offsetX = position.dx + (size.width - editorWidth) / 2;
+    double offsetY = position.dy + size.height + 8;
+
+    if (offsetX < editorOffset.dx) {
+      offsetX = editorOffset.dx + 8;
+    }
+    if (offsetX + editorWidth > editorOffset.dx + editorSize.width) {
+      offsetX = editorOffset.dx + editorSize.width - editorWidth - 8;
+    }
+    if (offsetY + editorHeight > editorOffset.dy + editorSize.height) {
+      offsetY = position.dy - editorHeight - 8;
+    }
+
+    _overlayEntry = OverlayEntry(
+      builder: (_) => Material(
+        type: MaterialType.transparency,
+        child: SizedBox(
+          height: editorSize.height,
+          width: editorSize.width,
+          child: KeyboardListener(
+            focusNode: FocusNode()..requestFocus(),
+            onKeyEvent: (key) {
+              if (key.logicalKey == LogicalKeyboardKey.escape) {
+                dismissOverlay();
+              }
+            },
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: dismissOverlay,
+              child: Stack(
+                children: [
+                  _MathEquationEditorOverlay(
+                    initialFormula: formula,
+                    controller: controller,
+                    offset: Offset(offsetX, offsetY),
+                    editorState: editorState,
+                    node: widget.node,
+                    onDismiss: dismissOverlay,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void dismissOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
   void showEditingDialog() {
     showDialog(
       context: context,
@@ -309,5 +383,120 @@ class MathEquationBlockComponentWidgetState
 
   void dismiss(BuildContext context) {
     Navigator.of(context).pop();
+  }
+}
+
+class _MathEquationEditorOverlay extends StatefulWidget {
+  const _MathEquationEditorOverlay({
+    required this.initialFormula,
+    required this.controller,
+    required this.offset,
+    required this.editorState,
+    required this.node,
+    required this.onDismiss,
+  });
+
+  final String initialFormula;
+  final TextEditingController controller;
+  final Offset offset;
+  final EditorState editorState;
+  final Node node;
+  final VoidCallback onDismiss;
+
+  @override
+  State<_MathEquationEditorOverlay> createState() =>
+      _MathEquationEditorOverlayState();
+}
+
+class _MathEquationEditorOverlayState extends State<_MathEquationEditorOverlay> {
+  late final TextEditingController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = TextEditingController(text: widget.initialFormula);
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = controller.text;
+    widget.onDismiss();
+    if (value == widget.initialFormula) {
+      return;
+    }
+    final transaction = widget.editorState.transaction
+      ..updateNode(
+        widget.node,
+        {
+          MathEquationBlockKeys.formula: value,
+        },
+      );
+    widget.editorState.apply(transaction);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: widget.offset.dx,
+      top: widget.offset.dy,
+      child: GestureDetector(
+        onTap: () {},
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                LocaleKeys.document_plugins_mathEquation_editMathEquation
+                    .tr(),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 12),
+              FlowyFormTextInput(
+                autoFocus: true,
+                textAlign: TextAlign.left,
+                controller: controller,
+                hintText: 'E = MC^2',
+                onEditingComplete: _submit,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  SecondaryTextButton(
+                    LocaleKeys.button_cancel.tr(),
+                    mode: TextButtonMode.big,
+                    onPressed: widget.onDismiss,
+                  ),
+                  const SizedBox(width: 8),
+                  PrimaryTextButton(
+                    LocaleKeys.button_done.tr(),
+                    onPressed: _submit,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

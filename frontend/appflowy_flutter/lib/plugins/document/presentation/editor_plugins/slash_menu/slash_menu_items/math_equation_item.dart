@@ -28,7 +28,7 @@ SelectionMenuItem mathEquationSlashMenuItem = SelectionMenuItem.node(
           editorState.getNodeAtPath(path)?.key.currentState;
       if (mathEquationState != null &&
           mathEquationState is MathEquationBlockComponentWidgetState) {
-        mathEquationState.showEditingDialog();
+        mathEquationState.showEditingOverlay();
       }
     });
     return null;

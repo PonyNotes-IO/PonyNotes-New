@@ -398,7 +398,8 @@ enum MoreOptionCommand {
         return;
       }
 
-      final transaction = editorState.transaction;
+      getIt<FloatingToolbarController>().hideToolbar();
+
       final isHighlight = isFormulaHighlight(editorState);
       if (isHighlight) {
         final formula = delta
@@ -410,16 +411,20 @@ enum MoreOptionCommand {
         if (formula == null) {
           return;
         }
-        // clear the format
-        transaction.replaceText(
-          node,
-          selection.startIndex,
-          selection.length,
-          formula,
-          attributes: {},
-        );
+        // 显示公式编辑弹窗
+        if (context.mounted) {
+          await _showFormulaEditDialog(
+            context: context,
+            editorState: editorState,
+            node: node,
+            index: selection.startIndex,
+            initialFormula: formula,
+            isNewFormula: false,
+          );
+        }
       } else {
         final text = editorState.getTextInSelection(selection).join();
+        final transaction = editorState.transaction;
         transaction.replaceText(
           node,
           selection.startIndex,
@@ -429,9 +434,137 @@ enum MoreOptionCommand {
             InlineMathEquationKeys.formula: text,
           },
         );
+        await editorState.apply(transaction);
+        // 显示公式编辑弹窗
+        if (context.mounted) {
+          await _showFormulaEditDialog(
+            context: context,
+            editorState: editorState,
+            node: node,
+            index: selection.startIndex,
+            initialFormula: text,
+            isNewFormula: true,
+          );
+        }
       }
-      await editorState.apply(transaction);
     }
+  }
+
+  Future<void> _showFormulaEditDialog({
+    required BuildContext context,
+    required EditorState editorState,
+    required Node node,
+    required int index,
+    required String initialFormula,
+    required bool isNewFormula,
+  }) async {
+    final controller = TextEditingController(text: initialFormula);
+    OverlayEntry? formulaOverlay;
+    formulaOverlay = OverlayEntry(
+      builder: (ctx) {
+        return _FormulaEditOverlay(
+          controller: controller,
+          onSubmit: (value) async {
+            if (isNewFormula) {
+              // 对于新公式，需要更新已插入的公式
+              final transaction = editorState.transaction
+                ..formatText(node, index, 1, {
+                  InlineMathEquationKeys.formula: value,
+                });
+              await editorState.apply(transaction);
+            }
+            formulaOverlay?.remove();
+          },
+          onCancel: () {
+            if (isNewFormula) {
+              // 取消时删除刚插入的占位符
+              final transaction = editorState.transaction
+                ..deleteText(node, index, 1);
+              editorState.apply(transaction);
+            }
+            formulaOverlay?.remove();
+          },
+        );
+      },
+    );
+    Overlay.of(context, rootOverlay: true).insert(formulaOverlay);
+  }
+}
+
+/// 公式编辑浮层
+class _FormulaEditOverlay extends StatelessWidget {
+  const _FormulaEditOverlay({
+    required this.controller,
+    required this.onSubmit,
+    required this.onCancel,
+  });
+
+  final TextEditingController controller;
+  final void Function(String) onSubmit;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 点击外部关闭
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: onCancel,
+            child: Container(color: Colors.transparent),
+          ),
+        ),
+        // 编辑框
+        Center(
+          child: Material(
+            color: Theme.of(context).canvasColor,
+            elevation: 8,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 320,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    LocaleKeys.document_plugins_mathEquation_editMathEquation
+                        .tr(),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: controller,
+                    autofocus: true,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: 'E = MC^2',
+                    ),
+                    onSubmitted: (value) => onSubmit(value),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: onCancel,
+                        child: Text(LocaleKeys.button_cancel.tr()),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: () => onSubmit(controller.text),
+                        child: Text(LocaleKeys.button_done.tr()),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
