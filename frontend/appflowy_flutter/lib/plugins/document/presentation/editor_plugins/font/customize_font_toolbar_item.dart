@@ -80,10 +80,20 @@ class FontFamilyDropDown extends StatefulWidget {
 }
 
 class _FontFamilyDropDownState extends State<FontFamilyDropDown> {
-  final List<String> availableFonts = [
-    defaultFontFamily,
-    ...GoogleFonts.asMap().keys,
-  ];
+  late final List<String> availableFonts = () {
+    final allKeys = GoogleFonts.asMap().keys.toList();
+    final googleChineseInMap = chineseFontKeys.where((k) => allKeys.contains(k));
+    final otherKeys = allKeys
+        .where((k) =>
+            !chineseFontKeys.contains(k) && !systemChineseFontKeys.contains(k))
+        .toList();
+    return [
+      defaultFontFamily,
+      ...systemChineseFontKeys,
+      ...googleChineseInMap,
+      ...otherKeys,
+    ];
+  }();
   final ValueNotifier<String> query = ValueNotifier('');
 
   @override
@@ -145,6 +155,18 @@ class _FontFamilyDropDownState extends State<FontFamilyDropDown> {
                       .sorted((a, b) => levenshtein(a, b))
                       .toList();
                 }
+                // 搜索无结果时显示提示
+                if (value.isNotEmpty && displayed.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Center(
+                      child: FlowyText.regular(
+                        '搜索结果为空',
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  );
+                }
                 return displayed.length >= 10
                     ? Flexible(
                         child: ListView.builder(
@@ -183,38 +205,41 @@ class _FontFamilyDropDownState extends State<FontFamilyDropDown> {
     BuildContext context,
     TextStyle style,
   ) {
+    final fontKey = style.fontFamily ?? defaultFontFamily;
     final buttonFontFamily =
         style.fontFamily?.parseFontFamilyName() ?? defaultFontFamily;
+    final displayName = chineseFontDisplayNames[fontKey] ??
+        (fontKey.isEmpty ? defaultFontFamily.fontFamilyDisplayName : fontKey.fontFamilyDisplayName);
     return Tooltip(
-      message: buttonFontFamily,
+      message: displayName,
       waitDuration: const Duration(milliseconds: 150),
       child: SizedBox(
-        key: ValueKey(buttonFontFamily),
+        key: ValueKey(fontKey),
         height: 36,
         child: FlowyButton(
           onHover: (_) => FocusScope.of(context).unfocus(),
           text: FlowyText(
-            buttonFontFamily.fontFamilyDisplayName,
-            fontFamily: buttonFontFamily,
+            displayName,
+            fontFamily: fontKey.isEmpty ? null : fontKey,
             figmaLineHeight: 20,
             fontWeight: FontWeight.w400,
           ),
           rightIcon:
-              buttonFontFamily == widget.currentFontFamily.parseFontFamilyName()
+              fontKey == widget.currentFontFamily ||
+                  buttonFontFamily == widget.currentFontFamily.parseFontFamilyName()
                   ? const FlowySvg(FlowySvgs.toolbar_check_m)
                   : null,
           onTap: () {
             if (widget.onFontFamilyChanged != null) {
-              widget.onFontFamilyChanged!(buttonFontFamily);
+              widget.onFontFamilyChanged!(fontKey);
             } else {
-              if (widget.currentFontFamily.parseFontFamilyName() !=
-                  buttonFontFamily) {
+              if (widget.currentFontFamily != fontKey) {
                 context
                     .read<AppearanceSettingsCubit>()
-                    .setFontFamily(buttonFontFamily);
+                    .setFontFamily(fontKey);
                 context
                     .read<DocumentAppearanceCubit>()
-                    .syncFontFamily(buttonFontFamily);
+                    .syncFontFamily(fontKey);
               }
             }
             PopoverContainer.of(context).close();

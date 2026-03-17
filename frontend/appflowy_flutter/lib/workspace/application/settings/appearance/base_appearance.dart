@@ -12,6 +12,61 @@ const defaultFontFamily = '';
 
 const builtInCodeFontFamily = 'RobotoMono';
 
+/// 系统常用中文字体（字体族名称 -> 显示名），Windows/macOS 常见
+const systemChineseFontKeys = [
+  'SimSun',        // 宋体 (Windows)
+  'SimHei',        // 黑体 (Windows)
+  'KaiTi',         // 楷体 (Windows)
+  'FangSong',      // 仿宋 (Windows)
+  'Microsoft YaHei', // 微软雅黑 (Windows)
+  'DengXian',      // 等线 (Windows)
+  'NSimSun',       // 新宋体 (Windows)
+  'Songti SC',     // 宋体-简 (macOS)
+  'Heiti SC',      // 黑体-简 (macOS)
+  'Kaiti SC',      // 楷体-简 (macOS)
+  'PingFang SC',   // 苹方 (macOS)
+  'STSong',        // 华文宋体
+  'STHeiti',       // 华文黑体
+  'STKaiti',       // 华文楷体
+];
+
+/// 系统中文字体显示名（用于下拉列表显示）
+const chineseFontDisplayNames = <String, String>{
+  'SimSun': '宋体',
+  'SimHei': '黑体',
+  'KaiTi': '楷体',
+  'FangSong': '仿宋',
+  'Microsoft YaHei': '微软雅黑',
+  'DengXian': '等线',
+  'NSimSun': '新宋体',
+  'Songti SC': '宋体-简',
+  'Heiti SC': '黑体-简',
+  'Kaiti SC': '楷体-简',
+  'PingFang SC': '苹方',
+  'STSong': '华文宋体',
+  'STHeiti': '华文黑体',
+  'STKaiti': '华文楷体',
+};
+
+/// 常用中文字体（Google Fonts key），排在字体列表前面便于选择
+const chineseFontKeys = [
+  'NotoSansSC',
+  'NotoSerifSC',
+  'NotoSansTC',
+  'NotoSerifTC',
+  'NotoSansHK',
+  'ZCOOLXiaoWei',
+  'ZCOOLKuaiLe',
+  'MaShanZheng',
+  'LongCang',
+  'LiuJianMaoCao',
+  'ZCOOLQingKe',
+  'NotoSerifJP',
+  'NotoSansJP',
+  'NotoSansKR',
+  'NotoSerifKR',
+];
+
 abstract class BaseAppearance {
   final white = const Color(0xFFFFFFFF);
 

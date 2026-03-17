@@ -10,9 +10,14 @@ extension FontFamilyExtension on String {
 
   // display the default font name if the font family name is empty
   //  or using the default font family
-  String get fontFamilyDisplayName => isEmpty || this == defaultFontFamily
-      ? LocaleKeys.settings_appearance_fontFamily_defaultFont.tr()
-      : parseFontFamilyName();
+  String get fontFamilyDisplayName {
+    if (isEmpty || this == defaultFontFamily) {
+      return LocaleKeys.settings_appearance_fontFamily_defaultFont.tr();
+    }
+    final chineseName = chineseFontDisplayNames[this];
+    if (chineseName != null) return chineseName;
+    return parseFontFamilyName();
+  }
 
   // the font display name is not the same as the font family name
   // for example, the display name is "Noto Sans HK"

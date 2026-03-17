@@ -17,8 +17,9 @@ TextStyle getGoogleFontSafely(
   double? letterSpacing,
   double? lineHeight,
 }) {
-  // if the font family is the built-in font family, we can use it directly
-  if (_defaultFontFamilies.contains(fontFamily)) {
+  // if the font family is the built-in font family or system Chinese font, use it directly
+  if (_defaultFontFamilies.contains(fontFamily) ||
+      systemChineseFontKeys.contains(fontFamily)) {
     return TextStyle(
       fontFamily: fontFamily.isEmpty ? null : fontFamily,
       fontWeight: fontWeight,
@@ -41,6 +42,7 @@ TextStyle getGoogleFontSafely(
   }
 
   return TextStyle(
+    fontFamily: fontFamily,
     fontWeight: fontWeight,
     fontSize: fontSize,
     color: fontColor,

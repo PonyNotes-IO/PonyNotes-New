@@ -851,7 +851,20 @@ class _FontSelectorDropdown extends StatefulWidget {
 }
 
 class _FontSelectorDropdownState extends State<_FontSelectorDropdown> {
-  late final _options = [defaultFontFamily, ...GoogleFonts.asMap().keys];
+  late final _options = () {
+    final allKeys = GoogleFonts.asMap().keys.toList();
+    final googleChineseInMap = chineseFontKeys.where((k) => allKeys.contains(k));
+    final otherKeys = allKeys
+        .where((k) =>
+            !chineseFontKeys.contains(k) && !systemChineseFontKeys.contains(k))
+        .toList();
+    return [
+      defaultFontFamily,
+      ...systemChineseFontKeys,
+      ...googleChineseInMap,
+      ...otherKeys,
+    ];
+  }();
   final _focusNode = FocusNode();
   final _controller = PopoverController();
   late final ScrollController _scrollController;
@@ -1084,7 +1097,9 @@ class _FontListPopupState extends State<_FontListPopup> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: FlowyText.medium(
-                LocaleKeys.settings_workspacePage_workspaceFont_noFontHint.tr(),
+                widget.textController.text.trim().isEmpty
+                    ? LocaleKeys.settings_workspacePage_workspaceFont_noFontHint.tr()
+                    : '搜索结果为空',
               ),
             ),
           Flexible(
