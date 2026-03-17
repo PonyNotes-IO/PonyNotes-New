@@ -45,22 +45,29 @@ class ResizableImage extends StatefulWidget {
   final VoidCallback? onDoubleTap;
   final ValueChanged<ResizableImageState>? onStateChange;
 
-  final void Function(double width) onResize;
+  final void Function(double width, double? height) onResize;
 
   @override
   State<ResizableImage> createState() => _ResizableImageState();
 }
 
 const _kImageBlockComponentMinWidth = 30.0;
+const _kImageBlockComponentMinHeight = 30.0;
 
 class _ResizableImageState extends State<ResizableImage> {
   final documentService = DocumentService();
+  final _imageKey = GlobalKey();
 
-  double initialOffset = 0;
-  double moveDistance = 0;
+  double initialOffsetX = 0;
+  double initialOffsetY = 0;
+  double moveDistanceX = 0;
+  double moveDistanceY = 0;
   Widget? _cacheImage;
 
   late double imageWidth;
+  double? imageHeight;
+  double? _computedHeight;
+  bool _hasSetInitialHeight = false;
 
   @visibleForTesting
   bool onFocus = false;
@@ -72,24 +79,57 @@ class _ResizableImageState extends State<ResizableImage> {
     super.initState();
 
     imageWidth = widget.width;
+    imageHeight = widget.height;
 
     _userProfilePB = context.read<UserWorkspaceBloc?>()?.state.userProfile ??
         context.read<DocumentBloc>().state.userProfilePB;
   }
 
+  void _ensureInitialHeight() {
+    if (!_hasSetInitialHeight && imageHeight == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _updateHeightFromRenderBox();
+      });
+    }
+  }
+
+  void _updateHeightFromRenderBox() {
+    if (!_hasSetInitialHeight && imageHeight == null && mounted) {
+      final renderBox =
+          _imageKey.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox != null && renderBox.hasSize && renderBox.size.height > 0) {
+        setState(() {
+          _computedHeight = renderBox.size.height;
+          _hasSetInitialHeight = true;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    _ensureInitialHeight();
+
     return Align(
       alignment: widget.alignment,
       child: SizedBox(
-        width: max(_kImageBlockComponentMinWidth, imageWidth - moveDistance),
-        height: widget.height,
+        width: max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX),
+        height: _computedHeight != null
+            ? max(_kImageBlockComponentMinHeight,
+                _computedHeight! - moveDistanceY)
+            : imageHeight != null
+                ? max(_kImageBlockComponentMinHeight,
+                    imageHeight! - moveDistanceY)
+                : null,
         child: MouseRegion(
           onEnter: (_) => setState(() => onFocus = true),
           onExit: (_) => setState(() => onFocus = false),
           child: GestureDetector(
             onDoubleTap: widget.onDoubleTap,
-            child: _buildResizableImage(context),
+            child: KeyedSubtree(
+              key: _imageKey,
+              child: _buildResizableImage(context),
+            ),
           ),
         ),
       ),
@@ -99,10 +139,19 @@ class _ResizableImageState extends State<ResizableImage> {
   Widget _buildResizableImage(BuildContext context) {
     Widget child;
     final src = widget.src;
+    final currentWidth = max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
+    final currentHeight = _computedHeight != null
+        ? max(_kImageBlockComponentMinHeight, _computedHeight! - moveDistanceY)
+        : imageHeight != null
+            ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
+            : null;
+
     if (isURL(src)) {
       _cacheImage = FlowyNetworkImage(
         url: widget.src,
-        width: imageWidth - moveDistance,
+        width: currentWidth,
+        height: currentHeight,
+        fit: BoxFit.fill,
         userProfilePB: _userProfilePB,
         onImageLoaded: (isImageInCache) {
           if (isImageInCache) {
@@ -138,28 +187,120 @@ class _ResizableImageState extends State<ResizableImage> {
       child = _cacheImage!;
     } else {
       // load local file
-      _cacheImage ??= Image.file(File(src));
+      final currentWidth = max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
+      final currentHeight = _computedHeight != null
+          ? max(_kImageBlockComponentMinHeight, _computedHeight! - moveDistanceY)
+          : imageHeight != null
+              ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
+              : null;
+      _cacheImage ??= Image.file(
+        File(src),
+        width: currentWidth,
+        height: currentHeight,
+        fit: BoxFit.fill,
+      );
       child = _cacheImage!;
     }
+
     return Stack(
       children: [
         child,
         if (widget.editable) ...[
+          // Left edge - horizontal resize
           _buildEdgeGesture(
             context,
+            isHorizontal: true,
+            isLeft: true,
             top: 0,
-            left: 5,
+            left: 0,
             bottom: 0,
-            width: 5,
-            onUpdate: (distance) => setState(() => moveDistance = distance),
+            width: 16,
+            onUpdateX: (distance) =>
+                setState(() => moveDistanceX = distance),
           ),
+          // Right edge - horizontal resize
           _buildEdgeGesture(
             context,
+            isHorizontal: true,
+            isLeft: false,
             top: 0,
-            right: 5,
+            right: 0,
             bottom: 0,
-            width: 5,
-            onUpdate: (distance) => setState(() => moveDistance = -distance),
+            width: 16,
+            onUpdateX: (distance) =>
+                setState(() => moveDistanceX = -distance),
+          ),
+          // Top edge - vertical resize
+          _buildEdgeGesture(
+            context,
+            isHorizontal: false,
+            isLeft: true,
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 16,
+            onUpdateY: (distance) =>
+                setState(() => moveDistanceY = distance),
+          ),
+          // Bottom edge - vertical resize
+          _buildEdgeGesture(
+            context,
+            isHorizontal: false,
+            isLeft: true,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 16,
+            onUpdateY: (distance) =>
+                setState(() => moveDistanceY = -distance),
+          ),
+          // Top-left corner
+          _buildCornerGesture(
+            context,
+            isTop: true,
+            isLeft: true,
+            top: 0,
+            left: 0,
+            onUpdateX: (distance) =>
+                setState(() => moveDistanceX = distance),
+            onUpdateY: (distance) =>
+                setState(() => moveDistanceY = distance),
+          ),
+          // Top-right corner
+          _buildCornerGesture(
+            context,
+            isTop: true,
+            isLeft: false,
+            top: 0,
+            right: 0,
+            onUpdateX: (distance) =>
+                setState(() => moveDistanceX = -distance),
+            onUpdateY: (distance) =>
+                setState(() => moveDistanceY = distance),
+          ),
+          // Bottom-left corner
+          _buildCornerGesture(
+            context,
+            isTop: false,
+            isLeft: true,
+            bottom: 0,
+            left: 0,
+            onUpdateX: (distance) =>
+                setState(() => moveDistanceX = distance),
+            onUpdateY: (distance) =>
+                setState(() => moveDistanceY = -distance),
+          ),
+          // Bottom-right corner
+          _buildCornerGesture(
+            context,
+            isTop: false,
+            isLeft: false,
+            bottom: 0,
+            right: 0,
+            onUpdateX: (distance) =>
+                setState(() => moveDistanceX = -distance),
+            onUpdateY: (distance) =>
+                setState(() => moveDistanceY = -distance),
           ),
         ],
       ],
@@ -185,12 +326,16 @@ class _ResizableImageState extends State<ResizableImage> {
 
   Widget _buildEdgeGesture(
     BuildContext context, {
+    required bool isHorizontal,
+    required bool isLeft,
     double? top,
     double? left,
     double? right,
     double? bottom,
     double? width,
-    void Function(double distance)? onUpdate,
+    double? height,
+    void Function(double distance)? onUpdateX,
+    void Function(double distance)? onUpdateY,
   }) {
     return Positioned(
       top: top,
@@ -198,46 +343,257 @@ class _ResizableImageState extends State<ResizableImage> {
       right: right,
       bottom: bottom,
       width: width,
+      height: height,
       child: GestureDetector(
-        onHorizontalDragStart: (details) {
-          initialOffset = details.globalPosition.dx;
-        },
-        onHorizontalDragUpdate: (details) {
-          if (onUpdate != null) {
-            double offset = details.globalPosition.dx - initialOffset;
-            if (widget.alignment == Alignment.center) {
-              offset *= 2.0;
-            }
-            onUpdate(offset);
-          }
-        },
-        onHorizontalDragEnd: (details) {
-          imageWidth =
-              max(_kImageBlockComponentMinWidth, imageWidth - moveDistance);
-          initialOffset = 0;
-          moveDistance = 0;
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: isHorizontal
+            ? (details) {
+                initialOffsetX = details.globalPosition.dx;
+              }
+            : null,
+        onHorizontalDragUpdate: isHorizontal
+            ? (details) {
+                if (onUpdateX != null) {
+                  double offset = details.globalPosition.dx - initialOffsetX;
+                  if (widget.alignment == Alignment.center) {
+                    offset *= 2.0;
+                  }
+                  onUpdateX(offset);
+                }
+              }
+            : null,
+        onHorizontalDragEnd: isHorizontal
+            ? (details) {
+                final newWidth = max(
+                    _kImageBlockComponentMinWidth,
+                    imageWidth - moveDistanceX);
+                imageWidth = newWidth;
+                initialOffsetX = 0;
+                moveDistanceX = 0;
 
-          widget.onResize(imageWidth);
-        },
+                widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+              }
+            : null,
+        onVerticalDragStart: !isHorizontal
+            ? (details) {
+                initialOffsetY = details.globalPosition.dy;
+              }
+            : null,
+        onVerticalDragUpdate: !isHorizontal
+            ? (details) {
+                if (onUpdateY != null) {
+                  double offset = details.globalPosition.dy - initialOffsetY;
+                  onUpdateY(offset);
+                }
+              }
+            : null,
+        onVerticalDragEnd: !isHorizontal
+            ? (details) {
+                final currentHeight = _computedHeight ?? imageHeight;
+                if (currentHeight != null) {
+                  final newHeight = max(
+                      _kImageBlockComponentMinHeight,
+                      currentHeight - moveDistanceY);
+                  if (_computedHeight != null) {
+                    _computedHeight = newHeight;
+                  } else {
+                    imageHeight = newHeight;
+                  }
+                }
+                initialOffsetY = 0;
+                moveDistanceY = 0;
+
+                widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+              }
+            : null,
         child: MouseRegion(
-          cursor: SystemMouseCursors.resizeLeftRight,
+          cursor: isHorizontal
+              ? SystemMouseCursors.resizeLeftRight
+              : SystemMouseCursors.resizeUpDown,
           child: onFocus
               ? Center(
-                  child: Container(
-                    height: 40,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: isHorizontal ? 8 : null,
+                    height: !isHorizontal ? 8 : null,
                     decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.5),
+                      color: Colors.black.withValues(alpha: 0.4),
                       borderRadius: const BorderRadius.all(
-                        Radius.circular(5.0),
+                        Radius.circular(4.0),
                       ),
-                      border: Border.all(color: Colors.white),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Center(
+                      child: Container(
+                        width: isHorizontal ? 2 : 24,
+                        height: isHorizontal ? 24 : 2,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(1),
+                        ),
+                      ),
                     ),
                   ),
                 )
-              : null,
+              : const SizedBox.shrink(),
         ),
       ),
     );
+  }
+
+  Widget _buildCornerGesture(
+    BuildContext context, {
+    required bool isTop,
+    required bool isLeft,
+    double? top,
+    double? left,
+    double? right,
+    double? bottom,
+    void Function(double distance)? onUpdateX,
+    void Function(double distance)? onUpdateY,
+  }) {
+    return Positioned(
+      top: top,
+      left: left,
+      right: right,
+      bottom: bottom,
+      width: 20,
+      height: 20,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (details) {
+          initialOffsetX = details.globalPosition.dx;
+          initialOffsetY = details.globalPosition.dy;
+        },
+        onHorizontalDragUpdate: (details) {
+          final offsetX = details.globalPosition.dx - initialOffsetX;
+          final offsetY = details.globalPosition.dy - initialOffsetY;
+
+          double finalOffsetX = offsetX;
+          double finalOffsetY = offsetY;
+
+          if (widget.alignment == Alignment.center) {
+            finalOffsetX *= 2.0;
+          }
+
+          if (onUpdateX != null) {
+            onUpdateX(finalOffsetX);
+          }
+          if (onUpdateY != null) {
+            onUpdateY(finalOffsetY);
+          }
+        },
+        onHorizontalDragEnd: (details) {
+          final newWidth = max(
+              _kImageBlockComponentMinWidth,
+              imageWidth - moveDistanceX);
+          imageWidth = newWidth;
+
+          final currentHeight = _computedHeight ?? imageHeight;
+          if (currentHeight != null) {
+            final newHeight = max(
+                _kImageBlockComponentMinHeight,
+                currentHeight - moveDistanceY);
+            if (_computedHeight != null) {
+              _computedHeight = newHeight;
+            } else {
+              imageHeight = newHeight;
+            }
+          }
+
+          initialOffsetX = 0;
+          initialOffsetY = 0;
+          moveDistanceX = 0;
+          moveDistanceY = 0;
+
+          widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+        },
+        onVerticalDragStart: (details) {
+          initialOffsetX = details.globalPosition.dx;
+          initialOffsetY = details.globalPosition.dy;
+        },
+        onVerticalDragUpdate: (details) {
+          final offsetX = details.globalPosition.dx - initialOffsetX;
+          final offsetY = details.globalPosition.dy - initialOffsetY;
+
+          double finalOffsetX = offsetX;
+          double finalOffsetY = offsetY;
+
+          if (widget.alignment == Alignment.center) {
+            finalOffsetX *= 2.0;
+          }
+
+          if (onUpdateX != null) {
+            onUpdateX(finalOffsetX);
+          }
+          if (onUpdateY != null) {
+            onUpdateY(finalOffsetY);
+          }
+        },
+        onVerticalDragEnd: (details) {
+          final newWidth = max(
+              _kImageBlockComponentMinWidth,
+              imageWidth - moveDistanceX);
+          imageWidth = newWidth;
+
+          final currentHeight = _computedHeight ?? imageHeight;
+          if (currentHeight != null) {
+            final newHeight = max(
+                _kImageBlockComponentMinHeight,
+                currentHeight - moveDistanceY);
+            if (_computedHeight != null) {
+              _computedHeight = newHeight;
+            } else {
+              imageHeight = newHeight;
+            }
+          }
+
+          initialOffsetX = 0;
+          initialOffsetY = 0;
+          moveDistanceX = 0;
+          moveDistanceY = 0;
+
+          widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+        },
+        child: MouseRegion(
+          cursor: _getCornerCursor(isTop, isLeft),
+          child: onFocus
+              ? Center(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: const BorderRadius.all(
+                        Radius.circular(2.0),
+                      ),
+                      border: Border.all(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ),
+    );
+  }
+
+  MouseCursor _getCornerCursor(bool isTop, bool isLeft) {
+    if (isTop && isLeft) {
+      return SystemMouseCursors.resizeUpLeftDownRight;
+    } else if (isTop && !isLeft) {
+      return SystemMouseCursors.resizeUpRightDownLeft;
+    } else if (!isTop && isLeft) {
+      return SystemMouseCursors.resizeUpRightDownLeft;
+    } else {
+      return SystemMouseCursors.resizeUpLeftDownRight;
+    }
   }
 }
 

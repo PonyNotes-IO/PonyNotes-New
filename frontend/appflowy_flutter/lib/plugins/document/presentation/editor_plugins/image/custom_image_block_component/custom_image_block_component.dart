@@ -208,9 +208,15 @@ class CustomImageBlockComponentState extends State<CustomImageBlockComponent>
             ),
           ),
         ),
-        onResize: (width) {
+        onResize: (width, height) {
+          final attributes = <String, dynamic>{
+            CustomImageBlockKeys.width: width,
+          };
+          if (height != null) {
+            attributes[CustomImageBlockKeys.height] = height;
+          }
           final transaction = editorState.transaction
-            ..updateNode(node, {CustomImageBlockKeys.width: width});
+            ..updateNode(node, attributes);
           editorState.apply(transaction);
         },
       );
