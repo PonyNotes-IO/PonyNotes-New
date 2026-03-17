@@ -1,5 +1,6 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -36,16 +37,19 @@ class SidebarTrashItem extends StatelessWidget {
 
   void _openTrash(BuildContext context) async {
     try {
-      // 创建回收站插件
-      final trashPlugin = makePlugin(
-        pluginType: PluginType.trash,
-        data: null,
-      );
+      // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
+      CalendarUnsavedGuard.instance.maybeConfirmLeave(context, () {
+        // 创建回收站插件
+        final trashPlugin = makePlugin(
+          pluginType: PluginType.trash,
+          data: null,
+        );
 
-      // 在新标签页中打开回收站
-      context.read<TabsBloc>().add(
-        TabsEvent.openPlugin(plugin: trashPlugin),
-      );
+        // 在新标签页中打开回收站
+        context.read<TabsBloc>().add(
+          TabsEvent.openPlugin(plugin: trashPlugin),
+        );
+      });
     } catch (e) {
       // 静默处理错误，不显示用户
     }

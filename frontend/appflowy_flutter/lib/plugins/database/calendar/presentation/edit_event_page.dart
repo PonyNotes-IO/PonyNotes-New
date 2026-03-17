@@ -26,6 +26,8 @@ class EditEventPage extends StatefulWidget {
   final VoidCallback onCancel;
   final Function(bool Function())? onSaveRequested;
   final ScheduleModel scheduleModel; // 外层传入的 ScheduleModel
+  /// 当「日程配置」是否有未保存变更发生变化时回调（用于离开前弹窗提示）
+  final void Function(bool hasUnsavedConfig)? onHasUnsavedConfigChanged;
 
   const EditEventPage({
     Key? key,
@@ -35,6 +37,7 @@ class EditEventPage extends StatefulWidget {
     required this.onCancel,
     required this.scheduleModel,
     this.onSaveRequested,
+    this.onHasUnsavedConfigChanged,
   }) : super(key: key);
 
   @override
@@ -54,7 +57,18 @@ class _EditEventPageState extends State<EditEventPage> {
   late String _calendar;
   late String _description;
   ReminderOption _reminderOption = ReminderOption.none;
-  
+
+  /// 用于判断是否有未保存的配置变更（与初始加载值对比）
+  late String _initialDescription;
+  late int _initialRepeatType;
+  late ReminderOption _initialReminderOption;
+  late DateTime _initialStartDate;
+  late DateTime _initialEndDate;
+  late TimeOfDay _initialStartTime;
+  late TimeOfDay _initialEndTime;
+  late bool _initialIsAllDay;
+  late bool _initialIsImportant;
+
   // 使用外层传入的 ScheduleModel（不在本页创建/销毁）
 
   @override
@@ -72,6 +86,7 @@ class _EditEventPageState extends State<EditEventPage> {
     if (widget.onSaveRequested != null) {
       widget.onSaveRequested!(saveEvent);
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _notifyUnsavedConfig());
   }
 
   @override
@@ -83,6 +98,7 @@ class _EditEventPageState extends State<EditEventPage> {
       setState(() {
         _initializeFromSchedule();
       });
+      _notifyUnsavedConfig();
       Log.debug('✅ [EditEventPage] 已重新初始化表单数据: title=${widget.schedule.title}');
     }
   }
@@ -107,6 +123,53 @@ class _EditEventPageState extends State<EditEventPage> {
     _calendar = schedule.category;
     _description = schedule.title; // 使用title作为description
     _reminderOption = schedule.reminderOption;
+    _initialDescription = _description;
+    _initialRepeatType = _repeatType;
+    _initialReminderOption = _reminderOption;
+    _initialStartDate = _startDate;
+    _initialEndDate = _endDate;
+    _initialStartTime = _startTime;
+    _initialEndTime = _endTime;
+    _initialIsAllDay = _isAllDay;
+    _initialIsImportant = _isImportant;
+  }
+
+  /// 是否有未保存的日程配置变更（说明、重复、提醒、时间、重要与初始值不同）
+  bool _hasUnsavedConfigChanges() {
+    // 手动比较 TimeOfDay 的 hour 和 minute，避免 == 比较引用问题
+    final startTimeChanged = _startTime.hour != _initialStartTime.hour ||
+        _startTime.minute != _initialStartTime.minute;
+    final endTimeChanged = _endTime.hour != _initialEndTime.hour ||
+        _endTime.minute != _initialEndTime.minute;
+
+    return _description != _initialDescription ||
+        _repeatType != _initialRepeatType ||
+        _reminderOption != _initialReminderOption ||
+        _startDate != _initialStartDate ||
+        _endDate != _initialEndDate ||
+        startTimeChanged ||
+        endTimeChanged ||
+        _isAllDay != _initialIsAllDay ||
+        _isImportant != _initialIsImportant;
+  }
+
+  void _notifyUnsavedConfig() {
+    if (!mounted) return;
+    widget.onHasUnsavedConfigChanged?.call(_hasUnsavedConfigChanges());
+  }
+
+  /// 保存成功后调用：将当前表单视为已保存，后续只有用户再次改动才标记为有未保存
+  void _markCurrentStateAsSaved() {
+    _initialDescription = _description;
+    _initialRepeatType = _repeatType;
+    _initialReminderOption = _reminderOption;
+    _initialStartDate = _startDate;
+    _initialEndDate = _endDate;
+    _initialStartTime = _startTime;
+    _initialEndTime = _endTime;
+    _initialIsAllDay = _isAllDay;
+    _initialIsImportant = _isImportant;
+    _notifyUnsavedConfig();
   }
 
   // 初始化日历视图
@@ -356,7 +419,10 @@ class _EditEventPageState extends State<EditEventPage> {
         };
 
         widget.onEventUpdated(eventData);
-        
+
+        // 标记为已保存，切换页面时不再弹确认窗；只有用户再次改动后才算有未保存
+        _markCurrentStateAsSaved();
+
         // 显示成功消息
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -648,6 +714,7 @@ class _EditEventPageState extends State<EditEventPage> {
         _startDate = selectedDate;
         _endDate = selectedDate;
       });
+      _notifyUnsavedConfig();
     }
   }
 
@@ -701,6 +768,7 @@ class _EditEventPageState extends State<EditEventPage> {
           _endTime = result['time'];
         }
       });
+      _notifyUnsavedConfig();
     }
   }
 
@@ -757,6 +825,7 @@ class _EditEventPageState extends State<EditEventPage> {
                             _endTime = const TimeOfDay(hour: 23, minute: 59);
                           }
                         });
+                        _notifyUnsavedConfig();
                       },
                       style: const ToggleStyle.mobile(),
                       padding: EdgeInsets.zero,
@@ -765,6 +834,7 @@ class _EditEventPageState extends State<EditEventPage> {
                       setState(() {
                         _isAllDay = !_isAllDay;
                       });
+                      _notifyUnsavedConfig();
                     },
                     horizontalTitleGap: 8.0,
                     minLeadingWidth: 0,
@@ -1000,6 +1070,7 @@ class _EditEventPageState extends State<EditEventPage> {
                       setState(() {
                         _description = controller.text;
                       });
+                      _notifyUnsavedConfig();
                       Navigator.pop(context);
                     },
                     style: ElevatedButton.styleFrom(
@@ -1059,6 +1130,7 @@ class _EditEventPageState extends State<EditEventPage> {
             setState(() {
               _reminderOption = selectedOption;
             });
+            _notifyUnsavedConfig();
           },
         );
       },
@@ -1089,6 +1161,7 @@ class _EditEventPageState extends State<EditEventPage> {
               _repeatLabel = _repeatTypeName(type);
             }
           });
+          _notifyUnsavedConfig();
         },
       ),
     );

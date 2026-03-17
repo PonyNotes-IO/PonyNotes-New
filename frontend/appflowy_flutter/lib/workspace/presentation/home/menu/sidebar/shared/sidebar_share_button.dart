@@ -1,3 +1,4 @@
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -637,7 +638,13 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
           child: InkWell(
             borderRadius: BorderRadius.circular(6.0),
             onTap: () {
-              context.read<TabsBloc>().openPlugin(view);
+              // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
+              CalendarUnsavedGuard.instance.maybeConfirmLeave(
+                context,
+                () {
+                  context.read<TabsBloc>().openPlugin(view);
+                },
+              );
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),

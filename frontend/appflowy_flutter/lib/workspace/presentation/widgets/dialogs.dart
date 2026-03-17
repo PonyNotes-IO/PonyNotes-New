@@ -912,3 +912,106 @@ Future<void> showSimpleConfirmDialog({
   );
 }
 
+/// iOS风格的简洁确认对话框 - 异步版本，返回 true 表示确认，false 表示取消
+Future<bool> showSimpleConfirmDialogAsync({
+  required BuildContext context,
+  required String message,
+  required String confirmText,
+  String? cancelText,
+  Color? confirmTextColor,
+}) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: Container(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 提示信息区域
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            // 分割线
+            Container(
+              width: double.infinity,
+              height: 1,
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            ),
+            // 底部操作区域
+            Container(
+              width: double.infinity,
+              height: 56,
+              child: Row(
+                children: [
+                  // 取消区域
+                  Expanded(
+                    child: InkWell(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      splashFactory: NoSplash.splashFactory,
+                      onTap: () => Navigator.of(context).pop(false),
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: Text(
+                          cancelText ?? LocaleKeys.button_cancel.tr(),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 垂直分割线
+                  Container(
+                    width: 1,
+                    height: double.infinity,
+                    color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  ),
+                  // 确认区域
+                  Expanded(
+                    child: InkWell(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      splashFactory: NoSplash.splashFactory,
+                      onTap: () {
+                        Navigator.of(context).pop(true);
+                      },
+                      child: Container(
+                        alignment: Alignment.center,
+                        child: Text(
+                          confirmText,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: confirmTextColor ?? Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  return result ?? false;
+}
+

@@ -1,3 +1,4 @@
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -33,6 +34,13 @@ class SidebarInboxButton extends StatelessWidget {
   }
 
   void _openInboxPage(BuildContext context) async {
+    // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
+    CalendarUnsavedGuard.instance.maybeConfirmLeave(context, () {
+      _doOpenInboxPage();
+    });
+  }
+
+  void _doOpenInboxPage() async {
     try {
       // 创建收件箱插件
       final inboxPlugin = makePlugin(

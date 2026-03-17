@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
@@ -18,6 +17,8 @@ class NewEventPage extends StatefulWidget {
   final VoidCallback onCancel;
   final Function(bool Function())? onSaveRequested;
   final ScheduleModel scheduleModel; // 外层传入的 ScheduleModel
+  /// 当日程有变更时回调（用于离开前弹窗提示）
+  final void Function(bool hasUnsaved)? onHasUnsavedConfigChanged;
 
   const NewEventPage({
     Key? key,
@@ -26,6 +27,7 @@ class NewEventPage extends StatefulWidget {
     required this.onEventCreated,
     required this.onCancel,
     this.onSaveRequested,
+    this.onHasUnsavedConfigChanged,
   }) : super(key: key);
 
   @override
@@ -48,6 +50,9 @@ class _NewEventPageState extends State<NewEventPage> {
   // 使用ScheduleModel来管理日程
   late ScheduleModel _scheduleModel;
 
+  // 简单标记：只要用户修改了任何内容就视为有未保存
+  bool _hasAnyChange = false;
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +69,13 @@ class _NewEventPageState extends State<NewEventPage> {
     if (widget.onSaveRequested != null) {
       widget.onSaveRequested!(saveEvent);
     }
+  }
+
+  // 通知父组件有未保存的变更
+  void _notifyUnsavedConfig() {
+    _hasAnyChange = true;
+    if (!mounted) return;
+    widget.onHasUnsavedConfigChanged?.call(_hasAnyChange);
   }
 
   // 初始化日历视图
@@ -518,6 +530,7 @@ class _NewEventPageState extends State<NewEventPage> {
         _startDate = selectedDate;
         _endDate = selectedDate; // 全天模式下结束日期等于开始日期
       });
+      _notifyUnsavedConfig();
     }
   }
 
@@ -573,6 +586,7 @@ class _NewEventPageState extends State<NewEventPage> {
           _endTime = result['time'];
         }
       });
+      _notifyUnsavedConfig();
     }
   }
 
@@ -631,6 +645,7 @@ class _NewEventPageState extends State<NewEventPage> {
                             _endTime = const TimeOfDay(hour: 23, minute: 59);
                           }
                         });
+                        _notifyUnsavedConfig();
                       },
                       style: const ToggleStyle.mobile(),
                       activeBackgroundColor: Theme.of(context).colorScheme.primary,
@@ -640,6 +655,7 @@ class _NewEventPageState extends State<NewEventPage> {
                       setState(() {
                         _isAllDay = !_isAllDay;
                       });
+                      _notifyUnsavedConfig();
                     },
                     horizontalTitleGap: 8.0, // 默认值通常是16.0
                     minLeadingWidth: 0, // 关键：设置为0
@@ -762,6 +778,7 @@ class _NewEventPageState extends State<NewEventPage> {
               _repeatLabel = _repeatTypeName(type);
             }
           });
+          _notifyUnsavedConfig();
         },
       ),
     );
@@ -937,6 +954,7 @@ class _NewEventPageState extends State<NewEventPage> {
                       setState(() {
                         _description = controller.text;
                       });
+                      _notifyUnsavedConfig();
                       Navigator.pop(context);
                     },
                     style: ElevatedButton.styleFrom(
@@ -996,6 +1014,7 @@ class _NewEventPageState extends State<NewEventPage> {
             setState(() {
               _reminderOption = selectedOption;
             });
+            _notifyUnsavedConfig();
           },
         );
       },

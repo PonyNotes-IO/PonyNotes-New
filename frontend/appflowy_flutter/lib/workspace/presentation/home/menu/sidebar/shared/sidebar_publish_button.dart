@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/plugins/shared/share/constants.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -327,6 +328,10 @@ class _SidebarPublishButtonState extends State<SidebarPublishButton> {
   /// 3. 如果找不到，说明是其他用户的文档，需要先调用 receive API 接收
   /// 4. 接收成功后，使用接收后的 viewId 打开
   Future<void> _openPublishedView(BuildContext context, PublishedItemData item) async {
+    // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
+    final canLeave = await CalendarUnsavedGuard.instance.maybeConfirmLeaveAsync(context);
+    if (!canLeave) return;
+
     try {
       // 对于接收的文档，打开前先刷新列表，确认文档仍然处于发布状态
       if (item.isReceived) {

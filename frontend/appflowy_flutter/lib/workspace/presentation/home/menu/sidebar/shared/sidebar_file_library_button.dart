@@ -1,4 +1,5 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -34,18 +35,21 @@ class SidebarFileLibraryButton extends StatelessWidget {
 
   void _openFileLibrary(BuildContext context) {
     try {
-      // 创建文件库插件
-      final fileLibraryPlugin = makePlugin(
-        pluginType: PluginType.fileLibrary,
-        data: null,
-      );
+      // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
+      CalendarUnsavedGuard.instance.maybeConfirmLeave(context, () {
+        // 创建文件库插件
+        final fileLibraryPlugin = makePlugin(
+          pluginType: PluginType.fileLibrary,
+          data: null,
+        );
 
-      // 在新标签页中打开文件库
-      getIt<TabsBloc>().add(
-        TabsEvent.openPlugin(
-          plugin: fileLibraryPlugin,
-        ),
-      );
+        // 在新标签页中打开文件库
+        getIt<TabsBloc>().add(
+          TabsEvent.openPlugin(
+            plugin: fileLibraryPlugin,
+          ),
+        );
+      });
     } catch (e) {
       _showMessage(context, '打开文件库时发生错误: $e');
     }

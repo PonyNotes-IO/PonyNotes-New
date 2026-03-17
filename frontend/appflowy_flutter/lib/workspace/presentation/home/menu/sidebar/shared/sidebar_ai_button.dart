@@ -1,4 +1,5 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:flutter/material.dart';
@@ -48,19 +49,22 @@ class SidebarAiButton extends StatelessWidget {
 
   void _openAiWelcomePage(BuildContext context) {
     Log.info('🔄 侧边栏: 点击问AI按钮，打开AI欢迎页');
-    
+
     try {
-      // 创建AI欢迎页插件
-      final plugin = makePlugin(pluginType: PluginType.aiWelcome, data: null);
-      
-      // 使用TabsBloc打开插件
-      context.read<TabsBloc>().add(
-        TabsEvent.openPlugin(
-          plugin: plugin,
-        ),
-      );
-      
-      Log.info('✅ 侧边栏: AI欢迎页已打开');
+      // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
+      CalendarUnsavedGuard.instance.maybeConfirmLeave(context, () {
+        // 创建AI欢迎页插件
+        final plugin = makePlugin(pluginType: PluginType.aiWelcome, data: null);
+
+        // 使用TabsBloc打开插件
+        context.read<TabsBloc>().add(
+          TabsEvent.openPlugin(
+            plugin: plugin,
+          ),
+        );
+
+        Log.info('✅ 侧边栏: AI欢迎页已打开');
+      });
     } catch (e, stackTrace) {
       Log.error('❌ 侧边栏: 打开AI欢迎页失败: $e', e, stackTrace);
       _showMessage(context, '打开AI欢迎页时发生错误: $e');

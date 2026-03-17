@@ -1,5 +1,6 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
@@ -114,10 +115,17 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
         isHoverEnabled: true,
         enableRightClickContext: true,
         onSelected: (viewContext, view) {
-          context.read<TabsBloc>().openPlugin(view);
+          CalendarUnsavedGuard.instance.maybeConfirmLeave(
+            context,
+            () => context.read<TabsBloc>().openPlugin(view),
+          );
         },
-        onTertiarySelected: (viewContext, view) =>
-            context.read<TabsBloc>().openTab(view),
+        onTertiarySelected: (viewContext, view) {
+          CalendarUnsavedGuard.instance.maybeConfirmLeave(
+            context,
+            () => context.read<TabsBloc>().openTab(view),
+          );
+        },
       );
     }).toList();
   }

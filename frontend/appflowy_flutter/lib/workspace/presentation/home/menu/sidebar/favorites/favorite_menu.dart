@@ -1,5 +1,6 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -81,8 +82,13 @@ class _FavoriteGroupedViews extends StatelessWidget {
               spaceType: FolderSpaceType.favorite,
               level: 0,
               onSelected: (_, view) {
-                context.read<TabsBloc>().openPlugin(view);
-                PopoverContainer.maybeOf(context)?.close();
+                CalendarUnsavedGuard.instance.maybeConfirmLeave(
+                  context,
+                  () {
+                    context.read<TabsBloc>().openPlugin(view);
+                    PopoverContainer.maybeOf(context)?.close();
+                  },
+                );
               },
               isFeedback: false,
               isDraggable: false,

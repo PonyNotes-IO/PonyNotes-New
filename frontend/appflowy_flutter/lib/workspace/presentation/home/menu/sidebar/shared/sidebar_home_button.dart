@@ -1,4 +1,5 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:flutter/material.dart';
@@ -42,18 +43,21 @@ class SidebarHomeButton extends StatelessWidget {
   void _openHomePage(
       BuildContext context, UserWorkspaceState workspaceState) async {
     try {
-      // 创建主页插件
-      final homePlugin = makePlugin(
-        pluginType: PluginType.homepage,
-        data: null,
-      );
+      // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
+      CalendarUnsavedGuard.instance.maybeConfirmLeave(context, () {
+        // 创建主页插件
+        final homePlugin = makePlugin(
+          pluginType: PluginType.homepage,
+          data: null,
+        );
 
-      // 在新标签页中打开主页
-      getIt<TabsBloc>().add(
-        TabsEvent.openPlugin(
-          plugin: homePlugin,
-        ),
-      );
+        // 在新标签页中打开主页
+        getIt<TabsBloc>().add(
+          TabsEvent.openPlugin(
+            plugin: homePlugin,
+          ),
+        );
+      });
     } catch (e) {
       _showMessage(context, '打开主页时发生错误: $e');
     }

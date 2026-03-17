@@ -1,6 +1,7 @@
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -80,11 +81,17 @@ class SidebarTrashButton extends StatelessWidget {
           ),
           text: LocaleKeys.trash_text.tr(),
           onTap: () {
-            getIt<MenuSharedState>().latestOpenView = null;
-            getIt<TabsBloc>().add(
-              TabsEvent.openPlugin(
-                plugin: makePlugin(pluginType: PluginType.trash),
-              ),
+            // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
+            CalendarUnsavedGuard.instance.maybeConfirmLeave(
+              context,
+              () {
+                getIt<MenuSharedState>().latestOpenView = null;
+                getIt<TabsBloc>().add(
+                  TabsEvent.openPlugin(
+                    plugin: makePlugin(pluginType: PluginType.trash),
+                  ),
+                );
+              },
             );
           },
         );

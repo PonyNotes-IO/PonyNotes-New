@@ -1,4 +1,5 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
@@ -205,13 +206,22 @@ class _SpaceState extends State<_Space> {
                   space: currentSpace,
                   isHovered: isHovered,
                   onSelected: (context, view) {
-                    if (HardwareKeyboard.instance.isControlPressed) {
-                      context.read<TabsBloc>().openTab(view);
-                    }
-                    context.read<TabsBloc>().openPlugin(view);
+                    CalendarUnsavedGuard.instance.maybeConfirmLeave(
+                      context,
+                      () {
+                        if (HardwareKeyboard.instance.isControlPressed) {
+                          context.read<TabsBloc>().openTab(view);
+                        }
+                        context.read<TabsBloc>().openPlugin(view);
+                      },
+                    );
                   },
-                  onTertiarySelected: (context, view) =>
-                      context.read<TabsBloc>().openTab(view),
+                  onTertiarySelected: (context, view) {
+                    CalendarUnsavedGuard.instance.maybeConfirmLeave(
+                      context,
+                      () => context.read<TabsBloc>().openTab(view),
+                    );
+                  },
                 ),
               ),
           ],

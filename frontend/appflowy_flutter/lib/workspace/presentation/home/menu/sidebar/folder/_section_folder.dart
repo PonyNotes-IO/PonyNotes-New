@@ -13,6 +13,7 @@ import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -278,30 +279,41 @@ class _SectionFolderState extends State<SectionFolder> {
           onSelected: (viewContext, view) {
             // 如果是 Space 类型，打开空间统一页面（SpaceHubPlugin）
             if (view.isSpace) {
-              // 使用 SpaceBloc 打开空间（加载空间下的文档列表）
-              final spaceBloc = context.read<SpaceBloc>();
-              spaceBloc.add(SpaceEvent.open(space: view));
+              // 先检查日历守卫，若有未保存则弹窗确认
+              CalendarUnsavedGuard.instance.maybeConfirmLeave(
+                viewContext,
+                () {
+                  // 使用 SpaceBloc 打开空间（加载空间下的文档列表）
+                  final spaceBloc = context.read<SpaceBloc>();
+                  spaceBloc.add(SpaceEvent.open(space: view));
 
-              // 打开空间统一页面插件
-              if (HardwareKeyboard.instance.isControlPressed) {
-                viewContext.read<TabsBloc>().openTab(view);
-              } else {
-                viewContext.read<TabsBloc>().openPlugin(view);
-              }
+                  // 打开空间统一页面插件
+                  if (HardwareKeyboard.instance.isControlPressed) {
+                    viewContext.read<TabsBloc>().openTab(view);
+                  } else {
+                    viewContext.read<TabsBloc>().openPlugin(view);
+                  }
+                },
+              );
               return;
             }
 
-            // 文档类型的点击处理
-            if (HardwareKeyboard.instance.isControlPressed) {
-              context.read<TabsBloc>().openTab(view);
-            }
+            // 文档类型的点击处理：先检查日历守卫
+            CalendarUnsavedGuard.instance.maybeConfirmLeave(
+              viewContext,
+              () {
+                if (HardwareKeyboard.instance.isControlPressed) {
+                  context.read<TabsBloc>().openTab(view);
+                }
 
-            // Defensive: ensure view has a valid id before attempting to open plugin.
-            if (view.id.isEmpty) {
-              // 空 view.id 的错误处理
-            } else {
-              context.read<TabsBloc>().openPlugin(view);
-            }
+                // Defensive: ensure view has a valid id before attempting to open plugin.
+                if (view.id.isEmpty) {
+                  // 空 view.id 的错误处理
+                } else {
+                  context.read<TabsBloc>().openPlugin(view);
+                }
+              },
+            );
           },
           onTertiarySelected: (viewContext, view) =>
               context.read<TabsBloc>().openTab(view),

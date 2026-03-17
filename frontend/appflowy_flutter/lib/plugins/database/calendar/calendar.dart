@@ -36,11 +36,13 @@ import '../../../workspace/presentation/home/home_sizes.dart';
 import '../../../workspace/presentation/home/menu/menu_shared_state.dart';
 import '../../../workspace/presentation/widgets/favorite_button.dart';
 import '../../../workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
+import '../../../workspace/presentation/widgets/dialogs.dart';
 import '../../../plugins/shared/share/share_button.dart';
 import 'presentation/new_event_page.dart';
 import 'presentation/edit_event_page.dart';
 import 'models/schedule_model.dart';
 import 'application/calendar_content_cubit.dart';
+import 'application/calendar_unsaved_guard.dart';
 
 // 添加日历事件类
 class CalendarEvent {
@@ -319,6 +321,10 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   late DateTime? _lastLoadedDate;
   late ViewListener? _viewListener;
   DateTime? _pendingLoadDate;
+  /// 新建日程页是否有未保存的配置变更（说明/重复/提醒等）
+  bool _newEventHasUnsavedConfig = false;
+  /// 编辑日程页是否有未保存的配置变更
+  bool _editEventHasUnsavedConfig = false;
 
   @override
   void initState() {
@@ -370,6 +376,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               if (mounted) {
                 setState(() {
                   _showNewEventPage = true;
+                  _newEventHasUnsavedConfig = false;
                 });
               }
             });
@@ -800,32 +807,91 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       _showEditEventPage = false; // 确保编辑日程页面关闭
       _editingSchedule = null; // 清除编辑中的日程
       _saveEventCallback = null; // 重置保存回调，避免使用上一次的引用
+      _newEventHasUnsavedConfig = false;
     });
     getIt<MenuSharedState>().latestOpenView = null;
   }
 
-  void _hideNewEventPage() {
-    // 当关闭新建日程页面时，恢复显示右侧工具栏
+  /// 检查并隐藏新建日程页，如果有未保存配置则弹窗确认
+  void _checkAndHideNewEventPage({VoidCallback? onHidden}) {
+    final hide = () {
+      // 当关闭新建日程页面时，恢复显示右侧工具栏
+      widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+
+      setState(() {
+        _showNewEventPage = false;
+        _saveEventCallback = null; // 关闭时重置回调
+        _newEventHasUnsavedConfig = false; // 关闭后清除未保存标记，避免之后点击其他日期误弹窗
+      });
+      onHidden?.call();
+    };
+
+    if (_newEventHasUnsavedConfig) {
+      showSimpleConfirmDialog(
+        context: context,
+        message: '当前设置还没有被保存，确认要离开吗？',
+        confirmText: '离开',
+        onConfirm: hide,
+      );
+    } else {
+      hide();
+    }
+  }
+
+  /// 保存成功后直接关闭新建页，不弹窗（不检查未保存状态）
+  void _hideNewEventPageAfterSave() {
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
-    
     setState(() {
       _showNewEventPage = false;
-      _saveEventCallback = null; // 关闭时重置回调
+      _saveEventCallback = null;
+      _newEventHasUnsavedConfig = false;
+    });
+  }
+
+  /// 用户点击取消时调用：若有未保存配置则弹窗确认，否则直接关闭
+  void _hideNewEventPage() {
+    _checkAndHideNewEventPage();
+  }
+
+  /// 仅关闭新建/编辑页并清除未保存标记，不弹窗（供侧边栏等外部离开时调用）
+  void _performLeaveCalendarWithoutDialog() {
+    widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+    setState(() {
+      _showNewEventPage = false;
+      _showEditEventPage = false;
+      _editingSchedule = null;
+      _saveEventCallback = null;
+      _newEventHasUnsavedConfig = false;
+      _editEventHasUnsavedConfig = false;
     });
   }
 
   // 处理点击日程
   void _onScheduleTap(ScheduleItem schedule) {
+    // 仅当正在显示新建/编辑日程页且有未保存配置时，才弹窗确认
+    if (_showNewEventPage && _newEventHasUnsavedConfig) {
+      _checkAndHideNewEventPage(onHidden: () => _performScheduleTap(schedule));
+      return;
+    } else if (_showEditEventPage && _editEventHasUnsavedConfig) {
+      _checkAndHideEditEventPage(onHidden: () => _performScheduleTap(schedule));
+      return;
+    }
+    _performScheduleTap(schedule);
+  }
+
+  /// 执行点击日程后的逻辑（抽取为独立方法）
+  void _performScheduleTap(ScheduleItem schedule) {
     // 调试输出已移除: _onScheduleTap info
-    
+
     // 当点击日程时，隐藏右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(true);
-    
+
     setState(() {
       _showEditEventPage = true;
       _editingSchedule = schedule;
       _showNewEventPage = false; // 确保新建页面关闭
       _selectedNote = null; // 清除选中的笔记
+      _editEventHasUnsavedConfig = false;
     });
     getIt<MenuSharedState>().latestOpenView = null;
 
@@ -834,6 +900,42 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   // 处理点击笔记
   void _onNoteTap(ViewPB note) {
+    // 仅当正在显示新建/编辑日程页且有未保存配置时，才弹窗确认
+    if (_showNewEventPage && _newEventHasUnsavedConfig) {
+      _checkAndHideNewEventPage(onHidden: () => _performNoteTap(note));
+      return;
+    } else if (_showEditEventPage && _editEventHasUnsavedConfig) {
+      _checkAndHideEditEventPage(onHidden: () => _performNoteTap(note));
+      return;
+    }
+    _performNoteTap(note);
+  }
+
+  /// 执行选择日期后的逻辑（抽取为独立方法）
+  void _performSelectDay(DateTime selected, DateTime focused) {
+    setState(() {
+      _selectedDay = selected;
+      _focusedDay = focused;
+      // 切换日期时清空右侧区域，让_buildDefaultView自动选择内容
+      _selectedNote = null;
+      widget.selectedViewNotifier.value = null;
+      getIt<MenuSharedState>().latestOpenView = null;
+      _showNewEventPage = false;
+      _showEditEventPage = false;
+      _editingSchedule = null;
+      // 先重置为非日程模式，待数据加载后再按内容决定显示模式
+      widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+      // 清除缓存，强制重新加载新日期的内容
+      _cachedContent = null;
+      _lastLoadedDate = null;
+    });
+
+    // 加载新日期的内容
+    _loadContentForDate(selected);
+  }
+
+  /// 执行点击笔记后的逻辑（抽取为独立方法）
+  void _performNoteTap(ViewPB note) {
     // 当点击文档时，显示右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
 
@@ -870,12 +972,39 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   void _hideEditEventPage() {
     // 当离开日程编辑页面时，恢复显示右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
-    
+
     setState(() {
       _showEditEventPage = false;
       _editingSchedule = null;
       _saveEventCallback = null; // 关闭时重置回调
     });
+  }
+
+  /// 检查并隐藏编辑日程页，如果有未保存配置则弹窗确认
+  void _checkAndHideEditEventPage({VoidCallback? onHidden}) {
+    final hide = () {
+      // 当关闭编辑日程页面时，恢复显示右侧工具栏
+      widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+
+      setState(() {
+        _showEditEventPage = false;
+        _editingSchedule = null;
+        _saveEventCallback = null;
+        _editEventHasUnsavedConfig = false; // 关闭后清除未保存标记
+      });
+      onHidden?.call();
+    };
+
+    if (_editEventHasUnsavedConfig) {
+      showSimpleConfirmDialog(
+        context: context,
+        message: '当前设置还没有被保存，确认要离开吗？',
+        confirmText: '离开',
+        onConfirm: hide,
+      );
+    } else {
+      hide();
+    }
   }
 
   void _onEventCreated(Map<String, dynamic> eventData) {
@@ -903,13 +1032,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       return;
     }
 
-    // 刷新日历内容以显示新创建的日程
-    // 刷新日历内容（调试输出已移除）
+    // 只保存、不跳转：清除未保存标记并刷新列表，不关闭新建页
+    setState(() {
+      _newEventHasUnsavedConfig = false;
+    });
     context.read<CalendarContentCubit>().refresh();
-
-    // 刷新日程列表以显示新创建的日程
-    // 通过 ScheduleModel 的全局实例来刷新
-    // _scheduleSidebarKey.currentState?.refreshData();
 
     // 显示成功提示
     ScaffoldMessenger.of(context).showSnackBar(
@@ -919,9 +1046,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         duration: Duration(seconds: 2),
       ),
     );
-
-    // 隐藏新建日程界面
-    _hideNewEventPage();
   }
 
   void _onEventUpdated(Map<String, dynamic> eventData) {
@@ -1083,6 +1207,14 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   @override
   Widget build(BuildContext context) {
+    // 向全局守卫注册：侧边栏点击主页/问AI等时，若当前有未保存的新建或编辑则先弹窗
+    final hasUnsaved = (_showNewEventPage && _newEventHasUnsavedConfig) ||
+        (_showEditEventPage && _editEventHasUnsavedConfig);
+    CalendarUnsavedGuard.instance.register(
+      hasUnsaved: hasUnsaved,
+      performLeave: hasUnsaved ? _performLeaveCalendarWithoutDialog : null,
+    );
+
     // 全窗口模式：隐藏左侧日历导航区
     return ValueListenableBuilder<bool>(
       valueListenable: FullWindowController.isFullWindow,
@@ -1238,25 +1370,18 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               focusedDay: _focusedDay,
               selectedDay: _selectedDay,
               onDaySelected: (selected, focused) {
-                setState(() {
-                  _selectedDay = selected;
-                  _focusedDay = focused;
-                  // 切换日期时清空右侧区域，让_buildDefaultView自动选择内容
-                  _selectedNote = null;
-                  widget.selectedViewNotifier.value = null;
-                  getIt<MenuSharedState>().latestOpenView = null;
-                  _showNewEventPage = false;
-                  _showEditEventPage = false;
-                  _editingSchedule = null;
-                  // 先重置为非日程模式，待数据加载后再按内容决定显示模式
-                  widget.calendarWidgetBuilder.setIsViewingSchedule(false);
-                  // 清除缓存，强制重新加载新日期的内容
-                  _cachedContent = null;
-                  _lastLoadedDate = null;
-                });
-                
-                // 加载新日期的内容
-                _loadContentForDate(selected);
+                // 仅当正在显示新建/编辑日程页且有未保存配置时，才弹窗确认
+                if (_showNewEventPage && _newEventHasUnsavedConfig) {
+                  _checkAndHideNewEventPage(onHidden: () {
+                    _performSelectDay(selected, focused);
+                  });
+                } else if (_showEditEventPage && _editEventHasUnsavedConfig) {
+                  _checkAndHideEditEventPage(onHidden: () {
+                    _performSelectDay(selected, focused);
+                  });
+                } else {
+                  _performSelectDay(selected, focused);
+                }
               },
               onPageChanged: (focusedDay) {
                 setState(() {
@@ -1365,7 +1490,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           _lastLoadedDate = date;
           _isLoadingContent = false;
         });
-        _syncDetailPanelWithLoadedContent(notes, schedules);
+        _checkAndSyncDetailPanelWithLoadedContent(notes, schedules);
       }
     } catch (e) {
       // 无论是否mounted，都尝试重置加载状态
@@ -1378,7 +1503,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           _lastLoadedDate = date;
           _isLoadingContent = false;
         });
-        _syncDetailPanelWithLoadedContent(const <ViewPB>[], const <ScheduleItem>[]);
+        _checkAndSyncDetailPanelWithLoadedContent(const <ViewPB>[], const <ScheduleItem>[]);
       }
     } finally {
       // 确保在任何情况下都能重置加载状态
@@ -1392,6 +1517,25 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         _pendingLoadDate = null;
         Future.microtask(() => _loadContentForDate(queuedDate));
       }
+    }
+  }
+
+  /// 检查并同步详情面板（如果有未保存配置则弹窗确认）
+  void _checkAndSyncDetailPanelWithLoadedContent(
+    List<ViewPB> notes,
+    List<ScheduleItem> schedules,
+  ) {
+    // 仅当正在显示新建/编辑日程页且有未保存配置时，才弹窗确认
+    if (_showNewEventPage && _newEventHasUnsavedConfig) {
+      _checkAndHideNewEventPage(
+        onHidden: () => _syncDetailPanelWithLoadedContent(notes, schedules),
+      );
+    } else if (_showEditEventPage && _editEventHasUnsavedConfig) {
+      _checkAndHideEditEventPage(
+        onHidden: () => _syncDetailPanelWithLoadedContent(notes, schedules),
+      );
+    } else {
+      _syncDetailPanelWithLoadedContent(notes, schedules);
     }
   }
 
@@ -1840,13 +1984,12 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             scheduleModel: _scheduleModel,
             onEventUpdated: _onEventUpdated,
             onEventDeleted: _onEventDeleted,
-            onCancel: () {
-              setState(() {
-                _editingSchedule = null;
-              });
-            },
+            onCancel: _checkAndHideEditEventPage,
             onSaveRequested: (saveCallback) {
               _saveEventCallback = saveCallback;
+            },
+            onHasUnsavedConfigChanged: (hasUnsaved) {
+              if (mounted) setState(() => _editEventHasUnsavedConfig = hasUnsaved);
             },
           ),
         ),
@@ -1881,9 +2024,20 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                         ),
                   ),
                 ),
-                // 取消按钮
+                // 取消按钮：有未保存配置时先弹出 iOS 风格确认框
                 TextButton(
-                  onPressed: _hideNewEventPage,
+                  onPressed: () {
+                    if (_newEventHasUnsavedConfig) {
+                      showSimpleConfirmDialog(
+                        context: context,
+                        message: '当前设置还没有被保存，确认要离开吗？',
+                        confirmText: '离开',
+                        onConfirm: _hideNewEventPage,
+                      );
+                    } else {
+                      _hideNewEventPage();
+                    }
+                  },
                   child: Text(
                     '取消',
                     style: TextStyle(
@@ -1923,6 +2077,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               onCancel: _hideNewEventPage,
               onSaveRequested: (saveCallback) {
                 _saveEventCallback = saveCallback;
+              },
+              onHasUnsavedConfigChanged: (hasUnsaved) {
+                if (mounted) setState(() => _newEventHasUnsavedConfig = hasUnsaved);
               },
             ),
           ),
@@ -1964,9 +2121,20 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                         ),
                   ),
                 ),
-                // 取消按钮
+                // 取消按钮：有未保存配置时先弹出 iOS 风格确认框
                 TextButton(
-                  onPressed: _hideEditEventPage,
+                  onPressed: () {
+                    if (_editEventHasUnsavedConfig) {
+                      showSimpleConfirmDialog(
+                        context: context,
+                        message: '当前设置还没有被保存，确认要离开吗？',
+                        confirmText: '离开',
+                        onConfirm: () => _checkAndHideEditEventPage(),
+                      );
+                    } else {
+                      _checkAndHideEditEventPage();
+                    }
+                  },
                   child: Text(
                     '取消',
                     style: TextStyle(
@@ -2005,9 +2173,12 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               schedule: _editingSchedule!,
               onEventUpdated: _onEventUpdated,
               onEventDeleted: _onEventDeleted,
-              onCancel: _hideEditEventPage,
+              onCancel: _checkAndHideEditEventPage,
               onSaveRequested: (saveCallback) {
                 _saveEventCallback = saveCallback;
+              },
+              onHasUnsavedConfigChanged: (hasUnsaved) {
+                if (mounted) setState(() => _editEventHasUnsavedConfig = hasUnsaved);
               },
             ),
           ),
