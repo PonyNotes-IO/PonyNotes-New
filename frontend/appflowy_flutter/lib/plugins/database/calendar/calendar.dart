@@ -925,8 +925,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   void _onEventUpdated(Map<String, dynamic> eventData) {
-    final description = eventData['description'] as String;
-
     // 刷新日历内容以显示更新的日程
     context.read<CalendarContentCubit>().refresh();
 
@@ -934,17 +932,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     // 通过 ScheduleModel 的全局实例来刷新
     // _scheduleSidebarKey.currentState?.refreshData();
 
-    // 显示成功提示
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('日程更新成功: $description'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    // 隐藏编辑日程界面
-    _hideEditEventPage();
+    // 成功提示由 EditEventPage 内统一展示。保存后不关闭编辑页，保持顶部「编辑日程 + 取消/保存」栏，
+    // 避免切换成 _buildDefaultView 后的「编辑日程：来自数据库的日程」仅有关闭按钮的顶栏。
+    // 用户可点击「取消」主动关闭编辑界面。
   }
 
   void _onEventDeleted(String scheduleId) {
@@ -955,15 +945,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     // 通过 ScheduleModel 的全局实例来刷新
     // _scheduleSidebarKey.currentState?.refreshData();
 
-    // 显示成功提示
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('日程已删除'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 2),
-      ),
-    );
-
+    // 删除成功提示由 EditEventPage 内统一展示，此处不再重复弹出
     // 隐藏编辑日程界面
     _hideEditEventPage();
   }
