@@ -4,6 +4,7 @@ import 'package:appflowy/plugins/database/calendar/presentation/widgets/calendar
 import 'package:appflowy/shared/permission/permission_checker.dart';
 import 'package:appflowy/plugins/database/tab_bar/tab_bar_view.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -32,6 +33,7 @@ import '../../../workspace/application/sidebar/space/space_bloc.dart';
 import '../../../workspace/application/view/view_ext.dart';
 import '../../../workspace/application/view/view_listener.dart';
 import '../../../workspace/presentation/home/home_sizes.dart';
+import '../../../workspace/presentation/home/menu/menu_shared_state.dart';
 import '../../../workspace/presentation/widgets/favorite_button.dart';
 import '../../../workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import '../../../plugins/shared/share/share_button.dart';
@@ -799,6 +801,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       _editingSchedule = null; // 清除编辑中的日程
       _saveEventCallback = null; // 重置保存回调，避免使用上一次的引用
     });
+    getIt<MenuSharedState>().latestOpenView = null;
   }
 
   void _hideNewEventPage() {
@@ -824,7 +827,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       _showNewEventPage = false; // 确保新建页面关闭
       _selectedNote = null; // 清除选中的笔记
     });
-    
+    getIt<MenuSharedState>().latestOpenView = null;
+
     // 调试输出已移除: post _onScheduleTap state
   }
 
@@ -832,16 +836,20 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   void _onNoteTap(ViewPB note) {
     // 当点击文档时，显示右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
-    
+
     setState(() {
       // 如果点击的是当前选中的笔记，则取消选中
       if (_selectedNote?.id == note.id) {
         _selectedNote = null;
         widget.selectedViewNotifier.value = null;
+        // 同步侧边栏选中状态，使列表高亮与主内容一致
+        getIt<MenuSharedState>().latestOpenView = null;
       } else {
         // 否则选中新笔记
         _selectedNote = note;
         widget.selectedViewNotifier.value = note;
+        // 同步侧边栏选中状态，使列表高亮与主内容一致
+        getIt<MenuSharedState>().latestOpenView = note;
         // 显示加载状态
         _isLoadingNote = true;
       }
@@ -1254,6 +1262,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                   // 切换日期时清空右侧区域，让_buildDefaultView自动选择内容
                   _selectedNote = null;
                   widget.selectedViewNotifier.value = null;
+                  getIt<MenuSharedState>().latestOpenView = null;
                   _showNewEventPage = false;
                   _showEditEventPage = false;
                   _editingSchedule = null;
@@ -1424,6 +1433,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         _editingSchedule = null;
       });
       widget.selectedViewNotifier.value = firstNote;
+      getIt<MenuSharedState>().latestOpenView = firstNote;
       widget.calendarWidgetBuilder.setIsViewingSchedule(false);
       return;
     }
@@ -1437,6 +1447,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         _editingSchedule = firstSchedule;
       });
       widget.selectedViewNotifier.value = null;
+      getIt<MenuSharedState>().latestOpenView = null;
       widget.calendarWidgetBuilder.setIsViewingSchedule(true);
       return;
     }
@@ -1448,6 +1459,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       _editingSchedule = null;
     });
     widget.selectedViewNotifier.value = null;
+    getIt<MenuSharedState>().latestOpenView = null;
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
   }
 
@@ -1759,6 +1771,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               // 如果被删除的是当前选中的笔记，更新选中状态
               if (_selectedNote?.id == view.id) {
                 _selectedNote = null;
+                getIt<MenuSharedState>().latestOpenView = null;
               }
             });
             // 刷新日历内容，重新加载当前日期的文档列表
@@ -2063,6 +2076,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               _selectedNote = null;
               widget.selectedViewNotifier.value = null;
             });
+            getIt<MenuSharedState>().latestOpenView = null;
             // 调用父组件的onDeleted回调
             widget.onDeleted?.call(view, index);
             // 刷新日历内容，重新加载当前日期的文档列表
