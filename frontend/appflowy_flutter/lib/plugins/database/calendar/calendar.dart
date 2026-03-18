@@ -957,6 +957,10 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   /// 执行点击笔记后的逻辑（抽取为独立方法）
   void _performNoteTap(ViewPB note) {
+    // 空间（Workspace）在日历右侧打开 SpaceHub 会长时间加载，此处不响应
+    if (note.isSpace) {
+      return;
+    }
     // 当点击文档时，显示右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
     if (_showNewEventPage) {
