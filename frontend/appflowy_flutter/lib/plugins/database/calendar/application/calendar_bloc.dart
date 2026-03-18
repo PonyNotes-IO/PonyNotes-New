@@ -342,11 +342,49 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
   Future<Map<String, dynamic>?> _getRepeatInfo(CalendarEventPB eventPB) async {
     try {
       final fieldInfos = fieldController.fieldInfos;
-      // 查找重复字段
+      final fieldById = {for (final f in fieldInfos) f.field.id: f};
+
+      // 优先从日期字段读取 repeatType / repeatRuleJson
+      // 这与 ScheduleModel._enrichFromCells 的逻辑一致
+      final dateField = fieldById[eventPB.dateFieldId];
+      if (dateField != null && dateField.fieldType == FieldType.DateTime) {
+        final dateCellResult = await CellBackendService.getCell(
+          viewId: viewId,
+          cellContext: CellContext(
+            fieldId: dateField.field.id,
+            rowId: eventPB.rowMeta.id,
+          ),
+        );
+
+        final pb = dateCellResult.fold(
+          (cell) => DateCellDataParser().parserData(cell.data),
+          (_) => null,
+        );
+
+        if (pb != null) {
+          int repeatType = 0;
+          if (pb.hasRepeatType()) {
+            repeatType = pb.repeatType;
+          }
+          String? repeatRuleJson;
+          if (pb.hasRepeatRuleJson()) {
+            final json = pb.repeatRuleJson;
+            repeatRuleJson = json.isEmpty ? null : json;
+          }
+          if (repeatType != 0 || repeatRuleJson != null) {
+            return {
+              'repeatType': repeatType,
+              'repeatRuleJson': repeatRuleJson,
+            };
+          }
+        }
+      }
+
+      // 兼容旧逻辑：如果日期字段没有，再尝试找自定义 RichText Repeat 字段
       FieldInfo? repeatField;
       for (final field in fieldInfos) {
         final name = field.name.toLowerCase();
-        if (field.fieldType == FieldType.RichText && 
+        if (field.fieldType == FieldType.RichText &&
             (name.contains('repeat') || name.contains('重复'))) {
           repeatField = field;
           break;
@@ -357,7 +395,6 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
         return null;
       }
 
-      // 读取重复字段的值
       final cellContext = CellContext(
         fieldId: repeatField.field.id,
         rowId: eventPB.rowMeta.id,
@@ -413,6 +450,16 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
         return true;
 
       case 2: // 每周
+        if (repeatRuleJson != null && repeatRuleJson!.isNotEmpty) {
+          try {
+            final rule = jsonDecode(repeatRuleJson!) as Map<String, dynamic>;
+            final weekdays = rule['weekdays'] as List<dynamic>?;
+            if (weekdays != null && weekdays.isNotEmpty) {
+              final weekdayList = weekdays.map((e) => (e as int) + 1).toList();
+              return weekdayList.contains(date.weekday);
+            }
+          } catch (_) {}
+        }
         return date.weekday == startDate.weekday;
 
       case 3: // 每年

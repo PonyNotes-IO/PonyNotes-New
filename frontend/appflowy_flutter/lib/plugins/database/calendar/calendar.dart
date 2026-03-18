@@ -22,6 +22,7 @@ import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy/plugins/document/document_page.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flowy_infra/uuid.dart';
 import '../../../features/page_access_level/logic/page_access_level_bloc.dart';
@@ -300,7 +301,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   late DateTime _lastDay;
   late bool _showNewEventPage;
   late bool _showEditEventPage; // 显示编辑日程页面
-  late ScheduleModel _scheduleModel; // 添加日程模型
+  late ScheduleModel _scheduleModel; // 主日历列表用，与当前视图绑定
+  /// 新建日程专用模型，避免与主日历 setViewId 异步初始化互相 dispose 控制器导致初始化失败
+  ScheduleModel? _newEventScheduleModel;
   late ScheduleItem? _editingSchedule; // 正在编辑的日程
   late Function()? _saveEventCallback;
   late String? _currentViewId; // 添加当前视图ID
@@ -374,6 +377,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           if (widget.pluginData?.openNewEvent == true) {
             Future.delayed(const Duration(milliseconds: 300), () {
               if (mounted) {
+                _newEventScheduleModel?.dispose();
+                _newEventScheduleModel = ScheduleModel();
                 setState(() {
                   _showNewEventPage = true;
                   _newEventHasUnsavedConfig = false;
@@ -408,9 +413,15 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   @override
   void dispose() {
     _viewListener?.stop();
+    _newEventScheduleModel?.dispose();
     // 确保释放资源
     _scheduleModel.dispose();
     super.dispose();
+  }
+
+  void _disposeNewEventScheduleModel() {
+    _newEventScheduleModel?.dispose();
+    _newEventScheduleModel = null;
   }
 
   // 月份切换：delta为-1上一月，1下一月
@@ -449,6 +460,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
             setState(() {
               _currentViewId = view.id;
             });
+            // 同步将 viewId 注入到共享的 ScheduleModel，避免 ScheduleSidebarContent
+            // 在 _initializeCalendarView 完成前调用 refresh() 时读不到正确数据。
+            _scheduleModel.setViewId(view.id);
           }
           // 视图就绪后主动加载当天内容，确保首次进入可自动选中日程/笔记
           final selectedDate = _selectedDay ?? _focusedDay;
@@ -469,6 +483,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 setState(() {
                   _currentViewId = view.id;
                 });
+                _scheduleModel.setViewId(view.id);
               }
               final selectedDate = _selectedDay ?? _focusedDay;
               await _loadContentForDate(selectedDate);
@@ -479,6 +494,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 setState(() {
                   _currentViewId = fixedViewId;
                 });
+                _scheduleModel.setViewId(fixedViewId);
               }
             },
           );
@@ -800,7 +816,8 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   void _showCreateScheduleDialog() {
     // 当新建日程时，隐藏右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(true);
-    
+    _newEventScheduleModel?.dispose();
+    _newEventScheduleModel = ScheduleModel();
     setState(() {
       _showNewEventPage = true;
       _selectedNote = null; // 清除当前选中的笔记
@@ -817,7 +834,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     final hide = () {
       // 当关闭新建日程页面时，恢复显示右侧工具栏
       widget.calendarWidgetBuilder.setIsViewingSchedule(false);
-
+      _disposeNewEventScheduleModel();
       setState(() {
         _showNewEventPage = false;
         _saveEventCallback = null; // 关闭时重置回调
@@ -841,6 +858,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   /// 保存成功后直接关闭新建页，不弹窗（不检查未保存状态）
   void _hideNewEventPageAfterSave() {
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+    _disposeNewEventScheduleModel();
     setState(() {
       _showNewEventPage = false;
       _saveEventCallback = null;
@@ -856,6 +874,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   /// 仅关闭新建/编辑页并清除未保存标记，不弹窗（供侧边栏等外部离开时调用）
   void _performLeaveCalendarWithoutDialog() {
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
+    _disposeNewEventScheduleModel();
     setState(() {
       _showNewEventPage = false;
       _showEditEventPage = false;
@@ -886,6 +905,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     // 当点击日程时，隐藏右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(true);
 
+    _disposeNewEventScheduleModel();
     setState(() {
       _showEditEventPage = true;
       _editingSchedule = schedule;
@@ -913,6 +933,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   /// 执行选择日期后的逻辑（抽取为独立方法）
   void _performSelectDay(DateTime selected, DateTime focused) {
+    _disposeNewEventScheduleModel();
     setState(() {
       _selectedDay = selected;
       _focusedDay = focused;
@@ -938,7 +959,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   void _performNoteTap(ViewPB note) {
     // 当点击文档时，显示右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
-
+    if (_showNewEventPage) {
+      _disposeNewEventScheduleModel();
+    }
     setState(() {
       // 如果点击的是当前选中的笔记，则取消选中
       if (_selectedNote?.id == note.id) {
@@ -1403,15 +1426,18 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16), // 确保内容与侧边栏边缘有距离
-              child: CalendarContent(
-                selectedDate: _selectedDay ?? _focusedDay,
-                viewId: _currentViewId,
-                onScheduleTap: _onScheduleTap,
-                onNoteTap: _onNoteTap,
-                selectedNoteId: _selectedNote?.id,
-                spaceType: FolderSpaceType.private,
+              child: ChangeNotifierProvider<ScheduleModel>.value(
+                value: _scheduleModel,
+                child: CalendarContent(
+                  selectedDate: _selectedDay ?? _focusedDay,
+                  viewId: _currentViewId,
+                  onScheduleTap: _onScheduleTap,
+                  onNoteTap: _onNoteTap,
+                  selectedNoteId: _selectedNote?.id,
+                  spaceType: FolderSpaceType.private,
+                ),
+              ),
             ),
-          ),
         ),
       ],
     );
@@ -1552,6 +1578,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
     if (notes.isNotEmpty) {
       final firstNote = notes.first;
+      if (_showNewEventPage) {
+        _disposeNewEventScheduleModel();
+      }
       setState(() {
         _selectedNote = firstNote;
         _showNewEventPage = false;
@@ -1566,6 +1595,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
     if (schedules.isNotEmpty) {
       final firstSchedule = schedules.first;
+      if (_showNewEventPage) {
+        _disposeNewEventScheduleModel();
+      }
       setState(() {
         _selectedNote = null;
         _showNewEventPage = false;
@@ -1578,6 +1610,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       return;
     }
 
+    if (_showNewEventPage) {
+      _disposeNewEventScheduleModel();
+    }
     setState(() {
       _selectedNote = null;
       _showNewEventPage = false;
@@ -1815,6 +1850,16 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         _scheduleModel.setViewId(_currentViewId!);
         // 首次绑定视图时等待一次刷新，避免首次进入拿到空列表。
         await _scheduleModel.refresh();
+      }
+
+      // 如果是过去的日期，自动创建缺失的重复实例
+      final today = DateTime.now();
+      final todayDateOnly = DateTime(today.year, today.month, today.day);
+      final targetDate = DateTime(date.year, date.month, date.day);
+
+      if (targetDate.isBefore(todayDateOnly)) {
+        // 自动为过去日期创建缺失的重复待办
+        await _scheduleModel.loadDateWithAutoCreate(date);
       }
 
       // 使用 ScheduleModel.getSchedulesForDate 方法，该方法会自动展开重复日程
@@ -2071,7 +2116,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           // 新建日程内容
           Expanded(
             child: NewEventPage(
-              scheduleModel: _scheduleModel,
+              scheduleModel: _newEventScheduleModel!,
               selectedDate: _selectedDay ?? _focusedDay,
               onEventCreated: _onEventCreated,
               onCancel: _hideNewEventPage,

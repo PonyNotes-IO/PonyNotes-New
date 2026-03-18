@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../models/schedule_model.dart';
 
@@ -23,32 +22,85 @@ class ScheduleSidebarContent extends StatefulWidget {
 }
 
 class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
+  /// 自己的 ScheduleModel 实例，自己管理生命周期和 viewId，
+  /// 避免依赖 CalendarMainPanel 异步初始化导致的 viewId 丢失问题。
+  /// 两个实例各自监听同一视图的数据库变化，自然保持同步。
   late ScheduleModel _scheduleModel;
   Function(ScheduleItem)? _onScheduleTap;
+  /// 记录正在加载的日期，避免并发重复调用 loadDateWithAutoCreate
+  DateTime? _loadingDate;
+  /// 是否正在为过去日期回填重复日程实例
+  bool _isBackfilling = false;
+  /// 缓存上一次已知的选中日期，用于检测变化
+  DateTime? _lastSelectedDate;
 
   @override
   void initState() {
     super.initState();
-    _scheduleModel = ScheduleModel();
     _onScheduleTap = widget.onScheduleTap;
-    
+
+    // 直接创建自己的 ScheduleModel，不依赖 CalendarMainPanel 的共享实例。
+    // 这样完全避免 viewId 初始化时序问题。两个实例各自监听同一视图的数据库变化，
+    // 数据库回调会自动同步各自的列表，UI 自然一致。
+    _scheduleModel = ScheduleModel();
     if (widget.databaseViewId != null && widget.databaseViewId!.isNotEmpty) {
       _scheduleModel.setViewId(widget.databaseViewId!);
+    }
+  }
+
+  /// 为指定日期创建缺失的重复日程实例（过去日期从 DB 回填，未来日期无操作）。
+  /// 有防并发保护：同一日期只并发执行一次。
+  Future<void> _ensureRepeatInstancesForDate(DateTime date) async {
+    final targetDate = DateTime(date.year, date.month, date.day);
+    final today = DateTime.now();
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+
+    // 只为今天及之前的日期回填；未来日期通过 getSchedulesForDate 虚拟展开即可
+    if (targetDate.isAfter(todayDateOnly)) return;
+
+    // 防并发：同一日期不重复并发加载
+    if (_loadingDate == targetDate) return;
+    _loadingDate = targetDate;
+
+    setState(() => _isBackfilling = true);
+    try {
+      await _scheduleModel.loadDateWithAutoCreate(date);
+    } finally {
+      if (_loadingDate == targetDate) _loadingDate = null;
+      setState(() => _isBackfilling = false);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 当 Provider 树变化（_scheduleModel.notifyListeners 触发重建）时，
+    // 检查是否切换到了新的日期，如果是则回填该日期的重复日程
+    final currentDate = widget.selectedDate;
+    if (currentDate != null) {
+      if (_lastSelectedDate == null || _lastSelectedDate != currentDate) {
+        _lastSelectedDate = currentDate;
+        _ensureRepeatInstancesForDate(currentDate);
+      }
     }
   }
 
   @override
   void didUpdateWidget(ScheduleSidebarContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 如果选中日期或视图ID变化，更新回调
-    if (oldWidget.selectedDate != widget.selectedDate ||
-        oldWidget.databaseViewId != widget.databaseViewId ||
-        oldWidget.onScheduleTap != widget.onScheduleTap) {
-      _onScheduleTap = widget.onScheduleTap;
-      if (widget.databaseViewId != null && 
-          widget.databaseViewId!.isNotEmpty &&
-          _scheduleModel.currentViewId != widget.databaseViewId) {
+    _onScheduleTap = widget.onScheduleTap;
+    // 如果视图ID变化，更新
+    if (oldWidget.databaseViewId != widget.databaseViewId) {
+      if (widget.databaseViewId != null && widget.databaseViewId!.isNotEmpty) {
         _scheduleModel.setViewId(widget.databaseViewId!);
+      }
+    }
+    // 如果选中日期变化，回填该日期的重复日程
+    if (oldWidget.selectedDate != widget.selectedDate) {
+      final newDate = widget.selectedDate;
+      if (newDate != null) {
+        _lastSelectedDate = newDate;
+        _ensureRepeatInstancesForDate(newDate);
       }
     }
   }
@@ -61,19 +113,16 @@ class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: _scheduleModel,
-      child: Consumer<ScheduleModel>(
-        builder: (context, model, child) {
-          if (model.isLoading) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-
-          return _buildScheduleContent(context, model);
-        },
-      ),
+    return ListenableBuilder(
+      listenable: _scheduleModel,
+      builder: (context, _) {
+        if (_scheduleModel.isLoading || _isBackfilling) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+        return _buildScheduleContent(context, _scheduleModel);
+      },
     );
   }
 

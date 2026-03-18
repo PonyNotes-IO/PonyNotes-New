@@ -1,4 +1,3 @@
-
 // 统一的日记和日程展示组件
 import 'package:appflowy/plugins/database/calendar/presentation/widgets/schedule_sidebar_content.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -22,7 +21,6 @@ class CalendarContent extends StatefulWidget {
   final Function(ViewPB)? onNoteTap; // 点击笔记的回调
   final String? selectedNoteId; // 当前选中的笔记ID
   final FolderSpaceType spaceType; // 空间类型
-  // 使用Bloc触发刷新，移除refreshTick
 
   const CalendarContent({
     Key? key,
