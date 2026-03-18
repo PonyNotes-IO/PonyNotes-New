@@ -214,10 +214,11 @@ class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
     final duration = schedule.endTime.difference(schedule.startTime);
     final durationText = _formatDuration(duration);
     
-    // 格式化时间范围
+    final refDay = widget.selectedDate;
     final timeRangeText = schedule.isAllDay
-    ? _formatDateTime(schedule.startTime, isAllDay: true)
-    : '${_formatDateTime(schedule.startTime)} - ${_formatDateTime(schedule.endTime)}';
+        ? _formatDateTime(schedule.startTime,
+            isAllDay: true, referenceDay: refDay)
+        : '${_formatDateTime(schedule.startTime, referenceDay: refDay)} - ${_formatDateTime(schedule.endTime, referenceDay: refDay)}';
     
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -353,25 +354,30 @@ class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
   }
 
   // 格式化日期时间，处理无效时间
-  String _formatDateTime(DateTime dateTime,{bool isAllDay = false}) {
-    // 检查是否是无效的时间戳（1970年或很早的时间）
+  /// [referenceDay] 为「今天」的参照：用日历中选中的日期，而非系统当前日
+  String _formatDateTime(DateTime dateTime,
+      {bool isAllDay = false, DateTime? referenceDay}) {
     if (dateTime.year < 2000) {
-      // 如果时间戳无效，使用当前时间
       dateTime = DateTime.now();
     }
-    
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final scheduleDate = DateTime(dateTime.year, dateTime.month, dateTime.day);
 
-    if (scheduleDate == today) {
+    final now = DateTime.now();
+    final ref = referenceDay != null
+        ? DateTime(referenceDay.year, referenceDay.month, referenceDay.day)
+        : DateTime(now.year, now.month, now.day);
+    final scheduleDate =
+        DateTime(dateTime.year, dateTime.month, dateTime.day);
+
+    if (scheduleDate == ref) {
       return isAllDay ? '今天' : '今天 ${_formatTimeOfDay(dateTime)}';
-    } else if (scheduleDate == today.add(const Duration(days: 1))) {
+    } else if (scheduleDate == ref.add(const Duration(days: 1))) {
       return isAllDay ? '明天' : '明天 ${_formatTimeOfDay(dateTime)}';
-    } else if (scheduleDate == today.subtract(const Duration(days: 1))) {
+    } else if (scheduleDate == ref.subtract(const Duration(days: 1))) {
       return isAllDay ? '昨天' : '昨天 ${_formatTimeOfDay(dateTime)}';
     } else {
-      return isAllDay ? '${dateTime.month}月${dateTime.day}日' : '${dateTime.month}月${dateTime.day}日 ${_formatTimeOfDay(dateTime)}';
+      return isAllDay
+          ? '${dateTime.month}月${dateTime.day}日'
+          : '${dateTime.month}月${dateTime.day}日 ${_formatTimeOfDay(dateTime)}';
     }
   }
 
