@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/shared/settings/show_settings.dart' as settings;
+import 'package:appflowy_popover/appflowy_popover.dart';
 import '../../../../../application/subscription/membership_checker_service.dart';
 import '_sidebar_import_notion.dart';
 
@@ -137,6 +138,35 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
               iconPadding: 10.0,
               text: FlowyText.regular(LocaleKeys.button_logout.tr()),
               onTap: () async {
+                // 先关闭工作区弹框
+                PopoverContainer.of(context).closeAll();
+                
+                final userProfile =
+                    context.read<UserWorkspaceBloc>().state.userProfile;
+                final isQuickEntryUser =
+                    userProfile.userAuthType != AuthTypePB.Server;
+
+                if (isQuickEntryUser) {
+                  await showCancelAndConfirmDialog(
+                    context: context,
+                    title: '退出快速进入',
+                    description:
+                        '是否清除当前快速进入产生的数据？\n\n选择"清除并退出"会删除本地快速进入数据，下次进入将从空白开始；\n选择"保留数据退出"则仅重启应用，下次快速进入会尝试继续加载当前数据。',
+                    confirmLabel: '清除并退出',
+                    cancelLabel: '保留并退出',
+                    onConfirm: (_) async {
+                      await getIt<AuthService>().signOut();
+                      // 清除并退出后，重启应用到登录页面，不自动登录
+                      await runAppFlowy();
+                    },
+                    onCancel: () async {
+                    // 保留数据退出，不调用signOut()，重启应用到登录页面
+                    await runAppFlowy(isAnon: true);
+                  },
+                  );
+                  return;
+                }
+
                 await getIt<AuthService>().signOut();
                 await runAppFlowy();
               },
@@ -924,6 +954,37 @@ class WorkspaceMoreButton extends StatelessWidget {
         iconPadding: 10.0,
         text: FlowyText.regular(LocaleKeys.button_logout.tr()),
         onTap: () async {
+          // 先关闭更多按钮的弹出菜单
+          PopoverContainer.maybeOf(context)?.closeAll();
+          
+          // 再关闭工作区弹框
+          PopoverContainer.of(context).closeAll();
+          
+          final userProfile =
+              context.read<UserWorkspaceBloc>().state.userProfile;
+          final isQuickEntryUser =
+              userProfile.userAuthType != AuthTypePB.Server;
+
+          if (isQuickEntryUser) {
+            await showCancelAndConfirmDialog(
+              context: context,
+              title: '退出快速进入',
+              description:
+                  '是否清除当前快速进入产生的数据？\n\n选择"清除并退出"会删除本地快速进入数据，下次进入将从空白开始；\n选择"保留数据退出"则仅重启应用，下次快速进入会尝试继续加载当前数据。',
+              confirmLabel: '清除并退出',
+              cancelLabel: '保留并退出',
+              onConfirm: (_) async {
+                  await getIt<AuthService>().signOut();
+                  // 清除并退出后，重启应用到登录页面，不自动登录
+                  await runAppFlowy();
+                },
+              onCancel: () async {
+                await runAppFlowy(isAnon: true);
+              },
+            );
+            return;
+          }
+
           await getIt<AuthService>().signOut();
           await runAppFlowy();
         },

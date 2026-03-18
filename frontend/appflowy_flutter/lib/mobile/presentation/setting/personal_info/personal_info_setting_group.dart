@@ -5,6 +5,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/password/password_bloc.dart';
 import 'package:appflowy/workspace/application/user/prelude.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/account/password/change_password.dart';
 import 'package:appflowy/workspace/presentation/settings/pages/account/password/setup_password.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -170,7 +171,30 @@ class PersonalInfoSettingGroup extends StatelessWidget {
           size: AFButtonSize.l,
           alignment: Alignment.center,
           onTap: () async {
-            // logout and restart the app
+            final isQuickEntryUser =
+                userProfile.userAuthType != AuthTypePB.Server;
+
+            if (isQuickEntryUser) {
+              await showCancelAndConfirmDialog(
+                context: context,
+                title: '退出快速进入',
+                description:
+                    '是否清除当前快速进入产生的数据？\n\n选择“清除并退出”会删除本地快速进入数据，下次进入将从空白开始；\n选择“保留数据退出”则仅重启应用，下次快速进入会尝试继续加载当前数据。',
+                confirmLabel: '清除并退出',
+                cancelLabel: '保留并退出',
+                onConfirm: (_) async {
+                  await getIt<AuthService>().signOut();
+                  // 清除并退出后，重启应用到登录页面，不自动登录
+                  await runAppFlowy();
+                },
+                onCancel: () async {
+                  // 保留数据退出，不调用signOut()，重启应用到登录页面
+                  await runAppFlowy(isAnon: true);
+                },
+              );
+              return;
+            }
+
             await getIt<AuthService>().signOut();
             await runAppFlowy();
           },

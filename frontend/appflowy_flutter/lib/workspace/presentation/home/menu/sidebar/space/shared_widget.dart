@@ -202,11 +202,13 @@ class SpaceCancelOrConfirmButton extends StatelessWidget {
     required this.confirmButtonName,
     this.confirmButtonColor,
     this.confirmButtonBuilder,
+    this.cancelButtonName
   });
 
   final VoidCallback onCancel;
   final VoidCallback onConfirm;
   final String confirmButtonName;
+  final String? cancelButtonName;
   final Color? confirmButtonColor;
   final WidgetBuilder? confirmButtonBuilder;
 
@@ -218,7 +220,7 @@ class SpaceCancelOrConfirmButton extends StatelessWidget {
       children: [
         AFOutlinedTextButton.normal(
           size: UniversalPlatform.isDesktop ? AFButtonSize.m : AFButtonSize.l,
-          text: LocaleKeys.button_cancel.tr(),
+          text: cancelButtonName ?? LocaleKeys.button_cancel.tr(),
           textStyle: theme.textStyle.body.standard(
             color: theme.textColorScheme.primary,
           ),
@@ -307,6 +309,7 @@ class ConfirmPopup extends StatefulWidget {
     required this.onConfirm,
     this.onCancel,
     this.confirmLabel,
+    this.cancelLabel,
     this.titleStyle,
     this.descriptionStyle,
     this.confirmButtonColor,
@@ -332,6 +335,8 @@ class ConfirmPopup extends StatefulWidget {
   /// Defaults to 'Ok' for [ConfirmPopupStyle.onlyOk] style.
   ///
   final String? confirmLabel;
+
+  final String? cancelLabel;
 
   /// Allows to add a child to the popup.
   ///
@@ -459,7 +464,7 @@ class _ConfirmPopupState extends State<ConfirmPopup> {
           theme.textStyle.body.standard(
             color: ConfirmPopupColor.descriptionColor(context),
           ),
-      maxLines: 5,
+      maxLines: 8,
     );
   }
 
@@ -498,6 +503,7 @@ class _ConfirmPopupState extends State<ConfirmPopup> {
           confirmButtonColor:
               widget.confirmButtonColor ?? Theme.of(context).colorScheme.error,
           confirmButtonBuilder: widget.confirmButtonBuilder,
+          cancelButtonName: widget.cancelLabel,
         );
     }
   }

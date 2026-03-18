@@ -707,6 +707,7 @@ Future<void> showCancelAndConfirmDialog({
   void Function(BuildContext context)? onConfirm,
   VoidCallback? onCancel,
   String? confirmLabel,
+  String? cancelLabel,
 }) {
   return showDialog(
     context: context,
@@ -716,13 +717,14 @@ Future<void> showCancelAndConfirmDialog({
           borderRadius: BorderRadius.circular(12.0),
         ),
         child: SizedBox(
-          width: 440,
+          width: 540,
           child: ConfirmPopup(
             title: title,
             description: description,
             onConfirm: (context) => onConfirm?.call(context),
             confirmLabel: confirmLabel,
             confirmButtonColor: Theme.of(context).colorScheme.primary,
+            cancelLabel: cancelLabel,
             onCancel: () => onCancel?.call(),
           ),
         ),
