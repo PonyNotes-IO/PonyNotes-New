@@ -193,8 +193,9 @@ class RecurrenceRule {
     // 仅使用重复规则 JSON 里的截止日期；不用日程 endTime（跨天日程的结束日会错误截断整段重复）
     final repeatUntil = _getRuleEndDate();
 
-    // 如果日期在原始日期之前，不匹配（每周在下面单独处理）
-    if (repeatType != 2 && dateOnly.isBefore(startDateOnly)) {
+    // 如果日期在原始日期之前，不匹配
+    // 每周（2）和自定义（99）允许匹配开始日之前的同星期几日期
+    if (repeatType != 2 && repeatType != 99 && dateOnly.isBefore(startDateOnly)) {
       return false;
     }
 
@@ -273,15 +274,18 @@ class RecurrenceRule {
           if (!weekdayList.contains(date.weekday)) {
             return false;
           }
-          
-          // 如果间隔为1，只要星期几匹配且日期在开始日期之后即可
-          if (interval == 1) {
-            return daysDiff >= 0;
-          }
-          
-          // 对于间隔大于1的情况，需要计算周数差是否能被间隔整除
-          // 找到第一个匹配的星期几（从开始日期所在周开始）
-          final weeksDiff = daysDiff ~/ 7;
+
+          // 计算从开始日期所在周（周一为起点）到目标日期所在周的天数
+          // 先把两个日期都对齐到各自的周一
+          final startWeekday = startDateOnly.weekday; // 1=周一
+          final dateWeekday = dateOnly.weekday;         // 1=周一
+          final daysToStartMonday = startDateOnly.day - startWeekday;
+          final daysToDateMonday = dateOnly.day - dateWeekday;
+          final startMonday = startDateOnly.subtract(Duration(days: daysToStartMonday));
+          final dateMonday = dateOnly.subtract(Duration(days: daysToDateMonday));
+          // 两个周一之间的天数差，再除以7得到周数差
+          final weeksDiff = dateMonday.difference(startMonday).inDays ~/ 7;
+
           return weeksDiff >= 0 && weeksDiff % interval == 0;
 
         case 2: // 每 N 月
@@ -1964,17 +1968,26 @@ class ScheduleModel extends ChangeNotifier {
         continue;
       }
 
-      // 🔧 关键：从日程开始日期 + 1天 开始，逐日回溯扫描到目标日期
-      // 这样可以发现并创建从开始日期到目标日期之间所有缺失的重复实例
+      // 🔧 关键：从日程开始日期 + 1天 开始，逐日扫描到目标日期
+      // 支持双向扫描：如果目标日期在开始日期之前（查看创建日之前的过去日期），反向扫描
       final rule = RecurrenceRule(
         repeatType: schedule.repeatType,
         repeatRuleJson: schedule.repeatRuleJson,
         startDate: schedule.startTime,
       );
 
-      // 从 schedule.startDate 的下一天开始扫描（开始日本身就是原始日程，不需要创建重复实例）
+      // 从 schedule.startDate 的下一天开始扫描
+      // 开始日本身就是原始日程，不需要创建重复实例
+      // 注意：无论目标日期在开始日期之前还是之后，都从 startDate+1 开始
       var scanDate = scheduleStartDateOnly.add(const Duration(days: 1));
-      while (!scanDate.isAfter(targetDate)) {
+      // 判断扫描方向：如果目标日期在扫描起始日期之后，向前扫；否则向后扫
+      final forward = !scanDate.isAfter(targetDate);
+      while (true) {
+        if (forward) {
+          if (scanDate.isAfter(targetDate)) break;
+        } else {
+          if (scanDate.isBefore(targetDate)) break;
+        }
         // 检查该日期是否匹配重复规则
         if (rule.matchesDate(scanDate)) {
           // 生成唯一标识符，与 getSchedulesForDate 中的虚拟实例 ID 格式保持一致
@@ -2011,7 +2024,9 @@ class ScheduleModel extends ChangeNotifier {
             }
           }
         }
-        scanDate = scanDate.add(const Duration(days: 1));
+        scanDate = forward
+            ? scanDate.add(const Duration(days: 1))
+            : scanDate.subtract(const Duration(days: 1));
       }
     }
 

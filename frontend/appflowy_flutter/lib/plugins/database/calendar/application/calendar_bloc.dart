@@ -436,7 +436,8 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
     final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
 
     // 如果日期在开始日期之前，不匹配
-    if (dateOnly.isBefore(startDateOnly)) {
+    // 每周（2）和自定义（99）允许匹配开始日之前的同星期几日期
+    if (repeatType != 2 && repeatType != 99 && dateOnly.isBefore(startDateOnly)) {
       return false;
     }
 
@@ -512,11 +513,17 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
             return false;
           }
 
-          if (interval == 1) {
-            return daysDiff >= 0;
-          }
+          // 计算从开始日期所在周（周一为起点）到目标日期所在周的天数
+          // 先把两个日期都对齐到各自的周一
+          final startWeekday = startDateOnly.weekday; // 1=周一
+          final dateWeekday = dateOnly.weekday;         // 1=周一
+          final daysToStartMonday = startDateOnly.day - startWeekday;
+          final daysToDateMonday = dateOnly.day - dateWeekday;
+          final startMonday = startDateOnly.subtract(Duration(days: daysToStartMonday));
+          final dateMonday = dateOnly.subtract(Duration(days: daysToDateMonday));
+          // 两个周一之间的天数差，再除以7得到周数差
+          final weeksDiff = dateMonday.difference(startMonday).inDays ~/ 7;
 
-          final weeksDiff = daysDiff ~/ 7;
           return weeksDiff >= 0 && weeksDiff % interval == 0;
 
         case 2: // 每 N 月
