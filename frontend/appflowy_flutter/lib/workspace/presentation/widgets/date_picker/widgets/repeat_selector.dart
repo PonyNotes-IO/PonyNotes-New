@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:ui';
 
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 
 class RepeatSelectionDialog extends StatefulWidget {
   final int currentType; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
@@ -499,15 +499,17 @@ class _CustomRepeatDialogState extends State<CustomRepeatDialog> {
 
   void _onSave() {
     if (unit == 1 && selectedWeekdays.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('请在自定义中至少选择一个星期几')),
+      showSimpleAlertDialog(
+        context: context,
+        message: '请在自定义中至少选择一个星期几',
       );
       return;
     }
     final summary = _buildCustomSummary(unit, interval, selectedWeekdays);
     if (summary == null || summary.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('请完善自定义选项')),
+      showSimpleAlertDialog(
+        context: context,
+        message: '请完善自定义选项',
       );
       return;
     }

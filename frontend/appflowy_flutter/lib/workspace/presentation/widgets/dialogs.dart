@@ -912,6 +912,77 @@ Future<void> showSimpleConfirmDialog({
   );
 }
 
+/// iOS 风格单按钮提示弹窗（与 [showSimpleConfirmDialog] 布局一致，居中，底部单按钮）
+Future<void> showSimpleAlertDialog({
+  required BuildContext context,
+  required String message,
+  String buttonText = '我已知晓',
+}) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: Container(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 32.0,
+              ),
+              child: Text(
+                message,
+                style: Theme.of(dialogContext).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(dialogContext).colorScheme.onSurface,
+                      fontWeight: FontWeight.w500,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Container(
+              width: double.infinity,
+              height: 1,
+              color: Theme.of(dialogContext)
+                  .colorScheme
+                  .outline
+                  .withOpacity(0.2),
+            ),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: InkWell(
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                hoverColor: Colors.transparent,
+                splashFactory: NoSplash.splashFactory,
+                onTap: () => Navigator.of(dialogContext).pop(),
+                child: Container(
+                  alignment: Alignment.center,
+                  child: Text(
+                    buttonText,
+                    style:
+                        Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(dialogContext)
+                                  .colorScheme
+                                  .primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 /// iOS风格的简洁确认对话框 - 异步版本，返回 true 表示确认，false 表示取消
 Future<bool> showSimpleConfirmDialogAsync({
   required BuildContext context,
