@@ -68,6 +68,7 @@ class _EditEventPageState extends State<EditEventPage> {
   late TimeOfDay _initialEndTime;
   late bool _initialIsAllDay;
   late bool _initialIsImportant;
+  String? _initialRepeatCustomSummary;
 
   // 使用外层传入的 ScheduleModel（不在本页创建/销毁）
 
@@ -132,6 +133,7 @@ class _EditEventPageState extends State<EditEventPage> {
     _initialEndTime = _endTime;
     _initialIsAllDay = _isAllDay;
     _initialIsImportant = _isImportant;
+    _initialRepeatCustomSummary = _repeatCustomSummary;
   }
 
   /// 是否有未保存的日程配置变更（说明、重复、提醒、时间、重要与初始值不同）
@@ -144,6 +146,7 @@ class _EditEventPageState extends State<EditEventPage> {
 
     return _description != _initialDescription ||
         _repeatType != _initialRepeatType ||
+        (_repeatCustomSummary ?? '') != (_initialRepeatCustomSummary ?? '') ||
         _reminderOption != _initialReminderOption ||
         _startDate != _initialStartDate ||
         _endDate != _initialEndDate ||
@@ -169,6 +172,7 @@ class _EditEventPageState extends State<EditEventPage> {
     _initialEndTime = _endTime;
     _initialIsAllDay = _isAllDay;
     _initialIsImportant = _isImportant;
+    _initialRepeatCustomSummary = _repeatCustomSummary;
     _notifyUnsavedConfig();
   }
 

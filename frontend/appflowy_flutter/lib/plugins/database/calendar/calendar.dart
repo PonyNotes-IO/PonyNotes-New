@@ -2073,47 +2073,42 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                         ),
                   ),
                 ),
-                // 取消按钮：有未保存配置时先弹出 iOS 风格确认框
-                TextButton(
-                  onPressed: () {
-                    if (_newEventHasUnsavedConfig) {
+                if (_newEventHasUnsavedConfig) ...[
+                  TextButton(
+                    onPressed: () {
                       showSimpleConfirmDialog(
                         context: context,
                         message: '当前设置还没有被保存，确认要离开吗？',
                         confirmText: '离开',
                         onConfirm: _hideNewEventPage,
                       );
-                    } else {
-                      _hideNewEventPage();
-                    }
-                  },
-                  child: Text(
-                    '取消',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 14,
+                    },
+                    child: Text(
+                      '取消',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                ),
-                SizedBox(width: 8),
-                // 保存按钮
-                ElevatedButton(
-                  onPressed: () {
-                    // 调用保存回调函数；是否关闭由保存结果回调决定
-                    if (_saveEventCallback != null) {
-                      _saveEventCallback!();
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (_saveEventCallback != null) {
+                        _saveEventCallback!();
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    child: Text(
+                      '保存',
+                      style: TextStyle(fontSize: 14),
+                    ),
                   ),
-                  child: Text(
-                    '保存',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ),
+                ],
               ],
             ),
           ),
@@ -2170,47 +2165,42 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                         ),
                   ),
                 ),
-                // 取消按钮：有未保存配置时先弹出 iOS 风格确认框
-                TextButton(
-                  onPressed: () {
-                    if (_editEventHasUnsavedConfig) {
+                if (_editEventHasUnsavedConfig) ...[
+                  TextButton(
+                    onPressed: () {
                       showSimpleConfirmDialog(
                         context: context,
                         message: '当前设置还没有被保存，确认要离开吗？',
                         confirmText: '离开',
                         onConfirm: () => _checkAndHideEditEventPage(),
                       );
-                    } else {
-                      _checkAndHideEditEventPage();
-                    }
-                  },
-                  child: Text(
-                    '取消',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 14,
+                    },
+                    child: Text(
+                      '取消',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                ),
-                SizedBox(width: 8),
-                // 保存按钮
-                ElevatedButton(
-                  onPressed: () {
-                    // 调用保存回调函数；是否关闭由更新结果回调决定
-                    if (_saveEventCallback != null) {
-                      _saveEventCallback!();
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (_saveEventCallback != null) {
+                        _saveEventCallback!();
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    ),
+                    child: Text(
+                      '保存',
+                      style: TextStyle(fontSize: 14),
+                    ),
                   ),
-                  child: Text(
-                    '保存',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ),
+                ],
               ],
             ),
           ),
