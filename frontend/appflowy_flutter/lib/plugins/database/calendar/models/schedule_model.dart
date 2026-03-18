@@ -193,11 +193,7 @@ class RecurrenceRule {
     // 仅使用重复规则 JSON 里的截止日期；不用日程 endTime（跨天日程的结束日会错误截断整段重复）
     final repeatUntil = _getRuleEndDate();
 
-    // 如果日期在原始日期之前，不匹配
-    // 每周（2）和自定义（99）允许匹配开始日之前的同星期几日期
-    if (repeatType != 2 && repeatType != 99 && dateOnly.isBefore(startDateOnly)) {
-      return false;
-    }
+    // 如果日期在原始日期之前，不匹配（所有重复类型都允许匹配过去日期）
 
     if (repeatUntil != null &&
         dateOnly.isAfter(_getDateOnly(repeatUntil))) {

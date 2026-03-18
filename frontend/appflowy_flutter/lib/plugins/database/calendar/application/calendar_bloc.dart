@@ -435,11 +435,7 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
     final dateOnly = DateTime(date.year, date.month, date.day);
     final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
 
-    // 如果日期在开始日期之前，不匹配
-    // 每周（2）和自定义（99）允许匹配开始日之前的同星期几日期
-    if (repeatType != 2 && repeatType != 99 && dateOnly.isBefore(startDateOnly)) {
-      return false;
-    }
+    // 如果日期在开始日期之前，不匹配（所有重复类型都允许匹配过去日期）
 
     // 如果日期正好是开始日期，不匹配（已经在原始事件中）
     if (dateOnly.isAtSameMomentAs(startDateOnly)) {
