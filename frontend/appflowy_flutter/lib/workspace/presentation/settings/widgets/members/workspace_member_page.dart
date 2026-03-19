@@ -675,6 +675,7 @@ class _MemberItemState extends State<_MemberItem> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       member.name,
@@ -684,14 +685,15 @@ class _MemberItemState extends State<_MemberItem> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      _contact ?? '',
-                      style: theme.textStyle.caption.standard(
-                        color: theme.textColorScheme.secondary,
+                    if ((_contact ?? '').isNotEmpty)
+                      Text(
+                        _contact!,
+                        style: theme.textStyle.caption.standard(
+                          color: theme.textColorScheme.secondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
                   ],
                 ),
               ),
