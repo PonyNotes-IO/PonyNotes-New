@@ -369,14 +369,14 @@ class _ScheduleSidebarContentState extends State<ScheduleSidebarContent> {
         DateTime(dateTime.year, dateTime.month, dateTime.day);
 
     if (scheduleDate == ref) {
-      return isAllDay ? '今天' : '今天 ${_formatTimeOfDay(dateTime)}';
+      return isAllDay ? '今天 全天' : '今天 ${_formatTimeOfDay(dateTime)}';
     } else if (scheduleDate == ref.add(const Duration(days: 1))) {
-      return isAllDay ? '明天' : '明天 ${_formatTimeOfDay(dateTime)}';
+      return isAllDay ? '明天 全天' : '明天 ${_formatTimeOfDay(dateTime)}';
     } else if (scheduleDate == ref.subtract(const Duration(days: 1))) {
-      return isAllDay ? '昨天' : '昨天 ${_formatTimeOfDay(dateTime)}';
+      return isAllDay ? '昨天 全天' : '昨天 ${_formatTimeOfDay(dateTime)}';
     } else {
       return isAllDay
-          ? '${dateTime.month}月${dateTime.day}日'
+          ? '${dateTime.month}月${dateTime.day}日 全天'
           : '${dateTime.month}月${dateTime.day}日 ${_formatTimeOfDay(dateTime)}';
     }
   }
