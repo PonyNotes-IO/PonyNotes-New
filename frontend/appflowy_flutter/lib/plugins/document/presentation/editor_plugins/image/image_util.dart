@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/prelude.dart';
@@ -14,6 +15,22 @@ import 'package:flowy_infra/uuid.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path/path.dart' as p;
+
+/// 读取本地图片文件的像素尺寸（宽×高）。
+/// 若读取失败或文件不存在，返回 null。
+Future<(double width, double height)?> getImageDimensions(String path) async {
+  try {
+    final file = File(path);
+    if (!file.existsSync()) return null;
+    final bytes = await file.readAsBytes();
+    final codec = await instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    return (frame.image.width.toDouble(), frame.image.height.toDouble());
+  } catch (e) {
+    Log.debug('getImageDimensions failed for $path: $e');
+    return null;
+  }
+}
 
 Future<String?> saveImageToLocalStorage(String localImagePath) async {
   final path = await getIt<ApplicationDataStorage>().getPath();

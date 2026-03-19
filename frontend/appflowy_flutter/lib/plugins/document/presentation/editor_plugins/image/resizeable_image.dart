@@ -181,7 +181,7 @@ class _ResizableImageState extends State<ResizableImage> {
         url: widget.src,
         width: currentWidth,
         height: currentHeight,
-        fit: BoxFit.fill,
+        fit: currentHeight != null ? BoxFit.fill : BoxFit.contain,
         userProfilePB: _userProfilePB,
         onImageLoaded: (isImageInCache) {
           if (isImageInCache) {
@@ -227,7 +227,7 @@ class _ResizableImageState extends State<ResizableImage> {
         File(src),
         width: currentWidth,
         height: currentHeight,
-        fit: BoxFit.fill,
+        fit: currentHeight != null ? BoxFit.fill : BoxFit.contain,
       );
       child = _cacheImage!;
     }

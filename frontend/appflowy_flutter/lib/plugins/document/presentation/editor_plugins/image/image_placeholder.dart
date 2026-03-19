@@ -31,6 +31,9 @@ import 'package:path/path.dart' as p;
 import 'package:string_validator/string_validator.dart';
 import 'package:universal_platform/universal_platform.dart';
 
+/// 编辑器内容区最大宽度（像素），用于插入图片时等比缩放
+const _kImageEditorMaxWidth = 560.0;
+
 class ImagePlaceholder extends StatefulWidget {
   const ImagePlaceholder({super.key, required this.node});
 
@@ -292,11 +295,32 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
     if (_isLocalMode()) {
       final first = urls.removeAt(0);
       final firstPath = await saveImageToLocalStorage(first);
+
+      // 读取原图尺寸并等比缩放至编辑器最大宽度内
+      double? targetWidth;
+      double? targetHeight;
+      if (firstPath != null) {
+        final dims = await getImageDimensions(firstPath);
+        if (dims != null) {
+          final (origW, origH) = dims;
+          if (origW > 0 && origH > 0) {
+            final scale = (origW > _kImageEditorMaxWidth)
+                ? _kImageEditorMaxWidth / origW
+                : 1.0;
+            targetWidth = origW * scale;
+            targetHeight = origH * scale;
+          }
+        }
+      }
+
       final transaction = editorState.transaction;
-      transaction.updateNode(widget.node, {
+      final firstAttrs = <String, dynamic>{
         CustomImageBlockKeys.url: firstPath,
         CustomImageBlockKeys.imageType: CustomImageType.local.toIntValue(),
-      });
+      };
+      if (targetWidth != null) firstAttrs[CustomImageBlockKeys.width] = targetWidth;
+      if (targetHeight != null) firstAttrs[CustomImageBlockKeys.height] = targetHeight;
+      transaction.updateNode(widget.node, firstAttrs);
 
       if (urls.isNotEmpty) {
         // Create new nodes for the rest of the images:
@@ -315,6 +339,23 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
 
       bool isFirst = true;
       for (final url in urls) {
+        // 上传前读取本地图片尺寸（等比缩放至最大宽度）
+        double? targetWidth;
+        double? targetHeight;
+        if (url.isNotEmpty) {
+          final dims = await getImageDimensions(url);
+          if (dims != null) {
+            final (origW, origH) = dims;
+            if (origW > 0 && origH > 0) {
+              final scale = (origW > _kImageEditorMaxWidth)
+                  ? _kImageEditorMaxWidth / origW
+                  : 1.0;
+              targetWidth = origW * scale;
+              targetHeight = origH * scale;
+            }
+          }
+        }
+
         // Upload to cloud
         final (path, error) = await saveImageToCloudStorage(
           url,
@@ -334,11 +375,14 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
         if (path != null) {
           if (isFirst) {
             isFirst = false;
-            transaction.updateNode(widget.node, {
+            final attrs = <String, dynamic>{
               CustomImageBlockKeys.url: path,
               CustomImageBlockKeys.imageType:
                   CustomImageType.internal.toIntValue(),
-            });
+            };
+            if (targetWidth != null) attrs[CustomImageBlockKeys.width] = targetWidth;
+            if (targetHeight != null) attrs[CustomImageBlockKeys.height] = targetHeight;
+            transaction.updateNode(widget.node, attrs);
           } else {
             transaction.insertNode(
               widget.node.path.next,
