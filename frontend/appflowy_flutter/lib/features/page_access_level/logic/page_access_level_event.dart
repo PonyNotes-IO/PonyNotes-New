@@ -24,6 +24,10 @@ sealed class PageAccessLevelEvent {
   const factory PageAccessLevelEvent.updateSectionType(
     SharedSectionType sectionType,
   ) = PageAccessLevelUpdateSectionTypeEvent;
+
+  /// Refresh the access level (triggered when shared users are updated).
+  const factory PageAccessLevelEvent.refreshAccessLevel() =
+      PageAccessLevelRefreshAccessLevelEvent;
 }
 
 class PageAccessLevelInitialEvent extends PageAccessLevelEvent {
@@ -52,4 +56,8 @@ class PageAccessLevelUpdateSectionTypeEvent extends PageAccessLevelEvent {
   const PageAccessLevelUpdateSectionTypeEvent(this.sectionType);
 
   final SharedSectionType sectionType;
+}
+
+class PageAccessLevelRefreshAccessLevelEvent extends PageAccessLevelEvent {
+  const PageAccessLevelRefreshAccessLevelEvent();
 }
