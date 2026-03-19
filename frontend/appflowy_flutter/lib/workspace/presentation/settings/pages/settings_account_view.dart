@@ -1,4 +1,3 @@
-import 'package:appflowy/core/helpers/temp_user_cache.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';

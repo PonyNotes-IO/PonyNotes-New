@@ -1,4 +1,3 @@
-import 'package:appflowy/core/helpers/temp_user_cache.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';

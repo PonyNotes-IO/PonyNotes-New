@@ -1,4 +1,3 @@
-import 'package:appflowy/core/helpers/temp_user_cache.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_trailing.dart';
