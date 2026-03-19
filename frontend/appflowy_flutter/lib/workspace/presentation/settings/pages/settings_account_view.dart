@@ -1,6 +1,9 @@
+import 'package:appflowy/core/helpers/temp_user_cache.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/validator.dart';
@@ -112,8 +115,14 @@ class _SettingsAccountViewState extends State<SettingsAccountView> {
                             await runAppFlowy();
                           },
                           onCancel: () async {
-                            // 保留数据退出，不调用signOut()，重启应用到登录页面
+                            // 保留数据退出，设置 tempUserSave 为 true，然后重启应用
+                            Log.info('🔵 [SettingsAccountView] 开始设置 tempUserSave 为 true');
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setString('tempUserSave', 'true');
+                            Log.info('🔵 [SettingsAccountView] 设置 tempUserSave 为 true 完成');
+                            Log.info('🔵 [SettingsAccountView] 开始重启应用');
                             await runAppFlowy(isAnon: true);
+                            Log.info('🔵 [SettingsAccountView] 重启应用完成');
                           },
                         );
                         return;

@@ -39,6 +39,7 @@ import 'package:flowy_infra/time/duration.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sheet/route.dart';
 import 'package:universal_platform/universal_platform.dart';
 
@@ -750,6 +751,12 @@ GoRoute _rootRoute(Widget child) {
       final userResponse = await getIt<AuthService>().getUser();
       final routeName = await userResponse.fold(
         (user) async {
+          // 直接使用 SharedPreferences 读取，不通过 TempUserCache
+          final prefs = await SharedPreferences.getInstance();
+          final value = prefs.getString('tempUserSave');
+          if(value == 'true') {
+            return SignInScreen.routeName;
+          }
           // 检查用户是否需要绑定手机号（第三方登录但未绑定手机号）
           // 如果需要绑定手机号，不重定向，让 SplashScreen 处理
           if (isAppFlowyCloudEnabled && !UniversalPlatform.isMobile) {

@@ -1,6 +1,9 @@
+import 'package:appflowy/core/helpers/temp_user_cache.dart';
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/features/share_tab/presentation/widgets/guest_tag.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy_backend/log.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -160,8 +163,14 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
                       await runAppFlowy();
                     },
                     onCancel: () async {
-                    // 保留数据退出，不调用signOut()，重启应用到登录页面
+                    // 保留数据退出，设置 tempUserSave 为 true，然后重启应用
+                    Log.info('🔵 [SidebarWorkspaceMenu] 开始设置 tempUserSave 为 true');
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('tempUserSave', 'true');
+                    Log.info('🔵 [SidebarWorkspaceMenu] 设置 tempUserSave 为 true 完成');
+                    Log.info('🔵 [SidebarWorkspaceMenu] 开始重启应用');
                     await runAppFlowy(isAnon: true);
+                    Log.info('🔵 [SidebarWorkspaceMenu] 重启应用完成');
                   },
                   );
                   return;
@@ -979,7 +988,14 @@ class WorkspaceMoreButton extends StatelessWidget {
                   await runAppFlowy();
                 },
               onCancel: () async {
+                // 保留数据退出，设置 tempUserSave 为 true，然后重启应用
+                Log.info('🔵 [WorkspaceMoreButton] 开始设置 tempUserSave 为 true');
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('tempUserSave', 'true');
+                Log.info('🔵 [WorkspaceMoreButton] 设置 tempUserSave 为 true 完成');
+                Log.info('🔵 [WorkspaceMoreButton] 开始重启应用');
                 await runAppFlowy(isAnon: true);
+                Log.info('🔵 [WorkspaceMoreButton] 重启应用完成');
               },
             );
             return;

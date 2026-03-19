@@ -1,3 +1,4 @@
+import 'package:appflowy/core/helpers/temp_user_cache.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';
@@ -6,6 +7,7 @@ import 'package:appflowy/user/presentation/screens/sign_in_screen/mobile_sign_in
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 class SignInScreen extends StatelessWidget {
@@ -32,7 +34,13 @@ class SignInScreen extends StatelessWidget {
     final successOrFail = state.successOrFail;
     if (successOrFail != null) {
       successOrFail.fold(
-        (userProfile) {
+        (userProfile) async {
+          // 登录成功后，清除 tempUserSave 字段
+          Log.info('🔵 [SignInScreen] 登录成功，清除 tempUserSave 字段');
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('tempUserSave');
+          Log.info('🔵 [SignInScreen] 清除 tempUserSave 字段成功');
+          
           // 检查 context 是否仍然有效
           if (!context.mounted) {
             Log.error('🔵 [SignInScreen] context is not mounted');

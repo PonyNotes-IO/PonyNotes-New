@@ -15,6 +15,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -106,6 +107,24 @@ class _SplashScreenState extends State<SplashScreen> {
         ),
       ),
     );
+  }
+
+  /// 检查 tempUserSave 字段
+  Future<bool> _checkTempUserSave() async {
+    try {
+      Log.info('🔵 [SplashScreen] 开始检查 tempUserSave 字段');
+      // 直接使用 SharedPreferences 读取，不通过 TempUserCache
+      final prefs = await SharedPreferences.getInstance();
+      final value = prefs.getString('tempUserSave');
+      Log.info('🔵 [SplashScreen] 直接读取 tempUserSave 值: $value');
+      final tempUserSave = value == 'true';
+      Log.info('🔵 [SplashScreen] tempUserSave 结果: $tempUserSave');
+      // 不再在这里清除字段，而是在登录成功后清除
+      return tempUserSave;
+    } catch (e, stack) {
+      Log.error('🔵 [SplashScreen] 检查 tempUserSave 字段失败: $e', stack);
+      return false;
+    }
   }
 
   Future<void> _registerIfNeeded() async {
