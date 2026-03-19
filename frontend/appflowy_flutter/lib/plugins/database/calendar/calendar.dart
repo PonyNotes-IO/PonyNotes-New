@@ -1111,7 +1111,13 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           InkWell(
             onTap: () {
               _addPopoverController.close();
-              _showCreateDocumentDialog();
+              if (_showNewEventPage && _newEventHasUnsavedConfig) {
+                _checkAndHideNewEventPage(onHidden: _showCreateDocumentDialog);
+              } else if (_showEditEventPage && _editEventHasUnsavedConfig) {
+                _checkAndHideEditEventPage(onHidden: _showCreateDocumentDialog);
+              } else {
+                _showCreateDocumentDialog();
+              }
             },
             child: Container(
               height: 38,
@@ -1128,7 +1134,13 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
           InkWell(
             onTap: () {
               _addPopoverController.close();
-              _showCreateScheduleDialog();
+              if (_showNewEventPage && _newEventHasUnsavedConfig) {
+                _checkAndHideNewEventPage(onHidden: _showCreateScheduleDialog);
+              } else if (_showEditEventPage && _editEventHasUnsavedConfig) {
+                _checkAndHideEditEventPage(onHidden: _showCreateScheduleDialog);
+              } else {
+                _showCreateScheduleDialog();
+              }
             },
             child: Container(
               height: 38,
