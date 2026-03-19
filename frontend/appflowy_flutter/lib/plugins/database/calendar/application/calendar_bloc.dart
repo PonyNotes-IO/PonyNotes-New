@@ -342,11 +342,49 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
   Future<Map<String, dynamic>?> _getRepeatInfo(CalendarEventPB eventPB) async {
     try {
       final fieldInfos = fieldController.fieldInfos;
-      // 查找重复字段
+      final fieldById = {for (final f in fieldInfos) f.field.id: f};
+
+      // 优先从日期字段读取 repeatType / repeatRuleJson
+      // 这与 ScheduleModel._enrichFromCells 的逻辑一致
+      final dateField = fieldById[eventPB.dateFieldId];
+      if (dateField != null && dateField.fieldType == FieldType.DateTime) {
+        final dateCellResult = await CellBackendService.getCell(
+          viewId: viewId,
+          cellContext: CellContext(
+            fieldId: dateField.field.id,
+            rowId: eventPB.rowMeta.id,
+          ),
+        );
+
+        final pb = dateCellResult.fold(
+          (cell) => DateCellDataParser().parserData(cell.data),
+          (_) => null,
+        );
+
+        if (pb != null) {
+          int repeatType = 0;
+          if (pb.hasRepeatType()) {
+            repeatType = pb.repeatType;
+          }
+          String? repeatRuleJson;
+          if (pb.hasRepeatRuleJson()) {
+            final json = pb.repeatRuleJson;
+            repeatRuleJson = json.isEmpty ? null : json;
+          }
+          if (repeatType != 0 || repeatRuleJson != null) {
+            return {
+              'repeatType': repeatType,
+              'repeatRuleJson': repeatRuleJson,
+            };
+          }
+        }
+      }
+
+      // 兼容旧逻辑：如果日期字段没有，再尝试找自定义 RichText Repeat 字段
       FieldInfo? repeatField;
       for (final field in fieldInfos) {
         final name = field.name.toLowerCase();
-        if (field.fieldType == FieldType.RichText && 
+        if (field.fieldType == FieldType.RichText &&
             (name.contains('repeat') || name.contains('重复'))) {
           repeatField = field;
           break;
@@ -357,7 +395,6 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
         return null;
       }
 
-      // 读取重复字段的值
       final cellContext = CellContext(
         fieldId: repeatField.field.id,
         rowId: eventPB.rowMeta.id,
@@ -398,10 +435,7 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
     final dateOnly = DateTime(date.year, date.month, date.day);
     final startDateOnly = DateTime(startDate.year, startDate.month, startDate.day);
 
-    // 如果日期在开始日期之前，不匹配
-    if (dateOnly.isBefore(startDateOnly)) {
-      return false;
-    }
+    // 如果日期在开始日期之前，不匹配（所有重复类型都允许匹配过去日期）
 
     // 如果日期正好是开始日期，不匹配（已经在原始事件中）
     if (dateOnly.isAtSameMomentAs(startDateOnly)) {
@@ -413,6 +447,16 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
         return true;
 
       case 2: // 每周
+        if (repeatRuleJson != null && repeatRuleJson!.isNotEmpty) {
+          try {
+            final rule = jsonDecode(repeatRuleJson!) as Map<String, dynamic>;
+            final weekdays = rule['weekdays'] as List<dynamic>?;
+            if (weekdays != null && weekdays.isNotEmpty) {
+              final weekdayList = weekdays.map((e) => (e as int) + 1).toList();
+              return weekdayList.contains(date.weekday);
+            }
+          } catch (_) {}
+        }
         return date.weekday == startDate.weekday;
 
       case 3: // 每年
@@ -465,11 +509,17 @@ class CalendarBloc extends Bloc<CalendarEvent, CalendarState> {
             return false;
           }
 
-          if (interval == 1) {
-            return daysDiff >= 0;
-          }
+          // 计算从开始日期所在周（周一为起点）到目标日期所在周的天数
+          // 先把两个日期都对齐到各自的周一
+          final startWeekday = startDateOnly.weekday; // 1=周一
+          final dateWeekday = dateOnly.weekday;         // 1=周一
+          final daysToStartMonday = startDateOnly.day - startWeekday;
+          final daysToDateMonday = dateOnly.day - dateWeekday;
+          final startMonday = startDateOnly.subtract(Duration(days: daysToStartMonday));
+          final dateMonday = dateOnly.subtract(Duration(days: daysToDateMonday));
+          // 两个周一之间的天数差，再除以7得到周数差
+          final weeksDiff = dateMonday.difference(startMonday).inDays ~/ 7;
 
-          final weeksDiff = daysDiff ~/ 7;
           return weeksDiff >= 0 && weeksDiff % interval == 0;
 
         case 2: // 每 N 月

@@ -50,8 +50,17 @@ class _NewEventPageState extends State<NewEventPage> {
   // 使用ScheduleModel来管理日程
   late ScheduleModel _scheduleModel;
 
-  // 简单标记：只要用户修改了任何内容就视为有未保存
-  bool _hasAnyChange = false;
+  /// 与打开新建页时的初始值对比，用于显示/隐藏顶部取消·保存
+  late String _initialDescription;
+  late int _initialRepeatType;
+  late String? _initialRepeatCustomSummary;
+  late ReminderOption _initialReminderOption;
+  late DateTime _initialStartDate;
+  late DateTime _initialEndDate;
+  late TimeOfDay _initialStartTime;
+  late TimeOfDay _initialEndTime;
+  late bool _initialIsAllDay;
+  late bool _initialIsImportant;
 
   @override
   void initState() {
@@ -64,18 +73,55 @@ class _NewEventPageState extends State<NewEventPage> {
     _endTime = TimeOfDay(hour: _startTime.hour + 1, minute: _startTime.minute);
     _startDate = widget.selectedDate;
     _endDate = widget.selectedDate;
+    _captureInitialSnapshot();
     
     // 设置保存回调
     if (widget.onSaveRequested != null) {
       widget.onSaveRequested!(saveEvent);
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _notifyUnsavedConfig());
   }
 
-  // 通知父组件有未保存的变更
+  void _captureInitialSnapshot() {
+    _initialDescription = _description;
+    _initialRepeatType = _repeatType;
+    _initialRepeatCustomSummary = _repeatCustomSummary;
+    _initialReminderOption = _reminderOption;
+    _initialStartDate = DateTime(_startDate.year, _startDate.month, _startDate.day);
+    _initialEndDate = DateTime(_endDate.year, _endDate.month, _endDate.day);
+    _initialStartTime = _startTime;
+    _initialEndTime = _endTime;
+    _initialIsAllDay = _isAllDay;
+    _initialIsImportant = _isImportant;
+  }
+
+  bool _hasUnsavedConfigChanges() {
+    final startTimeChanged = _startTime.hour != _initialStartTime.hour ||
+        _startTime.minute != _initialStartTime.minute;
+    final endTimeChanged = _endTime.hour != _initialEndTime.hour ||
+        _endTime.minute != _initialEndTime.minute;
+    final startDateChanged = _startDate.year != _initialStartDate.year ||
+        _startDate.month != _initialStartDate.month ||
+        _startDate.day != _initialStartDate.day;
+    final endDateChanged = _endDate.year != _initialEndDate.year ||
+        _endDate.month != _initialEndDate.month ||
+        _endDate.day != _initialEndDate.day;
+
+    return _description != _initialDescription ||
+        _repeatType != _initialRepeatType ||
+        (_repeatCustomSummary ?? '') != (_initialRepeatCustomSummary ?? '') ||
+        _reminderOption != _initialReminderOption ||
+        startDateChanged ||
+        endDateChanged ||
+        startTimeChanged ||
+        endTimeChanged ||
+        _isAllDay != _initialIsAllDay ||
+        _isImportant != _initialIsImportant;
+  }
+
   void _notifyUnsavedConfig() {
-    _hasAnyChange = true;
     if (!mounted) return;
-    widget.onHasUnsavedConfigChanged?.call(_hasAnyChange);
+    widget.onHasUnsavedConfigChanged?.call(_hasUnsavedConfigChanges());
   }
 
   // 初始化日历视图

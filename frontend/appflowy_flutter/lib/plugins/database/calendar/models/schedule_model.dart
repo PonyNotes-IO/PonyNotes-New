@@ -172,7 +172,8 @@ class RecurrenceRule {
   final int repeatType; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
   final String? repeatRuleJson; // 自定义规则JSON
   final DateTime startDate; // 原始开始日期
-  final DateTime? endDate; // 结束日期（重复截止）
+  /// 勿将日程单次结束时间当作重复截止；仅 JSON 中 until/endDate 表示「重复截止到某日」
+  final DateTime? endDate;
 
   RecurrenceRule({
     required this.repeatType,
@@ -189,15 +190,13 @@ class RecurrenceRule {
 
     final dateOnly = _getDateOnly(date);
     final startDateOnly = _getDateOnly(startDate);
-    final ruleEndDate = _getRuleEndDate() ?? endDate;
+    // 仅使用重复规则 JSON 里的截止日期；不用日程 endTime（跨天日程的结束日会错误截断整段重复）
+    final repeatUntil = _getRuleEndDate();
 
-    // 如果日期在原始日期之前，不匹配
-    if (dateOnly.isBefore(startDateOnly)) {
-      return false;
-    }
+    // 如果日期在原始日期之前，不匹配（所有重复类型都允许匹配过去日期）
 
-    // 如果规则设置了截止日期，截止日期之后不再重复
-    if (ruleEndDate != null && dateOnly.isAfter(_getDateOnly(ruleEndDate))) {
+    if (repeatUntil != null &&
+        dateOnly.isAfter(_getDateOnly(repeatUntil))) {
       return false;
     }
 
@@ -205,23 +204,30 @@ class RecurrenceRule {
       case 1: // 每天
         return true;
 
-      case 2: // 每周
-        // 每周的同一星期几
-        final matches = date.weekday == startDate.weekday;
-        print('    📅 [RecurrenceRule] 每周匹配: 目标日期 weekday=${date.weekday}, 开始日期 weekday=${startDate.weekday}, 匹配=$matches');
-        return matches;
+      case 2: // 每周：仅「周期锚点日」（与开始日同一星期几），且与开始日相差整周
+        if (repeatRuleJson != null && repeatRuleJson!.isNotEmpty) {
+          try {
+            final rule = jsonDecode(repeatRuleJson!) as Map<String, dynamic>;
+            final weekdays = rule['weekdays'] as List<dynamic>?;
+            if (weekdays != null && weekdays.isNotEmpty) {
+              final weekdayList = weekdays.map((e) => (e as int) + 1).toList();
+              if (!weekdayList.contains(date.weekday)) return false;
+              final diff = dateOnly.difference(startDateOnly).inDays;
+              return diff % 7 == 0;
+            }
+          } catch (_) {}
+        }
+        if (date.weekday != startDate.weekday) return false;
+        final d = dateOnly.difference(startDateOnly).inDays;
+        return d % 7 == 0;
 
       case 3: // 每年
-        // 每年的同月同日
-        return date.month == startDate.month &&
-            date.day == startDate.day;
+        return date.month == startDate.month && date.day == startDate.day;
 
       case 4: // 法定工作日（需要节假日库）
-        // 跳过周末
         if (date.weekday == 6 || date.weekday == 7) {
           return false;
         }
-        // TODO: 检查法定节假日（需要节假日数据）
         return true;
 
       case 99: // 自定义
@@ -264,15 +270,18 @@ class RecurrenceRule {
           if (!weekdayList.contains(date.weekday)) {
             return false;
           }
-          
-          // 如果间隔为1，只要星期几匹配且日期在开始日期之后即可
-          if (interval == 1) {
-            return daysDiff >= 0;
-          }
-          
-          // 对于间隔大于1的情况，需要计算周数差是否能被间隔整除
-          // 找到第一个匹配的星期几（从开始日期所在周开始）
-          final weeksDiff = daysDiff ~/ 7;
+
+          // 计算从开始日期所在周（周一为起点）到目标日期所在周的天数
+          // 先把两个日期都对齐到各自的周一
+          final startWeekday = startDateOnly.weekday; // 1=周一
+          final dateWeekday = dateOnly.weekday;         // 1=周一
+          final daysToStartMonday = startDateOnly.day - startWeekday;
+          final daysToDateMonday = dateOnly.day - dateWeekday;
+          final startMonday = startDateOnly.subtract(Duration(days: daysToStartMonday));
+          final dateMonday = dateOnly.subtract(Duration(days: daysToDateMonday));
+          // 两个周一之间的天数差，再除以7得到周数差
+          final weeksDiff = dateMonday.difference(startMonday).inDays ~/ 7;
+
           return weeksDiff >= 0 && weeksDiff % interval == 0;
 
         case 2: // 每 N 月
@@ -432,24 +441,27 @@ class ScheduleModel extends ChangeNotifier {
   
   // 设置视图ID
   void setViewId(String viewId) {
-    if (_currentViewId == viewId) {
-      // 调试输出已移除
+    final viewIdChanged = _currentViewId != viewId;
+    _currentViewId = viewId;
+
+    // 视图ID未变化且已有数据，只通知UI更新
+    if (!viewIdChanged && _schedules.isNotEmpty) {
+      if (!_isDisposed) notifyListeners();
       return;
     }
-    
-    // 调试输出已移除
-    _currentViewId = viewId;
-    notifyListeners();
-    
+
+    // 数据为空或视图ID变化：清空旧数据并重新初始化
+    if (viewIdChanged || _schedules.isEmpty) {
+      _schedules.clear();
+      if (!_isDisposed) notifyListeners();
+    }
+
     // 初始化数据库监听器（异步，不等待完成）
     _initializeDatabaseListener(viewId).then((_) {
-      // 监听器初始化完成后再刷新数据，避免重复调用
-      // 调试输出已移除
-      refresh();
+      if (!_isDisposed) refresh();
     }).catchError((e) {
       Log.error('❌ [ScheduleModel] 数据库监听器初始化失败: $e');
-      // 即使初始化失败，也尝试刷新一次
-      refresh();
+      if (!_isDisposed) refresh();
     });
   }
 
@@ -482,6 +494,7 @@ class ScheduleModel extends ChangeNotifier {
   static const Duration _refreshThrottleDuration = Duration(milliseconds: 500);
   
   Future<void> refresh() async {
+    if (_isDisposed) return;
     // 如果正在加载，直接返回
     if (_isLoading) {
       // 调试输出已移除
@@ -516,6 +529,7 @@ class ScheduleModel extends ChangeNotifier {
 
   // 从 AppFlowy 数据库加载日程
   Future<void> _loadSchedulesFromDatabase() async {
+    if (_isDisposed) return;
     // 如果已经在加载，直接返回
     if (_isLoading) {
       // 调试输出已移除
@@ -615,20 +629,22 @@ class ScheduleModel extends ChangeNotifier {
       
       return result.fold(
         (view) async {
+          if (_isDisposed) return false;
           // 视图已存在，设置视图ID并初始化数据库监听器
           _currentViewId = _newScheduleViewId;
-          notifyListeners();
+          if (!_isDisposed) notifyListeners();
           
           // 初始化数据库监听器（确保 _databaseController 被创建）
           try {
             await _initializeDatabaseListener(_newScheduleViewId);
-            return true;
+            return !_isDisposed;
           } catch (e) {
             print('⚠️ [ScheduleModel] initializeCalendarView 初始化数据库监听器失败: $e');
             return false;
           }
         },
         (error) async {
+          if (_isDisposed) return false;
           // 视图不存在，需要创建新视图
           final createResult = await ViewBackendService.createOrphanView(
             viewId: _newScheduleViewId,
@@ -636,15 +652,17 @@ class ScheduleModel extends ChangeNotifier {
             layoutType: ViewLayoutPB.Calendar,
           );
           
+          if (_isDisposed) return false;
           return createResult.fold(
             (view) async {
+              if (_isDisposed) return false;
               _currentViewId = _newScheduleViewId;
-              notifyListeners();
+              if (!_isDisposed) notifyListeners();
               
               // 初始化数据库监听器（确保 _databaseController 被创建）
               try {
                 await _initializeDatabaseListener(_newScheduleViewId);
-                return true;
+                return !_isDisposed;
               } catch (e) {
                 print('⚠️ [ScheduleModel] initializeCalendarView 初始化数据库监听器失败: $e');
                 return false;
@@ -1766,16 +1784,51 @@ class ScheduleModel extends ChangeNotifier {
     } catch (e) {}
   }
 
+  /// 每周重复 + 跨日历多日：求 target 落在哪一周期的「锚点日」（与原始开始日同星期几）
+  DateTime? _weeklySpanOccurrenceAnchor(ScheduleItem schedule, DateTime targetDate) {
+    final t = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    final sd = DateTime(
+      schedule.startTime.year,
+      schedule.startTime.month,
+      schedule.startTime.day,
+    );
+    final ed = DateTime(
+      schedule.endTime.year,
+      schedule.endTime.month,
+      schedule.endTime.day,
+    );
+    final spanDays = ed.difference(sd).inDays + 1;
+    if (spanDays < 1) return null;
+
+    var anchorWeekday = schedule.startTime.weekday;
+    if (schedule.repeatRuleJson != null && schedule.repeatRuleJson!.isNotEmpty) {
+      try {
+        final m = jsonDecode(schedule.repeatRuleJson!) as Map<String, dynamic>;
+        final wd = m['weekdays'] as List<dynamic>?;
+        if (wd != null && wd.isNotEmpty) {
+          anchorWeekday = (wd.first as int) + 1;
+        }
+      } catch (_) {}
+    }
+
+    for (var back = 0; back < spanDays; back++) {
+      final cand = t.subtract(Duration(days: back));
+      if (cand.weekday != anchorWeekday) continue;
+      final lastDay = cand.add(Duration(days: spanDays - 1));
+      if (t.isBefore(cand) || t.isAfter(lastDay)) continue;
+      final diffDays = cand.difference(sd).inDays;
+      if (diffDays % 7 != 0) continue;
+      return DateTime(cand.year, cand.month, cand.day);
+    }
+    return null;
+  }
+
   // 获取指定日期的日程（支持重复规则展开）
   List<ScheduleItem> getSchedulesForDate(DateTime date) {
     final result = <ScheduleItem>[];
     final targetDate = DateTime(date.year, date.month, date.day);
-    
-    print('🔍 [ScheduleModel] getSchedulesForDate 查询日期: $targetDate');
-    print('  - 总日程数: ${_schedules.length}');
 
     for (final schedule in _schedules) {
-      // 日程的起止日期（仅日期，用于跨天判断）
       final scheduleStartDate = DateTime(
         schedule.startTime.year,
         schedule.startTime.month,
@@ -1787,52 +1840,67 @@ class ScheduleModel extends ChangeNotifier {
         schedule.endTime.day,
       );
 
-      // 1) 选中日期落在日程的 [开始日期, 结束日期] 内（跨天日程在每一天都显示）
       final isInRange = (targetDate.isAtSameMomentAs(scheduleStartDate) ||
               targetDate.isAfter(scheduleStartDate)) &&
           (targetDate.isAtSameMomentAs(scheduleEndDate) ||
               targetDate.isBefore(scheduleEndDate));
-      if (isInRange) {
-        print('  ✅ 日期在范围内: ${schedule.title} (${schedule.id})');
-        result.add(schedule);
+
+      // 每周重复：按「整段跨天」为周期，锚点=开始日星期几；避免 3/20 既显示 3/19 段又生成 3/20 新段
+      if (schedule.repeatType == 2) {
+        final anchor = _weeklySpanOccurrenceAnchor(schedule, targetDate);
+        if (anchor == null) continue;
+        final isOriginalSeries = anchor.year == scheduleStartDate.year &&
+            anchor.month == scheduleStartDate.month &&
+            anchor.day == scheduleStartDate.day;
+        if (isOriginalSeries) {
+          if (!targetDate.isBefore(scheduleStartDate) &&
+              !targetDate.isAfter(scheduleEndDate)) {
+            result.add(schedule);
+          }
+        } else {
+          final adjustedStart =
+              _adjustTimeForRecurrence(schedule.startTime, anchor);
+          final adjustedEnd = _preserveDuration(
+              schedule.startTime, anchor, schedule.endTime);
+          result.add(schedule.copyWith(
+            id: '${schedule.id}_${anchor.year}_${anchor.month}_${anchor.day}',
+            startTime: adjustedStart,
+            endTime: adjustedEnd,
+          ));
+        }
         continue;
       }
 
-      // 如果日程设置了重复，检查是否匹配重复规则
-      if (schedule.repeatType != 0) {
-        print('  🔁 检查重复日程: ${schedule.title}');
-        print('    - 开始日期: $scheduleStartDate');
-        print('    - 重复类型: ${schedule.repeatType}');
-        print('    - 目标日期: $targetDate');
-        
-        final rule = RecurrenceRule(
-          repeatType: schedule.repeatType,
-          repeatRuleJson: schedule.repeatRuleJson,
-          startDate: schedule.startTime,
-          endDate: schedule.endTime,
-        );
+      if (schedule.repeatType == 0) {
+        if (isInRange) result.add(schedule);
+        continue;
+      }
 
-        if (rule.matchesDate(targetDate)) {
-          print('    ✅ 匹配重复规则，添加到结果');
-          // 创建一个虚拟的日程实例，用于显示
-          // 注意：这里的 ID 可以添加日期后缀来区分，但实际编辑时应该使用原始ID
-          final adjustedStartTime = _adjustTimeForRecurrence(
-              schedule.startTime, targetDate);
-          final adjustedEndTime = _adjustTimeForRecurrence(
-              schedule.endTime, targetDate);
+      if (isInRange) {
+        result.add(schedule);
+      }
 
-          result.add(schedule.copyWith(
-            id: '${schedule.id}_${date.year}_${date.month}_${date.day}',
-            startTime: adjustedStartTime,
-            endTime: adjustedEndTime,
-          ));
-        } else {
-          print('    ❌ 不匹配重复规则');
-        }
+      final rule = RecurrenceRule(
+        repeatType: schedule.repeatType,
+        repeatRuleJson: schedule.repeatRuleJson,
+        startDate: schedule.startTime,
+      );
+
+      if (rule.matchesDate(targetDate)) {
+        // 目标日已在原始日程的任一天内：只显示原始记录，勿再生成从 target 起的新虚拟段
+        if (isInRange) continue;
+        final adjustedStartTime =
+            _adjustTimeForRecurrence(schedule.startTime, targetDate);
+        final adjustedEndTime = _preserveDuration(
+            schedule.startTime, targetDate, schedule.endTime);
+        result.add(schedule.copyWith(
+          id: '${schedule.id}_${date.year}_${date.month}_${date.day}',
+          startTime: adjustedStartTime,
+          endTime: adjustedEndTime,
+        ));
       }
     }
 
-    print('  📋 返回 ${result.length} 个日程');
     result.sort((a, b) => a.startTime.compareTo(b.startTime));
     return result;
   }
@@ -1849,6 +1917,126 @@ class ScheduleModel extends ChangeNotifier {
       originalTime.millisecond,
       originalTime.microsecond,
     );
+  }
+
+  // 计算重复实例的结束时间：保持原始日程的时长不变
+  // 例如：原始日程 3/15 10:00 → 3/25 12:00（持续10天+2小时）
+  // 生成 3/22 的重复实例：3/22 10:00 → 4/1 12:00（保持相同时长）
+  DateTime _preserveDuration(DateTime startTime, DateTime targetStartDate, DateTime originalEndTime) {
+    final originalDuration = originalEndTime.difference(startTime);
+    final adjustedStart = _adjustTimeForRecurrence(startTime, targetStartDate);
+    return adjustedStart.add(originalDuration);
+  }
+
+  // 已创建的重复实例记录，防止重复创建
+  // Key: 原始日程ID, Value: 已创建实例的目标日期集合
+  final Map<String, Set<String>> _createdRepeatInstances = {};
+
+  /// 为指定日期创建缺失的重复实例（自动补全历史重复）
+  /// 当用户访问过去日期时，从日程开始日期起，回溯扫描每一天，
+  /// 将所有匹配重复规则且尚未创建的实例批量创建到数据库
+  Future<int> createMissingRepeatInstancesForDate(DateTime date) async {
+    final targetDate = DateTime(date.year, date.month, date.day);
+    final today = DateTime.now();
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+
+    // 只处理今天及之前的日期
+    if (targetDate.isAfter(todayDateOnly)) {
+      return 0;
+    }
+
+    int createdCount = 0;
+
+    for (final schedule in _schedules) {
+      // 只处理有重复规则的日程
+      if (schedule.repeatType == 0) {
+        continue;
+      }
+
+      final scheduleStartDateOnly = DateTime(
+        schedule.startTime.year,
+        schedule.startTime.month,
+        schedule.startTime.day,
+      );
+
+      // 跳过目标日期在日程开始日期之前的情况
+      if (targetDate.isBefore(scheduleStartDateOnly)) {
+        continue;
+      }
+
+      // 🔧 关键：从日程开始日期 + 1天 开始，逐日扫描到目标日期
+      // 支持双向扫描：如果目标日期在开始日期之前（查看创建日之前的过去日期），反向扫描
+      final rule = RecurrenceRule(
+        repeatType: schedule.repeatType,
+        repeatRuleJson: schedule.repeatRuleJson,
+        startDate: schedule.startTime,
+      );
+
+      // 从 schedule.startDate 的下一天开始扫描
+      // 开始日本身就是原始日程，不需要创建重复实例
+      // 注意：无论目标日期在开始日期之前还是之后，都从 startDate+1 开始
+      var scanDate = scheduleStartDateOnly.add(const Duration(days: 1));
+      // 判断扫描方向：如果目标日期在扫描起始日期之后，向前扫；否则向后扫
+      final forward = !scanDate.isAfter(targetDate);
+      while (true) {
+        if (forward) {
+          if (scanDate.isAfter(targetDate)) break;
+        } else {
+          if (scanDate.isBefore(targetDate)) break;
+        }
+        // 检查该日期是否匹配重复规则
+        if (rule.matchesDate(scanDate)) {
+          // 生成唯一标识符，与 getSchedulesForDate 中的虚拟实例 ID 格式保持一致
+          final instanceKey = '${schedule.id}_${scanDate.year}_${scanDate.month}_${scanDate.day}';
+          _createdRepeatInstances[schedule.id] ??= {};
+          if (!_createdRepeatInstances[schedule.id]!.contains(instanceKey)) {
+            // 计算该重复实例的时间
+            final adjustedStartTime = _adjustTimeForRecurrence(schedule.startTime, scanDate);
+            // 保持原始日程的时长不变
+            final adjustedEndTime = _preserveDuration(
+                schedule.startTime, scanDate, schedule.endTime);
+
+            try {
+              // 创建实际的重复实例到数据库
+              final newId = await createSchedule(
+                title: schedule.title,
+                description: schedule.description,
+                startTime: adjustedStartTime,
+                endTime: adjustedEndTime,
+                isImportant: schedule.isImportant,
+                category: schedule.category,
+                color: schedule.color,
+                isAllDay: schedule.isAllDay,
+                reminderOption: ReminderOption.none, // 重复实例不继承提醒
+              );
+
+              if (newId != null && newId.isNotEmpty) {
+                _createdRepeatInstances[schedule.id]!.add(instanceKey);
+                createdCount++;
+                print('✅ [ScheduleModel] 已为 $scanDate 创建重复实例: ${schedule.title} (ID: $newId)');
+              }
+            } catch (e) {
+              print('❌ [ScheduleModel] 创建重复实例失败: $e');
+            }
+          }
+        }
+        scanDate = forward
+            ? scanDate.add(const Duration(days: 1))
+            : scanDate.subtract(const Duration(days: 1));
+      }
+    }
+
+    if (createdCount > 0) {
+      // 刷新日程列表以加载新创建的实例
+      await refresh();
+    }
+
+    return createdCount;
+  }
+
+  /// 加载指定日期时自动创建缺失的重复实例
+  Future<void> loadDateWithAutoCreate(DateTime date) async {
+    await createMissingRepeatInstancesForDate(date);
   }
 
   // 获取日期范围内的日程
@@ -1896,12 +2084,15 @@ class ScheduleModel extends ChangeNotifier {
       
       // 获取ViewPB对象
       final viewResult = await ViewBackendService.getView(viewId);
+      if (_isDisposed) return;
       await viewResult.fold(
         (view) async {
+          if (_isDisposed) return;
           // 正常路径：视图存在
           await _setupDatabaseWithView(view);
         },
         (error) async {
+          if (_isDisposed) return;
           // 恢复路径：尝试用相同ID创建孤儿视图（处理在回收站/私有分区/不存在等情况）
           bool recovered = false;
           try {
@@ -1910,11 +2101,13 @@ class ScheduleModel extends ChangeNotifier {
               name: '新建日程日历',
               layoutType: ViewLayoutPB.Calendar,
             );
+            if (_isDisposed) return;
             await createOrphan.fold(
               (v) async {
+                if (_isDisposed) return;
                 await _setupDatabaseWithView(v);
                 _currentViewId = v.id;
-                notifyListeners();
+                if (!_isDisposed) notifyListeners();
                 recovered = true;
               },
               (e) async {
@@ -1925,6 +2118,7 @@ class ScheduleModel extends ChangeNotifier {
             recovered = false;
           }
 
+          if (_isDisposed) return;
           // 再次回退：使用固定的新建视图ID创建
           if (!recovered) {
             try {
@@ -1934,11 +2128,13 @@ class ScheduleModel extends ChangeNotifier {
                 name: '新建日程日历',
                 layoutType: ViewLayoutPB.Calendar,
               );
+              if (_isDisposed) return;
               await createFallback.fold(
                 (v) async {
+                  if (_isDisposed) return;
                   await _setupDatabaseWithView(v);
                   _currentViewId = v.id;
-                  notifyListeners();
+                  if (!_isDisposed) notifyListeners();
                 },
                 (e) async {
                   // 最终失败则静默返回，避免抛异常导致上层未捕获
@@ -1954,6 +2150,7 @@ class ScheduleModel extends ChangeNotifier {
       // 清理失败的状态
       _databaseController = null;
       _databaseCallbacks = null;
+      if (_isDisposed) return;
       rethrow; // 重新抛出异常，让调用者知道初始化失败
     }
   }
@@ -2018,15 +2215,18 @@ extension _ScheduleModelSetup on ScheduleModel {
 
     // 打开数据库连接
     final openResult = await _databaseController!.open();
+    if (_isDisposed) return;
     await openResult.fold(
       (success) async {
+        if (_isDisposed) return;
         // 等待字段控制器初始化
         await Future.delayed(const Duration(milliseconds: 150));
-        
+        if (_isDisposed) return;
         // 检查字段是否为空（新创建的视图通常没有字段）
         final fieldController = _databaseController?.fieldController;
         if (fieldController != null && fieldController.fieldInfos.isEmpty) {
           await _ensureMinimumFields(view.id);
+          if (_isDisposed) return;
           await Future.delayed(const Duration(milliseconds: 200));
         }
       },
