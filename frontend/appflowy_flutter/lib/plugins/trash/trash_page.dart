@@ -3,6 +3,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/trash/src/sizes.dart';
 import 'package:appflowy/plugins/trash/src/trash_header.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/size.dart';
@@ -149,37 +150,46 @@ class _TrashPageState extends State<TrashPage> {
   }
 
   Widget _renderListBody(BuildContext context, TrashState state) {
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (BuildContext context, int index) {
-          final object = state.objects[index];
-          return SizedBox(
-            height: 42,
-            child: TrashCell(
-              object: object,
-              onRestore: () => showSimpleConfirmDialog(
-                context: context,
-                message: '你确定要恢复此页面吗？',
-                confirmText: '恢复',
-                confirmTextColor: const Color(0xFFFF6B35), // 橙色
-                onConfirm: () => context
-                    .read<TrashBloc>()
-                    .add(TrashEvent.putback(object.id)),
-              ),
-              onDelete: () => showSimpleConfirmDialog(
-                context: context,
-                message: '你确定要永久删除此页面吗？',
-                confirmText: '删除',
-                confirmTextColor: Theme.of(context).colorScheme.error,
-                onConfirm: () =>
-                    context.read<TrashBloc>().add(TrashEvent.delete(object)),
-              ),
-            ),
-          );
-        },
-        childCount: state.objects.length,
-        addAutomaticKeepAlives: false,
-      ),
+    return BlocBuilder<AppearanceSettingsCubit, AppearanceSettingsState>(
+      buildWhen: (previous, current) =>
+          previous.dateFormat != current.dateFormat ||
+          previous.timeFormat != current.timeFormat,
+      builder: (context, appearanceState) {
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (BuildContext context, int index) {
+              final object = state.objects[index];
+              return SizedBox(
+                height: 42,
+                child: TrashCell(
+                  object: object,
+                  dateFormat: appearanceState.dateFormat,
+                  timeFormat: appearanceState.timeFormat,
+                  onRestore: () => showSimpleConfirmDialog(
+                    context: context,
+                    message: '你确定要恢复此页面吗？',
+                    confirmText: '恢复',
+                    confirmTextColor: const Color(0xFFFF6B35),
+                    onConfirm: () => context
+                        .read<TrashBloc>()
+                        .add(TrashEvent.putback(object.id)),
+                  ),
+                  onDelete: () => showSimpleConfirmDialog(
+                    context: context,
+                    message: '你确定要永久删除此页面吗？',
+                    confirmText: '删除',
+                    confirmTextColor: Theme.of(context).colorScheme.error,
+                    onConfirm: () =>
+                        context.read<TrashBloc>().add(TrashEvent.delete(object)),
+                  ),
+                ),
+              );
+            },
+            childCount: state.objects.length,
+            addAutomaticKeepAlives: false,
+          ),
+        );
+      },
     );
   }
 }

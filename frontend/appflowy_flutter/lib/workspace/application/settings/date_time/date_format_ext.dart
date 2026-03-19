@@ -29,7 +29,9 @@ extension DateFormatter on UserDateFormatPB {
         case UserTimeFormatPB.TwentyFourHour:
           return format.add_Hm().format(date);
         case UserTimeFormatPB.TwelveHour:
-          return format.add_jm().format(date);
+          // 在 zh_CN 等 locale 下 add_jm() 会输出 24 小时制，用显式 12h 模式并沿用当前 locale 的上午/下午
+          final time12 = DateFormat('h:mm a').format(date);
+          return '${format.format(date)} $time12';
         default:
           return format.format(date);
       }

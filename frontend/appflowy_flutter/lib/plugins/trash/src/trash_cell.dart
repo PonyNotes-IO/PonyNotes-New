@@ -1,13 +1,14 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/util/int64_extension.dart';
+import 'package:appflowy/workspace/application/settings/date_time/date_format_ext.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/date_time.pbenum.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/style_widget/icon_button.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/trash.pb.dart';
 import 'package:flutter/material.dart';
-import 'package:fixnum/fixnum.dart' as $fixnum;
 
 import 'sizes.dart';
 
@@ -17,11 +18,15 @@ class TrashCell extends StatelessWidget {
     required this.object,
     required this.onRestore,
     required this.onDelete,
+    required this.dateFormat,
+    required this.timeFormat,
   });
 
   final VoidCallback onRestore;
   final VoidCallback onDelete;
   final TrashPB object;
+  final UserDateFormatPB dateFormat;
+  final UserTimeFormatPB timeFormat;
 
   @override
   Widget build(BuildContext context) {
@@ -37,11 +42,11 @@ class TrashCell extends StatelessWidget {
         ),
         SizedBox(
           width: TrashSizes.lashModifyWidth,
-          child: FlowyText(dateFormatter(object.modifiedTime)),
+          child: FlowyText(formatTimestamp(object.modifiedTime.toDateTime())),
         ),
         SizedBox(
           width: TrashSizes.createTimeWidth,
-          child: FlowyText(dateFormatter(object.createTime)),
+          child: FlowyText(formatTimestamp(object.createTime.toDateTime())),
         ),
         const Spacer(),
         FlowyIconButton(
@@ -63,10 +68,7 @@ class TrashCell extends StatelessWidget {
     );
   }
 
-  String dateFormatter($fixnum.Int64 inputTimestamps) {
-    final outputFormat = DateFormat('MM/dd/yyyy HH:mm');
-    final date = inputTimestamps.toDateTime();
-    final outputDate = outputFormat.format(date);
-    return outputDate;
+  String formatTimestamp(DateTime dateTime) {
+    return dateFormat.formatDate(dateTime, true, timeFormat);
   }
 }
