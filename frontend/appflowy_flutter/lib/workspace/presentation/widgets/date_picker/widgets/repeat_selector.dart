@@ -115,7 +115,7 @@ class _RepeatSelectionDialogState extends State<RepeatSelectionDialog> {
                             final result = await showDialog<String>(
                               context: context,
                               barrierDismissible: false,
-                              builder: (_) => const CustomRepeatDialog(),
+                              builder: (_) => CustomRepeatDialog(initialJson: tempCustomSummary),
                             );
                             if (result != null && result.isNotEmpty) {
                               setState(() {
@@ -145,7 +145,7 @@ class _RepeatSelectionDialogState extends State<RepeatSelectionDialog> {
                                     final result = await showDialog<String>(
                                       context: context,
                                       barrierDismissible: false,
-                                      builder: (_) => const CustomRepeatDialog(),
+                                      builder: (_) => CustomRepeatDialog(initialJson: tempCustomSummary),
                                     );
                                     setState(() {
                                       tempValue = 99;
@@ -241,7 +241,10 @@ class _RepeatSelectionDialogState extends State<RepeatSelectionDialog> {
 }
 
 class CustomRepeatDialog extends StatefulWidget {
-  const CustomRepeatDialog({Key? key}) : super(key: key);
+  /// 已有自定义规则时的 JSON（含 unit、interval、weekdays、summary），用于预填
+  final String? initialJson;
+
+  const CustomRepeatDialog({Key? key, this.initialJson}) : super(key: key);
 
   @override
   State<CustomRepeatDialog> createState() => _CustomRepeatDialogState();
@@ -259,10 +262,28 @@ class _CustomRepeatDialogState extends State<CustomRepeatDialog> {
   @override
   void initState() {
     super.initState();
+    _applyInitialJson();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _intervalController.jumpToItem(interval - 1);
       _unitController.jumpToItem(unit);
     });
+  }
+
+  void _applyInitialJson() {
+    final jsonStr = widget.initialJson;
+    if (jsonStr == null || jsonStr.isEmpty) return;
+    try {
+      final data = jsonDecode(jsonStr);
+      if (data is! Map) return;
+      if (data['unit'] is int) unit = (data['unit'] as int).clamp(0, 3);
+      if (data['interval'] is int) interval = (data['interval'] as int).clamp(1, 30);
+      if (data['weekdays'] is List) {
+        selectedWeekdays.clear();
+        for (final e in data['weekdays']) {
+          if (e is int && e >= 0 && e <= 6) selectedWeekdays.add(e);
+        }
+      }
+    } catch (_) {}
   }
 
   @override
