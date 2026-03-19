@@ -11,6 +11,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -54,6 +55,33 @@ class ResizableImage extends StatefulWidget {
 const _kImageBlockComponentMinWidth = 30.0;
 const _kImageBlockComponentMinHeight = 30.0;
 
+/// 立即接受横向拖动，避免被父级 ScrollView 抢走手势
+class _ImmediateHorizontalDragGestureRecognizer extends HorizontalDragGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+  }
+}
+
+/// 立即接受纵向拖动（与横向一致，保证角点双向都能赢）
+class _ImmediateVerticalDragGestureRecognizer extends VerticalDragGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+  }
+}
+
+/// 立即接受的 Pan，用于四角同时拖宽高
+class _ImmediatePanGestureRecognizer extends PanGestureRecognizer {
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event);
+    resolve(GestureDisposition.accepted);
+  }
+}
+
 class _ResizableImageState extends State<ResizableImage> {
   final documentService = DocumentService();
   final _imageKey = GlobalKey();
@@ -62,6 +90,8 @@ class _ResizableImageState extends State<ResizableImage> {
   double initialOffsetY = 0;
   double moveDistanceX = 0;
   double moveDistanceY = 0;
+  double _cornerAccumulatedX = 0;
+  double _cornerAccumulatedY = 0;
   Widget? _cacheImage;
 
   late double imageWidth;
@@ -344,68 +374,71 @@ class _ResizableImageState extends State<ResizableImage> {
       bottom: bottom,
       width: width,
       height: height,
-      child: GestureDetector(
+      child: RawGestureDetector(
         behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart: isHorizontal
-            ? (details) {
-                initialOffsetX = details.globalPosition.dx;
+        gestures: isHorizontal
+            ? <Type, GestureRecognizerFactory>{
+                _ImmediateHorizontalDragGestureRecognizer:
+                    GestureRecognizerFactoryWithHandlers<_ImmediateHorizontalDragGestureRecognizer>(
+                  () => _ImmediateHorizontalDragGestureRecognizer(),
+                  (_ImmediateHorizontalDragGestureRecognizer instance) {
+                    instance.onStart = (details) {
+                      initialOffsetX = details.globalPosition.dx;
+                    };
+                    instance.onUpdate = (details) {
+                      if (onUpdateX != null) {
+                        double offset = details.globalPosition.dx - initialOffsetX;
+                        if (widget.alignment == Alignment.center) {
+                          offset *= 2.0;
+                        }
+                        onUpdateX(offset);
+                      }
+                    };
+                    instance.onEnd = (_) {
+                      final newWidth = max(
+                          _kImageBlockComponentMinWidth,
+                          imageWidth - moveDistanceX);
+                      imageWidth = newWidth;
+                      initialOffsetX = 0;
+                      moveDistanceX = 0;
+                      widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+                    };
+                  },
+                ),
               }
-            : null,
-        onHorizontalDragUpdate: isHorizontal
-            ? (details) {
-                if (onUpdateX != null) {
-                  double offset = details.globalPosition.dx - initialOffsetX;
-                  if (widget.alignment == Alignment.center) {
-                    offset *= 2.0;
-                  }
-                  onUpdateX(offset);
-                }
-              }
-            : null,
-        onHorizontalDragEnd: isHorizontal
-            ? (details) {
-                final newWidth = max(
-                    _kImageBlockComponentMinWidth,
-                    imageWidth - moveDistanceX);
-                imageWidth = newWidth;
-                initialOffsetX = 0;
-                moveDistanceX = 0;
-
-                widget.onResize(imageWidth, _computedHeight ?? imageHeight);
-              }
-            : null,
-        onVerticalDragStart: !isHorizontal
-            ? (details) {
-                initialOffsetY = details.globalPosition.dy;
-              }
-            : null,
-        onVerticalDragUpdate: !isHorizontal
-            ? (details) {
-                if (onUpdateY != null) {
-                  double offset = details.globalPosition.dy - initialOffsetY;
-                  onUpdateY(offset);
-                }
-              }
-            : null,
-        onVerticalDragEnd: !isHorizontal
-            ? (details) {
-                final currentHeight = _computedHeight ?? imageHeight;
-                if (currentHeight != null) {
-                  final newHeight = max(
-                      _kImageBlockComponentMinHeight,
-                      currentHeight - moveDistanceY);
-                  if (_computedHeight != null) {
-                    _computedHeight = newHeight;
-                  } else {
-                    imageHeight = newHeight;
-                  }
-                }
-                initialOffsetY = 0;
-                moveDistanceY = 0;
-
-                widget.onResize(imageWidth, _computedHeight ?? imageHeight);
-              }
-            : null,
+            : <Type, GestureRecognizerFactory>{
+                _ImmediateVerticalDragGestureRecognizer:
+                    GestureRecognizerFactoryWithHandlers<_ImmediateVerticalDragGestureRecognizer>(
+                  () => _ImmediateVerticalDragGestureRecognizer(),
+                  (_ImmediateVerticalDragGestureRecognizer instance) {
+                    instance.onStart = (details) {
+                      initialOffsetY = details.globalPosition.dy;
+                    };
+                    instance.onUpdate = (details) {
+                      if (onUpdateY != null) {
+                        final offset = details.globalPosition.dy - initialOffsetY;
+                        onUpdateY(offset);
+                      }
+                    };
+                    instance.onEnd = (_) {
+                      final currentHeight = _computedHeight ?? imageHeight;
+                      if (currentHeight != null) {
+                        final newHeight = max(
+                            _kImageBlockComponentMinHeight,
+                            currentHeight - moveDistanceY);
+                        if (_computedHeight != null) {
+                          _computedHeight = newHeight;
+                        } else {
+                          imageHeight = newHeight;
+                        }
+                      }
+                      initialOffsetY = 0;
+                      moveDistanceY = 0;
+                      widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+                    };
+                  },
+                ),
+              },
         child: MouseRegion(
           cursor: isHorizontal
               ? SystemMouseCursors.resizeLeftRight
@@ -444,6 +477,31 @@ class _ResizableImageState extends State<ResizableImage> {
     );
   }
 
+  void _commitCornerResize() {
+    final newWidth = max(
+        _kImageBlockComponentMinWidth,
+        imageWidth - moveDistanceX);
+    imageWidth = newWidth;
+
+    final currentHeight = _computedHeight ?? imageHeight;
+    if (currentHeight != null) {
+      final newHeight = max(
+          _kImageBlockComponentMinHeight,
+          currentHeight - moveDistanceY);
+      if (_computedHeight != null) {
+        _computedHeight = newHeight;
+      } else {
+        imageHeight = newHeight;
+      }
+    }
+
+    initialOffsetX = 0;
+    initialOffsetY = 0;
+    moveDistanceX = 0;
+    moveDistanceY = 0;
+    widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+  }
+
   Widget _buildCornerGesture(
     BuildContext context, {
     required bool isTop,
@@ -462,101 +520,34 @@ class _ResizableImageState extends State<ResizableImage> {
       bottom: bottom,
       width: 20,
       height: 20,
-      child: GestureDetector(
+      child: RawGestureDetector(
         behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart: (details) {
-          initialOffsetX = details.globalPosition.dx;
-          initialOffsetY = details.globalPosition.dy;
-        },
-        onHorizontalDragUpdate: (details) {
-          final offsetX = details.globalPosition.dx - initialOffsetX;
-          final offsetY = details.globalPosition.dy - initialOffsetY;
-
-          double finalOffsetX = offsetX;
-          double finalOffsetY = offsetY;
-
-          if (widget.alignment == Alignment.center) {
-            finalOffsetX *= 2.0;
-          }
-
-          if (onUpdateX != null) {
-            onUpdateX(finalOffsetX);
-          }
-          if (onUpdateY != null) {
-            onUpdateY(finalOffsetY);
-          }
-        },
-        onHorizontalDragEnd: (details) {
-          final newWidth = max(
-              _kImageBlockComponentMinWidth,
-              imageWidth - moveDistanceX);
-          imageWidth = newWidth;
-
-          final currentHeight = _computedHeight ?? imageHeight;
-          if (currentHeight != null) {
-            final newHeight = max(
-                _kImageBlockComponentMinHeight,
-                currentHeight - moveDistanceY);
-            if (_computedHeight != null) {
-              _computedHeight = newHeight;
-            } else {
-              imageHeight = newHeight;
-            }
-          }
-
-          initialOffsetX = 0;
-          initialOffsetY = 0;
-          moveDistanceX = 0;
-          moveDistanceY = 0;
-
-          widget.onResize(imageWidth, _computedHeight ?? imageHeight);
-        },
-        onVerticalDragStart: (details) {
-          initialOffsetX = details.globalPosition.dx;
-          initialOffsetY = details.globalPosition.dy;
-        },
-        onVerticalDragUpdate: (details) {
-          final offsetX = details.globalPosition.dx - initialOffsetX;
-          final offsetY = details.globalPosition.dy - initialOffsetY;
-
-          double finalOffsetX = offsetX;
-          double finalOffsetY = offsetY;
-
-          if (widget.alignment == Alignment.center) {
-            finalOffsetX *= 2.0;
-          }
-
-          if (onUpdateX != null) {
-            onUpdateX(finalOffsetX);
-          }
-          if (onUpdateY != null) {
-            onUpdateY(finalOffsetY);
-          }
-        },
-        onVerticalDragEnd: (details) {
-          final newWidth = max(
-              _kImageBlockComponentMinWidth,
-              imageWidth - moveDistanceX);
-          imageWidth = newWidth;
-
-          final currentHeight = _computedHeight ?? imageHeight;
-          if (currentHeight != null) {
-            final newHeight = max(
-                _kImageBlockComponentMinHeight,
-                currentHeight - moveDistanceY);
-            if (_computedHeight != null) {
-              _computedHeight = newHeight;
-            } else {
-              imageHeight = newHeight;
-            }
-          }
-
-          initialOffsetX = 0;
-          initialOffsetY = 0;
-          moveDistanceX = 0;
-          moveDistanceY = 0;
-
-          widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+        gestures: <Type, GestureRecognizerFactory>{
+          _ImmediatePanGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<_ImmediatePanGestureRecognizer>(
+            () => _ImmediatePanGestureRecognizer(),
+            (_ImmediatePanGestureRecognizer instance) {
+              instance.onStart = (_) {
+                _cornerAccumulatedX = 0;
+                _cornerAccumulatedY = 0;
+              };
+              instance.onUpdate = (details) {
+                _cornerAccumulatedX += details.delta.dx;
+                _cornerAccumulatedY += details.delta.dy;
+                double finalOffsetX = _cornerAccumulatedX;
+                if (widget.alignment == Alignment.center) {
+                  finalOffsetX *= 2.0;
+                }
+                if (onUpdateX != null) {
+                  onUpdateX(finalOffsetX);
+                }
+                if (onUpdateY != null) {
+                  onUpdateY(_cornerAccumulatedY);
+                }
+              };
+              instance.onEnd = (_) => _commitCornerResize();
+            },
+          ),
         },
         child: MouseRegion(
           cursor: _getCornerCursor(isTop, isLeft),
