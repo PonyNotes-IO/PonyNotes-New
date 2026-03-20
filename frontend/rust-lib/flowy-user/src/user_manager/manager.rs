@@ -879,6 +879,33 @@ impl UserManager {
                   );
                 },
               }
+
+              // 当用户被移出工作区时，立即强制刷新工作区列表。
+              // get_all_user_workspaces 会在后台发起一次服务端同步，
+              // 同步完成后会通过 DidUpdateUserWorkspaces 通知 Flutter 层，
+              // Flutter 的 UserWorkspaceBloc._onEmitWorkspaces 检测到当前
+              // 工作区不在列表中后会立即切换到用户自己的工作区。
+              if notification.notification_type == "workspace_member_removed" {
+                info!("workspace_member_removed received, forcing workspace list refresh");
+                if let Ok(session) = manager.get_session() {
+                  if let Ok(profile) = manager
+                    .get_user_profile_from_disk(session.user_id, &session.workspace_id)
+                    .await
+                  {
+                    if let Err(e) = manager
+                      .get_all_user_workspaces(profile.uid, profile.auth_type)
+                      .await
+                    {
+                      warn!(
+                        "Failed to refresh workspace list after member removal: {:?}",
+                        e
+                      );
+                    } else {
+                      info!("Workspace list refresh triggered after member removal");
+                    }
+                  }
+                }
+              }
             }
           }
         }

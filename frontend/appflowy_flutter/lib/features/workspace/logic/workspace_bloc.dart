@@ -655,20 +655,54 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
           ),
         );
       } else {
-        // No available workspace left. Clear current workspace to avoid showing stale data.
-        emit(
-          UserWorkspaceState(
-            currentWorkspace: null,
-            workspaces: sortedWorkspaces,
-            actionResult: state.actionResult,
-            isCollabWorkspaceOn: state.isCollabWorkspaceOn,
-            userProfile: state.userProfile,
-            workspaceSubscriptionInfo: state.workspaceSubscriptionInfo,
-            currentSubscription: state.currentSubscription,
-            isCloudSyncEnabled: state.isCloudSyncEnabled,
-            folderSyncState: state.folderSyncState,
-          ),
+        // B 没有任何可用工作区（从未创建过自己的工作区）。
+        // 立即创建一个默认工作区并切换过去，避免用户看到空白界面。
+        Log.info(
+          '[WorkspaceBloc] Removed from workspace, no workspaces available. Creating default workspace.',
         );
+        final createResult = await repository.createWorkspace(
+          name: LocaleKeys.workspace_defaultName.tr(),
+          workspaceType: WorkspaceTypePB.ServerW,
+        );
+        if (!isClosed) {
+          createResult.fold(
+            (newWorkspace) {
+              emit(
+                state.copyWith(
+                  workspaces: [newWorkspace],
+                  currentWorkspace: newWorkspace,
+                ),
+              );
+              _safeAdd(
+                UserWorkspaceEvent.openWorkspace(
+                  workspaceId: newWorkspace.workspaceId,
+                  workspaceType: newWorkspace.workspaceType,
+                ),
+              );
+            },
+            (error) {
+              Log.error(
+                '[WorkspaceBloc] Failed to create default workspace after removal: ${error.msg}',
+              );
+              // 创建失败时退回到清空当前工作区状态
+              // 注意：不能用 copyWith(currentWorkspace: null)，因为 copyWith 用 ?? 运算符
+              // 会忽略 null 值，必须用直接构造函数才能真正将字段置为 null。
+              emit(
+                UserWorkspaceState(
+                  currentWorkspace: null,
+                  workspaces: const [],
+                  actionResult: state.actionResult,
+                  isCollabWorkspaceOn: state.isCollabWorkspaceOn,
+                  userProfile: state.userProfile,
+                  workspaceSubscriptionInfo: state.workspaceSubscriptionInfo,
+                  currentSubscription: state.currentSubscription,
+                  isCloudSyncEnabled: state.isCloudSyncEnabled,
+                  folderSyncState: state.folderSyncState,
+                ),
+              );
+            },
+          );
+        }
       }
       return;
     }
