@@ -188,6 +188,7 @@ pub fn delete_user_all_workspace(
 pub enum WorkspaceChange {
   Inserted(String),
   Updated(String),
+  Deleted(String),
 }
 
 pub fn upsert_user_workspace(
@@ -240,13 +241,17 @@ pub fn sync_user_workspaces_with_diff(
       .cloned()
       .collect();
 
+    let mut diffs = Vec::new();
+
     if !to_delete.is_empty() {
       diesel::delete(dsl::user_workspace_table.filter(user_workspace_table::id.eq_any(&to_delete)))
         .execute(conn)?;
+      for id in &to_delete {
+        diffs.push(WorkspaceChange::Deleted(id.clone()));
+      }
     }
 
     // 3) For each incoming workspace, either INSERT or UPDATE if changed
-    let mut diffs = Vec::new();
     for uw in user_workspaces {
       match existing_map.remove(&uw.id) {
         None => {
