@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/features/workspace/data/repositories/rust_workspace_repository_impl.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/blank/blank.dart';
@@ -32,6 +33,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
     show UserProfilePB, UserWorkspacePB;
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/style_widget/container.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -65,7 +67,6 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
   static const double _minContentHeight = 420;
 
   late final Future<List<FlowyResult>> _initFuture;
-  bool _hasShownRemovedDialog = false;
 
   @override
   void initState() {
@@ -451,12 +452,11 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
         (w) => w.workspaceId == currentWorkspace.workspaceId,
       );
 
-      if (!isCurrentWorkspaceInList && !_hasShownRemovedDialog) {
-        _hasShownRemovedDialog = true;
+      if (!isCurrentWorkspaceInList) {
         Log.info(
           'Current workspace ${currentWorkspace.workspaceId} not found in list, switching to an available workspace',
         );
-        
+
         final workspaceBloc = context.read<UserWorkspaceBloc?>();
         if (workspaceBloc != null) {
           // 优先切换到用户自己的工作区（Owner），找不到再退回第一个可用工作区。
@@ -465,7 +465,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
             (w) => w.role == AFRolePB.Owner,
           );
           targetWorkspace ??= workspaces.firstOrNull;
-          
+
           if (targetWorkspace != null) {
             Log.info(
               'Switching workspace to ${targetWorkspace.workspaceId} (role: ${targetWorkspace.role}) after removal',
@@ -479,20 +479,10 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
           }
         }
 
-        // 显示提示对话框
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (!context.mounted) return;
-          showConfirmDialog(
-            context: context,
-            title: '当前工作区已经移除了你，请知悉',
-            description: '',
-            style: ConfirmPopupStyle.onlyOk,
-            confirmLabel: '确认',
-            onConfirm: (_) {
-              _hasShownRemovedDialog = false;
-            },
-          );
-        });
+        showToastNotification(
+          message: LocaleKeys.workspace_removedFromWorkspace.tr(),
+          type: ToastificationType.warning,
+        );
       }
     }
   }
