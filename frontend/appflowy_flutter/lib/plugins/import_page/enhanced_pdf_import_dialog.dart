@@ -14,6 +14,8 @@ import 'package:path/path.dart' as p;
 import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'processor/aliyun_doc_parse_processor.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'import_service.dart' as pdf_import_service;
 
 /// 增强的PDF导入对话框，提供多种处理模式和实时预览
 class EnhancedPdfImportDialog extends StatefulWidget {
@@ -499,7 +501,54 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       //     );
       final content1 = await CustomPdfProcessor.extractTextOcr(_selectedFile!,cancellationToken: _cancellationToken);
       if(content1 != null){
-        content = content1['text'];
+        content = content1['text']?.toString();
+        final pages = content1['pages'];
+        final engine = content1['engine']?.toString() ?? 'unknown';
+        
+        Log.info('PDF提取结果: pages=$pages, engine=$engine, textLength=${content?.length ?? 0}');
+        
+        // 如果OCR返回的文本为空，尝试使用Syncfusion作为备用方案
+        if (content == null || content.isEmpty) {
+          Log.warn('OCR提取结果为空，尝试使用Syncfusion备用方案。文件: ${_selectedFile!.path}');
+          Log.warn('OCR提取结果详情: $content1');
+          
+          try {
+            // 使用Syncfusion提取文本作为备用方案
+            final bytes = await _selectedFile!.readAsBytes();
+            final PdfDocument document = PdfDocument(inputBytes: bytes);
+            final PdfTextExtractor extractor = PdfTextExtractor(document);
+            final String rawText = extractor.extractText();
+            document.dispose();
+            
+            if (rawText.isNotEmpty) {
+              // 清理文本
+              content = pdf_import_service.ImportService.cleanPdfText(rawText);
+              Log.info('Syncfusion备用方案成功提取文本，长度: ${content.length}');
+            } else {
+              Log.warn('Syncfusion备用方案也返回空文本');
+            }
+          } catch (fallbackError) {
+            Log.error('Syncfusion备用方案失败: $fallbackError');
+          }
+        }
+      } else {
+        Log.warn('PDF提取返回null，可能后端服务不可用或处理失败，尝试使用Syncfusion备用方案');
+        
+        // 如果OCR完全失败，尝试使用Syncfusion
+        try {
+          final bytes = await _selectedFile!.readAsBytes();
+          final PdfDocument document = PdfDocument(inputBytes: bytes);
+          final PdfTextExtractor extractor = PdfTextExtractor(document);
+          final String rawText = extractor.extractText();
+          document.dispose();
+          
+          if (rawText.isNotEmpty) {
+            content = pdf_import_service.ImportService.cleanPdfText(rawText);
+            Log.info('Syncfusion备用方案成功提取文本，长度: ${content.length}');
+          }
+        } catch (fallbackError) {
+          Log.error('Syncfusion备用方案失败: $fallbackError');
+        }
       }
       // 检查是否已取消
       if (_cancellationToken?.isCancelled ?? false) {

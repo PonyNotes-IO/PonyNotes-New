@@ -294,7 +294,17 @@ class CustomPdfProcessor {
           
           // 验证返回数据的结构
           if (data.containsKey('text') && data.containsKey('pages') && data.containsKey('engine')) {
-            Log.info('OCR extraction successful: ${data['pages']} pages');
+            final text = data['text']?.toString() ?? '';
+            final pages = data['pages'];
+            final engine = data['engine']?.toString() ?? 'unknown';
+            
+            Log.info('OCR extraction response: pages=$pages, engine=$engine, textLength=${text.length}');
+            
+            // 如果文本为空，记录警告
+            if (text.isEmpty) {
+              Log.warn('OCR extraction returned empty text. Response: $body');
+            }
+            
             return data;
           } else {
             Log.error('Invalid OCR response structure: ${data.keys}');
