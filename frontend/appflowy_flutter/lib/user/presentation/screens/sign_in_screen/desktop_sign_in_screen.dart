@@ -477,9 +477,8 @@ class _TermsAndConditionsSection extends StatelessWidget {
         Flexible(
           child: RichText(
             text: TextSpan(
-              style: TextStyle(
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontSize: 14,
-                color: theme.textColorScheme.tertiary,
               ),
               children: [
                 const TextSpan(text: "我已阅读并同意 "),

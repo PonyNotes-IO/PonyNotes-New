@@ -41,6 +41,12 @@ class _ContinueWithEmailAndPasswordState
 
   @override
   Widget build(BuildContext context) {
+    // 与 desktop_sign_in_screen 中 _TermsAndConditionsSection 一致：正文用主题反转色，链接用 primary
+    final agreementPlainTextStyle =
+        Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontSize: 16,
+              fontFamily: 'PingFangSC-Regular',
+            );
 
     return BlocListener<SignInBloc, SignInState>(
       listener: (context, state) {
@@ -255,11 +261,7 @@ class _ContinueWithEmailAndPasswordState
                     children: [
                       Text(
                         "我已阅读并同意",
-                        style: TextStyle(
-                          color: const Color(0xFF333333),
-                          fontSize: 16,
-                          fontFamily: 'PingFangSC-Regular',
-                        ),
+                        style: agreementPlainTextStyle,
                       ),
                       GestureDetector(
                         onTap: () {
@@ -282,11 +284,7 @@ class _ContinueWithEmailAndPasswordState
                       ),
                       Text(
                         "与",
-                        style: TextStyle(
-                          color: const Color(0xFF333333),
-                          fontSize: 16,
-                          fontFamily: 'PingFangSC-Regular',
-                        ),
+                        style: agreementPlainTextStyle,
                       ),
                       GestureDetector(
                         onTap: () {

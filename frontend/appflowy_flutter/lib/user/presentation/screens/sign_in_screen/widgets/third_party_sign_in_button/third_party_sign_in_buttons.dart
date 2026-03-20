@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/douyin_webview_dialog.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/wechat_webview_dialog.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +15,63 @@ typedef _SignInCallback = void Function(ThirdPartySignInButtonType signInType);
 
 @visibleForTesting
 const Key signInWithGoogleButtonKey = Key('signInWithGoogleButton');
+
+// 第三方登录图标按钮（与主登录页面风格一致）
+class _ThirdPartyIconButton extends StatelessWidget {
+  const _ThirdPartyIconButton({
+    required this.label,
+    required this.icon,
+    this.onTap,
+    this.isLoading = false,
+  });
+
+  final String label;
+  final Widget icon;
+  final VoidCallback? onTap;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return GestureDetector(
+      onTap: isLoading ? null : onTap,
+      child: Opacity(
+        opacity: (onTap == null || isLoading) ? 0.6 : 1.0,
+        child: Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: theme.surfaceColorScheme.layer01,
+            border: Border.all(color: theme.borderColorScheme.primary),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: isLoading
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    icon,
+                    HSpace(8),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: theme.textColorScheme.primary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class ThirdPartySignInButtons extends StatelessWidget {
   /// Used in DesktopSignInScreen, MobileSignInScreen and SettingThirdPartyLogin
@@ -27,24 +86,51 @@ class ThirdPartySignInButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     if (UniversalPlatform.isDesktopOrWeb) {
       return _DesktopThirdPartySignIn(
-        onSignIn: (type) => _signIn(context, type.provider),
+        onSignIn: (type) => _signIn(context, type),
       );
     } else {
       return _MobileThirdPartySignIn(
         isExpanded: expanded,
-        onSignIn: (type) => _signIn(context, type.provider),
+        onSignIn: (type) => _signIn(context, type),
       );
     }
   }
 
-  void _signIn(BuildContext context, String provider) {
-    context.read<SignInBloc>().add(
-          SignInEvent.signInWithOAuth(platform: provider),
-        );
+  Future<void> _signIn(BuildContext context, ThirdPartySignInButtonType type) async {
+    final signInBloc = context.read<SignInBloc>();
+
+    if (type == ThirdPartySignInButtonType.wechat) {
+      if (UniversalPlatform.isWindows ||
+          UniversalPlatform.isMacOS ||
+          UniversalPlatform.isLinux) {
+        final code = await showWeChatWebViewDialog(context);
+        if (code != null && context.mounted) {
+          signInBloc.add(SignInEvent.wechatCodeReceived(code));
+        }
+      } else {
+        signInBloc.add(const SignInEvent.signInWithWeChat());
+      }
+    } else if (type == ThirdPartySignInButtonType.douyin) {
+      if (UniversalPlatform.isWindows ||
+          UniversalPlatform.isMacOS ||
+          UniversalPlatform.isLinux) {
+        final code = await showDouYinWebViewDialog(context);
+        if (code != null && context.mounted) {
+          signInBloc.add(SignInEvent.douyinCodeReceived(code));
+        }
+      } else {
+        signInBloc.add(const SignInEvent.signInWithDouYin());
+      }
+    } else {
+      // 其他平台使用通用的 OAuth 登录
+      signInBloc.add(
+        SignInEvent.signInWithOAuth(platform: type.provider),
+      );
+    }
   }
 }
 
-class _DesktopThirdPartySignIn extends StatefulWidget {
+class _DesktopThirdPartySignIn extends StatelessWidget {
   const _DesktopThirdPartySignIn({
     required this.onSignIn,
   });
@@ -52,73 +138,34 @@ class _DesktopThirdPartySignIn extends StatefulWidget {
   final _SignInCallback onSignIn;
 
   @override
-  State<_DesktopThirdPartySignIn> createState() =>
-      _DesktopThirdPartySignInState();
-}
-
-class _DesktopThirdPartySignInState extends State<_DesktopThirdPartySignIn> {
-  bool isExpanded = false;
-
-  @override
   Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
     return Column(
       children: [
-        DesktopThirdPartySignInButton(
-          key: signInWithGoogleButtonKey,
-          type: ThirdPartySignInButtonType.google,
-          onTap: () => widget.onSignIn(ThirdPartySignInButtonType.google),
+        _ThirdPartyIconButton(
+          label: "微信登录",
+          icon: Image.asset(
+            "assets/images/login/icon_login_wx.png",
+            width: 18,
+            height: 18,
+          ),
+          onTap: () => onSignIn(ThirdPartySignInButtonType.wechat),
         ),
-        VSpace(theme.spacing.l),
-        DesktopThirdPartySignInButton(
-          type: ThirdPartySignInButtonType.apple,
-          onTap: () => widget.onSignIn(ThirdPartySignInButtonType.apple),
+        const SizedBox(height: 12),
+        _ThirdPartyIconButton(
+          label: "抖音登录",
+          icon: Image.asset(
+            "assets/images/login/icon_login_dy.png",
+            width: 18,
+            height: 18,
+          ),
+          onTap: () => onSignIn(ThirdPartySignInButtonType.douyin),
         ),
-        ...isExpanded ? _buildExpandedButtons() : _buildCollapsedButtons(),
       ],
     );
   }
-
-  List<Widget> _buildExpandedButtons() {
-    final theme = AppFlowyTheme.of(context);
-    return [
-      VSpace(theme.spacing.l),
-      DesktopThirdPartySignInButton(
-        type: ThirdPartySignInButtonType.github,
-        onTap: () => widget.onSignIn(ThirdPartySignInButtonType.github),
-      ),
-      VSpace(theme.spacing.l),
-      DesktopThirdPartySignInButton(
-        type: ThirdPartySignInButtonType.discord,
-        onTap: () => widget.onSignIn(ThirdPartySignInButtonType.discord),
-      ),
-    ];
-  }
-
-  List<Widget> _buildCollapsedButtons() {
-    final theme = AppFlowyTheme.of(context);
-    return [
-      VSpace(theme.spacing.l),
-      AFGhostTextButton(
-        text: 'More options',
-        padding: EdgeInsets.zero,
-        textColor: (context, isHovering, disabled) {
-          if (isHovering) {
-            return theme.textColorScheme.actionHover;
-          }
-          return theme.textColorScheme.action;
-        },
-        onTap: () {
-          setState(() {
-            isExpanded = !isExpanded;
-          });
-        },
-      ),
-    ];
-  }
 }
 
-class _MobileThirdPartySignIn extends StatefulWidget {
+class _MobileThirdPartySignIn extends StatelessWidget {
   const _MobileThirdPartySignIn({
     required this.isExpanded,
     required this.onSignIn,
@@ -128,77 +175,81 @@ class _MobileThirdPartySignIn extends StatefulWidget {
   final _SignInCallback onSignIn;
 
   @override
-  State<_MobileThirdPartySignIn> createState() =>
-      _MobileThirdPartySignInState();
-}
-
-class _MobileThirdPartySignInState extends State<_MobileThirdPartySignIn> {
-  static const padding = 8.0;
-
-  bool isExpanded = false;
-
-  @override
-  void initState() {
-    super.initState();
-
-    isExpanded = widget.isExpanded;
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // only display apple sign in button on iOS
-        if (Platform.isIOS) ...[
-          MobileThirdPartySignInButton(
-            type: ThirdPartySignInButtonType.apple,
-            onTap: () => widget.onSignIn(ThirdPartySignInButtonType.apple),
+        // 微信登录按钮（与移动端登录页面风格一致）
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () => onSignIn(ThirdPartySignInButtonType.wechat),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  "assets/images/login/icon_login_wx.png",
+                  width: 18,
+                  height: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '微信登录',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const VSpace(padding),
-        ],
-        MobileThirdPartySignInButton(
-          key: signInWithGoogleButtonKey,
-          type: ThirdPartySignInButtonType.google,
-          onTap: () => widget.onSignIn(ThirdPartySignInButtonType.google),
         ),
-        ...isExpanded ? _buildExpandedButtons() : _buildCollapsedButtons(),
+        const SizedBox(height: 12),
+        // 抖音登录按钮
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: () => onSignIn(ThirdPartySignInButtonType.douyin),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.outline,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  "assets/images/login/icon_login_dy.png",
+                  width: 18,
+                  height: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '抖音登录',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
-  }
-
-  List<Widget> _buildExpandedButtons() {
-    return [
-      const VSpace(padding),
-      MobileThirdPartySignInButton(
-        type: ThirdPartySignInButtonType.github,
-        onTap: () => widget.onSignIn(ThirdPartySignInButtonType.github),
-      ),
-      const VSpace(padding),
-      MobileThirdPartySignInButton(
-        type: ThirdPartySignInButtonType.discord,
-        onTap: () => widget.onSignIn(ThirdPartySignInButtonType.discord),
-      ),
-    ];
-  }
-
-  List<Widget> _buildCollapsedButtons() {
-    final theme = AppFlowyTheme.of(context);
-    return [
-      const VSpace(padding * 2),
-      AFGhostTextButton(
-        text: 'More options',
-        textColor: (context, isHovering, disabled) {
-          if (isHovering) {
-            return theme.textColorScheme.actionHover;
-          }
-          return theme.textColorScheme.action;
-        },
-        onTap: () {
-          setState(() {
-            isExpanded = !isExpanded;
-          });
-        },
-      ),
-    ];
   }
 }

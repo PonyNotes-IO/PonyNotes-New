@@ -1,5 +1,4 @@
 import 'package:appflowy/env/cloud_env.dart';
-import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
@@ -67,6 +66,33 @@ class AccountSignInOutButton extends StatelessWidget {
   final VoidCallback onAction;
   final bool signIn;
 
+  static Future<void> showSignInDialog(BuildContext context) async {
+    var hasHandledSuccess = false;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => BlocProvider<SignInBloc>(
+        create: (context) => getIt<SignInBloc>(),
+        child: BlocListener<SignInBloc, SignInState>(
+          listener: (listenerContext, state) async {
+            if (hasHandledSuccess) {
+              return;
+            }
+            final successOrFail = state.successOrFail;
+            if (successOrFail != null && successOrFail.isSuccess) {
+              hasHandledSuccess = true;
+            }
+          },
+          child: FlowyDialog(
+            constraints: const BoxConstraints(maxHeight: 485, maxWidth: 375),
+            backgroundColor: AppFlowyTheme.of(context).backgroundColorScheme.primary,
+            child: const _SignInDialogContent(),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AFFilledTextButton.primary(
@@ -74,7 +100,7 @@ class AccountSignInOutButton extends StatelessWidget {
           ? LocaleKeys.settings_accountPage_login_loginLabel.tr()
           : LocaleKeys.settings_accountPage_login_logoutLabel.tr(),
       onTap: () =>
-          signIn ? _showSignInDialog(context) : _showLogoutDialog(context),
+          signIn ? AccountSignInOutButton.showSignInDialog(context) : _showLogoutDialog(context),
     );
   }
 
@@ -97,37 +123,6 @@ class AccountSignInOutButton extends StatelessWidget {
         await getIt<AuthService>().signOut();
         onAction();
       },
-    );
-  }
-
-  Future<void> _showSignInDialog(BuildContext context) async {
-    var hasHandledSuccess = false;
-    
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => BlocProvider<SignInBloc>(
-        create: (context) => getIt<SignInBloc>(),
-        child: BlocListener<SignInBloc, SignInState>(
-          listener: (listenerContext, state) async {
-            // 避免重复处理
-            if (hasHandledSuccess) {
-              return;
-            }
-            
-            // 监听登录成功状态
-            final successOrFail = state.successOrFail;
-            if (successOrFail != null && successOrFail.isSuccess) {
-              hasHandledSuccess = true;
-              // 登录成功后，Deep Link Handler 会自动调用 runAppFlowy()
-              // 这里不需要做任何操作，只需等待应用重启
-            }
-          },
-          child: const FlowyDialog(
-            constraints: BoxConstraints(maxHeight: 485, maxWidth: 375),
-            child: _SignInDialogContent(),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -233,73 +228,37 @@ class _SignInDialogContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return ScaffoldMessenger(
       child: Scaffold(
-        body: Padding(
-          padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                const _DialogHeader(),
-                const _DialogTitle(),
-                const VSpace(16),
-                const ContinueWithEmailAndPassword(),
-                if (isAuthEnabled) ...[
-                  const VSpace(20),
-                  const _OrDivider(),
-                  const VSpace(10),
-                  SettingThirdPartyLogin(
-                    didLogin: () {
-                      context.popToHome();
-                    },
+        backgroundColor: Colors.transparent,
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 375),
+            child: Padding(
+              // 顶部留白，避免与 FlowyDialog 右上角唯一关闭按钮重叠
+              padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
+              child: Scrollbar(
+                thumbVisibility: false,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      const _DialogTitle(),
+                      const VSpace(16),
+                      const ContinueWithEmailAndPassword(),
+                      if (isAuthEnabled) ...[
+                        const VSpace(20),
+                        const _OrDivider(),
+                        const VSpace(10),
+                        SettingThirdPartyLogin(
+                          didLogin: () {
+                            context.popToHome();
+                          },
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              ],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DialogHeader extends StatelessWidget {
-  const _DialogHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _buildBackButton(context),
-        _buildCloseButton(context),
-      ],
-    );
-  }
-
-  Widget _buildBackButton(BuildContext context) {
-    return GestureDetector(
-      onTap: Navigator.of(context).pop,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: Row(
-          children: [
-            const FlowySvg(FlowySvgs.arrow_back_m, size: Size.square(24)),
-            const HSpace(8),
-            FlowyText.semibold(LocaleKeys.button_back.tr(), fontSize: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCloseButton(BuildContext context) {
-    return GestureDetector(
-      onTap: Navigator.of(context).pop,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: FlowySvg(
-          FlowySvgs.m_close_m,
-          size: const Size.square(20),
-          color: Theme.of(context).colorScheme.outline,
         ),
       ),
     );

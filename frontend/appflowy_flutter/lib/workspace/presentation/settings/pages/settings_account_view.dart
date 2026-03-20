@@ -2,7 +2,6 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/validator.dart';
@@ -19,7 +18,6 @@ import 'package:appflowy/workspace/presentation/settings/widgets/phone_change_di
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
-import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -71,99 +69,86 @@ class _SettingsAccountViewState extends State<SettingsAccountView> {
                     currentSubscription: currentSubscription,
                     isLoadingSubscription: isLoadingSubscription,
                   ),
-                  const VSpace(16),
-                  // 保留原有账号设置内容（后续可以继续补充）
-                  // Account(
-                  //   userProfile: latestUserProfile,
-                  //   didLogout: widget.didLogout,
-                  //   didLogin: widget.didLogin,
-                  // ),
-                  // if (cloudEnabled) ...[
-                  //   const VSpace(16),
-                  //   const EmailSection(),
-                  // ],
-                  // const VSpace(16),
-                  // const AppVersion(),
-                  
-                  // 添加足够的间距，将退出登录按钮推到页面底部
-                  SizedBox(
-                    height: MediaQuery.of(context).size.height * 0.4, // 调整高度以适应不同屏幕
-                  ),
-                  
-                  GestureDetector(
-                    onTap: () async {
-                      final latestProfile =
-                          context.read<SettingsDialogBloc>().state.userProfile;
-                      final isQuickEntryUser =
-                          latestProfile.userAuthType != AuthTypePB.Server;
-
-                      if (isQuickEntryUser) {
-                        // 快速进入用户：先让用户选择是否清除本地数
-                        await showCancelAndConfirmDialog(
-                          context: context,
-                          title: '退出快速进入',
-                          description:
-                              '是否清除当前快速进入产生的数据？\n\n选择“清除并退出”会删除本地快速进入数据，下次进入将从空白开始；\n选择“保留数据退出”则仅重启应用，下次快速进入会尝试继续加载当前数据。',
-                          confirmLabel: '清除并退出',
-                          cancelLabel: '保留并退出',
-                          onConfirm: (ctx) async {
-                            try {
-                              await getIt<AuthService>().signOut();
-                            } catch (_) {}
-                            // 清除并退出后，重启应用到登录页面，不自动登录
-                            await runAppFlowy();
-                          },
-                          onCancel: () async {
-                            // 保留数据退出，设置 tempUserSave 为 true，然后重启应用
-                            Log.info('🔵 [SettingsAccountView] 开始设置 tempUserSave 为 true');
-                            final prefs = await SharedPreferences.getInstance();
-                            await prefs.setString('tempUserSave', 'true');
-                            Log.info('🔵 [SettingsAccountView] 设置 tempUserSave 为 true 完成');
-                            Log.info('🔵 [SettingsAccountView] 开始重启应用');
-                            await runAppFlowy(isAnon: true);
-                            Log.info('🔵 [SettingsAccountView] 重启应用完成');
-                          },
-                        );
-                        return;
-                      }
-
-                      // 云端登录用户：保持原有退出逻辑
-                      try {
-                        await getIt<AuthService>().signOut();
-                      } catch (_) {}
-                      widget.didLogout();
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme
-                              .of(context)
-                              .colorScheme
-                              .primary,
-                          width: 1,
-                        ),
-                        borderRadius: BorderRadius.circular(theme.spacing.s),
-                      ),
-                      child: Center(
-                        child: FlowyText(
-                          '退出登录',
-                          fontSize: 16,
-                          color: Theme
-                              .of(context)
-                              .colorScheme
-                              .primary,
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
+                bottomWidget: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  child: _buildAccountActionButton(context),
+                ),
               );
             },
           ),
         );
       },
+    );
+  }
+
+  // 根据用户类型构建登录或退出登录按钮
+  Widget _buildAccountActionButton(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final latestProfile =
+        context.read<SettingsDialogBloc>().state.userProfile;
+    final isQuickEntryUser =
+        latestProfile.userAuthType != AuthTypePB.Server;
+
+    if (isQuickEntryUser) {
+      // 匿名用户（快速进入）：显示"登录"按钮，点击弹出登录窗口
+      return GestureDetector(
+        onTap: () async {
+          await AccountSignInOutButton.showSignInDialog(context);
+        },
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(theme.spacing.s),
+          ),
+          child: Center(
+            child: FlowyText(
+              '登录',
+              fontSize: 16,
+              color: Theme.of(context).colorScheme.onPrimary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 云端登录用户：显示"退出登录"按钮
+    return GestureDetector(
+      onTap: () async {
+        await showCancelAndConfirmDialog(
+          context: context,
+          title: '退出登录',
+          description: '确定要退出当前账号吗？',
+          confirmLabel: '退出登录',
+          cancelLabel: '取消',
+          onConfirm: (ctx) async {
+            try {
+              await getIt<AuthService>().signOut();
+            } catch (_) {}
+            widget.didLogout();
+          },
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(vertical: theme.spacing.m),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Theme.of(context).colorScheme.primary,
+            width: 1,
+          ),
+          borderRadius: BorderRadius.circular(theme.spacing.s),
+        ),
+        child: Center(
+          child: FlowyText(
+            '退出登录',
+            fontSize: 16,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      ),
     );
   }
 }

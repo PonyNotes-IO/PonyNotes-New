@@ -9,7 +9,9 @@ enum ThirdPartySignInButtonType {
   google,
   github,
   discord,
-  anonymous;
+  anonymous,
+  wechat,
+  douyin;
 
   String get provider {
     switch (this) {
@@ -23,6 +25,10 @@ enum ThirdPartySignInButtonType {
         return 'discord';
       case ThirdPartySignInButtonType.anonymous:
         throw UnsupportedError('Anonymous session does not have a provider');
+      case ThirdPartySignInButtonType.wechat:
+        return 'weixin';
+      case ThirdPartySignInButtonType.douyin:
+        return 'douyin';
     }
   }
 
@@ -38,6 +44,10 @@ enum ThirdPartySignInButtonType {
         return FlowySvgs.m_discord_icon_xl;
       case ThirdPartySignInButtonType.anonymous:
         return FlowySvgs.m_discord_icon_xl;
+      case ThirdPartySignInButtonType.wechat:
+        return FlowySvgs.m_weixin_icon_xl;
+      case ThirdPartySignInButtonType.douyin:
+        return FlowySvgs.m_douyin_icon_xl;
     }
   }
 
@@ -53,6 +63,10 @@ enum ThirdPartySignInButtonType {
         return LocaleKeys.signIn_signInWithDiscord.tr();
       case ThirdPartySignInButtonType.anonymous:
         return 'Anonymous session';
+      case ThirdPartySignInButtonType.wechat:
+        return LocaleKeys.signIn_signInWithWeChat.tr();
+      case ThirdPartySignInButtonType.douyin:
+        return LocaleKeys.signIn_signInWithDouYin.tr();
     }
   }
 
@@ -66,6 +80,8 @@ enum ThirdPartySignInButtonType {
       case ThirdPartySignInButtonType.github:
       case ThirdPartySignInButtonType.discord:
       case ThirdPartySignInButtonType.anonymous:
+      case ThirdPartySignInButtonType.wechat:
+      case ThirdPartySignInButtonType.douyin:
         return isDarkMode ? Colors.black : Colors.grey.shade100;
     }
   }
@@ -79,6 +95,8 @@ enum ThirdPartySignInButtonType {
       case ThirdPartySignInButtonType.github:
       case ThirdPartySignInButtonType.discord:
       case ThirdPartySignInButtonType.anonymous:
+      case ThirdPartySignInButtonType.wechat:
+      case ThirdPartySignInButtonType.douyin:
         return isDarkMode ? Colors.white : Colors.black;
     }
   }
@@ -87,6 +105,8 @@ enum ThirdPartySignInButtonType {
     switch (this) {
       case ThirdPartySignInButtonType.apple:
       case ThirdPartySignInButtonType.github:
+      case ThirdPartySignInButtonType.wechat:
+      case ThirdPartySignInButtonType.douyin:
         return BlendMode.srcIn;
       default:
         return null;

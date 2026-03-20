@@ -480,7 +480,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
         }
 
         showToastNotification(
-          message: LocaleKeys.workspace_removedFromWorkspace.tr(),
+          message: LocaleKeys.settings_appearance_members_removeFromWorkspace.tr(),
           type: ToastificationType.warning,
         );
       }
