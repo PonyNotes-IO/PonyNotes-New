@@ -130,7 +130,9 @@
     "verificationCodeMustBe6Digits": "Verification code must be 6 digits",
     "enterVerificationCode": "Enter verification code",
     "backToModifyContact": "Back to modify contact",
-    "backToOtherLoginMethods": "Back to other login methods"
+    "backToOtherLoginMethods": "Back to other login methods",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Choose your workspace",
@@ -1083,7 +1085,7 @@
       "monthlyPriceInfo": "per seat billed monthly",
       "annualInterval": "Annually",
       "annualPriceInfo": "per seat billed annually",
-      "membershipUpgrades":"会员升级",
+      "membershipUpgrades": "会员升级",
       "storageAddon": "空间补充包",
       "storageSpace": "存储空间",
       "paidMonthly": "月付",
@@ -3045,9 +3047,10 @@
   },
   "publish": {
     "database": {
-      "zero": "0 databases selected",
-      "one": "{count} database selected",
-      "other": "{count} databases selected"
+      "zero": "Publish {} selected view",
+      "one": "Publish {} selected views",
+      "many": "Publish {} selected views",
+      "other": "Publish {} selected views"
     },
     "hasNotBeenPublished": "This page hasn't been published yet",
     "spaceHasNotBeenPublished": "Haven't supported publishing a space yet",
@@ -3071,12 +3074,6 @@
     "fastWithAI": "Fast and easy with AI.",
     "tryItNow": "Try it now",
     "onlyGridViewCanBePublished": "Only Grid view can be published",
-    "database": {
-      "zero": "Publish {} selected view",
-      "one": "Publish {} selected views",
-      "many": "Publish {} selected views",
-      "other": "Publish {} selected views"
-    },
     "mustSelectPrimaryDatabase": "The primary view must be selected",
     "noDatabaseSelected": "No database selected, please select at least one database.",
     "unableToDeselectPrimaryDatabase": "Unable to deselect primary database",

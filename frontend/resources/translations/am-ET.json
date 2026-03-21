@@ -46,7 +46,9 @@
     "LogInWithGoogle": "በ Google ይግቡ",
     "LogInWithGithub": "በ Github ይግቡ",
     "LogInWithDiscord": "በ Discord ይግቡ",
-    "signInWith": "በመለያ ይግቡ:"
+    "signInWith": "በመለያ ይግቡ:",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "የስራ ቦታዎን ይምረጡ",

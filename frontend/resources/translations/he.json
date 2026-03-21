@@ -65,7 +65,9 @@
     "logIn": "להיכנס",
     "generalError": "משהו השתבש. נא לנסות שוב מאוחר יותר",
     "limitRateError": "מטעמי אבטחת מידע, אפשר לבקש קישור קסם כל 60 שניות",
-    "magicLinkSentDescription": "קישור קסם נשלח לדוא״ל שלך. יש ללחוץ על הקישור כדי להשלים את הכניסה שלך למערכת.הקישור יפוג תוך 5 דקות."
+    "magicLinkSentDescription": "קישור קסם נשלח לדוא״ל שלך. יש ללחוץ על הקישור כדי להשלים את הכניסה שלך למערכת.הקישור יפוג תוך 5 דקות.",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "נא לבחור את מרחב העבודה שלך",

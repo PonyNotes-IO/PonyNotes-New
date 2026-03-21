@@ -72,7 +72,9 @@
     "LogInWithGoogle": "Đăng nhập bằng Google",
     "LogInWithGithub": "Đăng nhập bằng Github",
     "LogInWithDiscord": "Đăng nhập bằng Discord",
-    "loginAsGuestButtonText": "Đăng nhập với chế độ khách"
+    "loginAsGuestButtonText": "Đăng nhập với chế độ khách",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Chọn không gian làm việc của bạn",

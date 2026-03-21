@@ -49,7 +49,9 @@
     "LogInWithGoogle": "Σύνδεση μέσω Google",
     "LogInWithGithub": "Σύνδεση μέσω Github",
     "LogInWithDiscord": "Σύνδεση μέσω Discord",
-    "signInWith": "Συνδεθείτε με:"
+    "signInWith": "Συνδεθείτε με:",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Επιλέξτε το χώρο εργασίας σας",

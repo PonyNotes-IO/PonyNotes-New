@@ -36,7 +36,9 @@
     "dontHaveAnAccount": "Még nincs fiókod?",
     "repeatPasswordEmptyError": "A jelszó megerősítése nem lehet üres",
     "unmatchedPasswordError": "A jelszavak nem egyeznek",
-    "loginAsGuestButtonText": "Fogj neki"
+    "loginAsGuestButtonText": "Fogj neki",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "create": "Új munkaterület létrehozása",

@@ -110,7 +110,9 @@
     "loginToAppFlowyCloud": "Přihlášení do AppFlowy Cloud",
     "LogInWithGoogle": "Přihlásit přes Google",
     "LogInWithGithub": "Přihlásit přes GitHub",
-    "LogInWithDiscord": "Přihlásit přes Discord"
+    "LogInWithDiscord": "Přihlásit přes Discord",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Vyberte pracovní ůplochu",

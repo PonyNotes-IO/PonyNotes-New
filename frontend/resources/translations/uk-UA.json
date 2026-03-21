@@ -71,7 +71,9 @@
     "anonymous": "Анонім",
     "LogInWithGoogle": "Увійти за допомогою Google",
     "LogInWithGithub": "Увійти за допомогою Github",
-    "LogInWithDiscord": "Увійти за допомогою Discord"
+    "LogInWithDiscord": "Увійти за допомогою Discord",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Виберіть свій робочий простір",

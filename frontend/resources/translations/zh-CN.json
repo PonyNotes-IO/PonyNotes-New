@@ -137,7 +137,9 @@
     "tokenHasExpiredOrInvalid": "请输入正确的验证码",
     "tooFrequentVerificationCodeRequest": "请求过于频繁，请稍后再试",
     "verifying": "验证中...",
-    "youAreInLocalMode": "您当前处于本地模式"
+    "youAreInLocalMode": "您当前处于本地模式",
+    "signInWithWeChat": "继续使用微信登录",
+    "signInWithDouYin": "继续使用抖音登录"
   },
   "workspace": {
     "chooseWorkspace": "选择您的工作区",
@@ -546,7 +548,6 @@
     "login": "登录",
     "logout": "退出",
     "deleteAccount": "删除账户",
-    "back": "返回",
     "signInGoogle": "使用 Google 账户登录",
     "signInGithub": "使用 Github 账户登录",
     "signInDiscord": "使用 Discord 账户登录",

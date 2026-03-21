@@ -107,7 +107,9 @@
     "verifying": "正在驗證…",
     "continueWithPassword": "繼續使用密碼",
     "youAreInLocalMode": "您目前處於本地模式。",
-    "loginToAppFlowyCloud": "登入 PonyNotes Cloud"
+    "loginToAppFlowyCloud": "登入 PonyNotes Cloud",
+    "signInWithWeChat": "繼續使用微信登入",
+    "signInWithDouYin": "繼續使用抖音登入"
   },
   "workspace": {
     "chooseWorkspace": "選擇你的工作區",
@@ -1047,7 +1049,7 @@
       "monthlyPriceInfo": "每座位每月計費",
       "annualInterval": "每年",
       "annualPriceInfo": "每座位按年計費",
-      "membershipUpgrades":"会员升级",
+      "membershipUpgrades": "会员升级",
       "storageAddon": "空间补充包",
       "storageSpace": "存储空间",
       "paidMonthly": "月付",

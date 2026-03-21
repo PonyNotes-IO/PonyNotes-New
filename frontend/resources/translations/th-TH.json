@@ -71,7 +71,9 @@
     "anonymous": "ไม่ระบุตัวตน",
     "LogInWithGoogle": "เข้าสู่ระบบด้วย Google",
     "LogInWithGithub": "เข้าสู่ระบบด้วย Github",
-    "LogInWithDiscord": "เข้าสู่ระบบด้วย Discord"
+    "LogInWithDiscord": "เข้าสู่ระบบด้วย Discord",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "เลือกพื้นที่ทำงานของคุณ",

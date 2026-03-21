@@ -65,7 +65,9 @@
     "logIn": "ورود",
     "generalError": "مشکلی پیش آمد. لطفاً بعداً دوباره امتحان کنید",
     "anonymous": "ناشناس",
-    "loginAsGuestButtonText": "شروع کنید"
+    "loginAsGuestButtonText": "شروع کنید",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "فضای کار خود را انتخاب کنید",

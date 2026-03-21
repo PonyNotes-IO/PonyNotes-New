@@ -72,7 +72,9 @@
     "LogInWithGoogle": "Entrar com o Google",
     "LogInWithGithub": "Entrar com o Github",
     "LogInWithDiscord": "Entrar com o Discord",
-    "loginAsGuestButtonText": "Iniciar"
+    "loginAsGuestButtonText": "Iniciar",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Escolha seu espaço de trabalho",

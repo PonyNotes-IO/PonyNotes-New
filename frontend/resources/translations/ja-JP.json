@@ -68,7 +68,9 @@
     "generalError": "エラーが発生しました。後でもう一度お試しください",
     "limitRateError": "セキュリティのため、Magic Linkは60秒に1回しかリクエストできません",
     "magicLinkSentDescription": "Magic Linkがあなたのメールアドレスに送信されました。リンクをクリックしてログインを完了してください。リンクは5分後に無効になります。",
-    "anonymous": "匿名"
+    "anonymous": "匿名",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "ワークスペースを選択",
