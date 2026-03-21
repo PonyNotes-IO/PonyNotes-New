@@ -24,8 +24,6 @@ import 'package:appflowy/workspace/presentation/home/menu/view/view_action_type.
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_more_action_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/manage_space_popup.dart';
-import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
-import 'dart:convert';
 import 'package:appflowy/plugins/handwriting_saber/handwriting_saber.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
@@ -1211,44 +1209,14 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
               if (data is! SelectedEmojiIconResult) {
                 return;
               }
-              // 如果是 Space 类型，使用 SpaceBloc 更新图标
-              if (widget.view.isSpace) {
-                if (data.type == FlowyIconType.icon) {
-                  try {
-                    final iconsData =
-                        IconsData.fromJson(jsonDecode(data.emoji));
-                    if (context.mounted) {
-                      context.read<SpaceBloc>().add(
-                            SpaceEvent.changeIcon(
-                              space: widget.view,
-                              icon:
-                                  '${iconsData.groupName}/${iconsData.iconName}',
-                              iconColor: iconsData.color,
-                            ),
-                          );
-                      // 更新图标后刷新列表
-                      _refreshSpaceBlocIfNeeded(context);
-                    }
-                  } on FormatException catch (e) {
-                    Log.warn('ViewItem changeIcon error: $e');
-                    if (context.mounted) {
-                      context.read<SpaceBloc>().add(
-                            SpaceEvent.changeIcon(
-                              space: widget.view,
-                              icon: '',
-                            ),
-                          );
-                      // 更新图标后刷新列表
-                      _refreshSpaceBlocIfNeeded(context);
-                    }
-                  }
-                }
-              } else {
+              // Space 与文档统一走 view.icon（FolderEventUpdateViewIcon）。
+              // 旧逻辑仅在 FlowyIconType.icon 时 dispatch SpaceBloc（写 extra），
+              // Emojis / Upload 分支为空，导致菜单里选表情「无反应」。
+              if (context.mounted) {
                 await ViewBackendService.updateViewIcon(
                   view: widget.view,
                   viewIcon: data.data,
                 );
-                // 更新图标后刷新列表
                 _refreshSpaceBlocIfNeeded(context);
               }
               break;
