@@ -310,17 +310,6 @@ class InnerViewItem extends StatefulWidget {
 }
 
 class _InnerViewItemState extends State<InnerViewItem> {
-  @override
-  void initState() {
-    super.initState();
-    widget.isExpandedNotifier?.addListener(_collapseAllPages);
-  }
-
-  @override
-  void dispose() {
-    widget.isExpandedNotifier?.removeListener(_collapseAllPages);
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -445,11 +434,6 @@ class _InnerViewItemState extends State<InnerViewItem> {
     return child;
   }
 
-  void _collapseAllPages() {
-    if (widget.isExpandedNotifier?.value == true) {
-      context.read<ViewBloc>().add(const ViewEvent.collapseAllPages());
-    }
-  }
 }
 
 class SingleInnerViewItem extends StatefulWidget {
@@ -1222,9 +1206,6 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                   context.read<TabsBloc>().openTab(widget.view);
                 }
               });
-              break;
-            case ViewMoreActionType.collapseAllPages:
-              context.read<ViewBloc>().add(const ViewEvent.collapseAllPages());
               break;
             case ViewMoreActionType.changeIcon:
               if (data is! SelectedEmojiIconResult) {

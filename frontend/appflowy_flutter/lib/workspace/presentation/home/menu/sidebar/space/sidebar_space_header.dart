@@ -28,14 +28,12 @@ class SidebarSpaceHeader extends StatefulWidget {
     required this.space,
     required this.onAdded,
     required this.onCreateNewSpace,
-    required this.onCollapseAllPages,
     required this.isExpanded,
   });
 
   final ViewPB space;
   final void Function(ViewLayoutPB layout) onAdded;
   final VoidCallback onCreateNewSpace;
-  final VoidCallback onCollapseAllPages;
   final bool isExpanded;
 
   @override
@@ -228,9 +226,6 @@ class _SidebarSpaceHeaderState extends State<SidebarSpaceHeader> {
         break;
       case SpaceMoreActionType.addNewSpace:
         widget.onCreateNewSpace();
-        break;
-      case SpaceMoreActionType.collapseAllPages:
-        widget.onCollapseAllPages();
         break;
       case SpaceMoreActionType.delete:
         _showDeleteSpaceDialog(context);

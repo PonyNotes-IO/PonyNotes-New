@@ -189,7 +189,6 @@ class _SpaceState extends State<_Space> {
                 layout,
               ),
               onCreateNewSpace: () => _showCreateSpaceDialog(context),
-              onCollapseAllPages: () => isExpandedNotifier.value = true,
             ),
             if (state.isExpanded)
               MouseRegion(

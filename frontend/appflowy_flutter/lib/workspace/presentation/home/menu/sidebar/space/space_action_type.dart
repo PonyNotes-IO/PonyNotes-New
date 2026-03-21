@@ -7,7 +7,6 @@ enum SpaceMoreActionType {
   delete,
   rename,
   changeIcon,
-  collapseAllPages,
   divider,
   addNewSpace,
   manage,
@@ -23,8 +22,6 @@ extension ViewMoreActionTypeExtension on SpaceMoreActionType {
         return LocaleKeys.space_rename.tr();
       case SpaceMoreActionType.changeIcon:
         return LocaleKeys.space_changeIcon.tr();
-      case SpaceMoreActionType.collapseAllPages:
-        return LocaleKeys.space_collapseAllSubPages.tr();
       case SpaceMoreActionType.addNewSpace:
         return LocaleKeys.space_addNewSpace.tr();
       case SpaceMoreActionType.manage:
@@ -44,8 +41,6 @@ extension ViewMoreActionTypeExtension on SpaceMoreActionType {
         return FlowySvgs.view_item_rename_s;
       case SpaceMoreActionType.changeIcon:
         return FlowySvgs.change_icon_s;
-      case SpaceMoreActionType.collapseAllPages:
-        return FlowySvgs.collapse_all_page_s;
       case SpaceMoreActionType.addNewSpace:
         return FlowySvgs.space_add_s;
       case SpaceMoreActionType.manage:
@@ -61,7 +56,6 @@ extension ViewMoreActionTypeExtension on SpaceMoreActionType {
     switch (this) {
       case SpaceMoreActionType.changeIcon:
       case SpaceMoreActionType.rename:
-      case SpaceMoreActionType.collapseAllPages:
       case SpaceMoreActionType.divider:
       case SpaceMoreActionType.delete:
       case SpaceMoreActionType.addNewSpace:

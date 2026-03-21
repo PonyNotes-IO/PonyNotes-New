@@ -87,12 +87,6 @@ class ViewMoreActionPopover extends StatelessWidget {
         ViewMoreActionType.duplicate, // 复制空间
       ]);
 
-      // 如果有子视图且已展开，显示收起全部子页面
-      if (view.childViews.isNotEmpty && isExpanded) {
-        actionTypes.add(ViewMoreActionType.divider,);
-        actionTypes.add(ViewMoreActionType.collapseAllPages);
-      }
-
       // 根据用户角色显示删除或离开工作区
       if (context != null) {
         // 改版需求：
@@ -177,15 +171,6 @@ class ViewMoreActionPopover extends StatelessWidget {
         ViewMoreActionType.delete,
         ViewMoreActionType.divider,
       ]);
-
-      // Chat doesn't change collapse
-      // Only show collapse all pages if the view has child views
-      if (view.layout != ViewLayoutPB.Chat &&
-          view.childViews.isNotEmpty &&
-          isExpanded) {
-        actionTypes.add(ViewMoreActionType.collapseAllPages);
-        actionTypes.add(ViewMoreActionType.divider);
-      }
 
       actionTypes.add(ViewMoreActionType.openInNewTab);
     }

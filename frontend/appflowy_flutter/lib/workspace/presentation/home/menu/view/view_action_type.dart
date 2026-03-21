@@ -14,7 +14,6 @@ enum ViewMoreActionType {
   moveTo,
   openInNewTab,
   changeIcon,
-  collapseAllPages, // including sub pages
   divider,
   lastModified,
   created,
@@ -55,8 +54,6 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
         return LocaleKeys.disclosureAction_openNewTab.tr();
       case ViewMoreActionType.changeIcon:
         return LocaleKeys.disclosureAction_changeIcon.tr();
-      case ViewMoreActionType.collapseAllPages:
-        return LocaleKeys.disclosureAction_collapseAllPages.tr();
       case ViewMoreActionType.lockPage:
         return LocaleKeys.disclosureAction_lockPage.tr();
       case ViewMoreActionType.leaveSharedPage:
@@ -94,8 +91,6 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
         return FlowySvgs.view_item_open_in_new_tab_s;
       case ViewMoreActionType.changeIcon:
         return FlowySvgs.change_icon_s;
-      case ViewMoreActionType.collapseAllPages:
-        return FlowySvgs.collapse_all_page_s;
       case ViewMoreActionType.lockPage:
         return FlowySvgs.lock_page_s;
       case ViewMoreActionType.leaveSharedPage:
@@ -125,7 +120,6 @@ extension ViewMoreActionTypeExtension on ViewMoreActionType {
       case ViewMoreActionType.copyLink:
       case ViewMoreActionType.rename:
       case ViewMoreActionType.openInNewTab:
-      case ViewMoreActionType.collapseAllPages:
       case ViewMoreActionType.divider:
       case ViewMoreActionType.delete:
       case ViewMoreActionType.lastModified:
