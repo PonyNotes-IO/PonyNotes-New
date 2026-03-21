@@ -836,7 +836,20 @@ impl UserManager {
 
       tokio::spawn(async move {
         info!("Started listening for system notifications");
-        while let Ok(msg) = rx.recv().await {
+        loop {
+          let msg = match rx.recv().await {
+            Ok(m) => m,
+            // Lagged: 广播信道满了丢弃了部分消息，继续循环不要退出
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+              warn!("system notification receiver lagged, skipped {} messages", n);
+              continue;
+            },
+            // 信道关闭，退出循环
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+              info!("system notification channel closed");
+              break;
+            },
+          };
           if let UserMessage::SystemNotification(notification) = msg {
             info!(
               "Received system notification from WebSocket: id={}, type={}",
