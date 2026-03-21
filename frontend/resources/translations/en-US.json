@@ -168,7 +168,8 @@
     "cannotDeleteTheOnlyWorkspace": "Cannot delete the only workspace",
     "fetchWorkspacesFailed": "Failed to fetch workspaces",
     "leaveCurrentWorkspace": "Leave workspace",
-    "leaveCurrentWorkspacePrompt": "Are you sure you want to leave the current workspace?"
+    "leaveCurrentWorkspacePrompt": "Are you sure you want to leave the current workspace?",
+    "removedFromWorkspace": "Removed From Workspace"
   },
   "shareAction": {
     "buttonText": "Share",

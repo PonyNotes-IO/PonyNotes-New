@@ -175,7 +175,8 @@
     "cannotDeleteTheOnlyWorkspace": "不能删除仅存的工作区",
     "fetchWorkspacesFailed": "获取工作区失败",
     "leaveCurrentWorkspace": "退出工作区",
-    "leaveCurrentWorkspacePrompt": "您确定要离开当前工作区吗？"
+    "leaveCurrentWorkspacePrompt": "您确定要离开当前工作区吗？",
+    "removedFromWorkspace": "已被移除当前工作区"
   },
   "shareAction": {
     "buttonText": "分享",
