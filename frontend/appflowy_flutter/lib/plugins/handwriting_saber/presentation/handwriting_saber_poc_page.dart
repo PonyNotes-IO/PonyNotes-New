@@ -74,6 +74,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   String _status = '初始化中...';
 
+  /// 导入时的加载遮罩标志
+  bool _isImporting = false;
+
   /// 简化版 Saber 核心数据
   EditorCoreInfo _coreInfo = EditorCoreInfo.empty();
 
@@ -237,6 +240,11 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     debugPrint('🚀🚀🚀 [HandwritingSaber] ViewID: ${widget.view.id}');
     debugPrint('🚀🚀🚀 [HandwritingSaber] ViewName: ${widget.view.name}');
     _initLocalData();
+    // 注册导入后 reload 回调，供 HandwritingImportAction 在导入成功后调用
+    HandwritingSaberDataService.registerReloadCallback(
+      widget.view.id,
+      _reloadAfterImport,
+    );
     // 合并 repaint：当当前笔迹或激光笔列表变化时，更新 tick 以触发局部重绘
     _currentStrokeNotifier.addListener(() {
       _repaintTick.value++;
@@ -389,6 +397,15 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       debugPrint(
           '🦋[HandwritingSaber] _preloadPdfBackgrounds: Preloading $pdfPageCount PDF background images');
     }
+  }
+
+  /// 导入成功后重新加载数据（由 HandwritingSaberDataService.triggerReload 触发）
+  void _reloadAfterImport() {
+    if (!mounted) return;
+    setState(() { _isImporting = true; });
+    _initLocalData().then((_) {
+      if (mounted) setState(() { _isImporting = false; });
+    });
   }
 
   /// 初始化本地数据：
@@ -4994,6 +5011,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
   @override
   void dispose() {
+    // 注销导入 reload 回调
+    HandwritingSaberDataService.unregisterReloadCallback(widget.view.id);
+
     // ✅ 关键修复：dispose前最后一次保存（deactivate可能已保存，这里做双保险）
     // _flushSaveForView 会同步序列化数据，同时异步写入 Collab 和本地文件
     debugPrint('🦋[HandwritingSaber] ===== dispose: final flush save =====');
@@ -5064,7 +5084,9 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
   @override
   Widget build(BuildContext context) {
     try {
-      return Focus(
+      return Stack(
+        children: [
+          Focus(
         autofocus: true,
         onKeyEvent: (FocusNode node, KeyEvent event) {
           // ✅ 监听键盘事件
@@ -5443,6 +5465,26 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
             ),
           ],
         ),
+          ),
+          // 导入时的加载遮罩
+          if (_isImporting)
+            Container(
+              color: Colors.black38,
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: Colors.white),
+                    SizedBox(height: 16),
+                    Text(
+                      '正在导入数据，请稍候...',
+                      style: TextStyle(color: Colors.white, fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       );
     } catch (e, stackTrace) {
       debugPrint('❌ [HandwritingSaber] build() FAILED: $e');

@@ -633,10 +633,12 @@ class HandwritingImportAction extends StatelessWidget {
 
       if (success) {
         Log.info('[HandwritingImport] 导入成功');
-        if (context.mounted) {
-          _showSuccess(context, '手写笔记导入成功，请刷新页面');
-        }
+        // 通知手写笔记页面重新加载数据（自动更新，无需切换 tab）
+        HandwritingSaberDataService.triggerReload(view.id);
         onImportSuccess?.call();
+        if (context.mounted) {
+          _showSuccess(context, '手写笔记导入成功');
+        }
       } else {
         Log.error('[HandwritingImport] 保存数据失败');
         if (context.mounted) {

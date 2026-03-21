@@ -770,7 +770,7 @@ class _PromptBottomActions extends StatelessWidget {
         final path = await getIt<FilePickerService>().pickFiles(
           dialogTitle: '',
           type: FileType.custom,
-          allowedExtensions: ["pdf", "txt", "md"],
+          allowedExtensions: ["png", "jpg", "jpeg"],
         );
 
         if (path == null) {
@@ -818,7 +818,8 @@ class _PromptBottomActions extends StatelessWidget {
                 // 打开文件选择器，支持所有文件类型
                 final result = await getIt<FilePickerService>().pickFiles(
                   dialogTitle: '选择附件',
-                  type: FileType.any, // 支持所有文件类型
+                  type: FileType.custom,
+                  allowedExtensions: ["png", "jpg", "jpeg"],
                   allowMultiple: true,
                 );
 

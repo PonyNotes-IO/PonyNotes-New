@@ -880,16 +880,52 @@ impl UserManager {
                 },
               }
 
-              // 当用户被移出工作区时，立即强制刷新工作区列表。
-              // get_all_user_workspaces 会在后台发起一次服务端同步，
-              // 同步完成后会通过 DidUpdateUserWorkspaces 通知 Flutter 层，
-              // Flutter 的 UserWorkspaceBloc._onEmitWorkspaces 检测到当前
-              // 工作区不在列表中后会立即切换到用户自己的工作区。
+              // 当用户被移出工作区时，立即处理：
+              // 1. 从 payload_json 中解析被移除的 workspace_id
+              // 2. 立即从本地 SQLite 删除该工作区记录
+              // 3. 立即发送 DidUpdateUserWorkspaces 通知，Flutter 层收到后
+              //    _onEmitWorkspaces 检测到当前工作区不在新列表中，立即切换到自己的工作区
+              // 4. 同时在后台触发服务端同步，确保本地数据与服务端一致
               if notification.notification_type == "workspace_member_removed" {
-                info!("workspace_member_removed received, forcing workspace list refresh");
+                info!("workspace_member_removed received, applying immediate local removal");
+
+                // 从 payload_json 解析 workspace_id
+                let removed_workspace_id = serde_json::from_str::<Value>(&notification.payload_json)
+                  .ok()
+                  .and_then(|v| v.get("workspace_id").and_then(|id| id.as_str()).map(|s| s.to_string()));
+
                 if let Ok(session) = manager.get_session() {
+                  let uid = session.user_id;
+
+                  // 立即从本地 SQLite 删除被移除的工作区，并发送通知给 Flutter
+                  if let Some(ref ws_id) = removed_workspace_id {
+                    if let Ok(conn) = manager.db_connection(uid) {
+                      match delete_user_workspace(conn, ws_id) {
+                        Ok(_) => info!("Deleted workspace {} from local DB after member removal", ws_id),
+                        Err(e) => warn!("Failed to delete workspace {} from local DB: {:?}", ws_id, e),
+                      }
+                    }
+                    // 查询本地剩余工作区列表并立即通知 Flutter 层切换工作区
+                    if let Ok(mut conn) = manager.db_connection(uid) {
+                      match select_all_user_workspace(uid, &mut conn) {
+                        Ok(workspaces) => {
+                          info!(
+                            "Sending DidUpdateUserWorkspaces after removal: {} workspaces remain",
+                            workspaces.len()
+                          );
+                          let repeated_pb = crate::entities::RepeatedUserWorkspacePB::from(workspaces);
+                          send_notification(uid, UserNotification::DidUpdateUserWorkspaces)
+                            .payload(repeated_pb)
+                            .send();
+                        },
+                        Err(e) => warn!("Failed to query local workspaces after removal: {:?}", e),
+                      }
+                    }
+                  }
+
+                  // 后台触发服务端同步，确保本地列表与服务端最终一致
                   if let Ok(profile) = manager
-                    .get_user_profile_from_disk(session.user_id, &session.workspace_id)
+                    .get_user_profile_from_disk(uid, &session.workspace_id)
                     .await
                   {
                     if let Err(e) = manager
@@ -901,7 +937,7 @@ impl UserManager {
                         e
                       );
                     } else {
-                      info!("Workspace list refresh triggered after member removal");
+                      info!("Background workspace list sync triggered after member removal");
                     }
                   }
                 }

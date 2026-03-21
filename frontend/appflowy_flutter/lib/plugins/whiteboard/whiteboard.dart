@@ -178,6 +178,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   Map<String, dynamic>? _initialData;
   bool _isLoadingData = true;
   bool _isDisposing = false; // 标记是否正在销毁
+  int _importReloadCounter = 0; // 每次导入递增，强制重建 WebView
 
   // Collab 适配器 - 完全模仿 DocumentBloc 的 TransactionAdapter
   WhiteboardCollabAdapter? _collabAdapter;
@@ -185,7 +186,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   // ExcalidrawWebView的GlobalKey，用于调用其方法
   // ✅ 关键修复：为每个视图创建唯一的GlobalKey，避免视图切换时PlatformView重复创建
   // 使用view.id确保每个白板视图都有唯一的key
-  late final GlobalKey<ExcalidrawWebViewState> _webViewKey;
+  late GlobalKey<ExcalidrawWebViewState> _webViewKey;
 
   // 主题监听
   Brightness? _lastBrightness;
@@ -285,21 +286,37 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         'files': data['files'] ?? {},
       };
 
-      // 加载数据到 Excalidraw
-      await _webViewKey.currentState?.loadData(sceneData);
-
-      // 更新 Adapter 的全量数据缓存
+      // 更新 Adapter 的全量数据缓存并保存到后端
       _collabAdapter?.onWhiteboardDataChanged('update', sceneData);
-
-      // 强制保存到后端
       await _collabAdapter?.forceSync();
 
+      // 通过重建 WebView（更换 Key + 更新 initialData）确保数据立即显示，
+      // 与切换 tab 后重新加载的效果一致，避免依赖 JS 调用可能失败的问题。
+      if (mounted && !_isDisposing) {
+        setState(() {
+          _initialData = sceneData;
+          _isLoadingData = true;
+          _importReloadCounter++;
+          _webViewKey = GlobalKey<ExcalidrawWebViewState>(
+            debugLabel:
+                'whiteboard_webview_${widget.view.id}_i$_importReloadCounter',
+          );
+        });
+        // 短暂延迟让 loading 指示器渲染出来
+        await Future.delayed(const Duration(milliseconds: 80));
+        if (mounted && !_isDisposing) {
+          setState(() {
+            _isLoadingData = false;
+          });
+        }
+      }
+
       Log.info('[Whiteboard] 导入成功');
-      _showSuccessSnackBar('导入成功');
+      if (mounted) _showSuccessSnackBar('导入成功');
     } catch (e, stackTrace) {
       Log.error('[Whiteboard] 导入失败: $e');
       Log.error('[Whiteboard] 堆栈: $stackTrace');
-      _showErrorSnackBar('导入失败: $e');
+      if (mounted) _showErrorSnackBar('导入失败: $e');
     }
   }
 

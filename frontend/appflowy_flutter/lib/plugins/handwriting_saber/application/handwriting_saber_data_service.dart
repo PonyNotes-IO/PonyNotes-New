@@ -15,6 +15,20 @@ import 'package:path/path.dart' as p;
 /// Saber 手写笔记数据服务
 /// 负责手写笔记数据的存储和加载（通过 Rust Collab 接口同步）
 class HandwritingSaberDataService {
+  /// 页面注册的 reload 回调（导入成功后调用，触发页面重新加载数据）
+  static final Map<String, void Function()> _reloadCallbacks = {};
+
+  static void registerReloadCallback(String viewId, void Function() cb) {
+    _reloadCallbacks[viewId] = cb;
+  }
+
+  static void unregisterReloadCallback(String viewId) {
+    _reloadCallbacks.remove(viewId);
+  }
+
+  static void triggerReload(String viewId) {
+    _reloadCallbacks[viewId]?.call();
+  }
   /// 获取手写笔记数据存储目录（用于本地文件缓存回退）
   Future<String> _getHandwritingSaberDirectory() async {
     final basePath = await getIt<ApplicationDataStorage>().getPath();
