@@ -67,7 +67,9 @@
     "logIn": "Logáil isteach",
     "generalError": "Chuaigh rud éigin mícheart. Bain triail eile as ar ball",
     "limitRateError": "Ar chúiseanna slándála, ní féidir leat nasc draíochta a iarraidh ach gach 60 soicind",
-    "anonymous": "Gan ainm"
+    "anonymous": "Gan ainm",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Roghnaigh do spás oibre",

@@ -91,7 +91,9 @@
     "LogInWithGithub": "Se connecter avec Github",
     "LogInWithDiscord": "Se connecter avec Discord",
     "loginAsGuestButtonText": "Commencer",
-    "logInWithMagicLink": "Connectez-vous avec Magic Link"
+    "logInWithMagicLink": "Connectez-vous avec Magic Link",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Choisissez votre espace de travail",

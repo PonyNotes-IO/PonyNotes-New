@@ -68,7 +68,9 @@
     "generalError": "Bir hata oluştu. Lütfen daha sonra tekrar deneyin.",
     "limitRateError": "Güvenlik önlemi olarak, sihirli bağlantı talepleri 60 saniyede bir ile sınırlandırılmıştır.",
     "magicLinkSentDescription": "E-posta adresinize sihirli bir bağlantı gönderdik. Giriş yapmak için bu bağlantıya tıklayın. Bağlantı 5 dakika içinde geçersiz hale gelecektir.",
-    "anonymous": "Anonim"
+    "anonymous": "Anonim",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Çalışma alanınızı seçin",

@@ -55,7 +55,9 @@
     "LogInWithGithub": "چوونە ژوورەوە لە ڕێگەی گیتهاب",
     "LogInWithDiscord": "چوونە ژوورەوە لە ڕێگەی دیسکۆرد",
     "loginAsGuestButtonText": "دەست پێ بکە",
-    "logInWithMagicLink": "بە مەجیک لینک بچۆرە ژوورەوە"
+    "logInWithMagicLink": "بە مەجیک لینک بچۆرە ژوورەوە",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "هەڵبژاردنی شوێنی کارەکەت",

@@ -44,7 +44,9 @@
     "dontHaveAnAccount": "Har du inget konto?",
     "repeatPasswordEmptyError": "Upprepat lösenord kan inte vara tomt",
     "unmatchedPasswordError": "Upprepat lösenord är inte samma som det första",
-    "loginAsGuestButtonText": "Komma igång"
+    "loginAsGuestButtonText": "Komma igång",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "create": "Skapa arbetsyta",

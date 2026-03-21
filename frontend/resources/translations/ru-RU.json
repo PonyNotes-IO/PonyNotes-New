@@ -85,7 +85,9 @@
     "loginAs": "Войти как",
     "invalidVerificationCode": "Пожалуйста, введите действительный код верификации",
     "tooFrequentVerificationCodeRequest": "Вы сделали слишком много запросов. Пожалуйста, попробуйте позже.",
-    "invalidLoginCredentials": "Ваш пароль неверный, пожалуйста, попробуйте снова"
+    "invalidLoginCredentials": "Ваш пароль неверный, пожалуйста, попробуйте снова",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Выберите ваше рабочее пространство",

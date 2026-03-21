@@ -46,7 +46,9 @@
     "LogInWithGoogle": "गूगल से लॉग इन करें",
     "LogInWithGithub": "गिटहब से लॉग इन करें",
     "LogInWithDiscord": "डिस्कॉर्ड से लॉग इन करें",
-    "signInWith": "इसके साथ साइन इन करें:"
+    "signInWith": "इसके साथ साइन इन करें:",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "अपना कार्यक्षेत्र चुनें",

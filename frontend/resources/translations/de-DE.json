@@ -68,7 +68,9 @@
     "generalError": "Etwas ist schiefgelaufen. Bitte versuche es später noch einmal",
     "limitRateError": "Aus Sicherheitsgründen kannst du nur alle 60 Sekunden einen Authentifizierungslink anfordern",
     "magicLinkSentDescription": "Ein Magic Link wurde an deine E-Mail-Adresse gesendet. Klicke auf den Link, um deine Anmeldung abzuschließen. Der Link läuft nach 5 Minuten ab.",
-    "anonymous": "Anonym"
+    "anonymous": "Anonym",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Arbeitsbereich wählen",

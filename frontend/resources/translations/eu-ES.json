@@ -36,7 +36,9 @@
     "dontHaveAnAccount": "Ez daukazu konturik?",
     "repeatPasswordEmptyError": "Pasahitz errepikapenak ezin du hutsik egon",
     "unmatchedPasswordError": "Pasahitz errepikapena ez da berdina",
-    "loginAsGuestButtonText": "Hasi"
+    "loginAsGuestButtonText": "Hasi",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "create": "Lan-eremua",

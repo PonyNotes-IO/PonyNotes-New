@@ -72,7 +72,9 @@
     "LogInWithGoogle": "Masuk dengan Google",
     "LogInWithGithub": "Masuk dengan Github",
     "LogInWithDiscord": "Masuk dengan Discord",
-    "loginAsGuestButtonText": "Memulai"
+    "loginAsGuestButtonText": "Memulai",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Pilih workspace anda",

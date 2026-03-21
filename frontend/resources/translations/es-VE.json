@@ -67,7 +67,9 @@
     "logIn": "Iniciar sesión",
     "generalError": "Algo ha salido mal. Por favor, inténtalo más tarde",
     "limitRateError": "Por razones de seguridad, solo puedes solicitar un enlace mágico cada 60 segundos",
-    "anonymous": "Anónimo"
+    "anonymous": "Anónimo",
+    "signInWithWeChat": "Continue with WeChat",
+    "signInWithDouYin": "Continue with Douyin"
   },
   "workspace": {
     "chooseWorkspace": "Elige tu espacio de trabajo",
