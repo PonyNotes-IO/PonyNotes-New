@@ -163,7 +163,7 @@ class ViewMoreActionPopover extends StatelessWidget {
         
         // 同时显示"复制"和"复制到我的空间"选项，让用户选择
         actionTypes.add(ViewMoreActionType.duplicate);
-        actionTypes.add(ViewMoreActionType.duplicateToMySpace);
+        // actionTypes.add(ViewMoreActionType.duplicateToMySpace);
       }
 
       actionTypes.addAll([
