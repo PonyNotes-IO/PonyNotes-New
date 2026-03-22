@@ -25,6 +25,38 @@ abstract class IUserBackendService {
   );
 }
 
+/// 手机号绑定发送验证码的响应 DTO
+class PhoneBindSendResult {
+  PhoneBindSendResult({
+    required this.codeSent,
+    required this.phoneExists,
+    required this.isOwnPhone,
+    this.existingUid,
+    this.message,
+  });
+  final bool codeSent;      // 验证码是否已发送
+  final bool phoneExists;   // 手机号是否已被其他账号注册
+  final bool isOwnPhone;    // 手机号是否是当前用户自己的
+  final String? existingUid; // 已存在账号的 UID（用于展示）
+  final String? message;
+}
+
+/// 手机号绑定确认的响应 DTO
+class PhoneBindConfirmResult {
+  PhoneBindConfirmResult({
+    required this.merged,
+    this.primaryUserId,
+    this.deletedUserId,
+    this.message,
+    this.migratedWorkspaces,
+  });
+  final bool merged;                  // 是否执行了账号合并
+  final String? primaryUserId;        // 合并后保留的主账号 ID
+  final String? deletedUserId;        // 被删除的重复账号 ID
+  final String? message;             // 消息
+  final int? migratedWorkspaces;      // 迁移的工作区数量
+}
+
 /// Lightweight DTO for collab member returned by cloud API
 class CollabMember {
   CollabMember({
@@ -324,6 +356,174 @@ class UserBackendService implements IUserBackendService {
         FlowyError()
           ..code = ErrorCode.Internal
           ..msg = 'Failed to verify phone: $e',
+      );
+    }
+  }
+
+  /// 发送手机号绑定验证码（含手机号已注册检测）
+  /// POST /api/user/send-phone-bind-code
+  /// 返回 PhoneBindSendResult：
+  ///   - codeSent=true：验证码已发送，可进入输入验证码页面
+  ///   - phoneExists=true：手机号已被其他账号注册，前端应弹出"账号合并"确认框
+  ///   - isOwnPhone=true：手机号是当前用户自己的
+  static Future<FlowyResult<PhoneBindSendResult, FlowyError>>
+      sendPhoneBindCode(String phone) async {
+    try {
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+
+      final userProfileResult = await getCurrentUserProfile();
+      final userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+
+      final baseUrl = cloudConfig.serverUrl;
+      final token = _normalizeToken(userProfile.token);
+
+      if (baseUrl.isEmpty || token.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL or auth token',
+        );
+      }
+
+      final uri = Uri.parse('$baseUrl/api/user/send-phone-bind-code');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'phone': phone}),
+      );
+
+      if (response.statusCode == 200) {
+        try {
+          final json = jsonDecode(response.body) as Map<String, dynamic>;
+          return FlowyResult.success(PhoneBindSendResult(
+            codeSent: json['code_sent'] as bool? ?? false,
+            phoneExists: json['phone_exists'] as bool? ?? false,
+            isOwnPhone: json['is_own_phone'] as bool? ?? false,
+            existingUid: json['existing_uid'] as String?,
+            message: json['message'] as String?,
+          ));
+        } catch (e) {
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.Internal
+              ..msg = 'Failed to parse response: $e',
+          );
+        }
+      } else {
+        String errorMsg = 'Failed to send phone bind code (HTTP ${response.statusCode})';
+        if (response.body.isNotEmpty) {
+          try {
+            final json = jsonDecode(response.body) as Map<String, dynamic>;
+            errorMsg = json['message'] as String? ?? json['msg'] as String? ?? errorMsg;
+          } catch (_) {}
+        }
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e) {
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Failed to send phone bind code: $e',
+      );
+    }
+  }
+
+  /// 确认手机号绑定（含账号合并）
+  /// POST /api/user/confirm-phone-bind
+  static Future<FlowyResult<PhoneBindConfirmResult, FlowyError>>
+      confirmPhoneBind({
+    required String phone,
+    required String token,
+    bool merge = false,
+  }) async {
+    try {
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+
+      final userProfileResult = await getCurrentUserProfile();
+      final userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+
+      final baseUrl = cloudConfig.serverUrl;
+      final rawToken = _normalizeToken(userProfile.token);
+
+      if (baseUrl.isEmpty || rawToken.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL or auth token',
+        );
+      }
+
+      final uri = Uri.parse('$baseUrl/api/user/confirm-phone-bind');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $rawToken',
+        },
+        body: jsonEncode({
+          'phone': phone,
+          'token': token,
+          'merge': merge,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        try {
+          final json = jsonDecode(response.body) as Map<String, dynamic>;
+          return FlowyResult.success(PhoneBindConfirmResult(
+            merged: json['merged'] as bool? ?? false,
+            primaryUserId: json['primary_user_id'] as String?,
+            deletedUserId: json['deleted_user_id'] as String?,
+            message: json['message'] as String?,
+            migratedWorkspaces: json['migrated_workspaces'] as int?,
+          ));
+        } catch (e) {
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.Internal
+              ..msg = 'Failed to parse response: $e',
+          );
+        }
+      } else {
+        String errorMsg = 'Failed to confirm phone bind (HTTP ${response.statusCode})';
+        if (response.body.isNotEmpty) {
+          try {
+            final json = jsonDecode(response.body) as Map<String, dynamic>;
+            errorMsg = json['message'] as String? ?? json['msg'] as String? ?? errorMsg;
+          } catch (_) {}
+        }
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e) {
+      return FlowyResult.failure(
+        FlowyError()
+          ..code = ErrorCode.Internal
+          ..msg = 'Failed to confirm phone bind: $e',
       );
     }
   }

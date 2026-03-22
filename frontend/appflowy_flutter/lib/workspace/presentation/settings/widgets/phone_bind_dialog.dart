@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:appflowy/user/application/contact_binding_service.dart';
+import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/account_merge_dialog.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/slide_verification_widget.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -241,24 +242,40 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
       _isSending = true;
     });
 
-    final result =
-        await ContactBindingService.sendPhoneVerificationCode(cleanPhone);
+    // 使用新的含合并检测的 API
+    final result = await UserBackendService.sendPhoneBindCode(cleanPhone);
 
     result.fold(
-      (_) {
+      (data) {
         if (!mounted) return;
+        setState(() => _isSending = false);
+
+        if (data.isOwnPhone) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('该手机号已绑定到当前账号'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+
+        if (data.phoneExists) {
+          // 手机号已被其他账号注册 → 弹出账号合并确认框
+          _showMergeDialog(cleanPhone);
+          return;
+        }
+
+        // 验证码已发送
         setState(() {
           _countdown = 60;
-          _isSending = false;
           _hasRequestedCode = true;
         });
         _startCountdown();
       },
       (error) {
         if (!mounted) return;
-        setState(() {
-          _isSending = false;
-        });
+        setState(() => _isSending = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('发送失败: ${error.msg}'),
@@ -266,6 +283,23 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
           ),
         );
       },
+    );
+  }
+
+  void _showMergeDialog(String phone) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AccountMergeDialog(
+        phone: phone,
+        onMergeComplete: () {
+          Navigator.of(context).pop();
+          widget.onBindComplete?.call();
+        },
+        onCancelled: () {
+          Navigator.of(context).pop();
+        },
+      ),
     );
   }
 
@@ -307,9 +341,11 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
       _isBinding = true;
     });
 
-    final result = await ContactBindingService.bindPhoneNumber(
-      cleanPhone,
-      codeController.text,
+    // 不走合并路径，直接绑定
+    final result = await UserBackendService.confirmPhoneBind(
+      phone: cleanPhone,
+      token: codeController.text,
+      merge: false,
     );
 
     if (!mounted) return;
@@ -318,7 +354,14 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
     });
 
     result.fold(
-      (_) {
+      (data) {
+        if (data.merged) {
+          // 走合并路径（用户中途切换到合并弹窗并完成合并）
+          Navigator.of(context).pop();
+          widget.onBindComplete?.call();
+          return;
+        }
+        // 正常绑定成功
         Navigator.of(context).pop();
         widget.onBindComplete?.call();
       },
