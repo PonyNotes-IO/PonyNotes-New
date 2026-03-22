@@ -174,14 +174,14 @@ class _AccountQuickActionsSection extends StatelessWidget {
         _buildRow(
           context,
           title: LocaleKeys.settings_billingPage_storageSpace.tr(),
-          trailing: isLoadingSubscription ? '' : storageUsage,
-          showArrow: true,
+          trailing: isLoadingSubscription ? '--' : storageUsage,
+          showArrow: false,
         ),
         _buildRow(
           context,
           title: 'AI使用次数',
-          trailing: isLoadingSubscription ? '' : aiUsage,
-          showArrow: true,
+          trailing: isLoadingSubscription ? '--' : aiUsage,
+          showArrow: false,
         ),
         GestureDetector(
           onTap: () =>
@@ -256,7 +256,7 @@ class _AccountQuickActionsSection extends StatelessWidget {
     final usage = currentSubscription?.usage;
     final remaining = usage?.aiChatRemaining;
     if (remaining == null) {
-      return '';
+      return '--';
     }
     return '本月剩余$remaining次';
   }
@@ -266,7 +266,7 @@ class _AccountQuickActionsSection extends StatelessWidget {
     final usedGb = usage?.storageUsedGb;
     final totalGb = usage?.storageTotalGb;
     if (usedGb == null || totalGb == null) {
-      return '';
+      return '--';
     }
 
     double remainingGb = totalGb - usedGb;
