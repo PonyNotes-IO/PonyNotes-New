@@ -149,12 +149,16 @@ class DatabaseTabBarBloc
   void _listenInlineViewChanged() {
     final controller = state.tabBarControllerByViewId[state.parentView.id];
     controller?.onViewUpdated = (newView) {
-      add(DatabaseTabBarEvent.viewDidUpdate(newView));
+      if (!isClosed) {
+        add(DatabaseTabBarEvent.viewDidUpdate(newView));
+      }
     };
 
     // Only listen the child view changes when the parent view is inline.
     controller?.onViewChildViewChanged = (update) {
-      add(DatabaseTabBarEvent.didUpdateChildViews(update));
+      if (!isClosed) {
+        add(DatabaseTabBarEvent.didUpdateChildViews(update));
+      }
     };
   }
 
@@ -169,7 +173,9 @@ class DatabaseTabBarBloc
         compactModeId: state.compactModeId,
         enableCompactMode: state.enableCompactMode,
       )..onViewUpdated = (newView) {
-          add(DatabaseTabBarEvent.viewDidUpdate(newView));
+          if (!isClosed) {
+            add(DatabaseTabBarEvent.viewDidUpdate(newView));
+          }
         };
 
       tabBarControllerByViewId[view.id] = controller;
@@ -320,10 +326,16 @@ class DatabaseTabBarController {
           ),
         viewListener = ViewListener(viewId: view.id) {
     viewListener.start(
-      onViewChildViewsUpdated: (update) => onViewChildViewChanged?.call(update),
+      onViewChildViewsUpdated: (update) {
+        if (!_isDisposed) {
+          onViewChildViewChanged?.call(update);
+        }
+      },
       onViewUpdated: (newView) {
-        view = newView;
-        onViewUpdated?.call(newView);
+        if (!_isDisposed) {
+          view = newView;
+          onViewUpdated?.call(newView);
+        }
       },
     );
   }
@@ -338,6 +350,9 @@ class DatabaseTabBarController {
   Future<void> dispose() async {
     if (_isDisposed) return;
     _isDisposed = true;
+    // 清除回调函数，防止在控制器释放后仍然被调用
+    onViewUpdated = null;
+    onViewChildViewChanged = null;
     await Future.wait([viewListener.stop(), controller.dispose()]);
   }
 }
