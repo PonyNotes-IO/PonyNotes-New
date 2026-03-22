@@ -982,7 +982,7 @@ class _SpaceRowState extends State<_SpaceRow> {
                                                                 u.email,
                                                                 role:
                                                                     dialogSelectedRole);
-                                                        inviteRes.fold(
+                                                        await inviteRes.fold(
                                                             (_) async {
                                                           // On success, try to append invitee email to team ACL (best-effort)
                                                           try {

@@ -146,11 +146,11 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                 }, (err) {
                   // failed to get settings - allow create attempt, backend will enforce if necessary
                   Log.error('Failed to get workspace settings: ${err.msg}');
-                  showToastNotification(message: '工作空间创建失败：${err.msg}',type: ToastificationType.error);
+                  showToastNotification(message: '工作空间创建失败：仅工作空间所有者可以创建团队协作区',type: ToastificationType.error);
                 });
               } catch (e, st) {
                 Log.error('Exception when checking workspace settings: $e\n$st');
-                showToastNotification(message: '工作空间创建失败：$e',type: ToastificationType.error);
+                showToastNotification(message: '工作空间创建失败：仅工作空间所有者可以创建团队协作区',type: ToastificationType.error);
               }
             }
 
