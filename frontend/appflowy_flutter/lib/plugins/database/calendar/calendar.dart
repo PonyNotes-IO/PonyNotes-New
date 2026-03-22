@@ -2389,26 +2389,26 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
               ),
             ),
             // 更多选项按钮
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: AppFlowyPopover(
-                controller: _settingsPopoverController,
-                direction:
-                PopoverDirection.bottomWithCenterAligned,
-                child: IconButton(
-                  icon: Icon(Icons.more_horiz, size: 18),
-                  onPressed: () =>
-                      _settingsPopoverController.show(),
-                  tooltip: '更多选项',
-                  padding: EdgeInsets.zero,
-                  constraints: BoxConstraints.tightFor(
-                      width: 32, height: 32),
-                ),
-                popupBuilder: (context) =>
-                    _buildSettingsMenu(),
-              ),
-            ),
+            // SizedBox(
+            //   width: 32,
+            //   height: 32,
+            //   child: AppFlowyPopover(
+            //     controller: _settingsPopoverController,
+            //     direction:
+            //     PopoverDirection.bottomWithCenterAligned,
+            //     child: IconButton(
+            //       icon: Icon(Icons.more_horiz, size: 18),
+            //       onPressed: () =>
+            //           _settingsPopoverController.show(),
+            //       tooltip: '更多选项',
+            //       padding: EdgeInsets.zero,
+            //       constraints: BoxConstraints.tightFor(
+            //           width: 32, height: 32),
+            //     ),
+            //     popupBuilder: (context) =>
+            //         _buildSettingsMenu(),
+            //   ),
+            // ),
           ],
         )
             : Center(
