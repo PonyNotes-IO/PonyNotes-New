@@ -23,10 +23,10 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
   final codeController = TextEditingController();
   final emailFocusNode = FocusNode();
   final codeFocusNode = FocusNode();
-  bool _isCodeSent = false;
+  bool _isCodeSent = false;  // 是否已经点击过发送验证码
   bool _isBinding = false;
   bool _isSending = false;
-  int _countdown = 0;  // 初始为0，允许立即发送验证码
+  int _countdown = 0;
   Timer? _timer;
 
   @override
@@ -71,13 +71,13 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                     width: 24,
                     height: 24,
                     decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.1),
+                      color: theme.surfaceColorScheme.layer02,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.close,
                       size: 16,
-                      color: Colors.grey,
+                      color: theme.textColorScheme.secondary,
                     ),
                   ),
                 ),
@@ -93,17 +93,18 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                 TextField(
                   controller: emailController,
                   focusNode: emailFocusNode,
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: theme.textColorScheme.primary, fontSize: 14),
+                  decoration: InputDecoration(
                     hintText: '请输入你的邮箱',
                     hintStyle: TextStyle(
-                      color: Colors.grey,
+                      color: theme.textColorScheme.secondary,
                       fontSize: 14,
                     ),
                     border: OutlineInputBorder(
-                      borderSide: BorderSide(color: Colors.grey),
+                      borderSide: BorderSide(color: theme.textColorScheme.secondary),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: Color(0xFF4285F4)),
+                      borderSide: BorderSide(color: theme.textColorScheme.primary),
                     ),
                     contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                   ),
@@ -127,21 +128,22 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                       child: TextField(
                         controller: codeController,
                         focusNode: codeFocusNode,
-                        decoration: const InputDecoration(
-                          hintText: '6位短信验证码',
+                        style: TextStyle(color: theme.textColorScheme.primary, fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: '6位验证码',
                           hintStyle: TextStyle(
-                            color: Colors.grey,
+                            color: theme.textColorScheme.secondary,
                             fontSize: 14,
                           ),
                           border: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey),
+                            borderSide: BorderSide(color: theme.textColorScheme.secondary),
                           ),
                           focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Color(0xFF4285F4)),
+                            borderSide: BorderSide(color: theme.textColorScheme.primary),
                           ),
                           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          counterText: '', // 隐藏字符计数
-                          isDense: true, // 使输入框更紧凑
+                          counterText: '',
+                          isDense: true,
                         ),
                         keyboardType: TextInputType.number,
                         maxLength: 6,
@@ -158,25 +160,27 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                         decoration: BoxDecoration(
                           color: Colors.transparent,
                           border: Border.all(
-                            color: _canSendCode() 
-                                ? Colors.grey 
-                                : Colors.grey.withOpacity(0.3),
+                            color: _canSendCode()
+                                ? theme.textColorScheme.primary
+                                : theme.textColorScheme.secondary,
                           ),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: _isSending
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 16,
                                 height: 16,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.grey),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      theme.textColorScheme.secondary),
                                 ),
                               )
                             : FlowyText(
-                                _canSendCode() ? '重新获取' : '重新获取(${_countdown}s)',
+                                _countdown > 0
+                                    ? '重新获取(${_countdown}s)'
+                                    : (_isCodeSent ? '重新获取' : '获取验证码'),
                                 fontSize: 14,
-                                color: _canSendCode() ? Colors.black : Colors.grey,
                               ),
                       ),
                     ),
@@ -194,14 +198,14 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                   child: ElevatedButton(
                     onPressed: () => Navigator.of(context).pop(),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[300],
-                      foregroundColor: Colors.black,
+                      backgroundColor: theme.surfaceColorScheme.layer02,
+                      foregroundColor: theme.textColorScheme.primary,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(6),
                       ),
                     ),
-                    child: const Text(
+                    child: Text(
                       '取消',
                       style: TextStyle(fontSize: 16),
                     ),
@@ -212,19 +216,17 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                   child: ElevatedButton(
                     onPressed: (_canComplete() && !_isBinding) ? _completeBinding : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _canComplete() 
-                          ? const Color(0xFFFF6B47) 
-                          : Colors.grey[300],
-                      foregroundColor: _canComplete() 
-                          ? Colors.white 
-                          : Colors.grey,
+                      backgroundColor:
+                          _canComplete() ? const Color(0xFFFF6B47) : theme.surfaceColorScheme.layer02,
+                      foregroundColor:
+                          _canComplete() ? Colors.white : theme.textColorScheme.secondary,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(6),
                       ),
                     ),
                     child: _isBinding
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
@@ -232,7 +234,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                               valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
-                        : const Text(
+                        : Text(
                             '完成',
                             style: TextStyle(fontSize: 16),
                           ),

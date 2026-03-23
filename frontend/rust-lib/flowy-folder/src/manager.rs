@@ -2161,7 +2161,52 @@ impl FolderManager {
   pub(crate) async fn restore_all_trash(&self) {
     if let Some(lock) = self.mutex_folder.load_full() {
       let mut folder = lock.write().await;
+
+      // Save favorite status and IDs before removing from trash
+      let trash_ids = folder.get_my_trash_info();
+      let items_to_restore: Vec<(String, bool)> = trash_ids
+        .iter()
+        .filter_map(|trash| {
+          folder
+            .get_view(&trash.id)
+            .map(|v| (trash.id.clone(), v.is_favorite))
+        })
+        .collect();
+
+      // Remove all from trash
       folder.remove_all_my_trash_sections();
+
+      // Re-add favorited views
+      let favorited_ids: Vec<String> = items_to_restore
+        .iter()
+        .filter(|(_, was_favorite)| *was_favorite)
+        .map(|(id, _)| id.clone())
+        .collect();
+      if !favorited_ids.is_empty() {
+        folder.add_favorite_view_ids(favorited_ids);
+      }
+
+      drop(folder);
+
+      // Send DidRestoreView for each restored view
+      for (trash_id, was_favorite) in &items_to_restore {
+        if let Ok(view_pb) = self.get_view_pb(trash_id).await {
+          folder_notification_builder("favorite", FolderNotification::DidRestoreView)
+            .payload(view_pb)
+            .send();
+
+          if *was_favorite {
+            if let Ok(view_pb) = self.get_view_pb(trash_id).await {
+              folder_notification_builder("favorite", FolderNotification::DidFavoriteView)
+                .payload(RepeatedViewPB {
+                  items: vec![view_pb],
+                })
+                .send();
+            }
+          }
+        }
+      }
+
       folder_notification_builder("trash", FolderNotification::DidUpdateTrash)
         .payload(RepeatedTrashPB { items: vec![] })
         .send();
@@ -2170,9 +2215,49 @@ impl FolderManager {
 
   #[tracing::instrument(level = "trace", skip(self))]
   pub(crate) async fn restore_trash(&self, trash_id: &str) {
+    tracing::info!("[RestoreTrash] Starting restore for trash_id: {}", trash_id);
     if let Some(lock) = self.mutex_folder.load_full() {
       let mut folder = lock.write().await;
+
+      // Save favorite status before removing from trash, since the View may not be
+      // accessible once it's removed (it's only accessible while in trash).
+      let was_favorite = folder.get_view(trash_id).map(|v| v.is_favorite).unwrap_or(false);
+      tracing::info!("[RestoreTrash] trash_id={}, was_favorite={}", trash_id, was_favorite);
+
       folder.delete_trash_view_ids(vec![trash_id.to_string()]);
+
+      // Re-add to favorites if it was favorited before being trashed
+      if was_favorite {
+        tracing::info!("[RestoreTrash] Re-adding {} to favorites", trash_id);
+        folder.add_favorite_view_ids(vec![trash_id.to_string()]);
+      } else {
+        tracing::info!("[RestoreTrash] Skipping re-add to favorites, was_favorite=false");
+      }
+
+      drop(folder);
+
+      // Send DidRestoreView notification so Flutter can update the UI
+      if let Ok(view_pb) = self.get_view_pb(trash_id).await {
+        tracing::info!("[RestoreTrash] Sending DidRestoreView for {}", trash_id);
+        folder_notification_builder("favorite", FolderNotification::DidRestoreView)
+          .payload(view_pb)
+          .send();
+
+        // Also send DidFavoriteView if the view was favorited so FavoriteBloc refreshes
+        if was_favorite {
+          tracing::info!("[RestoreTrash] Sending DidFavoriteView for {}", trash_id);
+          if let Ok(view_pb) = self.get_view_pb(trash_id).await {
+            folder_notification_builder("favorite", FolderNotification::DidFavoriteView)
+              .payload(RepeatedViewPB {
+                items: vec![view_pb],
+              })
+              .send();
+          }
+        }
+      } else {
+        tracing::error!("[RestoreTrash] Failed to get view_pb for {}", trash_id);
+      }
+      tracing::info!("[RestoreTrash] Finished restore for trash_id: {}", trash_id);
     }
   }
 

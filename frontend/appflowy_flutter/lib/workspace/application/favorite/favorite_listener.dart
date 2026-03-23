@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:appflowy/core/notification/folder_notification.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/notification.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -16,7 +17,9 @@ typedef FavoriteUpdated = void Function(
 
 class FavoriteListener {
   StreamSubscription<SubscribeObject>? _streamSubscription;
+  StreamSubscription<SubscribeObject>? _viewStreamSubscription;
   FolderNotificationParser? _parser;
+  FolderNotificationParser? _viewParser;
 
   FavoriteUpdated? _favoriteUpdated;
 
@@ -30,6 +33,16 @@ class FavoriteListener {
     );
     _streamSubscription = RustStreamReceiver.listen(
       (observable) => _parser?.parse(observable),
+    );
+
+    // Also listen for DidRestoreView on the "favorite" channel to refresh favorites
+    // when a previously favorited view is restored from trash.
+    _viewParser = FolderNotificationParser(
+      id: 'favorite',
+      callback: _viewObservableCallback,
+    );
+    _viewStreamSubscription = RustStreamReceiver.listen(
+      (observable) => _viewParser?.parse(observable),
     );
   }
 
@@ -58,10 +71,39 @@ class FavoriteListener {
     }
   }
 
+  void _viewObservableCallback(
+    FolderNotification ty,
+    FlowyResult<Uint8List, FlowyError> result,
+  ) {
+    switch (ty) {
+      case FolderNotification.DidRestoreView:
+        result.fold(
+          (payload) {
+            final restoredView = ViewPB.fromBuffer(payload);
+            Log.info('[FavoriteListener] DidRestoreView: ${restoredView.name}, isFavorite=${restoredView.isFavorite}');
+            if (restoredView.isFavorite) {
+              // Trigger fetchFavorites to update the list
+              _favoriteUpdated?.call(
+                FlowyResult.success(RepeatedViewPB(items: [restoredView])),
+                true,
+              );
+            }
+          },
+          (error) => Log.error('[FavoriteListener] DidRestoreView error: $error'),
+        );
+        break;
+      default:
+        break;
+    }
+  }
+
   Future<void> stop() async {
     _parser = null;
+    _viewParser = null;
     await _streamSubscription?.cancel();
+    await _viewStreamSubscription?.cancel();
     _streamSubscription = null;
+    _viewStreamSubscription = null;
     _favoriteUpdated = null;
   }
 }
