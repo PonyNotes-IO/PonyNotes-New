@@ -1226,7 +1226,8 @@
         "deletionFailure": "Das Theme konnte nicht gelöscht werden. Versuche, es manuell zu löschen.",
         "filePickerDialogTitle": "Wähle eine .flowy_plugin-Datei",
         "urlUploadFailure": "URL konnte nicht geöffnet werden: {}",
-        "failure": "Das hochgeladene Theme hat ein ungültiges Format."
+        "failure": "Das hochgeladene Theme hat ein ungültiges Format.",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Theme",
       "builtInsLabel": "Integrierte Theme",

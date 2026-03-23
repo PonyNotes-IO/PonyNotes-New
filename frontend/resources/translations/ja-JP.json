@@ -1200,7 +1200,8 @@
         "uploadSuccess": "テーマが正常にアップロードされました",
         "deletionFailure": "テーマの削除に失敗しました。手動で削除をお試しください。",
         "filePickerDialogTitle": ".flowy_pluginファイルを選択",
-        "urlUploadFailure": "URLのオープンに失敗しました: {}"
+        "urlUploadFailure": "URLのオープンに失敗しました: {}",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "テーマ",
       "builtInsLabel": "組み込みテーマ",

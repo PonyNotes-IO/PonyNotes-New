@@ -233,7 +233,8 @@
         "deletionFailure": "Nem sikerült törölni a témát. Próbálja meg manuálisan törölni.",
         "filePickerDialogTitle": "Válasszon egy .flowy_plugin fájlt",
         "urlUploadFailure": "Nem sikerült megnyitni az URL-t: {}",
-        "failure": "A feltöltött téma formátuma érvénytelen."
+        "failure": "A feltöltött téma formátuma érvénytelen.",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Téma",
       "builtInsLabel": "Beépített témák",

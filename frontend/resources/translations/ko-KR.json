@@ -1256,7 +1256,8 @@
         "uploadSuccess": "테마가 성공적으로 업로드되었습니다",
         "deletionFailure": "테마를 삭제하지 못했습니다. 수동으로 삭제해 보세요.",
         "filePickerDialogTitle": ".flowy_plugin 파일 선택",
-        "urlUploadFailure": "URL을 열지 못했습니다: {}"
+        "urlUploadFailure": "URL을 열지 못했습니다: {}",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "테마",
       "builtInsLabel": "내장 테마",

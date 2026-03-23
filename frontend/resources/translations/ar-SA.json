@@ -1329,7 +1329,8 @@
         "deletionFailure": "فشل حذف الموضوع. حاول حذفه يدويًا.",
         "filePickerDialogTitle": "اختر ملف .flowy_plugin",
         "urlUploadFailure": "فشل فتح عنوان url: {}",
-        "failure": "النسق الذي تم تحميله به تنسيق غير صالح."
+        "failure": "النسق الذي تم تحميله به تنسيق غير صالح.",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "سمة",
       "builtInsLabel": "ثيمات مدمجة",

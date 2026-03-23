@@ -1325,7 +1325,8 @@
         "uploadSuccess": "您的主題已成功上傳",
         "deletionFailure": "刪除主題失敗。請嘗試手動刪除。",
         "filePickerDialogTitle": "選擇 .flowy_plugin 檔案",
-        "urlUploadFailure": "無法開啟網址: {}"
+        "urlUploadFailure": "無法開啟網址: {}",
+        "fileRequirements": "請選擇名稱以「.flowy_plugin」結尾的主題資料夾。資料夾內須包含兩個 JSON 檔：檔名分別以「.light.json」與「.dark.json」結尾（例如 MyTheme.light.json 與 MyTheme.dark.json）。"
       },
       "theme": "主題",
       "builtInsLabel": "內建主題",

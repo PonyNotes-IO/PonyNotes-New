@@ -1270,7 +1270,8 @@
         "uploadSuccess": "Your theme was uploaded successfully",
         "deletionFailure": "Failed to delete the theme. Try to delete it manually.",
         "filePickerDialogTitle": "Choose a .flowy_plugin file",
-        "urlUploadFailure": "Failed to open url: {}"
+        "urlUploadFailure": "Failed to open url: {}",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Theme",
       "builtInsLabel": "Built-in Themes",

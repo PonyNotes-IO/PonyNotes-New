@@ -1289,7 +1289,8 @@
         "uploadSuccess": "Ваша тема успешно загружена",
         "deletionFailure": "Не удалось удалить тему. Попробуйте удалить ее вручную.",
         "filePickerDialogTitle": "Выберите файл .flowy_plugin",
-        "urlUploadFailure": "Не удалось открыть url: {}"
+        "urlUploadFailure": "Не удалось открыть url: {}",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Тема",
       "builtInsLabel": "Встроенные темы",

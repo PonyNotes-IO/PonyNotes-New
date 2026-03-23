@@ -1,6 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/workspace/presentation/settings/widgets/theme_upload/theme_upload.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/theme_upload/theme_upload_button.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/theme_upload/theme_upload_view.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/theme_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -31,7 +32,12 @@ class UploadNewThemeWidget extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           ThemeUploadWidget.elementSpacer,
-          const ThemeUploadLearnMoreButton(),
+          FlowyText.medium(
+            LocaleKeys.settings_appearance_themeUpload_fileRequirements.tr(),
+            fontSize: 13,
+            textAlign: TextAlign.center,
+            maxLines: null,
+          ),
           ThemeUploadWidget.elementSpacer,
           const Divider(),
           ThemeUploadWidget.elementSpacer,

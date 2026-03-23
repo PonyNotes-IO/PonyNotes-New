@@ -1182,7 +1182,8 @@
         "deletionFailure": "ไม่สามารถลบธีมได้ ลองลบมันด้วยตนเอง",
         "filePickerDialogTitle": "เลือกไฟล์ .flowy_plugin",
         "urlUploadFailure": "ไม่สามารถเปิด URL: {} ได้",
-        "failure": "ธีมที่อัปโหลดมีรูปแบบที่ไม่ถูกต้อง"
+        "failure": "ธีมที่อัปโหลดมีรูปแบบที่ไม่ถูกต้อง",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "ธีม",
       "builtInsLabel": "ธีมในตัวแอป",

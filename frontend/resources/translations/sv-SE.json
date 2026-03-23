@@ -296,7 +296,8 @@
         "deletionFailure": "Det gick inte att ta bort temat. Försök att radera det manuellt.",
         "filePickerDialogTitle": "Välj en .flowy_plugin-fil",
         "urlUploadFailure": "Det gick inte att öppna webbadressen: {}",
-        "failure": "Temat som laddades upp hade ett ogiltigt format."
+        "failure": "Temat som laddades upp hade ett ogiltigt format.",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Tema",
       "builtInsLabel": "Inbyggda teman",

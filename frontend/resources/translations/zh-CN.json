@@ -1346,7 +1346,8 @@
         "deletionFailure": "删除主题失败，请尝试手动删除。",
         "filePickerDialogTitle": "选择 .flowy_plugin 文件",
         "urlUploadFailure": "无法打开网址：{}",
-        "failure": "上传的主题格式无效。"
+        "failure": "上传的主题格式无效。",
+        "fileRequirements": "请选择名称以 \".flowy_plugin\" 结尾的主题文件夹。文件夹内需包含两份 JSON：文件名分别以 \".light.json\" 与 \".dark.json\" 结尾（例如 MyTheme.light.json 与 MyTheme.dark.json）。"
       },
       "theme": "主题",
       "builtInsLabel": "内置主题",

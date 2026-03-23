@@ -689,7 +689,8 @@
         "deletionFailure": "Falha ao excluir o tema. Tente excluí-lo manualmente.",
         "filePickerDialogTitle": "Escolha um arquivo .flowy_plugin",
         "urlUploadFailure": "Falha ao abrir url: {}",
-        "failure": "O tema que foi carregado tinha um formato inválido."
+        "failure": "O tema que foi carregado tinha um formato inválido.",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Tema",
       "builtInsLabel": "Temas embutidos",

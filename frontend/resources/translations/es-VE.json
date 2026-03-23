@@ -510,7 +510,8 @@
         "deletionFailure": "No se pudo eliminar el tema. Intenta eliminarlo manualmente.",
         "filePickerDialogTitle": "Elija un archivo .flowy_plugin",
         "urlUploadFailure": "No se pudo abrir la URL: {}",
-        "failure": "El tema que se cargó tenía un formato no válido."
+        "failure": "El tema que se cargó tenía un formato no válido.",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Tema",
       "builtInsLabel": "Temas incorporados",

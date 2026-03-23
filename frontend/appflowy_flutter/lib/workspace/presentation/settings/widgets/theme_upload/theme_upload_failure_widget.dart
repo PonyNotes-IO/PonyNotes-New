@@ -1,5 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/theme_upload/theme_upload.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/theme_extension.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flutter/material.dart';
@@ -32,7 +34,12 @@ class ThemeUploadFailureWidget extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           ThemeUploadWidget.elementSpacer,
-          const ThemeUploadLearnMoreButton(),
+          FlowyText.medium(
+            LocaleKeys.settings_appearance_themeUpload_fileRequirements.tr(),
+            fontSize: 13,
+            textAlign: TextAlign.center,
+            maxLines: null,
+          ),
           ThemeUploadWidget.elementSpacer,
           ThemeUploadButton(color: Theme.of(context).colorScheme.error),
           ThemeUploadWidget.elementSpacer,

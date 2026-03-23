@@ -299,7 +299,8 @@
         "uploadSuccess": "ጭብጥዎ በተሳካ ሁኔታ ተሰቅሏል",
         "deletionFailure": "ጭብጡን መሰረዝ አልተቻለም.እሱን እራስዎ ለመሰረዝ ይሞክሩ።",
         "filePickerDialogTitle": "የ .flowy_plugin ፋይል ይምረጡ",
-        "urlUploadFailure": "URL ን መክፈት አልተሳካም: {}"
+        "urlUploadFailure": "URL ን መክፈት አልተሳካም: {}",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "ጭብጥ",
       "builtInsLabel": "የተገነቡ ገጽታዎች",

@@ -326,7 +326,8 @@
         "deletionFailure": "No s'ha pogut suprimir el tema. Intenta esborrar-lo manualment.",
         "filePickerDialogTitle": "Trieu un fitxer .flowy_plugin",
         "urlUploadFailure": "No s'ha pogut obrir l'URL: {}",
-        "failure": "El tema que s'ha penjat tenia un format no vàlid."
+        "failure": "El tema que s'ha penjat tenia un format no vàlid.",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Tema",
       "builtInsLabel": "Temes integrats",

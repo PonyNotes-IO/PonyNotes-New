@@ -1075,7 +1075,8 @@
         "deletionFailure": "Не вдалося видалити тему. Спробуйте видалити її вручну.",
         "filePickerDialogTitle": "Виберіть файл .flowy_plugin",
         "urlUploadFailure": "Не вдалося відкрити URL: {}",
-        "failure": "Тему, яка була завантажена, має неправильний формат."
+        "failure": "Тему, яка була завантажена, має неправильний формат.",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Тема",
       "builtInsLabel": "Вбудовані теми",

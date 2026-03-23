@@ -339,7 +339,8 @@
         "deletionFailure": "Gagal menghapus tema. Cobalah untuk menghapusnya secara manual.",
         "filePickerDialogTitle": "Pilih file .flowy_plugin",
         "urlUploadFailure": "Gagal membuka url: {}",
-        "failure": "Tema yang diunggah memiliki format yang tidak valid."
+        "failure": "Tema yang diunggah memiliki format yang tidak valid.",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Tema",
       "builtInsLabel": "Tema Bawaan",

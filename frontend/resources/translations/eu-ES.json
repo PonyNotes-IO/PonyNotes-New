@@ -229,7 +229,8 @@
         "deletionFailure": "Ezin izan da gaia ezabatu. Saiatu eskuz ezabatzen.",
         "filePickerDialogTitle": "Aukeratu .flowy_plugin fitxategi bat",
         "urlUploadFailure": "Ezin izan da ireki URLa: {}",
-        "failure": "Kargatu zen gaiak formatu baliogabea zuen."
+        "failure": "Kargatu zen gaiak formatu baliogabea zuen.",
+        "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
       },
       "theme": "Itxura",
       "builtInsLabel": "Eraikitako gaiak",
