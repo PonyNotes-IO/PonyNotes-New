@@ -831,11 +831,24 @@ impl UserManager {
   ) {
     use client_api::entity::UserMessage;
 
-    if let Some(mut rx) = cloud_service.subscribe_user_message() {
-      let weak_manager = Arc::downgrade(&manager);
+    let cloud_service = cloud_service.clone();
+    let weak_manager = Arc::downgrade(&manager);
 
-      tokio::spawn(async move {
+    tokio::spawn(async move {
+      loop {
+        // 外循环：等待直到能获取到订阅（auth_type 切换为 AppFlowyCloud 后才返回 Some）
+        let mut rx = loop {
+          match cloud_service.subscribe_user_message() {
+            Some(rx) => break rx,
+            None => {
+              tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+            },
+          }
+        };
+
         info!("Started listening for system notifications");
+
+        // 内循环：处理消息，直到信道关闭再返回外循环重新订阅
         loop {
           let msg = match rx.recv().await {
             Ok(m) => m,
@@ -844,9 +857,9 @@ impl UserManager {
               warn!("system notification receiver lagged, skipped {} messages", n);
               continue;
             },
-            // 信道关闭，退出循环
+            // 信道关闭（server 被替换），退出内循环，外循环将重新订阅
             Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-              info!("system notification channel closed");
+              info!("system notification channel closed, will re-subscribe");
               break;
             },
           };
@@ -957,10 +970,9 @@ impl UserManager {
               }
             }
           }
-        }
-        info!("Stopped listening for system notifications");
-      });
-    }
+        }  // end inner message loop
+      }  // end outer retry loop
+    });
   }
 
   #[instrument(level = "info", skip_all)]
