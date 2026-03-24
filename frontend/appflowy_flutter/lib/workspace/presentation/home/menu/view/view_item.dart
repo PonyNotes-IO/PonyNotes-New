@@ -752,7 +752,6 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
           ),
           maxLength: 256,
           onSubmitted: _finishRenaming,
-          onEditingComplete: () => _finishRenaming(_renameController.text),
         ),
       ),
     );
@@ -784,17 +783,30 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   }
 
   Future<void> _finishRenaming(String newName) async {
-    if (newName.isNotEmpty && newName != widget.view.nameOrDefault) {
+    final trimmed = newName.trim();
+    if (trimmed.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(LocaleKeys.web_error_pageNameCannotBeEmpty.tr()),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else if (trimmed != widget.view.nameOrDefault) {
       await ViewBackendService.updateView(
         viewId: widget.view.id,
-        name: newName,
+        name: trimmed,
       );
-      // 重命名后刷新 SpaceBloc 列表
-      _refreshSpaceBlocIfNeeded(context);
+      if (mounted) {
+        _refreshSpaceBlocIfNeeded(context);
+      }
     }
-    setState(() {
-      isRenaming = false;
-    });
+    if (mounted) {
+      setState(() {
+        isRenaming = false;
+      });
+    }
   }
 
   void _cancelRenaming() {

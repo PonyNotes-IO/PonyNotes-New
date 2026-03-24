@@ -3026,7 +3026,8 @@
     "importFailed": "匯入失敗，請檢查檔案格式。",
     "dropNotionFile": "在此處拖放您的Notion zip 檔案以上傳，或點擊瀏覽。",
     "error": {
-      "pageNameIsEmpty": "頁面名稱為空，請嘗試另一個。"
+      "pageNameIsEmpty": "頁面名稱為空，請嘗試另一個。",
+      "pageNameCannotBeEmpty": "名稱不能為空"
     }
   },
   "globalComment": {

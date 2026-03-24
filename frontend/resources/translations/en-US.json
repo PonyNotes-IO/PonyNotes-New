@@ -3131,7 +3131,8 @@
     "importFailed": "Import failed, please check the file format",
     "dropNotionFile": "Drop your Notion zip file here to upload, or click to browse",
     "error": {
-      "pageNameIsEmpty": "The page name is empty, please try another one"
+        "pageNameIsEmpty": "The page name is empty, please try another one",
+        "pageNameCannotBeEmpty": "Page name cannot be empty"
     }
   },
   "globalComment": {

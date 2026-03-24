@@ -3169,7 +3169,8 @@
     "continueWithApple": "Continue with Apple ",
     "dropNotionFile": "Drop your Notion zip file here to upload, or click to browse",
     "error": {
-      "pageNameIsEmpty": "页面名称为空，请尝试其他名称"
+      "pageNameIsEmpty": "页面名称为空，请尝试其他名称",
+      "pageNameCannotBeEmpty": "名称不能为空"
     },
     "fileBlock": {
       "empty": "上传或嵌入文件",

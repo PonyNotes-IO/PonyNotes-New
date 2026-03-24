@@ -247,6 +247,12 @@ class _AFTextFieldDialogState extends State<AFTextFieldDialog> {
     final text = textController.text.trim();
 
     if (text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(LocaleKeys.web_error_pageNameCannotBeEmpty.tr()),
+          duration: const Duration(seconds: 2),
+        ),
+      );
       return;
     }
 
