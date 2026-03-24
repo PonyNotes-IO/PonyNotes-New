@@ -708,7 +708,18 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
   bool _agreedToTerms = true; // 默认选中协议
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onAccountInputChanged);
+  }
+
+  void _onAccountInputChanged() {
+    setState(() {});
+  }
+
+  @override
   void dispose() {
+    _controller.removeListener(_onAccountInputChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -921,6 +932,25 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
                 horizontal: 16,
                 vertical: 12,
               ),
+              suffixIcon: _controller.text.isNotEmpty
+                  ? IconButton(
+                      onPressed: () {
+                        _controller.clear();
+                        _focusNode.requestFocus();
+                      },
+                      icon: Icon(
+                        Icons.close,
+                        size: 20,
+                        color: theme.textColorScheme.tertiary,
+                      ),
+                      splashRadius: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
+                    )
+                  : null,
             ),
             onSubmitted: (_) => _handleSubmit(context),
           ),
