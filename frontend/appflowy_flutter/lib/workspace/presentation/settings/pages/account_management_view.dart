@@ -630,50 +630,65 @@ class _AccountManagementViewState extends State<AccountManagementView>
       return const SizedBox.shrink();
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final spacing = theme.spacing.m;
-        final maxWidth =
-            constraints.maxWidth.isFinite ? constraints.maxWidth : 960.0;
-        const double minCardWidth = 180;
-        int crossAxisCount = (maxWidth / (minCardWidth + spacing)).floor();
-        crossAxisCount = crossAxisCount.clamp(1, plans.length);
+    final spacing = theme.spacing.m;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < plans.length; i++) ...[
+          if (i > 0) SizedBox(width: spacing),
+          Expanded(
+            child: _buildSingleUpgradePlanCard(
+              context: context,
+              theme: theme,
+              state: state,
+              plan: plans[i],
+              effectivePlan: effectivePlan,
+              selectedDuration: selectedDuration,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 
-        final cardWidth = (maxWidth - spacing * (crossAxisCount - 1)) / 4;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: plans.map((plan) {
-            final config = state.getPlanConfig(plan);
-            final isSelected = plan == effectivePlan;
-            return GestureDetector(
-              onTap: () {
-                context.read<AccountManagementBloc>().add(
-                      AccountManagementEvent.selectPlan(plan),
-                    );
-              },
-              child: Container(
-                width: cardWidth - 12,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? (Theme.of(context).brightness == Brightness.light
-                          ? const Color(0xFFFFF7F2)
-                          : theme.surfaceColorScheme.layer02)
-                      : theme.surfaceColorScheme.layer01,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected
-                        ? Theme.of(context).colorScheme.primary
-                        : theme.borderColorScheme.primary,
-                    width: isSelected ? 1.6 : 1.0,
-                  ),
-                ),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+  Widget _buildSingleUpgradePlanCard({
+    required BuildContext context,
+    required AppFlowyThemeData theme,
+    required AccountManagementState state,
+    required WorkspacePlanPB plan,
+    required WorkspacePlanPB effectivePlan,
+    required PurchaseDurationOption selectedDuration,
+  }) {
+    final config = state.getPlanConfig(plan);
+    final isSelected = plan == effectivePlan;
+    return GestureDetector(
+      onTap: () {
+        context.read<AccountManagementBloc>().add(
+              AccountManagementEvent.selectPlan(plan),
+            );
+      },
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (Theme.of(context).brightness == Brightness.light
+                  ? const Color(0xFFFFF7F2)
+                  : theme.surfaceColorScheme.layer02)
+              : theme.surfaceColorScheme.layer01,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : theme.borderColorScheme.primary,
+            width: isSelected ? 1.6 : 1.0,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
                       FlowyText(
                         ((config?.planNameCn ?? '').isNotEmpty)
                             ? (config?.planNameCn ?? '')
@@ -698,36 +713,44 @@ class _AccountManagementViewState extends State<AccountManagementView>
                                   : '/年';
                           final raw = '¥${formatCurrency(price)}$suffix';
                           return Container(
-                              width: cardWidth - 50,
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                  color: colorPriceInit(config?.planCode),
-                                  borderRadius:
-                                      BorderRadius.all(Radius.circular(16))),
-                              child: Column(
-                                children: [
-                                  FlowyText.regular(
-                                    raw,
-                                    color: config?.planCode?.contains("stand") == true ||
-                                        config?.planCode?.contains("standard") == true
-                                        ? Colors.white
-                                        : Color(0xFFF9D8A7),
-                                    fontSize: 18,
-                                  ),
-                                  VSpace(6),
-                                  FlowyText.regular(
-                                    selectedDuration ==
-                                            PurchaseDurationOption.monthly
-                                        ? "按月支付"
-                                        : "按年支付",
-                                    color: config?.planCode?.contains("stand") == true ||
-                                        config?.planCode?.contains("standard") == true
-                                        ? Colors.white
-                                        : Color(0x99F9D8A7),
-                                    fontSize: 12,
-                                  ),
-                                ],
-                              ));
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: colorPriceInit(config?.planCode),
+                              borderRadius:
+                                  const BorderRadius.all(Radius.circular(16)),
+                            ),
+                            child: Column(
+                              children: [
+                                FlowyText.regular(
+                                  raw,
+                                  color: config?.planCode?.contains("stand") ==
+                                              true ||
+                                          config?.planCode
+                                                  ?.contains("standard") ==
+                                              true
+                                      ? Colors.white
+                                      : const Color(0xFFF9D8A7),
+                                  fontSize: 18,
+                                ),
+                                const VSpace(6),
+                                FlowyText.regular(
+                                  selectedDuration ==
+                                          PurchaseDurationOption.monthly
+                                      ? "按月支付"
+                                      : "按年支付",
+                                  color: config?.planCode?.contains("stand") ==
+                                              true ||
+                                          config?.planCode
+                                                  ?.contains("standard") ==
+                                              true
+                                      ? Colors.white
+                                      : const Color(0x99F9D8A7),
+                                  fontSize: 12,
+                                ),
+                              ],
+                            ),
+                          );
                         },
                       ),
                       const VSpace(12),
@@ -738,14 +761,15 @@ class _AccountManagementViewState extends State<AccountManagementView>
                             SizedBox(
                               width: 6,
                               child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4.0),
                                 child: FlowySvg(
                                   FlowySvgs.icon_plan_info_indicator_s,
                                   blendMode: null,
                                 ),
                               ),
                             ),
-                            HSpace(4),
+                            const HSpace(4),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -757,7 +781,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  VSpace(8),
+                                  const VSpace(8),
                                   FlowyText(
                                     "工作区限制${config?.collaborativeWorkspaceLimit}个",
                                     fontSize: 12,
@@ -765,7 +789,7 @@ class _AccountManagementViewState extends State<AccountManagementView>
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  VSpace(8),
+                                  const VSpace(8),
                                   FlowyText(
                                     "每月AI对话额度${config?.aiChatCountPerMonth}次",
                                     fontSize: 12,
@@ -775,18 +799,14 @@ class _AccountManagementViewState extends State<AccountManagementView>
                                   ),
                                 ],
                               ),
-                            )
+                            ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        );
-      },
+            ],
+          ),
+        ),
+      ),
     );
   }
 
