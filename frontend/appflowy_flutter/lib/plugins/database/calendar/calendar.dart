@@ -740,37 +740,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                                     debugInfo = '错误代码: ${error.code}';
                                   }
 
-                                  // 打印调试信息到日志
                                   Log.error('日记创建失败: $errorMsg');
-                                  // 调试信息已移除
 
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(errorMsg),
-                                      backgroundColor: Colors.red,
-                                      duration: Duration(seconds: 6),
-                                      action: SnackBarAction(
-                                        label: '详情',
-                                        onPressed: () {
-                                          showDialog(
-                                            context: context,
-                                            builder: (context) => AlertDialog(
-                                              title: Text('错误详情'),
-                                              content: Text(
-                                                  '$errorMsg\n\n$debugInfo'),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () =>
-                                                      Navigator.of(context)
-                                                          .pop(),
-                                                  child: Text('确定'),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
+                                  showToastNotification(
+                                    message: errorMsg,
+                                    type: ToastificationType.error,
                                   );
                                 },
                               );

@@ -12,7 +12,6 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/image/uplo
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/string_extension.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
-import 'package:appflowy/workspace/presentation/home/toast.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/image_viewer/image_provider.dart';
 import 'package:appflowy/workspace/presentation/widgets/image_viewer/interactive_image_viewer.dart';
@@ -316,10 +315,11 @@ class _MultiImageMenuState extends State<MultiImageMenu> {
 
     if (url.isEmpty || !isURL(url)) {
       // show error
-      return showSnackBarMessage(
-        context,
-        LocaleKeys.document_imageBlock_error_invalidImage.tr(),
+      showToastNotification(
+        message: LocaleKeys.document_imageBlock_error_invalidImage.tr(),
+        type: ToastificationType.error,
       );
+      return;
     }
 
     final path = await getIt<ApplicationDataStorage>().getPath();
@@ -350,10 +350,11 @@ class _MultiImageMenuState extends State<MultiImageMenu> {
 
     if (url.isEmpty || !isURL(url)) {
       // show error
-      return showSnackBarMessage(
-        context,
-        LocaleKeys.document_imageBlock_error_invalidImage.tr(),
+      showToastNotification(
+        message: LocaleKeys.document_imageBlock_error_invalidImage.tr(),
+        type: ToastificationType.error,
       );
+      return;
     }
 
     final transaction = editorState.transaction;

@@ -7,7 +7,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/image/comm
 import 'package:appflowy/shared/custom_image_cache_manager.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
-import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/error.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -127,7 +127,7 @@ Future<List<ImageBlockData>> extractAndUploadImages(
   }
 
   if (context.mounted && lastErrorMsg != null) {
-    showSnackBarMessage(context, lastErrorMsg);
+    showToastNotification(message: lastErrorMsg, type: ToastificationType.error);
   }
 
   return images;

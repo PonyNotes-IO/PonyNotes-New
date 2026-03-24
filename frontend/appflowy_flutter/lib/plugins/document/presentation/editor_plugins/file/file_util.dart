@@ -237,7 +237,10 @@ Future<void> insertLocalFile(
     // 检查1：单文件大小不能超过 3GB（客户端立即拒绝，无需请求服务端）
     final fileSize = File(file.path).lengthSync();
     if (fileSize > kMaxUploadFileSizeBytes) {
-      showSnackBarMessage(context, '对不起，您最大可上传的单个文件不能超过3GB');
+      showToastNotification(
+        message: '对不起，您最大可上传的单个文件不能超过3GB',
+        type: ToastificationType.error,
+      );
       return;
     }
 
@@ -273,7 +276,8 @@ Future<void> insertLocalFile(
   }
 
   if (errorMsg != null) {
-    return showSnackBarMessage(context, errorMsg);
+    showToastNotification(message: errorMsg, type: ToastificationType.error);
+    return;
   }
 
   if (path == null) {
@@ -318,7 +322,10 @@ Future<void> insertLocalFiles(
       final fileSize = File(file.path).lengthSync();
       if (fileSize > kMaxUploadFileSizeBytes) {
         if (context.mounted) {
-          showSnackBarMessage(context, '对不起，您最大可上传的单个文件不能超过3GB');
+          showToastNotification(
+            message: '对不起，您最大可上传的单个文件不能超过3GB',
+            type: ToastificationType.error,
+          );
         }
         continue;
       }
@@ -355,7 +362,7 @@ Future<void> insertLocalFiles(
     }
 
     if (errorMsg != null) {
-      showSnackBarMessage(context, errorMsg);
+      showToastNotification(message: errorMsg, type: ToastificationType.error);
       continue;
     }
 

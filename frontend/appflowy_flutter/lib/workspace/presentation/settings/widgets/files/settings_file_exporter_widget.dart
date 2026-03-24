@@ -5,7 +5,7 @@ import 'package:appflowy/util/navigator_context_extension.dart';
 import 'package:appflowy/workspace/application/export/document_exporter.dart';
 import 'package:appflowy/workspace/application/settings/settings_file_exporter_cubit.dart';
 import 'package:appflowy/workspace/application/settings/share/export_service.dart';
-import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -114,22 +114,21 @@ class _FileExporterWidgetState extends State<FileExporterWidget> {
                 if (mounted) {
                   if (result.$1) {
                     // success
-                    showSnackBarMessage(
-                      context,
-                      LocaleKeys.settings_files_exportFileSuccess.tr(),
+                    showToastNotification(
+                      message: LocaleKeys.settings_files_exportFileSuccess.tr(),
                     );
                   } else {
-                    showSnackBarMessage(
-                      context,
-                      LocaleKeys.settings_files_exportFileFail.tr() +
+                    showToastNotification(
+                      message: LocaleKeys.settings_files_exportFileFail.tr() +
                           result.$2.join('\n'),
+                      type: ToastificationType.error,
                     );
                   }
                 }
               } else if (mounted) {
-                showSnackBarMessage(
-                  context,
-                  LocaleKeys.settings_files_exportFileFail.tr(),
+                showToastNotification(
+                  message: LocaleKeys.settings_files_exportFileFail.tr(),
+                  type: ToastificationType.error,
                 );
               }
               if (mounted) {

@@ -16,7 +16,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
-import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -229,7 +229,10 @@ class _AddAttachmentMenu extends StatelessWidget {
     if (file != null) {
       if (file.size > kMaxUploadFileSizeBytes) {
         if (context.mounted) {
-          showSnackBarMessage(context, '对不起，您最大可上传的单个文件不能超过3GB');
+          showToastNotification(
+            message: '对不起，您最大可上传的单个文件不能超过3GB',
+            type: ToastificationType.error,
+          );
         }
         if (context.mounted) Navigator.pop(context);
         return;
@@ -281,9 +284,9 @@ class _AddAttachmentMenu extends StatelessWidget {
         type = FileUrlType.cloud;
       }
 
-      if (errorMsg != null && context.mounted) {
-        showSnackBarMessage(context, errorMsg);
-      } else if (path != null) {
+  if (errorMsg != null && context.mounted) {
+    showToastNotification(message: errorMsg, type: ToastificationType.error);
+  } else if (path != null) {
         final node = fileNode(url: path, type: type, name: xFile.name);
         await _insertNode(node);
       }

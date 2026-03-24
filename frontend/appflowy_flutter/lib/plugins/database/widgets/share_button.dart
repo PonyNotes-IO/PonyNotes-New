@@ -3,8 +3,9 @@ import 'package:appflowy/plugins/database/application/share_bloc.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/string_extension.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
-import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/pop_up_action.dart';
+import 'package:appflowy/workspace/presentation/home/toast.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_popover/appflowy_popover.dart';
@@ -47,9 +48,8 @@ class DatabaseShareButton extends StatelessWidget {
   }
 
   void _handleExportData(BuildContext context) {
-    showSnackBarMessage(
-      context,
-      LocaleKeys.settings_files_exportFileSuccess.tr(),
+    showToastNotification(
+      message: LocaleKeys.settings_files_exportFileSuccess.tr(),
     );
   }
 

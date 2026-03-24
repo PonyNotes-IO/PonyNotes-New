@@ -305,92 +305,9 @@ class _NewEventPageState extends State<NewEventPage> {
         errorMessage = '日历视图初始化失败';
         detailedError = '请检查数据库连接和权限设置';
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ $errorMessage'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 4),
-          action: SnackBarAction(
-            label: '详情',
-            textColor: Colors.white,
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Row(
-                    children: [
-                      Icon(Icons.error, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('错误详情'),
-                    ],
-                  ),
-                  content: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          detailedError,
-                          style: TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          '故障排除建议:',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          '1. 检查 AppFlowy 应用是否正在运行\n'
-                          '2. 确认数据库服务状态正常\n'
-                          '3. 检查网络连接\n'
-                          '4. 重启应用程序\n'
-                          '5. 查看控制台日志了解详细信息',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        if (detailedError.length > 100) ...[
-                          SizedBox(height: 16),
-                          Text(
-                            '完整错误信息:',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 4),
-                          Container(
-                            padding: EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              e.toString(),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text('关闭'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        // 可以在这里添加重试逻辑
-                        _saveEventAsync();
-                      },
-                      child: Text('重试'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
+      showToastNotification(
+        message: '❌ $errorMessage',
+        type: ToastificationType.error,
       );
     }
   }

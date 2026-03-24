@@ -16,7 +16,7 @@ import 'package:appflowy/workspace/application/settings/date_time/time_format_ex
 import 'package:appflowy/workspace/application/settings/workspace/workspace_settings_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_icon.dart';
-import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/af_dropdown_menu_entry.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/document_color_setting_button.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/setting_action.dart';
@@ -30,7 +30,6 @@ import 'package:appflowy/workspace/presentation/settings/shared/settings_input_f
 import 'package:appflowy/workspace/presentation/settings/shared/settings_radio_select.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/single_setting_action.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/theme_upload/theme_upload_view.dart';
-import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -648,9 +647,8 @@ class _ThemeDropdown extends StatelessWidget {
                   ),
                 ).then((val) {
                   if (val != null && context.mounted) {
-                    showSnackBarMessage(
-                      context,
-                      LocaleKeys.settings_appearance_themeUpload_uploadSuccess
+                    showToastNotification(
+                      message: LocaleKeys.settings_appearance_themeUpload_uploadSuccess
                           .tr(),
                     );
                   }

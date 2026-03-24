@@ -13,7 +13,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/file/file_
 import 'package:appflowy/startup/tasks/file_storage_task.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
-import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialog_v2.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/file_entities.pbenum.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -593,9 +593,8 @@ class FileBlockComponentState extends State<FileBlockComponent>
         ),
         onTap: () async {
           context.pop();
-          showSnackBarMessage(
-            context,
-            LocaleKeys.document_plugins_image_copiedToPasteBoard.tr(),
+          showToastNotification(
+            message: LocaleKeys.document_plugins_image_copiedToPasteBoard.tr(),
           );
           await getIt<ClipboardService>().setPlainText(url);
         },
@@ -654,7 +653,10 @@ class FileBlockComponentState extends State<FileBlockComponent>
         final fileSize = File(path).lengthSync();
         if (fileSize > kMaxUploadFileSizeBytes) {
           if (mounted) {
-            showSnackBarMessage(context, '对不起，您最大可上传的单个文件不能超过3GB');
+            showToastNotification(
+              message: '对不起，您最大可上传的单个文件不能超过3GB',
+              type: ToastificationType.error,
+            );
           }
           return;
         }
@@ -690,7 +692,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
       }
 
       if (errorMsg != null && mounted) {
-        showSnackBarMessage(context, errorMsg);
+        showToastNotification(message: errorMsg, type: ToastificationType.error);
         return;
       }
 
@@ -716,10 +718,11 @@ class FileBlockComponentState extends State<FileBlockComponent>
   Future<void> insertNetworkFile(String url) async {
     if (url.isEmpty || !isURL(url)) {
       // show error
-      return showSnackBarMessage(
-        context,
-        LocaleKeys.document_plugins_file_networkUrlInvalid.tr(),
+      showToastNotification(
+        message: LocaleKeys.document_plugins_file_networkUrlInvalid.tr(),
+        type: ToastificationType.error,
       );
+      return;
     }
 
     // Remove the file block from the drop state manager

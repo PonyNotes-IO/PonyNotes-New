@@ -15,7 +15,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/image/uplo
 import 'package:appflowy/shared/patterns/file_type_patterns.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
-import 'package:appflowy/workspace/presentation/home/toast.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_editor/appflowy_editor.dart' hide UploadImageMenu;
 import 'package:desktop_drop/desktop_drop.dart';
@@ -411,10 +411,11 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
   Future<void> insertAIImage(String url) async {
     if (url.isEmpty || !isURL(url)) {
       // show error
-      return showSnackBarMessage(
-        context,
-        LocaleKeys.document_imageBlock_error_invalidImage.tr(),
+      showToastNotification(
+        message: LocaleKeys.document_imageBlock_error_invalidImage.tr(),
+        type: ToastificationType.error,
       );
+      return;
     }
 
     final path = await getIt<ApplicationDataStorage>().getPath();
@@ -443,10 +444,11 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
   Future<void> insertNetworkImage(String url) async {
     if (url.isEmpty || !isURL(url)) {
       // show error
-      return showSnackBarMessage(
-        context,
-        LocaleKeys.document_imageBlock_error_invalidImage.tr(),
+      showToastNotification(
+        message: LocaleKeys.document_imageBlock_error_invalidImage.tr(),
+        type: ToastificationType.error,
       );
+      return;
     }
 
     final transaction = editorState.transaction;

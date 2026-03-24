@@ -49,30 +49,3 @@ void showMessageToast(
   );
 }
 
-void showSnackBarMessage(
-  BuildContext context,
-  String message, {
-  bool showCancel = false,
-  Duration duration = const Duration(seconds: 4),
-}) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-      duration: duration,
-      action: !showCancel
-          ? null
-          : SnackBarAction(
-              label: LocaleKeys.button_cancel.tr(),
-              textColor: Colors.white,
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-            ),
-      content: FlowyText(
-        message,
-        maxLines: 2,
-        fontSize: UniversalPlatform.isDesktop ? 14 : 12,
-      ),
-    ),
-  );
-}

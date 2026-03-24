@@ -11,6 +11,7 @@ import 'package:appflowy/plugins/database/widgets/cell/editable_cell_builder.dar
 import 'package:appflowy/plugins/database/widgets/cell/mobile_grid/mobile_grid_summary_cell.dart';
 import 'package:appflowy/plugins/database/widgets/cell/mobile_row_detail/mobile_row_detail_summary_cell.dart';
 import 'package:appflowy/plugins/database/widgets/row/cells/cell_container.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/home/toast.dart';
 import 'package:appflowy_backend/dispatch/error.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -159,12 +160,15 @@ class SummaryCellAccessory extends StatelessWidget {
         listener: (context, state) {
           if (state.error != null) {
             if (state.error!.isAIResponseLimitExceeded) {
-              showSnackBarMessage(
-                context,
-                LocaleKeys.sideBar_aiResponseLimitDialogTitle.tr(),
+              showToastNotification(
+                message: LocaleKeys.sideBar_aiResponseLimitDialogTitle.tr(),
+                type: ToastificationType.error,
               );
             } else {
-              showSnackBarMessage(context, state.error!.msg);
+              showToastNotification(
+                message: state.error!.msg,
+                type: ToastificationType.error,
+              );
             }
           }
         },
