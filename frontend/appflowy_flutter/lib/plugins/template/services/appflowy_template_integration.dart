@@ -4,6 +4,7 @@ import 'package:appflowy/plugins/document/application/document_data_pb_extension
 import 'package:appflowy/shared/markdown_to_document.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:fixnum/fixnum.dart';
 
 import '../../document/application/document_service.dart';
@@ -586,12 +587,9 @@ ${template.description}
 
   /// 显示成功消息
   static void _showSuccess(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 3),
-      ),
+    showToastNotification(
+      message: message,
+      type: ToastificationType.success,
     );
   }
 
@@ -647,12 +645,9 @@ ${template.description}
 
   /// 显示错误消息
   static void _showError(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      ),
+    showToastNotification(
+      message: message,
+      type: ToastificationType.error,
     );
   }
 }

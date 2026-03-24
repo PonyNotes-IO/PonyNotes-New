@@ -205,9 +205,7 @@ class _RepeatSelectionDialogState extends State<RepeatSelectionDialog> {
   void _onSave() {
     if (tempValue == 99) {
       if (tempCustomSummary == null || tempCustomSummary!.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('请先完善自定义重复设置')),
-        );
+        showToastNotification(message: '请先完善自定义重复设置');
         return;
       }
       widget.onSave(type: 99, customSummary: tempCustomSummary);

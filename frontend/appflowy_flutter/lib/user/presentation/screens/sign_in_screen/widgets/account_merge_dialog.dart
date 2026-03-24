@@ -6,6 +6,7 @@ import 'package:appflowy/util/validator.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 
 /// 账号合并确认弹窗
 /// 当第三方登录用户绑定手机号，但该手机号已被其他账号注册时显示此弹窗。
@@ -139,12 +140,9 @@ class _AccountMergeDialogState extends State<AccountMergeDialog> {
           final msg = migratedCount > 0
               ? '账号合并成功！$migratedCount 个工作区已迁移。'
               : '账号合并成功！';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(msg),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 3),
-            ),
+          showToastNotification(
+            message: msg,
+            type: ToastificationType.success,
           );
           Navigator.of(context).pop();
           widget.onMergeComplete?.call();

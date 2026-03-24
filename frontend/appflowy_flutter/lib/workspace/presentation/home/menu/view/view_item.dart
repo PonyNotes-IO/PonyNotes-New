@@ -785,14 +785,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   Future<void> _finishRenaming(String newName) async {
     final trimmed = newName.trim();
     if (trimmed.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(LocaleKeys.web_error_pageNameCannotBeEmpty.tr()),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+      showToastNotification(
+        message: LocaleKeys.web_error_pageNameCannotBeEmpty.tr(),
+      );
     } else if (trimmed != widget.view.nameOrDefault) {
       await ViewBackendService.updateView(
         viewId: widget.view.id,
@@ -1197,12 +1192,9 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                 if (mounted) {
                   Future.delayed(const Duration(milliseconds: 500), () {
                     if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('已复制到我的空间'),
-                          backgroundColor: Colors.green,
-                          duration: Duration(seconds: 2),
-                        ),
+                      showToastNotification(
+                        message: '已复制到我的空间',
+                        type: ToastificationType.success,
                       );
                     }
                   });

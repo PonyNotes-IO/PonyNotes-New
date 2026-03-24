@@ -2,6 +2,7 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -67,16 +68,11 @@ class SidebarAiButton extends StatelessWidget {
       });
     } catch (e, stackTrace) {
       Log.error('❌ 侧边栏: 打开AI欢迎页失败: $e', e, stackTrace);
-      _showMessage(context, '打开AI欢迎页时发生错误: $e');
+      _showMessage('打开AI欢迎页时发生错误: $e');
     }
   }
 
-  void _showMessage(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+  void _showMessage(String message) {
+    showToastNotification(message: message);
   }
 }

@@ -3,6 +3,7 @@ import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 
@@ -51,16 +52,11 @@ class SidebarFileLibraryButton extends StatelessWidget {
         );
       });
     } catch (e) {
-      _showMessage(context, '打开文件库时发生错误: $e');
+      _showMessage('打开文件库时发生错误: $e');
     }
   }
 
-  void _showMessage(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+  void _showMessage(String message) {
+    showToastNotification(message: message);
   }
 }

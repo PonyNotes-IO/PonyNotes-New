@@ -13,6 +13,7 @@ import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 
 class FlowyErrorPage extends StatelessWidget {
   factory FlowyErrorPage.error(
@@ -94,17 +95,8 @@ class FlowyErrorPage extends StatelessWidget {
                 ClipboardServiceData(plainText: message),
               );
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                    content: FlowyText(
-                      'Message copied to clipboard',
-                      fontSize: kIsWeb || !Platform.isIOS && !Platform.isAndroid
-                          ? 14
-                          : 12,
-                    ),
-                  ),
+                showToastNotification(
+                  message: 'Message copied to clipboard',
                 );
               }
             },

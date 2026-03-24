@@ -10,6 +10,7 @@ import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_svg/flowy_svg.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
@@ -197,11 +198,8 @@ class _HomePageState extends State<HomePage> {
 
   void _showError(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 2),
-        ),
+      showToastNotification(
+        message: message,
       );
     }
   }
@@ -539,12 +537,9 @@ class _HomePageState extends State<HomePage> {
 
       if (userProfile == null || workspaceId == null || workspaceId.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('无法获取当前用户或工作空间信息'),
-              duration: Duration(seconds: 3),
-              backgroundColor: Colors.red,
-            ),
+          showToastNotification(
+            message: '无法获取当前用户或工作空间信息',
+            type: ToastificationType.error,
           );
         }
         return;
@@ -569,12 +564,9 @@ class _HomePageState extends State<HomePage> {
 
           // 显示成功消息
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('笔记本创建成功'),
-                duration: Duration(seconds: 2),
-                backgroundColor: Colors.green,
-              ),
+            showToastNotification(
+              message: '笔记本创建成功',
+              type: ToastificationType.success,
             );
           }
 
@@ -586,12 +578,9 @@ class _HomePageState extends State<HomePage> {
         (error) {
           // 显示错误消息
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('创建笔记本失败: ${error.msg}'),
-                duration: const Duration(seconds: 3),
-                backgroundColor: Colors.red,
-              ),
+            showToastNotification(
+              message: '创建笔记本失败: ${error.msg}',
+              type: ToastificationType.error,
             );
           }
         },
@@ -599,12 +588,9 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       // 显示错误消息
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('创建笔记本时发生错误: $e'),
-            duration: const Duration(seconds: 3),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '创建笔记本时发生错误: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -874,12 +860,9 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       // 显示错误消息
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('打开视图时发生错误: $e'),
-            duration: const Duration(seconds: 3),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '打开视图时发生错误: $e',
+          type: ToastificationType.error,
         );
       }
     }

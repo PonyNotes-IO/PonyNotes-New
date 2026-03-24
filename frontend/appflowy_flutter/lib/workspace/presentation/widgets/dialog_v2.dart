@@ -1,6 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
@@ -247,11 +248,8 @@ class _AFTextFieldDialogState extends State<AFTextFieldDialog> {
     final text = textController.text.trim();
 
     if (text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(LocaleKeys.web_error_pageNameCannotBeEmpty.tr()),
-          duration: const Duration(seconds: 2),
-        ),
+      showToastNotification(
+        message: LocaleKeys.web_error_pageNameCannotBeEmpty.tr(),
       );
       return;
     }

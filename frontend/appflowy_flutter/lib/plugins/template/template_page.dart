@@ -2,6 +2,7 @@ import 'package:appflowy/plugins/template/services/template_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'widgets/template_sidebar.dart';
 import 'widgets/template_list.dart';
 import 'services/appflowy_template_integration.dart';
@@ -102,11 +103,9 @@ class _TemplatePageState extends State<TemplatePage>
 
       if (userProfile == null) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: FlowyText.medium('无法获取当前用户信息'),
-              backgroundColor: Colors.red,
-            ),
+          showToastNotification(
+            message: '无法获取当前用户信息',
+            type: ToastificationType.error,
           );
         }
         return;
@@ -121,11 +120,9 @@ class _TemplatePageState extends State<TemplatePage>
 
       if (workspaceId.isEmpty) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: FlowyText.medium('无法获取工作空间信息'),
-              backgroundColor: Colors.red,
-            ),
+          showToastNotification(
+            message: '无法获取工作空间信息',
+            type: ToastificationType.error,
           );
         }
         return;
@@ -133,11 +130,8 @@ class _TemplatePageState extends State<TemplatePage>
 
       // 显示加载提示
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: FlowyText.medium('正在创建模版文档: ${template.title}...'),
-            duration: const Duration(seconds: 2),
-          ),
+        showToastNotification(
+          message: '正在创建模版文档: ${template.title}...',
         );
       }
 
@@ -156,23 +150,18 @@ class _TemplatePageState extends State<TemplatePage>
           
           // 显示添加到我的模版的提示
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: FlowyText.medium('模版已添加到"我的模版"列表'),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 2),
-              ),
+            showToastNotification(
+              message: '模版已添加到"我的模版"列表',
+              type: ToastificationType.success,
             );
           }
         }
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: FlowyText.medium('使用模版时发生错误: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '使用模版时发生错误: $e',
+          type: ToastificationType.error,
         );
       }
     }

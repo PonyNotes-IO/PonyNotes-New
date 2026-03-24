@@ -4,6 +4,7 @@ import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -106,13 +107,10 @@ class _ContinueWithMagicLinkOrPasscodePageState
       
       // 判断是邮箱还是手机号
       final isEmail = widget.email.contains('@');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(isEmail 
-              ? '验证码已重新发送到您的邮箱' 
-              : '验证码已重新发送到您的手机'),
-          duration: const Duration(seconds: 2),
-        ),
+      showToastNotification(
+        message: isEmail 
+            ? '验证码已重新发送到您的邮箱' 
+            : '验证码已重新发送到您的手机',
       );
     } catch (e) {
       setState(() => _errorMessage = '重新发送失败: $e');
@@ -520,7 +518,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
             child: RichText(
               textAlign: TextAlign.center,
               text: TextSpan(
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 20,
                   height: 1.4,
                 ),

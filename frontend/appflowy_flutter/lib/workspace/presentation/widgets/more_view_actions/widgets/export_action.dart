@@ -19,6 +19,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get_it/get_it.dart';
@@ -28,6 +29,7 @@ import 'package:http/http.dart' as http;
 import 'package:appflowy_editor/src/plugins/pdf/html_to_pdf_encoder.dart';
 import 'pdf_html_encoder_wrapper.dart';
 import 'package:appflowy_popover/appflowy_popover.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 
 class ExportAction extends StatefulWidget {
   const ExportAction({
@@ -163,7 +165,7 @@ class _ExportActionState extends State<ExportAction> {
           if (markdown.isEmpty) {
             Log.error('导出 Markdown 失败：内容为空');
             if (context.mounted) {
-              _showError(context, '导出失败：文档内容为空');
+              showToastNotification(message: '导出失败：文档内容为空');
             }
             return;
           }
@@ -182,21 +184,21 @@ class _ExportActionState extends State<ExportAction> {
             await file.writeAsString(markdown, encoding: utf8);
             Log.info('Markdown 文件已保存到: $savePath');
             if (context.mounted) {
-              _showSuccess(context, 'Markdown 文件已保存');
+              showToastNotification(message: 'Markdown 文件已保存', type: ToastificationType.success);
             }
           }
         },
         (error) {
           Log.error('导出 Markdown 失败: ${error.msg}');
           if (context.mounted) {
-            _showError(context, '导出失败：${error.msg}');
+            showToastNotification(message: '导出失败：${error.msg}');
           }
         },
       );
     } catch (e) {
       Log.error('导出 Markdown 异常: $e');
       if (context.mounted) {
-        _showError(context, '导出失败：$e');
+        showToastNotification(message: '导出失败：$e');
       }
     }
   }
@@ -246,7 +248,7 @@ class _ExportActionState extends State<ExportAction> {
             Log.error('导出 PDF 失败：无法获取文档');
             if (context.mounted) {
               Navigator.of(context).pop(); // 关闭加载指示器
-              _showError(context, '导出失败：无法获取文档内容');
+              showToastNotification(message: '导出失败：无法获取文档内容');
             }
             return;
           }
@@ -260,7 +262,7 @@ class _ExportActionState extends State<ExportAction> {
             Log.error('导出 PDF 失败：Markdown 内容为空');
             if (context.mounted) {
               Navigator.of(context).pop(); // 关闭加载指示器
-              _showError(context, '导出失败：文档内容为空');
+              showToastNotification(message: '导出失败：文档内容为空');
             }
             return;
           }
@@ -401,25 +403,25 @@ class _ExportActionState extends State<ExportAction> {
                 final fileSize = await file.length();
                 Log.info('PDF 文件验证成功，文件大小: $fileSize 字节');
                 if (context.mounted) {
-                  _showSuccess(context, 'PDF 文件已保存');
+                  showToastNotification(message: 'PDF 文件已保存', type: ToastificationType.success);
                 }
               } else {
                 Log.error('PDF 文件保存失败：文件不存在');
                 if (context.mounted) {
-                  _showError(context, 'PDF 文件保存失败：文件不存在');
+                  showToastNotification(message: 'PDF 文件保存失败：文件不存在');
                 }
               }
             } catch (e) {
               Log.error('写入 PDF 文件失败: $e');
               if (context.mounted) {
-                _showError(context, 'PDF 文件保存失败：$e');
+                showToastNotification(message: 'PDF 文件保存失败：$e');
               }
             }
           } catch (e) {
             Log.error('生成 PDF 时出错: $e');
             if (context.mounted) {
               Navigator.of(context).pop(); // 关闭加载指示器
-              _showError(context, 'PDF 生成失败：$e');
+              showToastNotification(message: 'PDF 生成失败：$e');
             }
           }
         },
@@ -427,7 +429,7 @@ class _ExportActionState extends State<ExportAction> {
           Log.error('导出 PDF 失败: ${error.msg}');
           if (context.mounted) {
             Navigator.of(context).pop(); // 关闭加载指示器
-            _showError(context, '导出失败：${error.msg}');
+            showToastNotification(message: '导出失败：${error.msg}');
           }
         },
       );
@@ -435,29 +437,9 @@ class _ExportActionState extends State<ExportAction> {
       Log.error('导出 PDF 异常: $e');
       if (context.mounted) {
         Navigator.of(context).pop(); // 关闭加载指示器
-        _showError(context, '导出失败：$e');
+        showToastNotification(message: '导出失败：$e');
       }
     }
-  }
-
-  void _showSuccess(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  void _showError(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
-        duration: const Duration(seconds: 3),
-      ),
-    );
   }
 
   /// 检查文档中是否包含表格
@@ -506,7 +488,7 @@ class _ExportActionState extends State<ExportAction> {
           if (document == null) {
             Log.error('导出 CSV 失败：无法获取文档');
             if (context.mounted) {
-              _showError(context, '导出失败：无法获取文档内容');
+              showToastNotification(message: '导出失败：无法获取文档内容');
             }
             return;
           }
@@ -516,7 +498,7 @@ class _ExportActionState extends State<ExportAction> {
           if (tableNodes.isEmpty) {
             Log.error('导出 CSV 失败：文档中没有表格');
             if (context.mounted) {
-              _showError(context, '导出失败：文档中没有表格');
+              showToastNotification(message: '导出失败：文档中没有表格');
             }
             return;
           }
@@ -529,7 +511,7 @@ class _ExportActionState extends State<ExportAction> {
           if (csvContent.isEmpty) {
             Log.error('导出 CSV 失败：表格内容为空');
             if (context.mounted) {
-              _showError(context, '导出失败：表格内容为空');
+              showToastNotification(message: '导出失败：表格内容为空');
             }
             return;
           }
@@ -550,21 +532,21 @@ class _ExportActionState extends State<ExportAction> {
             await file.writeAsBytes(bytes);
             Log.info('CSV 文件已保存到: $savePath');
             if (context.mounted) {
-              _showSuccess(context, 'CSV 文件已保存');
+              showToastNotification(message: 'CSV 文件已保存', type: ToastificationType.success);
             }
           }
         },
         (error) {
           Log.error('导出 CSV 失败: ${error.msg}');
           if (context.mounted) {
-            _showError(context, '导出失败：${error.msg}');
+            showToastNotification(message: '导出失败：${error.msg}');
           }
         },
       );
     } catch (e) {
       Log.error('导出 CSV 异常: $e');
       if (context.mounted) {
-        _showError(context, '导出失败：$e');
+        showToastNotification(message: '导出失败：$e');
       }
     }
   }
@@ -799,4 +781,3 @@ class _ExportActionState extends State<ExportAction> {
     }
   }
 }
-

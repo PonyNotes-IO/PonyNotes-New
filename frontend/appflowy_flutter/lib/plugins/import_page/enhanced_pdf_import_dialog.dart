@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:appflowy/plugins/import_page/processor/custom_pdf_processor.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/shared/markdown_to_document.dart';
@@ -435,12 +436,9 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         if (!AliyunDocParseProcessor.isFileSizeValid(fileSize)) {
           final fileSizeStr = _formatFileSize(fileSize);
           final maxSizeStr = _formatFileSize(AliyunDocParseProcessor.maxFileSize);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('文件大小超过限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5),
-            ),
+          showToastNotification(
+            message: '文件大小超过限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。',
+            type: ToastificationType.error,
           );
           return;
         }
@@ -453,8 +451,9 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
       }
     } catch (e) {
       Log.error('Failed to select PDF file: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('选择文件失败: $e')),
+      showToastNotification(
+        message: '选择文件失败: $e',
+        type: ToastificationType.error,
       );
     }
   }
@@ -641,11 +640,9 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
         await ImportBackendService.importPages(widget.parentViewId, importValues);
         
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('成功导入PDF文档: $fileName'),
-              backgroundColor: Colors.green,
-            ),
+          showToastNotification(
+            message: '成功导入PDF文档: $fileName',
+            type: ToastificationType.success,
           );
           Navigator.of(context).pop();
           widget.onImportSuccess?.call();
@@ -654,11 +651,9 @@ class _EnhancedPdfImportDialogState extends State<EnhancedPdfImportDialog> {
     } catch (e) {
       Log.error('Failed to import PDF document: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导入失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '导入失败: $e',
+          type: ToastificationType.error,
         );
       }
     }

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_backend/log.dart';
@@ -394,15 +395,15 @@ class _PdfEmbedComponentState extends State<PdfEmbedComponent> {
 
   void _openInExternalApp() {
     // TODO: 实现在外部应用中打开PDF
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('外部打开功能开发中...')),
+    showToastNotification(
+      message: '外部打开功能开发中...',
     );
   }
 
   void _saveCopy() {
     // TODO: 实现保存PDF副本
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('保存副本功能开发中...')),
+    showToastNotification(
+      message: '保存副本功能开发中...',
     );
   }
 

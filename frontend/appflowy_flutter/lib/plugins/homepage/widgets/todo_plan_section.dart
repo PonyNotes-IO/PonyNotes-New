@@ -1,4 +1,5 @@
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -427,23 +428,17 @@ class _TodoPlanSectionContentState extends State<TodoPlanSectionContent> {
 
       // 显示成功消息
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("正在打开日历..."),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
+        showToastNotification(
+          message: "正在打开日历...",
+          type: ToastificationType.success,
         );
       }
     } catch (e) {
       // 显示错误信息
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("打开日历失败: $e"),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
+        showToastNotification(
+          message: "打开日历失败: $e",
+          type: ToastificationType.error,
         );
       }
     }
@@ -535,8 +530,8 @@ class _CreateTodoSheetState extends State<_CreateTodoSheet> {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请输入待办标题')),
+        showToastNotification(
+          message: '请输入待办标题',
         );
       }
       return;
@@ -568,15 +563,17 @@ class _CreateTodoSheetState extends State<_CreateTodoSheet> {
 
       await TodoService.instance.addTodo(item);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('待办计划已创建')),
+        showToastNotification(
+          message: '待办计划已创建',
+          type: ToastificationType.success,
         );
         widget.onCreated();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('创建失败: $e')),
+        showToastNotification(
+          message: '创建失败: $e',
+          type: ToastificationType.error,
         );
       }
     } finally {
@@ -727,5 +724,4 @@ class _CreateTodoSheetState extends State<_CreateTodoSheet> {
     );
   }
 }
-
 

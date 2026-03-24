@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:appflowy/user/application/contact_binding_service.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 
@@ -265,12 +266,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
     
     // 验证邮箱格式
     if (!Validator.isValidEmail(emailController.text)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('请输入有效的邮箱地址'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      showToastNotification(message: '请输入有效的邮箱地址');
       return;
     }
     
@@ -294,12 +290,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
           
           _startCountdown();
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('验证码已发送到 ${emailController.text}'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          showToastNotification(message: '验证码已发送到 ${emailController.text}');
         }
       },
       (error) {
@@ -308,12 +299,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
             _isSending = false;
           });
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('发送失败: ${error.msg}'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          showToastNotification(message: '发送失败: ${error.msg}');
         }
       },
     );
@@ -336,12 +322,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
     if (!_canComplete() || _isBinding) return;
     
     if (!_canComplete()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('请输入有效的邮箱地址和6位验证码'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      showToastNotification(message: '请输入有效的邮箱地址和6位验证码');
       return;
     }
     
@@ -361,12 +342,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
           widget.onBindingComplete?.call();
           Navigator.of(context).pop();
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('邮箱 ${emailController.text} 绑定成功'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          showToastNotification(message: '邮箱 ${emailController.text} 绑定成功');
         }
       },
       (error) {
@@ -375,12 +351,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
             _isBinding = false;
           });
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('绑定失败: ${error.msg}'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          showToastNotification(message: '绑定失败: ${error.msg}');
         }
       },
     );

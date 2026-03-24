@@ -7,6 +7,7 @@ import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:appflowy/workspace/application/view/ai_chat_view_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 
 class AIWelcomePluginBuilder extends PluginBuilder {
@@ -124,11 +125,8 @@ class _AIWelcomePluginPageState extends State<AIWelcomePluginPage> {
 
   void _showError(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 2),
-        ),
+      showToastNotification(
+        message: message,
       );
     }
   }

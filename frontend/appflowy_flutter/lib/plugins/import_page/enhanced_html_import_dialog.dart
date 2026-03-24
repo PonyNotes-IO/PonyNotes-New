@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:appflowy_backend/log.dart';
@@ -406,12 +407,9 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
         if (!_isFileSizeValid(fileSize)) {
           final fileSizeStr = _formatFileSize(fileSize);
           final maxSizeStr = _formatFileSize(_maxFileSize);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('文件大小超过限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 5),
-            ),
+          showToastNotification(
+            message: '文件大小超过限制（最大$maxSizeStr），当前文件大小：$fileSizeStr。请压缩文件或使用较小的文件。',
+            type: ToastificationType.error,
           );
           return;
         }
@@ -424,8 +422,9 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
       }
     } catch (e) {
       Log.error('Failed to select HTML file: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('选择文件失败: $e')),
+      showToastNotification(
+        message: '选择文件失败: $e',
+        type: ToastificationType.error,
       );
     }
   }
@@ -555,22 +554,18 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
               if (widget.onImportSuccess != null) {
                 widget.onImportSuccess!();
               }
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('HTML文件导入成功'),
-                  backgroundColor: Colors.green,
-                ),
+              showToastNotification(
+                message: 'HTML文件导入成功',
+                type: ToastificationType.success,
               );
             }
           },
           (error) {
             Log.error('导入HTML文档失败: $error');
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('导入失败: $error'),
-                  backgroundColor: Colors.red,
-                ),
+              showToastNotification(
+                message: '导入失败: $error',
+                type: ToastificationType.error,
               );
             }
           },
@@ -581,11 +576,9 @@ class _EnhancedHtmlImportDialogState extends State<EnhancedHtmlImportDialog> {
     } catch (e) {
       Log.error('导入HTML文档失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导入失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '导入失败: $e',
+          type: ToastificationType.error,
         );
       }
     }

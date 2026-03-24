@@ -12,6 +12,7 @@ import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/repe
 import 'widgets/reminder_selection_dialog.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:collection/collection.dart';
@@ -185,23 +186,17 @@ class _EditEventPageState extends State<EditEventPage> {
         await _refreshReminderIfNeeded();
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('⚠️ 数据库连接失败，日程将无法保存'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
+          showToastNotification(
+            message: '⚠️ 数据库连接失败，日程将无法保存',
+            type: ToastificationType.warning,
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ 初始化失败: ${e.toString()}'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
+        showToastNotification(
+          message: '⚠️ 初始化失败: ${e.toString()}',
+          type: ToastificationType.warning,
         );
       }
     }
@@ -276,12 +271,9 @@ class _EditEventPageState extends State<EditEventPage> {
   bool saveEvent() {
     // 验证输入
     if (_description.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('请添加日程描述'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
+      showToastNotification(
+        message: '请添加日程描述',
+        type: ToastificationType.error,
       );
       return false;
     }
@@ -305,24 +297,18 @@ class _EditEventPageState extends State<EditEventPage> {
     
     // 检查时间是否在1970年之后
     if (startDateTime.year < 1970 || endDateTime.year < 1970) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ 时间设置无效，请选择有效的时间'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
+      showToastNotification(
+        message: '❌ 时间设置无效，请选择有效的时间',
+        type: ToastificationType.error,
       );
       return false;
     }
 
     // 检查结束时间不能小于开始时间
     if (endDateTime.isBefore(startDateTime)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('结束时间不能小于开始时间'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
+      showToastNotification(
+        message: '结束时间不能小于开始时间',
+        type: ToastificationType.error,
       );
       return false;
     }
@@ -330,12 +316,9 @@ class _EditEventPageState extends State<EditEventPage> {
     // 检查日程时长是否合理（不能超过30天）
     final duration = endDateTime.difference(startDateTime);
     if (duration.inDays > 30) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⚠️ 日程时长超过30天，请确认时间设置'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 3),
-        ),
+      showToastNotification(
+        message: '⚠️ 日程时长超过30天，请确认时间设置',
+        type: ToastificationType.warning,
       );
       // 不阻止保存，但给出警告
     }
@@ -429,12 +412,9 @@ class _EditEventPageState extends State<EditEventPage> {
 
         // 显示成功消息
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ 日程更新成功！'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
+          showToastNotification(
+            message: '✅ 日程更新成功！',
+            type: ToastificationType.success,
           );
         }
       } else {
@@ -456,12 +436,9 @@ class _EditEventPageState extends State<EditEventPage> {
           detailedError = '请检查数据库连接和权限设置';
         }
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ $errorMessage'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 4),
-          ),
+        showToastNotification(
+          message: '❌ $errorMessage',
+          type: ToastificationType.error,
         );
       }
     }
@@ -515,12 +492,9 @@ class _EditEventPageState extends State<EditEventPage> {
       if (success) {
         widget.onEventDeleted(widget.schedule.id);
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ 日程已删除'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
+        showToastNotification(
+          message: '✅ 日程已删除',
+          type: ToastificationType.success,
         );
         
         // 使用 SchedulerBinding 确保在下一帧执行导航
@@ -540,12 +514,9 @@ class _EditEventPageState extends State<EditEventPage> {
             e.toString().contains('本地列表中未找到要删除的日程') || 
             e.toString().contains('Not found')) {
           widget.onEventDeleted(widget.schedule.id);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ 日程已删除'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
+          showToastNotification(
+            message: '✅ 日程已删除',
+            type: ToastificationType.success,
           );
           // 使用 SchedulerBinding 确保在下一帧执行导航
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -554,12 +525,9 @@ class _EditEventPageState extends State<EditEventPage> {
             }
           });
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ 日程删除失败'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 4),
-            ),
+          showToastNotification(
+            message: '❌ 日程删除失败',
+            type: ToastificationType.error,
           );
         }
       }

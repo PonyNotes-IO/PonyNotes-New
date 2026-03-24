@@ -1,4 +1,6 @@
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -8,7 +10,6 @@ import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/settings/share/import_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
-import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -228,21 +229,17 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       } else {
         final result = await ImportService.pickAndImportFile(type);
         if (result != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('成功导入 ${result.fileName}'),
-              backgroundColor: Colors.green,
-            ),
+          showToastNotification(
+            message: '成功导入 ${result.fileName}',
+            type: ToastificationType.success,
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导入失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '导入失败: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -282,11 +279,9 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
         importResult.fold(
           (views) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('成功将 ${result.fileName} 导入到外部导入项目'),
-                  backgroundColor: Colors.green,
-                ),
+              showToastNotification(
+                message: '成功将 ${result.fileName} 导入到外部导入项目',
+                type: ToastificationType.success,
               );
 
               // 如果有导入的视图，打开第一个
@@ -297,11 +292,9 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
           },
           (error) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('导入失败: $error'),
-                  backgroundColor: Colors.red,
-                ),
+              showToastNotification(
+                message: '导入失败: $error',
+                type: ToastificationType.error,
               );
             }
           },
@@ -309,11 +302,9 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('CSV导入失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: 'CSV导入失败: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -379,11 +370,9 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
               if (mounted) {
                 final fileCount = importValues.length;
                 final fileNames = result.files.map((f) => f.name).join(', ');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('成功导入 $fileCount 个文件到外部导入项目：$fileNames'),
-                    backgroundColor: Colors.green,
-                  ),
+                showToastNotification(
+                  message: '成功导入 $fileCount 个文件到外部导入项目：$fileNames',
+                  type: ToastificationType.success,
                 );
 
                 // 如果有导入的视图，打开第一个
@@ -394,11 +383,9 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
             },
             (error) {
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('导入失败: $error'),
-                    backgroundColor: Colors.red,
-                  ),
+                showToastNotification(
+                  message: '导入失败: $error',
+                  type: ToastificationType.error,
                 );
               }
             },
@@ -407,11 +394,9 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('文本与Markdown导入失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '文本与Markdown导入失败: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -509,11 +494,9 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('PDF导入失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: 'PDF导入失败: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -524,20 +507,16 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
     try {
       await ImportService.importFromService(service);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('正在从 $service 导入数据...'),
-            backgroundColor: Colors.blue,
-          ),
+        showToastNotification(
+          message: '正在从 $service 导入数据...',
+          type: ToastificationType.info,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导入失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '导入失败: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -576,11 +555,9 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('打开HTML导入对话框失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '打开HTML导入对话框失败: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -657,11 +634,9 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
     } catch (e) {
       Log.error('❌ Word导入失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Word导入失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: 'Word导入失败: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -857,14 +832,14 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
 
 此Word文档似乎没有可提取的文本内容。
 
-**可能的原因：**
-- 文档主要包含图片或图表
-- 文档是扫描版PDF转换而成
-- 文档内容被加密或保护
+|**可能的原因：**|
+|- 文档主要包含图片或图表
+|- 文档是扫描版PDF转换而成
+|- 文档内容被加密或保护
 
-**建议：**
-- 请检查原始文档是否包含文本内容
-- 如果文档包含重要信息，请考虑手动复制粘贴
+|**建议：**|
+|- 请检查原始文档是否包含文本内容
+|- 如果文档包含重要信息，请考虑手动复制粘贴
 ''';
   }
 
@@ -872,21 +847,21 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
   String _createDocNotSupportedContent(String fileName) {
     return '''# $fileName
 
-**暂不支持.doc格式文件**
+|**暂不支持.doc格式文件**
 
 目前系统仅支持.docx格式的Word文档导入。
 
-**解决方案：**
+|**解决方案：**
 1. 使用Microsoft Word打开此文件
 2. 选择"文件" → "另存为"
 3. 将格式改为"Word文档(.docx)"
 4. 重新导入转换后的文件
 
-**为什么不支持.doc格式？**
+|**为什么不支持.doc格式？**
 .doc是较老的二进制格式，解析复杂且容易出错。
 .docx是基于XML的现代格式，更容易处理且兼容性更好。
 
-**导入时间：** ${DateTime.now().toString().split('.')[0]}
+|**导入时间：** ${DateTime.now().toString().split('.')[0]}
 ''';
   }
 
@@ -894,17 +869,17 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
   String _createErrorContent(String fileName, String error) {
     return '''# $fileName - 导入失败
 
-**导入过程中发生错误**
+|**导入过程中发生错误**
 
-**错误信息：** $error
+|**错误信息：** $error
 
-**可能的解决方案：**
+|**可能的解决方案：**
 1. 确保文件没有损坏
 2. 检查文件是否被密码保护
 3. 尝试用Microsoft Word打开并重新保存
 4. 确保文件格式正确（支持.docx格式）
 
-**技术信息：**
+|**技术信息：**
 - 文件名：$fileName
 - 导入时间：${DateTime.now().toString().split('.')[0]}
 - 错误类型：文档解析失败

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/services.dart';
 import 'package:appflowy/core/network/ai_model_service.dart';
 import 'package:appflowy/workspace/application/subscription/membership_checker_service.dart';
@@ -961,11 +962,8 @@ class _AIInputAreaState extends State<AIInputArea> {
     } catch (e) {
       debugPrint('文件选择失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('文件选择失败: $e'),
-            duration: const Duration(seconds: 2),
-          ),
+        showToastNotification(
+          message: '文件选择失败: $e',
         );
       }
     }
@@ -1016,7 +1014,7 @@ class _AIInputAreaState extends State<AIInputArea> {
                 ? Colors.red
                 : Theme.of(context).colorScheme.onSurface.withOpacity(0.6);
 
-            // 仅显示“X 次可用”的提示，放在字数与附件之间
+            // 仅显示"X 次可用"的提示，放在字数与附件之间
             return Text(
               '${remaining < 0 ? 0 : remaining} 次可用',
               style: TextStyle(
@@ -1657,8 +1655,8 @@ class _AIInputAreaState extends State<AIInputArea> {
     } catch (e) {
       debugPrint('打开附件失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('无法打开附件: $e')),
+        showToastNotification(
+          message: '无法打开附件: $e',
         );
       }
     }

@@ -17,6 +17,7 @@ import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy_backend/log.dart';
@@ -323,24 +324,18 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   /// 显示错误提示
   void _showErrorSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      ),
+    showToastNotification(
+      message: message,
+      type: ToastificationType.error,
     );
   }
 
   /// 显示成功提示
   void _showSuccessSnackBar(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-      ),
+    showToastNotification(
+      message: message,
+      type: ToastificationType.success,
     );
   }
 
@@ -490,11 +485,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('导出格式不受支持: $format'),
-        backgroundColor: Colors.red,
-      ),
+    showToastNotification(
+      message: '导出格式不受支持: $format',
+      type: ToastificationType.error,
     );
   }
 
@@ -525,21 +518,17 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('导出成功'),
-            backgroundColor: Colors.green,
-          ),
+        showToastNotification(
+          message: '导出成功',
+          type: ToastificationType.success,
         );
       }
     } catch (e) {
       Log.error('❌ [Whiteboard] Save PonyNotes json failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('保存失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '保存失败: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -566,21 +555,17 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       await file.writeAsBytes(bytes);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('导出成功'),
-            backgroundColor: Colors.green,
-          ),
+        showToastNotification(
+          message: '导出成功',
+          type: ToastificationType.success,
         );
       }
     } catch (e) {
       Log.error('❌ [Whiteboard] Save PNG failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('保存失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '保存失败: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -601,21 +586,17 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       await file.writeAsString(svgContent);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('导出成功'),
-            backgroundColor: Colors.green,
-          ),
+        showToastNotification(
+          message: '导出成功',
+          type: ToastificationType.success,
         );
       }
     } catch (e) {
       Log.error('❌ [Whiteboard] Save SVG failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('保存失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '保存失败: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -630,11 +611,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     // 处理错误
     Log.error('❌ [Whiteboard] Error: $error');
     if (mounted && !_isDisposing) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('白板错误: $error'),
-          backgroundColor: Colors.red,
-        ),
+      showToastNotification(
+        message: '白板错误: $error',
+        type: ToastificationType.error,
       );
     }
   }
@@ -650,16 +629,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
     if (mounted) {
       Log.debug('✅ [Whiteboard] Manual save completed via CollabAdapter');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('白板已保存'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          duration: const Duration(seconds: 2),
-        ),
+      showToastNotification(
+        message: '白板已保存',
+        type: ToastificationType.success,
       );
     }
   }
@@ -945,11 +917,9 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     } catch (e) {
       Log.error('❌ [Whiteboard] Export source file failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导出失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '导出失败: $e',
+          type: ToastificationType.error,
         );
       }
     }

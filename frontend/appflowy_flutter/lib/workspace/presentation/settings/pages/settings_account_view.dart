@@ -289,12 +289,7 @@ class _AccountQuickActionsSection extends StatelessWidget {
       builder: (context) =>
           EmailBindingDialog(
             onBindingComplete: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('邮箱绑定完成'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              showToastNotification(message: '邮箱绑定完成');
             },
           ),
     );
@@ -358,21 +353,11 @@ class _AccountQuickActionsSection extends StatelessWidget {
                 onPressed: () {
                   final phone = phoneController.text.trim();
                   if (phone.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('请输入手机号'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
+                    showToastNotification(message: '请输入手机号');
                     return;
                   }
                   if (!Validator.isValidPhone(phone)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('请输入正确的手机号格式'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
+                    showToastNotification(message: '请输入正确的手机号格式');
                     return;
                   }
                   Navigator.of(context).pop();
@@ -382,12 +367,7 @@ class _AccountQuickActionsSection extends StatelessWidget {
                         IdentityVerificationDialog(
                           phoneNumber: phone,
                           onVerificationComplete: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('手机验证完成'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
+                            showToastNotification(message: '手机验证完成');
                           },
                         ),
                   );
@@ -400,7 +380,6 @@ class _AccountQuickActionsSection extends StatelessWidget {
   }
 
   void _showPhoneChangeDialog(BuildContext context) {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final settingsBloc = context.read<SettingsDialogBloc>();
 
     showDialog(
@@ -408,12 +387,7 @@ class _AccountQuickActionsSection extends StatelessWidget {
       builder: (dialogContext) =>
           PhoneChangeDialog(
             onChangeComplete: () async {
-              scaffoldMessenger.showSnackBar(
-                const SnackBar(
-                  content: Text('手机号更改成功'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              showToastNotification(message: '手机号更改成功');
 
               Log.info('📱 开始刷新用户资料...');
               final result = await UserBackendService.getCurrentUserProfile();

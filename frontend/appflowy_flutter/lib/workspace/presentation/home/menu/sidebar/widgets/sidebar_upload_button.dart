@@ -4,7 +4,9 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 
 class SidebarUploadButton extends StatefulWidget {
   const SidebarUploadButton({
@@ -42,17 +44,12 @@ class _SidebarUploadButtonState extends State<SidebarUploadButton> {
         ),
       );
     } catch (e) {
-      _showMessage(context, '打开导入页面时发生错误: $e');
+      _showMessage('打开导入页面时发生错误: $e');
     }
   }
 
-  void _showMessage(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+  void _showMessage(String message) {
+    showToastNotification(message: message);
   }
 
   Widget _buildUploadIcon(

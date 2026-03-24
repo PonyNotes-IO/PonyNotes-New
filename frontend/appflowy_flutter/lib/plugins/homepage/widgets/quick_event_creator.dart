@@ -1,6 +1,7 @@
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:intl/intl.dart';
 import 'package:appflowy/plugins/homepage/application/todo_models.dart';
 import 'package:appflowy/plugins/homepage/application/todo_service.dart';
@@ -453,23 +454,17 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
 
       // 显示成功消息
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("正在打开日历..."),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
+        showToastNotification(
+          message: "正在打开日历...",
+          type: ToastificationType.success,
         );
       }
     } catch (e) {
       // 显示错误信息
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("打开日历失败: $e"),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
+        showToastNotification(
+          message: "打开日历失败: $e",
+          type: ToastificationType.error,
         );
       }
     }
@@ -523,11 +518,9 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
 
   Future<void> _createEvent() async {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("请输入待办事项标题"),
-          backgroundColor: Colors.orange,
-        ),
+      showToastNotification(
+        message: "请输入待办事项标题",
+        type: ToastificationType.warning,
       );
       return;
     }
@@ -577,21 +570,17 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
 
       // 显示成功消息
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("待办事项创建成功"),
-            backgroundColor: Colors.green,
-          ),
+        showToastNotification(
+          message: "待办事项创建成功",
+          type: ToastificationType.success,
         );
       }
     } catch (e) {
       // 显示错误消息
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("创建失败: $e"),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: "创建失败: $e",
+          type: ToastificationType.error,
         );
       }
     } finally {
@@ -603,5 +592,4 @@ class _QuickEventCreatorState extends State<QuickEventCreator> {
     }
   }
 }
-
 

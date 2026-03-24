@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -70,11 +71,9 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
         listener: (context, state) {
           // 显示消息提示
           if (state.error != null) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.error!),
-                backgroundColor: Colors.red,
-              ),
+            showToastNotification(
+              message: state.error!,
+              type: ToastificationType.error,
             );
           }
           // 移除成功和信息提示，只保留错误提示
@@ -422,19 +421,15 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                             // 根据云盘名称调用相应的导入功能
                             if (driveName == '阿里云盘') {
                               // TODO: 实现阿里云盘导入
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('阿里云盘导入功能暂未实现'),
-                                  backgroundColor: Colors.orange,
-                                ),
+                              showToastNotification(
+                                message: '阿里云盘导入功能暂未实现',
+                                type: ToastificationType.warning,
                               );
                             } else if (driveName == '坚果云云盘') {
                               // TODO: 实现坚果云导入
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('坚果云导入功能暂未实现'),
-                                  backgroundColor: Colors.orange,
-                                ),
+                              showToastNotification(
+                                message: '坚果云导入功能暂未实现',
+                                type: ToastificationType.warning,
                               );
                             }
                           },
@@ -613,13 +608,11 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       Navigator.of(context).pop();
 
       // 显示结果
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('成功导入 $successCount/${files.length} 个文件'),
-          backgroundColor: successCount == files.length 
-              ? Colors.green 
-              : Colors.orange,
-        ),
+      showToastNotification(
+        message: '成功导入 $successCount/${files.length} 个文件',
+        type: successCount == files.length 
+            ? ToastificationType.success 
+            : ToastificationType.warning,
       );
 
       // 刷新文件列表
@@ -630,11 +623,9 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       Navigator.of(context).pop();
       
       // 显示错误
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('导入失败: $e'),
-          backgroundColor: Colors.red,
-        ),
+      showToastNotification(
+        message: '导入失败: $e',
+        type: ToastificationType.error,
       );
     }
   }
@@ -1172,11 +1163,9 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       
       if (userProfile == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('无法获取用户信息'),
-              backgroundColor: Colors.red,
-            ),
+          showToastNotification(
+            message: '无法获取用户信息',
+            type: ToastificationType.error,
           );
         }
         return;
@@ -1191,11 +1180,9 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       
       if (workspaceId == null || workspaceId.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('无法获取当前工作空间'),
-              backgroundColor: Colors.red,
-            ),
+          showToastNotification(
+            message: '无法获取当前工作空间',
+            type: ToastificationType.error,
           );
         }
         return;
@@ -1249,11 +1236,9 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
         
         if (privateSpace == null) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('无法创建"我的空间"'),
-                backgroundColor: Colors.red,
-              ),
+            showToastNotification(
+              message: '无法创建"我的空间"',
+              type: ToastificationType.error,
             );
           }
           return;
@@ -1278,11 +1263,9 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       
       if (createdView == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('创建笔记失败'),
-              backgroundColor: Colors.red,
-            ),
+          showToastNotification(
+            message: '创建笔记失败',
+            type: ToastificationType.error,
           );
         }
         return;
@@ -1304,11 +1287,9 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       
       if (documentBloc == null || documentBloc.state.editorState == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('无法访问文档编辑器，请手动插入文件'),
-              backgroundColor: Colors.orange,
-            ),
+          showToastNotification(
+            message: '无法访问文档编辑器，请手动插入文件',
+            type: ToastificationType.warning,
           );
         }
         return;
@@ -1346,21 +1327,16 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
       await editorState.apply(transaction);
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('笔记创建成功'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
+        showToastNotification(
+          message: '笔记创建成功',
+          type: ToastificationType.success,
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('创建笔记时发生错误: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '创建笔记时发生错误: $e',
+          type: ToastificationType.error,
         );
       }
     }
@@ -1373,5 +1349,4 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
     return imageExtensions.contains(extension);
   }
 }
-
 

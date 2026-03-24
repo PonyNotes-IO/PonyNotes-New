@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/inbox/application/inbox_bloc.dart';
@@ -134,11 +135,8 @@ class InboxToolbar extends StatelessWidget {
             onPressed: () {
               context.read<InboxBloc>().add(const InboxEvent.markAllAsRead());
               Navigator.of(dialogContext).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('✅ 已将所有项目标记为已读'),
-                  duration: Duration(seconds: 2),
-                ),
+              showToastNotification(
+                message: '✅ 已将所有项目标记为已读',
               );
             },
             child: const Text('确定'),

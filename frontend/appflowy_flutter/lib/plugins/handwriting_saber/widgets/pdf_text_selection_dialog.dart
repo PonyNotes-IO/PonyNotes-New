@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/services.dart';
 import '../services/pdf_text_extraction_service.dart';
 import '../../../../../util/log_utils.dart';
@@ -86,8 +87,8 @@ class _PdfTextSelectionDialogState extends State<PdfTextSelectionDialog> {
 
     if (textToCopy.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('没有可复制的文本')),
+        showToastNotification(
+          message: '没有可复制的文本',
         );
       }
       return;
@@ -96,18 +97,15 @@ class _PdfTextSelectionDialogState extends State<PdfTextSelectionDialog> {
     try {
       await Clipboard.setData(ClipboardData(text: textToCopy));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('已复制 ${textToCopy.length} 个字符到剪贴板'),
-            duration: const Duration(seconds: 2),
-          ),
+        showToastNotification(
+          message: '已复制 ${textToCopy.length} 个字符到剪贴板',
         );
       }
     } catch (e) {
       LogUtils.error('复制到剪贴板失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('复制失败: $e')),
+        showToastNotification(
+          message: '复制失败: $e',
         );
       }
     }
@@ -116,8 +114,8 @@ class _PdfTextSelectionDialogState extends State<PdfTextSelectionDialog> {
   Future<void> _copyAllToClipboard() async {
     if (_extractedText.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('没有可复制的文本')),
+        showToastNotification(
+          message: '没有可复制的文本',
         );
       }
       return;
@@ -126,18 +124,15 @@ class _PdfTextSelectionDialogState extends State<PdfTextSelectionDialog> {
     try {
       await Clipboard.setData(ClipboardData(text: _extractedText));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('已复制全部文本（${_extractedText.length} 个字符）到剪贴板'),
-            duration: const Duration(seconds: 2),
-          ),
+        showToastNotification(
+          message: '已复制全部文本（${_extractedText.length} 个字符）到剪贴板',
         );
       }
     } catch (e) {
       LogUtils.error('复制到剪贴板失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('复制失败: $e')),
+        showToastNotification(
+          message: '复制失败: $e',
         );
       }
     }
@@ -298,4 +293,3 @@ class _PdfTextSelectionDialogState extends State<PdfTextSelectionDialog> {
     );
   }
 }
-

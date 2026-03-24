@@ -119,11 +119,9 @@ class _SettingsWorkspaceManagementViewState
           Log.error('Update workspace setting failed: $err');
           // 显示用户友好的错误提示
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('设置更新失败: ${err.msg}'),
-                backgroundColor: Colors.red,
-              ),
+            showToastNotification(
+              message: '设置更新失败: ${err.msg}',
+              type: ToastificationType.error,
             );
           }
         },
@@ -131,11 +129,9 @@ class _SettingsWorkspaceManagementViewState
     } catch (e) {
       Log.error('Exception updating workspace setting: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('设置更新失败，请稍后重试'),
-            backgroundColor: Colors.red,
-          ),
+        showToastNotification(
+          message: '设置更新失败，请稍后重试',
+          type: ToastificationType.error,
         );
       }
     }

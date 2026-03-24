@@ -612,11 +612,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                             try {
                               // 验证标题长度
                               if (documentTitle.length > 256) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('日记标题过长，请控制在256个字符以内'),
-                                    backgroundColor: Colors.red,
-                                  ),
+                                showToastNotification(
+                                  message: '日记标题过长，请控制在256个字符以内',
+                                  type: ToastificationType.error,
                                 );
                                 setDialogState(() {
                                   isCreating = false;
@@ -644,11 +642,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                               if (userProfile == null ||
                                   workspaceId == null ||
                                   workspaceId.isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('无法获取当前用户或工作空间信息'),
-                                    backgroundColor: Colors.red,
-                                  ),
+                                showToastNotification(
+                                  message: '无法获取当前用户或工作空间信息',
+                                  type: ToastificationType.error,
                                 );
                                 setDialogState(() {
                                   isCreating = false;
@@ -682,12 +678,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                                   });
 
                                   // 显示成功提示
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('日记创建成功: ${view.name}'),
-                                      backgroundColor: Colors.green,
-                                      duration: Duration(seconds: 2),
-                                    ),
+                                  showToastNotification(
+                                    message: '日记创建成功: ${view.name}',
+                                    type: ToastificationType.success,
                                   );
 
                                   // 关闭对话框
@@ -785,20 +778,15 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                               setDialogState(() {
                                 isCreating = false;
                               });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('创建日记失败: $e'),
-                                  backgroundColor: Colors.red,
-                                  duration: Duration(seconds: 4),
-                                ),
+                              showToastNotification(
+                                message: '创建日记失败: $e',
+                                type: ToastificationType.error,
                               );
                             }
                           } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('请输入日记标题'),
-                                backgroundColor: Colors.orange,
-                              ),
+                            showToastNotification(
+                              message: '请输入日记标题',
+                              type: ToastificationType.warning,
                             );
                             return;
                           }
@@ -1049,12 +1037,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     // 检查是否有有效的ID
     if (eventId == null || eventId.isEmpty) {
       Log.error('❌ 错误: 日程ID为空，保存可能失败');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ 日程创建失败：未返回有效ID'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
+      showToastNotification(
+        message: '❌ 日程创建失败：未返回有效ID',
+        type: ToastificationType.error,
       );
       return;
     }
@@ -1066,12 +1051,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     context.read<CalendarContentCubit>().refresh();
 
     // 显示成功提示
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('✅ 日程创建成功: $description'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 2),
-      ),
+    showToastNotification(
+      message: '✅ 日程创建成功: $description',
+      type: ToastificationType.success,
     );
   }
 
@@ -1791,40 +1773,27 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   void _showClientNotSupportedMessage() {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('当前客户端不支持或未授予日历权限'),
-        duration: const Duration(seconds: 2),
-        backgroundColor: Theme.of(context).colorScheme.error,
-      ),
+    showToastNotification(
+      message: '当前客户端不支持或未授予日历权限',
+      type: ToastificationType.error,
     );
   }
 
   // 显示Toggle成功提示
   void _showToggleSuccessMessage(bool isSubscribed) {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          isSubscribed ? '已订阅系统日历' : '已取消订阅系统日历',
-        ),
-        duration: Duration(seconds: 2),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-      ),
+    showToastNotification(
+      message: isSubscribed ? '已订阅系统日历' : '已取消订阅系统日历',
+      type: ToastificationType.success,
     );
   }
 
   // 显示Toggle错误提示
   void _showToggleErrorMessage() {
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('操作失败，请重试'),
-        duration: Duration(seconds: 2),
-        backgroundColor: Colors.red,
-      ),
+    showToastNotification(
+      message: '操作失败，请重试',
+      type: ToastificationType.error,
     );
   }
 

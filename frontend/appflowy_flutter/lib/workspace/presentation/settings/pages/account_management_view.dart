@@ -12,6 +12,7 @@ import 'package:appflowy/workspace/application/payment/payment_util.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/email_binding_dialog.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/phone_change_dialog.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
@@ -212,14 +213,11 @@ class _AccountManagementViewState extends State<AccountManagementView>
               error,
               paymentResult,
             ) {
-              if (error != null && error.isNotEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(error),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              }
+          if (error != null && error.isNotEmpty) {
+            showToastNotification(
+              message: error,
+            );
+          }
               if (paymentResult != null && paymentResult.isNotEmpty) {
                 // 避免同一条 paymentResult 多次触发提示
                 if (_lastHandledPaymentResult == paymentResult) {
@@ -237,11 +235,8 @@ class _AccountManagementViewState extends State<AccountManagementView>
                 // 普通消息提示
                 _lastHandledPaymentResult = paymentResult;
                 // 普通消息提示
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(paymentResult),
-                    duration: const Duration(seconds: 2),
-                  ),
+                showToastNotification(
+                  message: paymentResult,
                 );
                 // 支付成功后刷新订阅信息
                 if (paymentResult.contains('成功')) {

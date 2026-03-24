@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart' as quill;
 import 'package:pdfrx/pdfrx.dart';
@@ -2439,9 +2440,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         deletedRegularImages.length +
         deletedTextBoxes.length;
     if (mounted && deletedCount > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已删除 $deletedCount 个对象')),
-      );
+      showToastNotification(message: '已删除 $deletedCount 个对象');
     }
 
     debugPrint(
@@ -2479,9 +2478,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // 显示提示
     final copiedCount = _clipboardStrokes!.length + _clipboardImages!.length;
     if (mounted && copiedCount > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已复制 $copiedCount 个对象')),
-      );
+      showToastNotification(message: '已复制 $copiedCount 个对象');
     }
 
     debugPrint(
@@ -2495,9 +2492,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
         _clipboardRegularImages == null) {
       debugPrint('🦋[HandwritingSaber] _pasteObjects: 剪贴板为空');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('剪贴板为空')),
-        );
+        showToastNotification(message: '剪贴板为空');
       }
       return;
     }
@@ -2582,9 +2577,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       // 显示提示
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已粘贴 ${pastedStrokes.length} 个对象')),
-        );
+        showToastNotification(message: '已粘贴 ${pastedStrokes.length} 个对象');
       }
 
       debugPrint(
@@ -4359,9 +4352,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
     // 显示提示
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('图片已删除')),
-      );
+      showToastNotification(message: '图片已删除');
     }
   }
 
@@ -4389,9 +4380,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       final currentPageIndex = _viewingPageIndexNotifier.value;
       if (currentPageIndex >= _coreInfo.pages.length) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('没有可用的页面')),
-          );
+          showToastNotification(message: '没有可用的页面');
         }
         return;
       }
@@ -4442,17 +4431,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
         // 显示提示
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('已导入 $imagesAdded 张图片')),
-          );
+          showToastNotification(message: '已导入 $imagesAdded 张图片');
         }
       }
     } catch (e) {
       debugPrint('导入图片失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('导入图片失败')),
-        );
+        showToastNotification(message: '导入图片失败');
       }
     }
   }
@@ -4465,21 +4450,14 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       // 检查是否有可导出的内容
       if (_coreInfo.pages.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('没有可导出的页面')),
-          );
+          showToastNotification(message: '没有可导出的页面');
         }
         return;
       }
 
       // 显示加载提示
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('正在生成 PDF...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        showToastNotification(message: '正在生成 PDF...');
       }
 
       // 使用 EditorExporter 生成 PDF
@@ -4515,17 +4493,13 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       debugPrint('📄[HandwritingSaber] PDF 导出成功: ${file.path}');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF 导出成功: ${file.path}')),
-        );
+        showToastNotification(message: 'PDF 导出成功: ${file.path}');
       }
     } catch (e, stackTrace) {
       debugPrint('❌ [HandwritingSaber] 导出 PDF 失败: $e');
       debugPrint('❌ [HandwritingSaber] 堆栈: $stackTrace');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出 PDF 失败: $e')),
-        );
+        showToastNotification(message: '导出 PDF 失败: $e');
       }
     }
   }
@@ -4547,9 +4521,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       await _importPdfFromFilePath(pdfFilePath);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入 PDF 失败：$e')),
-        );
+        showToastNotification(message: '导入 PDF 失败：$e');
       }
     }
   }
@@ -4562,14 +4534,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       // 显示加载提示（非阻塞）
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('正在分析PDF文件...'),
-            duration: Duration(seconds: 2),
-          ),
-        );
+        showToastNotification(message: '正在分析PDF文件...');
       }
-
       // ✅ 保存当前第一页的笔迹（如果有）
       final List<Stroke> existingStrokes = _coreInfo.pages.isNotEmpty
           ? List<Stroke>.from(_coreInfo.pages.first.strokes)
@@ -4675,11 +4641,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
           '🦋[HandwritingSaber] PDF导入完成: 总用时 ${totalImportTime.inMilliseconds}ms');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('PDF导入成功（${pdfDocument.pages.length}页），正在加载页面内容...'),
-            duration: const Duration(seconds: 3),
-          ),
+        showToastNotification(
+          message: 'PDF导入成功（${pdfDocument.pages.length}页），正在加载页面内容...',
         );
       }
 
@@ -4688,11 +4651,8 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     } catch (e) {
       debugPrint('❌ [HandwritingSaberPocPage] 导入 PDF 失败：$e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导入 PDF 失败：$e'),
-            duration: const Duration(seconds: 5),
-          ),
+        showToastNotification(
+          message: '导入 PDF 失败：$e',
         );
       }
     }
@@ -4720,9 +4680,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       if (pdfImage == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('当前没有PDF页面')),
-          );
+        showToastNotification(message: '当前没有PDF页面');
         }
         return;
       }
@@ -4738,9 +4696,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     } catch (e) {
       debugPrint('❌ [HandwritingSaberPocPage] 提取PDF文本失败：$e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('提取PDF文本失败：$e')),
-        );
+        showToastNotification(message: '提取PDF文本失败：$e');
       }
     }
   }
@@ -4756,9 +4712,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
       final currentPageIndex = 0;
       if (currentPageIndex >= _coreInfo.pages.length) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('没有可用的页面')),
-          );
+          showToastNotification(message: '没有可用的页面');
         }
         return;
       }
@@ -4797,16 +4751,12 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       // 显示提示
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('网页已插入')),
-        );
+        showToastNotification(message: '网页已插入');
       }
     } catch (e) {
       debugPrint('插入网页失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('插入网页失败: $e')),
-        );
+        showToastNotification(message: '插入网页失败: $e');
       }
     }
   }
@@ -4877,9 +4827,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     _scheduleSave();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('网页已删除')),
-      );
+      showToastNotification(message: '网页已删除');
     }
   }
 
@@ -4890,9 +4838,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     setState(() {}); // 触发重新加载
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('网页缓存已清除，重新加载中...')),
-      );
+      showToastNotification(message: '网页缓存已清除，重新加载中...');
     }
   }
 
@@ -5527,9 +5473,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     if (page.backgroundImage == null ||
         !(page.backgroundImage is PdfEditorImage)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('当前页面没有PDF背景')),
-        );
+        showToastNotification(message: '当前页面没有PDF背景');
       }
       return;
     }
@@ -5593,9 +5537,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     // 检查选择区域是否足够大
     if (selectionRect.width < 5 || selectionRect.height < 5) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('选择区域太小')),
-        );
+        showToastNotification(message: '选择区域太小');
       }
       _pdfTextSelectionStart = null;
       _pdfTextSelectionPageIndex = null;
@@ -5623,19 +5565,14 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
 
       if (extractedText.trim().isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('选择的区域没有文本')),
-          );
+          showToastNotification(message: '选择的区域没有文本');
         }
       } else {
         // 复制到剪贴板
         await Clipboard.setData(ClipboardData(text: extractedText));
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('已复制 ${extractedText.length} 个字符到剪贴板'),
-              duration: const Duration(seconds: 2),
-            ),
+          showToastNotification(
+            message: '已复制 ${extractedText.length} 个字符到剪贴板',
           );
         }
         debugPrint(
@@ -5644,9 +5581,7 @@ class _HandwritingSaberPocPageState extends State<HandwritingSaberPocPage> {
     } catch (e) {
       debugPrint('❌ [HandwritingSaber] 提取PDF文本失败: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('提取PDF文本失败: $e')),
-        );
+        showToastNotification(message: '提取PDF文本失败: $e');
       }
     } finally {
       // 清除选择状态

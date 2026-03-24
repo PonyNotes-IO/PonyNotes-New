@@ -8,6 +8,7 @@ import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import '../models/schedule_model.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/repeat_selector.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'widgets/reminder_selection_dialog.dart';
 
@@ -41,9 +42,9 @@ class _NewEventPageState extends State<NewEventPage> {
   late DateTime _endDate;
   bool _isAllDay = false;
   bool _isImportant = false;
-  String _repeatLabel = '任务重复'; // 无时显示“任务重复”
+  String _repeatLabel = '任务重复'; // 无时显示"任务重复"
   int _repeatType = 0; // 0=无 1=每天 2=每周 3=每年 4=法定工作日 99=自定义
-  String? _repeatCustomSummary; // 自定义选项摘要，如“每1周的周二”
+  String? _repeatCustomSummary; // 自定义选项摘要，如"每1周的周二"
   String _calendar = '我的日历';
   String _description = '';
   ReminderOption _reminderOption = ReminderOption.none;
@@ -132,23 +133,17 @@ class _NewEventPageState extends State<NewEventPage> {
       } else {
         // 在界面上显示警告，但不阻止用户继续操作
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('⚠️ 数据库连接失败，日程将无法保存'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
+          showToastNotification(
+            message: '⚠️ 数据库连接失败，日程将无法保存',
+            type: ToastificationType.warning,
           );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('⚠️ 初始化失败: ${e.toString()}'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
+        showToastNotification(
+          message: '⚠️ 初始化失败: ${e.toString()}',
+          type: ToastificationType.warning,
         );
       }
     }
@@ -164,12 +159,9 @@ class _NewEventPageState extends State<NewEventPage> {
   bool saveEvent() {
     // 验证输入
     if (_description.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('请添加日程描述'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
+      showToastNotification(
+        message: '请添加日程描述',
+        type: ToastificationType.error,
       );
       return false;
     }
@@ -196,12 +188,9 @@ class _NewEventPageState extends State<NewEventPage> {
     
     // 检查时间是否在1970年之后
     if (startDateTime.year < 1970 || endDateTime.year < 1970) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ 时间设置无效，请选择有效的时间'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
+      showToastNotification(
+        message: '❌ 时间设置无效，请选择有效的时间',
+        type: ToastificationType.error,
       );
       return false;
     }
@@ -210,12 +199,9 @@ class _NewEventPageState extends State<NewEventPage> {
 
     // 检查结束时间不能小于开始时间
     if (endDateTime.isBefore(startDateTime)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('结束时间不能小于开始时间'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
+      showToastNotification(
+        message: '结束时间不能小于开始时间',
+        type: ToastificationType.error,
       );
       return false;
     }
@@ -223,12 +209,9 @@ class _NewEventPageState extends State<NewEventPage> {
     // 检查日程时长是否合理（不能超过30天）
     final duration = endDateTime.difference(startDateTime);
     if (duration.inDays > 30) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⚠️ 日程时长超过30天，请确认时间设置'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 3),
-        ),
+      showToastNotification(
+        message: '⚠️ 日程时长超过30天，请确认时间设置',
+        type: ToastificationType.warning,
       );
       // 不阻止保存，但给出警告
     }
@@ -297,12 +280,9 @@ class _NewEventPageState extends State<NewEventPage> {
         };
         widget.onEventCreated(eventData);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ 日程创建成功！'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
+          showToastNotification(
+            message: '✅ 日程创建成功！',
+            type: ToastificationType.success,
           );
         }
         return;
@@ -1546,7 +1526,7 @@ class _CustomTimePickerBottomSheetState extends State<CustomTimePickerBottomShee
       ),
     );
   }
-} 
+}
 
 // 自定义滚动行为：允许鼠标、触控板、触屏等设备拖拽/滚轮滚动 CupertinoPicker
 class _CupertinoPickerScrollBehavior extends ScrollBehavior {

@@ -5,6 +5,7 @@ import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/accoun
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/slide_verification_widget.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 
@@ -229,12 +230,7 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
 
     final cleanPhone = Validator.cleanPhoneNumber(phoneController.text);
     if (!Validator.isValidPhone(cleanPhone)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('手机号格式不正确'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      showToastNotification(message: '手机号格式不正确');
       return;
     }
 
@@ -251,12 +247,7 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
         setState(() => _isSending = false);
 
         if (data.isOwnPhone) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('该手机号已绑定到当前账号'),
-              duration: Duration(seconds: 2),
-            ),
-          );
+          showToastNotification(message: '该手机号已绑定到当前账号');
           return;
         }
 
@@ -276,12 +267,7 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
       (error) {
         if (!mounted) return;
         setState(() => _isSending = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('发送失败: ${error.msg}'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showToastNotification(message: '发送失败: ${error.msg}');
       },
     );
   }
@@ -319,21 +305,11 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
   Future<void> _bindPhone() async {
     final cleanPhone = Validator.cleanPhoneNumber(phoneController.text);
     if (!Validator.isValidPhone(cleanPhone)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('手机号格式不正确'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      showToastNotification(message: '手机号格式不正确');
       return;
     }
     if (codeController.text.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('请输入6位验证码'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+      showToastNotification(message: '请输入6位验证码');
       return;
     }
 
@@ -366,14 +342,8 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
         widget.onBindComplete?.call();
       },
       (error) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.msg),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        showToastNotification(message: error.msg);
       },
     );
   }
 }
-

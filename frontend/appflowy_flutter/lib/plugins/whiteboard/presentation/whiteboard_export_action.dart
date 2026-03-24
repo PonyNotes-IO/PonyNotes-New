@@ -6,6 +6,7 @@ import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:get_it/get_it.dart';
 import 'package:flutter/material.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 
 /// 白板导出控制器 - 用于在不同组件间协调导出操作
 class WhiteboardExportController {
@@ -186,12 +187,9 @@ class _WhiteboardExportActionState extends State<WhiteboardExportAction> {
     // 如果都不可用，显示提示
     if (widget.onExport == null) {
       Log.warn('[WhiteboardExport] 无法执行导出: 白板视图可能未打开');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('请先打开白板视图后再导出'),
-          duration: const Duration(seconds: 2),
-          backgroundColor: Colors.orange,
-        ),
+      showToastNotification(
+        message: '请先打开白板视图后再导出',
+        type: ToastificationType.warning,
       );
     }
   }
@@ -295,22 +293,16 @@ class _WhiteboardImportActionState extends State<WhiteboardImportAction> {
 
     // 如果不可用，显示提示
     Log.warn('[WhiteboardImport] 无法执行导入: 白板视图可能未打开');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('请先打开白板视图后再导入'),
-        duration: const Duration(seconds: 2),
-        backgroundColor: Colors.orange,
-      ),
+    showToastNotification(
+      message: '请先打开白板视图后再导入',
+      type: ToastificationType.warning,
     );
   }
 
   void _showError(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
-        duration: const Duration(seconds: 3),
-      ),
+    showToastNotification(
+      message: message,
+      type: ToastificationType.error,
     );
   }
 }

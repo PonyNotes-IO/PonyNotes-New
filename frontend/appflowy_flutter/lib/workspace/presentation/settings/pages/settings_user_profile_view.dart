@@ -12,6 +12,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -282,8 +283,8 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
         if (finalAvatarUrl == null) {
           // 头像上传失败，停止保存
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('头像上传失败')),
+            showToastNotification(
+              message: '头像上传失败',
             );
           }
           return;
@@ -311,27 +312,29 @@ class _SettingsUserProfileViewState extends State<SettingsUserProfileView> {
             // 刷新用户配置并通知 SettingsDialogBloc，让整个应用立即更新
             await _refreshUserProfile();
             
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('保存成功')),
-            );
+      if (mounted) {
+        showToastNotification(
+          message: '保存成功',
+        );
+      }
           }
         },
         (error) {
           Log.error('Failed to update user profile: $error');
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('保存失败: ${error.msg}')),
+            showToastNotification(
+              message: '保存失败: ${error.msg}',
             );
           }
         },
       );
     } catch (e) {
-      Log.error('Save changes exception: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存异常: $e')),
-        );
-      }
+    Log.error('Save changes exception: $e');
+    if (mounted) {
+      showToastNotification(
+        message: '保存异常: $e',
+      );
+    }
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);

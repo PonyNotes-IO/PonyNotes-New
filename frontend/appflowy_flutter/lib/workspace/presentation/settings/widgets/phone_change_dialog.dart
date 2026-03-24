@@ -5,6 +5,7 @@ import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/slide_verification_widget.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 
 /// 更改手机号码对话框
@@ -299,11 +300,8 @@ class _PhoneChangeDialogState extends State<PhoneChangeDialog> {
           
           _startCountdown();
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('验证码已发送到 $cleanPhone'),
-              duration: const Duration(seconds: 2),
-            ),
+          showToastNotification(
+            message: '验证码已发送到 $cleanPhone',
           );
         }
       },
@@ -313,11 +311,8 @@ class _PhoneChangeDialogState extends State<PhoneChangeDialog> {
             _isSending = false;
           });
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('发送失败: ${error.msg}'),
-              duration: const Duration(seconds: 2),
-            ),
+          showToastNotification(
+            message: '发送失败: ${error.msg}',
           );
         }
       },
@@ -370,11 +365,8 @@ class _PhoneChangeDialogState extends State<PhoneChangeDialog> {
             _isChanging = false;
           });
           
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('更改失败: ${error.msg}'),
-              duration: const Duration(seconds: 2),
-            ),
+          showToastNotification(
+            message: '更改失败: ${error.msg}',
           );
         }
       },

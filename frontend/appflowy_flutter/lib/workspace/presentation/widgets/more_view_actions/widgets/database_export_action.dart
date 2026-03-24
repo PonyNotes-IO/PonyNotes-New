@@ -10,8 +10,10 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:get_it/get_it.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 
 class DatabaseExportAction extends StatelessWidget {
   const DatabaseExportAction({
@@ -54,7 +56,7 @@ class DatabaseExportAction extends StatelessWidget {
           if (exportData.data.isEmpty) {
             Log.error('导出 CSV 失败：内容为空');
             if (context.mounted) {
-              _showError(context, '导出失败：表格内容为空');
+              showToastNotification(message: '导出失败：表格内容为空');
             }
             return;
           }
@@ -75,43 +77,22 @@ class DatabaseExportAction extends StatelessWidget {
             await file.writeAsBytes(bytes);
             Log.info('CSV 文件已保存到: $savePath');
             if (context.mounted) {
-              _showSuccess(context, 'CSV 文件已保存');
+              showToastNotification(message: 'CSV 文件已保存', type: ToastificationType.success);
             }
           }
         },
         (error) {
           Log.error('导出 CSV 失败: ${error.msg}');
           if (context.mounted) {
-            _showError(context, '导出失败：${error.msg}');
+            showToastNotification(message: '导出失败：${error.msg}');
           }
         },
       );
     } catch (e) {
       Log.error('导出 CSV 异常: $e');
       if (context.mounted) {
-        _showError(context, '导出失败：$e');
+        showToastNotification(message: '导出失败：$e');
       }
     }
   }
-
-  void _showSuccess(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  void _showError(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Theme.of(context).colorScheme.error,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
 }
-
