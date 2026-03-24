@@ -1,9 +1,11 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
+import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
@@ -34,7 +36,7 @@ class FavoriteMoreActions extends StatelessWidget {
         isExpanded: false,
         onEditing: (value) =>
             context.read<ViewBloc>().add(ViewEvent.setIsEditing(value)),
-        onAction: (action, _) {
+        onAction: (action, data) {
           switch (action) {
             case ViewMoreActionType.favorite:
             case ViewMoreActionType.unFavorite:
@@ -61,8 +63,30 @@ class FavoriteMoreActions extends StatelessWidget {
             case ViewMoreActionType.openInNewTab:
               getIt<TabsBloc>().openTab(view);
               break;
-            case ViewMoreActionType.delete:
             case ViewMoreActionType.duplicate:
+              context.read<ViewBloc>().add(const ViewEvent.duplicate());
+              PopoverContainer.maybeOf(context)?.closeAll();
+              break;
+            case ViewMoreActionType.changeIcon:
+              if (data is! SelectedEmojiIconResult) {
+                return;
+              }
+              ViewBackendService.updateViewIcon(
+                view: view,
+                viewIcon: data.data,
+              ).then((_) {
+                if (!context.mounted) {
+                  return;
+                }
+                try {
+                  final spaceBloc = context.read<SpaceBloc>();
+                  if (!spaceBloc.isClosed) {
+                    spaceBloc.add(const SpaceEvent.didReceiveSpaceUpdate());
+                  }
+                } catch (_) {}
+              });
+              break;
+            case ViewMoreActionType.delete:
             default:
               throw UnsupportedError('$action is not supported');
           }

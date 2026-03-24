@@ -141,6 +141,10 @@ class ViewMoreActionPopover extends StatelessWidget {
         ViewMoreActionType.unFavorite,
         ViewMoreActionType.divider,
         ViewMoreActionType.rename,
+        if (view.layout != ViewLayoutPB.Chat) ...[
+          ViewMoreActionType.changeIcon,
+          ViewMoreActionType.duplicate,
+        ],
         ViewMoreActionType.openInNewTab,
       ]);
     } else {

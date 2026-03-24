@@ -13,6 +13,7 @@ import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
@@ -218,6 +219,14 @@ class ViewBloc extends Bloc<ViewEvent, ViewState> {
                   successOrFailure: FlowyResult.failure(error),
                 ),
               ),
+            );
+            result.fold(
+              (_) {
+                showToastNotification(
+                  message: LocaleKeys.disclosureAction_duplicateSuccess.tr(),
+                );
+              },
+              (_) {},
             );
           },
           duplicateToMySpace: (e) async {

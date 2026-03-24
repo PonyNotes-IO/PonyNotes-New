@@ -243,6 +243,7 @@
     "rename": "Rename",
     "delete": "Delete",
     "duplicate": "Duplicate",
+    "duplicateSuccess": "Copied successfully",
     "unfavorite": "Remove from Favorites",
     "favorite": "Add to Favorites",
     "openNewTab": "Open in a new tab",
