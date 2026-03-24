@@ -50,52 +50,62 @@ class FileLibraryService {
     return files;
   }
 
-  /// 导入文件到文件库
-  Future<FileLibraryItem?> importPdfFile() async {
-    // 使用文件选择器选择任意类型文件
+  /// 导入多个文件到文件库
+  Future<List<FileLibraryItem>> importPdfFiles() async {
+    // 使用文件选择器选择任意类型文件（支持多选）
     final result = await FilePicker.platform.pickFiles(
       type: FileType.any,
-      allowMultiple: false,
+      allowMultiple: true,
     );
-    
+
     if (result == null || result.files.isEmpty) {
-      return null; // 用户取消选择
+      return []; // 用户取消选择
     }
-    
-    final platformFile = result.files.first;
-    if (platformFile.path == null) {
-      throw Exception('无法获取文件路径');
-    }
-    
-    final sourceFile = File(platformFile.path!);
-    if (!sourceFile.existsSync()) {
-      throw Exception('源文件不存在');
-    }
-    
+
     // 确保文件库目录存在
     final libraryPath = await _fileLibraryPath;
     final directory = Directory(libraryPath);
     if (!directory.existsSync()) {
       await directory.create(recursive: true);
     }
-    
-    // 生成UUID作为文件ID
-    final fileId = uuid();
-    
-    // 生成新的文件名（保持原始名称，添加UUID避免冲突）
-    final originalName = platformFile.name;
-    final extension = p.extension(originalName);
-    final nameWithoutExt = p.basenameWithoutExtension(originalName);
-    final newFileName = '${nameWithoutExt}_$fileId$extension';
-    final targetPath = p.join(libraryPath, newFileName);
-    
-    // 复制文件到文件库
-    final targetFile = await sourceFile.copy(targetPath);
-    
-    // 创建文件库项目，使用相同的fileId
-    final fileItem = await _createFileLibraryItemFromFile(targetFile, originalName: originalName, fileId: fileId);
-    
-    return fileItem;
+
+    final importedItems = <FileLibraryItem>[];
+
+    for (final platformFile in result.files) {
+      if (platformFile.path == null) {
+        continue; // 跳过无法获取路径的文件
+      }
+
+      final sourceFile = File(platformFile.path!);
+      if (!sourceFile.existsSync()) {
+        continue; // 跳过不存在的文件
+      }
+
+      // 生成UUID作为文件ID
+      final fileId = uuid();
+
+      // 生成新的文件名（保持原始名称，添加UUID避免冲突）
+      final originalName = platformFile.name;
+      final extension = p.extension(originalName);
+      final nameWithoutExt = p.basenameWithoutExtension(originalName);
+      final newFileName = '${nameWithoutExt}_$fileId$extension';
+      final targetPath = p.join(libraryPath, newFileName);
+
+      // 复制文件到文件库
+      final targetFile = await sourceFile.copy(targetPath);
+
+      // 创建文件库项目，使用相同的fileId
+      final fileItem = await _createFileLibraryItemFromFile(
+        targetFile,
+        originalName: originalName,
+        fileId: fileId,
+      );
+      if (fileItem != null) {
+        importedItems.add(fileItem);
+      }
+    }
+
+    return importedItems;
   }
 
   /// 从百度网盘导入文件

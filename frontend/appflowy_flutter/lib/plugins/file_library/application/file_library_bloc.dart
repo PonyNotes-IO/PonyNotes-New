@@ -27,7 +27,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
       categoryChanged: (category) => _onCategoryChanged(category, emit),
       refreshFiles: () => _onRefreshFiles(emit),
       deleteFile: (fileId) => _onDeleteFile(fileId, emit),
-      importPdfFile: () => _onImportPdfFile(emit),
+      importPdfFiles: () => _onImportPdfFiles(emit),
       importFromBaiduCloud: () => _onImportFromBaiduCloud(emit),
       openFile: (fileItem) => _onOpenFile(fileItem, emit),
       sortChanged: (sortBy) => _onSortChanged(sortBy, emit),
@@ -71,12 +71,12 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
     ),);
   }
 
-  Future<void> _onImportPdfFile(Emitter<FileLibraryState> emit) async {
+  Future<void> _onImportPdfFiles(Emitter<FileLibraryState> emit) async {
     emit(state.copyWith(isImporting: true));
 
     try {
-      final importedFile = await _service.importPdfFile();
-      if (importedFile != null) {
+      final importedFiles = await _service.importPdfFiles();
+      if (importedFiles.isNotEmpty) {
         // 重新加载文件列表
         final files = await _service.getAllFiles();
         final filteredFiles = state.selectedCategory == FileLibraryCategory.all
@@ -84,14 +84,17 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
             : files
                 .where((file) => state.selectedCategory.matchesFileType(file.fileType))
                 .toList();
-        
+
         final sortedFiles = _sortFiles(filteredFiles, state.sortBy);
 
+        final count = importedFiles.length;
         emit(state.copyWith(
           isImporting: false,
           files: files,
           filteredFiles: sortedFiles,
-          successMessage: '文件上传成功：${importedFile.name}',
+          successMessage: count == 1
+              ? '文件上传成功：${importedFiles.first.name}'
+              : '成功上传 $count 个文件',
         ));
       } else {
         emit(state.copyWith(
