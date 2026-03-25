@@ -242,6 +242,20 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                               : const Icon(Icons.search),
                           onPressed: () async {
                             final q = _inputController.text.trim();
+                            if (q.isEmpty) {
+                              showToastNotification(
+                                type: ToastificationType.error,
+                                message: '请输入邮箱或手机号',
+                              );
+                              return;
+                            }
+                            if (!_isValidEmailOrPhone(q)) {
+                              showToastNotification(
+                                type: ToastificationType.error,
+                                message: '请输入有效的邮箱地址或手机号',
+                              );
+                              return;
+                            }
                             await performSearch(q);
                           },
                         ),
@@ -347,20 +361,12 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                               _selectedRole = dialogSelectedRole;
                             });
 
-                            // If user manually typed an identifier and didn't select from results,
-                            // include that input as a single invite target.
-                            final typed = _inputController.text.trim();
-                            if (typed.isNotEmpty &&
-                                selectedUsers.every((u) =>
-                                    u.name != typed &&
-                                    u.email != typed &&
-                                    u.phone != typed) &&
-                                _isValidEmailOrPhone(typed)) {
-                              selectedUsers.add(SharedUser(
-                                  email: typed,
-                                  name: typed,
-                                  role: ShareRole.guest,
-                                  accessLevel: ShareAccessLevel.readOnly));
+                            if (selectedUsers.isEmpty) {
+                              showToastNotification(
+                                type: ToastificationType.error,
+                                message: '请点击搜索按钮选择要邀请的用户',
+                              );
+                              return;
                             }
 
                             // Dispatch invite events for all selected users
