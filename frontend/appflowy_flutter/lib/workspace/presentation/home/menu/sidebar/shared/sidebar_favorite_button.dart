@@ -109,6 +109,7 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
         spaceType: FolderSpaceType.public,
         view: view,
         level: 0,
+        isDraggable: false,
         leftPadding: HomeSpaceViewSizes.leftPadding,
         height: HomeSpaceViewSizes.viewHeight,
         isFeedback: false,
