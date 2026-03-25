@@ -599,6 +599,7 @@ class _CreateWorkspaceDialogState extends State<CreateWorkspaceDialog> {
       },
       child: _WorkspaceDialogContent(
         onConfirm: widget.onConfirm,
+        title: widget.title,
       ),
     );
   }
@@ -617,9 +618,12 @@ class _WorkspaceDialogContent extends StatelessWidget {
   Widget build(BuildContext context) {
     return NavigatorTextFieldDialog(
       title: title ?? '新建团队协作区',
+      subtitle: '为新工作区设置名称。创建成功后将自动切换到该工作区。',
       value: '',
-      hintText: '',
+      hintText: '请输入工作区名称',
+      maxLength: 256,
       autoSelectAllText: true,
+      showCounter: true,
       onConfirm: (name, _) => onConfirm(name),
     );
   }
@@ -660,7 +664,7 @@ class _CreateWorkspaceButton extends StatelessWidget {
             const HSpace(4.0),
             FlowyText.regular(
               LocaleKeys.workspace_create.tr(),
-              color: Theme.of(context).colorScheme.primary,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.88),
             ),
           ],
         ),
@@ -707,8 +711,8 @@ class _CreateWorkspaceButton extends StatelessWidget {
       // ),
       child: FlowySvg(
         FlowySvgs.icon_add_circle_s,
-        color: Theme.of(context).colorScheme.primary,
-        size: Size.square(30),
+        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.55),
+        size: Size.square(22),
       ),
     );
   }
