@@ -90,6 +90,9 @@ class NavigatorTextFieldDialog extends StatefulWidget {
     this.onCancel,
     this.maxLength,
     this.hintText,
+    this.subtitle,
+    this.dialogMaxWidth = 400,
+    this.showCounter = false,
   });
 
   final String value;
@@ -99,6 +102,11 @@ class NavigatorTextFieldDialog extends StatefulWidget {
   final bool autoSelectAllText;
   final int? maxLength;
   final String? hintText;
+  /// Optional short description under the title (e.g. create-workspace flow).
+  final String? subtitle;
+  final double dialogMaxWidth;
+  /// Show character counter (e.g. "12/256"). Only meaningful when maxLength is set.
+  final bool showCounter;
 
   @override
   State<NavigatorTextFieldDialog> createState() =>
@@ -145,45 +153,82 @@ class _NavigatorTextFieldDialogState extends State<NavigatorTextFieldDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return StyledDialog(
+      maxWidth: widget.dialogMaxWidth,
+      borderRadius: const BorderRadius.all(Radius.circular(12)),
+      padding: EdgeInsets.symmetric(horizontal: Insets.xl, vertical: Insets.l),
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 12.0),
+        padding: const EdgeInsets.only(bottom: 8.0),
         child: SingleChildScrollView(
           physics: const ClampingScrollPhysics(),
       child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           FlowyText.medium(
             widget.title,
-            color: Theme.of(context).colorScheme.tertiary,
+            color: scheme.onSurface,
             fontSize: FontSizes.s16,
           ),
+          if (widget.subtitle != null && widget.subtitle!.isNotEmpty) ...[
+            VSpace(Insets.sm),
+            FlowyText.regular(
+              widget.subtitle!,
+              color: scheme.onSurface.withOpacity(0.62),
+              fontSize: FontSizes.s14,
+              maxLines: 4,
+            ),
+          ],
           VSpace(Insets.m),
-          FlowyFormTextInput(
-            hintText:
-                widget.hintText ?? LocaleKeys.dialogCreatePageNameHint.tr(),
-            controller: controller,
-            textStyle: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(fontSize: FontSizes.s16),
-            maxLength: widget.maxLength,
-            showCounter: false,
-            autoFocus: true,
-            onChanged: (text) {
-              newValue = text;
-            },
-            onEditingComplete: () {
-              widget.onConfirm(newValue, context);
-              AppGlobals.nav.pop();
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: controller,
+            builder: (context, value, child) {
+              return TextFormField(
+                controller: controller,
+                autofocus: true,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(fontSize: FontSizes.s16),
+                decoration: InputDecoration(
+                  hintText:
+                      widget.hintText ?? LocaleKeys.dialogCreatePageNameHint.tr(),
+                  hintStyle: Theme.of(context)
+                      .textTheme
+                      .bodyMedium!
+                      .copyWith(color: Theme.of(context).hintColor.withValues(alpha: 0.7)),
+                  suffixText: widget.showCounter && widget.maxLength != null
+                      ? ' ${value.text.length}/${widget.maxLength}'
+                      : null,
+                  counterText: '',
+                  border: const OutlineInputBorder(borderSide: BorderSide.none),
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: Insets.sm),
+                ),
+                maxLength: widget.maxLength,
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                autocorrect: false,
+                enableSuggestions: false,
+                onChanged: (text) {
+                  newValue = text;
+                },
+                onFieldSubmitted: (_) {
+                  final trimmed = newValue.trim();
+                  if (trimmed.isEmpty) {
+                    return;
+                  }
+                  widget.onConfirm(trimmed, context);
+                },
+              );
             },
           ),
           VSpace(Insets.xl),
           OkCancelButton(
             onOkPressed: () {
-              // DEBUG BREAKPOINT 1: 用户点击确定按钮
-              Log.info('=== DEBUG BREAKPOINT 1 === 用户点击确定按钮创建工作空间: $newValue');             
-              if (newValue.isEmpty) {
+              Log.info('NavigatorTextFieldDialog OK: $newValue');
+              if (newValue.trim().isEmpty) {
                 showToastNotification(
                   message: LocaleKeys.space_spaceNameCannotBeEmpty.tr(),
                 );
@@ -192,9 +237,10 @@ class _NavigatorTextFieldDialogState extends State<NavigatorTextFieldDialog> {
                     
               // 🔧 FIX: Ensure dialog stays open until workspace creation process starts
               try {
-                Log.info('[DIALOG] 🚀 Calling onConfirm callback...');
-                widget.onConfirm(newValue, context);
-                Log.info('[DIALOG] ✅ onConfirm callback completed');
+                final trimmed = newValue.trim();
+                Log.info('[DIALOG] Calling onConfirm with trimmed name');
+                widget.onConfirm(trimmed, context);
+                Log.info('[DIALOG] onConfirm completed');
                 
                 // 🔧 FIX: Don't close dialog here - let BlocListener handle it
                 // This prevents Navigator state conflicts
