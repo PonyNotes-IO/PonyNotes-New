@@ -131,8 +131,7 @@ class _DateTimeTextFieldState extends State<DateTimeTextField> {
   }
 
   void dateFocusNodeListener() {
-    if (dateFocusNode.hasFocus || justSubmitted) {
-      justSubmitted = true;
+    if (dateFocusNode.hasFocus) {
       return;
     }
 
@@ -142,11 +141,11 @@ class _DateTimeTextFieldState extends State<DateTimeTextField> {
     if (expected != dateTextController.text.trim()) {
       onDateTextFieldSubmitted();
     }
+    justSubmitted = false;
   }
 
   void timeFocusNodeListener() {
-    if (timeFocusNode.hasFocus || widget.timeFormat == null || justSubmitted) {
-      justSubmitted = true;
+    if (timeFocusNode.hasFocus || widget.timeFormat == null) {
       return;
     }
 
@@ -156,6 +155,7 @@ class _DateTimeTextFieldState extends State<DateTimeTextField> {
     if (expected != timeTextController.text.trim()) {
       onTimeTextFieldSubmitted();
     }
+    justSubmitted = false;
   }
 
   void popoverListener() {
@@ -194,6 +194,7 @@ class _DateTimeTextFieldState extends State<DateTimeTextField> {
         dateTime.day,
       ).add(timeComponent);
     }
+    justSubmitted = true;
     widget.onSubmitted?.call(dateTime);
   }
 
@@ -213,6 +214,7 @@ class _DateTimeTextFieldState extends State<DateTimeTextField> {
       return;
     }
     statesController.update(WidgetState.error, false);
+    justSubmitted = true;
     widget.onSubmitted?.call(dateTime);
   }
 
@@ -352,6 +354,8 @@ class _DateTimeTextFieldState extends State<DateTimeTextField> {
       },
       onTap: () {
         statesController.update(WidgetState.pressed, false);
+        // 点击输入框容器时，将焦点设置到日期输入框
+        dateFocusNode.requestFocus();
       },
       child: child,
     );

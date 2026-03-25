@@ -138,26 +138,32 @@ class DatePickerMenu extends DatePickerService {
         child: SizedBox(
           height: editorSize.height,
           width: editorSize.width,
-          child: KeyboardListener(
-            focusNode: FocusNode()..requestFocus(),
-            onKeyEvent: (event) {
-              if (event.logicalKey == LogicalKeyboardKey.escape) {
-                dismiss();
-              }
-            },
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: dismiss,
-              child: Stack(
-                children: [
-                  _AnimatedDatePicker(
-                    offset: Offset(offsetX, offsetY),
-                    showBelow: showBelow,
-                    options: options,
-                    popoverMutex: popoverMutex,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: dismiss,
+            child: Stack(
+              children: [
+                _AnimatedDatePicker(
+                  offset: Offset(offsetX, offsetY),
+                  showBelow: showBelow,
+                  options: options,
+                  popoverMutex: popoverMutex,
+                ),
+                // 移除 KeyboardListener 的焦点请求，避免与输入框焦点竞争
+                // 使用 FocusScope 来处理键盘事件
+                FocusScope(
+                  child: Focus(
+                    onKeyEvent: (node, event) {
+                      if (event.logicalKey == LogicalKeyboardKey.escape) {
+                        dismiss();
+                        return KeyEventResult.handled;
+                      }
+                      return KeyEventResult.ignored;
+                    },
+                    child: Container(),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
