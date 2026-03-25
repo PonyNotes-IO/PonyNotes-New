@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:appflowy/workspace/application/favorite/favorite_refresh_notifier.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_service.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -16,11 +19,12 @@ import 'favorite_listener.dart';
 part 'favorite_bloc.freezed.dart';
 
 class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
-  FavoriteBloc({String? workspaceId, UserProfilePB? userProfile}) 
+  FavoriteBloc({String? workspaceId, UserProfilePB? userProfile})
       : super(FavoriteState.initial()) {
     _workspaceId = workspaceId;
     _userProfile = userProfile;
     _dispatch();
+    _setupRefreshListener();
   }
 
   final _service = FavoriteService();
@@ -28,6 +32,7 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
   bool isReordering = false;
   String? _workspaceId;
   UserProfilePB? _userProfile;
+  StreamSubscription<void>? _refreshSubscription;
   
   /// 设置当前工作区ID，用于过滤收藏
   void setWorkspaceId(String? workspaceId, {UserProfilePB? userProfile}) {
@@ -43,8 +48,19 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
     }
   }
 
+  void _setupRefreshListener() {
+    _refreshSubscription = FavoriteRefreshNotifier.stream.listen((_) {
+      Log.debug('[FavoriteBloc] _setupRefreshListener: received refresh notification, isReordering=$isReordering');
+      if (!isClosed && !isReordering) {
+        Log.debug('[FavoriteBloc] _setupRefreshListener: triggering fetchFavorites');
+        add(const FavoriteEvent.fetchFavorites());
+      }
+    });
+  }
+
   @override
   Future<void> close() async {
+    await _refreshSubscription?.cancel();
     await _listener.stop();
     return super.close();
   }
@@ -63,6 +79,8 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
             final result = await _service.readFavorites();
             await result.fold(
               (favoriteViews) async {
+                Log.debug('[FavoriteBloc] fetchFavorites: got ${favoriteViews.items.length} favorites');
+                
                 // 如果没有设置工作区ID，返回所有收藏（向后兼容）
                 if (_workspaceId == null || _workspaceId!.isEmpty) {
                   final views = favoriteViews.items.toList();
@@ -81,6 +99,7 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
                 
                 // 获取当前工作区的所有视图ID集合
                 final workspaceViewIds = await _getWorkspaceViewIds(_workspaceId!);
+                Log.debug('[FavoriteBloc] fetchFavorites: workspaceId=$_workspaceId, workspaceViewIds=${workspaceViewIds.length}');
                 
                 // 过滤收藏：只保留属于当前工作区的视图
                 final filteredViews = <SectionViewPB>[];
@@ -89,8 +108,11 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
                   // 检查视图是否属于当前工作区
                   if (await _isViewInWorkspace(view.id, workspaceViewIds)) {
                     filteredViews.add(sectionView);
+                  } else {
+                    Log.debug('[FavoriteBloc] fetchFavorites: view "${view.name}" (${view.id}) filtered out - not in current workspace');
                   }
                 }
+                Log.debug('[FavoriteBloc] fetchFavorites: filtered to ${filteredViews.length} favorites');
                 
                 final pinnedViews =
                     filteredViews.where((v) => v.item.isPinned).toList();
@@ -156,10 +178,14 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
     FlowyResult<RepeatedViewPB, FlowyError> favoriteOrFailed,
     bool didFavorite,
   ) {
+    Log.debug('[FavoriteBloc] _onFavoritesUpdated: didFavorite=$didFavorite, isReordering=$isReordering');
     if (!isReordering) {
       favoriteOrFailed.fold(
-        (favorite) => add(const FetchFavorites()),
-        (error) => Log.error(error),
+        (favorite) {
+          Log.debug('[FavoriteBloc] _onFavoritesUpdated: triggering fetchFavorites, ${favorite.items.length} items');
+          add(const FetchFavorites());
+        },
+        (error) => Log.error('[FavoriteBloc] _onFavoritesUpdated error: $error'),
       );
     }
   }
@@ -210,6 +236,7 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
   Future<bool> _isViewInWorkspace(String viewId, Set<String> workspaceRootViewIds) async {
     // 如果视图ID直接是工作区的根视图，直接返回true
     if (workspaceRootViewIds.contains(viewId)) {
+      Log.debug('[FavoriteBloc] _isViewInWorkspace: $viewId is a root view in workspace');
       return true;
     }
     
@@ -223,13 +250,18 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
       
       // 如果视图不存在，返回false
       if (view == null) {
+        Log.debug('[FavoriteBloc] _isViewInWorkspace: $viewId not found, returning false');
         return false;
       }
+      
+      Log.debug('[FavoriteBloc] _isViewInWorkspace: view "${view.name}" ($viewId), parentViewId=${view.parentViewId}');
       
       // 如果视图的 parentViewId 为空或等于自己，说明它是根视图
       // 检查是否在工作区的根视图列表中
       if (view.parentViewId.isEmpty || view.parentViewId == viewId) {
-        return workspaceRootViewIds.contains(viewId);
+        final result = workspaceRootViewIds.contains(viewId);
+        Log.debug('[FavoriteBloc] _isViewInWorkspace: $viewId is root view, inWorkspace=$result');
+        return result;
       }
       
       // 获取视图的祖先链，检查是否有祖先属于当前工作区的根视图
@@ -239,14 +271,18 @@ class FavoriteBloc extends Bloc<FavoriteEvent, FavoriteState> {
         (_) => <ViewPB>[],
       );
       
+      Log.debug('[FavoriteBloc] _isViewInWorkspace: $viewId has ${ancestors.length} ancestors');
+      
       // 检查祖先链中是否有属于当前工作区的根视图
       // 祖先链中的任何一个祖先如果是工作区的根视图，则该视图属于该工作区
       for (final ancestor in ancestors) {
+        Log.debug('[FavoriteBloc] _isViewInWorkspace: ancestor "${ancestor.name}" (${ancestor.id}), isInWorkspace=${workspaceRootViewIds.contains(ancestor.id)}');
         if (workspaceRootViewIds.contains(ancestor.id)) {
           return true;
         }
       }
       
+      Log.debug('[FavoriteBloc] _isViewInWorkspace: $viewId not in workspace, returning false');
       return false;
     } catch (e) {
       Log.error('检查视图工作区归属失败: $e');

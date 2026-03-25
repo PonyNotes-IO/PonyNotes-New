@@ -50,20 +50,28 @@ class FavoriteListener {
     FolderNotification ty,
     FlowyResult<Uint8List, FlowyError> result,
   ) {
+    Log.debug('[FavoriteListener] _observableCallback: ty=$ty');
     switch (ty) {
       case FolderNotification.DidFavoriteView:
         result.onSuccess(
-          (success) => _favoriteUpdated?.call(
-            FlowyResult.success(RepeatedViewPB.fromBuffer(success)),
-            true,
-          ),
+          (success) {
+            Log.debug('[FavoriteListener] DidFavoriteView received');
+            _favoriteUpdated?.call(
+              FlowyResult.success(RepeatedViewPB.fromBuffer(success)),
+              true,
+            );
+          },
         );
       case FolderNotification.DidUnfavoriteView:
-        result.map(
-          (success) => _favoriteUpdated?.call(
-            FlowyResult.success(RepeatedViewPB.fromBuffer(success)),
-            false,
-          ),
+        result.fold(
+          (success) {
+            Log.debug('[FavoriteListener] DidUnfavoriteView received');
+            _favoriteUpdated?.call(
+              FlowyResult.success(RepeatedViewPB.fromBuffer(success)),
+              false,
+            );
+          },
+          (error) => Log.error('[FavoriteListener] DidUnfavoriteView error: $error'),
         );
         break;
       default:
@@ -75,18 +83,23 @@ class FavoriteListener {
     FolderNotification ty,
     FlowyResult<Uint8List, FlowyError> result,
   ) {
+    Log.debug('[FavoriteListener] _viewObservableCallback: ty=$ty');
     switch (ty) {
       case FolderNotification.DidRestoreView:
+        Log.debug('[FavoriteListener] DidRestoreView notification received');
         result.fold(
           (payload) {
             final restoredView = ViewPB.fromBuffer(payload);
-            Log.info('[FavoriteListener] DidRestoreView: ${restoredView.name}, isFavorite=${restoredView.isFavorite}');
+            Log.info('[FavoriteListener] DidRestoreView: ${restoredView.name} (${restoredView.id}), isFavorite=${restoredView.isFavorite}');
             if (restoredView.isFavorite) {
+              Log.debug('[FavoriteListener] Restored view is favorited, triggering fetchFavorites');
               // Trigger fetchFavorites to update the list
               _favoriteUpdated?.call(
                 FlowyResult.success(RepeatedViewPB(items: [restoredView])),
                 true,
               );
+            } else {
+              Log.debug('[FavoriteListener] Restored view is NOT favorited, skipping refresh');
             }
           },
           (error) => Log.error('[FavoriteListener] DidRestoreView error: $error'),

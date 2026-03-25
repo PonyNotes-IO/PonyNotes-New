@@ -1,6 +1,7 @@
 import 'package:appflowy/plugins/document/presentation/editor_plugins/resource_node_cleanup.dart';
 import 'package:appflowy/plugins/trash/application/trash_listener.dart';
 import 'package:appflowy/plugins/trash/application/trash_service.dart';
+import 'package:appflowy/workspace/application/favorite/favorite_refresh_notifier.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/trash.pb.dart';
@@ -43,7 +44,15 @@ class TrashBloc extends Bloc<TrashEvent, TrashState> {
           emit(state.copyWith(objects: e.trash));
         },
         putback: (e) async {
+          Log.debug('[TrashBloc] putback: restoring trashId=${e.trashId}');
           final result = await TrashService.putback(e.trashId);
+          // 恢复成功后通知 FavoriteBloc 刷新（如果恢复的是之前在最爱中的项目）
+          if (result.isSuccess) {
+            Log.debug('[TrashBloc] putback: restore success, notifying FavoriteRefreshNotifier');
+            FavoriteRefreshNotifier.notify();
+          } else {
+            Log.error('[TrashBloc] putback: restore failed');
+          }
           await _handleResult(result, emit);
         },
         delete: (e) async {
@@ -57,7 +66,15 @@ class TrashBloc extends Bloc<TrashEvent, TrashState> {
           await _handleResult(result, emit);
         },
         restoreAll: (e) async {
+          Log.debug('[TrashBloc] restoreAll: restoring all items');
           final result = await _service.restoreAll();
+          // 一键恢复成功后通知 FavoriteBloc 刷新
+          if (result.isSuccess) {
+            Log.debug('[TrashBloc] restoreAll: restore success, notifying FavoriteRefreshNotifier');
+            FavoriteRefreshNotifier.notify();
+          } else {
+            Log.error('[TrashBloc] restoreAll: restore failed');
+          }
           await _handleResult(result, emit);
         },
       );
