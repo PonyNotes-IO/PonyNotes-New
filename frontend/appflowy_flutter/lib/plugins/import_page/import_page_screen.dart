@@ -15,8 +15,10 @@ import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:appflowy/shared/markdown_to_document.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
@@ -60,7 +62,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
             const SizedBox(height: 30),
             
             // File-based import section
-            _buildFileImportSection(),
+            _buildFileImportSection(context),
             const SizedBox(height: 30),
             
             // Third-party import section  
@@ -109,7 +111,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
     );
   }
 
-  Widget _buildFileImportSection() {
+  Widget _buildFileImportSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -127,7 +129,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
               child: ImportFileCard(
                 icon: Icons.table_chart,
                 title: "CSV",
-                onTap: () => _handleFileImport('csv'),
+                onTap: () => _handleFileImport(context,'csv'),
               ),
             ),
             const SizedBox(width: 30),
@@ -135,7 +137,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
               child: ImportFileCard(
                 icon: Icons.picture_as_pdf,
                 title: "PDF",
-                onTap: () => _handleFileImport('pdf'),
+                onTap: () => _handleFileImport(context,'pdf'),
               ),
             ),
             const SizedBox(width: 30),
@@ -143,7 +145,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
               child: ImportFileCard(
                 icon: Icons.text_snippet,
                 title: "文本与 Markdown",
-                onTap: () => _handleFileImport('markdown'),
+                onTap: () => _handleFileImport(context,'markdown'),
               ),
             ),
           ],
@@ -157,7 +159,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
               child: ImportFileCard(
                 icon: Icons.code,
                 title: "HTML",
-                onTap: () => _handleFileImport('html'),
+                onTap: () => _handleFileImport(context,'html'),
               ),
             ),
         //     const SizedBox(width: 30),
@@ -214,12 +216,12 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
     );
   }
 
-  void _handleFileImport(String type) async {
+  void _handleFileImport(BuildContext context ,String type) async {
     try {
       if (type == 'csv') {
         await _handleCsvImport();
       } else if (type == 'markdown') {
-        await _handleMarkdownImport();
+        await _handleMarkdownImport(context);
       } else if (type == 'pdf') {
         await _handlePdfImport();
       } else if (type == 'html') {
@@ -310,7 +312,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
     }
   }
 
-  Future<void> _handleMarkdownImport() async {
+  Future<void> _handleMarkdownImport(BuildContext context) async {
     try {
       // 获取当前工作空间
       final workspaceResult = await FolderEventReadCurrentWorkspace().send();
@@ -333,29 +335,145 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       if (result != null && result.files.isNotEmpty) {
         final importValues = <ImportItemPayloadPB>[];
         
+        // 先检查所有文件大小
+        bool hasValidFiles = false;
         for (final file in result.files) {
           final path = file.path;
-          if (path == null) continue;
+          if (path != null) {
+            final fileSize = await File(path).length();
+            const maxFileSize = 1024 * 1024; // 1MB
+            if (fileSize <= maxFileSize) {
+              hasValidFiles = true;
+              break;
+            }
+          }
+        }
+        
+        // 只有有有效文件时才显示进度对话框
+        BuildContext? dialogContext;
+        ValueNotifier<double>? progressNotifier;
+        int totalFiles = result.files.length;
+        int processedFiles = 0;
+        
+        if (hasValidFiles) {
+          // 显示导入进度对话框
+          progressNotifier = ValueNotifier<double>(0.0);
+          
+          // 立即更新初始进度
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            progressNotifier!.value = 0.0;
+          });
+          
+          // 非阻塞显示对话框
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) {
+              dialogContext = context;
+              return AlertDialog(
+                title: const Text('导入进度'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('正在处理文件，请稍候...'),
+                    const SizedBox(height: 16),
+                    ValueListenableBuilder<double>(
+                      valueListenable: progressNotifier!,
+                      builder: (context, value, child) => LinearProgressIndicator(
+                        value: value,
+                        minHeight: 8,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ValueListenableBuilder<double>(
+                      valueListenable: progressNotifier!,
+                      builder: (context, value, child) => Text(
+                        '${(value * 100).toStringAsFixed(0)}%',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        }
+        
+        for (final file in result.files) {
+          final path = file.path;
+          if (path == null) {
+            if (progressNotifier != null) {
+              processedFiles++;
+              progressNotifier.value = processedFiles / totalFiles;
+            }
+            continue;
+          }
           
           final fileName = file.name;
           final name = p.basenameWithoutExtension(fileName);
           
-          // 读取文件内容
-          final data = await File(path).readAsString();
-          
-          // 将Markdown/文本转换为Document格式
-          final document = customMarkdownToDocument(data);
-          final bytes = DocumentDataPBFromTo.fromDocument(document)?.writeToBuffer();
-          
-          if (bytes != null) {
-            importValues.add(
-              ImportItemPayloadPB.create()
-                ..name = name
-                ..data = bytes
-                ..viewLayout = ViewLayoutPB.Document
-                ..importType = ImportTypePB.Markdown,
-            );
+          // 检查文件大小
+          final fileSize = await File(path).length();
+          const maxFileSize = 1024 * 1024; // 1MB
+          if (fileSize > maxFileSize) {
+            if (mounted) {
+              showToastNotification(
+                message: '文件 $fileName 过大（${(fileSize / 1024 / 1024).toStringAsFixed(1)}MB），最大支持 1MB',
+                type: ToastificationType.warning,
+              );
+            }
+            if (progressNotifier != null) {
+              processedFiles++;
+              progressNotifier.value = processedFiles / totalFiles;
+            }
+            continue;
           }
+          
+          try {
+            // 读取文件内容
+            final data = await File(path).readAsString();
+            
+            // 读取完成后更新进度
+            if (progressNotifier != null) {
+              processedFiles++;
+              progressNotifier.value = processedFiles / totalFiles;
+            }
+            
+            // 使用 Isolate 进行后台处理
+            final documentBytes = await compute((Map<String, dynamic> params) {
+              final content = params['content'] as String;
+              final doc = customMarkdownToDocument(content);
+              return DocumentDataPBFromTo.fromDocument(doc)?.writeToBuffer();
+            }, {'content': data});
+            
+            if (documentBytes != null) {
+              importValues.add(
+                ImportItemPayloadPB.create()
+                  ..name = name
+                  ..data = documentBytes
+                  ..viewLayout = ViewLayoutPB.Document
+                  ..importType = ImportTypePB.Markdown,
+              );
+            }
+          } catch (e) {
+            Log.error('处理文件 $fileName 失败: $e');
+            if (mounted) {
+              showToastNotification(
+                message: '处理文件 $fileName 失败: $e',
+                type: ToastificationType.error,
+              );
+            }
+            // 即使出错也要更新进度
+            if (progressNotifier != null) {
+              processedFiles++;
+              progressNotifier.value = processedFiles / totalFiles;
+            }
+          }
+        }
+
+        // 关闭进度对话框
+        if (dialogContext != null) {
+          Navigator.of(dialogContext!).pop();
         }
 
         if (importValues.isNotEmpty) {
@@ -390,9 +508,15 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
               }
             },
           );
+        } else if (mounted) {
+          showToastNotification(
+            message: '没有成功处理的文件',
+            type: ToastificationType.info,
+          );
         }
       }
     } catch (e) {
+      Log.error('Markdown导入失败: $e');
       if (mounted) {
         showToastNotification(
           message: '文本与Markdown导入失败: $e',
