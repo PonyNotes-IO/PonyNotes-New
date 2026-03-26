@@ -27,7 +27,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
       categoryChanged: (category) => _onCategoryChanged(category, emit),
       refreshFiles: () => _onRefreshFiles(emit),
       deleteFile: (fileId) => _onDeleteFile(fileId, emit),
-      importPdfFiles: () => _onImportPdfFiles(emit),
+      importPdfFile: () => _onImportPdfFiles(emit),
       importFromBaiduCloud: () => _onImportFromBaiduCloud(emit),
       openFile: (fileItem) => _onOpenFile(fileItem, emit),
       sortChanged: (sortBy) => _onSortChanged(sortBy, emit),

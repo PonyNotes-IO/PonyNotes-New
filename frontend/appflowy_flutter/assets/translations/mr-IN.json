@@ -1257,7 +1257,8 @@
       "uploadSuccess": "तुमची थीम यशस्वीरित्या अपलोड झाली आहे",
       "deletionFailure": "थीम हटवण्यात अयशस्वी. कृपया ती मॅन्युअली हटवून पाहा.",
       "filePickerDialogTitle": ".flowy_plugin फाईल निवडा",
-      "urlUploadFailure": "URL उघडण्यात अयशस्वी: {}"
+      "urlUploadFailure": "URL उघडण्यात अयशस्वी: {}",
+      "fileRequirements": "Select the folder whose name ends with \".flowy_plugin\". It must contain two JSON files: one ending with \".light.json\" and one with \".dark.json\" (for example, MyTheme.light.json and MyTheme.dark.json)."
     },
     "theme": "थीम",
     "builtInsLabel": "अंतर्गत थीम्स",
