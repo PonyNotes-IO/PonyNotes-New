@@ -63,6 +63,21 @@ class _InboxMainPanelState extends State<InboxMainPanel> {
                             ),
                           ),
                         ),
+                        BlocBuilder<InboxBloc, InboxState>(
+                          builder: (context, state) => IconButton(
+                            icon: state.isLoading
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.refresh, size: 20),
+                            tooltip: '刷新',
+                            onPressed: state.isLoading
+                                ? null
+                                : () => context.read<InboxBloc>().add(const InboxEvent.loadItems()),
+                          ),
+                        ),
                       ],
                     ),
                   ),
