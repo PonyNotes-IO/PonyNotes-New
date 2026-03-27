@@ -202,7 +202,8 @@ class SpaceCancelOrConfirmButton extends StatelessWidget {
     required this.confirmButtonName,
     this.confirmButtonColor,
     this.confirmButtonBuilder,
-    this.cancelButtonName
+    this.cancelButtonName,
+    this.enable = true,
   });
 
   final VoidCallback onCancel;
@@ -211,6 +212,7 @@ class SpaceCancelOrConfirmButton extends StatelessWidget {
   final String? cancelButtonName;
   final Color? confirmButtonColor;
   final WidgetBuilder? confirmButtonBuilder;
+  final bool enable;
 
   @override
   Widget build(BuildContext context) {
@@ -232,10 +234,17 @@ class SpaceCancelOrConfirmButton extends StatelessWidget {
         ] else ...[
           DecoratedBox(
             decoration: ShapeDecoration(
-              color:
-                  confirmButtonColor ?? Theme.of(context).colorScheme.primary,
+              color: enable
+                  ? (confirmButtonColor ?? Theme.of(context).colorScheme.primary)
+                  : Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.6),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
+                side: enable
+                    ? BorderSide.none
+                    : BorderSide(
+                        color: Theme.of(context).dividerColor,
+                        width: 1,
+                      ),
               ),
             ),
             child: FlowyButton(
@@ -246,9 +255,11 @@ class SpaceCancelOrConfirmButton extends StatelessWidget {
               text: FlowyText.regular(
                 confirmButtonName,
                 lineHeight: 1.0,
-                color: Theme.of(context).colorScheme.onPrimary,
+                color: enable
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).disabledColor,
               ),
-              onTap: onConfirm,
+              onTap: enable ? onConfirm : null,
             ),
           ),
         ],
