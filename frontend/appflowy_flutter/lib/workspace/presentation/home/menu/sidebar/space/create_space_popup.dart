@@ -24,7 +24,7 @@ class CreateSpacePopup extends StatefulWidget {
 }
 
 class _CreateSpacePopupState extends State<CreateSpacePopup> {
-  late String spaceName = LocaleKeys.space_defaultSpaceName.tr();
+  String spaceName = '';
   late String? spaceIcon = kDefaultSpaceIconId;
   late String? spaceIconColor = builtInSpaceColors.first;
   late SpacePermission spacePermission;
@@ -34,6 +34,8 @@ class _CreateSpacePopupState extends State<CreateSpacePopup> {
     super.initState();
     spacePermission = widget.initialPermission ?? SpacePermission.publicToAll;
   }
+
+  bool get _isNameValid => spaceName.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -52,54 +54,59 @@ class _CreateSpacePopupState extends State<CreateSpacePopup> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-          FlowyText(
-            LocaleKeys.space_createNewSpace.tr(),
-            fontSize: 18.0,
-            figmaLineHeight: 24.0,
-          ),
-          const VSpace(2.0),
-          FlowyText(
-            LocaleKeys.space_createSpaceDescription.tr(),
-            fontSize: 14.0,
-            fontWeight: FontWeight.w300,
-            color: Theme.of(context).hintColor,
-            figmaLineHeight: 18.0,
-            maxLines: 2,
-          ),
-          const VSpace(16.0),
-          SizedBox.square(
-            dimension: 56,
-            child: SpaceIconPopup(
-              onIconChanged: (icon, iconColor) {
-                spaceIcon = icon;
-                spaceIconColor = iconColor;
-              },
-            ),
-          ),
-          const VSpace(8.0),
-          _SpaceNameTextField(
-            onChanged: (value) => spaceName = value,
-            onSubmitted: (value) {
-              spaceName = value;
-              _createSpace();
-            },
-          ),
-          const VSpace(20.0),
-          SpacePermissionSwitch(
-            spacePermission: spacePermission,
-            onPermissionChanged: widget.disablePermissionChange
-                ? (_) {}
-                : (value) => setState(() => spacePermission = value),
-            showArrow: !widget.disablePermissionChange,
-            disabled: widget.disablePermissionChange,
-          ),
-          const VSpace(20.0),
-          SpaceCancelOrConfirmButton(
-            confirmButtonName: LocaleKeys.button_create.tr(),
-            onCancel: () => Navigator.of(context).pop(),
-            onConfirm: () => _createSpace(),
-          ),
-        ],
+                FlowyText(
+                  LocaleKeys.space_createNewSpace.tr(),
+                  fontSize: 18.0,
+                  figmaLineHeight: 24.0,
+                ),
+                const VSpace(2.0),
+                FlowyText(
+                  LocaleKeys.space_createSpaceDescription.tr(),
+                  fontSize: 14.0,
+                  fontWeight: FontWeight.w300,
+                  color: Theme.of(context).hintColor,
+                  figmaLineHeight: 18.0,
+                  maxLines: 2,
+                ),
+                const VSpace(16.0),
+                SizedBox.square(
+                  dimension: 56,
+                  child: SpaceIconPopup(
+                    onIconChanged: (icon, iconColor) {
+                      spaceIcon = icon;
+                      spaceIconColor = iconColor;
+                    },
+                  ),
+                ),
+                const VSpace(8.0),
+                _SpaceNameTextField(
+                  onChanged: (value) {
+                    setState(() => spaceName = value);
+                  },
+                  onSubmitted: (value) {
+                    spaceName = value;
+                    if (_isNameValid) {
+                      _createSpace();
+                    }
+                  },
+                ),
+                const VSpace(20.0),
+                SpacePermissionSwitch(
+                  spacePermission: spacePermission,
+                  onPermissionChanged: widget.disablePermissionChange
+                      ? (_) {}
+                      : (value) => setState(() => spacePermission = value),
+                  showArrow: !widget.disablePermissionChange,
+                  disabled: widget.disablePermissionChange,
+                ),
+                const VSpace(20.0),
+                SpaceCancelOrConfirmButton(
+                  confirmButtonName: LocaleKeys.button_create.tr(),
+                  enable: _isNameValid,
+                  onCancel: () => Navigator.of(context).pop(),
+                  onConfirm: () => _createSpace(),
+                ),
+              ],
             ),
           ),
         ),
@@ -108,9 +115,10 @@ class _CreateSpacePopupState extends State<CreateSpacePopup> {
   }
 
   void _createSpace() {
+    if (!_isNameValid) return;
     context.read<SpaceBloc>().add(
           SpaceEvent.create(
-            name: spaceName,
+            name: spaceName.trim(),
             // fixme: space issue
             icon: spaceIcon!,
             iconColor: spaceIconColor!,
