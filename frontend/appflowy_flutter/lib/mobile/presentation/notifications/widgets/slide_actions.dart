@@ -54,7 +54,7 @@ enum NotificationPaneActionType {
           size: 24.0,
           onPressed: (context) {
             showToastNotification(
-              message: 'Unarchive notification success',
+              message: LocaleKeys.notificationHub_unarchiveSucceedToast.tr(),
             );
 
             context.read<ReminderBloc>().add(

@@ -146,6 +146,9 @@ class _SlidableNotificationItem extends StatelessWidget {
           NotificationPaneActionType.more,
           if (!reminder.isRead) NotificationPaneActionType.markAsRead,
         ],
+      NotificationTabType.archived => [
+          NotificationPaneActionType.unArchive,
+        ],
     };
 
     if (actions.isEmpty) {

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
+import 'package:appflowy/user/application/reminder/reminder_extension.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -23,26 +24,19 @@ class NotificationPanel extends StatefulWidget {
 }
 
 class _NotificationPanelState extends State<NotificationPanel>
-    with SingleTickerProviderStateMixin {
-  late TabController tabController;
+    with TickerProviderStateMixin {
+  TabController? _tabController;
   final PopoverController moreActionController = PopoverController();
-
-  final tabs = [
-    NotificationTabType.mention,
-    // NotificationTabType.clip,
-    NotificationTabType.reminder,
-    NotificationTabType.system,
-  ];
 
   @override
   void initState() {
     super.initState();
-    tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
   void dispose() {
-    tabController.dispose();
+    _tabController?.dispose();
     moreActionController.close();
     super.dispose();
   }
@@ -67,28 +61,51 @@ class _NotificationPanelState extends State<NotificationPanel>
                 boxShadow: theme.shadow.small,
               ),
               padding: EdgeInsets.symmetric(vertical: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  buildTitle(
-                    context: context,
-                    onHide: () => settingBloc
-                        .add(HomeSettingEvent.collapseNotificationPanel()),
-                  ),
-                  const VSpace(12),
-                  NotificationTabBar(
-                    tabController: tabController,
-                    tabs: tabs,
-                  ),
-                  const VSpace(14),
-                  Expanded(
-                    child: TabBarView(
-                      controller: tabController,
-                      children:
-                          tabs.map((e) => NotificationTab(tabType: e)).toList(),
-                    ),
-                  ),
-                ],
+              child: BlocBuilder<ReminderBloc, ReminderState>(
+                builder: (context, state) {
+                  final hasArchived = state.archivedReminders.isNotEmpty;
+                  final tabs = hasArchived
+                      ? [
+                          NotificationTabType.mention,
+                          NotificationTabType.reminder,
+                          NotificationTabType.system,
+                          NotificationTabType.archived,
+                        ]
+                      : [
+                          NotificationTabType.mention,
+                          NotificationTabType.reminder,
+                          NotificationTabType.system,
+                        ];
+
+                  if (_tabController?.length != tabs.length) {
+                    _tabController?.dispose();
+                    _tabController = TabController(length: tabs.length, vsync: this);
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      buildTitle(
+                        context: context,
+                        onHide: () => settingBloc
+                            .add(HomeSettingEvent.collapseNotificationPanel()),
+                      ),
+                      const VSpace(12),
+                      NotificationTabBar(
+                        tabController: _tabController!,
+                        tabs: tabs,
+                      ),
+                      const VSpace(14),
+                      Expanded(
+                        child: TabBarView(
+                          controller: _tabController!,
+                          children:
+                              tabs.map((e) => NotificationTab(tabType: e)).toList(),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),

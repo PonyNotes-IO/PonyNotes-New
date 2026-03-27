@@ -78,6 +78,10 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
               (reminders) async {
                 final availableReminders =
                     await filterAvailableReminders(reminders);
+                // Separate archived reminders
+                final archived =
+                    reminders.where((r) => r.isArchived).toList();
+
                 // only print the reminder ids are not the same as the previous ones
                 final previousReminderIds =
                     state.reminders.map((e) => e.id).toSet();
@@ -97,6 +101,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                     state.copyWith(
                       reminders: availableReminders,
                       serverReminders: reminders,
+                      archivedReminders: archived,
                     ),
                   );
                 }
@@ -201,7 +206,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 message: LocaleKeys.reminderNotification_message.tr(),
                 scheduledAt: scheduledAt,
                 isAck: scheduledAt.toDateTime().isBefore(DateTime.now()),
-                meta: meta,
+                meta: meta != null ? meta.entries.toList() : null,
               ),
             ),
           ),
@@ -223,6 +228,28 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
 
             await failureOrUnit.fold((_) async {
               Log.info('Updated reminder: ${newReminder.id}');
+
+              // Synchronously update archivedReminders when isArchived changes
+              var archivedReminders = [...state.archivedReminders];
+              final wasArchived = archivedReminders.any((r) => r.id == newReminder.id);
+              // Use meta directly since ReminderPB has no isArchived protobuf field
+              final isNowArchived = newReminder.meta[ReminderMetaKeys.isArchived] == true.toString();
+              if (isNowArchived && !wasArchived) {
+                archivedReminders = [...archivedReminders, newReminder];
+              } else if (!isNowArchived && wasArchived) {
+                archivedReminders =
+                    archivedReminders.where((r) => r.id != newReminder.id).toList();
+              }
+
+              // Also keep serverReminders in sync so allReminders reflects the change
+              var serverReminders = [...state.serverReminders];
+              final serverIdx = serverReminders.indexWhere((r) => r.id == newReminder.id);
+              if (serverIdx != -1) {
+                serverReminders.replaceRange(serverIdx, serverIdx + 1, [newReminder]);
+              } else {
+                serverReminders = [...serverReminders, newReminder];
+              }
+
               final index =
                   state.reminders.indexWhere((r) => r.id == newReminder.id);
               if (index == -1) {
@@ -231,8 +258,18 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                   state.allReminders.map((e) => e.id).toSet(),
                 )) {
                   emit(
-                    state
-                        .copyWith(reminders: [...state.reminders, newReminder]),
+                    state.copyWith(
+                      reminders: [...state.reminders, newReminder],
+                      archivedReminders: archivedReminders,
+                      serverReminders: serverReminders,
+                    ),
+                  );
+                } else {
+                  emit(
+                    state.copyWith(
+                      archivedReminders: archivedReminders,
+                      serverReminders: serverReminders,
+                    ),
                   );
                 }
                 return;
@@ -243,10 +280,18 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 state.allReminders.map((e) => e.id).toSet(),
               )) {
                 reminders.replaceRange(index, index + 1, [newReminder]);
-                emit(state.copyWith(reminders: reminders));
+                emit(state.copyWith(
+                  reminders: reminders,
+                  archivedReminders: archivedReminders,
+                  serverReminders: serverReminders,
+                ));
               } else {
                 reminders.removeAt(index);
-                emit(state.copyWith(reminders: reminders));
+                emit(state.copyWith(
+                  reminders: reminders,
+                  archivedReminders: archivedReminders,
+                  serverReminders: serverReminders,
+                ));
               }
             }, (error) {
               Log.error(
@@ -322,6 +367,9 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             emit(
               state.copyWith(
                 reminders: reminders,
+                archivedReminders: state.serverReminders
+                    .where((r) => r.isArchived)
+                    .toList(),
               ),
             );
           },
@@ -344,6 +392,9 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             emit(
               state.copyWith(
                 reminders: reminders,
+                archivedReminders: state.serverReminders
+                    .where((r) => r.isArchived)
+                    .toList(),
               ),
             );
           },
@@ -352,6 +403,9 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
             emit(
               state.copyWith(
                 reminders: reminders,
+                archivedReminders: state.serverReminders
+                    .where((r) => r.isArchived)
+                    .toList(),
               ),
             );
           },
@@ -691,7 +745,7 @@ class ReminderUpdate {
       isRead: isReadValue,
       title: a.title,
       message: a.message,
-      meta: metaMap,
+      meta: metaMap.entries.toList(),
     );
   }
 }
@@ -700,10 +754,9 @@ class ReminderState {
   ReminderState({
     List<ReminderPB>? reminders,
     this.serverReminders = const [],
+    List<ReminderPB>? archivedReminders,
   }) {
-    _reminders = [];
-    pastReminders = [];
-    upcomingReminders = [];
+    _archivedReminders = archivedReminders ?? [];
 
     if (reminders?.isEmpty ?? true) {
       return;
@@ -727,21 +780,26 @@ class ReminderState {
         .addAll([...List.of(pastReminders), ...List.of(upcomingReminders)]);
   }
 
-  late final List<ReminderPB> _reminders;
+  List<ReminderPB> _reminders = [];
   List<ReminderPB> get reminders => _reminders.unique((e) => e.id);
   List<ReminderPB> get allReminders =>
       [...serverReminders, ..._reminders].unique((e) => e.id);
 
-  late final List<ReminderPB> pastReminders;
-  late final List<ReminderPB> upcomingReminders;
+  List<ReminderPB> pastReminders = [];
+  List<ReminderPB> upcomingReminders = [];
   final List<ReminderPB> serverReminders;
+
+  List<ReminderPB> _archivedReminders = [];
+  List<ReminderPB> get archivedReminders => _archivedReminders.unique((e) => e.id);
 
   ReminderState copyWith({
     List<ReminderPB>? reminders,
     List<ReminderPB>? serverReminders,
+    List<ReminderPB>? archivedReminders,
   }) =>
       ReminderState(
         reminders: reminders ?? _reminders,
         serverReminders: serverReminders ?? this.serverReminders,
+        archivedReminders: archivedReminders ?? _archivedReminders,
       );
 }

@@ -37,7 +37,7 @@ class _NotificationTabState extends State<NotificationTab>
 
     return BlocBuilder<ReminderBloc, ReminderState>(
       builder: (context, state) {
-        final reminders = _filterReminders(state.reminders);
+        final reminders = _filterReminders(state.reminders, state.archivedReminders);
 
         if (reminders.isEmpty) return EmptyNotification(type: widget.tabType);
 
@@ -121,7 +121,15 @@ class _NotificationTabState extends State<NotificationTab>
     }
   }
 
-  List<ReminderPB> _filterReminders(List<ReminderPB> reminders) {
+  List<ReminderPB> _filterReminders(
+    List<ReminderPB> reminders,
+    List<ReminderPB> archivedReminders,
+  ) {
+    if (widget.tabType == NotificationTabType.archived) {
+      return archivedReminders.reversed
+          .toList()
+          .unique((reminder) => reminder.id);
+    }
     final targetType = widget.tabType.value;
     return reminders.reversed
         .where((reminder) {

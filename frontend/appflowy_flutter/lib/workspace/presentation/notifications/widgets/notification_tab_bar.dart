@@ -12,7 +12,8 @@ enum NotificationTabType {
   mention,
   clip,
   reminder,
-  system;
+  system,
+  archived;
 
   String get tr {
     switch (this) {
@@ -24,6 +25,8 @@ enum NotificationTabType {
         return LocaleKeys.notificationHub_tabs_reminder.tr();
       case NotificationTabType.system:
         return LocaleKeys.notificationHub_tabs_system.tr();
+      case NotificationTabType.archived:
+        return LocaleKeys.notificationHub_tabs_archived.tr();
     }
   }
 
@@ -38,6 +41,8 @@ enum NotificationTabType {
         return 'reminder';
       case NotificationTabType.system:
         return 'system';
+      case NotificationTabType.archived:
+        return 'archived';
     }
   }
 }
@@ -111,6 +116,7 @@ class NotificationTabBar extends StatelessWidget {
   }
 
   int _getUnreadCountForTab(List<ReminderPB> reminders, NotificationTabType tabType) {
+    if (tabType == NotificationTabType.archived) return 0;
     return reminders.where((reminder) {
       if (reminder.isRead || reminder.isArchived) return false;
       final notificationType = reminder.notificationType;

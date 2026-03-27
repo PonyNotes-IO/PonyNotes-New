@@ -2618,7 +2618,8 @@
       "mention": "@提及通知",
       "clip": "剪藏通知",
       "reminder": "提醒通知",
-      "system": "系统通知"
+      "system": "系统通知",
+      "archived": "已归档"
     },
     "empty": {
       "mention": {
@@ -2636,6 +2637,10 @@
       "system": {
         "title": "暂无系统通知",
         "body": "系统相关的通知将显示在此处。"
+      },
+      "archived": {
+        "title": "暂无已归档通知",
+        "body": "您归档的通知将显示在此处。"
       }
     },
     "actions": {
@@ -2662,6 +2667,8 @@
     "older": "更早",
     "today": "今天",
     "unarchiveTooltip": "取消归档此通知",
+    "unarchiveSucceedToast": "恢复成功",
+    "unarchiveAllSucceedToast": "全部恢复成功",
     "viewNotifications": "查看通知"
   },
   "reminderNotification": {

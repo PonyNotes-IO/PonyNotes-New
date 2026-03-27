@@ -2561,6 +2561,8 @@
     "markAllAsArchivedSucceedToast": "Archived all successfully",
     "markAsReadSucceedToast": "Mark as read successfully",
     "markAllAsReadSucceedToast": "Mark all as read successfully",
+    "unarchiveSucceedToast": "Restored successfully",
+    "unarchiveAllSucceedToast": "Restored all successfully",
     "today": "Today",
     "older": "Older",
     "mobile": {
@@ -2572,7 +2574,8 @@
       "mention": "@Mention Notifications",
       "clip": "Clip Notifications",
       "reminder": "Reminder Notifications",
-      "system": "System Notifications"
+      "system": "System Notifications",
+      "archived": "Archived"
     },
     "empty": {
       "mention": {
@@ -2590,6 +2593,10 @@
       "system": {
         "title": "No System Notifications",
         "body": "System-related notifications will appear here."
+      },
+      "archived": {
+        "title": "No Archived Notifications",
+        "body": "Notifications you archive will appear here."
       }
     },
     "actions": {

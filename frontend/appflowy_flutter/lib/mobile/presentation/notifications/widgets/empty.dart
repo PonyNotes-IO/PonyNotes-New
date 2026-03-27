@@ -24,6 +24,8 @@ class EmptyNotification extends StatelessWidget {
         LocaleKeys.notificationHub_empty_reminder_title.tr(),
       NotificationTabType.system =>
         LocaleKeys.notificationHub_empty_system_title.tr(),
+      NotificationTabType.archived =>
+        LocaleKeys.notificationHub_empty_archived_title.tr(),
     };
     final desc = switch (type) {
       NotificationTabType.mention =>
@@ -34,6 +36,8 @@ class EmptyNotification extends StatelessWidget {
         LocaleKeys.notificationHub_empty_reminder_body.tr(),
       NotificationTabType.system =>
         LocaleKeys.notificationHub_empty_system_body.tr(),
+      NotificationTabType.archived =>
+        LocaleKeys.notificationHub_empty_archived_body.tr(),
     };
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
