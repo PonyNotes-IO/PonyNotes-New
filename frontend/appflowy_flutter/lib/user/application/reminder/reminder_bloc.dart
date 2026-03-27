@@ -489,6 +489,12 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       return false;
     }
 
+    // Cloud notifications (from server) don't need a local view — they have
+    // 'payload' in meta which local reminders never have.
+    if (reminder.meta.containsKey('payload')) {
+      return true;
+    }
+
     /// check if view is not null
     final viewId = reminder.objectId;
     final view = _allViews.firstWhereOrNull((e) => e.id == viewId);

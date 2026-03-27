@@ -790,8 +790,14 @@ impl UserManager {
     );
 
     // 创建 Reminder
+    // 将 cloud 通知类型映射到 Flutter tab 分类：mention → mention，其他 → system
+    let tab_type = match notification_type {
+      "mention" => "mention",
+      _ => "system",
+    };
     let mut meta = std::collections::HashMap::new();
-    meta.insert("notification_type".to_string(), notification_type.to_string());
+    meta.insert("notification_type".to_string(), tab_type.to_string());
+    meta.insert("cloud_notification_type".to_string(), notification_type.to_string());
     meta.insert("payload".to_string(), payload_json.to_string());
     meta.insert(
       "created_at".to_string(),
@@ -872,11 +878,14 @@ impl UserManager {
             // 通过弱引用获取 UserManager 并创建 Reminder
             if let Some(manager) = weak_manager.upgrade() {
               // 创建 Reminder
+              // 将 cloud 通知类型映射到 Flutter tab 分类：mention → mention，其他 → system
+              let tab_type = match notification.notification_type.as_str() {
+                "mention" => "mention",
+                _ => "system",
+              };
               let mut meta = std::collections::HashMap::new();
-              meta.insert(
-                "notification_type".to_string(),
-                notification.notification_type.clone(),
-              );
+              meta.insert("notification_type".to_string(), tab_type.to_string());
+              meta.insert("cloud_notification_type".to_string(), notification.notification_type.clone());
               meta.insert("payload".to_string(), notification.payload_json.clone());
               meta.insert("created_at".to_string(), notification.created_at.to_string());
 
