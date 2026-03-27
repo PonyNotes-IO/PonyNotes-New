@@ -156,10 +156,11 @@ impl ChatCloudService for ChatServiceMiddleware {
     message: &str,
     message_type: ChatMessageType,
     prompt_id: Option<String>,
+    metadata: Option<serde_json::Value>,
   ) -> Result<ChatMessage, FlowyError> {
     self
       .cloud_service
-      .create_question(workspace_id, chat_id, message, message_type, prompt_id)
+      .create_question(workspace_id, chat_id, message, message_type, prompt_id, metadata)
       .await
   }
 

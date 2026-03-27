@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_entity.dart';
@@ -187,9 +188,9 @@ class _MessageImageList extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<Widget> children = [];
 
-    // 添加 base64 图片
+    // 添加 base64 或 URL 图片
     for (final image in images) {
-      children.add(_MessageImage(imageBase64: image));
+      children.add(_MessageImage(imageData: image));
     }
 
     // 添加文件路径图片
@@ -206,38 +207,70 @@ class _MessageImageList extends StatelessWidget {
   }
 }
 
-/// 单个图片缩略图组件（从base64加载）
+/// 单个图片缩略图组件（支持 base64 和 HTTP URL 两种来源）
 class _MessageImage extends StatelessWidget {
-  const _MessageImage({required this.imageBase64});
+  const _MessageImage({required this.imageData});
 
-  final String imageBase64;
+  final String imageData;
+
+  bool get _isUrl =>
+      imageData.startsWith('http://') || imageData.startsWith('https://');
 
   @override
   Widget build(BuildContext context) {
-    // 尝试解码base64图片
+    if (_isUrl) {
+      return _buildNetworkImage(context);
+    }
+    // 尝试解码 base64 图片
     Uint8List? imageBytes;
     try {
-      imageBytes = base64Decode(imageBase64);
-    } catch (e) {
-      // 解码失败，显示占位图标
+      imageBytes = base64Decode(imageData);
+    } catch (_) {
       imageBytes = null;
     }
-
-    return _buildImageWidget(context, imageBytes);
+    return _buildMemoryImage(context, imageBytes);
   }
 
-  Widget _buildImageWidget(BuildContext context, Uint8List? imageBytes) {
+  Widget _buildNetworkImage(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _showFullNetworkImage(context),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 120, maxHeight: 120),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: CachedNetworkImage(
+          imageUrl: imageData,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => Container(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            child: const Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+          errorWidget: (_, __, ___) => _buildPlaceholder(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemoryImage(BuildContext context, Uint8List? imageBytes) {
     return GestureDetector(
       onTap: () {
         if (imageBytes != null) {
-          _showFullImage(context, imageBytes);
+          _showFullMemoryImage(context, imageBytes);
         }
       },
       child: Container(
-        constraints: const BoxConstraints(
-          maxWidth: 120,
-          maxHeight: 120,
-        ),
+        constraints: const BoxConstraints(maxWidth: 120, maxHeight: 120),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
@@ -249,9 +282,7 @@ class _MessageImage extends StatelessWidget {
             ? Image.memory(
                 imageBytes,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return _buildPlaceholder(context);
-                },
+                errorBuilder: (_, __, ___) => _buildPlaceholder(context),
               )
             : _buildPlaceholder(context),
       ),
@@ -271,7 +302,7 @@ class _MessageImage extends StatelessWidget {
     );
   }
 
-  void _showFullImage(BuildContext context, Uint8List imageBytes) {
+  void _showFullNetworkImage(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -284,32 +315,52 @@ class _MessageImage extends StatelessWidget {
               maxScale: 4.0,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.memory(
-                  imageBytes,
-                  fit: BoxFit.contain,
-                ),
+                child: CachedNetworkImage(imageUrl: imageData, fit: BoxFit.contain),
               ),
             ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.close,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            ),
+            _closeButton(context),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showFullMemoryImage(BuildContext context, Uint8List imageBytes) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(imageBytes, fit: BoxFit.contain),
+              ),
+            ),
+            _closeButton(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _closeButton(BuildContext context) {
+    return Positioned(
+      top: 8,
+      right: 8,
+      child: IconButton(
+        onPressed: () => Navigator.of(context).pop(),
+        icon: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.black54,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: const Icon(Icons.close, color: Colors.white, size: 20),
         ),
       ),
     );

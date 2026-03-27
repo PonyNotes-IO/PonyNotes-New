@@ -92,6 +92,17 @@ impl Chat {
     let uid = self.user_service.user_id()?;
     let workspace_id = self.user_service.workspace_id()?;
 
+    // 构建消息 metadata：将图片数据（base64）一并保存到服务端，
+    // 以便协作区其他用户加载历史消息时能看到图片。
+    let question_metadata = if params.has_images && !params.images.is_empty() {
+      Some(serde_json::json!({
+        "images": params.images,
+        "has_images": true,
+      }))
+    } else {
+      None
+    };
+
     // 尝试创建问题，如果失败且是数据同步禁用错误，则在本地创建
     let question = match self
       .chat_service
@@ -101,6 +112,7 @@ impl Chat {
         &params.message,
         params.message_type.clone(),
         params.prompt_id.clone(),
+        question_metadata,
       )
       .await
     {

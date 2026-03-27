@@ -80,6 +80,7 @@ impl ChatCloudService for LocalChatServiceImpl {
     message: &str,
     message_type: ChatMessageType,
     _prompt_id: Option<String>,
+    _metadata: Option<serde_json::Value>,
   ) -> Result<ChatMessage, FlowyError> {
     let message_id = ID_GEN.lock().await.next_id();
     let message = match message_type {

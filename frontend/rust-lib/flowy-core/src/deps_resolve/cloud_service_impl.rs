@@ -762,12 +762,13 @@ impl ChatCloudService for ServerProvider {
     message: &str,
     message_type: ChatMessageType,
     prompt_id: Option<String>,
+    metadata: Option<serde_json::Value>,
   ) -> Result<ChatMessage, FlowyError> {
     let message = message.to_string();
     self
       .get_server()?
       .chat_service()
-      .create_question(workspace_id, chat_id, &message, message_type, prompt_id)
+      .create_question(workspace_id, chat_id, &message, message_type, prompt_id, metadata)
       .await
   }
 

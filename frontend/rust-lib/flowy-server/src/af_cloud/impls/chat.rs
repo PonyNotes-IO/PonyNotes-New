@@ -60,6 +60,7 @@ where
     message: &str,
     message_type: ChatMessageType,
     prompt_id: Option<String>,
+    metadata: Option<serde_json::Value>,
   ) -> Result<ChatMessage, FlowyError> {
     let chat_id = chat_id.to_string();
     let try_get_client = self.inner.try_get_client();
@@ -67,7 +68,7 @@ where
       content: message.to_string(),
       message_type,
       prompt_id,
-      metadata: None,
+      metadata,
     };
 
     let message = try_get_client?

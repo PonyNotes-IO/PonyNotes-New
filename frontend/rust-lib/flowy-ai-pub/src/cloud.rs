@@ -107,6 +107,7 @@ pub trait ChatCloudService: Send + Sync + 'static {
     message: &str,
     message_type: ChatMessageType,
     prompt_id: Option<String>,
+    metadata: Option<serde_json::Value>,
   ) -> Result<ChatMessage, FlowyError>;
 
   async fn create_answer(
