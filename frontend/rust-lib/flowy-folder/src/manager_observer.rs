@@ -105,11 +105,6 @@ pub(crate) fn subscribe_folder_sync_state_changed(
       let is_syncing = state.is_syncing();
       let is_finished = state.is_sync_finished();
 
-      tracing::info!(
-        "[FolderSyncState] 收到同步状态更新: is_syncing={}, is_finish={}",
-        is_syncing,
-        is_finished
-      );
       folder_notification_builder(
         workspace_id.to_string(),
         FolderNotification::DidUpdateFolderSyncUpdate,
@@ -118,9 +113,6 @@ pub(crate) fn subscribe_folder_sync_state_changed(
       .send();
 
       if was_syncing && is_finished && !is_syncing {
-        tracing::info!(
-          "[FolderSyncState] ✅ 同步完成，强制刷新 workspace 视图和回收站"
-        );
         if let Some(lock) = weak_mutex_folder.upgrade() {
           let folder = lock.read().await;
           notify_did_update_workspace(&workspace_id, &folder);

@@ -689,37 +689,21 @@ impl FolderManager {
     let index = params.index;
     let section = params.section.clone().unwrap_or(ViewSectionPB::Public);
     let is_private = section == ViewSectionPB::Private;
-    
-    info!("[FolderManager] 🔵 Creating view object for view: {}", params.view_id);
+
     let view = create_view(self.user.user_id()?, params.clone(), view_layout);
-    info!("[FolderManager] ✅ View object created for view: {}", view.id);
-    
-    info!("[FolderManager] 🔵 Loading folder lock for view: {}", view.id);
+
     if let Some(lock) = self.mutex_folder.load_full() {
-      info!("[FolderManager] ✅ Got folder lock for view: {}", view.id);
-      
-      info!("[FolderManager] 🔵 Acquiring folder write lock for view: {}", view.id);
       let mut folder = lock.write().await;
-      info!("[FolderManager] ✅ Acquired folder write lock for view: {}", view.id);
-      
-      info!("[FolderManager] 🔵 Inserting view into folder: {} at index: {:?}", view.id, index);
       folder.insert_view(view.clone(), index);
-      info!("[FolderManager] ✅ View inserted into folder: {}", view.id);
-      
+
       if is_private {
-        info!("[FolderManager] 🔵 Adding private view: {}", view.id);
         folder.add_private_view_ids(vec![view.id.clone()]);
       }
       if notify_workspace_update {
-        info!("[FolderManager] 🔵 Notifying workspace update for view: {}", view.id);
         notify_did_update_workspace(&workspace_id, &folder);
-        info!("[FolderManager] ✅ Workspace update notified for view: {}", view.id);
       }
-    } else {
-      error!("[FolderManager] ❌ Folder lock is not loaded for view: {}", view.id);
     }
 
-    info!("[FolderManager] ✅ create_view_with_params completed successfully for view: {}", view.id);
     Ok((view, encoded_collab))
   }
 
@@ -834,10 +818,6 @@ impl FolderManager {
         let uid = self.user.user_id()?;
         if let Ok(conn) = self.user.sqlite_connection(uid) {
           if let Ok(Some(shared_view)) = select_shared_view_by_view_id(conn, &view_id, uid) {
-            tracing::info!(
-              "View {} not in local folder, but found in shared_view table (workspace: {}, layout: {})",
-              view_id, shared_view.workspace_id, shared_view.view_layout
-            );
             let layout = ViewLayoutPB::from(shared_view.view_layout);
             let view_pb = ViewPB {
               id: shared_view.view_id,
@@ -974,9 +954,15 @@ impl FolderManager {
           return Err(FlowyError::view_is_locked());
         }
 
+        let is_favorite_before_trash = view.is_favorite;
         Self::unfavorite_view_and_decendants(view.clone(), &mut folder);
         folder.add_trash_view_ids(vec![view_id.to_string()]);
         drop(folder);
+
+        if is_favorite_before_trash {
+          let key = format!("trash_fav_{}", view_id);
+          let _ = self.store_preferences.set_bool(&key, true);
+        }
 
         // notify the parent view that the view is moved to trash
         folder_notification_builder(view_id, FolderNotification::DidMoveViewToTrash)
@@ -2215,37 +2201,28 @@ impl FolderManager {
 
   #[tracing::instrument(level = "trace", skip(self))]
   pub(crate) async fn restore_trash(&self, trash_id: &str) {
-    tracing::info!("[RestoreTrash] Starting restore for trash_id: {}", trash_id);
     if let Some(lock) = self.mutex_folder.load_full() {
       let mut folder = lock.write().await;
 
-      // Save favorite status before removing from trash, since the View may not be
-      // accessible once it's removed (it's only accessible while in trash).
-      let was_favorite = folder.get_view(trash_id).map(|v| v.is_favorite).unwrap_or(false);
-      tracing::info!("[RestoreTrash] trash_id={}, was_favorite={}", trash_id, was_favorite);
+      let was_favorite_key = format!("trash_fav_{}", trash_id);
+      let was_favorite = self.store_preferences.get_bool_or_default(&was_favorite_key);
 
       folder.delete_trash_view_ids(vec![trash_id.to_string()]);
 
-      // Re-add to favorites if it was favorited before being trashed
       if was_favorite {
-        tracing::info!("[RestoreTrash] Re-adding {} to favorites", trash_id);
         folder.add_favorite_view_ids(vec![trash_id.to_string()]);
-      } else {
-        tracing::info!("[RestoreTrash] Skipping re-add to favorites, was_favorite=false");
       }
 
       drop(folder);
 
-      // Send DidRestoreView notification so Flutter can update the UI
+      let _ = self.store_preferences.remove(&was_favorite_key);
+
       if let Ok(view_pb) = self.get_view_pb(trash_id).await {
-        tracing::info!("[RestoreTrash] Sending DidRestoreView for {}", trash_id);
         folder_notification_builder("favorite", FolderNotification::DidRestoreView)
           .payload(view_pb)
           .send();
 
-        // Also send DidFavoriteView if the view was favorited so FavoriteBloc refreshes
         if was_favorite {
-          tracing::info!("[RestoreTrash] Sending DidFavoriteView for {}", trash_id);
           if let Ok(view_pb) = self.get_view_pb(trash_id).await {
             folder_notification_builder("favorite", FolderNotification::DidFavoriteView)
               .payload(RepeatedViewPB {
@@ -2254,10 +2231,7 @@ impl FolderManager {
               .send();
           }
         }
-      } else {
-        tracing::error!("[RestoreTrash] Failed to get view_pb for {}", trash_id);
       }
-      tracing::info!("[RestoreTrash] Finished restore for trash_id: {}", trash_id);
     }
   }
 
@@ -2301,6 +2275,7 @@ impl FolderManager {
         }
       }
     }
+    let _ = self.store_preferences.remove(&format!("trash_fav_{}", view_id));
     Ok(())
   }
 
@@ -2928,8 +2903,6 @@ impl FolderManager {
   }
 
   pub async fn get_shared_view_section(&self, view_id: &str) -> FlowyResult<SharedViewSectionPB> {
-    tracing::info!("[FOLDER] 🔵 get_shared_view_section called for view_id: {}", view_id);
-    
     const MAX_LOOP_COUNT: usize = 20;
     let mut loop_count = 0;
     let mut current_view_id = view_id.to_string();
@@ -2939,56 +2912,22 @@ impl FolderManager {
       .load_full()
       .ok_or_else(folder_not_init_error)?;
     let folder = lock.read().await;
-    tracing::info!("[FOLDER] ✅ Got folder lock for view_id: {}", view_id);
 
     let flattened_shared_views = self.get_flatten_shared_pages().await?;
-    tracing::info!(
-      "[FOLDER] 📊 Flattened shared views count: {}, checking view_id: {}", 
-      flattened_shared_views.len(),
-      view_id
-    );
 
-    // if the view is in the flattened_shared_views, return the section
     if flattened_shared_views.iter().any(|view| view.id == view_id) {
-      tracing::info!("[FOLDER] ✅ View {} found in shared views, returning SharedSection", view_id);
       return Ok(SharedViewSectionPB::SharedSection);
     }
-    tracing::info!("[FOLDER] 🔵 View {} not in shared views, checking parent hierarchy", view_id);
 
     loop {
       if loop_count >= MAX_LOOP_COUNT {
-        tracing::warn!(
-          "[FOLDER] ⚠️ Max loop count reached for view_id: {}, returning PublicSection", 
-          view_id
-        );
         return Ok(SharedViewSectionPB::PublicSection);
       }
       loop_count += 1;
 
-      tracing::info!(
-        "[FOLDER] 🔵 Loop iteration {}: checking current_view_id: {}", 
-        loop_count, 
-        current_view_id
-      );
-
       let view = match folder.get_view(&current_view_id) {
-        Some(v) => {
-          tracing::info!(
-            "[FOLDER] ✅ Found view: {} (loop {})", 
-            current_view_id, 
-            loop_count
-          );
-          v
-        },
-        None => {
-          tracing::warn!(
-            "[FOLDER] ⚠️ View not found: {} (loop {}), this might be a timing issue. Returning PublicSection as fallback.",
-            current_view_id,
-            loop_count
-          );
-          // 返回 PublicSection 作为默认值，避免在竞态条件下报错
-          return Ok(SharedViewSectionPB::PublicSection);
-        }
+        Some(v) => v,
+        None => return Ok(SharedViewSectionPB::PublicSection),
       };
 
       if let Some(space_info) = view.space_info() {
@@ -2996,28 +2935,12 @@ impl FolderManager {
           SpacePermission::PublicToAll => SharedViewSectionPB::PublicSection,
           _ => SharedViewSectionPB::PrivateSection,
         };
-        tracing::info!(
-          "[FOLDER] ✅ Found space_info for view {}, permission: {:?}, returning: {:?}",
-          current_view_id,
-          space_info.space_permission,
-          result
-        );
         return Ok(result);
       }
 
       let parent_view_id = view.parent_view_id.clone();
-      tracing::info!(
-        "[FOLDER] 🔵 View {} has parent: {}", 
-        current_view_id, 
-        parent_view_id
-      );
 
-      // If parent_view_id is the same as current view id, return public to avoid infinite loop
       if parent_view_id == current_view_id {
-        tracing::warn!(
-          "[FOLDER] ⚠️ Parent view_id equals current view_id: {}, avoiding infinite loop, returning PublicSection",
-          current_view_id
-        );
         return Ok(SharedViewSectionPB::PublicSection);
       }
 
@@ -3044,11 +2967,6 @@ impl FolderManager {
 
     use flowy_folder_pub::sql::workspace_shared_view_sql::upsert_workspace_shared_view;
     upsert_workspace_shared_view(&mut conn, shared_view)?;
-
-    tracing::info!(
-      "[FOLDER] Saved shared view meta: view_id={}, workspace_id={}, name={}, layout={}",
-      params.view_id, params.workspace_id, params.view_name, params.view_layout
-    );
 
     Ok(())
   }
@@ -3077,9 +2995,7 @@ impl FolderManager {
     loop {
       interval.tick().await;
       
-      if let Err(e) = manager.cleanup_expired_trash().await {
-        tracing::error!("Failed to cleanup expired trash: {}", e);
-      }
+      let _ = manager.cleanup_expired_trash().await;
     }
   }
 
@@ -3095,15 +3011,6 @@ impl FolderManager {
     
     loop {
       interval.tick().await;
-      
-      // For now, we'll just log that the cleanup task is running
-      // The actual cleanup logic would need to be implemented differently
-      // since we don't have access to the folder manager's mutex_folder
-      tracing::info!("Auto-cleanup task running - would cleanup expired trash items");
-      
-      // TODO: Implement actual cleanup logic when we have access to the folder data
-      // This might require a different approach, such as storing a weak reference
-      // to the folder manager or implementing the cleanup through a different mechanism
     }
   }
 
@@ -3128,13 +3035,8 @@ impl FolderManager {
       };
       
       if !expired_trash_ids.is_empty() {
-        tracing::info!("Cleaning up {} expired trash items", expired_trash_ids.len());
-        
-        // Delete expired trash items
         for trash_id in expired_trash_ids {
-          if let Err(e) = self.delete_trash(&trash_id).await {
-            tracing::error!("Failed to delete expired trash item {}: {}", trash_id, e);
-          }
+          let _ = self.delete_trash(&trash_id).await;
         }
         
         // Get updated trash info and notify frontend
