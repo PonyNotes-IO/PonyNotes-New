@@ -9,6 +9,7 @@ import 'package:appflowy/shared/list_extension.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/notification_service.dart';
 import 'package:appflowy/user/application/reminder/reminder_extension.dart';
+import 'package:appflowy/user/application/reminder/reminder_listener.dart';
 import 'package:appflowy/user/application/reminder/reminder_service.dart';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
@@ -45,6 +46,21 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
       },
     );
 
+    // Listen for real-time reminder pushes from Rust (system notifications
+    // delivered over WebSocket). The fixed key "user_reminder" matches what
+    // Rust sends via send_notification("user_reminder", DidUpdateReminder).
+    // Use refresh() instead of add() to avoid a duplicate backend write —
+    // the reminder was already stored by Rust before the push was sent.
+    _awarenessListener = UserAwarenessListener(workspaceId: 'user_reminder')
+      ..start(
+        onDidUpdateReminder: (reminder) {
+          Log.info(
+            'ReminderBloc: received real-time reminder push: ${reminder.id}, triggering refresh',
+          );
+          if (!isClosed) add(const ReminderEvent.refresh());
+        },
+      );
+
     _dispatch();
   }
 
@@ -52,6 +68,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
   late final ReminderService _reminderService;
   Timer? timer;
   late final AppLifecycleListener _listener;
+  late final UserAwarenessListener _awarenessListener;
   final _deepEquality = DeepCollectionEquality();
 
   bool hasReminder(String reminderId) =>
@@ -422,6 +439,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
   Future<void> close() async {
     Log.info('ReminderBloc closed');
     _listener.dispose();
+    _awarenessListener.stop();
     timer?.cancel();
     await super.close();
   }

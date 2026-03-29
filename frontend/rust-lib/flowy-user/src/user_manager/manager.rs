@@ -900,12 +900,20 @@ impl UserManager {
                 meta,
               };
 
+              // Clone before moving into add_reminder so we can send the push
+              let reminder_pb_for_push = reminder_pb.clone();
+
               match manager.add_reminder(reminder_pb).await {
                 Ok(_) => {
                   info!(
                     "Successfully created reminder for system notification: {}",
                     notification.id
                   );
+                  // Push real-time notification to Flutter so ReminderBloc updates
+                  // immediately without waiting for the 30-second periodic refresh.
+                  send_notification("user_reminder", UserNotification::DidUpdateReminder)
+                    .payload(reminder_pb_for_push)
+                    .send();
                 },
                 Err(e) => {
                   error!(
