@@ -74,21 +74,29 @@ class _MentionDateBlockState extends State<MentionDateBlock> {
 
   @override
   void didUpdateWidget(covariant oldWidget) {
-    parsedDate = DateTime.tryParse(widget.date);
+    if (widget.date != oldWidget.date) {
+      parsedDate = DateTime.tryParse(widget.date);
+    }
     if (widget.reminderId != oldWidget.reminderId) {
       _reminderId = widget.reminderId;
     }
     if (widget.includeTime != oldWidget.includeTime) {
       _includeTime = widget.includeTime;
     }
-    if (widget.date != oldWidget.date) {
-      parsedDate = DateTime.tryParse(widget.date);
+    if (widget.reminderOption != oldWidget.reminderOption) {
+      _reminderOption = widget.reminderOption;
     }
     super.didUpdateWidget(oldWidget);
   }
 
   @override
   Widget build(BuildContext context) {
+    // 每次构建时都从 widget.date 重新解析，确保显示最新的时间
+    parsedDate = DateTime.tryParse(widget.date);
+    _includeTime = widget.includeTime;
+    _reminderId = widget.reminderId;
+    _reminderOption = widget.reminderOption;
+    
     if (parsedDate == null) {
       return const SizedBox.shrink();
     }
@@ -107,6 +115,16 @@ class _MentionDateBlockState extends State<MentionDateBlock> {
       builder: (context, appearance) =>
           BlocBuilder<ReminderBloc, ReminderState>(
         builder: (context, state) {
+          // 每次构建时都从 widget.date 重新解析，确保显示最新的时间
+          parsedDate = DateTime.tryParse(widget.date);
+          _includeTime = widget.includeTime;
+          _reminderId = widget.reminderId;
+          _reminderOption = widget.reminderOption;
+          
+          if (parsedDate == null) {
+            return const SizedBox.shrink();
+          }
+          
           final formattedDate = appearance.dateFormat
               .formatDate(parsedDate!, _includeTime, appearance.timeFormat);
 
@@ -120,23 +138,33 @@ class _MentionDateBlockState extends State<MentionDateBlock> {
             onIncludeTimeChanged: (includeTime, dateTime, _) {
               _includeTime = includeTime;
 
-              if (_reminderOption != ReminderOption.none) {
-                _updateReminder(
-                  widget.reminderOption,
-                  context,
-                  includeTime,
-                );
-              } else if (dateTime != null) {
+              if (dateTime != null) {
                 parsedDate = dateTime;
-                _updateBlock(
-                  dateTime,
-                  includeTime: includeTime,
-                );
+                
+                if (_reminderOption != ReminderOption.none) {
+                  _updateReminder(
+                    _reminderOption,
+                    context,
+                    includeTime,
+                  );
+                } else {
+                  _updateBlock(
+                    dateTime,
+                    includeTime: includeTime,
+                  );
+                }
               }
             },
             onDaySelected: (selectedDay) {
               parsedDate = selectedDay;
+              
+              // 检查 selectedDay 是否包含时间信息
+              final hasTime = selectedDay.hour != 0 || selectedDay.minute != 0;
+              if (hasTime != _includeTime) {
+                _includeTime = hasTime;
+              }
 
+              // 立即更新文档，确保时间修改能够实时反映
               if (_reminderOption != ReminderOption.none) {
                 _updateReminder(
                   _reminderOption,
@@ -232,7 +260,7 @@ class _MentionDateBlockState extends State<MentionDateBlock> {
           date: date.toIso8601String(),
           reminderId: rId,
           includeTime: includeTime,
-          reminderOption: reminderOption?.name ?? widget.reminderOption.name,
+          reminderOption: reminderOption?.name ?? _reminderOption.name,
         ),
       );
 
@@ -243,6 +271,18 @@ class _MentionDateBlockState extends State<MentionDateBlock> {
     widget.editorState.updateSelectionWithReason(
       widget.editorState.selection,
     );
+    
+    // 手动触发 setState，确保 MentionDateBlock 能够立即重新构建，显示最新的日期和时间信息
+    setState(() {
+      parsedDate = date;
+      _includeTime = includeTime;
+      if (reminderId != null) {
+        _reminderId = reminderId;
+      }
+      if (reminderOption != null) {
+        _reminderOption = reminderOption;
+      }
+    });
   }
 
   void _updateReminder(
@@ -306,7 +346,7 @@ class _MentionDateBlockState extends State<MentionDateBlock> {
                 ReminderMetaKeys.createdAt:
                     DateTime.now().millisecondsSinceEpoch.toString(),
                 ReminderMetaKeys.notificationType: 'reminder',
-              },
+              }.entries,
               scheduledAt: Int64(parsedDate!.millisecondsSinceEpoch ~/ 1000),
               isAck: parsedDate!.isBefore(DateTime.now()),
             ),

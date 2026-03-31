@@ -81,6 +81,29 @@ class DesktopAppFlowyDatePickerState
               isTabPressed: isTabPressedNotifier,
               refreshTextController: refreshStartTextFieldNotifier,
               onSubmitted: onDateTimeInputSubmitted,
+              onChanged: (value) {
+                if (isRange) {
+                  DateTime end = endDateTime ?? value;
+                  if (end.isBefore(value)) {
+                    (value, end) = (end, value);
+                    refreshStartTextFieldNotifier.refresh();
+                  }
+                  widget.onRangeSelected?.call(value, end);
+                  setState(() {
+                    dateTime = value;
+                    startDateTime = value;
+                    endDateTime = end;
+                  });
+                } else {
+                  // 确保调用 onDaySelected 回调，触发文档更新
+                  widget.onDaySelected?.call(value);
+                  // 更新内部状态，确保日期选择器显示正确
+                  setState(() {
+                    dateTime = value;
+                    focusedDateTime = getNewFocusedDay(value);
+                  });
+                }
+              },
               showHint: true,
             ),
             if (isRange) ...[
@@ -95,6 +118,30 @@ class DesktopAppFlowyDatePickerState
                 isTabPressed: isTabPressedNotifier,
                 refreshTextController: refreshEndTextFieldNotifier,
                 onSubmitted: onEndDateTimeInputSubmitted,
+                onChanged: (value) {
+                  if (isRange) {
+                    if (startDateTime == null) {
+                      value = combineDateTimes(value, widget.endDateTime);
+                    }
+                    DateTime start = startDateTime ?? value;
+                    if (value.isBefore(start)) {
+                      (start, value) = (value, start);
+                      refreshEndTextFieldNotifier.refresh();
+                    }
+                    widget.onRangeSelected?.call(start, value);
+                    setState(() {
+                      dateTime = start;
+                      startDateTime = start;
+                      endDateTime = value;
+                    });
+                  } else {
+                    widget.onDaySelected?.call(value);
+                    setState(() {
+                      dateTime = value;
+                      focusedDateTime = getNewFocusedDay(value);
+                    });
+                  }
+                },
                 showHint: isRange && !(dateTime != null && endDateTime == null),
               ),
             ],

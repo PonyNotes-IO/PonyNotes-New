@@ -178,7 +178,7 @@ class MentionBlock extends StatelessWidget {
         );
 
         return MentionDateBlock(
-          key: ValueKey(date),
+          key: ValueKey('${node.id}_${index}'),
           editorState: editorState,
           date: date,
           node: node,

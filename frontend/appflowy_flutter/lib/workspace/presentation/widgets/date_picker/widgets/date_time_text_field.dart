@@ -18,6 +18,7 @@ class DateTimeTextField extends StatefulWidget {
     required this.dateFormat,
     this.timeFormat,
     this.onSubmitted,
+    this.onChanged,
     this.popoverMutex,
     this.isTabPressed,
     this.refreshTextController,
@@ -27,6 +28,7 @@ class DateTimeTextField extends StatefulWidget {
   final DateTime? dateTime;
   final bool includeTime;
   final void Function(DateTime dateTime)? onSubmitted;
+  final void Function(DateTime dateTime)? onChanged;
   final DateFormatPB dateFormat;
   final TimeFormatPB? timeFormat;
   final PopoverMutex? popoverMutex;
@@ -205,14 +207,66 @@ class _DateTimeTextFieldState extends State<DateTimeTextField> {
       statesController.update(WidgetState.error, true);
       return;
     }
-    final adjustedTimeStr =
-        "${dateTextController.text} ${timeTextController.text.trim()}";
+    
+    final timeStr = timeTextController.text.trim();
+    final timeParts = timeStr.split(':');
+    
+    // 检查时间格式是否正确
+    if (timeParts.length >= 2) {
+      final hour = int.tryParse(timeParts[0]);
+      final minute = int.tryParse(timeParts[1]);
+      
+      // 检查时和分是否在有效范围内
+      if (hour == null || minute == null || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+        // 如果时间无效，还原到00:00
+        timeTextController.text = "09:00";
+        statesController.update(WidgetState.error, true);
+        
+        // 使用00:00作为时间
+        final date = widget.dateTime!;
+        final newDateTime = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          9,
+          0,
+          date.second,
+          date.millisecond,
+          date.microsecond,
+        );
+        
+        justSubmitted = true;
+        widget.onSubmitted?.call(newDateTime);
+        return;
+      }
+    }
+    
+    final adjustedTimeStr = "${dateTextController.text} ${timeTextController.text.trim()}";
     final dateTime = parseDateTimeStr(adjustedTimeStr);
 
     if (dateTime == null) {
+      // 如果解析失败，还原到00:00
+      timeTextController.text = "09:00";
       statesController.update(WidgetState.error, true);
+      
+      // 使用00:00作为时间
+      final date = widget.dateTime!;
+      final newDateTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        9,
+        0,
+        date.second,
+        date.millisecond,
+        date.microsecond,
+      );
+      
+      justSubmitted = true;
+      widget.onSubmitted?.call(newDateTime);
       return;
     }
+    
     statesController.update(WidgetState.error, false);
     justSubmitted = true;
     widget.onSubmitted?.call(dateTime);
@@ -285,9 +339,10 @@ class _DateTimeTextFieldState extends State<DateTimeTextField> {
                           const EdgeInsetsDirectional.fromSTEB(12, 6, 6, 6),
                           dateFormat.format(hintDate),
                         ),
-                        onSubmitted: (value) {
-                          justSubmitted = true;
-                          onDateTextFieldSubmitted();
+                        // 禁用日期输入，只能通过下方日历修改
+                        readOnly: true,
+                        onTap: () {
+                          // 点击日期输入框时，不做任何操作，让用户通过下方日历选择
                         },
                       ),
                     ),
@@ -315,6 +370,55 @@ class _DateTimeTextFieldState extends State<DateTimeTextField> {
                           const EdgeInsetsDirectional.fromSTEB(6, 6, 12, 6),
                           timeFormat.format(hintDate),
                         ),
+                        onChanged: (value) {
+                          // 实时解析用户输入并更新页面显示
+                          if (widget.dateTime != null) {
+                            // 直接使用 widget.dateTime 的日期部分，只修改时间部分
+                            final date = widget.dateTime!;
+                            final timeParts = value.trim().split(':');
+                            
+                            // 只有当分钟部分有至少两位数字时才更新，确保用户能够完整输入
+                            if (timeParts.length >= 2 && timeParts[1].length >= 2) {
+                              final hour = int.tryParse(timeParts[0]);
+                              final minute = int.tryParse(timeParts[1]);
+                              if (hour != null && minute != null && hour >= 0 && hour < 24 && minute >= 0 && minute < 60) {
+                                final newDateTime = DateTime(
+                                  date.year,
+                                  date.month,
+                                  date.day,
+                                  hour,
+                                  minute,
+                                  date.second,
+                                  date.millisecond,
+                                  date.microsecond,
+                                );
+                                statesController.update(WidgetState.error, false);
+                                widget.onChanged?.call(newDateTime);
+                                return;
+                              } else {
+                                // 时间无效，显示错误状态
+                                statesController.update(WidgetState.error, true);
+                                return;
+                              }
+                            }
+                            
+                            // 如果时间格式不完整，不更新，让用户继续输入
+                            if (timeParts.length < 2 || timeParts[1].length < 2) {
+                              statesController.update(WidgetState.error, false);
+                              return;
+                            }
+                            
+                            // 如果解析失败，尝试使用完整的日期时间字符串
+                            final adjustedTimeStr = "${dateTextController.text} ${value.trim()}";
+                            final dateTime = parseDateTimeStr(adjustedTimeStr);
+                            if (dateTime != null) {
+                              statesController.update(WidgetState.error, false);
+                              widget.onChanged?.call(dateTime);
+                            } else {
+                              statesController.update(WidgetState.error, true);
+                            }
+                          }
+                        },
                         onSubmitted: (value) {
                           justSubmitted = true;
                           onTimeTextFieldSubmitted();
@@ -333,9 +437,10 @@ class _DateTimeTextFieldState extends State<DateTimeTextField> {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       dateFormat.format(hintDate),
                     ),
-                    onSubmitted: (value) {
-                      justSubmitted = true;
-                      onDateTextFieldSubmitted();
+                    // 禁用日期输入，只能通过下方日历修改
+                    readOnly: true,
+                    onTap: () {
+                      // 点击日期输入框时，不做任何操作，让用户通过下方日历选择
                     },
                   ),
                 ),
