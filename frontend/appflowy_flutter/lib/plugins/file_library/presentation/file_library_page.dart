@@ -621,12 +621,27 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
     } catch (e) {
       // 关闭进度对话框
       Navigator.of(context).pop();
-      
-      // 显示错误
-      showToastNotification(
-        message: '导入失败: $e',
-        type: ToastificationType.error,
-      );
+
+      // 检查是否为不支持的文件格式错误
+      final errorMsg = e.toString();
+      if (errorMsg.startsWith('Exception: ALL_FILES_NOT_ALLOWED:')) {
+        final count = errorMsg.substring('Exception: ALL_FILES_NOT_ALLOWED:'.length);
+        showToastNotification(
+          message: '所选文件的类型均不支持，共 $count 个文件',
+          type: ToastificationType.error,
+        );
+      } else if (errorMsg.startsWith('Exception: SOME_FILES_NOT_ALLOWED:')) {
+        final count = errorMsg.substring('Exception: SOME_FILES_NOT_ALLOWED:'.length);
+        showToastNotification(
+          message: '有 $count 个文件的类型不支持，已为您过滤',
+          type: ToastificationType.warning,
+        );
+      } else {
+        showToastNotification(
+          message: '导入失败，请稍后重试',
+          type: ToastificationType.error,
+        );
+      }
     }
   }
 

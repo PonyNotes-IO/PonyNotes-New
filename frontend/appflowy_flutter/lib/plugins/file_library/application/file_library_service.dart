@@ -16,7 +16,28 @@ import '../services/baidu_cloud_config_service.dart';
 
 class FileLibraryService {
   static const String _fileLibraryDir = 'file_library';
-  
+
+  /// 允许导入的文件格式白名单
+  static const Set<String> allowedExtensions = {
+    // 图片
+    'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff', 'tif',
+    // 视频
+    'mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm', 'm4v', '3gp',
+    // 音频
+    'mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a', 'wma', 'opus',
+    // 文档
+    'pdf', 'doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx',
+    // 文本
+    'txt', 'md', 'json', 'xml', 'csv', 'log', 'rtf',
+    // 压缩包
+    'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz',
+  };
+
+  /// 检查扩展名是否在白名单中
+  static bool isExtensionAllowed(String extension) {
+    return allowedExtensions.contains(extension.toLowerCase().replaceAll('.', ''));
+  }
+
   /// 获取文件库目录路径
   Future<String> get _fileLibraryPath async {
     final appDataPath = await getIt<ApplicationDataStorage>().getPath();
@@ -62,6 +83,29 @@ class FileLibraryService {
       return []; // 用户取消选择
     }
 
+    // 收集不在白名单中的文件
+    final deniedFiles = <String>[];
+    final validPlatformFiles = <PlatformFile>[];
+
+    for (final platformFile in result.files) {
+      final ext = platformFile.name.split('.').last.toLowerCase();
+      if (!isExtensionAllowed(ext)) {
+        deniedFiles.add(platformFile.name);
+      } else {
+        validPlatformFiles.add(platformFile);
+      }
+    }
+
+    // 如果全部文件都不支持
+    if (validPlatformFiles.isEmpty && deniedFiles.isNotEmpty) {
+      throw Exception('ALL_FILES_NOT_ALLOWED:${deniedFiles.length}');
+    }
+
+    // 如果有部分文件不支持，过滤掉后继续，并记录被过滤数量
+    if (deniedFiles.isNotEmpty) {
+      throw Exception('SOME_FILES_NOT_ALLOWED:${deniedFiles.length}');
+    }
+
     // 确保文件库目录存在
     final libraryPath = await _fileLibraryPath;
     final directory = Directory(libraryPath);
@@ -71,7 +115,7 @@ class FileLibraryService {
 
     final importedItems = <FileLibraryItem>[];
 
-    for (final platformFile in result.files) {
+    for (final platformFile in validPlatformFiles) {
       if (platformFile.path == null) {
         continue; // 跳过无法获取路径的文件
       }
@@ -366,6 +410,11 @@ class FileLibraryService {
 
   /// 导入百度网盘文件
   Future<FileLibraryItem?> importBaiduCloudFile(BaiduCloudFile baiduFile) async {
+    // 先检查白名单
+    if (!isExtensionAllowed(baiduFile.fileExtension)) {
+      throw Exception('ALL_FILES_NOT_ALLOWED:1');
+    }
+
     try {
       final baiduService = BaiduCloudService();
       

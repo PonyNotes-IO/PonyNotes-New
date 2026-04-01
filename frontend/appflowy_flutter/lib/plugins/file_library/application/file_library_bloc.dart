@@ -48,7 +48,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
     } catch (e) {
       emit(state.copyWith(
         isLoading: false,
-        error: e.toString(),
+        error: '加载文件列表失败，请稍后重试',
       ),);
     }
   }
@@ -68,11 +68,12 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
     emit(state.copyWith(
       selectedCategory: category,
       filteredFiles: sortedFiles,
+      error: null,
     ),);
   }
 
   Future<void> _onImportPdfFiles(Emitter<FileLibraryState> emit) async {
-    emit(state.copyWith(isImporting: true));
+    emit(state.copyWith(isImporting: true, error: null, successMessage: null, infoMessage: null));
 
     try {
       final importedFiles = await _service.importPdfFiles();
@@ -103,15 +104,31 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
         ));
       }
     } catch (e) {
-      emit(state.copyWith(
-        isImporting: false,
-        error: '文件上传失败：${e.toString()}',
-      ));
+      // 检查是否为不支持的文件格式错误
+      final errorMsg = e.toString();
+      if (errorMsg.startsWith('Exception: ALL_FILES_NOT_ALLOWED:')) {
+        final count = errorMsg.substring('Exception: ALL_FILES_NOT_ALLOWED:'.length);
+        emit(state.copyWith(
+          isImporting: false,
+          error: '所选文件的类型均不支持，共 $count 个文件',
+        ));
+      } else if (errorMsg.startsWith('Exception: SOME_FILES_NOT_ALLOWED:')) {
+        final count = errorMsg.substring('Exception: SOME_FILES_NOT_ALLOWED:'.length);
+        emit(state.copyWith(
+          isImporting: false,
+          error: '有 $count 个文件的类型不支持，已为您过滤',
+        ));
+      } else {
+        emit(state.copyWith(
+          isImporting: false,
+          error: '文件上传失败，请稍后重试',
+        ));
+      }
     }
   }
 
   Future<void> _onImportFromBaiduCloud(Emitter<FileLibraryState> emit) async {
-    emit(state.copyWith(isImporting: true));
+    emit(state.copyWith(isImporting: true, error: null, successMessage: null, infoMessage: null));
 
     try {
       final importedFiles = await _service.importFromBaiduCloud();
@@ -139,10 +156,24 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
         ));
       }
     } catch (e) {
-      emit(state.copyWith(
-        isImporting: false,
-        error: '从百度网盘导入失败：${e.toString()}',
-      ));
+      // 检查是否为不支持的文件格式错误
+      final errorMsg = e.toString();
+      if (errorMsg.startsWith('Exception: ALL_FILES_NOT_ALLOWED:')) {
+        emit(state.copyWith(
+          isImporting: false,
+          error: '所选文件的类型均不支持，共 1 个文件',
+        ));
+      } else if (errorMsg.startsWith('Exception:SOME_FILES_NOT_ALLOWED:')) {
+        emit(state.copyWith(
+          isImporting: false,
+          error: '有 1 个文件的类型不支持，已为您过滤',
+        ));
+      } else {
+        emit(state.copyWith(
+          isImporting: false,
+          error: '从百度网盘导入失败，请稍后重试',
+        ));
+      }
     }
   }
 
@@ -157,7 +188,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
       ));
     } catch (e) {
       emit(state.copyWith(
-        error: '打开文件失败：${e.toString()}',
+        error: '打开文件失败，请稍后重试',
       ));
     }
   }
@@ -185,7 +216,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
     } catch (e) {
       emit(state.copyWith(
         isLoading: false,
-        error: e.toString(),
+        error: '加载文件列表失败，请稍后重试',
       ),);
     }
   }
@@ -212,7 +243,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
         filteredFiles: sortedFiles,
       ),);
     } catch (e) {
-      emit(state.copyWith(error: e.toString()));
+      emit(state.copyWith(error: '删除文件失败，请稍后重试'));
     }
   }
 
@@ -224,6 +255,7 @@ class FileLibraryBloc extends Bloc<FileLibraryEvent, FileLibraryState> {
     emit(state.copyWith(
       sortBy: sortBy,
       filteredFiles: sortedFiles,
+      error: null,
     ));
   }
 
