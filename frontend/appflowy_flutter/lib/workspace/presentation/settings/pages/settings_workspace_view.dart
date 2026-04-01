@@ -660,9 +660,13 @@ class _ThemeDropdown extends StatelessWidget {
                   size: Size.square(20),
                 ),
                 label: LocaleKeys.settings_common_reset.tr(),
-                onPressed: () => context
-                    .read<AppearanceSettingsCubit>()
-                    .setTheme(AppTheme.builtins.first.themeName),
+                onPressed: () {
+                  context.read<AppearanceSettingsCubit>().resetTheme();
+                  showToastNotification(
+                    message: '主题重置成功',
+                    type: ToastificationType.success,
+                  );
+                },
               ),
             ],
             onChanged: (theme) =>
