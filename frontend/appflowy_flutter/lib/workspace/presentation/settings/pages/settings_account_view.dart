@@ -284,12 +284,54 @@ class _AccountQuickActionsSection extends StatelessWidget {
   }
 
   void _showEmailVerificationDialog(BuildContext context) {
+    final settingsBloc = context.read<SettingsDialogBloc>();
+    final latestUserProfile = settingsBloc.state.userProfile;
+
+    final emailAddress = latestUserProfile.email;
+
+    if (emailAddress.isNotEmpty && emailAddress.contains('@')) {
+      // 已有邮箱 → 先身份验证，再换绑
+      final outerContext = context;
+      showDialog(
+        context: context,
+        builder: (dialogContext) =>
+            IdentityVerificationDialog(
+              phoneNumber: latestUserProfile.phone.isNotEmpty
+                  ? latestUserProfile.phone
+                  : '',
+              emailAddress: emailAddress,
+              onVerificationComplete: () => _showEmailBindingDialog(outerContext, isChange: true),
+            ),
+      );
+    } else {
+      // 未绑定邮箱 → 直接进入绑定流程
+      _showEmailBindingDialog(context, isChange: false);
+    }
+  }
+
+  void _showEmailBindingDialog(BuildContext context, {required bool isChange}) {
+    final settingsBloc = context.read<SettingsDialogBloc>();
+
     showDialog(
       context: context,
       builder: (context) =>
           EmailBindingDialog(
-            onBindingComplete: () {
-              showToastNotification(message: '邮箱绑定完成');
+            title: isChange ? '更换邮箱' : '绑定邮箱',
+            onBindingComplete: () async {
+              showToastNotification(message: isChange ? '邮箱更换成功' : '邮箱绑定成功');
+
+              Log.info('📧 开始刷新用户资料...');
+              final result = await UserBackendService.getCurrentUserProfile();
+              result.fold(
+                    (newProfile) {
+                  settingsBloc.add(
+                      SettingsDialogEvent.didReceiveUserProfile(newProfile));
+                  Log.info('✅ 用户资料已刷新');
+                },
+                    (error) {
+                  Log.error('❌ 刷新用户资料失败: ${error.msg}');
+                },
+              );
             },
           ),
     );
@@ -307,7 +349,7 @@ class _AccountQuickActionsSection extends StatelessWidget {
         Validator.isValidPhone(latestUserProfile.email)) {
       phoneNumber = latestUserProfile.email;
     } else {
-      _showPhoneInputDialog(context);
+      _showPhoneInputDialog(context, email: latestUserProfile.email);
       return;
     }
 
@@ -317,12 +359,13 @@ class _AccountQuickActionsSection extends StatelessWidget {
       builder: (dialogContext) =>
           IdentityVerificationDialog(
             phoneNumber: phoneNumber,
+            emailAddress: latestUserProfile.email,
             onVerificationComplete: () => _showPhoneChangeDialog(outerContext),
           ),
     );
   }
 
-  void _showPhoneInputDialog(BuildContext context) {
+  void _showPhoneInputDialog(BuildContext context, {required String email}) {
     final phoneController = TextEditingController();
     showDialog(
       context: context,
@@ -366,6 +409,7 @@ class _AccountQuickActionsSection extends StatelessWidget {
                     builder: (context) =>
                         IdentityVerificationDialog(
                           phoneNumber: phone,
+                          emailAddress: email,
                           onVerificationComplete: () {
                             showToastNotification(message: '手机验证完成');
                           },

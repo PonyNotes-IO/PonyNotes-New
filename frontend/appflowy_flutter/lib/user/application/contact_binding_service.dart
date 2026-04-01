@@ -92,33 +92,33 @@ class ContactBindingService {
     try {
       // 步骤1: 使用验证码登录来验证验证码是否正确
       final verifyResult = await UserBackendService.signInWithPasscode(
-        email, 
+        email,
         verificationCode,
       );
-      
+
       // 检查验证是否成功
       final verifySuccess = verifyResult.fold(
         (_) => true,
         (_) => false,
       );
-      
+
       if (!verifySuccess) {
         return FlowyResult.failure(
           FlowyError.create()
             ..msg = "验证码错误，请检查后重试",
         );
       }
-      
+
       // 步骤2: 验证成功后，更新用户邮箱
       final userProfileResult = await UserBackendService.getCurrentUserProfile();
       final userProfile = userProfileResult.fold(
         (profile) => profile,
         (error) => throw error,
       );
-      
+
       final userService = UserBackendService(userId: userProfile.id);
       final result = await userService.updateUserProfile(email: email);
-      
+
       return result.fold(
         (_) => FlowyResult.success(null),
         (error) => FlowyResult.failure(error),
@@ -127,6 +127,45 @@ class ContactBindingService {
       return FlowyResult.failure(
         FlowyError.create()
           ..msg = "绑定邮箱失败: $e",
+      );
+    }
+  }
+
+  /// 邮箱重认证验证码发送
+  /// 用于在身份验证对话框中切换到邮箱验证方式
+  static Future<FlowyResult<void, FlowyError>> sendEmailReauthenticationCode(
+    String email,
+  ) async {
+    try {
+      final result = await UserBackendService.signInWithMagicLink(email, '');
+      return result.fold(
+        (_) => FlowyResult.success(null),
+        (error) => FlowyResult.failure(error),
+      );
+    } catch (e) {
+      return FlowyResult.failure(
+        FlowyError.create()
+          ..msg = "发送邮箱验证码失败: $e",
+      );
+    }
+  }
+
+  /// 验证邮箱重认证验证码（用于身份验证，不绑定邮箱）
+  /// 通过 signInWithPasscode 验证邮箱 OTP，验证成功即完成身份验证
+  static Future<FlowyResult<void, FlowyError>> verifyEmailReauthentication(
+    String email,
+    String otp,
+  ) async {
+    try {
+      final result = await UserBackendService.signInWithPasscode(email, otp);
+      return result.fold(
+        (_) => FlowyResult.success(null),
+        (error) => FlowyResult.failure(error),
+      );
+    } catch (e) {
+      return FlowyResult.failure(
+        FlowyError.create()
+          ..msg = "验证失败: $e",
       );
     }
   }

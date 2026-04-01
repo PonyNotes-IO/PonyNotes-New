@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:appflowy/user/application/contact_binding_service.dart';
 import 'package:appflowy/util/validator.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/slide_verification_widget.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -11,9 +12,11 @@ class EmailBindingDialog extends StatefulWidget {
   const EmailBindingDialog({
     super.key,
     this.onBindingComplete,
+    this.title = '绑定邮箱',
   });
 
   final VoidCallback? onBindingComplete;
+  final String title;
 
   @override
   State<EmailBindingDialog> createState() => _EmailBindingDialogState();
@@ -24,9 +27,10 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
   final codeController = TextEditingController();
   final emailFocusNode = FocusNode();
   final codeFocusNode = FocusNode();
-  bool _isCodeSent = false;  // 是否已经点击过发送验证码
   bool _isBinding = false;
   bool _isSending = false;
+  bool _isSlideVerified = false;  // 滑块是否已验证（首次发码必须通过）
+  bool _hasRequestedCode = false; // 是否已经请求过验证码
   int _countdown = 0;
   Timer? _timer;
 
@@ -61,7 +65,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 FlowyText(
-                  '绑定邮箱',
+                  widget.title,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: theme.textColorScheme.primary,
@@ -118,7 +122,18 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
             ),
             
             const VSpace(16),
-            
+
+            // 滑块验证组件（首次发码必须先通过）
+            SlideVerificationWidget(
+              onVerificationSuccess: () {
+                setState(() {
+                  _isSlideVerified = true;
+                });
+              },
+            ),
+
+            const VSpace(16),
+
             // 验证码输入框
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,9 +193,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
                                 ),
                               )
                             : FlowyText(
-                                _countdown > 0
-                                    ? '重新获取(${_countdown}s)'
-                                    : (_isCodeSent ? '重新获取' : '获取验证码'),
+                                _getButtonText(),
                                 fontSize: 14,
                               ),
                       ),
@@ -250,15 +263,29 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
   }
 
   bool _canSendCode() {
-    return emailController.text.isNotEmpty && 
-           emailController.text.contains('@') && 
-           _countdown == 0;
+    // 第一次发送：需要邮箱有效 + 滑块已验证 + 没有倒计时
+    // 重新发送：需要邮箱有效 + 没有倒计时（不需要再次验证滑块）
+    return emailController.text.isNotEmpty &&
+           Validator.isValidEmail(emailController.text) &&
+           _countdown == 0 &&
+           (_hasRequestedCode || _isSlideVerified);
+  }
+
+  String _getButtonText() {
+    if (_countdown > 0) {
+      return '重新获取(${_countdown}s)';
+    } else if (_hasRequestedCode) {
+      return '重新获取';
+    } else {
+      return '获取验证码';
+    }
   }
 
   bool _canComplete() {
-    return emailController.text.isNotEmpty && 
-           emailController.text.contains('@') && 
-           codeController.text.length == 6;
+    return emailController.text.isNotEmpty &&
+           Validator.isValidEmail(emailController.text) &&
+           codeController.text.length == 6 &&
+           _hasRequestedCode;  // 必须先发送过验证码才能完成绑定
   }
 
   Future<void> _sendVerificationCode() async {
@@ -283,13 +310,13 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
       (success) {
         if (mounted) {
           setState(() {
-            _isCodeSent = true;
             _countdown = 60;
             _isSending = false;
+            _hasRequestedCode = true;  // 标记已请求过，后续重发不需要再过滑块
           });
-          
+
           _startCountdown();
-          
+
           showToastNotification(message: '验证码已发送到 ${emailController.text}');
         }
       },
