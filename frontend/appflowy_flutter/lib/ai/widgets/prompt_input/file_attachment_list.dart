@@ -10,13 +10,26 @@ import 'package:styled_widget/styled_widget.dart';
 
 import 'layout_define.dart';
 
-class PromptInputFile extends StatelessWidget {
+class PromptInputFile extends StatefulWidget {
   const PromptInputFile({
     super.key,
     required this.onDeleted,
   });
 
   final void Function(ChatFile) onDeleted;
+
+  @override
+  State<PromptInputFile> createState() => _PromptInputFileState();
+}
+
+class _PromptInputFileState extends State<PromptInputFile> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,17 +39,21 @@ class PromptInputFile extends StatelessWidget {
         if (files.isEmpty) {
           return const SizedBox.shrink();
         }
-        return ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: DesktopAIPromptSizes.attachedFilesBarPadding -
-              const EdgeInsets.only(top: 6),
-          separatorBuilder: (context, index) => const HSpace(
-            DesktopAIPromptSizes.attachedFilesPreviewSpacing - 6,
-          ),
-          itemCount: files.length,
-          itemBuilder: (context, index) => ChatFilePreview(
-            file: files[index],
-            onDeleted: () => onDeleted(files[index]),
+        return Scrollbar(
+          controller: _scrollController,
+          child: ListView.separated(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            padding: DesktopAIPromptSizes.attachedFilesBarPadding -
+                const EdgeInsets.only(top: 6),
+            separatorBuilder: (context, index) => const HSpace(
+              DesktopAIPromptSizes.attachedFilesPreviewSpacing - 6,
+            ),
+            itemCount: files.length,
+            itemBuilder: (context, index) => ChatFilePreview(
+              file: files[index],
+              onDeleted: () => widget.onDeleted(files[index]),
+            ),
           ),
         );
       },

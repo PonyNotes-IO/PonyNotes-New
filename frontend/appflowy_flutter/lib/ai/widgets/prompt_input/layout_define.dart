@@ -4,7 +4,7 @@ class DesktopAIPromptSizes {
   const DesktopAIPromptSizes._();
 
   static const attachedFilesBarPadding =
-      EdgeInsets.only(left: 8.0, top: 8.0, right: 8.0);
+      EdgeInsets.only(left: 8.0, top: 8.0, right: 8.0, bottom: 8.0);
   static const attachedFilesPreviewHeight = 48.0;
   static const attachedFilesPreviewSpacing = 12.0;
 

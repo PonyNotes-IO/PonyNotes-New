@@ -253,6 +253,10 @@ where
           // 忽略metadata，只返回答案
           CompletionStreamValue::Answer { value: String::new() }
         },
+        flowy_ai::ai_session_client::AISessionStreamValue::Thinking { value: _ } => {
+          // 忽略思考过程，文档内问AI不展示深度思考
+          CompletionStreamValue::Answer { value: String::new() }
+        },
       })
     });
     
