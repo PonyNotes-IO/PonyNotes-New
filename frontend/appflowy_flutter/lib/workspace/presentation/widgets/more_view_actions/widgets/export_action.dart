@@ -160,7 +160,7 @@ class _ExportActionState extends State<ExportAction> {
       final exporter = DocumentExporter(widget.view);
       final result = await exporter.export(DocumentExportType.markdown);
 
-      result.fold(
+      await result.fold(
         (markdown) async {
           if (markdown.isEmpty) {
             Log.error('导出 Markdown 失败：内容为空');

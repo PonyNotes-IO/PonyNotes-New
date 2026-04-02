@@ -255,7 +255,7 @@ dependency_overrides:
       ref: 93c4977
   # Don't upgrade file_picker until the issue is fixed
   # https://github.com/miguelpruivo/flutter_file_picker/issues/1652
-  file_picker: 8.1.4
+  file_picker: ^10.3.10
 
   auto_updater:
     git:
