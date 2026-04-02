@@ -290,22 +290,42 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
 
   Future<void> _sendVerificationCode() async {
     if (!_canSendCode() || _isSending) return;
-    
+
     // 验证邮箱格式
     if (!Validator.isValidEmail(emailController.text)) {
       showToastNotification(message: '请输入有效的邮箱地址');
       return;
     }
-    
+
     setState(() {
       _isSending = true;
     });
-    
-    // 调用真实的API发送验证码
+
+    // 步骤1: 先检测邮箱是否已被其他账号注册
+    final checkResult = await ContactBindingService.checkEmailRegistered(
+      emailController.text,
+    );
+
+    if (!mounted) return;
+
+    final isRegistered = checkResult.fold(
+      (_) => false,
+      (error) => error.msg.contains('已被其他账号注册'),
+    );
+
+    if (isRegistered) {
+      setState(() {
+        _isSending = false;
+      });
+      showToastNotification(message: '该邮箱已被其他账号注册');
+      return;
+    }
+
+    // 步骤2: 邮箱未注册，发送验证码
     final result = await ContactBindingService.sendEmailVerificationCode(
       emailController.text,
     );
-    
+
     result.fold(
       (success) {
         if (mounted) {
@@ -325,7 +345,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
           setState(() {
             _isSending = false;
           });
-          
+
           showToastNotification(message: '发送失败: ${error.msg}');
         }
       },
