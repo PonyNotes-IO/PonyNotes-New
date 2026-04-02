@@ -11,13 +11,17 @@ import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -176,8 +180,46 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
 
   @override
   Widget get leftBarItem {
-    // Hide the breadcrumb/title bar for document pages
-    return const SizedBox.shrink();
+    return FutureBuilder<List<ViewPB>>(
+      future: ViewBackendService.getViewAncestors(view.id).then((result) => result.fold((s) => s.items, (f) => [])),
+      builder: (context, snapshot) {
+        final ancestors = snapshot.data ?? [];
+        final hasParent = ancestors.length > 2; // workspace + parent + current
+        
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: 16),
+            FlowyIconButton(
+              width: 32,
+              height: 32,
+              tooltipText: hasParent ? '返回上一级' : '返回空间',
+              icon: const FlowySvg(FlowySvgs.back_m),
+              onPressed: () {
+                try {
+                  if (hasParent) {
+                    // Navigate to parent view
+                    final parentView = ancestors[ancestors.length - 2];
+                    final tabsBloc = getIt<TabsBloc>();
+                    tabsBloc.openPlugin(parentView);
+                  } else {
+                    // Navigate to space hub
+                    final tabsBloc = getIt<TabsBloc>();
+                    tabsBloc.add(
+                      TabsEvent.openPlugin(
+                        plugin: makePlugin(pluginType: PluginType.folder),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  Log.error('Failed to navigate back: $e');
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override

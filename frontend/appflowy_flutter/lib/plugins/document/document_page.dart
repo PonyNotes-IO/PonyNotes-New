@@ -317,11 +317,8 @@ class _DocumentPageState extends State<DocumentPage>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0,),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // Back button - only show when not in space hub and not in Space Hub
-          if (!widget.showShareAndFavorite && !widget.isInSpaceHub)
-            _buildBackButton(context),
           // Share and favorite actions - only show in space hub
           if (widget.showShareAndFavorite)
             Row(
@@ -351,63 +348,6 @@ class _DocumentPageState extends State<DocumentPage>
             ),
         ],
       ),
-    );
-  }
-
-  Widget _buildBackButton(BuildContext context) {
-    return FutureBuilder<List<ViewPB>>(
-      future: ViewBackendService.getViewAncestors(widget.view.id).then((result) => result.fold((s) => s.items, (f) => [])),
-      builder: (context, snapshot) {
-        final ancestors = snapshot.data ?? [];
-        final hasParent = ancestors.length > 2; // workspace + parent + current
-        
-        return FlowyIconButton(
-          width: 32,
-          height: 32,
-          tooltipText: hasParent ? '返回上一级' : '返回空间',
-          icon: const FlowySvg(FlowySvgs.back_m),
-          onPressed: () {
-            try {
-              if (hasParent) {
-                // Navigate to parent view
-                final parentView = ancestors[ancestors.length - 2];
-                
-                // Check if we're in Space Hub
-                if (widget.isInSpaceHub) {
-                  // In Space Hub: we need to find the SpaceHubPluginWidgetBuilder
-                  // and update its selected view
-                  try {
-                    // Find the nearest SpaceHubPluginWidgetBuilder
-                    // This is a bit tricky since we don't have direct access
-                    // Instead, we'll use the tabsBloc to open the parent view
-                    // but with a special parameter to indicate it's from Space Hub
-                    final tabsBloc = getIt<TabsBloc>();
-                    tabsBloc.openPlugin(parentView);
-                  } catch (e) {
-                    // Fall back to normal navigation
-                    final tabsBloc = getIt<TabsBloc>();
-                    tabsBloc.openPlugin(parentView);
-                  }
-                } else {
-                  // Not in Space Hub: use normal tabs navigation
-                  final tabsBloc = getIt<TabsBloc>();
-                  tabsBloc.openPlugin(parentView);
-                }
-              } else {
-                // Navigate to space hub
-                final tabsBloc = getIt<TabsBloc>();
-                tabsBloc.add(
-                  TabsEvent.openPlugin(
-                    plugin: makePlugin(pluginType: PluginType.folder),
-                  ),
-                );
-              }
-            } catch (e) {
-              Log.error('Failed to navigate back: $e');
-            }
-          },
-        );
-      },
     );
   }
 
