@@ -1,5 +1,6 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
@@ -11,6 +12,8 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_ic
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pbenum.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -44,6 +47,31 @@ class _SpacePermissionSwitchState extends State<SpacePermissionSwitch> {
   late SpacePermission spacePermission =
       widget.spacePermission ?? SpacePermission.publicToAll;
   final popoverController = PopoverController();
+  bool _isQuickEntryUser = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfQuickEntryUser();
+  }
+
+  Future<void> _checkIfQuickEntryUser() async {
+    try {
+      final userResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userResult.fold(
+        (user) => user,
+        (error) => null,
+      );
+      if (userProfile != null) {
+        setState(() {
+          _isQuickEntryUser = userProfile.userAuthType != AuthTypePB.Server;
+        });
+      }
+    } catch (e) {
+      // 错误处理：默认为非快速用户
+      _isQuickEntryUser = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +119,9 @@ class _SpacePermissionSwitchState extends State<SpacePermissionSwitch> {
             permission: SpacePermission.publicToAll,
             onTap: () => _onPermissionChanged(SpacePermission.publicToAll),
           ),
-          SpacePermissionButton(
+
+          // 快速用户不展示私有空间创建选项
+          if (!_isQuickEntryUser) SpacePermissionButton(
             permission: SpacePermission.private,
             onTap: () => _onPermissionChanged(SpacePermission.private),
           ),
