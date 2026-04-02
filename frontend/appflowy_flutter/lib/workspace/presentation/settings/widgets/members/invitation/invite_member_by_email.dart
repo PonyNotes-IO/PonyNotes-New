@@ -294,7 +294,7 @@ class _InviteMemberByEmailState extends State<InviteMemberByEmail> {
                           itemBuilder: (context, idx) {
                             final user = searchResults[idx];
                             final already =
-                                selectedUsers.any((u) => u.name == user.name);
+                                selectedUsers.any((u) => u.userId == user.userId);
                             return ListTile(
                               leading: CircleAvatar(
                                 child: Text(user.name.isNotEmpty

@@ -165,6 +165,7 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
           initialBlockId: blockId,
           fixedTitle: fixedTitle,
           tabs: tabs,
+          isInSpaceHub: false, // 默认为 false，单独打开时使用
         ),
       ),
     );
@@ -175,12 +176,7 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
 
   @override
   Widget get leftBarItem {
-    // Hide the breadcrumb/title bar for document pages to remove the
-    // return BlocProvider.value(
-    //   value: pageAccessLevelBloc,
-    //   child: ViewTitleBar(key: ValueKey(view.id), view: view),
-    // );
-    // top path area when a note is opened.
+    // Hide the breadcrumb/title bar for document pages
     return const SizedBox.shrink();
   }
 

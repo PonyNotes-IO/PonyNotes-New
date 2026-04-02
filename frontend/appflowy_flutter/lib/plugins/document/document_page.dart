@@ -1,4 +1,5 @@
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.dart';
 import 'package:appflowy/plugins/document/application/document_appearance_cubit.dart';
@@ -18,6 +19,7 @@ import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
+import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
@@ -34,7 +36,7 @@ import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
 import 'package:appflowy/plugins/shared/share/share_button.dart';
-import 'package:flowy_infra_ui/style_widget/text.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 
 import '../../startup/plugin/plugin.dart';
 
@@ -48,6 +50,7 @@ class DocumentPage extends StatefulWidget {
     this.initialBlockId,
     this.fixedTitle,
     this.showShareAndFavorite = false, // 是否显示分享和收藏工具栏，默认不显示（工作区打开时不显示）
+    this.isInSpaceHub = false, // 是否在 Space Hub 中打开
   });
 
   final ViewPB view;
@@ -57,6 +60,7 @@ class DocumentPage extends StatefulWidget {
   final String? fixedTitle;
   final List<PickerTabType> tabs;
   final bool showShareAndFavorite; // 是否显示分享和收藏工具栏
+  final bool isInSpaceHub; // 是否在 Space Hub 中打开
 
   @override
   State<DocumentPage> createState() => _DocumentPageState();
@@ -297,8 +301,8 @@ class _DocumentPageState extends State<DocumentPage>
         editorState: state.editorState!,
         child: Column(
           children: [
-            if (widget.showShareAndFavorite)
-            _buildTopActionsBar(context),
+            // Top bar with back button and actions
+            _buildTopBar(context),
             // the banner only shows on desktop
             if (state.isDeleted && UniversalPlatform.isDesktop)
               buildBanner(context),
@@ -306,6 +310,104 @@ class _DocumentPageState extends State<DocumentPage>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTopBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0,),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Back button - only show when not in space hub and not in Space Hub
+          if (!widget.showShareAndFavorite && !widget.isInSpaceHub)
+            _buildBackButton(context),
+          // Share and favorite actions - only show in space hub
+          if (widget.showShareAndFavorite)
+            Row(
+              children: [
+                if (FeatureFlag.syncDocument.isOn) ...[
+                  DocumentCollaborators(
+                    key: ValueKey('collaborators_${widget.view.id}'),
+                    width: 120,
+                    height: 32,
+                    view: widget.view,
+                  ),
+                  const SizedBox(width: 16),
+                ] else
+                  const SizedBox(width: 8),
+                ViewFavoriteButton(
+                  key: ValueKey('favorite_button_${widget.view.id}'),
+                  view: widget.view,
+                ),
+                const SizedBox(width: 10),
+                ShareButton(
+                  key: ValueKey('share_button_${widget.view.id}'),
+                  view: widget.view,
+                ),
+                const SizedBox(width: 4),
+                MoreViewActions(view: widget.view),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackButton(BuildContext context) {
+    return FutureBuilder<List<ViewPB>>(
+      future: ViewBackendService.getViewAncestors(widget.view.id).then((result) => result.fold((s) => s.items, (f) => [])),
+      builder: (context, snapshot) {
+        final ancestors = snapshot.data ?? [];
+        final hasParent = ancestors.length > 2; // workspace + parent + current
+        
+        return FlowyIconButton(
+          width: 32,
+          height: 32,
+          tooltipText: hasParent ? '返回上一级' : '返回空间',
+          icon: const FlowySvg(FlowySvgs.back_m),
+          onPressed: () {
+            try {
+              if (hasParent) {
+                // Navigate to parent view
+                final parentView = ancestors[ancestors.length - 2];
+                
+                // Check if we're in Space Hub
+                if (widget.isInSpaceHub) {
+                  // In Space Hub: we need to find the SpaceHubPluginWidgetBuilder
+                  // and update its selected view
+                  try {
+                    // Find the nearest SpaceHubPluginWidgetBuilder
+                    // This is a bit tricky since we don't have direct access
+                    // Instead, we'll use the tabsBloc to open the parent view
+                    // but with a special parameter to indicate it's from Space Hub
+                    final tabsBloc = getIt<TabsBloc>();
+                    tabsBloc.openPlugin(parentView);
+                  } catch (e) {
+                    // Fall back to normal navigation
+                    final tabsBloc = getIt<TabsBloc>();
+                    tabsBloc.openPlugin(parentView);
+                  }
+                } else {
+                  // Not in Space Hub: use normal tabs navigation
+                  final tabsBloc = getIt<TabsBloc>();
+                  tabsBloc.openPlugin(parentView);
+                }
+              } else {
+                // Navigate to space hub
+                final tabsBloc = getIt<TabsBloc>();
+                tabsBloc.add(
+                  TabsEvent.openPlugin(
+                    plugin: makePlugin(pluginType: PluginType.folder),
+                  ),
+                );
+              }
+            } catch (e) {
+              Log.error('Failed to navigate back: $e');
+            }
+          },
+        );
+      },
     );
   }
 

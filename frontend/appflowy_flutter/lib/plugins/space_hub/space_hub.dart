@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/plugins/document/document_page.dart';
 import 'package:appflowy/plugins/util.dart';
+import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/recent/cached_recent_service.dart';
@@ -542,6 +544,29 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         userProfile = userWorkspaceBloc.state.userProfile;
       } catch (e) {
         // 静默处理
+      }
+
+      // 为文档、文件夹和笔记本类型的视图添加 isInSpaceHub 参数
+      try {
+        final plugin = view.plugin();
+        if (plugin.pluginType == PluginType.document || 
+            plugin.pluginType == PluginType.folder || 
+            plugin.pluginType == PluginType.notebook) {
+          // 直接创建 DocumentPage 以传递 isInSpaceHub 参数
+          return DocumentPage(
+            key: ValueKey(view.id),
+            view: view,
+            onDeleted: () => _onChildViewDeleted(view, null),
+            tabs: [
+              PickerTabType.emoji,
+              PickerTabType.icon,
+              PickerTabType.custom,
+            ],
+            isInSpaceHub: true, // 在 Space Hub 中打开
+          );
+        }
+      } catch (e) {
+        // 静默处理错误
       }
 
       return plugin.widgetBuilder.buildWidget(

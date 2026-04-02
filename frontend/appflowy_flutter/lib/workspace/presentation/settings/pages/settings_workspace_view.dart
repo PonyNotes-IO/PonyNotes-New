@@ -139,25 +139,25 @@ class SettingsWorkspaceView extends StatelessWidget {
                     currentFont:
                         context.read<AppearanceSettingsCubit>().state.font,
                   ),
-                  SettingsDashedDivider(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                  SettingsCategory(
-                    title: LocaleKeys.settings_workspacePage_textDirection_title
-                        .tr(),
-                    children: const [
-                      TextDirectionSelect(),
-                      EnableRTLItemsSwitcher(),
-                    ],
-                  ),
+                  // SettingsDashedDivider(
+                  //   color: Theme.of(context).colorScheme.outline,
+                  // ),
+                  // SettingsCategory(
+                  //   title: LocaleKeys.settings_workspacePage_textDirection_title
+                  //       .tr(),
+                  //   children: const [
+                  //     TextDirectionSelect(),
+                  //     EnableRTLItemsSwitcher(),
+                  //   ],
+                  // ),
                 ],
               ),
-              const VSpace(16),
-              SettingsCategory(
-                title: LocaleKeys.settings_workspacePage_layoutDirection_title
-                    .tr(),
-                children: const [_LayoutDirectionSelect()],
-              ),
+              // const VSpace(16),
+              // SettingsCategory(
+              //   title: LocaleKeys.settings_workspacePage_layoutDirection_title
+              //       .tr(),
+              //   children: const [_LayoutDirectionSelect()],
+              // ),
               const SettingsCategorySpacer(),
 
               SettingsCategory(
