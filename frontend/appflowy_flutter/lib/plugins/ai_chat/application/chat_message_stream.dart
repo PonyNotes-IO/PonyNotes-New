@@ -31,9 +31,11 @@ class AnswerStream {
   bool _aiImageLimitReached = false;
   String? _error;
   String _text = "";
+  String _thinkingText = "";
 
   // Callbacks
   void Function(String text)? _onData;
+  void Function(String text)? _onThinking;
   void Function()? _onStart;
   void Function()? _onEnd;
   void Function(String error)? _onError;
@@ -53,6 +55,7 @@ class AnswerStream {
   bool get aiImageLimitReached => _aiImageLimitReached;
   String? get error => _error;
   String get text => _text;
+  String get thinkingText => _thinkingText;
 
   /// Releases the resources used by the AnswerStream.
   Future<void> dispose() async {
@@ -68,6 +71,10 @@ class AnswerStream {
       final newText = event.substring(AIStreamEventPrefix.data.length);
       _text += newText;
       _onData?.call(_text);
+    } else if (event.startsWith(AIStreamEventPrefix.thinking)) {
+      final newThinking = event.substring(AIStreamEventPrefix.thinking.length);
+      _thinkingText += newThinking;
+      _onThinking?.call(_thinkingText);
     } else if (event.startsWith(AIStreamEventPrefix.error)) {
       _error = event.substring(AIStreamEventPrefix.error.length);
       _onError?.call(_error!);
@@ -120,6 +127,7 @@ class AnswerStream {
   /// they will be flushed immediately.
   void listen({
     void Function(String text)? onData,
+    void Function(String text)? onThinking,
     void Function()? onStart,
     void Function()? onEnd,
     void Function(String error)? onError,
@@ -131,6 +139,7 @@ class AnswerStream {
     void Function(AIFollowUpData)? onAIFollowUp,
   }) {
     _onData = onData;
+    _onThinking = onThinking;
     _onStart = onStart;
     _onEnd = onEnd;
     _onError = onError;

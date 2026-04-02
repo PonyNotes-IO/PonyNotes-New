@@ -114,6 +114,7 @@ pub async fn collect_stream(stream: StreamAnswer) -> StreamResult {
           sources.push(value);
         },
 
+        QuestionStreamValue::Thinking { .. } => {},
         QuestionStreamValue::SuggestedQuestion {
           context_suggested_questions,
         } => {

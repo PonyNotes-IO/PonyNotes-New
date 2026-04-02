@@ -223,7 +223,7 @@ class _LoadingMessage extends StatelessWidget {
   }
 }
 
-class _NonEmptyMessage extends StatelessWidget {
+class _NonEmptyMessage extends StatefulWidget {
   const _NonEmptyMessage({
     required this.user,
     required this.messageUserId,
@@ -262,35 +262,136 @@ class _NonEmptyMessage extends StatelessWidget {
   final bool enableAnimation;
 
   @override
+  State<_NonEmptyMessage> createState() => _NonEmptyMessageState();
+}
+
+class _NonEmptyMessageState extends State<_NonEmptyMessage> {
+  bool _thinkingExpanded = true;
+
+  @override
   Widget build(BuildContext context) {
     final state = context.read<ChatAIMessageBloc>().state;
-    final showActions = stream == null && state.text.isNotEmpty && !isStreaming;
+    final showActions =
+        widget.stream == null && state.text.isNotEmpty && !widget.isStreaming;
     return ChatAIMessageBubble(
-      message: message,
-      isLastMessage: isLastMessage,
+      message: widget.message,
+      isLastMessage: widget.isLastMessage,
       showActions: showActions,
-      isSelectingMessages: isSelectingMessages,
-      onRegenerate: onRegenerate,
-      onChangeFormat: onChangeFormat,
-      onChangeModel: onChangeModel,
+      isSelectingMessages: widget.isSelectingMessages,
+      onRegenerate: widget.onRegenerate,
+      onChangeFormat: widget.onChangeFormat,
+      onChangeModel: widget.onChangeModel,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (state.thinkingText.isNotEmpty)
+            _ThinkingSection(
+              thinkingText: state.thinkingText,
+              isExpanded: _thinkingExpanded,
+              isStreaming: widget.isStreaming,
+              onToggle: () =>
+                  setState(() => _thinkingExpanded = !_thinkingExpanded),
+            ),
           Padding(
             padding: EdgeInsetsDirectional.only(start: 4.0),
             child: AIMarkdownText(
               markdown: state.text,
-              withAnimation: enableAnimation && stream != null,
+              withAnimation: widget.enableAnimation && widget.stream != null,
             ),
           ),
           if (state.sources.isNotEmpty)
             SelectionContainer.disabled(
               child: AIMessageMetadata(
                 sources: state.sources,
-                onSelectedMetadata: onSelectedMetadata,
+                onSelectedMetadata: widget.onSelectedMetadata,
               ),
             ),
-          if (state.sources.isNotEmpty && !isLastMessage) const VSpace(8.0),
+          if (state.sources.isNotEmpty && !widget.isLastMessage)
+            const VSpace(8.0),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThinkingSection extends StatelessWidget {
+  const _ThinkingSection({
+    required this.thinkingText,
+    required this.isExpanded,
+    required this.isStreaming,
+    required this.onToggle,
+  });
+
+  final String thinkingText;
+  final bool isExpanded;
+  final bool isStreaming;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.1)
+        : Colors.black.withValues(alpha: 0.08);
+    final bgColor = isDark
+        ? Colors.white.withValues(alpha: 0.04)
+        : Colors.black.withValues(alpha: 0.02);
+    final labelColor = theme.colorScheme.onSurface.withValues(alpha: 0.5);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                    color: labelColor,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    isStreaming && isExpanded ? '思考中...' : '思考过程',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: labelColor,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isExpanded)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 4.0),
+              padding: const EdgeInsets.all(10.0),
+              decoration: BoxDecoration(
+                color: bgColor,
+                border: Border.all(color: borderColor),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SelectionArea(
+                child: Text(
+                  thinkingText,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

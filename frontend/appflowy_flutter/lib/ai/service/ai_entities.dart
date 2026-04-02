@@ -14,6 +14,7 @@ part 'ai_entities.g.dart';
 
 class AIStreamEventPrefix {
   static const data = 'data:';
+  static const thinking = 'thinking:';
   static const error = 'error:';
   static const metadata = 'metadata:';
   static const start = 'start:';

@@ -281,6 +281,11 @@ impl Chat {
                       error!("Failed to stream answer via IsolateSink: {}", err);
                     }
                   },
+                  QuestionStreamValue::Thinking { value } => {
+                    let _ = answer_sink
+                      .send(StreamMessage::OnThinking(value).to_string())
+                      .await;
+                  },
                   QuestionStreamValue::Metadata { value } => {
                     if let Ok(s) = serde_json::to_string(&value) {
                       answer_stream_buffer.lock().await.set_metadata(value);

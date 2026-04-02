@@ -8,6 +8,7 @@ use tracing::{error, info, trace};
 
 const STREAM_ANSWER_KEY: &str = "1";
 const STREAM_METADATA_KEY: &str = "0";
+const STREAM_THINKING_KEY: &str = "5";
 
 #[pin_project]
 pub struct AISessionStream {
@@ -30,6 +31,7 @@ impl AISessionStream {
 pub enum AISessionStreamValue {
   Answer { value: String },
   Metadata { value: Value },
+  Thinking { value: String },
 }
 
 impl Stream for AISessionStream {
@@ -54,6 +56,15 @@ impl Stream for AISessionStream {
           {
             trace!("[AISession] 收到答案片段: {}", answer);
             return Poll::Ready(Some(Ok(AISessionStreamValue::Answer { value: answer })));
+          }
+
+          // 检查是否有思考内容 (key = "5")
+          if let Some(thinking) = value
+            .remove(STREAM_THINKING_KEY)
+            .and_then(|s| s.as_str().map(ToString::to_string))
+          {
+            trace!("[AISession] 收到思考片段: {}", thinking);
+            return Poll::Ready(Some(Ok(AISessionStreamValue::Thinking { value: thinking })));
           }
 
           // 无效的流值

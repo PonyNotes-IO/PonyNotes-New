@@ -118,6 +118,10 @@ class ChatAIMessageBloc extends Bloc<ChatAIMessageEvent, ChatAIMessageState> {
       );
     });
 
+    on<_UpdateThinking>((event, emit) {
+      emit(state.copyWith(thinkingText: event.text));
+    });
+
     on<_OnAIFollowUp>((event, emit) {
       emit(
         state.copyWith(
@@ -131,6 +135,7 @@ class ChatAIMessageBloc extends Bloc<ChatAIMessageEvent, ChatAIMessageState> {
     if (state.stream != null) {
       state.stream!.listen(
         onData: (text) => _safeAdd(ChatAIMessageEvent.updateText(text)),
+        onThinking: (text) => _safeAdd(ChatAIMessageEvent.updateThinking(text)),
         onError: (error) =>
             _safeAdd(ChatAIMessageEvent.receiveError(error.toString())),
         onAIResponseLimit: () =>
@@ -188,6 +193,7 @@ class ChatAIMessageEvent with _$ChatAIMessageEvent {
   const factory ChatAIMessageEvent.onAIFollowUp(
     AIFollowUpData followUpData,
   ) = _OnAIFollowUp;
+  const factory ChatAIMessageEvent.updateThinking(String text) = _UpdateThinking;
 }
 
 @freezed
@@ -195,6 +201,7 @@ class ChatAIMessageState with _$ChatAIMessageState {
   const factory ChatAIMessageState({
     AnswerStream? stream,
     required String text,
+    required String thinkingText,
     required MessageState messageState,
     required List<ChatMessageRefSource> sources,
     required AIChatProgress? progress,
@@ -206,6 +213,7 @@ class ChatAIMessageState with _$ChatAIMessageState {
   ) {
     return ChatAIMessageState(
       text: text is String ? text : "",
+      thinkingText: "",
       stream: text is AnswerStream ? text : null,
       messageState: const MessageState.ready(),
       sources: metadata.sources,

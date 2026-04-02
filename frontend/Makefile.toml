@@ -111,6 +111,7 @@ FLUTTER_OUTPUT_DIR = "Release"
 PRODUCT_EXT = "app"
 BUILD_ACTIVE_ARCHS_ONLY = false
 APP_ENVIRONMENT = "production"
+BUILD_ARCHS = "arm64 x86_64"
 
 [env.development-windows-x86]
 TARGET_OS = "windows"

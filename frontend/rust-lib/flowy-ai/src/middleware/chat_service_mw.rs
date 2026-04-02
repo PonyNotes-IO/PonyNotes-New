@@ -357,6 +357,7 @@ impl ChatCloudService for ChatServiceMiddleware {
         result.map(|value| match value {
           AISessionStreamValue::Answer { value } => QuestionStreamValue::Answer { value },
           AISessionStreamValue::Metadata { value } => QuestionStreamValue::Metadata { value },
+          AISessionStreamValue::Thinking { value } => QuestionStreamValue::Thinking { value },
         })
       });
       
