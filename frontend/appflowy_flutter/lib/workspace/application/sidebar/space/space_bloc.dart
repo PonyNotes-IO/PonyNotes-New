@@ -128,7 +128,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
                       await membersRes.fold((members) async {
                         final isOwner = members.items.any((m) =>
                             m.role == AFRolePB.Owner &&
-                            m.email == userProfile.email);
+                            m.uid.toInt() == userProfile.id.toInt());
                         if (!isOwner) {
                           showToastNotification(message: '仅工作空间所有者可以创建团队协作区');
                           shouldProceed = false;
@@ -944,7 +944,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
       final members =
           await service.getWorkspaceMembers(workspaceId).getOrThrow();
       final isOwner = members.items
-          .any((e) => e.role == AFRolePB.Owner && e.email == user.email);
+          .any((e) => e.role == AFRolePB.Owner && e.uid.toInt() == user.id.toInt());
 
       if (members.items.isEmpty) {
         return true;

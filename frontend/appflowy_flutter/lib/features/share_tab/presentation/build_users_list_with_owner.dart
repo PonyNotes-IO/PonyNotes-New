@@ -32,17 +32,18 @@ List<SharedUser> buildUsersListWithOwner({
     role: ShareRole.owner,
     accessLevel: ShareAccessLevel.fullAccess,
     avatarUrl: currentUser.iconUrl.isNotEmpty ? currentUser.iconUrl : null,
+    userId: currentUser.id.toString(),
   );
 
   // 检查当前用户是否已在列表中
   final currentUserInList = users.firstWhereOrNull(
-    (user) => user.email == currentUser.email,
+    (user) => user.userId == currentUser.id.toString(),
   );
 
   if (currentUserInList != null) {
     // 如果当前用户已在列表中，将其替换为拥有者，并放在最前面
     final otherUsers =
-        users.where((user) => user.email != currentUser.email).toList();
+        users.where((user) => user.userId != currentUser.id.toString()).toList();
     return [ownerUser, ...otherUsers];
   } else {
     // 如果当前用户不在列表中，将拥有者放在最前面

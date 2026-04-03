@@ -717,10 +717,7 @@ class _MemberItemState extends State<_MemberItem> {
           flex: 2,
           child: () {
             // 不能修改自己的角色；myRole 无权限时也只显示文本
-            final isSelf = member.uid.toInt() != 0
-                ? member.uid.toInt() == userProfile.id.toInt()
-                : (member.email.isNotEmpty && member.email == userProfile.email) ||
-                    member.name == userProfile.name;
+            final isSelf = member.uid.toInt() != 0 && member.uid.toInt() == userProfile.id.toInt();
             return (!myRole.canUpdate || isSelf)
                 ? FlowyText.regular(
                     member.role.description,
