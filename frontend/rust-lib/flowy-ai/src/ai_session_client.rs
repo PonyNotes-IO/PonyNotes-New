@@ -417,32 +417,44 @@ pub async fn stream_ai_session_with_attachments(
                       }
                       
                       if let Some(delta) = first_choice.get("delta").and_then(|d| d.as_object()) {
-                        // 优先使用 content，如果没有或为空则使用 reasoning_content（豆包模型的思考过程）
+                        // 独立提取 content 和 reasoning_content，分别处理
                         let content = delta.get("content")
                           .and_then(|c| c.as_str())
-                          .filter(|s| !s.is_empty())
-                          .or_else(|| {
-                            delta.get("reasoning_content")
-                              .and_then(|c| c.as_str())
-                              .filter(|s| !s.is_empty())
-                          });
-                        
+                          .filter(|s| !s.is_empty());
+
+                        let reasoning_content = delta.get("reasoning_content")
+                          .and_then(|c| c.as_str())
+                          .filter(|s| !s.is_empty());
+
+                        if content.is_none() && reasoning_content.is_none() {
+                          trace!("[AISession] delta中没有找到content或reasoning_content，跳过");
+                          continue; // 跳过这个chunk，不添加到results
+                        }
+
+                        // 如果有思考内容，作为 STREAM_THINKING_KEY (key="5") 独立输出
+                        if let Some(thinking_text) = reasoning_content {
+                          let mut thinking_obj = serde_json::Map::new();
+                          thinking_obj.insert(STREAM_THINKING_KEY.to_string(), Value::String(thinking_text.to_string()));
+                          trace!("[AISession] 转换思考内容: {:?}", thinking_text);
+                          results.push(Value::Object(thinking_obj));
+                        }
+
+                        // 如果有正常回答内容，作为 STREAM_ANSWER_KEY (key="1") 输出
                         if let Some(content_text) = content {
-                          // 转换为内部格式
                           let mut internal_obj = serde_json::Map::new();
                           internal_obj.insert(STREAM_ANSWER_KEY.to_string(), Value::String(content_text.to_string()));
-                          
+
                           // 如果有metadata，也提取
                           if let Some(metadata) = obj.get("metadata") {
                             internal_obj.insert(STREAM_METADATA_KEY.to_string(), metadata.clone());
                           }
-                          
-                          json = Value::Object(internal_obj);
-                          trace!("[AISession] 转换为内部格式: {:?}", json);
-                        } else {
-                          trace!("[AISession] delta中没有找到content或reasoning_content，跳过");
-                          continue; // 跳过这个chunk，不添加到results
+
+                          trace!("[AISession] 转换为内部格式: {:?}", content_text);
+                          results.push(Value::Object(internal_obj));
                         }
+
+                        // 已经直接push到results，跳过后续的 results.push(json)
+                        continue;
                       }
                     }
                   }
