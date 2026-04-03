@@ -721,12 +721,12 @@ class _SpaceRowState extends State<_SpaceRow> {
 
                                     void toggleSelectUser(SharedUser user) {
                                       final exists = selectedUsers.indexWhere(
-                                              (u) => u.email == user.email) >=
+                                              (u) => u.userId == user.userId) >=
                                           0;
                                       setStateDialog(() {
                                         if (exists) {
                                           selectedUsers.removeWhere(
-                                              (u) => u.email == user.email);
+                                              (u) => u.userId == user.userId);
                                         } else {
                                           selectedUsers.add(user);
                                         }
@@ -803,8 +803,8 @@ class _SpaceRowState extends State<_SpaceRow> {
                                                           selectedUsers
                                                               .removeWhere(
                                                                   (s) =>
-                                                                      s.email ==
-                                                                      u.email);
+                                                                      s.userId ==
+                                                                      u.userId);
                                                         });
                                                       },
                                                     );
@@ -831,8 +831,8 @@ class _SpaceRowState extends State<_SpaceRow> {
                                                       final already =
                                                           selectedUsers.any(
                                                               (u) =>
-                                                                  u.email ==
-                                                                  user.email);
+                                                                  u.userId ==
+                                                                  user.userId);
                                                       return ListTile(
                                                         leading: CircleAvatar(
                                                             child: Text(user
