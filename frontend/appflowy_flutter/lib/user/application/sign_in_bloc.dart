@@ -525,32 +525,16 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       ),
     );
 
-    // 尝试获取现有的用户信息，特别是在 tempUserSave 为 true 的情况下
-    final getUserResult = await authService.getUser();
-    
-    if (getUserResult.isSuccess) {
-      // 如果获取到用户信息，直接使用现有用户
-      Log.info('🔵 [SignInBloc] 快速开始：获取到现有用户信息，直接使用');
-      emit(
-        state.copyWith(
+    final result = await authService.signUpAsGuest();
+    emit(
+      result.fold(
+        (userProfile) => state.copyWith(
           isSubmitting: false,
-          successOrFail: FlowyResult.success(getUserResult.getOrThrow()),
+          successOrFail: FlowyResult.success(userProfile),
         ),
-      );
-    } else {
-      // 如果没有获取到用户信息，创建新的匿名用户
-      Log.info('🔵 [SignInBloc] 快速开始：没有获取到现有用户信息，创建新用户');
-      final result = await authService.signUpAsGuest();
-      emit(
-        result.fold(
-          (userProfile) => state.copyWith(
-            isSubmitting: false,
-            successOrFail: FlowyResult.success(userProfile),
-          ),
-          (error) => _stateFromCode(error),
-        ),
-      );
-    }
+        (error) => _stateFromCode(error),
+      ),
+    );
   }
 
   Future<void> _onForgotPassword(

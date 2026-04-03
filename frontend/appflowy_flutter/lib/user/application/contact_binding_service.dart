@@ -3,7 +3,6 @@ import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
-import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -241,44 +240,76 @@ class ContactBindingService {
   }
 
   /// 验证邮箱并绑定
+  /// 绑定邮箱（验证OTP并同步到 af_user 表）
+  ///
+  /// 流程：调用后端 /api/user/verify-email 接口
+  /// 后端验证 Gotrue OTP 后，同时更新 Gotrue (auth.users) 和业务数据库 (af_user.email)
+  ///
+  /// 注意：之前直接调用 Gotrue PUT /user，导致 af_user.email 未被更新，
+  /// 重新登录后从 af_user 读取的邮箱为空。
   static Future<FlowyResult<void, FlowyError>> bindEmail(
     String email,
     String verificationCode,
   ) async {
     try {
-      // 步骤1: 使用验证码登录来验证验证码是否正确
-      final verifyResult = await UserBackendService.signInWithPasscode(
-        email,
-        verificationCode,
+      // 获取云端配置
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
       );
 
-      // 检查验证是否成功
-      final verifySuccess = verifyResult.fold(
-        (_) => true,
-        (_) => false,
-      );
-
-      if (!verifySuccess) {
-        return FlowyResult.failure(
-          FlowyError.create()
-            ..msg = "验证码错误，请检查后重试",
-        );
-      }
-
-      // 步骤2: 验证成功后，更新用户邮箱
+      // 获取当前用户 Profile（包含 token）
       final userProfileResult = await UserBackendService.getCurrentUserProfile();
       final userProfile = userProfileResult.fold(
         (profile) => profile,
         (error) => throw error,
       );
 
-      final userService = UserBackendService(userId: userProfile.id);
-      final result = await userService.updateUserProfile(email: email);
+      final baseUrl = cloudConfig.serverUrl;
+      final rawToken = _normalizeToken(userProfile.token);
 
-      return result.fold(
-        (_) => FlowyResult.success(null),
-        (error) => FlowyResult.failure(error),
+      if (baseUrl.isEmpty || rawToken.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError.create()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL or auth token',
+        );
+      }
+
+      // 调用后端 /api/user/verify-email 接口
+      // 后端会：1) 验证 Gotrue OTP  2) 更新 af_user.email
+      final uri = Uri.parse('$baseUrl/api/user/verify-email');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $rawToken',
+        },
+        body: jsonEncode({
+          'email': email,
+          'otp': verificationCode,
+        }),
       );
+
+      if (response.statusCode == 200) {
+        return FlowyResult.success(null);
+      } else {
+        String errorMsg = '绑定邮箱失败 (HTTP ${response.statusCode})';
+        if (response.body.isNotEmpty) {
+          try {
+            final json = jsonDecode(response.body) as Map<String, dynamic>;
+            errorMsg = json['msg'] as String? ??
+                       json['message'] as String? ??
+                       errorMsg;
+          } catch (_) {}
+        }
+        return FlowyResult.failure(
+          FlowyError.create()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
     } catch (e) {
       return FlowyResult.failure(
         FlowyError.create()

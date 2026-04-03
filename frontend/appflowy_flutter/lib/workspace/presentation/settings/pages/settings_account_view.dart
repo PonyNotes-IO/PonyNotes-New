@@ -167,6 +167,12 @@ class _AccountQuickActionsSection extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
     final storageUsage = _buildStorageUsageSubtitle();
     final aiUsage = _buildAiUsageSubtitle();
+    final isCloudSignedIn = context
+        .read<SettingsDialogBloc>()
+        .state
+        .userProfile
+        .userAuthType ==
+        AuthTypePB.Server;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,24 +202,26 @@ class _AccountQuickActionsSection extends StatelessWidget {
             showArrow: true,
           ),
         ),
-        GestureDetector(
-          onTap: () => _showPhoneVerificationDialog(context),
-          child: _buildRow(
-            context,
-            title: '绑定手机',
-            trailing: '修改',
-            showArrow: true,
+        if (isCloudSignedIn) ...[
+          GestureDetector(
+            onTap: () => _showPhoneVerificationDialog(context),
+            child: _buildRow(
+              context,
+              title: '绑定手机',
+              trailing: '修改',
+              showArrow: true,
+            ),
           ),
-        ),
-        GestureDetector(
-          onTap: () => _showEmailVerificationDialog(context),
-          child: _buildRow(
-            context,
-            title: '邮箱',
-            trailing: '修改',
-            showArrow: true,
+          GestureDetector(
+            onTap: () => _showEmailVerificationDialog(context),
+            child: _buildRow(
+              context,
+              title: '绑定邮箱',
+              trailing: '修改',
+              showArrow: true,
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
