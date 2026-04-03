@@ -19,6 +19,7 @@ pub fn af_update_from_update_params(update: UpdateUserProfileParams) -> UpdateUs
     email: update.email,
     password: update.password,
     phone: None,
+    email_otp: None,
     metadata: Some(user_metadata),
   }
 }
