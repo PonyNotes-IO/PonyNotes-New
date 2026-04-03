@@ -216,32 +216,34 @@ class _ShareTabState extends State<ShareTab> {
             );
       },
       onRemoveAccess: (user) {
-        final theme = AppFlowyTheme.of(context);
-        final shareTabBloc = context.read<ShareTabBloc>();
-        final removingSelf =
-            user.email == shareTabBloc.state.currentUser?.email;
-        if (removingSelf) {
-          showConfirmDialog(
-            context: context,
-            title: LocaleKeys.shareAction_removeOwnAccess.tr(),
-            titleStyle: theme.textStyle.body.standard(
-              color: theme.textColorScheme.primary,
-            ),
-            description: '',
-            style: ConfirmPopupStyle.cancelAndOk,
-            confirmLabel: LocaleKeys.button_delete.tr(),
-            onConfirm: (_) {
-              shareTabBloc.add(
-                ShareTabEvent.removeCollabMember(user: user),
-              );
-            },
-          );
-        } else {
-          shareTabBloc.add(
-            ShareTabEvent.removeCollabMember(user: user),
-          );
-        }
-      },
+                final theme = AppFlowyTheme.of(context);
+                final shareTabBloc = context.read<ShareTabBloc>();
+                final currentUser = shareTabBloc.state.currentUser;
+                final currentUid = currentUser?.id.toString();
+                final removingSelf =
+                    (currentUid != null && currentUid.isNotEmpty && user.userId == currentUid);
+                if (removingSelf) {
+                  showConfirmDialog(
+                    context: context,
+                    title: LocaleKeys.shareAction_removeOwnAccess.tr(),
+                    titleStyle: theme.textStyle.body.standard(
+                      color: theme.textColorScheme.primary,
+                    ),
+                    description: '',
+                    style: ConfirmPopupStyle.cancelAndOk,
+                    confirmLabel: LocaleKeys.button_delete.tr(),
+                    onConfirm: (_) {
+                      shareTabBloc.add(
+                        ShareTabEvent.removeCollabMember(user: user),
+                      );
+                    },
+                  );
+                } else {
+                  shareTabBloc.add(
+                    ShareTabEvent.removeCollabMember(user: user),
+                  );
+                }
+              },
     );
   }
 
@@ -730,10 +732,7 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                 (user) =>
                     (currentUid != null &&
                         currentUid.isNotEmpty &&
-                        user.userId == currentUid) ||
-                    (currentEmail != null &&
-                        currentEmail.isNotEmpty &&
-                        user.email == currentEmail),
+                        user.userId == currentUid),
               );
         // 兜底：接口返回成员里找不到当前用户时，也要展示列表，避免整块空白。
         // 这里使用最小权限(member + readOnly)作为安全默认值，防止误放权。
@@ -836,10 +835,7 @@ class _CollaboratorsDialogState extends State<_CollaboratorsDialog> {
                                         final removingSelf =
                                             (currentUid != null &&
                                                 currentUid.isNotEmpty &&
-                                                user.userId == currentUid) ||
-                                            (currentEmail != null &&
-                                                currentEmail.isNotEmpty &&
-                                                user.email == currentEmail);
+                                                user.userId == currentUid);
                                         if (removingSelf) {
                                           showConfirmDialog(
                                             context: context,

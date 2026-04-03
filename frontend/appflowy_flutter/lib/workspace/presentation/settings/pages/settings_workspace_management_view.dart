@@ -357,8 +357,8 @@ class _SpaceRowState extends State<_SpaceRow> {
         final res = await userService.getTeamACL(widget.space.id);
         if (!mounted) return;
         res.fold((acl) {
-          final allowed = acl.allowEmails.contains(widget.userProfile.email) ||
-              acl.allowUserIds.contains(widget.userProfile.id.toInt());
+          final allowed = acl.allowUserIds.contains(widget.userProfile.id) ||
+              acl.allowEmails.contains(widget.userProfile.email);
           setState(() {
             _isVisible = allowed;
           });
