@@ -63,6 +63,7 @@ impl UserCloudService for LocalServerUserServiceImpl {
       is_new_user: true,
       // Anon user doesn't have email
       email: None,
+      phone: None,
       token: None,
       encryption_type: EncryptionType::NoEncryption,
       updated_at: timestamp(),
@@ -84,6 +85,7 @@ impl UserCloudService for LocalServerUserServiceImpl {
       user_workspaces: vec![user_workspace],
       is_new_user: false,
       email: Some(params.email),
+      phone: None,
       token: None,
       encryption_type: EncryptionType::NoEncryption,
       updated_at: timestamp(),

@@ -245,43 +245,34 @@ class AppFlowyCloudDeepLink {
                   // 从 URI 中提取 access_token
                   final accessToken = _extractAccessTokenFromUri(uri);
                   if (accessToken != null) {
-                    // 从 userProfile 中提取手机号或邮箱
-                    // 优先使用 phone 字段，如果为空则使用 email 字段
-                    var hasPhone = userProfile.hasPhone() && userProfile.phone.isNotEmpty;
-                    var phoneOrEmail = hasPhone ? userProfile.phone : userProfile.email;
+                    // 从 userProfile 提取手机号或邮箱；再与 JWT 对齐。
+                    // 绑定邮箱后 profile 可能只有 email、phone 仍为空，但手机号登录的 JWT
+                    // 里会有 phone。若仅用 profile 会误判为「邮箱未设密码」并打开设置密码页。
+                    Map<String, dynamic>? jwtClaims;
+                    try {
+                      jwtClaims = _decodeJwtPayloadMap(accessToken);
+                    } catch (_) {
+                      jwtClaims = null;
+                    }
+
+                    var hasPhone =
+                        userProfile.hasPhone() && userProfile.phone.isNotEmpty;
+                    var phoneOrEmail =
+                        hasPhone ? userProfile.phone : userProfile.email;
                     var isEmail = !hasPhone;
-                    
-                    // 如果 phone 和 email 都为空，尝试从 token 中提取手机号
-                    if (phoneOrEmail.isEmpty) {
-                      try {
-                        // 尝试从 JWT token 中提取手机号（token 格式：header.payload.signature）
-                        final parts = accessToken.split('.');
-                        if (parts.length >= 2) {
-                          // 解码 payload（base64url）
-                          final payload = parts[1];
-                          // 补齐 padding
-                          final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
-                          final padding = (4 - normalized.length % 4) % 4;
-                          final padded = normalized + ('=' * padding);
-                          
-                          try {
-                            final decoded = base64Decode(padded);
-                            final jsonString = utf8.decode(decoded);
-                            final json = jsonDecode(jsonString) as Map<String, dynamic>;
-                            
-                            // 从 token 中提取手机号
-                            final tokenPhone = json['phone'] as String?;
-                            if (tokenPhone != null && tokenPhone.isNotEmpty) {
-                              phoneOrEmail = tokenPhone;
-                              hasPhone = true;
-                              isEmail = false;
-                            }
-                          } catch (e) {
-                            // 无法从 token 中提取手机号，忽略
-                          }
-                        }
-                      } catch (e) {
-                        // 解析 token 失败，忽略
+
+                    final tokenPhone = _nonEmptyStringClaim(jwtClaims, 'phone');
+                    if (tokenPhone != null) {
+                      hasPhone = true;
+                      phoneOrEmail = tokenPhone;
+                      isEmail = false;
+                    } else if (phoneOrEmail.isEmpty) {
+                      final tokenEmail =
+                          _nonEmptyStringClaim(jwtClaims, 'email');
+                      if (tokenEmail != null) {
+                        phoneOrEmail = tokenEmail;
+                        hasPhone = false;
+                        isEmail = true;
                       }
                     }
                     
@@ -540,6 +531,27 @@ bool _needBindPhone(String? phone) {
   if (phone.isEmpty) return false;
   // 只有临时手机号（第三方登录）才需要绑定
   return phone.startsWith('+86temp');
+}
+
+/// 解码 JWT payload（不校验签名，仅用于读取公开声明）。
+Map<String, dynamic>? _decodeJwtPayloadMap(String accessToken) {
+  final parts = accessToken.split('.');
+  if (parts.length < 2) return null;
+  final payload = parts[1];
+  final normalized = payload.replaceAll('-', '+').replaceAll('_', '/');
+  final padding = (4 - normalized.length % 4) % 4;
+  final padded = normalized + ('=' * padding);
+  final decoded = base64Decode(padded);
+  final jsonString = utf8.decode(decoded);
+  return jsonDecode(jsonString) as Map<String, dynamic>?;
+}
+
+String? _nonEmptyStringClaim(Map<String, dynamic>? claims, String key) {
+  if (claims == null) return null;
+  final v = claims[key];
+  if (v is! String) return null;
+  final t = v.trim();
+  return t.isEmpty ? null : t;
 }
 
 

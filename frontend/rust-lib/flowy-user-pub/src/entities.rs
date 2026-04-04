@@ -21,6 +21,7 @@ pub trait UserAuthResponse {
   fn user_workspaces(&self) -> &[UserWorkspace];
   fn user_token(&self) -> Option<String>;
   fn user_email(&self) -> Option<String>;
+  fn user_phone(&self) -> Option<String>;
   fn encryption_type(&self) -> EncryptionType;
   fn metadata(&self) -> &Option<serde_json::Value>;
   fn updated_at(&self) -> i64;
@@ -52,6 +53,7 @@ pub struct AuthResponse {
   pub user_workspaces: Vec<UserWorkspace>,
   pub is_new_user: bool,
   pub email: Option<String>,
+  pub phone: Option<String>,
   pub token: Option<String>,
   pub encryption_type: EncryptionType,
   pub updated_at: i64,
@@ -85,6 +87,10 @@ impl UserAuthResponse for AuthResponse {
 
   fn user_email(&self) -> Option<String> {
     self.email.clone()
+  }
+
+  fn user_phone(&self) -> Option<String> {
+    self.phone.clone()
   }
 
   fn encryption_type(&self) -> EncryptionType {
@@ -216,7 +222,7 @@ where
       name: value.user_name().to_owned(),
       token: value.user_token().unwrap_or_default(),
       icon_url,
-      phone: None,
+      phone: value.user_phone(),
       auth_type: *auth_type,
       workspace_type,
       updated_at: value.updated_at(),

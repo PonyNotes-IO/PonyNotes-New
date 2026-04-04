@@ -691,6 +691,7 @@ pub async fn user_sign_in_with_url(
     latest_workspace,
     user_workspaces,
     email: user_profile.email,
+    phone: user_profile.phone,
     token: Some(client.get_token_str()?),
     encryption_type,
     is_new_user,
