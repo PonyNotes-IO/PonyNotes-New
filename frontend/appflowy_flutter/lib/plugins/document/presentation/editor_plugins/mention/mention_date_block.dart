@@ -340,13 +340,15 @@ class _MentionDateBlockState extends State<MentionDateBlock> {
               objectId: viewId,
               title: LocaleKeys.reminderNotification_title.tr(),
               message: LocaleKeys.reminderNotification_message.tr(),
-              meta: {
-                ReminderMetaKeys.includeTime: false.toString(),
-                ReminderMetaKeys.blockId: widget.node.id,
-                ReminderMetaKeys.createdAt:
-                    DateTime.now().millisecondsSinceEpoch.toString(),
-                ReminderMetaKeys.notificationType: 'reminder',
-              },
+              meta: <MapEntry<String, String>>[
+                MapEntry(ReminderMetaKeys.includeTime, false.toString()),
+                MapEntry(ReminderMetaKeys.blockId, widget.node.id),
+                MapEntry(
+                  ReminderMetaKeys.createdAt,
+                  DateTime.now().millisecondsSinceEpoch.toString(),
+                ),
+                MapEntry(ReminderMetaKeys.notificationType, 'reminder'),
+              ],
               scheduledAt: Int64(parsedDate!.millisecondsSinceEpoch ~/ 1000),
               isAck: parsedDate!.isBefore(DateTime.now()),
             ),

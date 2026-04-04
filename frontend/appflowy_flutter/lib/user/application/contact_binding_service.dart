@@ -293,6 +293,24 @@ class ContactBindingService {
       );
 
       if (response.statusCode == 200) {
+        // 即使状态码是 200，也要检查响应体中是否有错误
+        // 因为 AppError 的 ResponseError impl 总是返回 HTTP 200
+        try {
+          final json = jsonDecode(response.body) as Map<String, dynamic>;
+          // 检查是否有错误结构：code != 0 或有 error 字段
+          if ((json.containsKey('code') && json['code'] != 0) ||
+              json.containsKey('error')) {
+            final errorMsg = json['message'] as String? ??
+                             json['msg'] as String? ??
+                             json['error'] as String? ??
+                             '绑定邮箱失败';
+            return FlowyResult.failure(
+              FlowyError.create()
+                ..code = ErrorCode.Internal
+                ..msg = errorMsg,
+            );
+          }
+        } catch (_) {}
         return FlowyResult.success(null);
       } else {
         String errorMsg = '绑定邮箱失败 (HTTP ${response.statusCode})';
