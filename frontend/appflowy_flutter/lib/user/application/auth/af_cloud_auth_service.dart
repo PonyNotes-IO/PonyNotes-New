@@ -233,6 +233,25 @@ class AppFlowyCloudAuthService implements AuthService {
       );
     }
   }
+
+  @override
+  Future<void> updateAuthToken({
+    required String accessToken,
+    required String refreshToken,
+  }) async {
+    // Store the new refresh token locally
+    await _storeRefreshToken(refreshToken);
+
+    // Build the GotrueTokenResponsePB
+    final gotrueTokenResponse = GotrueTokenResponsePB.create()
+      ..accessToken = accessToken
+      ..refreshToken = refreshToken
+      ..tokenType = 'bearer'
+      ..expiresIn = Int64(3600);
+
+    // Pass tokens to deep link handler to update the session
+    getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(gotrueTokenResponse);
+  }
 }
 
 extension ProviderTypePBExtension on ProviderTypePB {

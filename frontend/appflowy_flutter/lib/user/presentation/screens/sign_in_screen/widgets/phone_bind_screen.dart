@@ -45,6 +45,7 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
   bool _isSending = false;
   bool _isBinding = false;
   bool _hasRequestedCode = false;
+  bool _phoneIsRegistered = false; // 手机号是否已被注册
   int _countdown = 0;
   Timer? _timer;
 
@@ -77,10 +78,6 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
               VSpace(spacing),
               BackToLoginButton(
                 onTap: () async {
-                  // 无论是从登录页还是从应用内部进入的绑定流程，都使用相同的处理方式：
-                  // 1. 退出登录
-                  // 2. 重启 AppFlowy，回到登录入口
-                  // 这样可以确保完全清除登录状态，不会进入主界面
                   try {
                     await getIt<AuthService>().signOut();
                   } catch (e, stack) {
@@ -89,8 +86,6 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
                       stack,
                     );
                   }
-
-                  // 使用 runAppFlowy 重启应用，确保不会停留在主界面
                   await runAppFlowy();
                 },
               ),
@@ -120,7 +115,7 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
   Widget _buildCodeField() {
     final theme = AppFlowyTheme.of(context);
     final canResend = _canResendCode() && !_isSending;
-    
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -131,7 +126,6 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
             hintText: '请输入6位验证码',
             keyboardType: TextInputType.number,
             onChanged: (value) {
-              // 手动限制长度为 6，不显示字数提示
               if (value.length > 6) {
                 _codeController.value = TextEditingValue(
                   text: value.substring(0, 6),
@@ -151,7 +145,7 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
             disabled: !canResend,
             padding: EdgeInsets.symmetric(
               horizontal: theme.spacing.xl,
-              vertical: 10.0, // 与输入框的 vertical padding 一致
+              vertical: 10.0,
             ),
             backgroundColor: (context, isHovering, disabled) {
               if (disabled) {
@@ -197,22 +191,46 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
       _toast('手机号格式不正确');
       return;
     }
-    // 确保手机号格式为 E.164 格式（+86开头）
-    final e164Phone = cleanPhone.startsWith('+86') ? cleanPhone : '+86$cleanPhone';
+    final e164Phone =
+        cleanPhone.startsWith('+86') ? cleanPhone : '+86$cleanPhone';
     setState(() {
       _isSending = true;
+      _phoneIsRegistered = false;
     });
-    final result =
-        await ContactBindingService.sendPhoneVerificationCode(e164Phone);
+
+    // 从 SignInBloc 获取 pendingToken（OAuth pending 流程）
+    final pendingToken = _getPendingTokenFromBloc();
+    final result = await UserBackendService.sendPhoneBindCode(
+      e164Phone,
+      pendingToken: pendingToken,
+    );
     if (!mounted) return;
     result.fold(
-      (_) {
+      (res) {
         setState(() {
           _isSending = false;
-          _hasRequestedCode = true;
-          _countdown = 60;
         });
-        _startCountdown();
+        if (res.isOwnPhone) {
+          _toast('该手机号已绑定当前账号');
+          return;
+        }
+        if (res.phoneExists && res.codeSent) {
+          // 手机号已注册，OTP 已发到该手机，用户需确认是否绑定
+          setState(() {
+            _hasRequestedCode = true;
+            _phoneIsRegistered = true;
+            _countdown = 60;
+          });
+          _startCountdown();
+          _showExistingPhoneConfirmDialog(e164Phone);
+        } else if (res.codeSent) {
+          // 正常发送验证码
+          setState(() {
+            _hasRequestedCode = true;
+            _countdown = 60;
+          });
+          _startCountdown();
+        }
       },
       (error) {
         setState(() {
@@ -220,6 +238,41 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
         });
         _toast('发送失败: ${error.msg}');
       },
+    );
+  }
+
+  void _showExistingPhoneConfirmDialog(String phone) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('手机号已注册'),
+        content: const Text(
+          '该手机号已关联其他账号。绑定后，微信/抖音登录将可以使用该手机号登录，同时保留原有账号的所有数据。\n\n是否继续绑定？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              // 用户取消绑定，清除验证码状态
+              setState(() {
+                _phoneIsRegistered = false;
+                _hasRequestedCode = false;
+                _codeController.clear();
+              });
+            },
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              // 用户确认绑定，提示输入验证码
+              _toast('请输入发送到 $phone 的验证码完成绑定');
+            },
+            child: const Text('确认绑定'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -234,6 +287,22 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
     });
   }
 
+  String? _getPendingTokenFromBloc() {
+    try {
+      final bloc = context.read<SignInBloc>();
+      final state = bloc.state;
+      // pendingToken 存在于 SignInState 中
+      final dynamic dynState = state;
+      if (dynState is SignInState) {
+        return dynState.pendingToken;
+      }
+      // 兜底：直接从 bloc 内部状态读取
+      return (bloc.state as dynamic).pendingToken as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _bindPhone() async {
     final cleanPhone = Validator.cleanPhoneNumber(_phoneController.text);
     if (!Validator.isValidPhone(cleanPhone)) {
@@ -244,53 +313,50 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
       _toast('请输入6位验证码');
       return;
     }
-    // 确保手机号格式为 E.164 格式（+86开头），与发送验证码时保持一致
-    final e164Phone = cleanPhone.startsWith('+86') ? cleanPhone : '+86$cleanPhone';
+    final e164Phone =
+        cleanPhone.startsWith('+86') ? cleanPhone : '+86$cleanPhone';
+
+    // 从 SignInBloc 获取 pendingToken
+    final pendingToken = _getPendingTokenFromBloc();
+    if (pendingToken == null || pendingToken.isEmpty) {
+      _toast('登录状态已过期，请重新登录');
+      return;
+    }
+
     setState(() {
       _isBinding = true;
     });
+
+    // 绑定时传入 merge=true，让后端知道这是绑定到已注册手机号
     final result = await ContactBindingService.bindPhoneNumber(
       e164Phone,
       _codeController.text,
+      pendingToken: pendingToken,
+      merge: _phoneIsRegistered,
     );
     if (!mounted) return;
     setState(() {
       _isBinding = false;
     });
     result.fold(
-      (_) async {
-        // 绑定成功后，等待一小段时间确保后端数据已更新
+      (res) async {
+        // 无论是绑定到新手机号还是已注册手机号，confirmPhoneBind 都会返回 access_token
+        // 因为新的 pending_token 流程下，新用户也是在 confirm 时才创建的
+        if (res.accessToken != null && res.refreshToken != null) {
+          await _updateAuthToken(
+            res.accessToken!,
+            res.refreshToken!,
+            res.userId,
+          );
+        }
+        if (res.bindToExisting) {
+          _toast('绑定成功，现在可以使用该手机号登录');
+        } else {
+          _toast('注册成功');
+        }
         await Future.delayed(const Duration(milliseconds: 500));
         if (!mounted) return;
-        
-        // 刷新用户信息
-        final profileResult = await UserBackendService.getCurrentUserProfile();
-        // 再次检查 mounted，因为异步操作可能已经导致 widget 被销毁
-        if (!mounted) return;
-        profileResult.fold(
-          (profile) {
-            // 验证手机号是否已成功更新（不再是临时手机号）
-            final phone = profile.phone;
-            if (phone != null && phone.isNotEmpty && phone.startsWith('+86temp')) {
-              // 手机号仍然是临时手机号，绑定可能失败
-              if (mounted) {
-                _toast('绑定失败，请重试');
-              }
-              return;
-            }
-            
-            // 直接返回 profile，让 desktop_sign_in_screen 处理导航
-            // 不在这里触发 phoneBindingComplete 事件，避免重复导航
-            if (mounted) {
-              Navigator.of(context).pop(profile);
-            }
-          },
-          (error) {
-            if (mounted) {
-              _toast('获取用户信息失败: ${error.msg}');
-            }
-          },
-        );
+        Navigator.of(context).pop();
       },
       (error) {
         if (mounted) {
@@ -298,6 +364,24 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
         }
       },
     );
+  }
+
+  Future<void> _updateAuthToken(
+    String accessToken,
+    String refreshToken,
+    String? userId,
+  ) async {
+    try {
+      await getIt<AuthService>().updateAuthToken(
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+      );
+      Log.info(
+        '[PhoneBindScreen] Auth token updated for existing user: $userId',
+      );
+    } catch (e) {
+      Log.error('[PhoneBindScreen] Failed to update auth token: $e');
+    }
   }
 
   void _toast(String msg) {

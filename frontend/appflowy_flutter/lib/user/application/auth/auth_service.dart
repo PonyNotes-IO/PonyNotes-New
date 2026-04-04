@@ -99,4 +99,13 @@ abstract class AuthService {
   ///
   /// Returns [GotrueTokenResponsePB] with new tokens, otherwise returns [FlowyError].
   Future<FlowyResult<GotrueTokenResponsePB, FlowyError>> refreshToken();
+
+  /// Updates the local auth tokens (access token and refresh token).
+  ///
+  /// This is used after binding OAuth identity to an existing phone account,
+  /// where the backend issues new tokens for the existing user.
+  Future<void> updateAuthToken({
+    required String accessToken,
+    required String refreshToken,
+  });
 }

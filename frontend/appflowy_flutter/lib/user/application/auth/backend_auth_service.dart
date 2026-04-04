@@ -125,4 +125,12 @@ class BackendAuthService implements AuthService {
         ..msg = "Refresh token not supported in backend auth service",
     );
   }
+
+  @override
+  Future<void> updateAuthToken({
+    required String accessToken,
+    required String refreshToken,
+  }) async {
+    // BackendAuthService doesn't need to handle token updates.
+  }
 }

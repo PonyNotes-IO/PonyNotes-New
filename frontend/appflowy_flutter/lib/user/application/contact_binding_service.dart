@@ -206,29 +206,37 @@ class ContactBindingService {
   }
 
   /// 验证手机号并绑定
-  /// 
-  /// 调用云端 API /api/user/verify-phone 来验证验证码并绑定手机号
-  static Future<FlowyResult<void, FlowyError>> bindPhoneNumber(
+  ///
+  /// 调用云端 API /api/user/confirm-phone-bind 来验证验证码并绑定手机号
+  ///
+  /// [pendingToken] 可选，若提供则走 OAuth pending 流程（无需登录态）
+  ///   - merge=false：绑定到新手机号
+  ///   - merge=true：绑定到已注册手机号（OAuth identity 迁移到已注册用户）
+  ///
+  /// 若不提供 pendingToken，则走已登录用户换绑手机号流程（需要登录态）
+  static Future<FlowyResult<PhoneBindConfirmResult, FlowyError>> bindPhoneNumber(
     String phoneNumber,
-    String verificationCode,
-  ) async {
+    String verificationCode, {
+    String? pendingToken,
+    bool merge = false,
+  }) async {
     try {
-      // 验证验证码格式
       if (verificationCode.length != 6) {
         return FlowyResult.failure(
           FlowyError.create()
             ..msg = "请输入6位验证码",
         );
       }
-      
-      // 调用新的 API 端点验证验证码并绑定手机号
-      final result = await UserBackendService.verifyAndBindPhone(
-        phoneNumber,
-        verificationCode,
+
+      final result = await UserBackendService.confirmPhoneBind(
+        phone: phoneNumber,
+        token: verificationCode,
+        pendingToken: pendingToken,
+        merge: merge,
       );
-      
+
       return result.fold(
-        (_) => FlowyResult.success(null),
+        (r) => FlowyResult.success(r),
         (error) => FlowyResult.failure(error),
       );
     } catch (e) {

@@ -123,6 +123,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             emit(
               state.copyWith(
                 requiresPhoneBinding: false,
+                pendingToken: null,
               ),
             );
           },
@@ -770,7 +771,19 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     emit(
       loginResult.fold(
         (tokenMap) {
-          // 将 JSON map 转换为 GotrueTokenResponsePB
+          // 检测是否为 pending_token 响应（OAuth 新用户需要绑定手机号）
+          final pendingToken = tokenMap['pending_token'] as String?;
+          if (pendingToken != null && pendingToken.isNotEmpty) {
+            // OAuth identity not found, user needs phone binding
+            Log.info('[SignInBloc] WeChat OAuth pending, requires phone binding. pending_token: ${pendingToken.substring(0, pendingToken.length > 8 ? 8 : pendingToken.length)}...');
+            return state.copyWith(
+              isSubmitting: false,
+              requiresPhoneBinding: true,
+              pendingToken: pendingToken,
+            );
+          }
+
+          // 正常 OAuth 登录成功（有 access_token）
           try {
             final gotrueTokenResponse = GotrueTokenResponsePB.create()
               ..accessToken = tokenMap['access_token'] as String? ?? ''
@@ -785,7 +798,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
               gotrueTokenResponse,
             );
-            // Try to pull server-side user profile so listeners/blocs receive update quickly.
             unawaited(
               UserEventGetUserProfile().send().then((profileResult) {
                 profileResult.fold(
@@ -801,17 +813,10 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
               })
             );
 
-            // 判定是否需要绑定手机号
-            String phone = '';
-            final userMap = tokenMap['user'];
-            if (userMap is Map<String, dynamic>) {
-              phone = (userMap['phone'] as String?) ?? '';
-            }
-            final requiresPhoneBinding = phone.isEmpty;
-
             return state.copyWith(
               isSubmitting: false,
-              requiresPhoneBinding: requiresPhoneBinding,
+              requiresPhoneBinding: false,
+              pendingToken: null,
             );
           } catch (e) {
             Log.error('🟢[SignInBloc] Failed to parse token response: $e');
@@ -883,7 +888,18 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     emit(
       loginResult.fold(
         (tokenMap) {
-          // 将 JSON map 转换为 GotrueTokenResponsePB
+          // 检测是否为 pending_token 响应（OAuth 新用户需要绑定手机号）
+          final pendingToken = tokenMap['pending_token'] as String?;
+          if (pendingToken != null && pendingToken.isNotEmpty) {
+            Log.info('[SignInBloc] DouYin OAuth pending, requires phone binding. pending_token: ${pendingToken.substring(0, pendingToken.length > 8 ? 8 : pendingToken.length)}...');
+            return state.copyWith(
+              isSubmitting: false,
+              requiresPhoneBinding: true,
+              pendingToken: pendingToken,
+            );
+          }
+
+          // 正常 OAuth 登录成功（有 access_token）
           try {
             final gotrueTokenResponse = GotrueTokenResponsePB.create()
               ..accessToken = tokenMap['access_token'] as String? ?? ''
@@ -897,7 +913,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
               gotrueTokenResponse,
             );
-            // Try to pull server-side user profile so listeners/blocs receive update quickly.
             unawaited(
               UserEventGetUserProfile().send().then((profileResult) {
                 profileResult.fold(
@@ -913,17 +928,10 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
               })
             );
 
-            // 判定是否需要绑定手机号
-            String phone = '';
-            final userMap = tokenMap['user'];
-            if (userMap is Map<String, dynamic>) {
-              phone = (userMap['phone'] as String?) ?? '';
-            }
-            final requiresPhoneBinding = phone.isEmpty;
-
             return state.copyWith(
               isSubmitting: false,
-              requiresPhoneBinding: requiresPhoneBinding,
+              requiresPhoneBinding: false,
+              pendingToken: null,
             );
           } catch (e) {
             Log.error('🟢[SignInBloc] Failed to parse token response: $e');
@@ -1086,6 +1094,8 @@ class SignInState with _$SignInState {
     @Default(LoginType.signIn) LoginType loginType,
     bool? passwordIsSet,
     @Default(false) bool requiresPhoneBinding,
+    /// OAuth pending token（来自 ThirdPartyGrant），用于后续手机绑定流程
+    String? pendingToken,
   }) = _SignInState;
 
   factory SignInState.initial() => const SignInState(
@@ -1098,5 +1108,6 @@ class SignInState with _$SignInState {
         resetPasswordSuccessOrFail: null,
         passwordIsSet: null,
         requiresPhoneBinding: false,
+        pendingToken: null,
       );
 }
