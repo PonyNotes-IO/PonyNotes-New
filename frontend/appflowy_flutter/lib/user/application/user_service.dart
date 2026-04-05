@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -81,6 +83,39 @@ class CollabMember {
 
 const _baseBetaUrl = 'https://beta.appflowy.com';
 const _baseProdUrl = 'https://appflowy.com';
+
+/// Derives the Gotrue base URL from the Cloud server URL.
+/// If the server URL is a xiaomabiji.com domain, returns the standalone Gotrue URL;
+/// otherwise appends '/gotrue' to the server URL.
+String _gotrueBaseUrl(String serverUrl) {
+  if (serverUrl.contains('xiaomabiji.com')) {
+    return 'https://gotrue.xiaomabiji.com';
+  }
+  final uri = Uri.parse(serverUrl);
+  return '${uri.scheme}://${uri.host}/gotrue';
+}
+
+/// OAuth pending（未登录）时不能调用 [UserEventGetCloudConfig]（Rust 侧依赖会话）。
+/// 从应用内置/环境里的 [AppFlowyCloudConfiguration] 解析 Gotrue 根 URL（无末尾 `/`）。
+String _gotrueRootUrlForOAuthPending() {
+  try {
+    final cfg = getIt<AppFlowyCloudSharedEnv>().appflowyCloudConfig;
+    final g = cfg.gotrue_url.trim();
+    if (g.isNotEmpty) {
+      return g.replaceAll(RegExp(r'/+$'), '');
+    }
+    final b = cfg.base_url.trim();
+    if (b.isNotEmpty) {
+      return _gotrueBaseUrl(b);
+    }
+  } catch (e, st) {
+    Log.error(
+      '[UserBackendService] _gotrueRootUrlForOAuthPending: $e',
+      st,
+    );
+  }
+  return '';
+}
 
 class UserBackendService implements IUserBackendService {
   UserBackendService({required this.userId});
@@ -365,7 +400,7 @@ class UserBackendService implements IUserBackendService {
   }
 
   /// 发送手机号绑定验证码（含手机号已注册检测）
-  /// POST /api/user/send-phone-bind-code
+  /// OAuth pending：直连 Gotrue 根路径 POST /send-phone-bind-code（无 /api 前缀）
   /// [pendingToken] 可选，若提供则无需用户登录态（OAuth pending 流程）
   /// 返回 PhoneBindSendResult：
   ///   - codeSent=true：验证码已发送，可进入输入验证码页面
@@ -374,35 +409,41 @@ class UserBackendService implements IUserBackendService {
   static Future<FlowyResult<PhoneBindSendResult, FlowyError>>
       sendPhoneBindCode(String phone, {String? pendingToken}) async {
     try {
-      final cloudConfigResult = await UserEventGetCloudConfig().send();
-      final cloudConfig = cloudConfigResult.fold(
-        (config) => config,
-        (error) => throw error,
-      );
-
-      final baseUrl = cloudConfig.serverUrl;
-
-      if (baseUrl.isEmpty) {
-        return FlowyResult.failure(
-          FlowyError()
-            ..code = ErrorCode.Internal
-            ..msg = 'Missing server URL',
-        );
-      }
-
-      // 若提供了 pendingToken，则无需用户登录态（OAuth pending 流程）
+      // OAuth pending 流程：发到 Gotrue；须先解析 URL，不能走 GetCloudConfig（无会话会失败）
       if (pendingToken != null && pendingToken.isNotEmpty) {
-        final uri = Uri.parse('$baseUrl/api/user/send-phone-bind-code');
-        final response = await http.post(
-          uri,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'phone': phone,
-            'pending_token': pendingToken,
-          }),
-        );
+        final gotrueRoot = _gotrueRootUrlForOAuthPending();
+        Log.info('[sendPhoneBindCode] OAuth pending path, gotrueRoot: $gotrueRoot');
+        if (gotrueRoot.isEmpty) {
+          Log.error('[sendPhoneBindCode] gotrueRoot is empty!');
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.Internal
+              ..msg = 'Missing Gotrue URL (check app cloud configuration)',
+          );
+        }
+        final uri = Uri.parse('$gotrueRoot/send-phone-bind-code');
+        Log.info('[sendPhoneBindCode] POST $uri, body: phone=$phone, pending_token=${pendingToken.substring(0, 8)}...');
+        http.Response response;
+        try {
+          response = await http.post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'phone': phone,
+              'pending_token': pendingToken,
+            }),
+          );
+          Log.info('[sendPhoneBindCode] response status: ${response.statusCode}, body: ${response.body}');
+        } catch (e, st) {
+          Log.error('[sendPhoneBindCode] http.post exception: $e', st);
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.Internal
+              ..msg = 'Network error: $e',
+          );
+        }
 
         if (response.statusCode == 200) {
           try {
@@ -435,6 +476,22 @@ class UserBackendService implements IUserBackendService {
         }
       }
 
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+
+      final baseUrl = cloudConfig.serverUrl;
+
+      if (baseUrl.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL',
+        );
+      }
+
       // 使用用户登录态的原始逻辑
       final userProfileResult = await getCurrentUserProfile();
       final userProfile = userProfileResult.fold(
@@ -451,7 +508,8 @@ class UserBackendService implements IUserBackendService {
         );
       }
 
-      final uri = Uri.parse('$baseUrl/api/user/send-phone-bind-code');
+      // 已登录用户流程：发到 Cloud Rust /send-phone-otp
+      final uri = Uri.parse('$baseUrl/api/user/send-phone-otp');
       final response = await http.post(
         uri,
         headers: {
@@ -501,7 +559,7 @@ class UserBackendService implements IUserBackendService {
   }
 
   /// 确认手机号绑定
-  /// POST /api/user/confirm-phone-bind
+  /// OAuth pending：直连 Gotrue 根路径 POST /confirm-phone-bind
   ///
   /// [pendingToken] 可选，若提供则走 OAuth pending 流程（无需登录态）
   /// [merge] true=绑定到已注册手机号，false=绑定到新手机号
@@ -514,34 +572,36 @@ class UserBackendService implements IUserBackendService {
     bool merge = false,
   }) async {
     try {
-      final cloudConfigResult = await UserEventGetCloudConfig().send();
-      final cloudConfig = cloudConfigResult.fold(
-        (config) => config,
-        (error) => throw error,
-      );
-
-      final baseUrl = cloudConfig.serverUrl;
-      if (baseUrl.isEmpty) {
-        return FlowyResult.failure(
-          FlowyError()
-            ..code = ErrorCode.Internal
-            ..msg = 'Missing server URL',
-        );
-      }
-
-      final uri = Uri.parse('$baseUrl/api/user/confirm-phone-bind');
+      // OAuth pending 流程：发到 Gotrue；不能先 GetCloudConfig（无会话）
+      final Map<String, String> headers = {'Content-Type': 'application/json'};
       final Map<String, dynamic> body = {
         'phone': phone,
-        'token': token,
         'merge': merge,
       };
+      String uriStr;
       if (pendingToken != null && pendingToken.isNotEmpty) {
+        final gotrueRoot = _gotrueRootUrlForOAuthPending();
+        if (gotrueRoot.isEmpty) {
+          return FlowyResult.failure(
+            FlowyError()
+              ..code = ErrorCode.Internal
+              ..msg = 'Missing Gotrue URL (check app cloud configuration)',
+          );
+        }
+        uriStr = '$gotrueRoot/confirm-phone-bind';
+        body['token'] = token;
         body['pending_token'] = pendingToken;
-      }
-
-      // 有 pendingToken 时无需认证；无 pendingToken 时需要用户登录态
-      final Map<String, String> headers = {'Content-Type': 'application/json'};
-      if (pendingToken == null || pendingToken.isEmpty) {
+      } else {
+        final cloudConfigResult = await UserEventGetCloudConfig().send();
+        final cloudConfig = cloudConfigResult.fold(
+          (config) => config,
+          (error) => throw error,
+        );
+        final baseUrl = cloudConfig.serverUrl;
+        uriStr = '$baseUrl/api/user/verify-phone';
+        // Cloud Rust /verify-phone 期望字段名为 "otp"，不是 "token"
+        body['otp'] = token;
+        // 已登录用户需要 Cloud token
         final userProfileResult = await getCurrentUserProfile();
         final userProfile = userProfileResult.fold(
           (profile) => profile,
@@ -558,6 +618,7 @@ class UserBackendService implements IUserBackendService {
         headers['Authorization'] = 'Bearer $rawToken';
       }
 
+      final uri = Uri.parse(uriStr);
       final response = await http.post(
         uri,
         headers: headers,
@@ -1023,78 +1084,100 @@ class UserBackendService implements IUserBackendService {
     return UserEventUpdateWorkspaceSubscriptionPaymentPeriod(request).send();
   }
 
-  /// Verify phone OTP for reauthentication (without binding)
-  /// This calls GoTrue's /verify endpoint with type=reauthentication
+  /// Verify phone OTP for identity reauthentication (without binding).
+  /// Calls Cloud Rust endpoint /api/user/verify-phone-reauthentication
+  /// which forwards to GoTrue with type=sms (verifies OTP without modifying user data).
   static Future<FlowyResult<void, FlowyError>> verifyPhoneReauthentication(
     String phone,
     String otp,
   ) async {
     try {
       Log.info('[UserBackendService] 🔐 START verifyPhoneReauthentication for: $phone');
-      
+
       // 获取当前用户配置
       final cloudConfigResult = await UserEventGetCloudConfig().send();
       final cloudConfig = cloudConfigResult.fold(
         (config) => config,
         (error) => throw error,
       );
-      
+
       // 获取当前用户 Profile（包含 token）
       final userProfileResult = await getCurrentUserProfile();
       final userProfile = userProfileResult.fold(
         (profile) => profile,
         (error) => throw error,
       );
-      
+
       final baseUrl = cloudConfig.serverUrl;
-      final token = userProfile.token;
-      
-      if (baseUrl.isEmpty || token.isEmpty) {
+      final rawToken = _normalizeToken(userProfile.token);
+
+      if (baseUrl.isEmpty || rawToken.isEmpty) {
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
             ..msg = 'Missing server URL or auth token',
         );
       }
-      
-      // 调用 GoTrue 的 /verify 端点
-      // baseUrl 格式: http://8.152.101.166:8000/api (云端 API)
-      // GoTrue 通过 nginx 代理在 80 端口的 /gotrue 路径下
-      // 需要将端口从 8000 改为 80
-      final uri = Uri.parse(baseUrl);
-      final gotrueUrl = '${uri.scheme}://${uri.host}/gotrue/verify';
-      final url = Uri.parse(gotrueUrl);
-      
+
+      // 通过 Cloud Rust 转发，避免直连 GoTrue（/gotrue/* 在公网 404）
+      final uri = Uri.parse('$baseUrl/api/user/verify-phone-reauthentication');
       final response = await http.post(
-        url,
+        uri,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $rawToken',
         },
         body: jsonEncode({
-          'type': 'reauthentication',
           'phone': phone,
-          'token': otp,
+          'otp': otp,
         }),
       );
-      
+
       if (response.statusCode == 200) {
+        // 即使状态码是 200，也要检查响应体中是否有错误
+        try {
+          final json = jsonDecode(response.body) as Map<String, dynamic>;
+          if ((json.containsKey('code') && json['code'] != 0) ||
+              json.containsKey('error')) {
+            final errorMsg = json['message'] as String? ??
+                json['msg'] as String? ??
+                json['error'] as String? ??
+                '身份验证失败';
+            Log.error('[UserBackendService] verifyPhoneReauthentication failed: $errorMsg');
+            return FlowyResult.failure(
+              FlowyError()
+                ..code = ErrorCode.Internal
+                ..msg = errorMsg,
+            );
+          }
+        } catch (_) {}
+        Log.info('[UserBackendService] ✅ verifyPhoneReauthentication success');
         return FlowyResult.success(null);
       } else {
-        final errorMsg = 'Failed to verify phone reauthentication: ${response.statusCode} - ${response.body}';
-        Log.error('[UserBackendService] $errorMsg');
+        String errorMsg = '身份验证失败 (HTTP ${response.statusCode})';
+        if (response.body.isNotEmpty) {
+          try {
+            final json = jsonDecode(response.body) as Map<String, dynamic>;
+            errorMsg = json['message'] as String? ??
+                json['msg'] as String? ??
+                json['error'] as String? ??
+                errorMsg;
+          } catch (_) {}
+        }
+        Log.error('[UserBackendService] verifyPhoneReauthentication failed: $errorMsg');
         return FlowyResult.failure(
           FlowyError()
             ..code = ErrorCode.Internal
             ..msg = errorMsg,
         );
       }
-    } catch (e) {
-      Log.error('[UserBackendService] Exception: $e');
+    } catch (e, stackTrace) {
+      Log.error('[UserBackendService] ❌ Exception: $e');
+      Log.error('[UserBackendService] ❌ Stack trace: $stackTrace');
       return FlowyResult.failure(
         FlowyError()
           ..code = ErrorCode.Internal
-          ..msg = 'Failed to verify phone reauthentication: $e',
+          ..msg = '身份验证失败: $e',
       );
     }
   }
