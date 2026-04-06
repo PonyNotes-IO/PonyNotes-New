@@ -48,7 +48,7 @@ Future<void> runAppFlowy({bool isAnon = false}) async {
 }
 
 Future<void> _runAppFlowyImpl({bool isAnon = false}) async {
-  Log.info('restart PonyNotes: isAnon: $isAnon');
+  Log.info('restart AppFlowy: isAnon: $isAnon');
 
   if (kReleaseMode) {
     await FlowyRunner.run(

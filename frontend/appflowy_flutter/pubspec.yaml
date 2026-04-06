@@ -1,4 +1,4 @@
-name: ponynotes
+name: appflowy
 description: Bring projects, wikis, and teams together with AI. AppFlowy is an
   AI collaborative workspace where you achieve more without losing control of
   your data. The best open source alternative to Notion.
@@ -47,7 +47,7 @@ dependencies:
   # Desktop Drop uses Cross File (XFile) data type
   defer_pointer: ^0.0.2
   desktop_drop: ^0.5.0
-  device_info_plus:
+  device_info_plus: ^11.2.2
   diffutil_dart: ^4.0.1
   dotted_border: ^2.0.0+3
   easy_localization: ^3.0.2
@@ -105,7 +105,7 @@ dependencies:
   logger: ^2.6.2
   #  third party packages
   intl: ^0.19.0
-  json_annotation: ^4.8.1
+  json_annotation: ^4.9.0
   keyboard_height_plugin: ^0.1.5
   leak_tracker: ^10.0.0
   linked_scroll_controller: ^0.2.0
@@ -141,7 +141,7 @@ dependencies:
   scrollable_positioned_list: ^0.3.8
   share_plus: ^10.0.2
   shared_preferences: ^2.2.2
-  sheet:
+  sheet: ^0.2.1
   sized_context: ^1.0.0+4
   string_validator: ^1.0.0
   styled_widget: ^0.4.1
@@ -155,7 +155,7 @@ dependencies:
   universal_platform: ^1.1.0
   unsplash_client: ^2.1.1
   url_launcher: ^6.1.11
-  url_protocol:
+  url_protocol: ^2.0.0
 
   # Window Manager for MacOS and Linux
   version: ^3.0.2
