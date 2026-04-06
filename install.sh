@@ -44,7 +44,7 @@ execute() {
   install -d "${BINDIR}"
   sudo mv "${srcdir}/${PROJECT_NAME}" /opt
   log_info "installed ${BINDIR}/${PROJECT_NAME}"
-  (cd "/opt/${PROJECT_NAME}" && ./AppFlowy)
+  (cd "/opt/${PROJECT_NAME}" && ./PonyNotes)
 }
 
 is_supported_platform() {
