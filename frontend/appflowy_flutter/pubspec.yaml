@@ -167,7 +167,7 @@ dependencies:
 
   analyzer: 6.11.0
   media_kit: ^1.1.11
-  media_kit_video: ^1.2.0
+  media_kit_video: 1.2.0
   media_kit_libs_windows_video: ^1.0.9
   ffi: ^2.1.0
   # webview_flutter: ^4.10.0  # 已替换为 flutter_inappwebview (支持 Windows)
