@@ -1,5 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <application android:label="PonyNotes" android:icon="@mipmap/ic_launcher"
+  <application android:label="PonyNotes"
+      android:icon="@mipmap/ic_launcher"
+      android:roundIcon="@mipmap/ic_launcher_round"
     android:name="${applicationName}">
     <activity android:name=".MainActivity"
       android:exported="true"
