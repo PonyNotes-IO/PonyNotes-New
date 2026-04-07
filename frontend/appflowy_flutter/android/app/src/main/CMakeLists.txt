@@ -2,23 +2,15 @@ cmake_minimum_required(VERSION 3.10.0)
 
 project(AppFlowy)
 
-message(CONFIGURE_LOG "NDK PATH: ${ANDROID_NDK}")
-message(CONFIGURE_LOG "Copying libc++_shared.so")
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# arm64-v8a
-file(COPY
-    ${ANDROID_NDK}/sources/cxx-stl/llvm-libc++/libs/arm64-v8a/libc++_shared.so
-    DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/jniLibs/arm64-v8a
-)
+# Android-specific settings
+set(CMAKE_ANDROID_ARCH_ABI "arm64-v8a")
+set(CMAKE_ANDROID_NDK "${ANDROID_NDK}")
+set(CMAKE_ANDROID_STL_TYPE "c++_shared")
 
-# armeabi-v7a
-file(COPY
-    ${ANDROID_NDK}/sources/cxx-stl/llvm-libc++/libs/armeabi-v7a/libc++_shared.so
-    DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/jniLibs/armeabi-v7a
-)
-
-# x86_64
-file(COPY
-    ${ANDROID_NDK}/sources/cxx-stl/llvm-libc++/libs/x86_64/libc++_shared.so
-    DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/jniLibs/x86_64
-)
+message(STATUS "NDK PATH: ${ANDROID_NDK}")
+message(STATUS "CMake version: ${CMAKE_VERSION}")
+message(STATUS "Android ABI: ${CMAKE_ANDROID_ARCH_ABI}")
