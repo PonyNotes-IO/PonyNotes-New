@@ -1,4 +1,7 @@
 // ignore_for_file: undefined_getter
+
+import 'dart:async' show unawaited;
+
 import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -9,6 +12,7 @@ import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/user/presentation/screens/legal_document_screen.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/password_login_dialog.dart';
@@ -16,7 +20,6 @@ import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/contin
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/douyin_webview_dialog.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
-import 'package:appflowy/user/application/sign_in_bloc.dart' show SignInState;
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -793,13 +796,20 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
 
     // 等待密码状态检查完成（以 passwordIsSet 的首次变化为准，超时则按未设置处理）
     final passwordIsSet = await _waitForPasswordStatus(signInBloc);
+    if (!context.mounted) {
+      return;
+    }
     if (passwordIsSet == true) {
       // 用户已设置密码，弹出密码登录对话框
       _showPasswordLoginDialog(context, emailOrPhone, signInBloc);
     } else {
       // 用户未设置密码，直接发送验证码并跳转到验证码输入页面
-      _sendVerificationCodeAndNavigate(
-          context, emailOrPhone, isEmail, signInBloc);
+      await _sendVerificationCodeAndNavigate(
+        context,
+        emailOrPhone,
+        isEmail,
+        signInBloc,
+      );
     }
   }
 
@@ -846,45 +856,95 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
             // 关闭密码登录对话框，切换到验证码登录
             Navigator.of(dialogContext).pop();
             final bool isEmail = _isValidEmail(emailOrPhone);
-            _sendVerificationCodeAndNavigate(
-                context, emailOrPhone, isEmail, signInBloc);
+            if (!context.mounted) {
+              return;
+            }
+            unawaited(
+              _sendVerificationCodeAndNavigate(
+                context,
+                emailOrPhone,
+                isEmail,
+                signInBloc,
+              ),
+            );
           },
         ),
       ),
     );
   }
 
-  void _sendVerificationCodeAndNavigate(
+  Future<void> _sendVerificationCodeAndNavigate(
     BuildContext context,
     String emailOrPhone,
     bool isEmail,
     SignInBloc signInBloc,
-  ) {
-    // 发送登录请求（GoTrue 会自动识别是邮箱还是手机号）
-    signInBloc.add(
-      SignInEvent.signInWithMagicLink(email: emailOrPhone),
-    );
+  ) async {
+    try {
+      await waitSignInBlocSubmittingCycle(
+        signInBloc,
+        () => signInBloc.add(
+          SignInEvent.signInWithMagicLink(email: emailOrPhone),
+        ),
+      );
+    } catch (e, st) {
+      Log.error(
+        'Magic link / OTP request timed out or failed to observe bloc state: $e',
+        st,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      showToastNotification(
+        message: '发送验证码失败，请稍后重试',
+        type: ToastificationType.error,
+      );
+      return;
+    }
 
-    // 根据输入类型显示不同的提示信息
+    if (!context.mounted) {
+      return;
+    }
+
+    final state = signInBloc.state;
+    if (state.emailError != null) {
+      return;
+    }
+    final navigator = Navigator.of(context);
+    if (state.successOrFail?.isFailure == true) {
+      // 限流等错误由外层 BlocListener 展示，不再显示“已发送”成功提示
+      unawaited(
+        navigator.push(
+          _verificationCodeRoute(signInBloc, emailOrPhone, navigator),
+        ),
+      );
+      return;
+    }
+
     showToastNotification(
       message: isEmail ? "验证码已发送，请查看您的邮箱" : "验证码已发送，请查看您的手机短信",
       type: ToastificationType.success,
     );
 
-    // 跳转到验证码输入页面
-    final navigator = Navigator.of(context);
-    navigator.push(
-      MaterialPageRoute(
-        builder: (context) => BlocProvider.value(
-          value: signInBloc,
-          child: ContinueWithMagicLinkOrPasscodePage(
-            email: emailOrPhone,
-            backToLogin: () {
-              navigator.pop();
-            },
-            // onEnterPasscode 现在在 ContinueWithMagicLinkOrPasscodePage 内部直接使用 context.read<SignInBloc>()
-            // 不再需要通过回调传递，避免使用已关闭的 bloc
-          ),
+    unawaited(
+      navigator.push(
+        _verificationCodeRoute(signInBloc, emailOrPhone, navigator),
+      ),
+    );
+  }
+
+  MaterialPageRoute<void> _verificationCodeRoute(
+    SignInBloc signInBloc,
+    String emailOrPhone,
+    NavigatorState navigator,
+  ) {
+    return MaterialPageRoute(
+      builder: (context) => BlocProvider.value(
+        value: signInBloc,
+        child: ContinueWithMagicLinkOrPasscodePage(
+          email: emailOrPhone,
+          backToLogin: () {
+            navigator.pop();
+          },
         ),
       ),
     );

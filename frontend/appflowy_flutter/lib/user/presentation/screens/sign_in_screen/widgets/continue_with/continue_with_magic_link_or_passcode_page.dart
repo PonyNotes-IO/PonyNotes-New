@@ -84,32 +84,65 @@ class _ContinueWithMagicLinkOrPasscodePageState
         controller.clear();
       }
       setState(() => _errorMessage = '');
-      
+
       // 聚焦到第一个输入框
       _codeFocusNodes[0].requestFocus();
-      
-      // 调用SignInBloc重新发送验证码
+
       if (!mounted) return;
       final signInBloc = context.read<SignInBloc>();
-      
-      // 如果提供了 onEnterPasscode 回调，说明是忘记密码流程，使用 forgotPassword API
-      if (widget.onEnterPasscode != null) {
-        signInBloc.add(SignInEvent.forgotPassword(email: widget.email));
-      } else {
-        // 否则，使用正常的登录验证码流程
-        signInBloc.add(SignInEvent.signInWithMagicLink(email: widget.email));
+
+      SignInState stateAfterSend;
+      try {
+        stateAfterSend = await waitSignInBlocSubmittingCycle(
+          signInBloc,
+          () {
+            if (widget.onEnterPasscode != null) {
+              signInBloc.add(SignInEvent.forgotPassword(email: widget.email));
+            } else {
+              signInBloc.add(
+                SignInEvent.signInWithMagicLink(email: widget.email),
+              );
+            }
+          },
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _errorMessage = '重新发送失败: $e');
+        return;
       }
-      
-      // 重新开始倒计时
-      _startCountdown();
-      
+
       if (!mounted) return;
-      
-      // 判断是邮箱还是手机号
+
+      if (widget.onEnterPasscode != null) {
+        final fp = stateAfterSend.forgotPasswordSuccessOrFail;
+        if (fp != null && fp.isFailure) {
+          fp.onFailure((err) {
+            if (mounted) {
+              setState(() => _errorMessage = err.msg);
+            }
+          });
+          return;
+        }
+      } else {
+        if (stateAfterSend.emailError != null) {
+          setState(
+            () => _errorMessage =
+                stateAfterSend.emailError ?? '发送失败，请检查邮箱或手机号',
+          );
+          return;
+        }
+        if (stateAfterSend.successOrFail?.isFailure == true) {
+          // 限流等错误由登录页 BlocListener 以 Toast 展示，此处不再提示“已重新发送”
+          return;
+        }
+      }
+
+      _startCountdown();
+
       final isEmail = widget.email.contains('@');
       showToastNotification(
-        message: isEmail 
-            ? '验证码已重新发送到您的邮箱' 
+        message: isEmail
+            ? '验证码已重新发送到您的邮箱'
             : '验证码已重新发送到您的手机',
       );
     } catch (e) {

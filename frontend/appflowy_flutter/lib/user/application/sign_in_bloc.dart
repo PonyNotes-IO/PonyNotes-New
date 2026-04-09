@@ -994,6 +994,23 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
   }
 }
 
+/// Waits for a [SignInBloc] submitting cycle triggered by [dispatch].
+///
+/// Subscribes before [dispatch] runs so a fast `isSubmitting: true` emit is not
+/// missed (e.g. [SignInEvent.signInWithMagicLink], [SignInEvent.forgotPassword]).
+Future<SignInState> waitSignInBlocSubmittingCycle(
+  SignInBloc bloc,
+  void Function() dispatch,
+) async {
+  final submittingFuture = bloc.stream.firstWhere((s) => s.isSubmitting);
+  dispatch();
+  await submittingFuture.timeout(const Duration(seconds: 15));
+  await bloc.stream
+      .firstWhere((s) => !s.isSubmitting)
+      .timeout(const Duration(seconds: 120));
+  return bloc.state;
+}
+
 @freezed
 class SignInEvent with _$SignInEvent {
   // Sign in methods
