@@ -865,10 +865,11 @@ class _AIInputAreaState extends State<AIInputArea> {
     }
 
     try {
-      // 直接打开系统文件浏览器，支持所有文件类型
+      // 直接打开系统文件浏览器，仅支持图片类型（PNG、JPG）
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
-        type: FileType.any, // 支持所有文件类型
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png'],
         withData: false, // 大文件不直接加载到内存
       );
 
@@ -877,17 +878,7 @@ class _AIInputAreaState extends State<AIInputArea> {
       }
 
       // 支持的图片扩展名
-      const imageExtensions = [
-        'jpg',
-        'jpeg',
-        'png',
-        'gif',
-        'bmp',
-        'webp',
-        'svg',
-        'ico',
-        'tiff'
-      ];
+      const imageExtensions = ['jpg', 'jpeg', 'png'];
 
       // 处理选中的文件
       final List<_AttachmentItem> newAttachments = [];

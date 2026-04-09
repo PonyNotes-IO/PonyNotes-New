@@ -192,7 +192,7 @@ class AIPromptInputBloc extends Bloc<AIPromptInputEvent, AIPromptInputState> {
   /// 判断文件是否为图片
   bool _isImageFile(String filePath) {
     final extension = filePath.split('.').last.toLowerCase();
-    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff'];
+    const imageExtensions = ['jpg', 'jpeg', 'png'];
     return imageExtensions.contains(extension);
   }
 }

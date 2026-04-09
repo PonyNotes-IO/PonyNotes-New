@@ -22,7 +22,7 @@ class ChatImageService {
 
   /// 支持的图片扩展名
   static const List<String> supportedExtensions = [
-    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'
+    'jpg', 'jpeg', 'png'
   ];
 
   /// 最大文件大小 (10MB)

@@ -769,7 +769,8 @@ class _PromptBottomActions extends StatelessWidget {
       onTap: () async {
         final path = await getIt<FilePickerService>().pickFiles(
           dialogTitle: '',
-          type: FileType.image,
+          type: FileType.custom,
+          allowedExtensions: ['jpg', 'jpeg', 'png'],
         );
 
         if (path == null) {
@@ -817,7 +818,8 @@ class _PromptBottomActions extends StatelessWidget {
                 // 打开文件选择器，支持所有文件类型
                 final result = await getIt<FilePickerService>().pickFiles(
                   dialogTitle: '选择附件',
-                  type: FileType.image,
+                  type: FileType.custom,
+                  allowedExtensions: ['jpg', 'jpeg', 'png'],
                   allowMultiple: true,
                 );
 
