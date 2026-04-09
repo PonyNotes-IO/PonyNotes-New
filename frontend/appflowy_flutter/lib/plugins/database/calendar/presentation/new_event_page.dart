@@ -278,13 +278,8 @@ class _NewEventPageState extends State<NewEventPage> {
           'repeatType':_repeatType,
           'repeatRuleJson': _repeatCustomSummary,
         };
+        // 成功提示由 calendar.dart 的 _onEventCreated 统一展示，避免重复 Toast
         widget.onEventCreated(eventData);
-        if (mounted) {
-          showToastNotification(
-            message: '✅ 日程创建成功！',
-            type: ToastificationType.success,
-          );
-        }
         return;
       } else {
         throw Exception('创建日程失败：未返回有效ID');
