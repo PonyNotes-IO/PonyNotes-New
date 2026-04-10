@@ -808,6 +808,13 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         _newEventHasUnsavedConfig = false; // 关闭后清除未保存标记，避免之后点击其他日期误弹窗
       });
       onHidden?.call();
+      // 仅「直接关闭新建页」时同步右侧面板；若带 onHidden（如去点某日程/笔记）则由回调负责，避免覆盖
+      if (onHidden == null && mounted) {
+        final data = _cachedContent ?? {};
+        final notes = data['notes'] as List<ViewPB>? ?? [];
+        final schedules = data['schedules'] as List<ScheduleItem>? ?? [];
+        _syncDetailPanelWithLoadedContent(notes, schedules);
+      }
     };
 
     if (_newEventHasUnsavedConfig) {
@@ -994,6 +1001,15 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         _editEventHasUnsavedConfig = false; // 关闭后清除未保存标记
       });
       onHidden?.call();
+      // 仅「直接关闭编辑页」（取消/离开）时同步右侧面板，与侧边栏点击日程一致进入 _buildEditEventView；
+      // 若带 onHidden（如切换去点其它日程）则由回调负责，避免覆盖。
+      // 若不调用此处同步，会落在 _buildDefaultView → 旧版 _buildScheduleEditArea（「编辑日程: xxx」），与点击日程不一致。
+      if (onHidden == null && mounted) {
+        final data = _cachedContent ?? {};
+        final notes = data['notes'] as List<ViewPB>? ?? [];
+        final schedules = data['schedules'] as List<ScheduleItem>? ?? [];
+        _syncDetailPanelWithLoadedContent(notes, schedules);
+      }
     };
 
     if (_editEventHasUnsavedConfig) {
@@ -1452,9 +1468,31 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
       return _buildNoteEditAreaForNote(notes.first);
     }
 
-    // 如果有日程没有笔记，显示第一条日程
+    // 如果有日程没有笔记：与侧边栏点击日程一致，进入完整「编辑日程」顶栏（_buildEditEventView），
+    // 勿使用旧版内嵌顶栏（「编辑日程: xxx」），避免与点击日程的界面不一致。
     if (schedules.isNotEmpty) {
-      return _buildScheduleEditArea(schedules.first);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_selectedNote == null &&
+            !_showNewEventPage &&
+            !_showEditEventPage &&
+            _editingSchedule == null) {
+          _performScheduleTap(schedules.first);
+        }
+      });
+      return Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+        ],
+      );
     }
 
     // 如果既没有笔记也没有日程，显示空状态
@@ -1960,67 +1998,6 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         ),
       );
     }
-  }
-
-  Widget _buildScheduleEditArea(ScheduleItem schedule) {
-    return Column(
-      children: [
-        // 编辑区域标题栏
-        Container(
-          height: 50,
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Theme.of(context).dividerColor,
-                width: 0.5,
-              ),
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '编辑日程: ${schedule.description}',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.close, size: 18),
-                onPressed: () {
-                  setState(() {
-                    _editingSchedule = null;
-                  });
-                },
-                tooltip: '关闭编辑',
-                padding: EdgeInsets.zero,
-                constraints: BoxConstraints.tightFor(width: 32, height: 32),
-              ),
-            ],
-          ),
-        ),
-        // 编辑内容区域
-        Expanded(
-          child: EditEventPage(
-            key: ValueKey(schedule.id), // 使用 schedule.id 作为 key，确保切换日程时重建 widget
-            schedule: schedule,
-            scheduleModel: _scheduleModel,
-            onEventUpdated: _onEventUpdated,
-            onEventDeleted: _onEventDeleted,
-            onCancel: _checkAndHideEditEventPage,
-            onSaveRequested: (saveCallback) {
-              _saveEventCallback = saveCallback;
-            },
-            onHasUnsavedConfigChanged: (hasUnsaved) {
-              if (mounted) setState(() => _editEventHasUnsavedConfig = hasUnsaved);
-            },
-          ),
-        ),
-      ],
-    );
   }
 
   Widget _buildNewEventView() {
