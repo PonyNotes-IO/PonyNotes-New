@@ -1,6 +1,7 @@
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy/plugins/database/application/tab_bar_bloc.dart';
 import 'package:appflowy/plugins/shared/share/share_bloc.dart';
 import 'package:appflowy/plugins/shared/share/share_menu.dart';
@@ -54,8 +55,13 @@ class ShareMenuButton extends StatelessWidget {
     }
 
     if (tabs.isEmpty) {
+      final userWorkspaceBloc = context.read<UserWorkspaceBloc?>();
+      final isGuestMode = userWorkspaceBloc?.state.currentWorkspace?.workspaceType ==
+          WorkspaceTypePB.LocalW;
       showToastNotification(
-        message: '该文档为只读内容，不能再次共享或发布',
+        message: isGuestMode
+            ? '快速开始，无法分享和发布。如需分享和发布，请登录/注册'
+            : '该文档为只读内容，不能再次共享或发布',
         type: ToastificationType.warning,
       );
       return;
