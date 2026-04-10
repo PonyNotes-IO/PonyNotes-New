@@ -146,11 +146,14 @@ class _FontFamilyDropDownState extends State<FontFamilyDropDown> {
               builder: (context, value, child) {
                 var displayed = availableFonts;
                 if (value.isNotEmpty) {
+                  final q = value.toLowerCase();
                   displayed = availableFonts
                       .where(
-                        (font) => font
-                            .toLowerCase()
-                            .contains(value.toLowerCase().toString()),
+                        (font) =>
+                            font.toLowerCase().contains(q) ||
+                            font.fontFamilyDisplayName
+                                .toLowerCase()
+                                .contains(q),
                       )
                       .sorted((a, b) => levenshtein(a, b))
                       .toList();
