@@ -388,8 +388,7 @@ class _EmailBindingDialogState extends State<EmailBindingDialog> {
         if (mounted) {
           widget.onBindingComplete?.call();
           Navigator.of(context).pop();
-          
-          showToastNotification(message: '邮箱 ${emailController.text} 绑定成功');
+          // 成功提示已在 onBindingComplete（settings_account_view.dart）里统一展示
         }
       },
       (error) {
