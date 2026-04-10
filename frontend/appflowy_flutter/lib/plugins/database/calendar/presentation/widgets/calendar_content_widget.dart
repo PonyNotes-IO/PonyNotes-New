@@ -441,6 +441,9 @@ class _CalendarContentState extends State<CalendarContent> {
         view: node.view,
         depth: depth,
         indent: _perLevelIndent,
+        onTitleTap: node.view.isDocument && widget.onNoteTap != null
+            ? () => widget.onNoteTap!(node.view)
+            : null,
         childWidgets: node.sortedChildren
             .map((c) => _buildNoteTreeNode(context, c, depth: depth + 1))
             .toList(),
@@ -512,12 +515,15 @@ class _CalendarNoteFolderTile extends StatefulWidget {
     required this.view,
     required this.depth,
     required this.indent,
+    this.onTitleTap,
     required this.childWidgets,
   });
 
   final ViewPB view;
   final int depth;
   final double indent;
+  /// 点击标题行（图标+名称）时打开该笔记；仅对含子页面的 Document 等需要。
+  final VoidCallback? onTitleTap;
   final List<Widget> childWidgets;
 
   @override
@@ -567,45 +573,81 @@ class _CalendarNoteFolderTileState extends State<_CalendarNoteFolderTile> {
   Widget _buildHeader(double left) {
     return Padding(
       padding: EdgeInsets.fromLTRB(left, 0, 8, 0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 24,
-            height: 24,
-            child: FlowyHover(
-              child: GestureDetector(
-                onTap: _toggle,
-                child: FlowySvg(
-                  _expanded
-                      ? FlowySvgs.view_item_expand_s
-                      : FlowySvgs.view_item_unexpand_s,
-                  size: const Size.square(16.0),
+      child: FlowyHover(
+        style: HoverStyle(hoverColor: Theme.of(context).colorScheme.secondary),
+        builder: (_, onHover) {
+          // 标题区域（图标 + 名称），点击打开笔记；整行悬停时与 ViewItem 行为一致
+          final titleWidget = widget.onTitleTap == null
+              ? Row(
+                  children: [
+                    _buildIcon(),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        widget.view.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ],
+                )
+              : InkWell(
+                  onTap: widget.onTitleTap,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        _buildIcon(),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            widget.view.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: FlowyHover(
+                  child: GestureDetector(
+                    onTap: _toggle,
+                    child: FlowySvg(
+                      _expanded
+                          ? FlowySvgs.view_item_expand_s
+                          : FlowySvgs.view_item_unexpand_s,
+                      size: const Size.square(16.0),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          SizedBox(
-            width: 22,
-            child: Center(
-              child: Opacity(
-                opacity: 0.6,
-                child: widget.view.defaultIcon(
-                  size: const Size(18, 18),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              widget.view.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-        ],
+              Expanded(child: titleWidget),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildIcon() {
+    return SizedBox(
+      width: 22,
+      child: Center(
+        child: Opacity(
+          opacity: 0.6,
+          child: widget.view.defaultIcon(size: const Size(18, 18)),
+        ),
       ),
     );
   }
