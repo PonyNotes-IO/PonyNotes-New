@@ -8,7 +8,7 @@ edition = "2018"
 name = "dart_ffi"
 # this value will change depending on the target os
 # default static library
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "cdylib"]
 
 
 [dependencies]
@@ -52,6 +52,8 @@ dart = ["flowy-core/dart"]
 http_sync = ["flowy-core/http_sync"]
 openssl_vendored = ["flowy-core/openssl_vendored"]
 verbose_log = []
+
+
 
 [build-dependencies]
 flowy-codegen = { workspace = true, features = ["dart"] }

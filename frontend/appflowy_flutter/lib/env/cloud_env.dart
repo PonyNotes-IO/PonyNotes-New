@@ -188,21 +188,25 @@ class AppFlowyCloudSharedEnv {
         AuthenticatorType.fromValue(Env.authenticatorType);
 
     // For appflowyCloudDevelop type, use configurationFromUri to handle port configuration
-    final appflowyCloudConfig =
-        authenticatorType == AuthenticatorType.appflowyCloudDevelop
-            ? await configurationFromUri(
-                Uri.parse(Env.afCloudUrl),
-                Env.afCloudUrl,
-                authenticatorType,
-                Env.baseWebDomain,
-              )
-            : AppFlowyCloudConfiguration(
-                base_url: Env.afCloudUrl,
-                ws_base_url: await _getAppFlowyCloudWSUrl(Env.afCloudUrl),
-                gotrue_url: await _getAppFlowyCloudGotrueUrl(Env.afCloudUrl),
-                enable_sync_trace: false,
-                base_web_domain: Env.baseWebDomain,
-              );
+    late AppFlowyCloudConfiguration appflowyCloudConfig;
+    if (authenticatorType == AuthenticatorType.appflowyCloudDevelop) {
+      appflowyCloudConfig = await configurationFromUri(
+        Uri.parse(Env.afCloudUrl),
+        Env.afCloudUrl,
+        authenticatorType,
+        Env.baseWebDomain,
+      );
+    } else {
+      final wsUrl = await _getAppFlowyCloudWSUrl(Env.afCloudUrl);
+      final gotrueUrl = await _getAppFlowyCloudGotrueUrl(Env.afCloudUrl);
+      appflowyCloudConfig = AppFlowyCloudConfiguration(
+        base_url: Env.afCloudUrl,
+        ws_base_url: wsUrl,
+        gotrue_url: gotrueUrl,
+        enable_sync_trace: false,
+        base_web_domain: Env.baseWebDomain,
+      );
+    }
 
     return AppFlowyCloudSharedEnv(
       authenticatorType: authenticatorType,
