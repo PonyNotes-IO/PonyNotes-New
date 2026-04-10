@@ -1155,14 +1155,18 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
                     },
                   );
                 } else if (context.mounted) {
-                  context.read<ViewBloc>().add(const ViewEvent.delete());
-                  // 删除后立即刷新列表（不等待监听，确保最后一条也能刷新）
-                  // 增加延迟时间，确保后端删除操作完成
-                  Future.delayed(const Duration(milliseconds: 500), () {
-                    if (context.mounted) {
-                      _refreshSpaceBlocIfNeeded(context);
-                    }
-                  });
+                  await showDeleteViewToTrashConfirmDialog(
+                    context: context,
+                    name: widget.view.nameOrDefault,
+                    onConfirm: () {
+                      context.read<ViewBloc>().add(const ViewEvent.delete());
+                      Future.delayed(const Duration(milliseconds: 500), () {
+                        if (context.mounted) {
+                          _refreshSpaceBlocIfNeeded(context);
+                        }
+                      });
+                    },
+                  );
                 }
               }
               break;

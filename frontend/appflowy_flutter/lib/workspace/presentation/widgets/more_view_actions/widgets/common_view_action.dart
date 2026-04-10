@@ -122,8 +122,14 @@ class ViewAction extends StatelessWidget {
           unawaited(_onDeleteConfirmed(actionContext));
         },
       );
-    } else {
-      await _onDeleteConfirmed(actionContext);
+    } else if (dialogContext.mounted) {
+      await showDeleteViewToTrashConfirmDialog(
+        context: dialogContext,
+        name: view.nameOrDefault,
+        onConfirm: () {
+          unawaited(_onDeleteConfirmed(actionContext));
+        },
+      );
     }
   }
 

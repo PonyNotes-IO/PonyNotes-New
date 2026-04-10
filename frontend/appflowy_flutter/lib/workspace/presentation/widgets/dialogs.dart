@@ -960,6 +960,27 @@ Future<void> showSimpleConfirmDialog({
   );
 }
 
+/// iOS-style confirmation before moving a page to trash (same layout as recycle bin prompts).
+Future<void> showDeleteViewToTrashConfirmDialog({
+  required BuildContext context,
+  required String name,
+  required VoidCallback onConfirm,
+}) {
+  final pageType = LocaleKeys.settings_sites_publishedPage_page.tr();
+  final title = LocaleKeys.views_deleteContentTitle
+      .tr(namedArgs: {'pageType': pageType})
+      .replaceFirst(pageType, name);
+  final message = '$title\n\n'
+      '${LocaleKeys.views_deleteContentCaption.tr(namedArgs: {'pageType': pageType})}';
+  return showSimpleConfirmDialog(
+    context: context,
+    message: message,
+    confirmText: LocaleKeys.disclosureAction_delete.tr(),
+    confirmTextColor: Theme.of(context).colorScheme.error,
+    onConfirm: onConfirm,
+  );
+}
+
 /// iOS 风格单按钮提示弹窗（与 [showSimpleConfirmDialog] 布局一致，居中，底部单按钮）
 Future<void> showSimpleAlertDialog({
   required BuildContext context,
