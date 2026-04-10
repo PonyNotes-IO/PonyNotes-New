@@ -6,7 +6,6 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/desktop_to
 import 'package:appflowy/plugins/document/presentation/editor_plugins/link_preview/shared.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/menu/menu_extension.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_block.dart';
-import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_page_block.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -165,8 +164,6 @@ class _LinkEmbedMenuState extends State<LinkEmbedMenu> {
                   convertUrlPreviewNodeToMention(editorState, node);
                 } else if (command == LinkEmbedConvertCommand.toURL) {
                   convertUrlPreviewNodeToLink(editorState, node);
-                } else if (command == LinkEmbedConvertCommand.toPage) {
-                  _convertUrlPreviewNodeToPage(editorState, node, url);
                 }
               },
             ),
@@ -354,8 +351,7 @@ enum LinkEmbedMenuCommand {
 enum LinkEmbedConvertCommand {
   toMention,
   toURL,
-  toBookmark,
-  toPage;
+  toBookmark;
 
   String get title {
     switch (this) {
@@ -369,38 +365,8 @@ enum LinkEmbedConvertCommand {
         return LocaleKeys
             .document_plugins_linkPreview_linkPreviewMenu_toBookmark
             .tr();
-      case toPage:
-        return 'Embed as Page';
     }
   }
-}
-
-/// 将 URL 预览节点转换为嵌入本地笔记
-Future<void> _convertUrlPreviewNodeToPage(
-  EditorState editorState,
-  Node node,
-  String url,
-) async {
-  // 从 URL 中解析 viewId
-  final viewId = _extractViewIdFromUrl(url);
-  if (viewId == null) {
-    return;
-  }
-
-  // 创建嵌入本地笔记的节点
-  final pageNode = pageMentionNode(viewId);
-
-  final transaction = editorState.transaction;
-  transaction
-    ..insertNode(node.path, pageNode)
-    ..deleteNode(node);
-  transaction.afterSelection = Selection.collapsed(
-    Position(
-      path: node.path,
-      offset: 1,
-    ),
-  );
-  return editorState.apply(transaction);
 }
 
 /// 从 URL 中提取 viewId
