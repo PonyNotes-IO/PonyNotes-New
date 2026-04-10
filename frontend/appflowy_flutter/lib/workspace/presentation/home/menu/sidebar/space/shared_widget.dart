@@ -721,22 +721,10 @@ class SpacePages extends StatelessWidget {
                     rightIconsBuilder: rightIconsBuilder,
                     onSelected: onSelected,
                     onTertiarySelected: onTertiarySelected,
-                    shouldIgnoreView: (targetView) {
-                      // 空间列表中，只能在space文件中移动，不能在普通文档中间位置添加
-                      // 如果有自定义的shouldIgnoreView，先使用它
-                      if (shouldIgnoreView != null) {
-                        final result = shouldIgnoreView!(targetView);
-                        if (result != IgnoreViewType.none) {
-                          return result;
-                        }
-                      }
-                      // 检查目标视图是否是space文件
-                      if (!targetView.isSpace) {
-                        // 普通文档，不允许在中间位置添加
-                        return IgnoreViewType.disable;
-                      }
-                      return IgnoreViewType.none;
-                    },
+                    // 仅使用调用方传入的规则（如「移动」菜单：隐藏源页面、禁止移入 Grid/Board 等数据库视图）。
+                    // 不再附加「非 isSpace 一律 disable」：否则会误判普通文档页为不可选，
+                    // 悬停一直提示 space_cannotMovePageToDatabase，且无法点击完成移动。
+                    shouldIgnoreView: shouldIgnoreView,
                   ),
                 )
                 .toList(),
