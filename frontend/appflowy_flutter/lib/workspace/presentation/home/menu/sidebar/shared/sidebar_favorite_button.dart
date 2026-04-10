@@ -52,19 +52,15 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
             if (state.isLoading) {
               return const SizedBox.shrink();
             }
-            
-            // 加载完成后，如果没有最爱笔记（views 为空），不显示菜单项
-            if (state.views.isEmpty) {
-              return const SizedBox.shrink();
-            }
-            
-            // 有1个及以上最爱笔记时，显示菜单项
+
+            // 始终显示最爱菜单项，有收藏时可展开列表
             return Column(
               children: [
                 // 收藏夹标题行
                 _buildFavoriteHeader(context, state),
-                // 收藏的页面列表
-                if (_isExpanded) ..._buildFavoriteItems(context, state),
+                // 收藏的页面列表（仅在展开且有内容时显示）
+                if (_isExpanded && state.views.isNotEmpty)
+                  ..._buildFavoriteItems(context, state),
               ],
             );
           },
