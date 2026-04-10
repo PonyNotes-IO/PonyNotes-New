@@ -2052,14 +2052,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 ),
                 if (_newEventHasUnsavedConfig) ...[
                   TextButton(
-                    onPressed: () {
-                      showSimpleConfirmDialog(
-                        context: context,
-                        message: '当前设置还没有被保存，确认要离开吗？',
-                        confirmText: '离开',
-                        onConfirm: _hideNewEventPage,
-                      );
-                    },
+                    // 直接走 _checkAndHideNewEventPage，勿再包一层 showSimpleConfirmDialog，
+                    // 否则会连续弹出两个相同的「离开」确认框。
+                    onPressed: _hideNewEventPage,
                     child: Text(
                       '取消',
                       style: TextStyle(
@@ -2144,14 +2139,9 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                 ),
                 if (_editEventHasUnsavedConfig) ...[
                   TextButton(
-                    onPressed: () {
-                      showSimpleConfirmDialog(
-                        context: context,
-                        message: '当前设置还没有被保存，确认要离开吗？',
-                        confirmText: '离开',
-                        onConfirm: () => _checkAndHideEditEventPage(),
-                      );
-                    },
+                    // 直接走 _checkAndHideEditEventPage，勿再包一层 showSimpleConfirmDialog，
+                    // 否则会连续弹出两个相同的「离开」确认框。
+                    onPressed: () => _checkAndHideEditEventPage(),
                     child: Text(
                       '取消',
                       style: TextStyle(
