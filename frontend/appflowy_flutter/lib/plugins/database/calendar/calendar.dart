@@ -329,6 +329,10 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   /// 编辑日程页是否有未保存的配置变更
   bool _editEventHasUnsavedConfig = false;
 
+  /// 新建/编辑日程保存成功后，忽略接下来若干次右侧面板「按当天首条笔记/日程」同步。
+  /// 避免异步加载分批完成时，在 `_showEditEventPage` 已短暂不一致的情况下仍被切走。
+  int _skipDetailPanelSyncCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -794,6 +798,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   /// 检查并隐藏新建日程页，如果有未保存配置则弹窗确认
   void _checkAndHideNewEventPage({VoidCallback? onHidden}) {
     final hide = () {
+      _skipDetailPanelSyncCount = 0;
       // 当关闭新建日程页面时，恢复显示右侧工具栏
       widget.calendarWidgetBuilder.setIsViewingSchedule(false);
       _disposeNewEventScheduleModel();
@@ -819,6 +824,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   /// 保存成功后直接关闭新建页，不弹窗（不检查未保存状态）
   void _hideNewEventPageAfterSave() {
+    _skipDetailPanelSyncCount = 0;
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
     _disposeNewEventScheduleModel();
     setState(() {
@@ -835,6 +841,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   /// 仅关闭新建/编辑页并清除未保存标记，不弹窗（供侧边栏等外部离开时调用）
   void _performLeaveCalendarWithoutDialog() {
+    _skipDetailPanelSyncCount = 0;
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
     _disposeNewEventScheduleModel();
     setState(() {
@@ -864,6 +871,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   void _performScheduleTap(ScheduleItem schedule) {
     // 调试输出已移除: _onScheduleTap info
 
+    _skipDetailPanelSyncCount = 0;
     // 当点击日程时，隐藏右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(true);
 
@@ -895,6 +903,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
   /// 执行选择日期后的逻辑（抽取为独立方法）
   void _performSelectDay(DateTime selected, DateTime focused) {
+    _skipDetailPanelSyncCount = 0;
     _disposeNewEventScheduleModel();
     setState(() {
       _selectedDay = selected;
@@ -923,6 +932,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     if (note.isSpace) {
       return;
     }
+    _skipDetailPanelSyncCount = 0;
     // 当点击文档时，显示右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
     if (_showNewEventPage) {
@@ -959,6 +969,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   void _hideEditEventPage() {
+    _skipDetailPanelSyncCount = 0;
     // 当离开日程编辑页面时，恢复显示右侧工具栏
     widget.calendarWidgetBuilder.setIsViewingSchedule(false);
 
@@ -972,6 +983,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   /// 检查并隐藏编辑日程页，如果有未保存配置则弹窗确认
   void _checkAndHideEditEventPage({VoidCallback? onHidden}) {
     final hide = () {
+      _skipDetailPanelSyncCount = 0;
       // 当关闭编辑日程页面时，恢复显示右侧工具栏
       widget.calendarWidgetBuilder.setIsViewingSchedule(false);
 
@@ -1022,6 +1034,7 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     setState(() {
       _newEventHasUnsavedConfig = false;
     });
+    _skipDetailPanelSyncCount = 5;
     context.read<CalendarContentCubit>().refresh();
 
     // 显示成功提示
@@ -1032,12 +1045,11 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
   }
 
   void _onEventUpdated(Map<String, dynamic> eventData) {
-    // 刷新日历内容以显示更新的日程
-    context.read<CalendarContentCubit>().refresh();
-
-    // 刷新日程列表以显示更新的日程
-    // 通过 ScheduleModel 的全局实例来刷新
-    // _scheduleSidebarKey.currentState?.refreshData();
+    _skipDetailPanelSyncCount = 5;
+    // 注意：不要调用 CalendarContentCubit.refresh()，因为：
+    // 1. ScheduleSidebarContent 有自己的 ScheduleModel 实例监听数据库变化，会自动刷新
+    // 2. CalendarContentCubit.refresh() 会触发 CalendarContentWidget 重新加载笔记，
+    //    导致 _loadNotesForDate 中的自动选择逻辑被触发，从而跳转到笔记而非留在编辑页面
 
     // 成功提示由 EditEventPage 内统一展示。保存后不关闭编辑页，保持顶部「编辑日程 + 取消/保存」栏，
     // 避免切换成 _buildDefaultView 后的「编辑日程：来自数据库的日程」仅有关闭按钮的顶栏。
@@ -1547,6 +1559,16 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     List<ScheduleItem> schedules,
   ) {
     if (!mounted) return;
+
+    // 正在新建或编辑日程时，不要用「当天第一条笔记/日程」覆盖右侧。
+    // 否则保存后未保存标记已清除，异步加载完成时会误切到未命名文档等其它视图。
+    if (_showNewEventPage || _showEditEventPage) {
+      return;
+    }
+    if (_skipDetailPanelSyncCount > 0) {
+      _skipDetailPanelSyncCount--;
+      return;
+    }
 
     if (notes.isNotEmpty) {
       final firstNote = notes.first;
