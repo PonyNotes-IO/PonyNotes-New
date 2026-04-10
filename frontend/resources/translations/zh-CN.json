@@ -2135,7 +2135,8 @@
           "removeLink": "移除链接",
           "pasteHint": "粘贴 https://...",
           "unableToDisplay": "无法显示"
-        }
+        },
+        "emptyPage": "空白页面"
       },
       "appflowyAIEditDisabled": "登录以启用 AI 功能",
       "cannotMoveToItsChildren": "无法移动到其子项",

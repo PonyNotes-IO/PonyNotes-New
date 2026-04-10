@@ -2108,7 +2108,8 @@
           "removeLink": "移除連結",
           "pasteHint": "貼上 https://...",
           "unableToDisplay": "無法顯示"
-        }
+        },
+        "emptyPage": "空白頁面"
       }
     },
     "outlineBlock": {

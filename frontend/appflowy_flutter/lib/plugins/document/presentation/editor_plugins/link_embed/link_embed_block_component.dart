@@ -331,7 +331,7 @@ class LinkEmbedBlockComponentState
                   )
                 : Center(
                     child: FlowyText(
-                      'Empty page',
+                      LocaleKeys.document_plugins_linkPreview_emptyPage.tr(),
                       color: fillScheme.tertiary,
                     ),
                   ),

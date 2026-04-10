@@ -2166,7 +2166,8 @@
           "removeLink": "Remove Link",
           "pasteHint": "Paste in https://...",
           "unableToDisplay": "unable to display"
-        }
+        },
+        "emptyPage": "Empty page"
       }
     },
     "outlineBlock": {

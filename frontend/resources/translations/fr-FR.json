@@ -2099,7 +2099,8 @@
           "removeLink": "Supprimer le lien",
           "pasteHint": "Coller en https://...",
           "unableToDisplay": "impossible d'afficher"
-        }
+        },
+        "emptyPage": "Page vide"
       }
     },
     "outlineBlock": {

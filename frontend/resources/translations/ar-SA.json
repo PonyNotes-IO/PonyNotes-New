@@ -2129,7 +2129,8 @@
           "removeLink": "إزالة الرابط",
           "pasteHint": "ألصق في https://...",
           "unableToDisplay": "غير قادر على العرض"
-        }
+        },
+        "emptyPage": "صفحة فارغة"
       },
       "autoCompletionMenuItemName": "عنصر قائمة الإكمال التلقائي"
     },

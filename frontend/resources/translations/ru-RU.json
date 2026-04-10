@@ -2104,7 +2104,8 @@
           "removeLink": "Удалить ссылку",
           "pasteHint": "Вставить https://...",
           "unableToDisplay": "невозможно отобразить"
-        }
+        },
+        "emptyPage": "Пустая страница"
       }
     },
     "outlineBlock": {
