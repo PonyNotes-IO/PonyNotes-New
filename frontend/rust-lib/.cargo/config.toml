@@ -10,3 +10,6 @@ rustflags = ["-C", "link-arg=-miphoneos-version-min=10.0"]
 
 [target.aarch64-apple-ios-sim]
 rustflags = ["-C", "link-arg=-mios-simulator-version-min=10.0"]
+
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-soname,libdart_ffi.so"]
