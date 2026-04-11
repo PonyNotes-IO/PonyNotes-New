@@ -124,12 +124,17 @@ class ChatMessageHandler {
     List<String>? serverImages;
     bool? serverHasImages;
     List<String>? serverImagePaths; // 新增：服务器返回的图片路径
+    String? serverThinkingText; // 深度思考内容
 
     try {
       final metadataJson = jsonDecode(metadata);
       Log.info('📋 MessageHandler: 解析后的metadata类型: ${metadataJson.runtimeType}');
       if (metadataJson is Map<String, dynamic>) {
         Log.info('📋 MessageHandler: metadata键列表: ${metadataJson.keys.toList()}');
+        // 提取思考过程文本
+        if (metadataJson['thinking_text'] != null) {
+          serverThinkingText = metadataJson['thinking_text'] as String?;
+        }
         if (metadataJson['images'] != null) {
           if (metadataJson['images'] is List) {
             serverImages = (metadataJson['images'] as List)
@@ -193,6 +198,11 @@ class ChatMessageHandler {
     } else if (serverImagePaths != null && serverImagePaths.isNotEmpty) {
       finalMetadata['image_paths'] = serverImagePaths;
       Log.info('📸 MessageHandler: 图片路径已保留到最终消息（从服务器metadata）');
+    }
+
+    // 保留思考过程文本
+    if (serverThinkingText != null && serverThinkingText.isNotEmpty) {
+      finalMetadata[messageThinkingTextKey] = serverThinkingText;
     }
 
     return TextMessage(

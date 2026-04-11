@@ -282,6 +282,8 @@ impl Chat {
                     }
                   },
                   QuestionStreamValue::Thinking { value } => {
+                    // 同时积累到 buffer，流结束后存入 metadata 持久化
+                    answer_stream_buffer.lock().await.push_thinking(&value);
                     let _ = answer_sink
                       .send(StreamMessage::OnThinking(value).to_string())
                       .await;
@@ -387,7 +389,15 @@ impl Chat {
         return Ok(());
       }
       let content = answer_stream_buffer.lock().await.take_content();
-      let metadata = answer_stream_buffer.lock().await.take_metadata();
+      let mut metadata = answer_stream_buffer.lock().await.take_metadata();
+      let thinking_text = answer_stream_buffer.lock().await.take_thinking();
+      // 将思考过程写入 metadata，持久化到本地 SQLite
+      if !thinking_text.is_empty() {
+        let meta = metadata.get_or_insert_with(|| serde_json::json!({}));
+        if let Some(obj) = meta.as_object_mut() {
+          obj.insert("thinking_text".to_string(), serde_json::Value::String(thinking_text));
+        }
+      }
       let answer = cloud_service
         .create_answer(
           &workspace_id,
@@ -719,16 +729,22 @@ fn save_chat_message_disk(
 struct StringBuffer {
   content: String,
   metadata: Option<serde_json::Value>,
+  thinking_text: String,
 }
 
 impl StringBuffer {
   fn clear(&mut self) {
     self.content.clear();
     self.metadata = None;
+    self.thinking_text.clear();
   }
 
   fn push_str(&mut self, value: &str) {
     self.content.push_str(value);
+  }
+
+  fn push_thinking(&mut self, value: &str) {
+    self.thinking_text.push_str(value);
   }
 
   fn set_metadata(&mut self, value: serde_json::Value) {
@@ -745,6 +761,10 @@ impl StringBuffer {
 
   fn take_content(&mut self) -> String {
     std::mem::take(&mut self.content)
+  }
+
+  fn take_thinking(&mut self) -> String {
+    std::mem::take(&mut self.thinking_text)
   }
 }
 

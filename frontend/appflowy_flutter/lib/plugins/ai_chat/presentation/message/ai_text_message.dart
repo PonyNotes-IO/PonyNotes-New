@@ -74,6 +74,7 @@ class ChatAIMessageWidget extends StatelessWidget {
         refSourceJsonString: refSourceJsonString,
         chatId: chatId,
         questionId: questionId,
+        originalMessage: stream == null ? message : null,
       ),
       child: BlocConsumer<ChatAIMessageBloc, ChatAIMessageState>(
         listenWhen: (previous, current) =>
@@ -117,7 +118,8 @@ class ChatAIMessageWidget extends StatelessWidget {
                   ),
                 ),
                 ready: () {
-                  return blocState.text.isEmpty
+                  // 正文为空但有思考内容时（深度思考流式阶段），也显示消息气泡
+                  return (blocState.text.isEmpty && blocState.thinkingText.isEmpty)
                       ? _LoadingMessage(
                           message: message,
                           loadingText: loadingText,
@@ -270,46 +272,49 @@ class _NonEmptyMessageState extends State<_NonEmptyMessage> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.read<ChatAIMessageBloc>().state;
-    final showActions =
-        widget.stream == null && state.text.isNotEmpty && !widget.isStreaming;
-    return ChatAIMessageBubble(
-      message: widget.message,
-      isLastMessage: widget.isLastMessage,
-      showActions: showActions,
-      isSelectingMessages: widget.isSelectingMessages,
-      onRegenerate: widget.onRegenerate,
-      onChangeFormat: widget.onChangeFormat,
-      onChangeModel: widget.onChangeModel,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (state.thinkingText.isNotEmpty)
-            _ThinkingSection(
-              thinkingText: state.thinkingText,
-              isExpanded: _thinkingExpanded,
-              isStreaming: widget.isStreaming,
-              onToggle: () =>
-                  setState(() => _thinkingExpanded = !_thinkingExpanded),
-            ),
-          Padding(
-            padding: EdgeInsetsDirectional.only(start: 4.0),
-            child: AIMarkdownText(
-              markdown: state.text,
-              withAnimation: widget.enableAnimation && widget.stream != null,
-            ),
-          ),
-          if (state.sources.isNotEmpty)
-            SelectionContainer.disabled(
-              child: AIMessageMetadata(
-                sources: state.sources,
-                onSelectedMetadata: widget.onSelectedMetadata,
+    return BlocBuilder<ChatAIMessageBloc, ChatAIMessageState>(
+      builder: (context, state) {
+        final showActions =
+            widget.stream == null && state.text.isNotEmpty && !widget.isStreaming;
+        return ChatAIMessageBubble(
+          message: widget.message,
+          isLastMessage: widget.isLastMessage,
+          showActions: showActions,
+          isSelectingMessages: widget.isSelectingMessages,
+          onRegenerate: widget.onRegenerate,
+          onChangeFormat: widget.onChangeFormat,
+          onChangeModel: widget.onChangeModel,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (state.thinkingText.isNotEmpty)
+                _ThinkingSection(
+                  thinkingText: state.thinkingText,
+                  isExpanded: _thinkingExpanded,
+                  isStreaming: widget.isStreaming,
+                  onToggle: () =>
+                      setState(() => _thinkingExpanded = !_thinkingExpanded),
+                ),
+              Padding(
+                padding: EdgeInsetsDirectional.only(start: 4.0),
+                child: AIMarkdownText(
+                  markdown: state.text,
+                  withAnimation: widget.enableAnimation && widget.stream != null,
+                ),
               ),
-            ),
-          if (state.sources.isNotEmpty && !widget.isLastMessage)
-            const VSpace(8.0),
-        ],
-      ),
+              if (state.sources.isNotEmpty)
+                SelectionContainer.disabled(
+                  child: AIMessageMetadata(
+                    sources: state.sources,
+                    onSelectedMetadata: widget.onSelectedMetadata,
+                  ),
+                ),
+              if (state.sources.isNotEmpty && !widget.isLastMessage)
+                const VSpace(8.0),
+            ],
+          ),
+        );
+      },
     );
   }
 }

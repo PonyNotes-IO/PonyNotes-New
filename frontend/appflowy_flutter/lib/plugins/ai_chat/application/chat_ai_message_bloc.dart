@@ -1,4 +1,5 @@
 import 'package:appflowy/plugins/ai_chat/application/chat_entity.dart';
+import 'package:flutter_chat_core/flutter_chat_core.dart';
 import 'package:appflowy/plugins/ai_chat/application/chat_message_stream.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -17,10 +18,12 @@ class ChatAIMessageBloc extends Bloc<ChatAIMessageEvent, ChatAIMessageState> {
     String? refSourceJsonString,
     required this.chatId,
     required this.questionId,
+    Message? originalMessage,
   }) : super(
           ChatAIMessageState.initial(
             message,
             parseMetadata(refSourceJsonString),
+            message: originalMessage,
           ),
         ) {
     _registerEventHandlers();
@@ -209,11 +212,20 @@ class ChatAIMessageState with _$ChatAIMessageState {
 
   factory ChatAIMessageState.initial(
     dynamic text,
-    MetadataCollection metadata,
-  ) {
+    MetadataCollection metadata, {
+    Message? message,
+  }) {
+    // 从历史消息 metadata 中恢复思考过程文本
+    String restoredThinkingText = "";
+    if (message != null && message.metadata != null) {
+      final thinking = message.metadata![messageThinkingTextKey];
+      if (thinking is String && thinking.isNotEmpty) {
+        restoredThinkingText = thinking;
+      }
+    }
     return ChatAIMessageState(
       text: text is String ? text : "",
-      thinkingText: "",
+      thinkingText: restoredThinkingText,
       stream: text is AnswerStream ? text : null,
       messageState: const MessageState.ready(),
       sources: metadata.sources,

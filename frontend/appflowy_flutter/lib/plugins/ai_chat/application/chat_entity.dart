@@ -21,6 +21,8 @@ const aiResponseUserId = "0";
 const messageRefSourceJsonStringKey = "ref_source_json_string";
 const messageChatFileListKey = "chat_files";
 const messageQuestionIdKey = "question_id";
+// 深度思考内容持久化 key（存储在消息 metadata 中，用于历史恢复）
+const messageThinkingTextKey = "thinking_text_key";
 
 @JsonSerializable()
 class ChatMessageRefSource {
