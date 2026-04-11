@@ -752,10 +752,15 @@ GoRoute _rootRoute(Widget child) {
       final routeName = await userResponse.fold(
         (user) async {
           // 直接使用 SharedPreferences 读取，不通过 TempUserCache
-          final prefs = await SharedPreferences.getInstance();
-          final value = prefs.getString('tempUserSave');
-          if(value == 'true') {
-            return SignInScreen.routeName;
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            final value = prefs.getString('tempUserSave');
+            if(value == 'true') {
+              return SignInScreen.routeName;
+            }
+          } catch (e) {
+            Log.error('Failed to get shared preferences', e);
+            // 继续正常流程
           }
           // 检查用户是否需要绑定手机号（第三方登录但未绑定手机号）
           // 如果需要绑定手机号，不重定向，让 SplashScreen 处理

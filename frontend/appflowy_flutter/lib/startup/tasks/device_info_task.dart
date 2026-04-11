@@ -59,66 +59,81 @@ class ApplicationInfoTask extends LaunchTask {
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
     final DeviceInfoPlugin deviceInfoPlugin = DeviceInfoPlugin();
-    final PackageInfo packageInfo = await PackageInfo.fromPlatform();
-
-    if (Platform.isMacOS) {
-      final macInfo = await deviceInfoPlugin.macOsInfo;
-      ApplicationInfo.macOSMajorVersion = macInfo.majorVersion;
-      ApplicationInfo.macOSMinorVersion = macInfo.minorVersion;
-    }
-
-    if (Platform.isAndroid) {
-      final androidInfo = await deviceInfoPlugin.androidInfo;
-      ApplicationInfo.androidSDKVersion = androidInfo.version.sdkInt;
-    }
-
-    ApplicationInfo.applicationVersion = packageInfo.version;
-    ApplicationInfo.buildNumber = packageInfo.buildNumber;
-
-    String? deviceId;
-    String? architecture;
-    String? os;
+    
     try {
-      if (Platform.isAndroid) {
-        final AndroidDeviceInfo androidInfo =
-            await deviceInfoPlugin.androidInfo;
-        deviceId = androidInfo.device;
-        architecture = androidInfo.supportedAbis.firstOrNull;
-        os = 'android';
-      } else if (Platform.isIOS) {
-        final IosDeviceInfo iosInfo = await deviceInfoPlugin.iosInfo;
-        deviceId = iosInfo.identifierForVendor;
-        architecture = iosInfo.utsname.machine;
-        os = 'ios';
-      } else if (Platform.isMacOS) {
-        final MacOsDeviceInfo macInfo = await deviceInfoPlugin.macOsInfo;
-        deviceId = macInfo.systemGUID;
-        architecture = macInfo.arch;
-        os = 'macos';
-      } else if (Platform.isWindows) {
-        final WindowsDeviceInfo windowsInfo =
-            await deviceInfoPlugin.windowsInfo;
-        deviceId = windowsInfo.deviceId;
-        // we only support x86_64 on Windows
-        architecture = 'x86_64';
-        os = 'windows';
-      } else if (Platform.isLinux) {
-        final LinuxDeviceInfo linuxInfo = await deviceInfoPlugin.linuxInfo;
-        deviceId = linuxInfo.machineId;
-        // we only support x86_64 on Linux
-        architecture = 'x86_64';
-        os = 'linux';
-      } else {
-        deviceId = null;
-        architecture = null;
-        os = null;
-      }
+      final PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      ApplicationInfo.applicationVersion = packageInfo.version;
+      ApplicationInfo.buildNumber = packageInfo.buildNumber;
     } catch (e) {
-      Log.error('Failed to get platform version, $e');
+      Log.error('Failed to get package info, $e');
+      // 如果获取失败，使用默认值
+      ApplicationInfo.applicationVersion = '1.0.0';
+      ApplicationInfo.buildNumber = '1';
     }
 
-    ApplicationInfo.deviceId = deviceId ?? '';
-    ApplicationInfo.architecture = architecture ?? '';
-    ApplicationInfo.os = os ?? '';
+    try {
+      if (Platform.isMacOS) {
+        final macInfo = await deviceInfoPlugin.macOsInfo;
+        ApplicationInfo.macOSMajorVersion = macInfo.majorVersion;
+        ApplicationInfo.macOSMinorVersion = macInfo.minorVersion;
+      }
+
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfoPlugin.androidInfo;
+        ApplicationInfo.androidSDKVersion = androidInfo.version.sdkInt;
+      }
+
+      String? deviceId;
+      String? architecture;
+      String? os;
+      try {
+        if (Platform.isAndroid) {
+          final AndroidDeviceInfo androidInfo =
+              await deviceInfoPlugin.androidInfo;
+          deviceId = androidInfo.device;
+          architecture = androidInfo.supportedAbis.firstOrNull;
+          os = 'android';
+        } else if (Platform.isIOS) {
+          final IosDeviceInfo iosInfo = await deviceInfoPlugin.iosInfo;
+          deviceId = iosInfo.identifierForVendor;
+          architecture = iosInfo.utsname.machine;
+          os = 'ios';
+        } else if (Platform.isMacOS) {
+          final MacOsDeviceInfo macInfo = await deviceInfoPlugin.macOsInfo;
+          deviceId = macInfo.systemGUID;
+          architecture = macInfo.arch;
+          os = 'macos';
+        } else if (Platform.isWindows) {
+          final WindowsDeviceInfo windowsInfo =
+              await deviceInfoPlugin.windowsInfo;
+          deviceId = windowsInfo.deviceId;
+          // we only support x86_64 on Windows
+          architecture = 'x86_64';
+          os = 'windows';
+        } else if (Platform.isLinux) {
+          final LinuxDeviceInfo linuxInfo = await deviceInfoPlugin.linuxInfo;
+          deviceId = linuxInfo.machineId;
+          // we only support x86_64 on Linux
+          architecture = 'x86_64';
+          os = 'linux';
+        } else {
+          deviceId = null;
+          architecture = null;
+          os = null;
+        }
+      } catch (e) {
+        Log.error('Failed to get platform version, $e');
+      }
+
+      ApplicationInfo.deviceId = deviceId ?? '';
+      ApplicationInfo.architecture = architecture ?? '';
+      ApplicationInfo.os = os ?? '';
+    } catch (e) {
+      Log.error('Failed to get device info, $e');
+      // 如果获取失败，使用默认值
+      ApplicationInfo.deviceId = '';
+      ApplicationInfo.architecture = '';
+      ApplicationInfo.os = '';
+    }
   }
 }

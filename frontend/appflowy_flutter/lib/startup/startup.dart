@@ -112,9 +112,7 @@ class FlowyRunner {
     final config = LaunchConfiguration(
       isAnon: isAnon,
       // Unit test can't use the package_info_plus plugin
-      version: mode.isUnitTest
-          ? '1.0.0'
-          : await PackageInfo.fromPlatform().then((value) => value.version),
+      version: '1.0.0',
       rustEnvs: rustEnvsBuilder?.call() ?? {},
     );
 
@@ -125,16 +123,29 @@ class FlowyRunner {
     // 处理 Windows deep link（在 getIt 初始化完成后）
     if (Platform.isWindows && isAppFlowyCloudEnabled) {
       try {
-        getIt<AppFlowyCloudDeepLink>().processInitialDeepLink();
+        await getIt<AppFlowyCloudDeepLink>().processInitialDeepLink();
       } catch (e) {
         Log.error('Failed to process initial deep link: $e');
       }
     }
 
-    final applicationDataDirectory =
-        await getIt<ApplicationDataStorage>().getPath().then(
-              (value) => Directory(value),
-            );
+    // 增加延迟时间，确保插件有足够的时间初始化
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    Directory applicationDataDirectory;
+    try {
+      final path = await getIt<ApplicationDataStorage>().getPath();
+      applicationDataDirectory = Directory(path);
+    } catch (e) {
+      Log.error('Failed to get application data directory: $e');
+      // 使用更可靠的默认路径
+      if (Platform.isAndroid) {
+        // 在Android上使用缓存目录作为默认路径
+        applicationDataDirectory = Directory('/data/data/ioi.xiaomabiji.ponynotes/cache');
+      } else {
+        applicationDataDirectory = Directory('./data');
+      }
+    }
 
     // add task
     final launcher = getIt<AppLauncher>();

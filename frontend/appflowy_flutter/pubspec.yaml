@@ -123,7 +123,7 @@ dependencies:
   open_filex: ^4.5.0
   package_info_plus: ^8.0.2
   path: ^1.8.3
-  path_provider: ^2.0.15
+  path_provider: ^2.1.5
   perfect_freehand: ^2.5.1
   pdf: ^3.11.1
   screenshot: ^3.0.0  # ✅ 用于手写笔记导出PDF时截图
@@ -168,7 +168,7 @@ dependencies:
   analyzer: 6.11.0
   media_kit: ^1.1.11
   media_kit_video: 1.2.0
-  media_kit_libs_windows_video: ^1.0.9
+  media_kit_libs_video: ^1.0.7 # Native video dependencies.
   ffi: ^2.1.0
   # webview_flutter: ^4.10.0  # 已替换为 flutter_inappwebview (支持 Windows)
   flutter_inappwebview: ^6.0.0

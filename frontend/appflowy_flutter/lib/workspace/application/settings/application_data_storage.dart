@@ -65,25 +65,48 @@ class ApplicationDataStorage {
       return _cachePath!;
     }
 
-    final response = await getIt<KeyValueStorage>().get(KVKeys.pathLocation);
+    try {
+      final response = await getIt<KeyValueStorage>().get(KVKeys.pathLocation);
 
-    String path;
-    if (response == null) {
-      final directory = await appFlowyApplicationDataDirectory();
-      path = directory.path;
-    } else {
-      path = response;
+      String path;
+      if (response == null) {
+        try {
+          final directory = await appFlowyApplicationDataDirectory();
+          path = directory.path;
+        } catch (e) {
+          Log.error('Failed to get application data directory: $e');
+          // 使用默认路径
+          path = './data';
+        }
+      } else {
+        path = response;
+      }
+      _cachePath = path;
+
+      // if the path is not exists means the path is invalid, so we should clear the kv store
+      try {
+        if (!Directory(path).existsSync()) {
+          await getIt<KeyValueStorage>().clear();
+          try {
+            final directory = await appFlowyApplicationDataDirectory();
+            path = directory.path;
+          } catch (e) {
+            Log.error('Failed to get application data directory: $e');
+            // 使用默认路径
+            path = './data';
+          }
+        }
+      } catch (e) {
+        Log.error('Failed to check directory existence: $e');
+        // 继续使用当前路径
+      }
+
+      return path;
+    } catch (e) {
+      Log.error('Failed to get application data path: $e');
+      // 使用默认路径
+      return './data';
     }
-    _cachePath = path;
-
-    // if the path is not exists means the path is invalid, so we should clear the kv store
-    if (!Directory(path).existsSync()) {
-      await getIt<KeyValueStorage>().clear();
-      final directory = await appFlowyApplicationDataDirectory();
-      path = directory.path;
-    }
-
-    return path;
   }
 }
 
