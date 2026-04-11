@@ -329,12 +329,14 @@ pub async fn stream_ai_session_with_attachments(
     resp: reqwest::Response,
     buffer: String,
     pending_jsons: Vec<Value>,
+    enable_thinking: bool,
   }
-  
+
   let initial_state = StreamState {
     resp,
     buffer: String::new(),
     pending_jsons: Vec::new(),
+    enable_thinking,
   };
   
   let stream = futures_util::stream::unfold(initial_state, |mut state| async move {
@@ -431,12 +433,18 @@ pub async fn stream_ai_session_with_attachments(
                           continue; // 跳过这个chunk，不添加到results
                         }
 
-                        // 如果有思考内容，作为 STREAM_THINKING_KEY (key="5") 独立输出
+                        // 如果有思考内容，仅在用户开启深度思考时才转发
+                        // doubao-seed 等思考模型默认返回 reasoning_content，
+                        // 只有 enable_thinking=true 时才显示给用户
                         if let Some(thinking_text) = reasoning_content {
-                          let mut thinking_obj = serde_json::Map::new();
-                          thinking_obj.insert(STREAM_THINKING_KEY.to_string(), Value::String(thinking_text.to_string()));
-                          trace!("[AISession] 转换思考内容: {:?}", thinking_text);
-                          results.push(Value::Object(thinking_obj));
+                          if state.enable_thinking {
+                            let mut thinking_obj = serde_json::Map::new();
+                            thinking_obj.insert(STREAM_THINKING_KEY.to_string(), Value::String(thinking_text.to_string()));
+                            trace!("[AISession] 转换思考内容: {:?}", thinking_text);
+                            results.push(Value::Object(thinking_obj));
+                          } else {
+                            trace!("[AISession] 收到 reasoning_content 但 enable_thinking=false，跳过");
+                          }
                         }
 
                         // 如果有正常回答内容，作为 STREAM_ANSWER_KEY (key="1") 输出
@@ -458,8 +466,30 @@ pub async fn stream_ai_session_with_attachments(
                       }
                     }
                   }
+
+                  // 处理联网搜索来源 - Ark API 将 references 放在顶层 JSON
+                  // 格式: {"references": [{"url": "...", "title": "...", "content": "..."}]}
+                  if let Some(references) = obj.get("references").and_then(|r| r.as_array()) {
+                    if !references.is_empty() {
+                      let converted: Vec<Value> = references.iter().filter_map(|r| {
+                        let url = r.get("url").and_then(|u| u.as_str())?;
+                        let title = r.get("title").and_then(|t| t.as_str()).unwrap_or("未知来源");
+                        Some(serde_json::json!({
+                          "id": url,
+                          "name": title,
+                          "source": url,
+                        }))
+                      }).collect();
+                      if !converted.is_empty() {
+                        let mut meta_obj = serde_json::Map::new();
+                        meta_obj.insert(STREAM_METADATA_KEY.to_string(), Value::Array(converted));
+                        trace!("[AISession] 转换联网搜索来源: {} 条", meta_obj.len());
+                        results.push(Value::Object(meta_obj));
+                      }
+                    }
+                  }
                 }
-                
+
                 results.push(json);
               }
               Err(e) => {
