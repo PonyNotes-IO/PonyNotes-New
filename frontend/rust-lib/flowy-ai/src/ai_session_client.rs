@@ -145,7 +145,9 @@ pub async fn stream_ai_session_with_attachments(
   let client = Client::builder()
     .danger_accept_invalid_certs(true)  // 接受自签名证书
     .user_agent("AppFlowyClient/0.9.9")  // 添加User-Agent
-    .timeout(Duration::from_secs(60))  // 超时时间
+    .connect_timeout(Duration::from_secs(30))  // 仅限制连接建立时间
+    // 不设置 timeout()，避免对 SSE 流式传输施加总时限
+    // DeepSeek 深度思考模式回答复杂问题可能需要数分钟
     .build()
     .map_err(|e| {
       error!("[AISession] 创建HTTP客户端失败: {}", e);
@@ -193,7 +195,6 @@ pub async fn stream_ai_session_with_attachments(
 
   let mut request = client
     .post(&url)
-    .timeout(Duration::from_secs(60))
     .json(&body);
   
   // 添加 Authorization header（如果提供了 token）
