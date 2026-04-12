@@ -1,5 +1,5 @@
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
-import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.dart';
 import 'package:appflowy/plugins/document/application/document_appearance_cubit.dart';
@@ -24,9 +24,9 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
-import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -51,6 +51,7 @@ class DocumentPage extends StatefulWidget {
     this.fixedTitle,
     this.showShareAndFavorite = false, // 是否显示分享和收藏工具栏，默认不显示（工作区打开时不显示）
     this.isInSpaceHub = false, // 是否在 Space Hub 中打开
+    this.viewInfoBloc, // 可选：外部传入的 ViewInfoBloc（如 SpaceHub 中需要为每个文档创建单独的 bloc）
   });
 
   final ViewPB view;
@@ -61,6 +62,7 @@ class DocumentPage extends StatefulWidget {
   final List<PickerTabType> tabs;
   final bool showShareAndFavorite; // 是否显示分享和收藏工具栏
   final bool isInSpaceHub; // 是否在 Space Hub 中打开
+  final ViewInfoBloc? viewInfoBloc; // 可选：外部传入的 ViewInfoBloc
 
   @override
   State<DocumentPage> createState() => _DocumentPageState();
@@ -72,6 +74,7 @@ class _DocumentPageState extends State<DocumentPage>
   Selection? initialSelection;
   bool _handledDeletedInSpaceHub = false;
   bool _handledForceCloseNavigation = false;
+  bool _editorStateRegistered = false; // 避免重复注册 ViewInfoBloc
   late final documentBloc = DocumentBloc(documentId: widget.view.id, workspaceId: widget.view.workspaceId)
     ..add(const DocumentEvent.initial());
 
@@ -101,6 +104,9 @@ class _DocumentPageState extends State<DocumentPage>
 
   @override
   Widget build(BuildContext context) {
+    // 确定要使用的 ViewInfoBloc：优先使用传入的 bloc
+    final viewInfoBloc = widget.viewInfoBloc;
+
     return MultiBlocProvider(
       providers: [
         BlocProvider.value(value: getIt<ActionNavigationBloc>()),
@@ -110,6 +116,8 @@ class _DocumentPageState extends State<DocumentPage>
               ViewBloc(view: widget.view)..add(const ViewEvent.initial()),
           lazy: false,
         ),
+        if (viewInfoBloc != null)
+          BlocProvider<ViewInfoBloc>.value(value: viewInfoBloc),
       ],
       child: BlocConsumer<PageAccessLevelBloc, PageAccessLevelState>(
         listenWhen: (prev, curr) =>
@@ -158,6 +166,16 @@ class _DocumentPageState extends State<DocumentPage>
 
               final editorState = state.editorState;
               this.editorState = editorState;
+              // editorState 就绪后注册到 ViewInfoBloc（仅首次），触发字数统计服务启动
+              if (editorState != null && !_editorStateRegistered) {
+                _editorStateRegistered = true;
+                // 从 context 中获取 ViewInfoBloc
+                final viewInfoBloc = context.read<ViewInfoBloc>();
+                Log.debug('DocumentPage: registerEditorState for view: ${widget.view.id}, bloc hashCode: ${viewInfoBloc.hashCode}');
+                viewInfoBloc.add(
+                  ViewInfoEvent.registerEditorState(editorState: editorState),
+                );
+              }
               final error = state.error;
               if (error != null) {
                 Log.error(error);
@@ -314,6 +332,9 @@ class _DocumentPageState extends State<DocumentPage>
   }
 
   Widget _buildTopBar(BuildContext context) {
+    // 优先使用传入的 ViewInfoBloc，确保和 DocumentPage 注册 EditorState 使用同一个实例
+    final effectiveViewInfoBloc = widget.viewInfoBloc;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0,),
       child: Row(
@@ -343,7 +364,10 @@ class _DocumentPageState extends State<DocumentPage>
                   view: widget.view,
                 ),
                 const SizedBox(width: 4),
-                MoreViewActions(view: widget.view),
+                if (effectiveViewInfoBloc != null)
+                  MoreViewActions(view: widget.view, viewInfoBloc: effectiveViewInfoBloc)
+                else
+                  MoreViewActions(view: widget.view),
               ],
             ),
         ],
@@ -352,6 +376,9 @@ class _DocumentPageState extends State<DocumentPage>
   }
 
   Widget _buildTopActionsBar(BuildContext context) {
+    // 优先使用传入的 ViewInfoBloc，确保和 DocumentPage 注册 EditorState 使用同一个实例
+    final effectiveViewInfoBloc = widget.viewInfoBloc;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Row(
@@ -377,7 +404,10 @@ class _DocumentPageState extends State<DocumentPage>
             view: widget.view,
           ),
           const SizedBox(width: 4),
-          MoreViewActions(view: widget.view),
+          if (effectiveViewInfoBloc != null)
+            MoreViewActions(view: widget.view, viewInfoBloc: effectiveViewInfoBloc)
+          else
+            MoreViewActions(view: widget.view),
         ],
       ),
     );

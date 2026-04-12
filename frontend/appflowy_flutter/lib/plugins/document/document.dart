@@ -170,6 +170,7 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
           fixedTitle: fixedTitle,
           tabs: tabs,
           isInSpaceHub: false, // 默认为 false，单独打开时使用
+          viewInfoBloc: bloc, // 传入 ViewInfoBloc
         ),
       ),
     );
@@ -261,7 +262,7 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
             view: view,
           ),
           const HSpace(10),
-          MoreViewActions(view: view),
+          MoreViewActions(view: view, viewInfoBloc: bloc),
           const HSpace(10),
           //全局全窗口切换按钮（应用于所有视图）
           ValueListenableBuilder<bool>(

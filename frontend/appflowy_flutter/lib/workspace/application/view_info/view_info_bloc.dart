@@ -12,9 +12,14 @@ part 'view_info_bloc.freezed.dart';
 
 class ViewInfoBloc extends Bloc<ViewInfoEvent, ViewInfoState> {
   ViewInfoBloc({required this.view}) : super(ViewInfoState.initial()) {
+    // 调试日志
+    Log.debug('ViewInfoBloc constructor called for view: ${view.id}, name: ${view.name}, hashCode: ${hashCode}');
+
     on<ViewInfoEvent>((event, emit) {
+      Log.debug('ViewInfoBloc event handler called: ${event.runtimeType}, bloc hashCode: ${hashCode}');
       event.when(
         started: () {
+          Log.debug('ViewInfoBloc started for view: ${view.id}');
           emit(
             state.copyWith(
               createdAt: view.createTime.toDateTime(),
@@ -27,16 +32,23 @@ class ViewInfoBloc extends Bloc<ViewInfoEvent, ViewInfoState> {
           emit(state.copyWith(documentCounters: null));
         },
         registerEditorState: (editorState) {
-          _clearWordCountService();
-          _wordCountService = WordCountService(editorState: editorState)
-            ..addListener(_onWordCountChanged)
-            ..register();
+          Log.debug('ViewInfoBloc registerEditorState CALLED for view: ${view.id}');
+          try {
+            _clearWordCountService();
+            _wordCountService = WordCountService(editorState: editorState)
+              ..addListener(_onWordCountChanged)
+              ..register();
 
-          emit(
-            state.copyWith(
-              documentCounters: _wordCountService!.documentCounters,
-            ),
-          );
+            Log.debug('ViewInfoBloc WordCountService registered, documentCounters: ${_wordCountService?.documentCounters}');
+            emit(
+              state.copyWith(
+                documentCounters: _wordCountService!.documentCounters,
+              ),
+            );
+            Log.debug('ViewInfoBloc state updated, new documentCounters: ${_wordCountService?.documentCounters}');
+          } catch (e, stackTrace) {
+            Log.error('ViewInfoBloc registerEditorState error: $e, stack: $stackTrace');
+          }
         },
         wordCountChanged: () {
           emit(

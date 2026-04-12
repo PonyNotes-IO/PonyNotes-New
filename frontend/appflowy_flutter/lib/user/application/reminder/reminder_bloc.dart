@@ -223,7 +223,7 @@ class ReminderBloc extends Bloc<ReminderEvent, ReminderState> {
                 message: LocaleKeys.reminderNotification_message.tr(),
                 scheduledAt: scheduledAt,
                 isAck: scheduledAt.toDateTime().isBefore(DateTime.now()),
-                meta: meta,
+                meta: meta?.entries,
               ),
             ),
           ),
@@ -763,7 +763,7 @@ class ReminderUpdate {
       isRead: isReadValue,
       title: a.title,
       message: a.message,
-      meta: metaMap,
+      meta: metaMap.entries,
     );
   }
 }

@@ -4,10 +4,15 @@ import 'dart:convert';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/plugins/document/document.dart';
 import 'package:appflowy/plugins/document/document_page.dart';
+import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
+import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:appflowy/plugins/util.dart';
+import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
+import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/recent/cached_recent_service.dart';
 import 'package:appflowy/workspace/application/sidebar/folder/folder_bloc.dart';
@@ -15,13 +20,14 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/menu/menu_shared_state.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_add_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
-import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/log.dart';
@@ -71,12 +77,14 @@ class SpaceHubPlugin extends Plugin {
           ..add(const ViewInfoEvent.started()),
         _pageAccessLevelBloc = PageAccessLevelBloc(view: view)
           ..add(const PageAccessLevelEvent.initial()),
-        _selectedViewNotifier = ValueNotifier<ViewPB?>(null);
+        _selectedViewNotifier = ValueNotifier<ViewPB?>(null),
+        _currentViewInfoBlocNotifier = ValueNotifier<ViewInfoBloc?>(null);
 
   final ViewPB view;
   final ViewInfoBloc _viewInfoBloc;
   final PageAccessLevelBloc _pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> _selectedViewNotifier;
+  final ValueNotifier<ViewInfoBloc?> _currentViewInfoBlocNotifier; // ✅ 用于跟踪当前文档的 ViewInfoBloc
 
   @override
   final ViewPluginNotifier notifier;
@@ -87,6 +95,7 @@ class SpaceHubPlugin extends Plugin {
         pageAccessLevelBloc: _pageAccessLevelBloc,
         notifier: notifier,
         selectedViewNotifier: _selectedViewNotifier,
+        currentViewInfoBlocNotifier: _currentViewInfoBlocNotifier,
       );
 
   @override
@@ -105,6 +114,7 @@ class SpaceHubPlugin extends Plugin {
     _viewInfoBloc.close();
     _pageAccessLevelBloc.close();
     _selectedViewNotifier.dispose();
+    _currentViewInfoBlocNotifier.dispose();
     notifier.dispose();
   }
 }
@@ -118,12 +128,14 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
     required this.notifier,
     required this.pageAccessLevelBloc,
     required this.selectedViewNotifier,
+    required this.currentViewInfoBlocNotifier,
   });
 
   final ViewInfoBloc bloc;
   final ViewPluginNotifier notifier;
   final PageAccessLevelBloc pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
+  final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
 
   ViewPB get view => notifier.view;
 
@@ -142,18 +154,48 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
         }
 
         try {
-          final plugin = selectedView.plugin();
-          plugin.init();
-          final widgetBuilder = plugin.widgetBuilder;
-
-          // PluginWidgetBuilder 已经 mixin 了 NavigationItem，直接访问 rightBarItem
-          final toolbar = widgetBuilder.rightBarItem;
-          if (toolbar != null) {
-            return toolbar;
-          }
-          } catch (e) {
-            // 静默处理错误
-          }
+          // ✅ 使用 currentViewInfoBlocNotifier 来获取当前文档的 ViewInfoBloc
+          return ValueListenableBuilder<ViewInfoBloc?>(
+            valueListenable: currentViewInfoBlocNotifier,
+            builder: (context, currentViewInfoBloc, _) {
+              final effectiveViewInfoBloc = currentViewInfoBloc ?? bloc;
+              return MultiBlocProvider(
+                providers: [
+                  BlocProvider<ViewInfoBloc>.value(value: effectiveViewInfoBloc),
+                ],
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (FeatureFlag.syncDocument.isOn) ...[
+                      DocumentCollaborators(
+                        key: ValueKey('collaborators_${selectedView.id}'),
+                        width: 120,
+                        height: 32,
+                        view: selectedView,
+                      ),
+                      const HSpace(16),
+                    ] else
+                      const HSpace(8),
+                    ShareButton(
+                      key: ValueKey('share_button_${selectedView.id}'),
+                      view: selectedView,
+                    ),
+                    const HSpace(4),
+                    ViewFavoriteButton(
+                      key: ValueKey('favorite_button_${selectedView.id}'),
+                      view: selectedView,
+                    ),
+                    const HSpace(10),
+                    MoreViewActions(view: selectedView, viewInfoBloc: effectiveViewInfoBloc),
+                    const HSpace(10),
+                  ],
+                ),
+              );
+            },
+          );
+        } catch (e) {
+          // 静默处理错误
+        }
 
         // 没有可用的工具栏时，返回一个空占位，避免报错
         return const SizedBox.shrink();
@@ -179,6 +221,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           pluginContext: context,
           bloc: bloc,
           pageAccessLevelBloc: pageAccessLevelBloc,
+          currentViewInfoBlocNotifier: currentViewInfoBlocNotifier,
         );
       },
     );
@@ -224,6 +267,7 @@ class _SpaceHubBlocProvider extends StatefulWidget {
     required this.pluginContext,
     required this.bloc,
     required this.pageAccessLevelBloc,
+    required this.currentViewInfoBlocNotifier,
   });
 
   final ViewPB spaceView;
@@ -232,6 +276,7 @@ class _SpaceHubBlocProvider extends StatefulWidget {
   final PluginContext pluginContext;
   final ViewInfoBloc bloc;
   final PageAccessLevelBloc pageAccessLevelBloc;
+  final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
 
   @override
   State<_SpaceHubBlocProvider> createState() => _SpaceHubBlocProviderState();
@@ -289,6 +334,7 @@ class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
         spaceView: widget.spaceView,
         selectedViewNotifier: widget.selectedViewNotifier,
         onDeleted: widget.onDeleted,
+        currentViewInfoBlocNotifier: widget.currentViewInfoBlocNotifier,
       ),
     );
   }
@@ -300,11 +346,13 @@ class _SpaceHubContent extends StatefulWidget {
     required this.spaceView,
     required this.selectedViewNotifier,
     required this.onDeleted,
+    required this.currentViewInfoBlocNotifier,
   });
 
   final ViewPB spaceView;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
   final Function(ViewPB, int?)? onDeleted;
+  final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
 
   @override
   State<_SpaceHubContent> createState() => _SpaceHubContentState();
@@ -324,6 +372,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 
   /// 上次添加到最近访问的视图 ID（用于防抖）
   String? _lastAddedRecentViewId;
+
+  /// 为每个子文档视图创建的 ViewInfoBloc（用于字数统计）
+  final List<ViewInfoBloc> _childViewInfoBlocs = [];
 
   /// 添加视图到最近访问列表（带防抖）
   void _addToRecentViews(String viewId) {
@@ -549,20 +600,49 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       // 为文档、文件夹和笔记本类型的视图添加 isInSpaceHub 参数
       try {
         final plugin = view.plugin();
-        if (plugin.pluginType == PluginType.document || 
-            plugin.pluginType == PluginType.folder || 
+        if (plugin.pluginType == PluginType.document ||
+            plugin.pluginType == PluginType.folder ||
             plugin.pluginType == PluginType.notebook) {
-          // 直接创建 DocumentPage 以传递 isInSpaceHub 参数
+          // 检查是否已经为这个 view 创建过 ViewInfoBloc
+          // 如果是（用户切换视图后又切回来），复用已有的 bloc
+          ViewInfoBloc? existingBloc;
+          for (final bloc in _childViewInfoBlocs) {
+            if (bloc.view.id == view.id) {
+              existingBloc = bloc;
+              break;
+            }
+          }
+
+          ViewInfoBloc viewInfoBloc;
+          if (existingBloc != null) {
+            Log.debug('SpaceHub: Reusing existing ViewInfoBloc for view: ${view.id}, hashCode: ${existingBloc.hashCode}');
+            viewInfoBloc = existingBloc;
+          } else {
+            viewInfoBloc = ViewInfoBloc(view: view)
+              ..add(const ViewInfoEvent.started());
+            Log.debug('SpaceHub: Created new ViewInfoBloc for view: ${view.id}, hashCode: ${viewInfoBloc.hashCode}');
+            _childViewInfoBlocs.add(viewInfoBloc);
+          }
+
+          // ✅ 在 build 完成后更新 currentViewInfoBlocNotifier，避免 setState() called during build 错误
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              widget.currentViewInfoBlocNotifier.value = viewInfoBloc;
+            }
+          });
+
+          // 将 viewInfoBloc 作为参数传给 DocumentPage，确保正确传递
           return DocumentPage(
             key: ValueKey(view.id),
             view: view,
             onDeleted: () => _onChildViewDeleted(view, null),
-            tabs: [
+            tabs: const [
               PickerTabType.emoji,
               PickerTabType.icon,
               PickerTabType.custom,
             ],
             isInSpaceHub: true, // 在 Space Hub 中打开
+            viewInfoBloc: viewInfoBloc, // ✅ 传给 DocumentPage
           );
         }
       } catch (e) {
@@ -605,6 +685,15 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         _selectedView = null;
       });
       widget.selectedViewNotifier.value = null;
+    }
+
+    // 清理被删除视图的 ViewInfoBloc
+    final blocToRemove = _childViewInfoBlocs.where(
+      (bloc) => bloc.view.id == deletedView.id,
+    );
+    for (final bloc in blocToRemove) {
+      bloc.close();
+      _childViewInfoBlocs.remove(bloc);
     }
 
     try {
