@@ -129,24 +129,6 @@ class FlowyRunner {
       }
     }
 
-    // 增加延迟时间，确保插件有足够的时间初始化
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    Directory applicationDataDirectory;
-    try {
-      final path = await getIt<ApplicationDataStorage>().getPath();
-      applicationDataDirectory = Directory(path);
-    } catch (e) {
-      Log.error('Failed to get application data directory: $e');
-      // 使用更可靠的默认路径
-      if (Platform.isAndroid) {
-        // 在Android上使用缓存目录作为默认路径
-        applicationDataDirectory = Directory('/data/data/ioi.xiaomabiji.ponynotes/cache');
-      } else {
-        applicationDataDirectory = Directory('./data');
-      }
-    }
-
     // add task
     final launcher = getIt<AppLauncher>();
     launcher.addTasks(
@@ -171,8 +153,9 @@ class FlowyRunner {
         const InitLocalizationTask(),
         // init the app window
         InitAppWindowTask(),
+        if(Platform.isAndroid) const InitAppWidgetTask(),
         // Init Rust SDK
-        InitRustSDKTask(customApplicationPath: applicationDataDirectory),
+        InitRustSDKTask(),
         // Load Plugins, like document, grid ...
         const PluginLoadTask(),
         const FileStorageTask(),
@@ -196,13 +179,27 @@ class FlowyRunner {
           if (!mode.isIntegrationTest) AutoUpdateTask(),
           const HotKeyTask(),
           if (isAppFlowyCloudEnabled) InitAppFlowyCloudTask(),
-          const InitAppWidgetTask(),
+          if(!Platform.isAndroid) const InitAppWidgetTask(),
           const InitPlatformServiceTask(),
           const RecentServiceTask(),
         ],
       ],
     );
     await launcher.launch(); // execute the tasks
+    Directory applicationDataDirectory;
+    try {
+      final path = await getIt<ApplicationDataStorage>().getPath();
+      applicationDataDirectory = Directory(path);
+    } catch (e) {
+      Log.error('Failed to get application data directory: $e');
+      // 使用更可靠的默认路径
+      if (Platform.isAndroid) {
+        // 在Android上使用缓存目录作为默认路径
+        applicationDataDirectory = Directory('/data/data/ioi.xiaomabiji.ponynotes/cache');
+      } else {
+        applicationDataDirectory = Directory('./data');
+      }
+    }
 
     return FlowyRunnerContext(
       applicationDataDirectory: applicationDataDirectory,

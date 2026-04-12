@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:appflowy_backend/log.dart';
 
 import '../startup.dart';
 
@@ -10,11 +13,10 @@ class InitMediaKitTask extends LaunchTask {
   @override
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
+    WidgetsFlutterBinding.ensureInitialized();
+    MediaKit.ensureInitialized();
     // Initialize media_kit for video/audio playback support
     // Skip initialization on macOS as it requires additional native libraries
-    if (!Platform.isMacOS) {
-      MediaKit.ensureInitialized();
-    }
   }
 
   @override
