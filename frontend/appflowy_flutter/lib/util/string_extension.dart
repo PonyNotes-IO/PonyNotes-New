@@ -7,6 +7,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flowy_infra/theme_extension.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Icon;
+import 'package:text_counter/text_counter.dart';
 
 extension StringExtension on String {
   static const _specialCharacters = r'\/:*?"<>| ';
@@ -87,7 +88,7 @@ extension IconExtension on String {
 
 extension CounterExtension on String {
   Counters getCounter() {
-    final wordCount = wordRegex.allMatches(this).length;
+    final wordCount = TextCounter.count(this);
     final charCount = runes.length;
     return Counters(wordCount: wordCount, charCount: charCount);
   }

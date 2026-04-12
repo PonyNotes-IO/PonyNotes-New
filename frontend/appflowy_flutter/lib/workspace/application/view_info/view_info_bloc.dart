@@ -8,6 +8,8 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:bloc/bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'custom_word_count_service.dart';
+
 part 'view_info_bloc.freezed.dart';
 
 class ViewInfoBloc extends Bloc<ViewInfoEvent, ViewInfoState> {
@@ -35,9 +37,10 @@ class ViewInfoBloc extends Bloc<ViewInfoEvent, ViewInfoState> {
           Log.debug('ViewInfoBloc registerEditorState CALLED for view: ${view.id}');
           try {
             _clearWordCountService();
-            _wordCountService = WordCountService(editorState: editorState)
-              ..addListener(_onWordCountChanged)
-              ..register();
+            _wordCountService = CustomWordCountService(
+              editorState: editorState,
+              onWordCountChanged: _onWordCountChanged,
+            );
 
             Log.debug('ViewInfoBloc WordCountService registered, documentCounters: ${_wordCountService?.documentCounters}');
             emit(
@@ -86,7 +89,7 @@ class ViewInfoBloc extends Bloc<ViewInfoEvent, ViewInfoState> {
 
   final ViewPB view;
 
-  WordCountService? _wordCountService;
+  CustomWordCountService? _wordCountService;
 
   @override
   Future<void> close() async {
@@ -97,9 +100,7 @@ class ViewInfoBloc extends Bloc<ViewInfoEvent, ViewInfoState> {
   void _onWordCountChanged() => add(const ViewInfoEvent.wordCountChanged());
 
   void _clearWordCountService() {
-    _wordCountService
-      ?..removeListener(_onWordCountChanged)
-      ..dispose();
+    _wordCountService?.dispose();
     _wordCountService = null;
   }
 }

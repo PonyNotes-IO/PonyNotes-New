@@ -159,6 +159,7 @@ dependencies:
 
   # Window Manager for MacOS and Linux
   version: ^3.0.2
+  text_counter: ^0.1.2
   xml: ^6.5.0
   window_manager: ^0.4.3
   saver_gallery: ^4.0.1
