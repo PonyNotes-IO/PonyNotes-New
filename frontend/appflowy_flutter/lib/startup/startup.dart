@@ -153,7 +153,6 @@ class FlowyRunner {
         const InitLocalizationTask(),
         // init the app window
         InitAppWindowTask(),
-        if(Platform.isAndroid) const InitAppWidgetTask(),
         // Init Rust SDK
         InitRustSDKTask(),
         // Load Plugins, like document, grid ...
@@ -179,7 +178,7 @@ class FlowyRunner {
           if (!mode.isIntegrationTest) AutoUpdateTask(),
           const HotKeyTask(),
           if (isAppFlowyCloudEnabled) InitAppFlowyCloudTask(),
-          if(!Platform.isAndroid) const InitAppWidgetTask(),
+          const InitAppWidgetTask(),
           const InitPlatformServiceTask(),
           const RecentServiceTask(),
         ],
