@@ -498,17 +498,16 @@ class _CustomRepeatDialogState extends State<CustomRepeatDialog> {
               ),
             ],
             const SizedBox(height: 12),
-            SwitchListTile(
+            _SwitchWithCustomStyle(
               value: skipHolidays,
               onChanged: (v) => setState(() => skipHolidays = v),
-              title: const Text('跳过法定节假日'),
-              contentPadding: EdgeInsets.zero,
+              title: '跳过法定节假日',
             ),
-            SwitchListTile(
+            const SizedBox(height: 8),
+            _SwitchWithCustomStyle(
               value: skipWeekend,
               onChanged: (v) => setState(() => skipWeekend = v),
-              title: const Text('跳过周末'),
-              contentPadding: EdgeInsets.zero,
+              title: '跳过周末',
             ),
           ],
         ),
@@ -591,9 +590,100 @@ class _CupertinoPickerScrollBehavior extends ScrollBehavior {
         PointerDeviceKind.invertedStylus,
         PointerDeviceKind.trackpad,
       };
-  @override
   Widget buildViewportChrome(BuildContext context, Widget child, AxisDirection axisDirection) {
     return child;
+  }
+}
+
+/// 自定义开关，保持 SwitchListTile 的布局但使用改进的开关样式
+class _SwitchWithCustomStyle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final String title;
+
+  const _SwitchWithCustomStyle({
+    required this.value,
+    required this.onChanged,
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        borderRadius: BorderRadius.circular(8),
+        hoverColor: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+              ),
+              _CustomSwitch(
+                value: value,
+                onChanged: onChanged,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 自定义开关部件，去掉悬停背景色
+class _CustomSwitch extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _CustomSwitch({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Focus(
+        onFocusChange: (_) {},
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Semantics(
+            label: 'Switch',
+            toggled: value,
+            child: Switch(
+              value: value,
+              onChanged: onChanged,
+              activeColor: Colors.white,
+              activeTrackColor: theme.colorScheme.primary,
+              inactiveTrackColor: isDark
+                  ? const Color(0xFF3A3A3A)
+                  : const Color(0xFFE0E0E0),
+              inactiveThumbColor: isDark
+                  ? const Color(0xFF8E8E8E)
+                  : const Color(0xFFBDBDBD),
+              overlayColor: WidgetStateProperty.all(Colors.transparent),
+              splashRadius: 0,
+              hoverColor: Colors.transparent,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
