@@ -45,7 +45,7 @@ class _ContinueWithEmailAndPasswordState
     // 与 desktop_sign_in_screen 中 _TermsAndConditionsSection 一致：正文用主题反转色，链接用 primary
     final agreementPlainTextStyle =
         Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontSize: 16,
+              fontSize: 12,
               fontFamily: 'PingFangSC-Regular',
             );
 
@@ -84,14 +84,14 @@ class _ContinueWithEmailAndPasswordState
                 hintText: "输入邮箱或者手机号",
                 hintStyle: TextStyle(
                   color: const Color(0xFF999999),
-                  fontSize: 20,
+                  fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),
                 border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 19, vertical: 10),
               ),
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
               onSubmitted: (value) => _signInWithEmail(context, value),
@@ -112,6 +112,7 @@ class _ContinueWithEmailAndPasswordState
                     }
                     if (!_agreed) {
                       final parentContext = context;
+                      final primaryColor = Theme.of(context).colorScheme.primary;
                       showDialog(
                         context: parentContext,
                         builder: (dialogContext) => AlertDialog(
@@ -133,10 +134,7 @@ class _ContinueWithEmailAndPasswordState
                                     TextSpan(
                                       text: '《用户协议》',
                                       style: TextStyle(
-                                        color: AppFlowyTheme.of(parentContext)
-                                            .textColorScheme
-                                            .action,
-                                        decoration: TextDecoration.underline,
+                                        color: primaryColor,
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
@@ -148,10 +146,7 @@ class _ContinueWithEmailAndPasswordState
                                     TextSpan(
                                       text: '《隐私政策》',
                                       style: TextStyle(
-                                        color: AppFlowyTheme.of(parentContext)
-                                            .textColorScheme
-                                            .action,
-                                        decoration: TextDecoration.underline,
+                                        color: primaryColor,
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
@@ -212,7 +207,7 @@ class _ContinueWithEmailAndPasswordState
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 20,
+                      fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -235,8 +230,8 @@ class _ContinueWithEmailAndPasswordState
                   builder: (context) {
                     final primaryColor = Theme.of(context).colorScheme.primary;
                     return Container(
-                      width: 20,
-                      height: 20,
+                      width: 16,
+                      height: 16,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
@@ -279,9 +274,8 @@ class _ContinueWithEmailAndPasswordState
                               "《用户协议》",
                               style: TextStyle(
                                 color: primaryColor,
-                                fontSize: 16,
+                                fontSize: 12,
                                 fontFamily: 'PingFangSC-Regular',
-                                decoration: TextDecoration.underline,
                               ),
                             );
                           },
@@ -302,9 +296,8 @@ class _ContinueWithEmailAndPasswordState
                               "《隐私政策》",
                               style: TextStyle(
                                 color: primaryColor,
-                                fontSize: 16,
+                                fontSize: 12,
                                 fontFamily: 'PingFangSC-Regular',
-                                decoration: TextDecoration.underline,
                               ),
                             );
                           },
