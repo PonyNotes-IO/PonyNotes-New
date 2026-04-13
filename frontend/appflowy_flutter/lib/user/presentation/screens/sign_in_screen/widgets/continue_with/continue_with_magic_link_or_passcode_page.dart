@@ -229,6 +229,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: theme.surfaceColorScheme.layer01,
       body: BlocListener<SignInBloc, SignInState>(
       listener: (context, state) {
@@ -294,14 +295,14 @@ class _ContinueWithMagicLinkOrPasscodePageState
               }
             },
             (error) {
-              // 验证失败，显示错误信息
-              if (mounted) {
-                setState(() {
-                  _isLoading = false;
-                  _errorMessage = error.msg;
-                });
-              }
-            },
+                // 验证失败，显示错误信息
+                if (mounted) {
+                  setState(() {
+                    _isLoading = false;
+                    _errorMessage = error.msg;
+                  });
+                }
+              },
           );
         }
         
@@ -327,89 +328,80 @@ class _ContinueWithMagicLinkOrPasscodePageState
         }
         },
         child: SafeArea(
-          child: Column(
-            children: [
-              // 返回按钮
-              _buildBackButton(),
-              
-              // 主要内容
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Column(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              children: [
+                // 返回按钮
+                _buildBackButton(),
+                // 主要内容
+                const VSpace(40),
+                // 标题
+                Text(
+                  '请输入验证码',
+                  style: TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+                const VSpace(20),
+
+                // 验证码发送信息
+                RichText(
+                  textAlign: TextAlign.center,
+                  text: TextSpan(
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: theme.textColorScheme.secondary,
+                      height: 1.4,
+                    ),
                     children: [
-                      const VSpace(40),
-                      
-                      // 标题
-                      Text(
-                        '请输入验证码',
+                      const TextSpan(text: '6位验证码已发送至 '),
+                      TextSpan(
+                        text: widget.email,
                         style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w500,
                           color: theme.textColorScheme.primary,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const VSpace(20),
-                      
-                      // 验证码发送信息
-                      RichText(
-                        textAlign: TextAlign.center,
-                        text: TextSpan(
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: theme.textColorScheme.secondary,
-                            height: 1.4,
-                          ),
-                          children: [
-                            const TextSpan(text: '6位验证码已发送至 '),
-                            TextSpan(
-                              text: widget.email,
-                              style: TextStyle(
-                                color: theme.textColorScheme.primary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const TextSpan(text: '，有效期15分钟。'),
-                          ],
-                        ),
-                      ),
-                      const VSpace(80),
-                      
-                      // 验证码输入框
-                      _buildVerificationCodeInputs(),
-                      
-                      const VSpace(20),
-                      
-                      // 错误提示
-                      if (_errorMessage.isNotEmpty)
-                        Container(
-                          width: double.infinity,
-                          alignment: Alignment.center,
-                          child: Text(
-                            _errorMessage,
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      
-                      const VSpace(40),
-                      
-                      // 重新发送验证码
-                      _buildResendSection(),
-                      
-                      const VSpace(40),
-                      
-                      // 下一步按钮
-                      _buildNextButton(),
-                      
-                      const Spacer(),
+                      const TextSpan(text: '，有效期15分钟。'),
                     ],
                   ),
                 ),
-              ),
-            ],
+                const VSpace(80),
+
+                // 验证码输入框
+                _buildVerificationCodeInputs(),
+
+                const VSpace(20),
+
+                // 错误提示
+                if (_errorMessage.isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    alignment: Alignment.center,
+                    child: Text(
+                      _errorMessage,
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+
+                const VSpace(40),
+
+                // 重新发送验证码
+                _buildResendSection(),
+
+                const VSpace(40),
+
+                // 下一步按钮
+                _buildNextButton(),
+                const VSpace(40), // 添加底部空间，确保内容不被键盘完全遮挡
+              ],
+            ),
           ),
         ),
       ),
@@ -420,7 +412,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
     final theme = AppFlowyTheme.of(context);
     return Container(
       alignment: Alignment.centerLeft,
-      margin: const EdgeInsets.only(left: 32, top: 20),
+      margin: const EdgeInsets.only(top: 20),
       child: IconButton(
         icon: Icon(
           Icons.arrow_back,
