@@ -356,7 +356,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
                         textAlign: TextAlign.center,
                         text: TextSpan(
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: 16,
                             color: theme.textColorScheme.secondary,
                             height: 1.4,
                           ),
@@ -389,7 +389,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
                             _errorMessage,
                             style: TextStyle(
                               color: Colors.red,
-                              fontSize: 20,
+                              fontSize: 16,
                             ),
                           ),
                         ),
@@ -434,100 +434,110 @@ class _ContinueWithMagicLinkOrPasscodePageState
 
   Widget _buildVerificationCodeInputs() {
     final theme = AppFlowyTheme.of(context);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(6, (index) {
-        return Container(
-          margin: EdgeInsets.only(right: index < 5 ? 12 : 0),
-          child: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: theme.surfaceColorScheme.layer02,
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: theme.borderColorScheme.primary,
-                width: 1,
-              ),
-            ),
-            child: KeyboardListener(
-              focusNode: FocusNode(),
-              onKeyEvent: (KeyEvent event) {
-                if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
-                  if (_codeControllers[index].text.isEmpty && index > 0) {
-                    // 如果当前输入框为空且不是第一个，则跳到前一个输入框并清空
-                    _codeFocusNodes[index - 1].requestFocus();
-                    _codeControllers[index - 1].clear();
-                  }
-                }
-              },
-              child: TextField(
-                controller: _codeControllers[index],
-                focusNode: _codeFocusNodes[index],
-                textAlign: TextAlign.center,
-                textAlignVertical: TextAlignVertical.center,
-                keyboardType: TextInputType.number,
-                textInputAction: index < 5 ? TextInputAction.next : TextInputAction.done,
-                expands: true,
-                // ignore: avoid_redundant_argument_values
-                minLines: null,
-                // ignore: avoid_redundant_argument_values
-                maxLines: null,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  color: theme.textColorScheme.primary,
+    final screenWidth = MediaQuery.of(context).size.width;
+    // 计算每个输入框的宽度，考虑屏幕宽度和间距
+    final padding = 32.0 * 2; // 左右各32的padding
+    final spacing = 10.0 * 5; // 5个间距，每个10
+    final availableWidth = screenWidth - padding;
+    final inputWidth = (availableWidth - spacing) / 6;
+    
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: List.generate(6, (index) {
+          return Container(
+            margin: EdgeInsets.only(right: index < 5 ? 10 : 0),
+            child: Container(
+              width: inputWidth,
+              height: inputWidth, // 保持正方形
+              decoration: BoxDecoration(
+                color: theme.surfaceColorScheme.layer02,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: theme.borderColorScheme.primary,
+                  width: 1,
                 ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(1),
-                ],
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  counterText: '',
-                  contentPadding: EdgeInsets.zero,
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(4),
-                    borderSide: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 1.5,
+              ),
+              child: KeyboardListener(
+                focusNode: FocusNode(),
+                onKeyEvent: (KeyEvent event) {
+                  if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
+                    if (_codeControllers[index].text.isEmpty && index > 0) {
+                      // 如果当前输入框为空且不是第一个，则跳到前一个输入框并清空
+                      _codeFocusNodes[index - 1].requestFocus();
+                      _codeControllers[index - 1].clear();
+                    }
+                  }
+                },
+                child: TextField(
+                  controller: _codeControllers[index],
+                  focusNode: _codeFocusNodes[index],
+                  textAlign: TextAlign.center,
+                  textAlignVertical: TextAlignVertical.center,
+                  keyboardType: TextInputType.number,
+                  textInputAction: index < 5 ? TextInputAction.next : TextInputAction.done,
+                  expands: true,
+                  // ignore: avoid_redundant_argument_values
+                  minLines: null,
+                  // ignore: avoid_redundant_argument_values
+                  maxLines: null,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textColorScheme.primary,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(1),
+                  ],
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    counterText: '',
+                    contentPadding: EdgeInsets.zero,
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(4),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.primary,
+                        width: 1.5,
+                      ),
                     ),
                   ),
+                  onChanged: (value) {
+                    // 清除错误信息
+                    if (_errorMessage.isNotEmpty) {
+                      setState(() => _errorMessage = '');
+                    }
+
+                    // 只保留最后一个字符
+                    if (value.length > 1) {
+                      _codeControllers[index].text = value.substring(value.length - 1);
+                      _codeControllers[index].selection = TextSelection.fromPosition(
+                        TextPosition(offset: _codeControllers[index].text.length),
+                      );
+                    }
+                    if (value.isNotEmpty && index < 5) {
+                      _codeFocusNodes[index + 1].requestFocus();
+                    }
+                    // 移除自动提交逻辑，改为由"下一步"按钮触发
+                  },
+                  onTap: () {
+                    // 点击时清空当前输入框并聚焦
+                    _codeControllers[index].clear();
+                    _codeFocusNodes[index].requestFocus();
+                  },
+                  onSubmitted: (_) {
+                    if (index < 5) {
+                      _codeFocusNodes[index + 1].requestFocus();
+                    }
+                    // 移除自动提交逻辑，改为由"下一步"按钮触发
+                  },
                 ),
-                onChanged: (value) {
-                  // 清除错误信息
-                  if (_errorMessage.isNotEmpty) {
-                    setState(() => _errorMessage = '');
-                  }
-                  
-                  // 只保留最后一个字符
-                  if (value.length > 1) {
-                    _codeControllers[index].text = value.substring(value.length - 1);
-                    _codeControllers[index].selection = TextSelection.fromPosition(
-                      TextPosition(offset: _codeControllers[index].text.length),
-                    );
-                  }
-                  if (value.isNotEmpty && index < 5) {
-                    _codeFocusNodes[index + 1].requestFocus();
-                  }
-                  // 移除自动提交逻辑，改为由"下一步"按钮触发
-                },
-                onTap: () {
-                  // 点击时清空当前输入框并聚焦
-                  _codeControllers[index].clear();
-                  _codeFocusNodes[index].requestFocus();
-                },
-                onSubmitted: (_) {
-                  if (index < 5) {
-                    _codeFocusNodes[index + 1].requestFocus();
-                  }
-                  // 移除自动提交逻辑，改为由"下一步"按钮触发
-                },
               ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 
@@ -541,35 +551,33 @@ class _ContinueWithMagicLinkOrPasscodePageState
           '收不到验证码？',
           style: TextStyle(
             color: theme.textColorScheme.secondary,
-            fontSize: 20,
+            fontSize: 16,
           ),
         ),
-        const HSpace(12),
+        const Spacer(),
         if (_countdown > 0)
-          SizedBox(
-            width: 211,
-            child: RichText(
-              textAlign: TextAlign.center,
-              text: TextSpan(
-                style: const TextStyle(
-                  fontSize: 20,
-                  height: 1.4,
-                ),
-                children: [
-                  TextSpan(
-                    text: '$_countdown',
-                    style: TextStyle(
-                      color: primaryColor,
-                    ),
-                  ),
-                  TextSpan(
-                    text: '秒后重新获取验证码',
-                    style: TextStyle(
-                      color: theme.textColorScheme.primary,
-                    ),
-                  ),
-                ],
+          RichText(
+            textAlign: TextAlign.center,
+            text: TextSpan(
+              style: const TextStyle(
+                fontSize: 20,
+                height: 1.4,
               ),
+              children: [
+                TextSpan(
+                  text: '$_countdown',
+                  style: TextStyle(
+                    color: primaryColor,
+                  ),
+                ),
+                TextSpan(
+                  text: '秒后重新获取验证码',
+                  style: TextStyle(
+                    color: theme.textColorScheme.primary,
+                    fontSize: 12
+                  ),
+                ),
+              ],
             ),
           )
         else
