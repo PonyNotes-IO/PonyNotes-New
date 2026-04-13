@@ -431,35 +431,60 @@ pub async fn stream_ai_session_with_attachments(
 
                         if content.is_none() && reasoning_content.is_none() {
                           trace!("[AISession] delta中没有找到content或reasoning_content，跳过");
-                          continue; // 跳过这个chunk，不添加到results
-                        }
+                          // 即使没有内容，也要检查是否有联网搜索来源
+                        } else {
+                          // 如果有思考内容，仅在用户开启深度思考时才转发
+                          // doubao-seed 等思考模型默认返回 reasoning_content，
+                          // 只有 enable_thinking=true 时才显示给用户
+                          if let Some(thinking_text) = reasoning_content {
+                            if state.enable_thinking {
+                              let mut thinking_obj = serde_json::Map::new();
+                              thinking_obj.insert(STREAM_THINKING_KEY.to_string(), Value::String(thinking_text.to_string()));
+                              trace!("[AISession] 转换思考内容: {:?}", thinking_text);
+                              results.push(Value::Object(thinking_obj));
+                            } else {
+                              trace!("[AISession] 收到 reasoning_content 但 enable_thinking=false，跳过");
+                            }
+                          }
 
-                        // 如果有思考内容，仅在用户开启深度思考时才转发
-                        // doubao-seed 等思考模型默认返回 reasoning_content，
-                        // 只有 enable_thinking=true 时才显示给用户
-                        if let Some(thinking_text) = reasoning_content {
-                          if state.enable_thinking {
-                            let mut thinking_obj = serde_json::Map::new();
-                            thinking_obj.insert(STREAM_THINKING_KEY.to_string(), Value::String(thinking_text.to_string()));
-                            trace!("[AISession] 转换思考内容: {:?}", thinking_text);
-                            results.push(Value::Object(thinking_obj));
-                          } else {
-                            trace!("[AISession] 收到 reasoning_content 但 enable_thinking=false，跳过");
+                          // 如果有正常回答内容，作为 STREAM_ANSWER_KEY (key="1") 输出
+                          if let Some(content_text) = content {
+                            let mut internal_obj = serde_json::Map::new();
+                            internal_obj.insert(STREAM_ANSWER_KEY.to_string(), Value::String(content_text.to_string()));
+                            trace!("[AISession] 转换为内部格式: {:?}", content_text);
+                            results.push(Value::Object(internal_obj));
                           }
                         }
 
-                        // 如果有正常回答内容，作为 STREAM_ANSWER_KEY (key="1") 输出
-                        if let Some(content_text) = content {
-                          let mut internal_obj = serde_json::Map::new();
-                          internal_obj.insert(STREAM_ANSWER_KEY.to_string(), Value::String(content_text.to_string()));
+                        // 【关键修复】Ark API 会在 choices 所在的同一 JSON 对象里返回 references，
+                        // 必须在 continue 之前提取，否则 continue 会跳过后面的 references 检查。
+                        // 同时处理 DashScope (通义千问) 的 search_info.search_results 格式。
+                        let references_opt = obj.get("references").and_then(|r| r.as_array());
+                        let search_results_opt = obj
+                          .get("search_info")
+                          .and_then(|si| si.get("search_results"))
+                          .and_then(|sr| sr.as_array());
 
-                          // 如果有metadata，也提取
-                          if let Some(metadata) = obj.get("metadata") {
-                            internal_obj.insert(STREAM_METADATA_KEY.to_string(), metadata.clone());
+                        let refs_to_process = references_opt.or(search_results_opt);
+                        if let Some(refs) = refs_to_process {
+                          if !refs.is_empty() {
+                            let converted: Vec<Value> = refs.iter().filter_map(|r| {
+                              let url = r.get("url").and_then(|u| u.as_str())?;
+                              let title = r.get("title").and_then(|t| t.as_str())
+                                .unwrap_or_else(|| r.get("site_name").and_then(|s| s.as_str()).unwrap_or("未知来源"));
+                              Some(serde_json::json!({
+                                "id": url,
+                                "name": title,
+                                "source": url,
+                              }))
+                            }).collect();
+                            if !converted.is_empty() {
+                              let mut meta_obj = serde_json::Map::new();
+                              meta_obj.insert(STREAM_METADATA_KEY.to_string(), Value::Array(converted));
+                              trace!("[AISession] 从choices同层提取联网搜索来源: {} 条", meta_obj.len());
+                              results.push(Value::Object(meta_obj));
+                            }
                           }
-
-                          trace!("[AISession] 转换为内部格式: {:?}", content_text);
-                          results.push(Value::Object(internal_obj));
                         }
 
                         // 已经直接push到results，跳过后续的 results.push(json)
@@ -468,8 +493,10 @@ pub async fn stream_ai_session_with_attachments(
                     }
                   }
 
-                  // 处理联网搜索来源 - Ark API 将 references 放在顶层 JSON
+                  // 处理独立的联网搜索来源事件 - 某些 Ark 模型将 references 作为单独 JSON 对象推送
                   // 格式: {"references": [{"url": "...", "title": "...", "content": "..."}]}
+                  // 注意：如果已经在 choices 块里提取过了，这里可能不会再出现；
+                  // 但为了兼容性仍然保留此处理逻辑，并在处理后 continue 避免双重推送。
                   if let Some(references) = obj.get("references").and_then(|r| r.as_array()) {
                     if !references.is_empty() {
                       let converted: Vec<Value> = references.iter().filter_map(|r| {
@@ -484,14 +511,45 @@ pub async fn stream_ai_session_with_attachments(
                       if !converted.is_empty() {
                         let mut meta_obj = serde_json::Map::new();
                         meta_obj.insert(STREAM_METADATA_KEY.to_string(), Value::Array(converted));
-                        trace!("[AISession] 转换联网搜索来源: {} 条", meta_obj.len());
+                        trace!("[AISession] 转换独立联网搜索来源: {} 条", meta_obj.len());
                         results.push(Value::Object(meta_obj));
                       }
                     }
+                    // 【修复】已处理完毕，跳过后面的 results.push(json)，避免推送无法识别的原始 JSON
+                    continue;
+                  }
+
+                  // 处理 DashScope (通义千问) 独立搜索结果事件
+                  // 格式: {"search_info": {"search_results": [{"url": "...", "title": "...", ...}]}}
+                  if let Some(search_results) = obj
+                    .get("search_info")
+                    .and_then(|si| si.get("search_results"))
+                    .and_then(|sr| sr.as_array())
+                  {
+                    if !search_results.is_empty() {
+                      let converted: Vec<Value> = search_results.iter().filter_map(|r| {
+                        let url = r.get("url").and_then(|u| u.as_str())?;
+                        let title = r.get("title").and_then(|t| t.as_str())
+                          .unwrap_or_else(|| r.get("site_name").and_then(|s| s.as_str()).unwrap_or("未知来源"));
+                        Some(serde_json::json!({
+                          "id": url,
+                          "name": title,
+                          "source": url,
+                        }))
+                      }).collect();
+                      if !converted.is_empty() {
+                        let mut meta_obj = serde_json::Map::new();
+                        meta_obj.insert(STREAM_METADATA_KEY.to_string(), Value::Array(converted));
+                        trace!("[AISession] 转换 DashScope 搜索来源: {} 条", meta_obj.len());
+                        results.push(Value::Object(meta_obj));
+                      }
+                    }
+                    continue;
                   }
                 }
 
-                results.push(json);
+                // 其他未知 JSON 格式，静默忽略（不推送到 results，避免触发"无效的流值"错误）
+                trace!("[AISession] 收到未知格式 JSON，忽略: {:?}", json);
               }
               Err(e) => {
                 error!("[AISession] JSON解析失败: {} - 原始行: [{}] - 提取的JSON字符串: [{}]", e, line, json_str);
