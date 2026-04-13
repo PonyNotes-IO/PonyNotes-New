@@ -5,6 +5,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../../env/cloud_env.dart';
+import '../../../../../startup/startup.dart';
+
 class SignInAgreement extends StatelessWidget {
   const SignInAgreement({
     super.key,
@@ -12,6 +15,8 @@ class SignInAgreement extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+    final base_web_domain = cloudEnv.appflowyCloudConfig.base_web_domain;
     final theme = AppFlowyTheme.of(context);
     final textStyle = theme.textStyle.caption.standard(
       color: theme.textColorScheme.secondary,
@@ -32,7 +37,7 @@ class SignInAgreement extends StatelessWidget {
             style: underlinedTextStyle,
             mouseCursor: SystemMouseCursors.click,
             recognizer: TapGestureRecognizer()
-              ..onTap = () => afLaunchUrlString('https://appflowy.com/terms'),
+              ..onTap = () => afLaunchUrlString('$base_web_domain/agreement'),
           ),
           TextSpan(
             text: '${LocaleKeys.web_and.tr()} ',
@@ -43,7 +48,7 @@ class SignInAgreement extends StatelessWidget {
             style: underlinedTextStyle,
             mouseCursor: SystemMouseCursors.click,
             recognizer: TapGestureRecognizer()
-              ..onTap = () => afLaunchUrlString('https://appflowy.com/privacy'),
+              ..onTap = () => afLaunchUrlString('$base_web_domain/privacy'),
           ),
         ],
       ),

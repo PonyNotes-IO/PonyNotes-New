@@ -7,6 +7,7 @@ import 'package:appflowy/util/validator.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -121,43 +122,47 @@ class _ContinueWithEmailAndPasswordState
                             children: [
                               const Text('请先阅读并同意以下协议：'),
                               const SizedBox(height: 8),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text('AppFlowy'),
-                                  const SizedBox(width: 4),
-                                  GestureDetector(
-                                    onTap: () {
-                                      Navigator.of(dialogContext).pop();
-                                      _navigateToUserAgreement(parentContext);
-                                    },
-                                    child: Text(
-                                      '《用户协议》',
+                              RichText(
+                                text: TextSpan(
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 16,
+                                  ),
+                                  children: [
+                                    const TextSpan(text: 'PonyNotes '),
+                                    TextSpan(
+                                      text: '《用户协议》',
                                       style: TextStyle(
                                         color: AppFlowyTheme.of(parentContext)
                                             .textColorScheme
                                             .action,
                                         decoration: TextDecoration.underline,
                                       ),
+                                      recognizer: TapGestureRecognizer()
+                                        ..onTap = () {
+                                          Navigator.of(dialogContext).pop();
+                                          _navigateToUserAgreement(parentContext);
+                                        },
                                     ),
-                                  ),
-                                  const Text('、'),
-                                  GestureDetector(
-                                    onTap: () {
-                                      Navigator.of(dialogContext).pop();
-                                      _navigateToPrivacyPolicy(parentContext);
-                                    },
-                                    child: Text(
-                                      '《隐私政策》',
+                                    const TextSpan(text: '、'),
+                                    TextSpan(
+                                      text: '《隐私政策》',
                                       style: TextStyle(
                                         color: AppFlowyTheme.of(parentContext)
                                             .textColorScheme
                                             .action,
                                         decoration: TextDecoration.underline,
                                       ),
+                                      recognizer: TapGestureRecognizer()
+                                        ..onTap = () {
+                                          Navigator.of(dialogContext).pop();
+                                          _navigateToPrivacyPolicy(parentContext);
+                                        },
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                softWrap: true,
+                                overflow: TextOverflow.visible,
                               ),
                             ],
                           ),
@@ -491,7 +496,7 @@ class _ContinueWithEmailAndPasswordState
     );
   }
 
-    void _pushContinueWithMagicLinkOrPasscodePage(
+  void _pushContinueWithMagicLinkOrPasscodePage(
     BuildContext context,
     String email,
   ) {
