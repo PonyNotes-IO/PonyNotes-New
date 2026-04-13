@@ -403,7 +403,24 @@ pub async fn stream_ai_session_with_attachments(
             match serde_json::from_str::<Value>(json_str) {
               Ok(mut json) => {
                 trace!("[AISession] 成功解析JSON: {:?}", json);
-                
+
+                // 【优先处理】检测 SSE 流中的错误事件（如 Bot 无权限、模型不存在等）
+                // 部分 API 以 HTTP 200 + SSE 错误体返回，而非 HTTP 4xx/5xx
+                // 格式: {"error":{"code":"...","message":"..."}}
+                if let Value::Object(ref obj) = json {
+                  if let Some(error_obj) = obj.get("error").and_then(|e| e.as_object()) {
+                    let code = error_obj.get("code").and_then(|c| c.as_str()).unwrap_or("Unknown");
+                    let message = error_obj.get("message").and_then(|m| m.as_str()).unwrap_or("AI服务返回未知错误");
+                    error!("[AISession] SSE流中收到错误事件: code={}, message={}", code, message);
+                    // 将错误作为 Answer 事件推送给用户，让界面显示错误信息而非永久等待
+                    let user_message = format!("AI服务错误（{}）：{}", code, message);
+                    let mut err_obj = serde_json::Map::new();
+                    err_obj.insert(STREAM_ANSWER_KEY.to_string(), Value::String(user_message));
+                    results.push(Value::Object(err_obj));
+                    continue;
+                  }
+                }
+
                 // 从OpenAI兼容格式转换为内部格式
                 // OpenAI格式: {"choices":[{"delta":{"content":"text"}}]}
                 // 豆包格式: {"choices":[{"delta":{"content":"","reasoning_content":"text"}}]}
