@@ -3047,7 +3047,7 @@
     "quicklySwitch": "快速切换到下一个空间",
     "duplicate": "复制空间",
     "movePageToSpace": "将页面移动到空间",
-    "cannotMovePageToDatabase": "无法将页面移至数据库",
+    "cannotMovePageToDatabase": "无法将页面移动到该位置",
     "switchSpace": "切换空间",
     "spaceNameCannotBeEmpty": "空间名称不能为空",
     "success": {
