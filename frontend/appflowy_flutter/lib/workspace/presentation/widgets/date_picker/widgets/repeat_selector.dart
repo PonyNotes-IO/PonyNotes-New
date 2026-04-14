@@ -281,6 +281,8 @@ class _CustomRepeatDialogState extends State<CustomRepeatDialog> {
           if (e is int && e >= 0 && e <= 6) selectedWeekdays.add(e);
         }
       }
+      if (data['skipHolidays'] is bool) skipHolidays = data['skipHolidays'] as bool;
+      if (data['skipWeekend'] is bool) skipWeekend = data['skipWeekend'] as bool;
     } catch (_) {}
   }
 
@@ -536,6 +538,8 @@ class _CustomRepeatDialogState extends State<CustomRepeatDialog> {
       'unit': unit,
       'interval': interval,
       'weekdays': selectedWeekdays.toList()..sort(),
+      'skipHolidays': skipHolidays,
+      'skipWeekend': skipWeekend,
       'summary': summary, // 保留显示文本用于 UI 显示
     });
     Navigator.pop(context, jsonData);
