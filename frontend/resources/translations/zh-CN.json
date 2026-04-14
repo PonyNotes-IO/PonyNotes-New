@@ -1298,7 +1298,8 @@
       "fontFamily": {
         "label": "字体系列",
         "search": "搜索",
-        "defaultFont": "系统"
+        "defaultFont": "系统",
+        "resetSuccess": "字体已重置为系统默认"
       },
       "themeMode": {
         "label": "主题模式",
@@ -2568,12 +2569,12 @@
       "groupTitle": "提醒",
       "shortKeyword": "提醒"
     },
-    "boardReference": "看板参考",
-    "calReference": "日历参考",
-    "createPage": "创建 \"{}\" 子页面",
-    "docReference": "文档参考",
-    "gridReference": "表格参考",
-    "recentPages": "近期页面",
+    "boardReference": "Board reference",
+    "calReference": "Calendar reference",
+    "createPage": "Create \"{}\" sub-page",
+    "docReference": "Document reference",
+    "gridReference": "Grid reference",
+    "recentPages": "Recent pages",
     "mentionUser": "提及用户",
     "noUsers": "没有找到用户"
   },

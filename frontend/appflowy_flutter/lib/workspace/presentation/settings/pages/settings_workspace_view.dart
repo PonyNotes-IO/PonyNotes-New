@@ -879,14 +879,16 @@ class _FontSelectorDropdownState extends State<_FontSelectorDropdown> {
     final index = _options.indexOf(widget.currentFont);
     final newPosition = (index * itemExtent).toDouble();
     _scrollController = ScrollController(initialScrollOffset: newPosition);
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _textController.text = context
-          .read<AppearanceSettingsCubit>()
-          .state
-          .font
-          .fontFamilyDisplayName;
-    });
+  @override
+  void didUpdateWidget(_FontSelectorDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 当字体被重置时，更新 TextField 显示的文本
+    final currentFontName = widget.currentFont.fontFamilyDisplayName;
+    if (_textController.text != currentFontName) {
+      _textController.text = currentFontName;
+    }
   }
 
   @override
@@ -900,7 +902,14 @@ class _FontSelectorDropdownState extends State<_FontSelectorDropdown> {
 
   @override
   Widget build(BuildContext context) {
+    // 监听状态变化以响应重置操作
     final appearance = context.watch<AppearanceSettingsCubit>().state;
+    final currentFontName = appearance.font.fontFamilyDisplayName;
+    // 当外部传入的 currentFont 与当前状态不同时更新文本
+    if (_textController.text != currentFontName &&
+        !_focusNode.hasFocus) {
+      _textController.text = currentFontName;
+    }
     return LayoutBuilder(
       builder: (context, constraints) => AppFlowyPopover(
         margin: EdgeInsets.zero,
@@ -986,9 +995,17 @@ class _FontSelectorDropdownState extends State<_FontSelectorDropdown> {
             const HSpace(16),
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => context
-                  .read<AppearanceSettingsCubit>()
-                  .setFontFamily(defaultFontFamily),
+              onTap: () {
+                context
+                    .read<AppearanceSettingsCubit>()
+                    .setFontFamily(defaultFontFamily);
+                showToastNotification(
+                  message: LocaleKeys
+                      .settings_appearance_fontFamily_resetSuccess
+                      .tr(),
+                  type: ToastificationType.success,
+                );
+              },
               child: SizedBox(
                 height: 26,
                 child: FlowyHover(

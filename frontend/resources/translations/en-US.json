@@ -1334,7 +1334,8 @@
       "fontFamily": {
         "label": "Font Family",
         "search": "Search",
-        "defaultFont": "System"
+        "defaultFont": "System",
+        "resetSuccess": "Font reset to system default"
       },
       "themeMode": {
         "label": "Theme Mode",

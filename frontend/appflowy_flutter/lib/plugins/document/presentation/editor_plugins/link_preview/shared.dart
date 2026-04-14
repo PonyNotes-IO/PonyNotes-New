@@ -1,4 +1,5 @@
 import 'package:appflowy/plugins/document/presentation/editor_plugins/link_embed/link_embed_block_component.dart';
+import 'package:appflowy/plugins/document/presentation/editor_plugins/mention/mention_block.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
@@ -11,6 +12,42 @@ Node _linkPreviewNode({required String url, String? originalText}) => Node(
       },
     );
 
+/// 检测URL是否为应用内笔记链接
+/// 支持格式: ponynotes://open?viewId=xxx, /share?viewId=xxx&type=share
+bool _isInAppPageLink(String url) {
+  try {
+    final uri = Uri.parse(url);
+    final path = uri.path;
+    final queryParams = uri.queryParameters;
+    final linkType = queryParams['type'];
+    var viewId = queryParams['viewId'];
+    if (viewId != null && (viewId.contains('&') || viewId.contains('?'))) {
+      final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
+      if (match != null) viewId = match.group(1);
+    }
+    // ponynotes://open?viewId=xxx 格式
+    if (url.startsWith('ponynotes://') && viewId != null) {
+      return true;
+    }
+    // /share?viewId=xxx&type=share 格式
+    final isSharePath = path == '/share' || path == 'share';
+    final isShareOrPublish = linkType == 'share' || linkType == 'publish';
+    if (isSharePath && isShareOrPublish && viewId != null) {
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+/// 从分享链接提取viewId
+String? _extractViewIdFromShareUrl(String url) {
+  try {
+    final match = RegExp(r'[?&]viewId=([^&]+)').firstMatch(url);
+    return match?.group(1);
+  } catch (_) {}
+  return null;
+}
+
 Future<void> convertUrlPreviewNodeToLink(
   EditorState editorState,
   Node node,
@@ -20,9 +57,41 @@ Future<void> convertUrlPreviewNodeToLink(
   }
 
   final url = node.attributes[LinkPreviewBlockKeys.url];
+  final originalText =
+      node.attributes[LinkEmbedKeys.originalText] as String?;
+
+  // 检测是否为应用内笔记链接
+  if (_isInAppPageLink(url)) {
+    // 应用内笔记：使用 mention 格式显示，带有 @ 符号
+    final textToShow = originalText ?? 'Untitled';
+    final delta = Delta()
+      ..insert(
+        MentionBlockKeys.mentionChar,
+        attributes: {
+          MentionBlockKeys.mention: {
+            MentionBlockKeys.type: MentionType.page.name,
+            MentionBlockKeys.url: url,
+            MentionBlockKeys.originalText: originalText,
+          },
+        },
+      );
+    final transaction = editorState.transaction;
+    transaction
+      ..insertNode(node.path, paragraphNode(delta: delta))
+      ..deleteNode(node);
+    transaction.afterSelection = Selection.collapsed(
+      Position(
+        path: node.path,
+        offset: 1, // mentionChar 后面的位置
+      ),
+    );
+    return editorState.apply(transaction);
+  }
+
+  // 外部链接：使用普通超链接显示
   final delta = Delta()
     ..insert(
-      url,
+      originalText ?? url,
       attributes: {
         AppFlowyRichTextKeys.href: url,
       },
@@ -34,7 +103,7 @@ Future<void> convertUrlPreviewNodeToLink(
   transaction.afterSelection = Selection.collapsed(
     Position(
       path: node.path,
-      offset: url.length,
+      offset: (originalText ?? url).length,
     ),
   );
   return editorState.apply(transaction);
