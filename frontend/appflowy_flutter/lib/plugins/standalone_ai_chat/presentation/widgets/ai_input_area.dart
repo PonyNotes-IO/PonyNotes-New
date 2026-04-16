@@ -68,6 +68,9 @@ class _AIInputAreaState extends State<AIInputArea> {
   // 附件列表（包含图片和文件）
   final List<_AttachmentItem> _attachments = [];
 
+  // 附件横向滚动控制器（用于 Scrollbar）
+  final ScrollController _attachmentScrollController = ScrollController();
+
   // 功能开关状态
   bool _isDeepThinkingEnabled = false; // 深度思考开关
   bool _isWebSearchEnabled = false; // 全网搜索开关
@@ -89,6 +92,7 @@ class _AIInputAreaState extends State<AIInputArea> {
     _textController.removeListener(_onTextChanged);
     _textController.dispose();
     _focusNode.dispose();
+    _attachmentScrollController.dispose();
     super.dispose();
   }
 
@@ -280,9 +284,9 @@ class _AIInputAreaState extends State<AIInputArea> {
           width: widget.customWidth ?? AIWelcomeTheme.inputContainerWidth,
           constraints: BoxConstraints(
             minHeight: AIWelcomeTheme.inputContainerHeight,
-            // 有附件时允许高度扩展，最大高度增加到原来的1.5倍
+            // 有附件时允许高度扩展（附件区 + 滚动条额外 8px 空间）
             maxHeight: _attachments.isNotEmpty
-                ? AIWelcomeTheme.inputContainerHeight * 1.5
+                ? AIWelcomeTheme.inputContainerHeight * 1.5 + 8
                 : AIWelcomeTheme.inputContainerHeight,
           ),
           decoration: AIWelcomeTheme.inputContainerDecoration(context),
@@ -1148,11 +1152,12 @@ class _AIInputAreaState extends State<AIInputArea> {
   }
 
   /// 构建附件预览区域（包含图片和文件）
-  /// 显示在工具栏下方
+  /// 显示在工具栏下方，附件数量超出可视区域时显示横向滚动条
   Widget _buildAttachmentPreviewArea() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+      // 底部 padding 增加 8px 留出滚动条空间
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
@@ -1161,12 +1166,19 @@ class _AIInputAreaState extends State<AIInputArea> {
           ),
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: _attachments
-              .map((attachment) => _buildAttachmentItem(attachment))
-              .toList(),
+      child: Scrollbar(
+        controller: _attachmentScrollController,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _attachmentScrollController,
+          scrollDirection: Axis.horizontal,
+          // 为滚动条腾出底部空间，避免遮挡附件内容
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: _attachments
+                .map((attachment) => _buildAttachmentItem(attachment))
+                .toList(),
+          ),
         ),
       ),
     );
