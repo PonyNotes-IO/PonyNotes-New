@@ -135,13 +135,9 @@ class _AccountMergeDialogState extends State<AccountMergeDialog> {
 
     result.fold(
       (data) {
-        if (data.merged) {
-          final migratedCount = data.migratedWorkspaces ?? 0;
-          final msg = migratedCount > 0
-              ? '账号合并成功！$migratedCount 个工作区已迁移。'
-              : '账号合并成功！';
+        if (data.bindToExisting) {
           showToastNotification(
-            message: msg,
+            message: '账号合并成功！',
             type: ToastificationType.success,
           );
           Navigator.of(context).pop();

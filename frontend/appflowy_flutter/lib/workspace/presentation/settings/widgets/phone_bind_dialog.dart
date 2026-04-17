@@ -331,8 +331,8 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
 
     result.fold(
       (data) {
-        if (data.merged) {
-          // 走合并路径（用户中途切换到合并弹窗并完成合并）
+        if (data.bindToExisting) {
+          // 走合并路径（绑定到已注册账号）
           Navigator.of(context).pop();
           widget.onBindComplete?.call();
           return;
