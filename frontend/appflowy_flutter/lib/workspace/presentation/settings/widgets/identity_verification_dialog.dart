@@ -433,7 +433,10 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
 
     setState(() => _isSending = true);
 
-    final result = await ContactBindingService.sendPhoneVerificationCode(cleanPhone);
+    // 身份再认证：发送 type=sms OTP 到已有手机号（不修改用户资料）
+    // 对应 verifyPhoneReauthentication（type=sms） 验证
+    // 不可用 sendPhoneVerificationCode（send-phone-otp），那是绑定新手机号用的
+    final result = await ContactBindingService.sendPhoneReauthCode(cleanPhone);
     result.fold(
       (success) {
         if (mounted) {

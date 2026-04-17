@@ -14,6 +14,7 @@ import 'package:appflowy/workspace/presentation/settings/shared/settings_body.da
 import 'package:appflowy/workspace/presentation/settings/shared/settings_category.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/email_binding_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/identity_verification_dialog.dart';
+import 'package:appflowy/workspace/presentation/settings/widgets/phone_bind_dialog.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/phone_change_dialog.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
@@ -357,7 +358,9 @@ class _AccountQuickActionsSection extends StatelessWidget {
         Validator.isValidPhone(latestUserProfile.email)) {
       phoneNumber = latestUserProfile.email;
     } else {
-      _showPhoneInputDialog(context, email: latestUserProfile.email);
+      // 没有手机号 → 直接进入手机号绑定流程，无需先做身份验证
+      // IdentityVerificationDialog 仅用于验证已有手机号，不可用于绑定新手机号
+      _showPhoneBindingDialog(context);
       return;
     }
 
@@ -373,61 +376,23 @@ class _AccountQuickActionsSection extends StatelessWidget {
     );
   }
 
-  void _showPhoneInputDialog(BuildContext context, {required String email}) {
-    final phoneController = TextEditingController();
+  /// 邮箱用户首次绑定手机号时直接进入绑定弹窗
+  /// 使用 PhoneBindDialog（send-phone-otp + confirmPhoneBind），不走身份再认证流程
+  void _showPhoneBindingDialog(BuildContext context) {
+    final settingsBloc = context.read<SettingsDialogBloc>();
     showDialog(
       context: context,
-      builder: (context) =>
-          AlertDialog(
-            title: const Text('输入手机号'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('请输入您要绑定的手机号码'),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: phoneController,
-                  decoration: const InputDecoration(
-                    hintText: '请输入手机号',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.phone,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('取消'),
-              ),
-              TextButton(
-                onPressed: () {
-                  final phone = phoneController.text.trim();
-                  if (phone.isEmpty) {
-                    showToastNotification(message: '请输入手机号');
-                    return;
-                  }
-                  if (!Validator.isValidPhone(phone)) {
-                    showToastNotification(message: '请输入正确的手机号格式');
-                    return;
-                  }
-                  Navigator.of(context).pop();
-                  showDialog(
-                    context: context,
-                    builder: (context) =>
-                        IdentityVerificationDialog(
-                          phoneNumber: phone,
-                          emailAddress: email,
-                          onVerificationComplete: () {
-                            showToastNotification(message: '手机验证完成');
-                          },
-                        ),
-                  );
-                },
-                child: const Text('确定'),
-              ),
-            ],
-          ),
+      builder: (_) => PhoneBindDialog(
+        onBindComplete: () async {
+          showToastNotification(message: '手机号绑定成功');
+          final result = await UserBackendService.getCurrentUserProfile();
+          result.fold(
+            (newProfile) => settingsBloc
+                .add(SettingsDialogEvent.didReceiveUserProfile(newProfile)),
+            (error) => Log.error('刷新用户资料失败: ${error.msg}'),
+          );
+        },
+      ),
     );
   }
 

@@ -83,6 +83,83 @@ class ContactBindingService {
     }
   }
 
+  /// 发送手机验证码（用于身份再认证，验证已有手机号）
+  ///
+  /// 调用 /api/user/send-phone-reauth-otp（GoTrue POST /otp → type=sms OTP）
+  /// 只能用于验证用户已拥有的手机号，不可用于绑定新手机号
+  /// 验证时配合 UserBackendService.verifyPhoneReauthentication（type=sms）使用
+  static Future<FlowyResult<void, FlowyError>> sendPhoneReauthCode(
+    String phoneNumber,
+  ) async {
+    try {
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
+      );
+
+      final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+
+      final baseUrl = cloudConfig.serverUrl;
+      final rawToken = _normalizeToken(userProfile.token);
+      if (baseUrl.isEmpty || rawToken.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError.create()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL or auth token',
+        );
+      }
+
+      final uri = Uri.parse('$baseUrl/api/user/send-phone-reauth-otp');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $rawToken',
+        },
+        body: jsonEncode({'phone': phoneNumber}),
+      );
+
+      if (response.statusCode == 200) {
+        try {
+          final json = jsonDecode(response.body) as Map<String, dynamic>;
+          if (json.containsKey('code') && json['code'] != 0) {
+            final errorMsg =
+                json['message'] as String? ?? json['msg'] as String? ?? '发送验证码失败';
+            return FlowyResult.failure(
+              FlowyError.create()
+                ..code = ErrorCode.Internal
+                ..msg = errorMsg,
+            );
+          }
+        } catch (_) {}
+        return FlowyResult.success(null);
+      } else {
+        String errorMsg = '发送手机验证码失败 (HTTP ${response.statusCode})';
+        if (response.body.isNotEmpty) {
+          try {
+            final json = jsonDecode(response.body) as Map<String, dynamic>;
+            errorMsg = json['message'] as String? ?? json['msg'] as String? ?? errorMsg;
+          } catch (_) {}
+        }
+        return FlowyResult.failure(
+          FlowyError.create()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
+    } catch (e) {
+      return FlowyResult.failure(
+        FlowyError.create()
+          ..msg = "发送手机验证码失败: $e",
+      );
+    }
+  }
+
   /// 发送手机验证码（用于换绑手机号）
   ///
   /// 使用 GoTrue 的标准手机号变更流程（需要登录）
