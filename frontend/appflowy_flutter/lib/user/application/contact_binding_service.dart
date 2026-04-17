@@ -87,7 +87,8 @@ class ContactBindingService {
   ///
   /// 使用 GoTrue 的标准手机号变更流程（需要登录）
   /// 调用云端 API /api/user/send-phone-otp
-  /// 若手机号已被其他账号注册，后端返回 phone_exists=true，此时直接拒绝
+  /// GoTrue PUT /user 将手机号存入 phone_change 字段，验证时用 type=phone_change
+  /// 若手机号已被其他账号注册，后端返回错误，此时直接拒绝
   static Future<FlowyResult<void, FlowyError>> sendPhoneVerificationCode(
     String phoneNumber,
   ) async {
@@ -114,6 +115,9 @@ class ContactBindingService {
         );
       }
 
+      // 绑定手机号使用 /send-phone-otp（GoTrue PUT /user，phone_change 类型 OTP）
+      // 与 verify_and_bind_phone 的 type=phone_change 匹配
+      // 不可使用 /send-phone-reauth-otp（GoTrue /otp 端点，会为手机号创建新用户行）
       final uri = Uri.parse('$baseUrl/api/user/send-phone-otp');
       final response = await http.post(
         uri,
@@ -184,19 +188,76 @@ class ContactBindingService {
     return token;
   }
 
-  /// 发送邮箱验证码
+  /// 发送邮箱验证码（用于绑定新邮箱）
+  ///
+  /// 使用 GoTrue 的邮箱变更流程（需要登录态）
+  /// 调用云端 API /api/user/send-email-change-otp
+  /// GoTrue PUT /user 将 email_change 存入当前用户行，验证时用 type=email_change
+  /// 不可使用 /otp 端点（会为邮箱创建新 auth.users 行，导致绑定后无法用邮箱登录原账号）
   static Future<FlowyResult<void, FlowyError>> sendEmailVerificationCode(
     String email,
   ) async {
     try {
-      // 调用云端API发送邮箱验证码
-      // 使用GoTrue的/otp端点发送验证码
-      final result = await UserBackendService.signInWithMagicLink(email, '');
-
-      return result.fold(
-        (_) => FlowyResult.success(null),
-        (error) => FlowyResult.failure(error),
+      final cloudConfigResult = await UserEventGetCloudConfig().send();
+      final cloudConfig = cloudConfigResult.fold(
+        (config) => config,
+        (error) => throw error,
       );
+
+      final userProfileResult = await UserBackendService.getCurrentUserProfile();
+      final userProfile = userProfileResult.fold(
+        (profile) => profile,
+        (error) => throw error,
+      );
+
+      final baseUrl = cloudConfig.serverUrl;
+      final rawToken = _normalizeToken(userProfile.token);
+      if (baseUrl.isEmpty || rawToken.isEmpty) {
+        return FlowyResult.failure(
+          FlowyError.create()
+            ..code = ErrorCode.Internal
+            ..msg = 'Missing server URL or auth token',
+        );
+      }
+
+      final uri = Uri.parse('$baseUrl/api/user/send-email-change-otp');
+      final response = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $rawToken',
+        },
+        body: jsonEncode({'email': email}),
+      );
+
+      if (response.statusCode == 200) {
+        try {
+          final json = jsonDecode(response.body) as Map<String, dynamic>;
+          if (json.containsKey('code') && json['code'] != 0) {
+            final errorMsg =
+                json['message'] as String? ?? json['msg'] as String? ?? '发送邮箱验证码失败';
+            return FlowyResult.failure(
+              FlowyError.create()
+                ..code = ErrorCode.Internal
+                ..msg = errorMsg,
+            );
+          }
+        } catch (_) {}
+        return FlowyResult.success(null);
+      } else {
+        String errorMsg = '发送邮箱验证码失败 (HTTP ${response.statusCode})';
+        if (response.body.isNotEmpty) {
+          try {
+            final json = jsonDecode(response.body) as Map<String, dynamic>;
+            errorMsg = json['message'] as String? ?? json['msg'] as String? ?? errorMsg;
+          } catch (_) {}
+        }
+        return FlowyResult.failure(
+          FlowyError.create()
+            ..code = ErrorCode.Internal
+            ..msg = errorMsg,
+        );
+      }
     } catch (e) {
       return FlowyResult.failure(
         FlowyError.create()
