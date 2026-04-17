@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:appflowy/user/application/contact_binding_service.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/validator.dart';
-import 'package:appflowy/workspace/presentation/settings/widgets/slide_verification_widget.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -44,7 +43,6 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
   final _codeFocusNode = FocusNode();
   bool _isVerified = false;
   bool _isSending = false;
-  bool _isSlideVerified = false;
   bool _hasRequestedCode = false;
   int _countdown = 0;
   Timer? _timer;
@@ -119,15 +117,6 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
             if (_currentMethod == VerificationMethod.email &&
                 widget.emailAddress == null)
               const VSpace(16),
-            // 滑块验证组件
-            SlideVerificationWidget(
-              onVerificationSuccess: () {
-                setState(() {
-                  _isSlideVerified = true;
-                });
-              },
-            ),
-            const VSpace(16),
             // 验证码输入区
             _buildCodeInput(theme),
             const VSpace(32),
@@ -221,7 +210,6 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
                 if (method != _currentMethod) {
                   setState(() {
                     _currentMethod = method;
-                    _isSlideVerified = false;
                     _hasRequestedCode = false;
                     _countdown = 0;
                     _timer?.cancel();
@@ -394,11 +382,10 @@ class _IdentityVerificationDialogState extends State<IdentityVerificationDialog>
 
   bool _canResendCode() {
     if (_currentMethod == VerificationMethod.phone) {
-      return _countdown == 0 && (_hasRequestedCode || _isSlideVerified);
+      return _countdown == 0;
     } else {
       final email = _effectiveEmail;
       return _countdown == 0 &&
-          (_hasRequestedCode || _isSlideVerified) &&
           email.isNotEmpty &&
           email.contains('@');
     }
