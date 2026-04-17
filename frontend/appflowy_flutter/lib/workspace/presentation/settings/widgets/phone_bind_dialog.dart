@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/account_merge_dialog.dart';
 import 'package:appflowy/util/validator.dart';
-import 'package:appflowy/workspace/presentation/settings/widgets/slide_verification_widget.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -30,7 +29,6 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
 
   bool _isBinding = false;
   bool _isSending = false;
-  bool _isSlideVerified = false;
   bool _hasRequestedCode = false;
   int _countdown = 0;
   Timer? _timer;
@@ -137,14 +135,6 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
               ],
             ),
             const VSpace(12),
-            SlideVerificationWidget(
-              onVerificationSuccess: () {
-                setState(() {
-                  _isSlideVerified = true;
-                });
-              },
-            ),
-            const VSpace(12),
             Row(
               children: [
                 Expanded(
@@ -212,7 +202,7 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
   }
 
   bool _canResendCode() {
-    return _countdown == 0 && (_hasRequestedCode || _isSlideVerified);
+    return _countdown == 0;
   }
 
   String _getButtonText() {
