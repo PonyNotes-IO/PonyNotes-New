@@ -23,13 +23,20 @@ class _SlideVerificationWidgetState extends State<SlideVerificationWidget> {
   double _sliderPosition = 0.0;
   bool _isVerified = false;
   bool _isDragging = false;
+  // 由 LayoutBuilder 实时计算，不在 build 中直接赋值状态变量
   double _maxWidth = 300.0;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        _maxWidth = constraints.maxWidth - 50;
+        // 只在宽度变化时更新，避免在 build 阶段直接修改状态
+        final newMaxWidth = (constraints.maxWidth - 50).clamp(1.0, double.infinity);
+        if (newMaxWidth != _maxWidth) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _maxWidth = newMaxWidth);
+          });
+        }
         
         return Container(
           height: widget.height,
@@ -91,6 +98,7 @@ class _SlideVerificationWidgetState extends State<SlideVerificationWidget> {
                 top: 2,
                 bottom: 2,
                 child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onHorizontalDragStart: (details) {
                     if (!_isVerified) {
                       setState(() {
