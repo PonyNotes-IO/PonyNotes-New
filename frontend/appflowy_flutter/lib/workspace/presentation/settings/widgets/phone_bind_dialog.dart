@@ -157,21 +157,32 @@ class _PhoneBindDialogState extends State<PhoneBindDialog> {
                   ),
                 ),
                 const HSpace(12),
-                FlowyButton(
-                  text: _isSending
-                      ? Row(
-                          children: [
-                            const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                GestureDetector(
+                  onTap: (_canResendCode() && !_isSending) ? _sendCode : null,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12,),
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      border: Border.all(
+                        color: _canResendCode()
+                            ? theme.textColorScheme.primary
+                            : theme.textColorScheme.secondary,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _isSending
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  theme.textColorScheme.secondary,),
                             ),
-                            const HSpace(6),
-                            FlowyText(_getButtonText(), fontSize: 14),
-                          ],
-                        )
-                      : FlowyText(_getButtonText(), fontSize: 14),
-                  onTap: _canResendCode() ? _sendCode : null,
+                          )
+                        : FlowyText(_getButtonText(), fontSize: 14),
+                  ),
                 ),
               ],
             ),
