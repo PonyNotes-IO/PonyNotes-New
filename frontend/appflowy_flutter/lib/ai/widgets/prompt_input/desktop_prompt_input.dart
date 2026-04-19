@@ -719,7 +719,7 @@ class _PromptBottomActions extends StatelessWidget {
               const SizedBox(width: 10),
               if (extraBottomActionButton != null) extraBottomActionButton!,
               // PonyNotes: 始终显示附件上传按钮（支持图片和文件）
-              _buildAttachmentButton(context),
+              _buildAttachmentButton(context, state),
               const SizedBox(width: 10),
               _sendButton(),
             ],
@@ -797,15 +797,12 @@ class _PromptBottomActions extends StatelessWidget {
   }
 
   /// PonyNotes: 构建附件上传按钮（支持图片和文件）
-  Widget _buildAttachmentButton(BuildContext context) {
-    // 有附件时显示选中状态
-    final hasAttachments = context.select<AIPromptInputBloc, bool>(
-      (bloc) => bloc.state.attachedFiles.isNotEmpty,
-    );
+  Widget _buildAttachmentButton(BuildContext context, AIPromptInputState state) {
+    // 直接从外层 BlocBuilder 已传入的 state 读取，避免在 BlocBuilder builder 内
+    // 再次调用 context.select 造成双重订阅的反模式。
+    final hasAttachments = state.attachedFiles.isNotEmpty;
     // 有功能开关开启时禁用附件上传
-    final isDisabled = context.select<AIPromptInputBloc, bool>(
-      (bloc) => bloc.state.enableDeepThinking || bloc.state.enableWebSearch,
-    );
+    final isDisabled = state.enableDeepThinking || state.enableWebSearch;
 
     return FlowyTooltip(
       message: isDisabled
@@ -1008,29 +1005,42 @@ class _AIUsageIndicatorWidget extends StatefulWidget {
 class _AIUsageIndicatorWidgetState extends State<_AIUsageIndicatorWidget> {
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ChatBloc, ChatState>(builder: (context, state) {
-      // 根据剩余次数选择颜色
-      final textColor = _getUsageTextColor(
-          context, (state.usageInfo?.aiResponsesCountLimit.toInt() ?? 0) - (state.usageInfo?.aiResponsesCount.toInt() ?? 0)
-      );
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          _getUsageDisplayText(
+    // ChatBloc 只在 AI 聊天页面上下文中提供，文档视图 AI 写作等场景中不存在。
+    // 若不加守卫，BlocBuilder 内部在 didChangeDependencies 阶段调用
+    // context.read<ChatBloc>() 会抛出异常，进而在 Stack 布局期间触发
+    // markNeedsLayout()，导致 !_debugDoingThisLayout 断言失败。
+    final chatBloc = context.read<ChatBloc?>();
+    if (chatBloc == null) {
+      return const SizedBox.shrink();
+    }
+    return BlocBuilder<ChatBloc, ChatState>(
+      bloc: chatBloc,
+      builder: (context, state) {
+        // 根据剩余次数选择颜色
+        final textColor = _getUsageTextColor(
+          context,
+          (state.usageInfo?.aiResponsesCountLimit.toInt() ?? 0) -
+              (state.usageInfo?.aiResponsesCount.toInt() ?? 0),
+        );
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            _getUsageDisplayText(
               state.usageInfo?.aiResponsesCount.toInt() ?? 0,
               state.usageInfo?.aiResponsesCountLimit.toInt() ?? 0,
-              ),
-          style: TextStyle(
-            fontSize: 12,
-            color: textColor,
+            ),
+            style: TextStyle(
+              fontSize: 12,
+              color: textColor,
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 
   String _getUsageDisplayText(int used, int total) {
