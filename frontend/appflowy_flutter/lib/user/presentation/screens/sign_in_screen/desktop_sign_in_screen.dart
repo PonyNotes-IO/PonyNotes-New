@@ -12,6 +12,7 @@ import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/quick_start/quick_start_button.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/user/presentation/screens/legal_document_screen.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_magic_link_or_passcode_page.dart';
@@ -28,6 +29,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:window_manager/window_manager.dart';
+
+import 'widgets/agreement/terms_and_conditions_section.dart';
 
 class DesktopSignInScreen extends StatefulWidget {
   const DesktopSignInScreen({
@@ -366,7 +369,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                           ),
                           const VSpace(12),
                           // 快速开始按钮
-                          _QuickStartButton(
+                          QuickStartButton(
                             onTap: () {
                               context
                                   .read<SignInBloc>()
@@ -404,7 +407,7 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                           ],
                           const VSpace(20),
                           // 用户协议部分（移到三方登录下方）
-                          _TermsAndConditionsSection(
+                          TermsAndConditionsSection(
                             agreedToTerms: _agreedToTerms,
                             onAgreedToTermsChanged: (value) {
                               setState(() {
@@ -440,96 +443,6 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
     // https://pub.dev/packages/window_manager#windows
     // must call setState once when the window is focused
     setState(() {});
-  }
-}
-
-// 用户协议部分组件
-class _TermsAndConditionsSection extends StatelessWidget {
-  const _TermsAndConditionsSection({
-    required this.agreedToTerms,
-    required this.onAgreedToTermsChanged,
-  });
-
-  final bool agreedToTerms;
-  final ValueChanged<bool> onAgreedToTermsChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-    final base_web_domain = cloudEnv.appflowyCloudConfig.base_web_domain;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        SizedBox(
-          width: 18,
-          height: 18,
-          child: Checkbox(
-            value: agreedToTerms,
-            onChanged: (value) {
-              onAgreedToTermsChanged(value ?? false);
-            },
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
-            ),
-            side: BorderSide(color: theme.borderColorScheme.primary),
-            activeColor: Theme.of(context).colorScheme.primary,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          child: RichText(
-            text: TextSpan(
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: 14,
-              ),
-              children: [
-                const TextSpan(text: "我已阅读并同意 "),
-                TextSpan(
-                  text: "《${LocaleKeys.legal_userAgreement.tr()}》",
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  mouseCursor: SystemMouseCursors.click,
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = () {
-
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => LegalDocumentScreen(
-                            title: LocaleKeys.sidebar_appName.tr() +
-                                LocaleKeys.legal_userAgreement.tr(),
-                            url: "$base_web_domain/agreement",
-                          ),
-                        ),
-                      );
-                    },
-                ),
-                TextSpan(text: LocaleKeys.and.tr()),
-                TextSpan(
-                  text: "《${LocaleKeys.legal_privacyPolicy.tr()}》",
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  mouseCursor: SystemMouseCursors.click,
-                  recognizer: TapGestureRecognizer()
-                    ..onTap = () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => LegalDocumentScreen(
-                            title: LocaleKeys.legal_privacyPolicy.tr(),
-                            url: "$base_web_domain/privacy",
-                          ),
-                        ),
-                      );
-                    },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
   }
 }
 
@@ -641,56 +554,6 @@ class _CustomOrDivider extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-// 快速开始按钮组件
-class _QuickStartButton extends StatelessWidget {
-  const _QuickStartButton({required this.onTap, this.checkTermsAgreement});
-
-  final VoidCallback onTap;
-  final bool Function()? checkTermsAgreement;
-
-  // 检查用户是否同意了协议
-  bool _checkTermsAgreement(BuildContext context) {
-    if (checkTermsAgreement != null) {
-      return checkTermsAgreement!();
-    }
-
-    // 默认返回true，因为现在都通过回调传递状态
-    return true;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    final materialTheme = Theme.of(context);
-    return GestureDetector(
-      onTap: () {
-        // 检查协议同意
-        if (_checkTermsAgreement(context)) {
-          onTap();
-        }
-      },
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: theme.surfaceColorScheme.layer01,
-          border: Border.all(color: theme.borderColorScheme.primary),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Text(
-          "快速开始",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: theme.textColorScheme.primary,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
     );
   }
 }

@@ -132,7 +132,7 @@ class _ContinueWithEmailAndPasswordState
                                   children: [
                                     const TextSpan(text: 'PonyNotes '),
                                     TextSpan(
-                                      text: '《用户协议》',
+                                      text: '《${LocaleKeys.settings_mobile_userAgreement.tr()}》',
                                       style: TextStyle(
                                         color: primaryColor,
                                       ),
@@ -144,7 +144,7 @@ class _ContinueWithEmailAndPasswordState
                                     ),
                                     const TextSpan(text: '、'),
                                     TextSpan(
-                                      text: '《隐私政策》',
+                                      text: '《${LocaleKeys.settings_mobile_privacyPolicy.tr()}》',
                                       style: TextStyle(
                                         color: primaryColor,
                                       ),
@@ -589,7 +589,7 @@ class _ContinueWithEmailAndPasswordState
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => LegalDocumentScreen(
-          title: '用户协议',
+          title: LocaleKeys.settings_mobile_userAgreement.tr(),
           url: '$base_web_domain/agreement',
         ),
       ),
@@ -602,7 +602,7 @@ class _ContinueWithEmailAndPasswordState
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => LegalDocumentScreen(
-          title: '隐私政策',
+          title: LocaleKeys.settings_mobile_privacyPolicy.tr(),
           url: '$base_web_domain/privacy',
         ),
       ),

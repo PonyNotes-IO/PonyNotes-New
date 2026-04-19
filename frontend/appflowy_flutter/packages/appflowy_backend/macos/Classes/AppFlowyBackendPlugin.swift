@@ -18,6 +18,6 @@ public class AppFlowyBackendPlugin: NSObject, FlutterPlugin {
   }
 
   public static func dummyMethodToEnforceBundling() {
-    link_me_please()
+    // link_me_please()
   }
 }

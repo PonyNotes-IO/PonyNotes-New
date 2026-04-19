@@ -51,6 +51,8 @@
     "passwordMustContain": "密碼必須包含至少一個字母、一個數字和一個符號。",
     "syncPromptMessage": "同步資料可能需要一些時間。請不要關閉此頁面",
     "or": "或",
+    "and": "与",
+    "other": "其他登录方式",
     "signInWithGoogle": "使用 Google 登入",
     "signInWithGithub": "使用 Github 登入",
     "signInWithDiscord": "使用 Discord 登入",

@@ -52,6 +52,8 @@
     "passwordMustContain": "Password must contain at least one letter, one number, and one symbol.",
     "syncPromptMessage": "Syncing the data might take a while. Please don't close this page",
     "or": "or",
+    "and": "and",
+    "other": "Other",
     "signInWithGoogle": "Continue with Google",
     "signInWithGithub": "Continue with GitHub",
     "signInWithDiscord": "Continue with Discord",

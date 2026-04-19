@@ -6,6 +6,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/setting/launch_settings_page.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/anonymous_sign_in_button.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/mobile_phone_login_form.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/widgets.dart';
 import 'package:appflowy/user/presentation/widgets/flowy_logo_title.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -15,10 +16,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-class MobileSignInScreen extends StatelessWidget {
+import '../../../../workspace/presentation/widgets/dialogs.dart';
+import 'widgets/agreement/terms_and_conditions_section.dart';
+import 'widgets/quick_start/quick_start_button.dart';
+
+class MobileSignInScreen extends StatefulWidget {
   const MobileSignInScreen({
     super.key,
   });
+
+  @override
+  State<MobileSignInScreen> createState() => _MobileSignInScreenState();
+}
+
+class _MobileSignInScreenState extends State<MobileSignInScreen> {
+  bool _agreedToTerms = false;
 
   @override
   Widget build(BuildContext context) {
@@ -27,25 +39,67 @@ class MobileSignInScreen extends StatelessWidget {
         final theme = AppFlowyTheme.of(context);
         return Scaffold(
           resizeToAvoidBottomInset: false,
-          body: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 38, horizontal: 40),
-            child: Column(
-              children: [
-                const Spacer(),
-                FlowyLogoTitle(title: LocaleKeys.welcomeText.tr()),
-                VSpace(theme.spacing.xxl),
-                isLocalAuthEnabled
-                    ? const SignInAnonymousButtonV3()
-                    : const ContinueWithEmailAndPassword(),
-                VSpace(theme.spacing.xxl),
-                if (isAuthEnabled) ...[
-                  _buildThirdPartySignInButtons(context),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 38, horizontal: 30),
+              child: Column(
+                children: [
+                  VSpace(80),
+                  // Logo and welcome text
+                  FlowyLogoTitle(
+                    title: LocaleKeys.welcomeToPonyNotes.tr(),
+                    logoSize: Size.square(80),
+                  ),
                   VSpace(theme.spacing.xxl),
+                  
+                  // Phone input and login button
+                  MobilePhoneLoginForm(
+                    onAgreeChanged: (value) {
+                      setState(() {
+                        _agreedToTerms = value;
+                      });
+                    },
+                    initialAgreed: _agreedToTerms,
+                  ),
+                  VSpace(theme.spacing.l),
+
+                  QuickStartButton(
+                    onTap: () {
+                      context
+                          .read<SignInBloc>()
+                          .add(const SignInEvent.signInAsGuest());
+                    },
+                    checkTermsAgreement: () {
+                      if (!_agreedToTerms) {
+                        showToastNotification(
+                          message: "请先同意用户协议和隐私政策",
+                          type: ToastificationType.error,
+                        );
+                        return false;
+                      }
+                      return true;
+                    },
+                  ),
+                  Spacer(),
+                  
+                  // Third party login
+                  if (isAuthEnabled) ...[
+                    _buildThirdPartySignInButtons(context),
+                    VSpace(theme.spacing.xl),
+                  ],
+                  
+                  // Agreement checkbox
+                  // SignInAgreement(),
+                  TermsAndConditionsSection(
+                    agreedToTerms: _agreedToTerms,
+                    onAgreedToTermsChanged: (value) {
+                      setState(() {
+                        _agreedToTerms = value;
+                      });
+                    },
+                  ),
                 ],
-                const SignInAgreement(),
-                const Spacer(),
-                _buildSettingsButton(context),
-              ],
+              ),
             ),
           ),
         );
@@ -62,25 +116,29 @@ class MobileSignInScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Expanded(child: Divider()),
+                const SizedBox(width: 40,child: Divider(),),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
-                    LocaleKeys.signIn_or.tr(),
+                    '其他登录方式',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 12,
                       color: theme.textColorScheme.secondary,
                     ),
                   ),
                 ),
-                const Expanded(child: Divider()),
+                const SizedBox(width: 40,child: Divider(),),
               ],
             ),
             const VSpace(16),
-            // expand third-party sign in buttons on Android by default.
-            // on iOS, the github and discord buttons are collapsed by default.
-            ThirdPartySignInButtons(
-              expanded: Platform.isAndroid,
+            // Custom third party buttons with 40dp size
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildThirdPartyButton(context, 'wechat'),
+                const HSpace(40),
+                _buildThirdPartyButton(context, 'douyin'),
+              ],
             ),
           ],
         );
@@ -88,36 +146,28 @@ class MobileSignInScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSettingsButton(BuildContext context) {
+  Widget _buildThirdPartyButton(BuildContext context, String type) {
     final theme = AppFlowyTheme.of(context);
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AFGhostIconTextButton(
-          text: LocaleKeys.signIn_settings.tr(),
-          textColor: (context, isHovering, disabled) {
-            return theme.textColorScheme.secondary;
-          },
-          size: AFButtonSize.s,
-          padding: EdgeInsets.symmetric(
-            horizontal: theme.spacing.m,
-            vertical: theme.spacing.xs,
+    return GestureDetector(
+      onTap: () {
+        if (type == 'wechat') {
+          context.read<SignInBloc>().add(const SignInEvent.signInWithWeChat());
+        } else if (type == 'douyin') {
+          context.read<SignInBloc>().add(const SignInEvent.signInWithDouYin());
+        }
+      },
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: Center(
+          child: FlowySvg(
+            type == 'wechat' ? FlowySvgs.icon_login_wx_xl : FlowySvgs.icon_login_dy_xl,
+            blendMode: null,
           ),
-          onTap: () => context.push(MobileLaunchSettingsPage.routeName),
-          iconBuilder: (context, isHovering, disabled) {
-            return FlowySvg(
-              FlowySvgs.settings_s,
-              size: Size.square(20),
-              color: theme.textColorScheme.secondary,
-            );
-          },
         ),
-        const HSpace(24),
-        // Server configuration is now compile-time only
-        // Always show anonymous button regardless of auth mode
-        const SignInAnonymousButtonV2(),
-      ],
+      ),
     );
   }
+
+
 }
