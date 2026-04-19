@@ -26,19 +26,33 @@ class TermsAndConditionsSection extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        SizedBox(
-          width: 18,
-          height: 18,
-          child: Checkbox(
-            value: agreedToTerms,
-            onChanged: (value) {
-              onAgreedToTermsChanged(value ?? false);
+        GestureDetector(
+          onTap: () {
+            onAgreedToTermsChanged(!agreedToTerms);
+          },
+          child: Builder(
+            builder: (context) {
+              final primaryColor = Theme.of(context).colorScheme.primary;
+              return Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: agreedToTerms ? primaryColor : const Color(0xFFD0D0D0),
+                    width: 2,
+                  ),
+                  color: agreedToTerms ? primaryColor : Colors.transparent,
+                ),
+                child: agreedToTerms
+                    ? Icon(
+                        Icons.check,
+                        size: 14,
+                        color: Colors.white,
+                      )
+                    : null,
+              );
             },
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(4),
-            ),
-            side: BorderSide(color: theme.borderColorScheme.primary),
-            activeColor: Theme.of(context).colorScheme.primary,
           ),
         ),
         const SizedBox(width: 8),

@@ -242,106 +242,101 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
 
   Widget _buildVerificationCodeInputs() {
     final screenWidth = MediaQuery.of(context).size.width;
-    // 计算每个输入框的宽度，考虑屏幕宽度和间距
-    final padding = 32.0 * 2; // 左右各32的padding
-    final spacing = 12.0 * 5; // 5个间距，每个12
-    final availableWidth = screenWidth - padding;
-    final inputWidth = (availableWidth - spacing) / 6;
+    // 计算输入框宽度：屏幕宽度减去间距，再除以6
+    // 间距：5个间隔，每个间隔12
+    const spacing = 12.0;
+    final inputWidth = (screenWidth - (5 * spacing)) / 6;
     
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: List.generate(6, (index) {
-          return Container(
-            margin: EdgeInsets.only(right: index < 5 ? 12 : 0),
-            child: Container(
-              width: inputWidth,
-              height: inputWidth, // 保持正方形
-              decoration: BoxDecoration(
-                color: const Color(0xFFEBEBEB),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: KeyboardListener(
-                focusNode: FocusNode(),
-                onKeyEvent: (KeyEvent event) {
-                  if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
-                    if (_codeControllers[index].text.isEmpty && index > 0) {
-                      // 如果当前输入框为空且不是第一个，则跳到前一个输入框并清空
-                      _codeFocusNodes[index - 1].requestFocus();
-                      _codeControllers[index - 1].clear();
-                    }
+    return Row(
+      children: List.generate(6, (index) {
+        return Container(
+          margin: EdgeInsets.only(right: index < 5 ? spacing : 0),
+          child: Container(
+            width: inputWidth,
+            height: inputWidth, // 保持正方形
+            decoration: BoxDecoration(
+              color: const Color(0xFFEBEBEB),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: KeyboardListener(
+              focusNode: FocusNode(),
+              onKeyEvent: (KeyEvent event) {
+                if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
+                  if (_codeControllers[index].text.isEmpty && index > 0) {
+                    // 如果当前输入框为空且不是第一个，则跳到前一个输入框并清空
+                    _codeFocusNodes[index - 1].requestFocus();
+                    _codeControllers[index - 1].clear();
+                  }
+                }
+              },
+              child: TextField(
+                controller: _codeControllers[index],
+                focusNode: _codeFocusNodes[index],
+                textAlign: TextAlign.center,
+                textAlignVertical: TextAlignVertical.center,
+                keyboardType: TextInputType.number,
+                textInputAction: index < 5 ? TextInputAction.next : TextInputAction.done,
+                expands: true,
+                // ignore: avoid_redundant_argument_values
+                minLines: null,
+                // ignore: avoid_redundant_argument_values
+                maxLines: null,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF333333),
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(1),
+                ],
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  counterText: '',
+                  contentPadding: EdgeInsets.zero,
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(4),
+                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5),
+                  ),
+                ),
+                onChanged: (value) {
+                  // 清除错误信息
+                  if (_errorMessage.isNotEmpty) {
+                    setState(() => _errorMessage = '');
+                  }
+                  
+                  // 只保留最后一个字符
+                  if (value.length > 1) {
+                    _codeControllers[index].text = value.substring(value.length - 1);
+                    _codeControllers[index].selection = TextSelection.fromPosition(
+                      TextPosition(offset: _codeControllers[index].text.length),
+                    );
+                  }
+                  if (value.isNotEmpty && index < 5) {
+                    _codeFocusNodes[index + 1].requestFocus();
+                  }
+                  final isAllFilled = _codeControllers.every((c) => c.text.isNotEmpty);
+                  if (isAllFilled) {
+                    _validateAndSubmit();
                   }
                 },
-                child: TextField(
-                  controller: _codeControllers[index],
-                  focusNode: _codeFocusNodes[index],
-                  textAlign: TextAlign.center,
-                  textAlignVertical: TextAlignVertical.center,
-                  keyboardType: TextInputType.number,
-                  textInputAction: index < 5 ? TextInputAction.next : TextInputAction.done,
-                  expands: true,
-                  // ignore: avoid_redundant_argument_values
-                  minLines: null,
-                  // ignore: avoid_redundant_argument_values
-                  maxLines: null,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF333333),
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(1),
-                  ],
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    counterText: '',
-                    contentPadding: EdgeInsets.zero,
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    // 清除错误信息
-                    if (_errorMessage.isNotEmpty) {
-                      setState(() => _errorMessage = '');
-                    }
-                    
-                    // 只保留最后一个字符
-                    if (value.length > 1) {
-                      _codeControllers[index].text = value.substring(value.length - 1);
-                      _codeControllers[index].selection = TextSelection.fromPosition(
-                        TextPosition(offset: _codeControllers[index].text.length),
-                      );
-                    }
-                    if (value.isNotEmpty && index < 5) {
-                      _codeFocusNodes[index + 1].requestFocus();
-                    }
-                    final isAllFilled = _codeControllers.every((c) => c.text.isNotEmpty);
-                    if (isAllFilled) {
-                      _validateAndSubmit();
-                    }
-                  },
-                  onTap: () {
-                    // 点击时清空当前输入框并聚焦
-                    _codeControllers[index].clear();
-                    _codeFocusNodes[index].requestFocus();
-                  },
-                  onSubmitted: (_) {
-                    if (index < 5) {
-                      _codeFocusNodes[index + 1].requestFocus();
-                    } else {
-                      _validateAndSubmit();
-                    }
-                  },
-                ),
+                onTap: () {
+                  // 点击时清空当前输入框并聚焦
+                  _codeControllers[index].clear();
+                  _codeFocusNodes[index].requestFocus();
+                },
+                onSubmitted: (_) {
+                  if (index < 5) {
+                    _codeFocusNodes[index + 1].requestFocus();
+                  } else {
+                    _validateAndSubmit();
+                  }
+                },
               ),
             ),
-          );
-        }),
-      ),
+          ),
+        );
+      }),
     );
   }
 

@@ -10,6 +10,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 
+import '../../../../../../generated/flowy_svgs.g.dart';
+
 class ContinueWithMagicLinkOrPasscodePage extends StatefulWidget {
   const ContinueWithMagicLinkOrPasscodePage({
     super.key,
@@ -331,21 +333,20 @@ class _ContinueWithMagicLinkOrPasscodePageState
             children: [
               // 返回按钮
               _buildBackButton(),
-              
               // 主要内容
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const VSpace(40),
-                      
+                      const VSpace(20),
                       // 标题
                       Text(
                         '请输入验证码',
                         style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                           color: theme.textColorScheme.primary,
                         ),
                       ),
@@ -353,11 +354,11 @@ class _ContinueWithMagicLinkOrPasscodePageState
                       
                       // 验证码发送信息
                       RichText(
-                        textAlign: TextAlign.center,
                         text: TextSpan(
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: 14,
                             color: theme.textColorScheme.secondary,
+                            fontWeight: FontWeight.w600,
                             height: 1.4,
                           ),
                           children: [
@@ -366,44 +367,35 @@ class _ContinueWithMagicLinkOrPasscodePageState
                               text: widget.email,
                               style: TextStyle(
                                 color: theme.textColorScheme.primary,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                             const TextSpan(text: '，有效期15分钟。'),
                           ],
                         ),
                       ),
-                      const VSpace(80),
-                      
+                      const VSpace(40),
                       // 验证码输入框
                       _buildVerificationCodeInputs(),
-                      
-                      const VSpace(20),
-                      
+                      const VSpace(14),
+                      // 重新发送验证码
+                      _buildResendSection(),
                       // 错误提示
                       if (_errorMessage.isNotEmpty)
-                        Container(
+                        SizedBox(
                           width: double.infinity,
-                          alignment: Alignment.center,
                           child: Text(
                             _errorMessage,
                             style: TextStyle(
                               color: Colors.red,
-                              fontSize: 20,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
-                      
-                      const VSpace(40),
-                      
-                      // 重新发送验证码
-                      _buildResendSection(),
-                      
-                      const VSpace(40),
-                      
+                      const VSpace(42),
                       // 下一步按钮
                       _buildNextButton(),
-                      
                       const Spacer(),
                     ],
                   ),
@@ -420,11 +412,10 @@ class _ContinueWithMagicLinkOrPasscodePageState
     final theme = AppFlowyTheme.of(context);
     return Container(
       alignment: Alignment.centerLeft,
-      margin: const EdgeInsets.only(left: 32, top: 20),
+      margin: const EdgeInsets.only(top: 20),
       child: IconButton(
-        icon: Icon(
-          Icons.arrow_back,
-          size: 24,
+        icon: FlowySvg(
+          FlowySvgs.back_m,
           color: theme.textColorScheme.primary,
         ),
         onPressed: widget.backToLogin,
@@ -433,22 +424,23 @@ class _ContinueWithMagicLinkOrPasscodePageState
   }
 
   Widget _buildVerificationCodeInputs() {
-    final theme = AppFlowyTheme.of(context);
+    final appTheme = AppFlowyTheme.of(context);
+    final theme = Theme.of(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    // 计算输入框宽度：屏幕宽度减去间距，再除以6
+    // 间距：5个间隔，每个间隔12
+    const spacing = 12.0;
+    final inputWidth = (screenWidth - (5 * spacing) - 40) / 6;
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(6, (index) {
         return Container(
-          margin: EdgeInsets.only(right: index < 5 ? 12 : 0),
+          margin: EdgeInsets.only(right: index < 5 ? spacing : 0),
           child: Container(
-            width: 56,
-            height: 56,
+            width: inputWidth,
+            height: inputWidth, // 保持正方形
             decoration: BoxDecoration(
-              color: theme.surfaceColorScheme.layer02,
+              color: appTheme.badgeColorScheme.color19Light1,
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(
-                color: theme.borderColorScheme.primary,
-                width: 1,
-              ),
             ),
             child: KeyboardListener(
               focusNode: FocusNode(),
@@ -476,7 +468,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
-                  color: theme.textColorScheme.primary,
+                  color: appTheme.textColorScheme.primary,
                 ),
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
@@ -489,7 +481,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
                     borderSide: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
+                      color: theme.colorScheme.primary,
                       width: 1.5,
                     ),
                   ),
@@ -541,35 +533,34 @@ class _ContinueWithMagicLinkOrPasscodePageState
           '收不到验证码？',
           style: TextStyle(
             color: theme.textColorScheme.secondary,
-            fontSize: 20,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        const HSpace(12),
+        Spacer(),
         if (_countdown > 0)
-          SizedBox(
-            width: 211,
-            child: RichText(
-              textAlign: TextAlign.center,
-              text: TextSpan(
-                style: const TextStyle(
-                  fontSize: 20,
-                  height: 1.4,
-                ),
-                children: [
-                  TextSpan(
-                    text: '$_countdown',
-                    style: TextStyle(
-                      color: primaryColor,
-                    ),
-                  ),
-                  TextSpan(
-                    text: '秒后重新获取验证码',
-                    style: TextStyle(
-                      color: theme.textColorScheme.primary,
-                    ),
-                  ),
-                ],
+          RichText(
+            textAlign: TextAlign.center,
+            text: TextSpan(
+              style: const TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                fontWeight: FontWeight.w600
               ),
+              children: [
+                TextSpan(
+                  text: '$_countdown',
+                  style: TextStyle(
+                    color: primaryColor,
+                  ),
+                ),
+                TextSpan(
+                  text: '秒后重新获取验证码',
+                  style: TextStyle(
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+              ],
             ),
           )
         else
@@ -577,16 +568,12 @@ class _ContinueWithMagicLinkOrPasscodePageState
             onTap: _resendCode,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: primaryColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
+              child: Text(
                 '重新获取验证码',
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+                  color: primaryColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),

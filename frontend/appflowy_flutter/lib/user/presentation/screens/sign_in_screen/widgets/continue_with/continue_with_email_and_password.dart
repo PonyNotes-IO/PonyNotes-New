@@ -112,72 +112,127 @@ class _ContinueWithEmailAndPasswordState
                     }
                     if (!_agreed) {
                       final parentContext = context;
-                      final primaryColor = Theme.of(context).colorScheme.primary;
                       showDialog(
                         context: parentContext,
-                        builder: (dialogContext) => AlertDialog(
-                          title: const Text('为了更好地使用服务'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('请先阅读并同意以下协议：'),
-                              const SizedBox(height: 8),
-                              RichText(
-                                text: TextSpan(
-                                  style: const TextStyle(
-                                    color: Colors.black,
+                        barrierDismissible: false,
+                        builder: (dialogContext) => Container(
+                          alignment: Alignment.center,
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 40),
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '为了更好的使用服务\n登录前请阅读并同意以下协议',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
                                     fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.black,
                                   ),
-                                  children: [
-                                    const TextSpan(text: 'PonyNotes '),
-                                    TextSpan(
-                                      text: '《${LocaleKeys.settings_mobile_userAgreement.tr()}》',
-                                      style: TextStyle(
-                                        color: primaryColor,
-                                      ),
-                                      recognizer: TapGestureRecognizer()
-                                        ..onTap = () {
-                                          Navigator.of(dialogContext).pop();
-                                          _navigateToUserAgreement(parentContext);
-                                        },
-                                    ),
-                                    const TextSpan(text: '、'),
-                                    TextSpan(
-                                      text: '《${LocaleKeys.settings_mobile_privacyPolicy.tr()}》',
-                                      style: TextStyle(
-                                        color: primaryColor,
-                                      ),
-                                      recognizer: TapGestureRecognizer()
-                                        ..onTap = () {
-                                          Navigator.of(dialogContext).pop();
-                                          _navigateToPrivacyPolicy(parentContext);
-                                        },
-                                    ),
-                                  ],
                                 ),
-                                softWrap: true,
-                                overflow: TextOverflow.visible,
-                              ),
-                            ],
+                                const SizedBox(height: 20),
+                                RichText(
+                                  textAlign: TextAlign.center,
+                                  text: TextSpan(
+                                    style: const TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 14,
+                                    ),
+                                    children: [
+                                      TextSpan(text: '小马笔记 '),
+                                      TextSpan(
+                                        text: '《${LocaleKeys.settings_mobile_userAgreement.tr()}》',
+                                        style: TextStyle(
+                                          color: const Color(0xFFFF4D4F),
+                                        ),
+                                        recognizer: TapGestureRecognizer()
+                                          ..onTap = () {
+                                            Navigator.of(dialogContext).pop();
+                                            _navigateToUserAgreement(parentContext);
+                                          },
+                                      ),
+                                      TextSpan(text: ' 和 '),
+                                      TextSpan(
+                                        text: '《${LocaleKeys.settings_mobile_privacyPolicy.tr()}》',
+                                        style: TextStyle(
+                                          color: const Color(0xFFFF4D4F),
+                                        ),
+                                        recognizer: TapGestureRecognizer()
+                                          ..onTap = () {
+                                            Navigator.of(dialogContext).pop();
+                                            _navigateToPrivacyPolicy(parentContext);
+                                          },
+                                      ),
+                                    ],
+                                  ),
+                                  softWrap: true,
+                                  overflow: TextOverflow.visible,
+                                ),
+                                const SizedBox(height: 30),
+                                // 同意并继续按钮
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _agreed = true;
+                                    });
+                                    Navigator.of(dialogContext).pop();
+                                  },
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFF4D4F),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      '同意并继续',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                // 不同意按钮
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.of(dialogContext).pop();
+                                  },
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      border: Border.all(
+                                        color: const Color(0xFFD0D0D0),
+                                        width: 1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      '不同意',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          actions: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(dialogContext).pop();
-                              },
-                              child: const Text('不同意'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  _agreed = true;
-                                });
-                                Navigator.of(dialogContext).pop();
-                              },
-                              child: const Text('同意并继续'),
-                            ),
-                          ],
                         ),
                       );
                       return;
