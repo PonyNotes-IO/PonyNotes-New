@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import '../../../../../../generated/flowy_svgs.g.dart';
 
@@ -335,69 +336,72 @@ class _ContinueWithMagicLinkOrPasscodePageState
               _buildBackButton(),
               // 主要内容
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const VSpace(20),
-                      // 标题
-                      Text(
-                        '请输入验证码',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: theme.textColorScheme.primary,
-                        ),
-                      ),
-                      const VSpace(20),
-                      
-                      // 验证码发送信息
-                      RichText(
-                        text: TextSpan(
+                child: Center(
+                  child: Container(
+                    width: UniversalPlatform.isDesktop ? 450 : double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const VSpace(20),
+                        // 标题
+                        Text(
+                          '请输入验证码',
                           style: TextStyle(
-                            fontSize: 14,
-                            color: theme.textColorScheme.secondary,
-                            fontWeight: FontWeight.w600,
-                            height: 1.4,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: theme.textColorScheme.primary,
                           ),
-                          children: [
-                            const TextSpan(text: '6位验证码已发送至 '),
-                            TextSpan(
-                              text: widget.email,
+                        ),
+                        const VSpace(20),
+
+                        // 验证码发送信息
+                        RichText(
+                          text: TextSpan(
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: theme.textColorScheme.secondary,
+                              fontWeight: FontWeight.w600,
+                              height: 1.4,
+                            ),
+                            children: [
+                              const TextSpan(text: '6位验证码已发送至 '),
+                              TextSpan(
+                                text: widget.email,
+                                style: TextStyle(
+                                  color: theme.textColorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const TextSpan(text: '，有效期15分钟。'),
+                            ],
+                          ),
+                        ),
+                        const VSpace(40),
+                        // 验证码输入框
+                        _buildVerificationCodeInputs(),
+                        const VSpace(14),
+                        // 重新发送验证码
+                        _buildResendSection(),
+                        // 错误提示
+                        if (_errorMessage.isNotEmpty)
+                          SizedBox(
+                            width: double.infinity,
+                            child: Text(
+                              _errorMessage,
                               style: TextStyle(
-                                color: theme.textColorScheme.primary,
+                                color: Colors.red,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const TextSpan(text: '，有效期15分钟。'),
-                          ],
-                        ),
-                      ),
-                      const VSpace(40),
-                      // 验证码输入框
-                      _buildVerificationCodeInputs(),
-                      const VSpace(14),
-                      // 重新发送验证码
-                      _buildResendSection(),
-                      // 错误提示
-                      if (_errorMessage.isNotEmpty)
-                        SizedBox(
-                          width: double.infinity,
-                          child: Text(
-                            _errorMessage,
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
                           ),
-                        ),
-                      const VSpace(42),
-                      // 下一步按钮
-                      _buildNextButton(),
-                      const Spacer(),
-                    ],
+                        const VSpace(42),
+                        // 下一步按钮
+                        _buildNextButton(),
+                        const Spacer(),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -429,10 +433,9 @@ class _ContinueWithMagicLinkOrPasscodePageState
     // 桌面端固定每个方块 52px，移动端按屏幕宽度自适应但不超过 52px
     // 避免在 macOS 窗口宽 1400px 时每个方块变成 230px 的问题
     const spacing = 12.0;
-    const double maxBoxSize = 52.0;
     final screenWidth = MediaQuery.of(context).size.width;
     final calculatedWidth = (screenWidth - (5 * spacing) - 40) / 6;
-    final inputWidth = calculatedWidth > maxBoxSize ? maxBoxSize : calculatedWidth;
+    final inputWidth = UniversalPlatform.isDesktop ? 56.0 : calculatedWidth;
     return Row(
       children: List.generate(6, (index) {
         return Container(
