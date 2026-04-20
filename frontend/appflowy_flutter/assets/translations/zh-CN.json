@@ -48,6 +48,8 @@
     "unmatchedPasswordError": "两次密码输入不一致",
     "syncPromptMessage": "同步数据可能需要一段时间，请不要关闭此页面",
     "or": "或",
+    "and": "与",
+    "other": "其他登录方式",
     "signInWithGoogle": "使用 Google 账户登录",
     "signInWithGithub": "使用 Github 账户登录",
     "signInWithDiscord": "使用 Discord 账户登录",
