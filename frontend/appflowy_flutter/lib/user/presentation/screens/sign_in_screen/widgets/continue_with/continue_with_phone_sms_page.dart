@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 class ContinueWithPhoneSmsPage extends StatefulWidget {
   const ContinueWithPhoneSmsPage({
@@ -20,16 +21,17 @@ class ContinueWithPhoneSmsPage extends StatefulWidget {
   final Function(String code) onVerifySms;
 
   @override
-  State<ContinueWithPhoneSmsPage> createState() => _ContinueWithPhoneSmsPageState();
+  State<ContinueWithPhoneSmsPage> createState() =>
+      _ContinueWithPhoneSmsPageState();
 }
 
 class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
   final List<TextEditingController> _codeControllers = List.generate(
-    6, 
+    6,
     (index) => TextEditingController(),
   );
   final List<FocusNode> _codeFocusNodes = List.generate(
-    6, 
+    6,
     (index) => FocusNode(),
   );
 
@@ -42,7 +44,6 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
   void initState() {
     super.initState();
     _startCountdown();
-    // 自动聚焦到第一个验证码输入框
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _codeFocusNodes[0].requestFocus();
     });
@@ -72,7 +73,6 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
             successOrFail.fold(
               (userProfile) async {
                 setState(() => _errorMessage = '');
-                // 登录成功的处理逻辑在上层组件
               },
               (error) {
                 setState(() => _errorMessage = error.msg);
@@ -82,87 +82,87 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
         },
         child: SafeArea(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 状态栏
-              _buildStatusBar(),
-              
               // 返回按钮
               _buildBackButton(),
-              
-              // 主要内容
+
+              // 主要内容居中展示
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Column(
-                    children: [
-                      const VSpace(40),
-                      
-                      // 标题
-                      const Text(
-                        '请输入验证码',
-                        style: TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF333333),
-                        ),
-                      ),
-                      const VSpace(20),
-                      
-                      // 验证码发送信息
-                      RichText(
-                        textAlign: TextAlign.center,
-                        text: TextSpan(
-                          style: const TextStyle(
+                child: Center(
+                  child: Container(
+                    width: UniversalPlatform.isDesktop ? 450 : double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const VSpace(20),
+
+                        // 标题
+                        const Text(
+                          '请输入验证码',
+                          style: TextStyle(
                             fontSize: 20,
-                            color: Color(0xFF777777),
-                            height: 1.4,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF333333),
                           ),
-                          children: [
-                            const TextSpan(text: '6位验证码已发送至'),
-                            TextSpan(
-                              text: ' ${widget.phone}',
+                        ),
+                        const VSpace(20),
+
+                        // 验证码发送信息
+                        RichText(
+                          text: TextSpan(
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF777777),
+                              fontWeight: FontWeight.w600,
+                              height: 1.4,
+                            ),
+                            children: [
+                              const TextSpan(text: '6位验证码已发送至 '),
+                              TextSpan(
+                                text: widget.phone,
+                                style: const TextStyle(
+                                  color: Color(0xFF333333),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const TextSpan(text: '，有效期15分钟。'),
+                            ],
+                          ),
+                        ),
+                        const VSpace(40),
+
+                        // 验证码输入框
+                        _buildVerificationCodeInputs(),
+
+                        const VSpace(14),
+
+                        // 重新发送验证码
+                        _buildResendSection(),
+
+                        // 错误提示
+                        if (_errorMessage.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              _errorMessage,
                               style: const TextStyle(
-                                color: Color(0xFF333333),
-                                fontWeight: FontWeight.w500,
+                                color: Colors.red,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const TextSpan(text: '，有效期15分钟。'),
-                          ],
-                        ),
-                      ),
-                      const VSpace(80),
-                      
-                      // 验证码输入框
-                      _buildVerificationCodeInputs(),
-                      
-                      const VSpace(20),
-                      
-                      // 错误提示
-                      if (_errorMessage.isNotEmpty)
-                        Container(
-                          width: double.infinity,
-                          alignment: Alignment.center,
-                          child: Text(
-                            _errorMessage,
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 20,
-                            ),
                           ),
-                        ),
-                      
-                      const VSpace(40),
-                      
-                      // 重新发送验证码
-                      _buildResendSection(),
-                      
-                      const VSpace(40),
-                      
-                      // 下一步按钮
-                      _buildNextButton(),
-                      
-                      const Spacer(),
-                    ],
+
+                        const VSpace(42),
+
+                        // 下一步按钮
+                        _buildNextButton(),
+
+                        const Spacer(),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -173,62 +173,9 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
     );
   }
 
-  Widget _buildStatusBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 21, vertical: 5),
-      child: Row(
-        children: [
-          const Text(
-            '9:41',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.black,
-            ),
-          ),
-          const HSpace(8),
-          const Text(
-            'Mon Jun 10',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.black,
-            ),
-          ),
-          const Spacer(),
-          // 信号图标
-          Container(
-            width: 35,
-            height: 10,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const HSpace(4),
-          const Text(
-            '100%',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.black,
-            ),
-          ),
-          const HSpace(3),
-          // 电池图标
-          Container(
-            width: 27,
-            height: 12,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBackButton() {
-    return Container(
-      margin: const EdgeInsets.only(left: 89, top: 75),
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, top: 8),
       child: IconButton(
         icon: const Icon(
           Icons.arrow_back,
@@ -241,14 +188,12 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
   }
 
   Widget _buildVerificationCodeInputs() {
-    // 桌面端固定每个方块 52px，移动端按屏幕宽度自适应但不超过 52px
-    // 避免在 macOS 窗口宽 1400px 时每个方块变成 230px 的问题
     const spacing = 12.0;
-    const double maxBoxSize = 52.0;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final calculatedWidth = (screenWidth - (5 * spacing)) / 6;
-    final inputWidth = calculatedWidth > maxBoxSize ? maxBoxSize : calculatedWidth;
-    
+    // 桌面端固定每个方块 56px，移动端按屏幕宽度自适应
+    final inputWidth = UniversalPlatform.isDesktop
+        ? 56.0
+        : (MediaQuery.of(context).size.width - (5 * spacing) - 40) / 6;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(6, (index) {
@@ -256,7 +201,7 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
           margin: EdgeInsets.only(right: index < 5 ? spacing : 0),
           child: Container(
             width: inputWidth,
-            height: inputWidth, // 保持正方形
+            height: inputWidth,
             decoration: BoxDecoration(
               color: const Color(0xFFEBEBEB),
               borderRadius: BorderRadius.circular(4),
@@ -264,9 +209,9 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
             child: KeyboardListener(
               focusNode: FocusNode(),
               onKeyEvent: (KeyEvent event) {
-                if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.backspace) {
                   if (_codeControllers[index].text.isEmpty && index > 0) {
-                    // 如果当前输入框为空且不是第一个，则跳到前一个输入框并清空
                     _codeFocusNodes[index - 1].requestFocus();
                     _codeControllers[index - 1].clear();
                   }
@@ -278,7 +223,8 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
                 textAlign: TextAlign.center,
                 textAlignVertical: TextAlignVertical.center,
                 keyboardType: TextInputType.number,
-                textInputAction: index < 5 ? TextInputAction.next : TextInputAction.done,
+                textInputAction:
+                    index < 5 ? TextInputAction.next : TextInputAction.done,
                 expands: true,
                 // ignore: avoid_redundant_argument_values
                 minLines: null,
@@ -299,32 +245,36 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
                   contentPadding: EdgeInsets.zero,
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(4),
-                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 1.5,
+                    ),
                   ),
                 ),
+
                 onChanged: (value) {
-                  // 清除错误信息
                   if (_errorMessage.isNotEmpty) {
                     setState(() => _errorMessage = '');
                   }
-                  
-                  // 只保留最后一个字符
                   if (value.length > 1) {
-                    _codeControllers[index].text = value.substring(value.length - 1);
-                    _codeControllers[index].selection = TextSelection.fromPosition(
-                      TextPosition(offset: _codeControllers[index].text.length),
+                    _codeControllers[index].text =
+                        value.substring(value.length - 1);
+                    _codeControllers[index].selection =
+                        TextSelection.fromPosition(
+                      TextPosition(
+                          offset: _codeControllers[index].text.length,),
                     );
                   }
                   if (value.isNotEmpty && index < 5) {
                     _codeFocusNodes[index + 1].requestFocus();
                   }
-                  final isAllFilled = _codeControllers.every((c) => c.text.isNotEmpty);
+                  final isAllFilled =
+                      _codeControllers.every((c) => c.text.isNotEmpty);
                   if (isAllFilled) {
                     _validateAndSubmit();
                   }
                 },
                 onTap: () {
-                  // 点击时清空当前输入框并聚焦
                   _codeControllers[index].clear();
                   _codeFocusNodes[index].requestFocus();
                 },
@@ -345,123 +295,87 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
 
   Widget _buildResendSection() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text(
+        Text(
           '收不到验证码？',
           style: TextStyle(
-            color: Color(0xFF5E5E5E),
-            fontSize: 20,
+            color: Colors.grey.shade600,
+            fontSize: 13,
           ),
         ),
-        const HSpace(12),
+        const HSpace(8),
         if (_countdown > 0)
-          SizedBox(
-            width: 211,
-            child: RichText(
-              textAlign: TextAlign.center,
-              text: TextSpan(
-                style: const TextStyle(
-                  fontSize: 20,
-                  height: 1.4,
-                ),
-                children: [
-                  TextSpan(
-                    text: '$_countdown',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  const TextSpan(
-                    text: '秒后重新获取验证码',
-                    style: TextStyle(
-                      color: Color(0xFF333333),
-                    ),
-                  ),
-                ],
-              ),
+          Text(
+            '$_countdown秒后重新获取',
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).colorScheme.primary,
             ),
           )
         else
-          Builder(
-            builder: (context) {
-              final primaryColor = Theme.of(context).colorScheme.primary;
-              return GestureDetector(
-                onTap: _resendCode,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: primaryColor,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    '重新获取验证码',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              );
-            },
+          GestureDetector(
+            onTap: _resendCode,
+            child: Text(
+              '重新获取验证码',
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
       ],
     );
   }
 
   Widget _buildNextButton() {
-    return Builder(
-      builder: (context) {
-        final primaryColor = Theme.of(context).colorScheme.primary;
-        return SizedBox(
-          width: 418,
-          height: 52,
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _validateAndSubmit,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              elevation: 0,
-            ),
-            child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Text(
-                    '下一步',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    return SizedBox(
+      width: double.infinity,
+      height: 48,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _validateAndSubmit,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryColor,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-        );
-      },
+          elevation: 0,
+        ),
+        child: _isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Text(
+                '下一步',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+      ),
     );
   }
 
   void _validateAndSubmit() {
     final code = _codeControllers.map((c) => c.text).join();
-    
+
     if (code.length != 6) {
       setState(() => _errorMessage = '验证码错误，请重新输入');
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
       _errorMessage = '';
     });
-    
+
     widget.onVerifySms(code);
   }
 
@@ -479,28 +393,20 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
 
   Future<void> _resendCode() async {
     try {
-      // 清空当前验证码输入
       for (final controller in _codeControllers) {
         controller.clear();
       }
       setState(() => _errorMessage = '');
-      
-      // 聚焦到第一个输入框
       _codeFocusNodes[0].requestFocus();
-      
-      // TODO: 调用后端API重新发送短信验证码
-      // 临时处理：仅重置倒计时
       _startCountdown();
-      
+
       if (mounted) {
         showToastNotification(
           message: '验证码已重新发送到您的手机',
         );
       }
-      
     } catch (e) {
       setState(() => _errorMessage = '重新发送失败: $e');
     }
   }
 }
-
