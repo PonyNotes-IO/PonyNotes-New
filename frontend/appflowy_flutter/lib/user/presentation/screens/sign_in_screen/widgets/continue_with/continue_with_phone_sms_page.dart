@@ -241,11 +241,13 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
   }
 
   Widget _buildVerificationCodeInputs() {
-    final screenWidth = MediaQuery.of(context).size.width;
-    // 计算输入框宽度：屏幕宽度减去间距，再除以6
-    // 间距：5个间隔，每个间隔12
+    // 桌面端固定每个方块 52px，移动端按屏幕宽度自适应但不超过 52px
+    // 避免在 macOS 窗口宽 1400px 时每个方块变成 230px 的问题
     const spacing = 12.0;
-    final inputWidth = (screenWidth - (5 * spacing)) / 6;
+    const double maxBoxSize = 52.0;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final calculatedWidth = (screenWidth - (5 * spacing)) / 6;
+    final inputWidth = calculatedWidth > maxBoxSize ? maxBoxSize : calculatedWidth;
     
     return Row(
       children: List.generate(6, (index) {

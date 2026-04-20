@@ -22,4 +22,10 @@ A new flutter plugin project.
   s.swift_version = '5.0'
   s.static_framework = true
   s.vendored_libraries = "libdart_ffi.a"
+  # Force-load libdart_ffi.a 以确保 Rust FFI 符号（如 rust_log）不被链接器
+  # 的死代码裁剪丢弃。这些符号只通过 dlsym() 在运行时查找，链接器无法静态
+  # 分析到引用关系，必须强制保留整个库。
+  s.user_target_xcconfig = {
+    'OTHER_LDFLAGS' => '-force_load ${PODS_ROOT}/../Flutter/ephemeral/.symlinks/plugins/appflowy_backend/macos/libdart_ffi.a'
+  }
 end
