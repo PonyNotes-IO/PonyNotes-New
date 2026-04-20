@@ -437,6 +437,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
     final calculatedWidth = (screenWidth - (5 * spacing) - 40) / 6;
     final inputWidth = UniversalPlatform.isDesktop ? 56.0 : calculatedWidth;
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(6, (index) {
         return Container(
           margin: EdgeInsets.only(right: index < 5 ? spacing : 0),

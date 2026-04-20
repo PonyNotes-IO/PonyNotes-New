@@ -250,6 +250,7 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
     final inputWidth = calculatedWidth > maxBoxSize ? maxBoxSize : calculatedWidth;
     
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(6, (index) {
         return Container(
           margin: EdgeInsets.only(right: index < 5 ? spacing : 0),
