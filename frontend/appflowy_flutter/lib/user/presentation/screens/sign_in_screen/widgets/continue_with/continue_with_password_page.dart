@@ -14,6 +14,8 @@ import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'continue_with_magic_link_or_passcode_page.dart';
+
 class ContinueWithPasswordPage extends StatefulWidget {
   const ContinueWithPasswordPage({
     super.key,
@@ -35,18 +37,28 @@ class ContinueWithPasswordPage extends StatefulWidget {
 
 class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
   final passwordController = TextEditingController();
+  final accountController = TextEditingController();
   final inputPasswordKey = GlobalKey<AFTextFieldState>();
 
   bool isSubmitting = false;
 
   @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    accountController.text = widget.email;
+  }
+
+  @override
   void dispose() {
     passwordController.dispose();
+    accountController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Scaffold(
       body: Center(
         child: SizedBox(
@@ -75,11 +87,22 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
               }
             },
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                VSpace(120),
                 // Logo and title
                 _buildLogoAndTitle(),
+                Align(
+                  alignment: Alignment.centerLeft,
+                    child: FlowyText.semibold(
+                  "使用已经注册过的手机号登录",
+                  fontSize: 14,
+                  color: theme.textColorScheme.secondary,
+                )),
+                VSpace(20),
 
+                // account show
+                _buildAccountSection(),
+                VSpace(12),
                 // Password input and buttons
                 ..._buildPasswordSection(),
 
@@ -97,6 +120,44 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
 
   Widget _buildLogoAndTitle() {
     final theme = AppFlowyTheme.of(context);
+    // 标题
+    return Row(
+      children: [
+        Text(
+          LocaleKeys.signIn_signInPassword.tr(),
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: theme.textColorScheme.primary,
+          ),
+        ),
+        Spacer(),
+        OutlinedButton(
+          onPressed: () {
+            final signInBloc = context.read<SignInBloc>();
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                settings: const RouteSettings(name: '/continue-with-email-verification'),
+                builder: (context) => BlocProvider.value(
+                  value: signInBloc,
+                  child: ContinueWithMagicLinkOrPasscodePage(
+                    email: widget.email,
+                    backToLogin: widget.backToLogin,
+                  ),
+                ),
+              ),
+            );
+          },
+          style: OutlinedButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30), // 设置圆角半径
+            ),
+          ),
+          child: FlowyText.small(LocaleKeys.signIn_verificationLogin.tr()),
+        ),
+      ],
+    );
     return TitleLogo(
       title: LocaleKeys.signIn_enterPassword.tr(),
       informationBuilder: (context) => // email display
@@ -150,7 +211,7 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
 
       // Forgot password button
       Align(
-        alignment: Alignment.centerLeft,
+        alignment: Alignment.centerRight,
         child: AFGhostTextButton(
           text: LocaleKeys.signIn_forgotPassword.tr(),
           size: AFButtonSize.s,
@@ -201,5 +262,14 @@ class _ContinueWithPasswordPageState extends State<ContinueWithPasswordPage> {
         ),
       );
     }
+  }
+
+  AFTextField _buildAccountSection() {
+    return // Password input
+        AFTextField(
+      controller: accountController,
+      hintText: LocaleKeys.signIn_enterYourEmailOrPhone.tr(),
+      autoFocus: true,
+    );
   }
 }

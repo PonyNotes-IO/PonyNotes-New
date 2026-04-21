@@ -129,8 +129,12 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
     if (_isLoading) return;
 
     if (!Validator.isValidEmailOrPhone(emailOrPhone)) {
-      emailKey.currentState?.syncError(
-        errorText: '请输入有效的邮箱或手机号',
+      // 显示错误提示
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('请输入有效的邮箱或手机号'),
+          duration: Duration(seconds: 2),
+        ),
       );
       return;
     }
@@ -148,7 +152,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
     }
   }
 
-  void _signInWithEmail(BuildContext context, String email) async {
+  Future<void> _signInWithEmail(BuildContext context, String email) async {
     if (_isLoading) return;
 
     // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
@@ -168,19 +172,16 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
       );
       
       // 等待密码状态检查完成
-      await Future.delayed(const Duration(milliseconds: 800));
-      
-      // 获取当前状态
-      final currentState = signInBloc.state;
-      if (mounted) {
-        if (currentState.passwordIsSet == true) {
-          // 用户已设置密码，跳转到密码登录页面
-          _pushContinueWithPasswordPage(context, email);
-        } else {
-          // 用户未设置密码，发送验证码并跳转到验证码输入页面
-          signInBloc.add(SignInEvent.signInWithMagicLink(email: email));
-          _pushContinueWithMagicLinkOrPasscodePage(context, email);
-        }
+      final passwordIsSet = await _waitForPasswordStatus(signInBloc);
+      if (!mounted) return;
+
+      if (passwordIsSet == true) {
+        // 用户已设置密码，跳转到密码登录页面
+        _pushContinueWithPasswordPage(context, email);
+      } else {
+        // 用户未设置密码，发送验证码并跳转到验证码输入页面
+        signInBloc.add(SignInEvent.signInWithMagicLink(email: email));
+        _pushContinueWithMagicLinkOrPasscodePage(context, email);
       }
     } catch (e) {
       // 处理异常
@@ -196,7 +197,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
     }
   }
 
-  void _signInWithPhone(BuildContext context, String phone) async {
+  Future<void> _signInWithPhone(BuildContext context, String phone) async {
     if (_isLoading) return;
     
     // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
@@ -216,19 +217,16 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
       );
       
       // 等待密码状态检查完成
-      await Future.delayed(const Duration(milliseconds: 800));
-      
-      // 获取当前状态
-      final currentState = signInBloc.state;
-      if (mounted) {
-        if (currentState.passwordIsSet == true) {
-          // 用户已设置密码，跳转到密码登录页面
-          _pushContinueWithPasswordPage(context, phone);
-        } else {
-          // 用户未设置密码，发送验证码并跳转到验证码输入页面
-          signInBloc.add(SignInEvent.signInWithMagicLink(email: phone));
-          _pushContinueWithMagicLinkOrPasscodePage(context, phone);
-        }
+      final passwordIsSet = await _waitForPasswordStatus(signInBloc);
+      if (!mounted) return;
+
+      if (passwordIsSet == true) {
+        // 用户已设置密码，跳转到密码登录页面
+        _pushContinueWithPasswordPage(context, phone);
+      } else {
+        // 用户未设置密码，发送验证码并跳转到验证码输入页面
+        signInBloc.add(SignInEvent.signInWithMagicLink(email: phone));
+        _pushContinueWithMagicLinkOrPasscodePage(context, phone);
       }
     } catch (e) {
       // 处理异常
@@ -241,6 +239,24 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// 等待 passwordIsSet 有结果，最多 2 秒；超时或异常返回 null
+  Future<bool?> _waitForPasswordStatus(SignInBloc signInBloc) async {
+    try {
+      // 如果当前已有值，直接返回
+      if (signInBloc.state.passwordIsSet != null) {
+        return signInBloc.state.passwordIsSet;
+      }
+
+      final state = await signInBloc.stream
+          .where((s) => s.passwordIsSet != null)
+          .first
+          .timeout(const Duration(seconds: 2));
+      return state.passwordIsSet;
+    } catch (_) {
+      return null;
     }
   }
 

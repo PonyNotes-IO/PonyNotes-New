@@ -453,6 +453,12 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       (gotrueTokenResponse) async {
 
         try {
+          // 保存 accessToken 到状态中，用于后续设置密码流程
+          final accessToken = gotrueTokenResponse.accessToken;
+          if (!isClosed) {
+            emit(state.copyWith(accessToken: accessToken));
+          }
+          
           // 将 token 交给 Deep Link 处理（写入本地并触发登录流程）
           await getIt<AppFlowyCloudDeepLink>().passGotrueTokenResponse(
             gotrueTokenResponse,
@@ -468,6 +474,42 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
         if (!isClosed &&
             state.successOrFail != null &&
             state.successOrFail!.isSuccess) {
+          // 检查用户是否设置了密码
+          if (passwordService != null) {
+            try {
+              final passwordStatusResult = await passwordService!.checkPasswordStatus(
+                email: email.contains('@') ? email : null,
+                phone: email.contains('@') ? null : email,
+              );
+              
+              passwordStatusResult.fold(
+                (passwordIsSet) {
+                  if (!isClosed) {
+                    emit(state.copyWith(
+                      isSubmitting: false,
+                      passwordIsSet: passwordIsSet,
+                    ));
+                  }
+                },
+                (error) {
+                  if (!isClosed) {
+                    emit(state.copyWith(
+                      isSubmitting: false,
+                      passwordIsSet: false,
+                    ));
+                  }
+                },
+              );
+            } catch (e) {
+              Log.warn('[SignInBloc] Check password status failed: $e');
+              if (!isClosed) {
+                emit(state.copyWith(
+                  isSubmitting: false,
+                  passwordIsSet: false,
+                ));
+              }
+            }
+          }
           return state.copyWith(
             isSubmitting: false,
           );
@@ -481,9 +523,52 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
             (err) => null,
           );
           if (maybeProfile != null) {
+            // 检查用户是否设置了密码
+            if (passwordService != null) {
+              try {
+                final passwordStatusResult = await passwordService!.checkPasswordStatus(
+                  email: email.contains('@') ? email : null,
+                  phone: email.contains('@') ? null : email,
+                );
+                
+                passwordStatusResult.fold(
+                  (passwordIsSet) {
+                    if (!isClosed) {
+                      emit(state.copyWith(
+                        isSubmitting: false,
+                        successOrFail: FlowyResult.success(maybeProfile),
+                        passwordIsSet: passwordIsSet,
+                      ));
+                    }
+                  },
+                  (error) {
+                    if (!isClosed) {
+                      emit(state.copyWith(
+                        isSubmitting: false,
+                        successOrFail: FlowyResult.success(maybeProfile),
+                        passwordIsSet: false,
+                      ));
+                    }
+                  },
+                );
+                return state.copyWith(
+                  isSubmitting: false,
+                  successOrFail: FlowyResult.success(maybeProfile),
+                  passwordIsSet: false, // 默认值，实际值会在上面的回调中更新
+                );
+              } catch (e) {
+                Log.warn('[SignInBloc] Check password status failed: $e');
+                return state.copyWith(
+                  isSubmitting: false,
+                  successOrFail: FlowyResult.success(maybeProfile),
+                  passwordIsSet: false,
+                );
+              }
+            }
             return state.copyWith(
               isSubmitting: false,
               successOrFail: FlowyResult.success(maybeProfile),
+              passwordIsSet: false,
             );
           }
         } catch (e) {
@@ -494,12 +579,52 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
         final profileResult = await authService.getUser();
         return profileResult.fold(
           (userProfile) {
+            // 检查用户是否设置了密码
+            if (passwordService != null) {
+              try {
+                final passwordStatusResult = passwordService!.checkPasswordStatus(
+                  email: email.contains('@') ? email : null,
+                  phone: email.contains('@') ? null : email,
+                );
+                
+                passwordStatusResult.fold(
+                  (passwordIsSet) {
+                    if (!isClosed) {
+                      emit(state.copyWith(
+                        isSubmitting: false,
+                        successOrFail: FlowyResult.success(userProfile),
+                        passwordIsSet: passwordIsSet,
+                      ));
+                    }
+                  },
+                  (error) {
+                    if (!isClosed) {
+                      emit(state.copyWith(
+                        isSubmitting: false,
+                        successOrFail: FlowyResult.success(userProfile),
+                        passwordIsSet: false,
+                      ));
+                    }
+                  },
+                );
+              } catch (e) {
+                Log.warn('[SignInBloc] Check password status failed: $e');
+                if (!isClosed) {
+                  emit(state.copyWith(
+                    isSubmitting: false,
+                    successOrFail: FlowyResult.success(userProfile),
+                    passwordIsSet: false,
+                  ));
+                }
+              }
+            }
             return state.copyWith(
               isSubmitting: false,
               successOrFail: FlowyResult.success(userProfile),
-          );
-        },
-        (error) {
+              passwordIsSet: false, // 默认值，实际值会在上面的回调中更新
+            );
+          },
+          (error) {
             Log.error('🟣 [SignInBloc] 兜底获取用户信息失败: ${error.msg}');
             return _stateFromCode(error);
           }
@@ -1113,6 +1238,8 @@ class SignInState with _$SignInState {
     @Default(false) bool requiresPhoneBinding,
     /// OAuth pending token（来自 ThirdPartyGrant），用于后续手机绑定流程
     String? pendingToken,
+    /// Access token from passcode login，用于后续设置密码流程
+    String? accessToken,
   }) = _SignInState;
 
   factory SignInState.initial() => const SignInState(
@@ -1126,5 +1253,6 @@ class SignInState with _$SignInState {
         passwordIsSet: null,
         requiresPhoneBinding: false,
         pendingToken: null,
+        accessToken: null,
       );
 }

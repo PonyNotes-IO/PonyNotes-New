@@ -71,6 +71,8 @@
     "invalidEmail": "請輸入有效的電郵地址",
     "alreadyHaveAnAccount": "已經有帳戶？",
     "logIn": "登入",
+    "signInPassword": "账号密码登录",
+    "verificationLogin": "验证码登录",
     "generalError": "出了些問題。請稍後再試",
     "limitRateError": "出於安全原因，您只能每 60 秒申請一次 Magic Link",
     "magicLinkSentDescription": "連結已發送到您的電子信箱。點擊連結即可登入。連結將在 5 分鐘後過期。",

@@ -92,9 +92,9 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
                           Text(
                             '设置密码',
                             style: TextStyle(
-                              fontSize: 30,
-                              fontWeight: FontWeight.w500,
-                              color: Theme.of(context).colorScheme.primary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textColorScheme.primary,
                             ),
                           ),
                           const VSpace(20),
@@ -103,12 +103,12 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
                           Text(
                             '请输入8位以上的密码,需包含大小写字母、数字和特殊字符',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 14,
                               color: theme.textColorScheme.secondary,
                               height: 1.5,
                             ),
                           ),
-                          const VSpace(40),
+                          const VSpace(20),
                           
                           // 手机号/邮箱显示（只读）
                           _buildPhoneOrEmailField(),
@@ -258,6 +258,12 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
                       color: theme.textColorScheme.tertiary,
                     ),
                     border: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
                   ),
                   onChanged: (_) {
                     if (_errorMessage.isNotEmpty) {
@@ -327,6 +333,12 @@ class _SetPasswordPageState extends State<SetPasswordPage> {
                       color: theme.textColorScheme.tertiary,
                     ),
                     border: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
                   ),
                   onChanged: (_) {
                     if (_errorMessage.isNotEmpty) {

@@ -3,6 +3,7 @@ import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,8 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:universal_platform/universal_platform.dart';
 
+import '../../../../../../generated/locale_keys.g.dart';
+import 'set_password_page.dart';
 import '../../../../../../generated/flowy_svgs.g.dart';
 
 class ContinueWithMagicLinkOrPasscodePage extends StatefulWidget {
@@ -257,18 +260,35 @@ class _ContinueWithMagicLinkOrPasscodePageState
               Future.microtask(() {
                 if (mounted && context.mounted) {
                   try {
+                    // 检查用户是否设置了密码
+                    final passwordIsSet = state.passwordIsSet ?? false;
+                    
                     // 先关闭当前页面（验证码页面）
                     final navigator = Navigator.of(context, rootNavigator: true);
                     if (navigator.canPop()) {
                       navigator.pop();
                     }
                     
-                    // 然后导航到主界面
-                    final rootContext = navigator.context;
-                    if (rootContext.mounted) {
-                      getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
+                    // 检查是否需要设置密码
+                    if (!passwordIsSet) {
+                      // 跳转到设置密码页面
+                      // 由于 DeepLinkHandler 会处理设置密码的导航，这里不再重复处理
+                      // 直接进入主界面
+                      Log.info('[ContinueWithMagicLinkOrPasscodePage] 用户未设置密码，由 DeepLinkHandler 处理设置密码流程');
+                      final rootContext = navigator.context;
+                      if (rootContext.mounted) {
+                        getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
+                      } else {
+                        Log.error('🟢 [ContinueWithMagicLinkOrPasscodePage] rootContext 未 mounted');
+                      }
                     } else {
-                      Log.error('🟢 [ContinueWithMagicLinkOrPasscodePage] rootContext 未 mounted');
+                      // 用户已设置密码，直接进入主界面
+                      final rootContext = navigator.context;
+                      if (rootContext.mounted) {
+                        getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
+                      } else {
+                        Log.error('🟢 [ContinueWithMagicLinkOrPasscodePage] rootContext 未 mounted');
+                      }
                     }
                   } catch (e, stackTrace) {
                     Log.error('🟢 [ContinueWithMagicLinkOrPasscodePage] 导航失败: $e', stackTrace);
@@ -346,7 +366,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
                         const VSpace(20),
                         // 标题
                         Text(
-                          '请输入验证码',
+                          LocaleKeys.signIn_pleaseEnterVerificationCode.tr(),
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
