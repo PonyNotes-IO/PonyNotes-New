@@ -663,6 +663,7 @@
     "accountPage": {
       "menuLabel": "Account & App",
       "title": "My account",
+      "userName": "User name",
       "general": {
         "title": "Account name & profile image",
         "changeProfilePicture": "Change profile picture"

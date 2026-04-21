@@ -50,7 +50,7 @@ class PersonalInfoSettingGroup extends StatelessWidget {
             groupTitle: LocaleKeys.settings_accountPage_title.tr(),
             settingItemList: [
               MobileSettingItem(
-                name: 'User name',
+                name: LocaleKeys.settings_accountPage_userName.tr(),
                 trailing: MobileSettingTrailing(
                   text: userName,
                 ),

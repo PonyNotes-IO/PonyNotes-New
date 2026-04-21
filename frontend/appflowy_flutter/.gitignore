@@ -76,7 +76,7 @@ coverage/
 
 **/failures/*.png
 
-assets/translations/
+assets/translations/*
 assets/flowy_icons/*
 
 # FVM Version Cache

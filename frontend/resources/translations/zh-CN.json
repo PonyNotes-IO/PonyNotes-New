@@ -673,6 +673,7 @@
     "accountPage": {
       "menuLabel": "我的账户",
       "title": "我的账户",
+      "userName": "用户名",
       "general": {
         "title": "账户名与资料图像",
         "changeProfilePicture": "更换头像"

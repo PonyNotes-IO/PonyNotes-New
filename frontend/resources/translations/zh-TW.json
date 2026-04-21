@@ -625,6 +625,7 @@
     "accountPage": {
       "menuLabel": "我帳戶與應用程式",
       "title": "我的帳號",
+      "userName": "用户名",
       "general": {
         "title": "帳號名稱和個人資料圖片",
         "changeProfilePicture": "更改個人資料圖片"
