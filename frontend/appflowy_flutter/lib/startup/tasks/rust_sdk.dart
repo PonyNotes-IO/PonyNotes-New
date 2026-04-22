@@ -81,7 +81,7 @@ Future<Directory> appFlowyApplicationDataDirectory() async {
           // 使用默认路径
           if (Platform.isAndroid) {
             // 在Android上使用缓存目录作为默认路径
-            return Directory('/data/data/ioi.xiaomabiji.ponynotes/cache/data_dev');
+            return Directory('/data/data/com.xiaomabiji.app.note/cache/data_dev');
           } else {
             return Directory('./data_dev');
           }
@@ -95,7 +95,7 @@ Future<Directory> appFlowyApplicationDataDirectory() async {
           // 使用默认路径
           if (Platform.isAndroid) {
             // 在Android上使用缓存目录作为默认路径
-            return Directory('/data/data/ioi.xiaomabiji.ponynotes/cache/data');
+            return Directory('/data/data/com.xiaomabiji.app.note/cache/data');
           } else {
             return Directory('./data');
           }
@@ -109,7 +109,7 @@ Future<Directory> appFlowyApplicationDataDirectory() async {
     // 使用默认路径
     if (Platform.isAndroid) {
       // 在Android上使用缓存目录作为默认路径
-      return Directory('/data/data/ioi.xiaomabiji.ponynotes/cache/data');
+      return Directory('/data/data/com.xiaomabiji.app/cache/data');
     } else {
       return Directory('./data');
     }

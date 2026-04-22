@@ -3,8 +3,11 @@ import 'dart:async';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:douyin_login/douyin.dart';
+import 'package:installed_apps/installed_apps.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:universal_platform/universal_platform.dart';
+
 
 /// Service for handling DouYin (TikTok) login
 /// 
@@ -18,6 +21,10 @@ class DouYinLoginService {
 
   Completer<String>? _codeWaiter;
   String? _expectedState;
+
+  final _douyinPlugin = Douyin();
+  String _initState = "none";
+  String _code = "";
 
   /// Gets the authorization code from DouYin
   /// 
@@ -50,19 +57,42 @@ class DouYinLoginService {
 
   /// Gets authorization code from mobile SDK
   /// 
-  /// TODO: Integrate DouYin SDK for mobile platforms
+  /// For Android/iOS: Uses douyin_login plugin to integrate DouYin SDK
   Future<FlowyResult<String, String>> _getCodeFromMobileSDK() async {
-    // TODO: Implement DouYin SDK integration
-    // This should:
-    // 1. Initialize DouYin SDK
-    // 2. Call DouYin login API
-    // 3. Get authorization code from callback
-    // 4. Return the code
-    
-    Log.warn('🟢[DouYinLoginService] Mobile SDK integration not yet implemented');
-    return FlowyResult.failure(
-      'DouYin SDK integration is required for mobile platforms. Please integrate DouYin SDK first.',
-    );
+    try {
+      // 1. Initialize DouYin SDK
+      await initPlatformState();
+      
+      // 2. Check if DouYin is installed
+      final isInstalled = await isDouYinInstalled();
+      if (!isInstalled) {
+        return FlowyResult.failure('DouYin is not installed on this device');
+      }
+
+      // 3. Set up event listener for login response
+      final codeCompleter = Completer<String>();
+
+      authorResultState(codeCompleter);
+
+      // 4. Call DouYin login API
+      await _douyinPlugin.authorLogin(
+        scopeKey: 'trial.whitelist,user_info',
+      );
+      
+      // 5. Wait for the authorization code with timeout
+      final code = await codeCompleter.future.timeout(
+        const Duration(minutes: 2),
+        onTimeout: () => throw TimeoutException('DouYin login timed out'),
+      );
+      
+      return FlowyResult.success(code);
+    } on TimeoutException catch (e) {
+      Log.error('🟢[DouYinLoginService] DouYin login timed out: $e');
+      return FlowyResult.failure('DouYin login timed out');
+    } catch (e) {
+      Log.error('🟢[DouYinLoginService] Error getting authorization code: $e');
+      return FlowyResult.failure('Failed to get DouYin authorization code: $e');
+    }
   }
 
   /// Gets authorization code from desktop
@@ -117,17 +147,6 @@ class DouYinLoginService {
     }
   }
 
-  /// Checks if DouYin is installed (mobile only)
-  Future<bool> isDouYinInstalled() async {
-    if (!UniversalPlatform.isAndroid && !UniversalPlatform.isIOS) {
-      return false;
-    }
-    
-    // TODO: Implement DouYin installation check using SDK
-    // This requires DouYin SDK integration
-    return false;
-  }
-
   /// Called by deep link handler when the browser redirects to app scheme:
   /// e.g. ponynotes://douyin-callback?code=XXX&state=YYY
   Future<FlowyResult<void, FlowyError>> handleDouYinDeepLink(Uri uri) async {
@@ -148,6 +167,71 @@ class DouYinLoginService {
   void _reset() {
     _expectedState = null;
     _codeWaiter = null;
+  }
+
+  void authorResultState(Completer<String> codeCompleter) {
+    _douyinPlugin.respStream().listen((response) {
+      if (response.code == '0') {
+        // Login success
+        final authCode = response.authCode;
+        if (authCode != null && authCode.isNotEmpty) {
+          codeCompleter.complete(authCode);
+        } else {
+          codeCompleter.completeError('Invalid authorization code');
+        }
+      } else {
+        // Login failed
+        codeCompleter.completeError('DouYin login failed: ${response.toJson()}');
+      }
+    });
+  }
+
+  Future<void> initPlatformState() async {
+    try {
+      // Initialize DouYin SDK with app key
+      await _douyinPlugin.registerDouyinApp(
+        apiKey: 'aws8ujfhmwybxv72',
+      );
+      _initState = 'success';
+      Log.info('🟢[DouYinLoginService] DouYin SDK initialized successfully');
+    } catch (e) {
+      Log.error('🟢[DouYinLoginService] Failed to initialize DouYin SDK: $e');
+      _initState = 'failed';
+      throw Exception('Failed to initialize DouYin SDK: $e');
+    }
+  }
+
+  /// Checks if DouYin is installed (mobile only)
+  Future<bool> isDouYinInstalled() async {
+    if (!UniversalPlatform.isAndroid && !UniversalPlatform.isIOS) {
+      return false;
+    }
+    
+    try {
+      // First try using douyin plugin's isInstalled method
+      try {
+        bool? isInstalled = false;
+        // Use installed_apps plugin to check if DouYin is installed
+        if (UniversalPlatform.isAndroid) {
+          // Android package name for DouYin
+          const douyinPackageName = 'com.ss.android.ugc.aweme';
+          isInstalled = await InstalledApps.isAppInstalled(douyinPackageName);
+          Log.info('🟢[DouYinLoginService] DouYin installed (Android): $isInstalled');
+        } else if (UniversalPlatform.isIOS) {
+          // iOS bundle ID for DouYin
+          const douyinBundleId = 'com.ss.iphone.ugc.Aweme';
+          isInstalled = await InstalledApps.isAppInstalled(douyinBundleId);
+          Log.info('🟢[DouYinLoginService] DouYin installed (iOS): $isInstalled');
+        }
+        return isInstalled ?? false;
+      } catch (e) {
+        Log.warn('🟢[DouYinLoginService] Using installed_apps plugin: $e');
+        return false;
+      }
+    } catch (e) {
+      Log.error('🟢[DouYinLoginService] Error checking if DouYin is installed: $e');
+      return false;
+    }
   }
 }
 

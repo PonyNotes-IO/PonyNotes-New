@@ -1,7 +1,7 @@
 class KVKeys {
   const KVKeys._();
 
-  static const String prefix = 'ioi.xiaomabiji.ponynotes_flutter';
+  static const String prefix = 'com.xiaomabiji.app.note_flutter';
 
   /// The key for the path location of the local data for the whole app.
   static const String pathLocation = '$prefix.path_location';

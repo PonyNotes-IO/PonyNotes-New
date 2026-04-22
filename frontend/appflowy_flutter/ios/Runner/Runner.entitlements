@@ -10,10 +10,10 @@
 	</array>
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:appflowy.com</string>
-		<string>applinks:appflowy.io</string>
-		<string>applinks:test.appflowy.com</string>
-		<string>applinks:test.appflowy.io</string>
+		<string>applinks:www.xiaomabiji.com</string>
+		<string>applinks:www.xiaomabiji.io</string>
+		<string>applinks:test.www.xiaomabiji.com</string>
+		<string>applinks:test.www.xiaomabiji.io</string>
 	</array>
 </dict>
 </plist>

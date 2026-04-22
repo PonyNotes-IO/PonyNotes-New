@@ -194,7 +194,7 @@ class FlowyRunner {
       // 使用更可靠的默认路径
       if (Platform.isAndroid) {
         // 在Android上使用缓存目录作为默认路径
-        applicationDataDirectory = Directory('/data/data/ioi.xiaomabiji.ponynotes/cache');
+        applicationDataDirectory = Directory('/data/data/com.xiaomabiji.app.note/cache');
       } else {
         applicationDataDirectory = Directory('./data');
       }

@@ -181,6 +181,11 @@ dependencies:
   flutter_inappwebview: ^6.0.0
   in_app_purchase: ^3.2.3
   decimal: ^2.3.0
+  # WeChat SDK
+  fluwx: ^5.7.5
+  douyin_login: ^1.0.6
+  # Check if app is installed
+  installed_apps: ^2.1.1
 
 dev_dependencies:
   # Introduce talker to log the bloc events, and only log the events in the development mode

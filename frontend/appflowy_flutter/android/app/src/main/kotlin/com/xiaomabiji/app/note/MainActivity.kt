@@ -1,4 +1,4 @@
-package ioi.xiaomabiji.ponynotes
+package com.xiaomabiji.app.note
 
 import io.flutter.embedding.android.FlutterActivity
 

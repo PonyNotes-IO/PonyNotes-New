@@ -5,6 +5,8 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/setting/launch_settings_page.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/user/application/wechat/wechat_login_service.dart';
+import 'package:appflowy/user/application/douyin/douyin_login_service.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/anonymous_sign_in_button.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/mobile_phone_login_form.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/widgets.dart';
@@ -149,11 +151,11 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
   Widget _buildThirdPartyButton(BuildContext context, String type) {
     final theme = AppFlowyTheme.of(context);
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
         if (type == 'wechat') {
-          context.read<SignInBloc>().add(const SignInEvent.signInWithWeChat());
+          await _signInWithWeChat(context);
         } else if (type == 'douyin') {
-          context.read<SignInBloc>().add(const SignInEvent.signInWithDouYin());
+          await _signInWithDouYin(context);
         }
       },
       child: SizedBox(
@@ -168,6 +170,46 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
       ),
     );
   }
+
+  Future<void> _signInWithWeChat(BuildContext context) async {
+    try {
+      if (!_agreedToTerms) {
+        showToastNotification(
+          message: "请先同意用户协议和隐私政策",
+          type: ToastificationType.error,
+        );
+        return;
+      }
+      // 执行微信登录
+      context.read<SignInBloc>().add(const SignInEvent.signInWithWeChat());
+    } catch (e) {
+      showToastNotification(
+        message: '微信登录失败，请稍后重试',
+        type: ToastificationType.error,
+      );
+    }
+  }
+
+  Future<void> _signInWithDouYin(BuildContext context) async {
+    try {
+      if (!_agreedToTerms) {
+        showToastNotification(
+          message: "请先同意用户协议和隐私政策",
+          type: ToastificationType.error,
+        );
+        return;
+      }
+      // 执行抖音登录
+      context.read<SignInBloc>().add(const SignInEvent.signInWithDouYin());
+    } catch (e) {
+      showToastNotification(
+        message: '抖音登录失败，请稍后重试',
+        type: ToastificationType.error,
+      );
+    }
+  }
+
+
 
 
 }

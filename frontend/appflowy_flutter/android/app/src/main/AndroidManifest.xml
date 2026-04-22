@@ -64,6 +64,13 @@
         android:name="com.dexterous.flutterlocalnotifications.ForegroundService"
         android:exported="false"
         android:stopWithTask="false"/>
+    
+    <!-- WeChat SDK Configuration -->
+    <activity
+        android:name=".wxapi.WXEntryActivity"
+        android:exported="true"
+        android:launchMode="singleTop"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar" />
   </application>
   <uses-permission android:name="android.permission.INTERNET" />
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -100,5 +107,7 @@
       <action android:name="android.intent.action.PROCESS_TEXT"/>
       <data android:mimeType="text/plain"/>
     </intent>
+    <!-- WeChat SDK Configuration -->
+    <package android:name="com.tencent.mm" />
   </queries>
 </manifest>

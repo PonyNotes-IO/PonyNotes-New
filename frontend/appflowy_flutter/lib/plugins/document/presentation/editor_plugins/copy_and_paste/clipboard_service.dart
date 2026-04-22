@@ -9,14 +9,14 @@ import 'package:super_clipboard/super_clipboard.dart';
 ///
 /// It's a Json string representing the copied editor nodes.
 const inAppJsonFormat = CustomValueFormat<String>(
-  applicationId: 'ioi.xiaomabiji.ponynotes.InAppJsonType',
+  applicationId: 'com.xiaomabiji.app.note.InAppJsonType',
   onDecode: _defaultDecode,
   onEncode: _defaultEncode,
 );
 
 /// Used for table nodes when coping a row or a column.
 const tableJsonFormat = CustomValueFormat<String>(
-  applicationId: 'ioi.xiaomabiji.ponynotes.TableJsonType',
+  applicationId: 'com.xiaomabiji.app.note.TableJsonType',
   onDecode: _defaultDecode,
   onEncode: _defaultEncode,
 );
