@@ -52,7 +52,7 @@ class AIWelcomeHeader extends StatelessWidget {
               const SizedBox(width: 20), // 头像和文字之间的间距
               // 主标题（对应 text_15）
               Text(
-                '我是小马笔记AI，很高兴见到你！',
+                '我是小马AI笔记AI，很高兴见到你！',
                 style: AIWelcomeTheme.titleStyle(context),
               ),
               // 聊天记录按钮

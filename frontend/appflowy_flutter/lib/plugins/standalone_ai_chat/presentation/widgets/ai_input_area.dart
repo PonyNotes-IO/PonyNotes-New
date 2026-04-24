@@ -311,7 +311,7 @@ class _AIInputAreaState extends State<AIInputArea> {
                       color: AIWelcomeTheme.primaryTextColor(context),
                     ),
                     decoration: InputDecoration(
-                      hintText: '在小马笔记可以问或找到每一件事…',
+                      hintText: '在小马AI笔记可以问或找到每一件事…',
                       hintStyle: AIWelcomeTheme.placeholderStyle(context),
                       border: InputBorder.none,
                       contentPadding: EdgeInsets.zero,

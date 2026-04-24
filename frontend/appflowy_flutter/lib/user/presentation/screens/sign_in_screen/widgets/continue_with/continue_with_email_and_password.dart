@@ -146,7 +146,7 @@ class _ContinueWithEmailAndPasswordState
                                       fontSize: 14,
                                     ),
                                     children: [
-                                      TextSpan(text: '小马笔记 '),
+                                      TextSpan(text: '小马AI笔记 '),
                                       TextSpan(
                                         text: '《${LocaleKeys.settings_mobile_userAgreement.tr()}》',
                                         style: TextStyle(

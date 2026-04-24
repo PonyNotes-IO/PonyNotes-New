@@ -379,7 +379,7 @@
 				DEVELOPMENT_TEAM = 5MC7J2V78W;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "小马笔记";
+				INFOPLIST_KEY_CFBundleDisplayName = "小马AI笔记";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -518,7 +518,7 @@
 				DEVELOPMENT_TEAM = 5MC7J2V78W;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "小马笔记";
+				INFOPLIST_KEY_CFBundleDisplayName = "小马AI笔记";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -552,7 +552,7 @@
 				DEVELOPMENT_TEAM = 5MC7J2V78W;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "小马笔记";
+				INFOPLIST_KEY_CFBundleDisplayName = "小马AI笔记";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
 				LD_RUNPATH_SEARCH_PATHS = (

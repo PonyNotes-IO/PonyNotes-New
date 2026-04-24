@@ -119,7 +119,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     }
     // 最后显示默认值
     // debug log removed
-    return '小马笔记的笔记';
+    return '小马AI笔记的笔记';
   }
 
   @override

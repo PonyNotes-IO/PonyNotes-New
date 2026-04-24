@@ -1364,7 +1364,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                       Opacity(
                         opacity: 0.5,
                         child: Text(
-                          _isInitializing ? '正在加载白板数据...' : '小马笔记白板',
+                          _isInitializing ? '正在加载白板数据...' : '小马AI笔记白板',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,

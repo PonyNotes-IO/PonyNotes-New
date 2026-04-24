@@ -90,7 +90,7 @@ class _ImportPageScreenState extends State<ImportPageScreen> {
       children: [
         Expanded(
           child: FlowyText(
-            "从其他应用和文件导入数据到 小马笔记",
+            "从其他应用和文件导入数据到 小马AI笔记",
             fontSize: 20,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),

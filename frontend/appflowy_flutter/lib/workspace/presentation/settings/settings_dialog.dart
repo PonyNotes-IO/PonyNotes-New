@@ -710,7 +710,7 @@ extension SettingsServerDropdownMenuExtension on AuthenticatorType {
       case AuthenticatorType.appflowyCloudSelfHost:
         return LocaleKeys.settings_menu_cloudAppFlowySelfHost.tr();
       case AuthenticatorType.appflowyCloudDevelop:
-        return "小马笔记 Cloud (Development)";
+        return "小马AI笔记 Cloud (Development)";
       default:
         throw Exception('Unsupported server type: $this');
     }

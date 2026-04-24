@@ -79,7 +79,7 @@ class _SettingsAboutXiaomaViewState extends State<SettingsAboutXiaomaView> {
           const VSpace(16),
           // 应用名称
           Text(
-            "小马笔记",
+            "小马AI笔记",
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
