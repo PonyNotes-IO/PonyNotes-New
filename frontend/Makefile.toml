@@ -207,7 +207,7 @@ CRATE_TYPE = "cdylib"
 FLUTTER_OUTPUT_DIR = "Debug"
 LIB_EXT = "so"
 PRODUCT_EXT = "apk"
-FLUTTER_DESKTOP_FEATURES = "dart,openssl_vendored"
+FLUTTER_DESKTOP_FEATURES = "dart"
 
 [env.production-android]
 BUILD_FLAG = "release"

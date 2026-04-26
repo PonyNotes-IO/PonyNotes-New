@@ -638,6 +638,25 @@
       }
     },
     {
+      "label": "AF: Build APK (Android)",
+      "type": "shell",
+      "command": "flutter build apk --debug",
+      "dependsOn": ["AF: Build Appflowy Core For Android"],
+      "options": {
+        "cwd": "${workspaceFolder}/appflowy_flutter"
+      }
+    },
+    {
+      "label": "AF: Build APK (Android)",
+      "type": "shell",
+      "command": "flutter build apk --debug",
+      "group": "build",
+      "dependsOn": ["AF: Build Appflowy Core For Android"],
+      "options": {
+        "cwd": "${workspaceFolder}/appflowy_flutter"
+      }
+    },
+    {
       "label": "AF: Dart Clean",
       "type": "shell",
       "command": "cargo make flutter_clean",

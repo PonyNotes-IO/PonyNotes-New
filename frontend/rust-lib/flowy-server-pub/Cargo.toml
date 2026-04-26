@@ -10,3 +10,4 @@ flowy-error = { workspace = true }
 serde.workspace = true
 serde_repr.workspace = true
 client-api = { workspace = true }
+

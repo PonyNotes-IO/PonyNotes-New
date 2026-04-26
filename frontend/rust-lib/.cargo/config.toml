@@ -1,3 +1,11 @@
+[build]
+target-dir = "D:/appflow/cache/cargo-target"
+
+[alias]
+# 清理 Android 交叉编译缓存的快捷命令
+# 用法: cargo android-clean
+android-clean = "clean --target aarch64-linux-android --target x86_64-linux-android"
+
 [target.x86_64-apple-darwin]
 #rustflags = ["-C", "target-cpu=native", "-C", "link-arg=-mmacosx-version-min=11.0"]
 rustflags = ["-C", "link-arg=-mmacosx-version-min=11.0"]

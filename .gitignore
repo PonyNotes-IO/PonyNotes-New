@@ -161,3 +161,6 @@ scripts/windows_installer/README.md
 
 # Flutter 安装包构建产物
 installer_output/
+
+# Linux/Android native shared libraries
+**/*.so

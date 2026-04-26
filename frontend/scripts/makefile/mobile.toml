@@ -59,8 +59,8 @@ category = "Build"
 dependencies = ["env_check", "set-app-version"]
 run_task = { name = [
   "setup-crate-type",
-  "sdk-build-android",
-  "post-mobile-android",
+  "sdk-build-android-all",
+  "post-mobile-android-multiarch",
   "restore-crate-type",
 ] }
 
@@ -76,22 +76,56 @@ run_task = { name = [
 ] }
 
 [tasks.sdk-build-android]
-dependencies = ["set-app-version"]
 private = true
 script = [
   """
-    cd rust-lib/
-    if [ "${BUILD_FLAG}" = "debug" ]; then
-      echo "🚀 🚀 🚀  Building Android SDK for debug"
-      cargo ndk -t arm64-v8a -o ./jniLibs build --features "${FLUTTER_DESKTOP_FEATURES}" --package=dart-ffi
-    else
-      echo "🚀 🚀 🚀  Building Android SDK for release"
-      cargo ndk -t arm64-v8a -o ./jniLibs build --features "${FLUTTER_DESKTOP_FEATURES}" --package=dart-ffi --release
-    fi
-    cd ../
+    echo Building Android ARM64 (arm64-v8a)...
+    cd rust-lib
+    exec cargo ndk -t arm64-v8a -o ./jniLibs build --package dart-ffi --features "${FLUTTER_DESKTOP_FEATURES}"
+    cd ..
+    echo ARM64 cargo build done.
   """,
 ]
-script_runner = "@shell"
+script_runner = "@duckscript"
+
+[tasks.sdk-build-android-x86_64]
+private = true
+script = [
+  """
+    echo Building Android x86_64 (x86_64)...
+    cd rust-lib
+    exec cargo ndk -t x86_64 -o ./jniLibs_x86_64 build --package dart-ffi --features "${FLUTTER_DESKTOP_FEATURES}"
+    cd ..
+    echo x86_64 cargo build done.
+  """,
+]
+script_runner = "@duckscript"
+
+# 清理 Android 交叉编译的增量缓存（只删 incremental，保留 deps 以复用已编译依赖）
+[tasks.clean-android-incremental-cache]
+private = true
+script = [
+  """
+    echo "🧹 Cleaning Android incremental build cache..."
+    arm64_inc = set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/rust-lib/target/aarch64-linux-android/debug/incremental
+    x86_64_inc = set ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/rust-lib/target/x86_64-linux-android/debug/incremental
+    if is_dir ${arm64_inc}
+        rm -r ${arm64_inc}
+        echo "  Removed aarch64-linux-android incremental cache"
+    end
+    if is_dir ${x86_64_inc}
+        rm -r ${x86_64_inc}
+        echo "  Removed x86_64-linux-android incremental cache"
+    end
+    echo "Done."
+  """,
+]
+script_runner = "@duckscript"
+
+# Builds both arm64-v8a AND x86_64 in parallel for emulator + real device support
+[tasks.sdk-build-android-all]
+dependencies = ["set-app-version", "clean-android-incremental-cache"]
+run_task = { name = ["sdk-build-android", "sdk-build-android-x86_64"] }
 
 # only use in CI job
 [tasks.sdk-build-android-ci]
@@ -100,7 +134,7 @@ private = true
 script = [
   """
     cd rust-lib/
-    cargo ndk -t arm64-v8a -t armeabi-v7a -o ./jniLibs build --features "${FLUTTER_DESKTOP_FEATURES}" --package=dart-ffi
+    cargo ndk -t arm64-v8a -t armeabi-v7a -o ./jniLibs build --package dart-ffi --features "${FLUTTER_DESKTOP_FEATURES}"
     cd ../
   """,
 ]
@@ -143,6 +177,17 @@ script = [
     rm -f ${dart_ffi_dir}/Classes/binding.h
     cp ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/rust-lib/${CARGO_MAKE_CRATE_NAME}/binding.h \
     ${dart_ffi_dir}/Classes/binding.h
+  """,
+]
+script_runner = "@duckscript"
+
+# Multi-arch version: copies both arm64-v8a AND x86_64 to Flutter project
+[tasks.post-mobile-android-multiarch]
+script = [
+  """
+    echo AppFlowy-Core multi-arch copy start
+    exec powershell -ExecutionPolicy Bypass -File rust-lib/copy_android_libs.ps1
+    echo AppFlowy-Core multi-arch copy done
   """,
 ]
 script_runner = "@duckscript"

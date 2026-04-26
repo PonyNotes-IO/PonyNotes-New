@@ -33,6 +33,7 @@ impl std::convert::From<TrashPB> for TrashInfo {
       id: trash.id,
       name: trash.name,
       created_at: trash.create_time,
+      is_favorite: false,
     }
   }
 }
