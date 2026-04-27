@@ -54,11 +54,27 @@ if [ "$ARCH_COUNT" -gt 1 ]; then
             echo "  请先运行 build_macos_dmg.sh 或手动执行 lipo 合并"
             echo "  尝试从 Rust 构建目录重新合并..."
             RUST_LIB_DIR="$FLUTTER_DIR/../rust-lib/target"
-            ARM64_LIB="$RUST_LIB_DIR/aarch64-apple-darwin/release/libdart_ffi.a"
-            X86_LIB="$RUST_LIB_DIR/x86_64-apple-darwin/release/libdart_ffi.a"
-            if [ -f "$ARM64_LIB" ] && [ -f "$X86_LIB" ]; then
+            # 先找 release，再找 debug
+            ARM64_LIB=""
+            for BUILD_TYPE in release debug; do
+                CANDIDATE="$RUST_LIB_DIR/aarch64-apple-darwin/$BUILD_TYPE/libdart_ffi.a"
+                if [ -f "$CANDIDATE" ]; then ARM64_LIB="$CANDIDATE"; break; fi
+            done
+            X86_LIB=""
+            for BUILD_TYPE in release debug; do
+                CANDIDATE="$RUST_LIB_DIR/x86_64-apple-darwin/$BUILD_TYPE/libdart_ffi.a"
+                if [ -f "$CANDIDATE" ]; then X86_LIB="$CANDIDATE"; break; fi
+            done
+            if [ -n "$ARM64_LIB" ] && [ -n "$X86_LIB" ]; then
                 lipo -create "$X86_LIB" "$ARM64_LIB" -output "$LIB_FILE"
                 echo "✓ 已重新合并 universal binary: $(lipo -archs "$LIB_FILE")"
+                echo "=== 架构检测完成 ==="
+                exit 0
+            elif [ -n "$ARM64_LIB" ]; then
+                # debug 模式下 Rust 只构建 arm64，Apple Silicon Mac 上直接用 arm64
+                echo "⚠ 未找到 x86_64 产物，使用 arm64 单架构库（debug/开发模式）"
+                cp "$ARM64_LIB" "$LIB_FILE"
+                echo "✓ 已复制 arm64 库: $(lipo -archs "$LIB_FILE")"
                 echo "=== 架构检测完成 ==="
                 exit 0
             else

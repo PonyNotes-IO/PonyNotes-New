@@ -267,7 +267,8 @@ dependency_overrides:
     git:
       url: https://github.com/LucasXu0/reorderable_tabbar
       ref: 93c4977
-  file_picker: ^10.3.10
+  file_picker:
+    path: packages/file_picker
 
   auto_updater:
     git:
