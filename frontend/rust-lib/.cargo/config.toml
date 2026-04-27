@@ -1,5 +1,6 @@
 [build]
-target-dir = "D:/appflow/cache/cargo-target"
+# target-dir 不设置，使用 cargo 默认路径 rust-lib/target/
+# （原 D:/appflow/cache/cargo-target 为 Windows 专用路径，macOS 上会引起冒号解析错误）
 
 [alias]
 # 清理 Android 交叉编译缓存的快捷命令
