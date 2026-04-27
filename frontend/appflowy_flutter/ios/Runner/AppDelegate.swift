@@ -1,5 +1,6 @@
 import UIKit
 import Flutter
+import DouyinOpenSDK
 
 @main
 @objc class AppDelegate: FlutterAppDelegate,DouyinOpenSDKLogDelegate {
