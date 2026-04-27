@@ -36,6 +36,22 @@ class NotificationReminderBloc
             dateFormat,
             timeFormat,
           );
+
+          // 云端/系统通知含有 'payload' 字段，objectId 是 workspace_id 而非视图 ID，
+          // 无需也无法查找本地视图，直接以消息内容渲染。
+          if (reminder.meta.containsKey('payload')) {
+            emit(
+              NotificationReminderState(
+                scheduledAt: scheduledAt,
+                pageTitle: reminder.title,
+                reminderContent: reminder.message,
+                isLocked: false,
+                status: NotificationReminderStatus.loaded,
+              ),
+            );
+            return;
+          }
+
           final view = await _getView(reminder);
 
           if (view == null) {

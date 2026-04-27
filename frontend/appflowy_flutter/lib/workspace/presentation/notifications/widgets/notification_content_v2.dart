@@ -23,11 +23,18 @@ class NotificationItemContentV2 extends StatelessWidget {
     return BlocBuilder<NotificationReminderBloc, NotificationReminderState>(
       builder: (context, state) {
         final view = state.view;
+        final theme = AppFlowyTheme.of(context);
+        final isRead = reminder.isRead;
+
+        // 系统通知：view 为 null 但 status 为 loaded，直接渲染消息内容
+        if (view == null &&
+            state.status == NotificationReminderStatus.loaded) {
+          return _buildSystemNotificationContent(state, theme, isRead);
+        }
+
         if (view == null) {
           return const SizedBox.shrink();
         }
-        final theme = AppFlowyTheme.of(context);
-        final isRead = reminder.isRead;
 
         return Opacity(
           opacity: isRead ? 0.6 : 1.0,
@@ -42,6 +49,67 @@ class NotificationItemContentV2 extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  /// 系统通知内容渲染：标题 + 时间 + 正文
+  Widget _buildSystemNotificationContent(
+    NotificationReminderState state,
+    AppFlowyThemeData theme,
+    bool isRead,
+  ) {
+    final primaryTextColor = isRead
+        ? theme.textColorScheme.secondary
+        : theme.textColorScheme.primary;
+
+    return Opacity(
+      opacity: isRead ? 0.6 : 1.0,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 标题行：通知标题 + 时间戳 + 未读红点
+          SizedBox(
+            height: 22,
+            child: Row(
+              children: [
+                Expanded(
+                  child: FlowyText.medium(
+                    state.pageTitle.isNotEmpty
+                        ? state.pageTitle
+                        : reminder.title,
+                    fontSize: 14,
+                    figmaLineHeight: 22,
+                    color: primaryTextColor,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (state.scheduledAt.isNotEmpty)
+                  FlowyText.regular(
+                    state.scheduledAt,
+                    fontSize: 12,
+                    figmaLineHeight: 16,
+                    color: theme.textColorScheme.secondary,
+                  ),
+                if (!reminder.isRead) ...[
+                  HSpace(4),
+                  const UnreadRedDot(),
+                ],
+              ],
+            ),
+          ),
+          const VSpace(4),
+          // 正文消息
+          FlowyText.regular(
+            reminder.message,
+            fontSize: 13,
+            figmaLineHeight: 18,
+            color: theme.textColorScheme.secondary,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
