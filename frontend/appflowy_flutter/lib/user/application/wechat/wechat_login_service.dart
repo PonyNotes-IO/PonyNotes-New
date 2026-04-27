@@ -85,9 +85,9 @@ class WeChatLoginService {
         }
       });
       if(UniversalPlatform.isIOS) {
-        await fluwx.Fluwx().authBy(which: fluwx.PhoneLogin(scope: 'snsapi_login',state: DateTime.now().microsecondsSinceEpoch.toString(),));
+        await fluwx.Fluwx().authBy(which: fluwx.PhoneLogin(scope: 'snsapi_userinfo',state: DateTime.now().microsecondsSinceEpoch.toString(),));
       } else {
-        await fluwx.Fluwx().authBy(which: fluwx.NormalAuth(scope: 'snsapi_login',state: DateTime.now().microsecondsSinceEpoch.toString(),));
+        await fluwx.Fluwx().authBy(which: fluwx.NormalAuth(scope: 'snsapi_userinfo',state: DateTime.now().microsecondsSinceEpoch.toString(),));
       }
       // Send WeChat authorization request
       // Wait for the authorization code with timeout

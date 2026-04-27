@@ -42,6 +42,16 @@
 				<string>wx3b1a7737f52a004b</string>
 			</array>
 		</dict>
+		<dict>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>CFBundleURLName</key>
+            <string>douyin</string>
+            <key>CFBundleURLSchemes</key>
+			<array>
+				<string>aws8ujfhmwybxv72</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
@@ -51,6 +61,8 @@
 	<array>
 		<string>weixin</string>
 		<string>wechat</string>
+		<string>aweme</string>
+		<string>douyin</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>

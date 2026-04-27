@@ -39,6 +39,10 @@ PODS:
   - DKPhotoGallery/Resource (0.0.19):
     - SDWebImage
     - SwiftyGif
+  - douyin_login (0.0.1):
+    - DouyinOpenSDK
+    - Flutter
+  - DouyinOpenSDK (4.2.4)
   - file_picker (0.0.1):
     - DKImagePickerController/PhotoGallery
     - Flutter
@@ -129,6 +133,7 @@ DEPENDENCIES:
   - appflowy_backend (from `.symlinks/plugins/appflowy_backend/ios`)
   - connectivity_plus (from `.symlinks/plugins/connectivity_plus/ios`)
   - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
+  - douyin_login (from `.symlinks/plugins/douyin_login/ios`)
   - file_picker (from `.symlinks/plugins/file_picker/ios`)
   - flowy_infra_ui (from `.symlinks/plugins/flowy_infra_ui/ios`)
   - Flutter (from `Flutter`)
@@ -165,6 +170,7 @@ SPEC REPOS:
   trunk:
     - DKImagePickerController
     - DKPhotoGallery
+    - DouyinOpenSDK
     - OrderedSet
     - ReachabilitySwift
     - SDWebImage
@@ -180,6 +186,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/connectivity_plus/ios"
   device_info_plus:
     :path: ".symlinks/plugins/device_info_plus/ios"
+  douyin_login:
+    :path: ".symlinks/plugins/douyin_login/ios"
   file_picker:
     :path: ".symlinks/plugins/file_picker/ios"
   flowy_infra_ui:
@@ -250,6 +258,8 @@ SPEC CHECKSUMS:
   device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
   DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
   DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
+  douyin_login: e814fcfaa552f5a151b9f0c176ab18536bf2a87c
+  DouyinOpenSDK: a153567ba06ee0fdae56955c34482b2f2768c75d
   file_picker: a0560bc09d61de87f12d246fc47d2119e6ef37be
   flowy_infra_ui: 931b73a18b54a392ab6152eebe29a63a30751f53
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
