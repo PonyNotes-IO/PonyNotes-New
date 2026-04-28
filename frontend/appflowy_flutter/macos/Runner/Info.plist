@@ -22,7 +22,7 @@
 			<string>zh</string>
 		</array>
 		<key>CFBundleName</key>
-		<string>PonyNotes</string>
+        <string>$(PRODUCT_NAME)</string>
 		<key>CFBundleDisplayName</key>
 		<string>PonyNotes</string>
 		<key>CFBundlePackageType</key>
@@ -36,7 +36,7 @@
 				<string></string>
 				<key>CFBundleURLSchemes</key>
 				<array>
-					<string>ponynotes</string>
+					<string>appflowy-flutter</string>
 				</array>
 			</dict>
 		</array>
