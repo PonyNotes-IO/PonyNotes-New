@@ -61,8 +61,10 @@
 	<array>
 		<string>weixin</string>
 		<string>wechat</string>
-		<string>aweme</string>
-		<string>douyin</string>
+        <string>douyinopensdk</string>
+        <string>douyinliteopensdk</string>
+        <string>douyinsharesdk</string>
+        <string>snssdk1128</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
