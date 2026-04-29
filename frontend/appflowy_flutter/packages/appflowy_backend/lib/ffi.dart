@@ -35,6 +35,14 @@ DynamicLibrary _open() {
   throw UnsupportedError('This platform is not supported.');
 }
 
+/// iOS 静态库中的符号带有下划线前缀
+String _symbolName(String name) {
+  if (Platform.isIOS) {
+    return '_$name';
+  }
+  return name;
+}
+
 /// C function `async_event`.
 void async_event(
   int port,
@@ -45,7 +53,7 @@ void async_event(
 }
 
 final _invoke_async_Dart _invoke_async = _dart_ffi_lib
-    .lookupFunction<_invoke_async_C, _invoke_async_Dart>('async_event');
+    .lookupFunction<_invoke_async_C, _invoke_async_Dart>(_symbolName('async_event'));
 typedef _invoke_async_C = Void Function(
   Int64 port,
   Pointer<Uint8> input,
@@ -66,7 +74,7 @@ Pointer<Uint8> sync_event(
 }
 
 final _invoke_sync_Dart _invoke_sync = _dart_ffi_lib
-    .lookupFunction<_invoke_sync_C, _invoke_sync_Dart>('sync_event');
+    .lookupFunction<_invoke_sync_C, _invoke_sync_Dart>(_symbolName('sync_event'));
 typedef _invoke_sync_C = Pointer<Uint8> Function(
   Pointer<Uint8> input,
   Uint64 len,
@@ -85,7 +93,7 @@ int init_sdk(
 }
 
 final _init_sdk_Dart _init_sdk =
-    _dart_ffi_lib.lookupFunction<_init_sdk_C, _init_sdk_Dart>('init_sdk');
+    _dart_ffi_lib.lookupFunction<_init_sdk_C, _init_sdk_Dart>(_symbolName('init_sdk'));
 typedef _init_sdk_C = Int64 Function(
   Int64 port,
   Pointer<ffi.Utf8> path,
@@ -102,7 +110,7 @@ int set_stream_port(int port) {
 
 final _set_stream_port_Dart _set_stream_port =
     _dart_ffi_lib.lookupFunction<_set_stream_port_C, _set_stream_port_Dart>(
-        'set_stream_port');
+        _symbolName('set_stream_port'));
 
 typedef _set_stream_port_C = Int32 Function(
   Int64 port,
@@ -118,7 +126,7 @@ int set_log_stream_port(int port) {
 
 final _set_log_stream_port_Dart _set_log_stream_port = _dart_ffi_lib
     .lookupFunction<_set_log_stream_port_C, _set_log_stream_port_Dart>(
-        'set_log_stream_port');
+        _symbolName('set_log_stream_port'));
 
 typedef _set_log_stream_port_C = Int32 Function(
   Int64 port,
@@ -133,7 +141,7 @@ void link_me_please() {
 }
 
 final _link_me_please_Dart _link_me_please = _dart_ffi_lib
-    .lookupFunction<_link_me_please_C, _link_me_please_Dart>('link_me_please');
+    .lookupFunction<_link_me_please_C, _link_me_please_Dart>(_symbolName('link_me_please'));
 typedef _link_me_please_C = Void Function();
 typedef _link_me_please_Dart = void Function();
 
@@ -146,7 +154,7 @@ void store_dart_post_cobject(
 
 final _store_dart_post_cobject_Dart _store_dart_post_cobject = _dart_ffi_lib
     .lookupFunction<_store_dart_post_cobject_C, _store_dart_post_cobject_Dart>(
-        'store_dart_post_cobject');
+        _symbolName('store_dart_post_cobject'));
 typedef _store_dart_post_cobject_C = Void Function(
   Pointer<NativeFunction<Int8 Function(Int64, Pointer<Dart_CObject>)>> ptr,
 );
@@ -162,7 +170,7 @@ void rust_log(
 }
 
 final _invoke_rust_log_Dart _invoke_rust_log = _dart_ffi_lib
-    .lookupFunction<_invoke_rust_log_C, _invoke_rust_log_Dart>('rust_log');
+    .lookupFunction<_invoke_rust_log_C, _invoke_rust_log_Dart>(_symbolName('rust_log'));
 typedef _invoke_rust_log_C = Void Function(
   Int64 level,
   Pointer<ffi.Utf8> data,
@@ -180,7 +188,7 @@ void set_env(
 }
 
 final _set_env_Dart _set_env =
-    _dart_ffi_lib.lookupFunction<_set_env_C, _set_env_Dart>('set_env');
+    _dart_ffi_lib.lookupFunction<_set_env_C, _set_env_Dart>(_symbolName('set_env'));
 typedef _set_env_C = Void Function(
   Pointer<ffi.Utf8> data,
 );

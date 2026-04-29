@@ -42,7 +42,7 @@ export PROTOC=$(which protoc || true)
 # 构建时跳过 rustfmt 步骤
 export RUSTFMT=skip
 # 添加链接标志解决 ___chkstk_darwin 符号问题
-RUSTFLAGS="-C link-arg=-Wl,-undefined,dynamic_lookup" cargo build --release --package=dart-ffi --target "$RUST_TARGET" --features "dart"
+RUSTFLAGS="-C link-arg=-Wl,-undefined,dynamic_lookup -C link-arg=-Wl,-all_load" cargo build --release --package=dart-ffi --target "$RUST_TARGET" --features "dart"
 
 # 检查构建是否成功
 if [ $? -ne 0 ]; then
