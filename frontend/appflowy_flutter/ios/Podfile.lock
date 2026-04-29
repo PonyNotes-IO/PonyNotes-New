@@ -253,7 +253,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   app_links: 3dbc685f76b1693c66a6d9dd1e9ab6f73d97dc0a
-  appflowy_backend: 78f6a053f756e6bc29bcc5a2106cbe77b756e97a
+  appflowy_backend: cbf5587d1e696f61d3d0f2942f26b00dccd2cd7b
   connectivity_plus: 481668c94744c30c53b8895afb39159d1e619bdf
   device_info_plus: 21fcca2080fbcd348be798aa36c3e5ed849eefbe
   DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
@@ -297,6 +297,6 @@ SPEC CHECKSUMS:
   webview_flutter_wkwebview: 1821ceac936eba6f7984d89a9f3bcb4dea99ebb2
   WechatOpenSDK-XCFramework: ff342ae616bb86df3d236aca38059dfd4bc4a949
 
-PODFILE CHECKSUM: d0d9b4ff572d8695c38eb3f9b490f55cdfc57eca
+PODFILE CHECKSUM: f8e4063f097beece5c81112b15fc193524748251
 
 COCOAPODS: 1.16.2

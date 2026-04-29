@@ -103,5 +103,11 @@
 	<true/>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+    <key>NSBonjourServices</key>
+    <array>
+            <string>_dartVmService._tcp</string>
+    </array>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Looking for local tcp Bonjour service for Flutter debugging.</string>
 </dict>
 </plist>
