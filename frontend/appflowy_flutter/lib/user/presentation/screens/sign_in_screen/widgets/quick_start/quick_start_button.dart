@@ -34,7 +34,7 @@ class QuickStartButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: theme.surfaceColorScheme.layer01,
           border: Border.all(color: theme.borderColorScheme.primary),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(24),
         ),
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Text(

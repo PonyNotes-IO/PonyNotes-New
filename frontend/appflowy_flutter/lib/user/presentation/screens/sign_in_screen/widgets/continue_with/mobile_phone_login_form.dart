@@ -69,7 +69,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
         DecoratedBox(
           decoration: BoxDecoration(
             color: const Color(0xFFF5F5F5),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(24),
           ),
           child: TextField(
             controller: controller,
@@ -81,6 +81,8 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                 fontWeight: FontWeight.w500,
               ),
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
             style: TextStyle(
@@ -105,7 +107,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
             width: double.infinity,
             decoration: BoxDecoration(
               color: primaryColor,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(24),
             ),
             padding: const EdgeInsets.symmetric(vertical: 14),
             child: Text(
