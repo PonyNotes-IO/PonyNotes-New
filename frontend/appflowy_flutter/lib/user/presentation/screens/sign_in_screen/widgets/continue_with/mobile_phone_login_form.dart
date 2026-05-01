@@ -77,7 +77,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
               hintText: "输入邮箱或者手机号",
               hintStyle: TextStyle(
                 color: const Color(0xFF999999),
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
               border: InputBorder.none,
@@ -86,7 +86,7 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             ),
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
             keyboardType: TextInputType.emailAddress,
@@ -103,25 +103,25 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
                   final phone = controller.text.trim();
                   _handleSubmit(context, phone);
                 },
-          child: Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: primaryColor,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            child: Text(
-              _isLoading
-                  ? "登录中..."
-                  : "登录/注册",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: primaryColor,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Text(
+                _isLoading
+                    ? "登录中..."
+                    : "登录/注册",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
-          ),
         ),
       ],
     );

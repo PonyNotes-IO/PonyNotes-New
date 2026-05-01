@@ -8,10 +8,12 @@ class FlowyLogoTitle extends StatelessWidget {
     super.key,
     required this.title,
     this.logoSize = const Size.square(40),
+    this.titleStyle,
   });
 
   final String title;
   final Size logoSize;
+  final TextStyle? titleStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -22,10 +24,12 @@ class FlowyLogoTitle extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           AFLogo(size: logoSize),
-          const VSpace(20),
+          const VSpace(12),
           Text(
             title,
-            style: theme.textStyle.heading3.enhanced(
+            style: titleStyle ?? TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
               color: theme.textColorScheme.primary,
             ),
           ),

@@ -34,10 +34,10 @@ class TermsAndConditionsSection extends StatelessWidget {
             builder: (context) {
               final primaryColor = Theme.of(context).colorScheme.primary;
               return Container(
-                width: 18,
-                height: 18,
+                width: 14,
+                height: 14,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(7),
                   border: Border.all(
                     color: agreedToTerms ? primaryColor : const Color(0xFFD0D0D0),
                     width: 2,
@@ -47,7 +47,7 @@ class TermsAndConditionsSection extends StatelessWidget {
                 child: agreedToTerms
                     ? Icon(
                         Icons.check,
-                        size: 14,
+                        size: 10,
                         color: Colors.white,
                       )
                     : null,
@@ -55,12 +55,12 @@ class TermsAndConditionsSection extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         Flexible(
           child: RichText(
             text: TextSpan(
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: 12,
+                fontSize: 11,
               ),
               children: [
                 const TextSpan(text: "我已阅读并同意 "),
