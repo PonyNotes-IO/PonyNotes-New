@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/douyin_webview_dialog.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/wechat_webview_dialog.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/third_party_sign_in_button/third_party_sign_in_button.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -176,80 +178,72 @@ class _MobileThirdPartySignIn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final theme = AppFlowyTheme.of(context);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // 微信登录按钮（与移动端登录页面风格一致）
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: () => onSignIn(ThirdPartySignInButtonType.wechat),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              side: BorderSide(
-                color: Theme.of(context).colorScheme.outline,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  "assets/images/login/icon_login_wx.png",
-                  width: 18,
-                  height: 18,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '微信登录',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+        _CircularIconButton(
+          icon: FlowySvg(
+            ThirdPartySignInButtonType.wechat.icon,
+            size: const Size.square(28),
+            blendMode: ThirdPartySignInButtonType.wechat.blendMode,
           ),
+          onTap: () => onSignIn(ThirdPartySignInButtonType.wechat),
         ),
-        const SizedBox(height: 12),
-        // 抖音登录按钮
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: () => onSignIn(ThirdPartySignInButtonType.douyin),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              side: BorderSide(
-                color: Theme.of(context).colorScheme.outline,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  "assets/images/login/icon_login_dy.png",
-                  width: 18,
-                  height: 18,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '抖音登录',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+        const SizedBox(width: 24),
+        _CircularIconButton(
+          icon: FlowySvg(
+            ThirdPartySignInButtonType.douyin.icon,
+            size: const Size.square(28),
+            blendMode: ThirdPartySignInButtonType.douyin.blendMode,
           ),
+          onTap: () => onSignIn(ThirdPartySignInButtonType.douyin),
         ),
       ],
+    );
+  }
+}
+
+class _CircularIconButton extends StatelessWidget {
+  const _CircularIconButton({
+    required this.icon,
+    this.onTap,
+    this.isLoading = false,
+  });
+
+  final Widget icon;
+  final VoidCallback? onTap;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return GestureDetector(
+      onTap: isLoading ? null : onTap,
+      child: Opacity(
+        opacity: (onTap == null || isLoading) ? 0.6 : 1.0,
+        child: Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: theme.surfaceColorScheme.layer01,
+            border: Border.all(color: theme.borderColorScheme.primary),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: isLoading
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(theme.textColorScheme.primary),
+                    ),
+                  )
+                : icon,
+          ),
+        ),
+      ),
     );
   }
 }
