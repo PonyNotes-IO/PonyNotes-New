@@ -2,6 +2,7 @@ import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/mobile_phone_login_form.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/third_party_sign_in_button/third_party_sign_in_buttons.dart';
 import 'package:appflowy/user/presentation/widgets/flowy_logo_title.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -75,13 +76,14 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  const Spacer(),
+
                   // 第三方登录按钮
                   _buildThirdPartyButtons(context),
 
-                  Spacer(),
-                  
+                  const SizedBox(height: 24),
+
                   // Agreement checkbox
-                  // SignInAgreement(),
                   TermsAndConditionsSection(
                     agreedToTerms: _agreedToTerms,
                     onAgreedToTermsChanged: (value) {
@@ -100,70 +102,59 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
   }
 
   Widget _buildThirdPartyButtons(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
     return Column(
       children: [
-        // 微信登录按钮
-        GestureDetector(
-          onTap: () => _signInWithWeChat(context),
-          child: Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F5F5),
-              borderRadius: BorderRadius.circular(24),
+        // 分割线带文字
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 1,
+                color: theme.borderColorScheme.primary,
+              ),
             ),
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  "assets/images/login/icon_login_wx.png",
-                  width: 16,
-                  height: 16,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                '其他登录方式',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.textColorScheme.secondary,
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  '微信登录',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            Expanded(
+              child: Container(
+                height: 1,
+                color: theme.borderColorScheme.primary,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 10),
-        // 抖音登录按钮
-        GestureDetector(
-          onTap: () => _signInWithDouYin(context),
-          child: Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F5F5),
-              borderRadius: BorderRadius.circular(24),
+        const SizedBox(height: 16),
+        // 第三方登录按钮
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularIconButton(
+              icon: Image.asset(
+                "assets/images/login/icon_login_wx.png",
+                width: 28,
+                height: 28,
+              ),
+              onTap: () => _signInWithWeChat(context),
             ),
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  "assets/images/login/icon_login_dy.png",
-                  width: 16,
-                  height: 16,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '抖音登录',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
-              ],
+            const SizedBox(width: 24),
+            CircularIconButton(
+              icon: Image.asset(
+                "assets/images/login/icon_login_dy.png",
+                width: 28,
+                height: 28,
+              ),
+              onTap: () => _signInWithDouYin(context),
             ),
-          ),
+          ],
         ),
       ],
     );

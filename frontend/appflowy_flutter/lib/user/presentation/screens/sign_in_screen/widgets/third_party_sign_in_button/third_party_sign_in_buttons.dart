@@ -11,8 +11,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
 
-import 'third_party_sign_in_button.dart';
-
 typedef _SignInCallback = void Function(ThirdPartySignInButtonType signInType);
 
 @visibleForTesting
@@ -178,24 +176,21 @@ class _MobileThirdPartySignIn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _CircularIconButton(
+        CircularIconButton(
           icon: FlowySvg(
             ThirdPartySignInButtonType.wechat.icon,
             size: const Size.square(28),
-            blendMode: ThirdPartySignInButtonType.wechat.blendMode,
           ),
           onTap: () => onSignIn(ThirdPartySignInButtonType.wechat),
         ),
         const SizedBox(width: 24),
-        _CircularIconButton(
+        CircularIconButton(
           icon: FlowySvg(
             ThirdPartySignInButtonType.douyin.icon,
             size: const Size.square(28),
-            blendMode: ThirdPartySignInButtonType.douyin.blendMode,
           ),
           onTap: () => onSignIn(ThirdPartySignInButtonType.douyin),
         ),
@@ -204,8 +199,9 @@ class _MobileThirdPartySignIn extends StatelessWidget {
   }
 }
 
-class _CircularIconButton extends StatelessWidget {
-  const _CircularIconButton({
+// 第三方登录图标按钮
+class CircularIconButton extends StatelessWidget {
+  const CircularIconButton({
     required this.icon,
     this.onTap,
     this.isLoading = false,
