@@ -890,9 +890,9 @@ class _PopupMenuRoute<T> extends PopupRoute<T> {
     if (popUpAnimationStyle != AnimationStyle.noAnimation) {
       return CurvedAnimation(
         parent: super.createAnimation(),
-        curve: popUpAnimationStyle?.curve ?? Curves.easeInBack,
+        curve: popUpAnimationStyle?.curve ?? Curves.easeOutCubic,
         reverseCurve: popUpAnimationStyle?.reverseCurve ??
-            const Interval(0.0, _kMenuCloseIntervalEnd),
+            Curves.easeOutCubic,
       );
     }
     return super.createAnimation();
