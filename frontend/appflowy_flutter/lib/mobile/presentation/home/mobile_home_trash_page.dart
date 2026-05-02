@@ -25,6 +25,7 @@ class MobileHomeTrashPage extends StatelessWidget {
           return Scaffold(
             appBar: AppBar(
               title: Text(LocaleKeys.trash_text.tr()),
+              centerTitle: true,
               actions: [
                 state.objects.isEmpty
                     ? const SizedBox.shrink()

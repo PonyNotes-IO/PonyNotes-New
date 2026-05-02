@@ -283,13 +283,13 @@ class _HomePageNavigationBar extends StatelessWidget {
                 _NavBarItem(
                   icon: BottomNavigationBarItemType.add.iconWidget,
                   activeIcon: BottomNavigationBarItemType.add.activeIcon,
-                  isSelected: navigationShell.currentIndex == 3,
+                  isSelected: false,
                   onTap: () => _onTap(context, 3),
                 ),
                 _NavBarItem(
                   icon: BottomNavigationBarItemType.notification.iconWidget,
                   activeIcon: BottomNavigationBarItemType.notification.activeIcon,
-                  isSelected: navigationShell.currentIndex == 4,
+                  isSelected: navigationShell.currentIndex == 3,
                   onTap: () => _onTap(context, 4),
                 ),
               ],
