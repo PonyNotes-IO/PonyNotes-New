@@ -37,6 +37,7 @@ final ValueNotifier<String?> bottomNavigationBarItemType =
 enum BottomNavigationBarItemType {
   home,
   search,
+  askAI,
   add,
   notification;
 
@@ -47,6 +48,7 @@ enum BottomNavigationBarItemType {
       search => MobileSearchScreen.routeName,
       notification => MobileNotificationsScreenV2.routeName,
       add => null,
+      askAI => null,
     };
   }
 
@@ -58,6 +60,7 @@ enum BottomNavigationBarItemType {
     return switch (this) {
       home => const FlowySvg(FlowySvgs.m_home_unselected_m),
       search => const FlowySvg(FlowySvgs.m_home_search_icon_m),
+      askAI => const _AskAIcon(),
       add => const FlowySvg(FlowySvgs.m_home_add_m),
       notification => const _NotificationNavigationBarItemIcon(),
     };
@@ -68,6 +71,7 @@ enum BottomNavigationBarItemType {
       home => const FlowySvg(FlowySvgs.m_home_selected_m, blendMode: null),
       search =>
         const FlowySvg(FlowySvgs.m_home_search_icon_active_m, blendMode: null),
+      askAI => const _AskAIcon(),
       add => null,
       notification => const _NotificationNavigationBarItemIcon(isActive: true),
     };
@@ -170,6 +174,22 @@ class _MobileBottomNavigationBarState extends State<MobileBottomNavigationBar> {
   }
 }
 
+class _AskAIcon extends StatelessWidget {
+  const _AskAIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: Image.asset(
+        "assets/navigation/icon_ask_ai.png",
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+}
+
 class _NotificationNavigationBarItemIcon extends StatelessWidget {
   const _NotificationNavigationBarItemIcon({
     this.isActive = false,
@@ -235,18 +255,45 @@ class _HomePageNavigationBar extends StatelessWidget {
             border: context.border,
             color: context.backgroundColor,
           ),
-          child: Theme(
-            data: _getThemeData(context),
-            child: BottomNavigationBar(
-              showSelectedLabels: false,
-              showUnselectedLabels: false,
-              enableFeedback: false,
-              type: BottomNavigationBarType.fixed,
-              elevation: 0,
-              items: _items,
-              backgroundColor: Colors.transparent,
-              currentIndex: navigationShell.currentIndex,
-              onTap: (int bottomBarIndex) => _onTap(context, bottomBarIndex),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              children: [
+                _NavBarItem(
+                  icon: BottomNavigationBarItemType.home.iconWidget,
+                  activeIcon: BottomNavigationBarItemType.home.activeIcon,
+                  isSelected: navigationShell.currentIndex == 0,
+                  onTap: () => _onTap(context, 0),
+                ),
+                _NavBarItem(
+                  icon: BottomNavigationBarItemType.search.iconWidget,
+                  activeIcon: BottomNavigationBarItemType.search.activeIcon,
+                  isSelected: navigationShell.currentIndex == 1,
+                  onTap: () => _onTap(context, 1),
+                ),
+                _NavBarItem(
+                  icon: BottomNavigationBarItemType.askAI.iconWidget,
+                  activeIcon: BottomNavigationBarItemType.askAI.activeIcon,
+                  isSelected: navigationShell.currentIndex == 2,
+                  onTap: () => _onTap(context, 2),
+                  flex: 2,
+                ),
+                _NavBarItem(
+                  icon: BottomNavigationBarItemType.add.iconWidget,
+                  activeIcon: BottomNavigationBarItemType.add.activeIcon,
+                  isSelected: navigationShell.currentIndex == 3,
+                  onTap: () => _onTap(context, 3),
+                ),
+                _NavBarItem(
+                  icon: BottomNavigationBarItemType.notification.iconWidget,
+                  activeIcon: BottomNavigationBarItemType.notification.activeIcon,
+                  isSelected: navigationShell.currentIndex == 4,
+                  onTap: () => _onTap(context, 4),
+                ),
+              ],
+            ),
             ),
           ),
         ),
@@ -254,44 +301,59 @@ class _HomePageNavigationBar extends StatelessWidget {
     );
   }
 
-  ThemeData _getThemeData(BuildContext context) {
-    if (Platform.isAndroid) {
-      return Theme.of(context);
-    }
-
-    // hide the splash effect for iOS
-    return Theme.of(context).copyWith(
-      splashFactory: NoSplash.splashFactory,
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-    );
-  }
-
-  /// Navigate to the current location of the branch at the provided index when
-  /// tapping an item in the BottomNavigationBar.
   void _onTap(BuildContext context, int bottomBarIndex) {
-    // close the popup menu
     closePopupMenu();
 
     final label = _items[bottomBarIndex].label;
     if (label == BottomNavigationBarItemType.add.label) {
-      // show an add dialog
       mobileCreateNewPageNotifier.value = ViewLayoutPB.Document;
+      return;
+    } else if (label == BottomNavigationBarItemType.askAI.label) {
       return;
     } else if (label == BottomNavigationBarItemType.notification.label) {
       getIt<ReminderBloc>().add(const ReminderEvent.refresh());
     }
     bottomNavigationBarItemType.value = label;
-    // When navigating to a new branch, it's recommended to use the goBranch
-    // method, as doing so makes sure the last navigation state of the
-    // Navigator for the branch is restored.
     navigationShell.goBranch(
       bottomBarIndex,
-      // A common pattern when using bottom navigation bars is to support
-      // navigating to the initial location when tapping the item that is
-      // already active. This example demonstrates how to support this behavior,
-      // using the initialLocation parameter of goBranch.
       initialLocation: bottomBarIndex == navigationShell.currentIndex,
+    );
+  }
+}
+
+class _NavBarItem extends StatelessWidget {
+  const _NavBarItem({
+    required this.icon,
+    this.activeIcon,
+    required this.isSelected,
+    required this.onTap,
+    this.flex = 1,
+  });
+
+  final Widget icon;
+  final Widget? activeIcon;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final int flex;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          height: 48,
+          alignment: Alignment.center,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: isSelected
+                ? (activeIcon ?? icon)
+                : icon,
+          ),
+        ),
+      ),
     );
   }
 }
