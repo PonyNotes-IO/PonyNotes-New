@@ -314,9 +314,19 @@ class _HomePageNavigationBar extends StatelessWidget {
       getIt<ReminderBloc>().add(const ReminderEvent.refresh());
     }
     bottomNavigationBarItemType.value = label;
+
+    // Map bottom bar index to router branch index
+    // bottom bar: [home=0, search=1, askAI=2, add=3, notification=4]
+    // router: [home=0, search=1, favorite=2, notification=3]
+    final routerIndex = switch (bottomBarIndex) {
+      0 => 0,
+      1 => 1,
+      4 => 3,
+      _ => navigationShell.currentIndex,
+    };
     navigationShell.goBranch(
-      bottomBarIndex,
-      initialLocation: bottomBarIndex == navigationShell.currentIndex,
+      routerIndex,
+      initialLocation: routerIndex == navigationShell.currentIndex,
     );
   }
 }
