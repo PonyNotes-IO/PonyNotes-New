@@ -180,8 +180,8 @@ class _AskAIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 32,
-      height: 32,
+      width: 72,
+      height: 72,
       child: Image.asset(
         "assets/navigation/icon_ask_ai.png",
         fit: BoxFit.contain,
