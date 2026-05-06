@@ -37,6 +37,11 @@ class _MobileSearchTextfieldState extends State<MobileSearchTextfield>
   late String lastPage = bottomNavigationBarItemType.value ?? '';
   String lastText = '';
 
+  /// Guard flag to prevent infinite loops in onBackOrLeave.
+  /// This is needed because setting bottomNavigationBarItemType.value
+  /// triggers the listener again, which can cause re-entry.
+  bool _isNavigating = false;
+
   @override
   void initState() {
     super.initState();
@@ -186,13 +191,18 @@ class _MobileSearchTextfieldState extends State<MobileSearchTextfield>
   }
 
   void onBackOrLeave() {
+    if (_isNavigating) return;
     final label = bottomNavigationBarItemType.value;
     if (label == BottomNavigationBarItemType.search.label) {
       focusNode.requestFocus();
     } else {
+      _isNavigating = true;
       focusNode.unfocus();
       controller.clear();
       lastPage = label ?? '';
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _isNavigating = false;
+      });
     }
   }
 
