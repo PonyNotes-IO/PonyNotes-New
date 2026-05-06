@@ -24,6 +24,7 @@ class MobileHomeTrashPage extends StatelessWidget {
         builder: (context, state) {
           return Scaffold(
             appBar: AppBar(
+              leading: const AppBarBackButton(),
               title: Text(LocaleKeys.trash_text.tr()),
               centerTitle: true,
               actions: [

@@ -24,7 +24,8 @@ class LegalDocumentScreen extends StatelessWidget {
         title: Text(title),
         leading: IconButton(
           icon: FlowySvg(
-            FlowySvgs.m_app_bar_back_s,
+            FlowySvgs.mobile_return_s,
+            size: const Size(7, 12),
             color: theme.textColorScheme.primary,
           ),
           onPressed: () => Navigator.of(context).pop(),

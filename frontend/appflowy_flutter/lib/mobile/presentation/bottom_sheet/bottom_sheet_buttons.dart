@@ -92,14 +92,11 @@ class BottomSheetBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap ?? () => Navigator.pop(context),
-      child: const Padding(
+      child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 16.0),
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: FlowySvg(
-            FlowySvgs.m_bottom_sheet_back_s,
-          ),
+        child: FlowySvg(
+          FlowySvgs.mobile_return_s,
+          size: const Size(7, 12),
         ),
       ),
     );

@@ -106,8 +106,8 @@ class _MobileSearchTextfieldState extends State<MobileSearchTextfield>
                   dimension: 40,
                   child: Center(
                     child: FlowySvg(
-                      FlowySvgs.search_page_arrow_left_m,
-                      size: Size.square(20),
+                      FlowySvgs.mobile_return_s,
+                      size: const Size(7, 12),
                       color: theme.iconColorScheme.primary,
                     ),
                   ),

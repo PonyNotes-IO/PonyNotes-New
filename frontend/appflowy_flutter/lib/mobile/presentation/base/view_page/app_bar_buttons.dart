@@ -70,9 +70,10 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
       padding: EdgeInsets.zero,
       onTap: (context) => context.pop(),
       child: _ImmersiveAppBarButton(
-        icon: FlowySvgs.m_app_bar_back_s,
+        icon: FlowySvgs.mobile_return_s,
         dimension: 30.0,
         iconPadding: 3.0,
+        iconSize: const Size(7, 12),
         isImmersiveMode:
             context.read<MobileViewPageBloc>().state.isImmersiveMode,
         appBarOpacity: appBarOpacity,
@@ -192,6 +193,7 @@ class _ImmersiveAppBarButton extends StatelessWidget {
     required this.iconPadding,
     required this.isImmersiveMode,
     required this.appBarOpacity,
+    this.iconSize,
   });
 
   final FlowySvgData icon;
@@ -199,6 +201,7 @@ class _ImmersiveAppBarButton extends StatelessWidget {
   final double iconPadding;
   final bool isImmersiveMode;
   final ValueListenable appBarOpacity;
+  final Size? iconSize;
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +230,7 @@ class _ImmersiveAppBarButton extends StatelessWidget {
 
             Widget child = Container(
               margin: EdgeInsets.all(iconPadding),
-              child: FlowySvg(icon, color: color),
+              child: FlowySvg(icon, size: iconSize, color: color),
             );
 
             if (isImmersiveMode && appBarOpacity <= 0.99) {

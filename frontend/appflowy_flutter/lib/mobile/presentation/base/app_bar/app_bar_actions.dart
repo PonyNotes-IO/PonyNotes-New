@@ -19,8 +19,9 @@ class AppBarBackButton extends StatelessWidget {
     return AppBarButton(
       onTap: (_) => (onTap ?? () => Navigator.pop(context)).call(),
       padding: padding,
-      child: const FlowySvg(
-        FlowySvgs.m_app_bar_back_s,
+      child: FlowySvg(
+        FlowySvgs.mobile_return_s,
+        size: const Size(7, 12),
       ),
     );
   }
@@ -44,8 +45,9 @@ class AppBarImmersiveBackButton extends StatelessWidget {
         bottom: 8.0,
         right: 4.0,
       ),
-      child: const FlowySvg(
-        FlowySvgs.m_app_bar_back_s,
+      child: FlowySvg(
+        FlowySvgs.mobile_return_s,
+        size: const Size(7, 12),
       ),
     );
   }

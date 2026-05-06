@@ -209,7 +209,7 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
                 GoRouter.of(context).go(MobileHomeScreen.routeName),
             icon: FlowySvg(
               FlowySvgs.mobile_return_s,
-              size: const Size.square(15),
+              size: const Size(7, 12),
               color: afTheme.iconColorScheme.primary,
             ),
           ),
