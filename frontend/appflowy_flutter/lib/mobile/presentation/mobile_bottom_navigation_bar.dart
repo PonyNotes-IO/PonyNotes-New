@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/mobile/presentation/ai/mobile_ai_welcome_page.dart';
 import 'package:appflowy/mobile/presentation/notifications/mobile_notifications_screen.dart';
 import 'package:appflowy/mobile/presentation/widgets/navigation_bar_button.dart';
 import 'package:appflowy/shared/popup_menu/appflowy_popup_menu.dart';
@@ -48,7 +49,7 @@ enum BottomNavigationBarItemType {
       search => MobileSearchScreen.routeName,
       notification => MobileNotificationsScreenV2.routeName,
       add => null,
-      askAI => null,
+      askAI => MobileAIWelcomePage.routeName,
     };
   }
 
@@ -309,6 +310,8 @@ class _HomePageNavigationBar extends StatelessWidget {
       mobileCreateNewPageNotifier.value = ViewLayoutPB.Document;
       return;
     } else if (label == BottomNavigationBarItemType.askAI.label) {
+      // Navigate to AI welcome page via GoRouter (not the navigation shell)
+      GoRouter.of(context).go(BottomNavigationBarItemType.askAI.routeName!);
       return;
     } else if (label == BottomNavigationBarItemType.notification.label) {
       getIt<ReminderBloc>().add(const ReminderEvent.refresh());

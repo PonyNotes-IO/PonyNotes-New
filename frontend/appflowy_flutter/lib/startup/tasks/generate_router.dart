@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:appflowy/mobile/presentation/ai/mobile_ai_welcome_page.dart';
 import 'package:appflowy/mobile/presentation/chat/mobile_chat_screen.dart';
 import 'package:appflowy/mobile/presentation/database/board/mobile_board_screen.dart';
 import 'package:appflowy/mobile/presentation/database/card/card.dart';
@@ -75,6 +76,7 @@ GoRouter generateRouter(Widget child) {
         _mobileBoardScreenRoute(),
         _mobileCalendarScreenRoute(),
         _mobileChatScreenRoute(),
+        _mobileAIWelcomeScreenRoute(),
         // card detail page
         _mobileCardDetailScreenRoute(),
         _mobileDateCellEditScreenRoute(),
@@ -626,6 +628,18 @@ GoRoute _mobileChatScreenRoute() {
 
       return MaterialExtendedPage(
         child: MobileChatScreen(id: id, title: title),
+      );
+    },
+  );
+}
+
+GoRoute _mobileAIWelcomeScreenRoute() {
+  return GoRoute(
+    path: MobileAIWelcomePage.routeName,
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    pageBuilder: (context, state) {
+      return MaterialExtendedPage(
+        child: const MobileAIWelcomePage(),
       );
     },
   );
