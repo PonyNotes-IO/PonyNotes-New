@@ -212,7 +212,7 @@ class _DeletedFilesListView extends StatelessWidget {
                 color: theme.colorScheme.onSurface,
               ),
               title: Text(
-                deletedFile.name,
+                deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name,
                 style: theme.textTheme.labelMedium
                     ?.copyWith(color: theme.colorScheme.onSurface),
               ),
