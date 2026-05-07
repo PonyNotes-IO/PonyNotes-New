@@ -4,6 +4,8 @@ import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
 import 'package:appflowy/plugins/trash/application/prelude.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy_backend/protobuf/flowy-folder/trash.pb.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -11,10 +13,24 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:go_router/go_router.dart';
 
-class MobileHomeTrashPage extends StatelessWidget {
+class MobileHomeTrashPage extends StatefulWidget {
   const MobileHomeTrashPage({super.key});
 
   static const routeName = '/trash';
+
+  @override
+  State<MobileHomeTrashPage> createState() => _MobileHomeTrashPageState();
+}
+
+class _MobileHomeTrashPageState extends State<MobileHomeTrashPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +38,11 @@ class MobileHomeTrashPage extends StatelessWidget {
       create: (context) => getIt<TrashBloc>()..add(const TrashEvent.initial()),
       child: BlocBuilder<TrashBloc, TrashState>(
         builder: (context, state) {
+          final filteredObjects = state.objects.where((obj) {
+            if (_searchQuery.isEmpty) return true;
+            return obj.name.toLowerCase().contains(_searchQuery.toLowerCase());
+          }).toList();
+
           return Scaffold(
             appBar: AppBar(
               leading: const AppBarBackButton(),
@@ -65,16 +86,130 @@ class MobileHomeTrashPage extends StatelessWidget {
                       ),
               ],
             ),
-            body: state.objects.isEmpty
-                ? const _EmptyTrashBin()
-                : Column(
-                    children: [
-                      const Expanded(child: _DeletedFilesListView()),
-                      _TrashAutoDeleteHint(),
-                    ],
-                  ),
+            body: Column(
+              children: [
+                _TrashSearchBar(
+                  controller: _searchController,
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                ),
+                Expanded(
+                  child: filteredObjects.isEmpty
+                      ? state.objects.isEmpty
+                          ? const _EmptyTrashBin()
+                          : const _NoSearchResult()
+                      : _DeletedFilesListView(objects: filteredObjects),
+                ),
+                if (filteredObjects.isNotEmpty) _TrashAutoDeleteHint(),
+              ],
+            ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _TrashSearchBar extends StatelessWidget {
+  const _TrashSearchBar({
+    required this.controller,
+    required this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: controller,
+        builder: (context, value, child) {
+          return TextField(
+            controller: controller,
+            onChanged: onChanged,
+            decoration: InputDecoration(
+              hintText: '搜索被移入垃圾箱的页面',
+              isDense: true,
+              prefixIconConstraints: BoxConstraints.loose(const Size(38, 40)),
+              prefixIcon: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+                child: FlowySvg(
+                  FlowySvgs.m_home_search_icon_m,
+                  color: AppFlowyTheme.of(context).iconColorScheme.secondary,
+                  size: const Size.square(20),
+                ),
+              ),
+              suffixIcon: value.text.isNotEmpty
+                  ? GestureDetector(
+                      onTap: () {
+                        controller.clear();
+                        onChanged('');
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 10, 8, 10),
+                        child: FlowySvg(
+                          FlowySvgs.search_clear_m,
+                          color: AppFlowyTheme.of(context).iconColorScheme.tertiary,
+                          size: const Size.square(20),
+                        ),
+                      ),
+                    )
+                  : null,
+              contentPadding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+              filled: true,
+              fillColor: const Color(0xFFF9F9F9),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _NoSearchResult extends StatelessWidget {
+  const _NoSearchResult();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const FlowySvg(
+            FlowySvgs.m_home_search_icon_m,
+            size: Size.square(46),
+          ),
+          const VSpace(16.0),
+          FlowyText.medium(
+            '未找到匹配的笔记',
+            fontSize: 18.0,
+            textAlign: TextAlign.center,
+          ),
+          const VSpace(8.0),
+          FlowyText.regular(
+            '尝试其他关键词搜索',
+            fontSize: 17.0,
+            textAlign: TextAlign.center,
+            color: Theme.of(context).hintColor,
+          ),
+        ],
       ),
     );
   }
@@ -136,7 +271,7 @@ class _TrashActionAllButton extends StatelessWidget {
     return BlocProvider.value(
       value: trashBloc,
       child: BottomSheetActionWidget(
-        svg: isDeleteAll ? FlowySvgs.m_delete_m : FlowySvgs.m_restore_m,
+        svg: isDeleteAll ? FlowySvgs.m_trash_delete_m : FlowySvgs.m_trash_restore_m,
         text: isDeleteAll
             ? LocaleKeys.trash_deleteAll.tr()
             : LocaleKeys.trash_restoreAll.tr(),
@@ -190,17 +325,18 @@ class _TrashActionAllButton extends StatelessWidget {
 }
 
 class _DeletedFilesListView extends StatelessWidget {
-  const _DeletedFilesListView();
+  const _DeletedFilesListView({required this.objects});
+
+  final List<TrashPB> objects;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final state = context.watch<TrashBloc>().state;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: ListView.builder(
         itemBuilder: (context, index) {
-          final deletedFile = state.objects[index];
+          final deletedFile = objects[index];
 
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -227,7 +363,7 @@ class _DeletedFilesListView extends StatelessWidget {
                   IconButton(
                     splashRadius: 20,
                     icon: FlowySvg(
-                      FlowySvgs.m_restore_m,
+                      FlowySvgs.m_trash_restore_m,
                       size: const Size.square(24),
                       color: theme.colorScheme.onSurface,
                     ),
@@ -245,7 +381,7 @@ class _DeletedFilesListView extends StatelessWidget {
                   IconButton(
                     splashRadius: 20,
                     icon: FlowySvg(
-                      FlowySvgs.m_delete_m,
+                      FlowySvgs.m_trash_delete_m,
                       size: const Size.square(24),
                       color: theme.colorScheme.onSurface,
                     ),
@@ -265,7 +401,7 @@ class _DeletedFilesListView extends StatelessWidget {
             ),
           );
         },
-        itemCount: state.objects.length,
+        itemCount: objects.length,
       ),
     );
   }
