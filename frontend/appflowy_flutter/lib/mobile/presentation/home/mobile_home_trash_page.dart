@@ -277,7 +277,7 @@ class _TrashAutoDeleteHint extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 12,
+        bottom: MediaQuery.of(context).padding.bottom + 36,
         top: 12,
         left: 16,
         right: 16,
