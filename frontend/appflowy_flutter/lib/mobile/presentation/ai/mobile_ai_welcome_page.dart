@@ -237,7 +237,7 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
           Expanded(
             child: Text(
               '小马笔记AI',
-              style: afTheme.textStyle.heading3.standard(
+              style: afTheme.textStyle.heading4.standard(
                 color: afTheme.textColorScheme.primary,
               ),
               textAlign: TextAlign.center,
@@ -263,27 +263,12 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
   ) {
     return Column(
       children: [
-        // Orange circle with horse icon
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            color: const Color(0xFFFF6B35),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFFFF6B35).withValues(alpha: 0.3),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: const Center(
-            child: Icon(
-              Icons.pets,
-              size: 40,
-              color: Colors.white,
-            ),
+        // Pony Notes logo
+        Center(
+          child: Image.asset(
+            'assets/images/cal_logo@2x.png',
+            width: 80,
+            height: 80,
           ),
         ),
         const SizedBox(height: 20),
@@ -292,7 +277,7 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Text(
             '我是小马笔记AI，很高兴见到你！',
-            style: afTheme.textStyle.heading2.standard(
+            style: afTheme.textStyle.heading3.standard(
               color: afTheme.textColorScheme.primary,
             ),
             textAlign: TextAlign.center,

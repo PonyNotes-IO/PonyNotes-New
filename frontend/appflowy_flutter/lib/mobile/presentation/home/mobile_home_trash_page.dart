@@ -67,7 +67,12 @@ class MobileHomeTrashPage extends StatelessWidget {
             ),
             body: state.objects.isEmpty
                 ? const _EmptyTrashBin()
-                : _DeletedFilesListView(state),
+                : Column(
+                    children: [
+                      const Expanded(child: _DeletedFilesListView()),
+                      _TrashAutoDeleteHint(),
+                    ],
+                  ),
           );
         },
       ),
@@ -185,14 +190,12 @@ class _TrashActionAllButton extends StatelessWidget {
 }
 
 class _DeletedFilesListView extends StatelessWidget {
-  const _DeletedFilesListView(
-    this.state,
-  );
+  const _DeletedFilesListView();
 
-  final TrashState state;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final state = context.watch<TrashBloc>().state;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: ListView.builder(
@@ -263,6 +266,29 @@ class _DeletedFilesListView extends StatelessWidget {
           );
         },
         itemCount: state.objects.length,
+      ),
+    );
+  }
+}
+
+class _TrashAutoDeleteHint extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).padding.bottom + 12,
+        top: 12,
+        left: 16,
+        right: 16,
+      ),
+      child: Text(
+        '回收站中的笔记将在7天后永久删除',
+        style: TextStyle(
+          fontSize: 13,
+          color: Theme.of(context).hintColor,
+        ),
+        textAlign: TextAlign.center,
       ),
     );
   }
