@@ -90,7 +90,7 @@ class _PromptInputMobileSelectSourcesButtonState
           child: BlocBuilder<SpaceBloc, SpaceState>(
             builder: (context, state) {
               return FlowyButton(
-                margin: const EdgeInsetsDirectional.fromSTEB(4, 6, 2, 6),
+                margin: const EdgeInsetsDirectional.fromSTEB(2, 4, 2, 4),
                 expandText: false,
                 text: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -98,7 +98,7 @@ class _PromptInputMobileSelectSourcesButtonState
                     FlowySvg(
                       FlowySvgs.ai_page_s,
                       color: Theme.of(context).iconTheme.color,
-                      size: const Size.square(20.0),
+                      size: const Size.square(16.0),
                     ),
                     const HSpace(2.0),
                     ValueListenableBuilder(
@@ -113,8 +113,8 @@ class _PromptInputMobileSelectSourcesButtonState
                             : selectedSourceIds.length.toString();
                         return FlowyText(
                           label,
-                          fontSize: 14,
-                          figmaLineHeight: 20,
+                          fontSize: 11,
+                          figmaLineHeight: 16,
                           color: Theme.of(context).hintColor,
                         );
                       },

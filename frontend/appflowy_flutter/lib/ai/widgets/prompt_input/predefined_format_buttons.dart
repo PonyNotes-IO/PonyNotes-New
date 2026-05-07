@@ -194,19 +194,19 @@ class PromptInputMobileToggleFormatButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox.square(
-      dimension: 32.0,
+      dimension: 26.0,
       child: FlowyButton(
-        radius: const BorderRadius.all(Radius.circular(8.0)),
+        radius: const BorderRadius.all(Radius.circular(4.0)),
         margin: EdgeInsets.zero,
         expandText: false,
         text: showFormatBar
             ? const FlowySvg(
                 FlowySvgs.m_aa_text_s,
-                size: Size.square(20.0),
+                size: Size.square(16.0),
               )
             : const FlowySvg(
                 FlowySvgs.ai_text_image_s,
-                size: Size(26.25, 20.0),
+                size: Size(20.0, 16.0),
               ),
         onTap: onTap,
       ),

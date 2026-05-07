@@ -327,148 +327,6 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Hint text
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                '在小马笔记可以问或找到每一件事...',
-                style: afTheme.textStyle.body.standard(
-                  color: afTheme.textColorScheme.tertiary,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            // Controls row — horizontally scrollable to handle narrow screens
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  _buildModelChip(context, afTheme, theme),
-                  const SizedBox(width: 6),
-                  _buildToggleChip(
-                    label: '深度思考',
-                    icon: Icons.psychology_outlined,
-                    isEnabled: _isDeepThinkingEnabled,
-                    afTheme: afTheme,
-                    theme: theme,
-                    onChanged: (v) =>
-                        setState(() => _isDeepThinkingEnabled = v),
-                  ),
-                  const SizedBox(width: 6),
-                  _buildToggleChip(
-                    label: '联网搜索',
-                    icon: Icons.language_outlined,
-                    isEnabled: _isWebSearchEnabled,
-                    afTheme: afTheme,
-                    theme: theme,
-                    onChanged: (v) =>
-                        setState(() => _isWebSearchEnabled = v),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            // Input row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  // Attachment button
-                  GestureDetector(
-                    onTap: _pickImages,
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.attachment_outlined,
-                        size: 20,
-                        color: afTheme.iconColorScheme.secondary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Text input
-                  Expanded(
-                    child: Container(
-                      constraints: const BoxConstraints(maxHeight: 120),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest
-                            .withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: theme.dividerColor.withValues(alpha: 0.5),
-                          width: 0.5,
-                        ),
-                      ),
-                      child: TextField(
-                        controller: _textController,
-                        focusNode: _focusNode,
-                        maxLines: null,
-                        minLines: 1,
-                        maxLength: _kMaxMessageLength,
-                        buildCounter: (context,
-                                {required currentLength,
-                                required isFocused,
-                                required maxLength}) =>
-                            null,
-                        style: afTheme.textStyle.body.standard(
-                          color: afTheme.textColorScheme.primary,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: '输入你的问题...',
-                          hintStyle: afTheme.textStyle.body.standard(
-                            color: afTheme.textColorScheme.tertiary,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          border: InputBorder.none,
-                        ),
-                        onChanged: (_) => setState(() {}),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  // Send button
-                  GestureDetector(
-                    onTap: canSend ? _sendMessage : null,
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: canSend
-                            ? primaryColor
-                            : primaryColor.withValues(alpha: 0.35),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: _isSending
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                ),
-                              )
-                            : Icon(
-                                Icons.send_rounded,
-                                size: 18,
-                                color: Colors.white,
-                              ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
             // Image attachment preview strip
             if (_selectedImages.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -528,7 +386,156 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
                   },
                 ),
               ),
+              const SizedBox(height: 8),
             ],
+            // 输入框整体容器（文字输入 + 底部按钮）
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 180),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: theme.dividerColor.withValues(alpha: 0.5),
+                    width: 0.5,
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 文字输入区域（包含所有按钮作为 suffix）
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 120),
+                      child: IntrinsicHeight(
+                        child: TextField(
+                          controller: _textController,
+                          focusNode: _focusNode,
+                          maxLines: 6,
+                          minLines: 6,
+                          maxLength: _kMaxMessageLength,
+                          buildCounter: (context,
+                                  {required currentLength,
+                                  required isFocused,
+                                  required maxLength}) =>
+                              null,
+                          style: afTheme.textStyle.body.standard(
+                            color: afTheme.textColorScheme.primary,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: '输入你的问题...',
+                            hintStyle: afTheme.textStyle.body.standard(
+                              color: afTheme.textColorScheme.tertiary,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            border: InputBorder.none,
+                          suffixIcon: Padding(
+                            padding: const EdgeInsets.only(right: 8, bottom: 8),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                // 顶部工具栏（模型、思考、联网）
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // 模型选择按钮
+                                    _buildModelChip(context, afTheme, theme),
+                                    const SizedBox(width: 4),
+                                    // 深度思考按钮
+                                    _buildToggleChip(
+                                      label: '思考',
+                                      icon: Icons.psychology_outlined,
+                                      isEnabled: _isDeepThinkingEnabled,
+                                      afTheme: afTheme,
+                                      theme: theme,
+                                      onChanged: (v) =>
+                                          setState(() => _isDeepThinkingEnabled = v),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    // 联网搜索按钮
+                                    _buildToggleChip(
+                                      label: '联网',
+                                      icon: Icons.language_outlined,
+                                      isEnabled: _isWebSearchEnabled,
+                                      afTheme: afTheme,
+                                      theme: theme,
+                                      onChanged: (v) =>
+                                          setState(() => _isWebSearchEnabled = v),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                // 底部按钮行（附件、发送）
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // 附件按钮
+                                    GestureDetector(
+                                      onTap: _pickImages,
+                                      child: Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: theme.colorScheme.surfaceContainerHighest,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Icon(
+                                          Icons.add_photo_alternate_outlined,
+                                          size: 16,
+                                          color: afTheme.iconColorScheme.secondary,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    // 发送按钮
+                                    GestureDetector(
+                                      onTap: canSend ? _sendMessage : null,
+                                      child: Container(
+                                        width: 28,
+                                        height: 28,
+                                        decoration: BoxDecoration(
+                                          color: canSend
+                                              ? primaryColor
+                                              : primaryColor.withValues(alpha: 0.35),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Center(
+                                          child: _isSending
+                                              ? SizedBox(
+                                                  width: 12,
+                                                  height: 12,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    color: Colors.white.withValues(alpha: 0.8),
+                                                  ),
+                                                )
+                                              : Icon(
+                                                  Icons.send_rounded,
+                                                  size: 14,
+                                                  color: Colors.white,
+                                                ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 10),
           ],
         ),
@@ -545,11 +552,11 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
 
     if (_isLoadingModels) {
       return Container(
-        height: 32,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           color: primaryColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: primaryColor.withValues(alpha: 0.3),
             width: 0.5,
@@ -557,8 +564,8 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
         ),
         child: Center(
           child: SizedBox(
-            width: 14,
-            height: 14,
+            width: 12,
+            height: 12,
             child: CircularProgressIndicator(
               strokeWidth: 1.5,
               color: primaryColor,
@@ -631,11 +638,11 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
         );
       }).toList(),
       child: Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
           color: primaryColor.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: primaryColor.withValues(alpha: 0.3),
             width: 0.5,
@@ -649,13 +656,13 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
               size: const Size.square(12),
               color: primaryColor,
             ),
-            const SizedBox(width: 3),
+            const SizedBox(width: 2),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 60),
+              constraints: const BoxConstraints(maxWidth: 40),
               child: Text(
-                _selectedModel?.name ?? '选择模型',
+                _selectedModel?.name ?? '模型',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 10,
                   color: primaryColor,
                   fontWeight: FontWeight.w500,
                 ),
@@ -686,49 +693,41 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
     return GestureDetector(
       onTap: () => onChanged(!isEnabled),
       child: Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: isEnabled
-            ? primaryColor.withValues(alpha: 0.1)
-            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
           color: isEnabled
-              ? primaryColor.withValues(alpha: 0.4)
-              : theme.dividerColor.withValues(alpha: 0.5),
-          width: 0.5,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 13,
+              ? primaryColor.withValues(alpha: 0.1)
+              : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
             color: isEnabled
-                ? primaryColor
-                : afTheme.iconColorScheme.secondary,
+                ? primaryColor.withValues(alpha: 0.4)
+                : theme.dividerColor.withValues(alpha: 0.5),
+            width: 0.5,
           ),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
               color: isEnabled
                   ? primaryColor
-                  : afTheme.textColorScheme.secondary,
-              fontWeight: isEnabled ? FontWeight.w600 : FontWeight.w400,
+                  : afTheme.iconColorScheme.secondary,
             ),
-          ),
-          const SizedBox(width: 1),
-          Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: 13,
-            color: isEnabled
-                ? primaryColor
-                : afTheme.iconColorScheme.secondary,
-          ),
+            const SizedBox(width: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: isEnabled
+                    ? primaryColor
+                    : afTheme.textColorScheme.secondary,
+                fontWeight: isEnabled ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
           ],
         ),
       ),
