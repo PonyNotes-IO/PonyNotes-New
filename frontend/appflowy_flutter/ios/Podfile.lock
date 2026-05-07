@@ -94,8 +94,6 @@ PODS:
   - pdfrx (0.0.3):
     - Flutter
     - FlutterMacOS
-  - pdfx (1.0.0):
-    - Flutter
   - permission_handler_apple (9.3.0):
     - Flutter
   - quill_native_bridge_ios (0.0.1):
@@ -153,7 +151,6 @@ DEPENDENCIES:
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - pdfrx (from `.symlinks/plugins/pdfrx/darwin`)
-  - pdfx (from `.symlinks/plugins/pdfx/ios`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - quill_native_bridge_ios (from `.symlinks/plugins/quill_native_bridge_ios/ios`)
   - saver_gallery (from `.symlinks/plugins/saver_gallery/ios`)
@@ -226,8 +223,6 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
   pdfrx:
     :path: ".symlinks/plugins/pdfrx/darwin"
-  pdfx:
-    :path: ".symlinks/plugins/pdfx/ios"
   permission_handler_apple:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
   quill_native_bridge_ios:
@@ -280,7 +275,6 @@ SPEC CHECKSUMS:
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
   path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
   pdfrx: f02453e8acfc97f5cd0e29aa33f658ea6c12e71d
-  pdfx: 77f4dddc48361fbb01486fa2bdee4532cbb97ef3
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
   quill_native_bridge_ios: f47af4b14e7757968486641656c5d23250cee521
   ReachabilitySwift: 32793e867593cfc1177f5d16491e3a197d2fccda

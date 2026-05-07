@@ -12,7 +12,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy/workspace/application/settings/share/import_service.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:path/path.dart' as p;
-import 'package:pdfx/pdfx.dart' as pdfx;
+import 'package:pdfrx/pdfrx.dart' as pdfrx_widget;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'processor/aliyun_doc_parse_processor.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -691,11 +691,11 @@ class PdfHybridPreviewScreen extends StatefulWidget {
 }
 
 class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
-  late pdfx.PdfController _pdfController;
+  final pdfrx_widget.PdfViewerController _pdfController = pdfrx_widget.PdfViewerController();
   bool _isLoading = true;
   String? _error;
   int _currentPage = 1;
-  int _totalPages = 0;
+  int? _totalPages;
   double _zoom = 1.0;
   bool _showControls = true;
 
@@ -707,21 +707,12 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
 
   Future<void> _initializePdf() async {
     try {
-      // 初始化PDF控制器
-      _pdfController = pdfx.PdfController(
-        document: pdfx.PdfDocument.openData(widget.pdfBytes),
-      );
-      
-      // 获取文档信息
-      final document = await pdfx.PdfDocument.openData(widget.pdfBytes);
-      _totalPages = document.pagesCount;
-      
       setState(() {
         _isLoading = false;
       });
-      
-      Log.info('PDF混合预览初始化成功: ${widget.fileName}, $_totalPages 页');
-      
+
+      Log.info('PDF混合预览初始化成功: ${widget.fileName}');
+
     } catch (e) {
       Log.error('PDF混合预览初始化失败: $e');
       setState(() {
@@ -733,7 +724,6 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
 
   @override
   void dispose() {
-    _pdfController.dispose();
     super.dispose();
   }
 
@@ -780,19 +770,13 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
                       const Spacer(),
                       if (_showControls && !_isLoading && _error == null) ...[
                         IconButton(
-                          onPressed: _currentPage > 1 ? () => _pdfController.previousPage(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                          ) : null,
+                          onPressed: () => _pdfController.goToPage(pageNumber: (_currentPage - 1).clamp(1, _totalPages ?? 1)),
                           icon: const Icon(Icons.chevron_left),
                           tooltip: '上一页',
                         ),
-                        Text('$_currentPage / $_totalPages'),
+                        Text('$_currentPage / ${_totalPages ?? 0}'),
                         IconButton(
-                          onPressed: _currentPage < _totalPages ? () => _pdfController.nextPage(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                          ) : null,
+                          onPressed: () => _pdfController.goToPage(pageNumber: (_currentPage + 1).clamp(1, _totalPages ?? 1)),
                           icon: const Icon(Icons.chevron_right),
                           tooltip: '下一页',
                         ),
@@ -921,19 +905,22 @@ class _PdfHybridPreviewScreenState extends State<PdfHybridPreviewScreen> {
 
     return Transform.scale(
       scale: _zoom,
-      child: pdfx.PdfView(
+      child: pdfrx_widget.PdfViewer.data(
+        widget.pdfBytes,
+        sourceName: widget.fileName,
         controller: _pdfController,
-        scrollDirection: Axis.vertical,
-        onDocumentLoaded: (document) {
-          Log.debug('PDF文档在混合预览中加载: ${document.pagesCount} 页');
-        },
-        onPageChanged: (page) {
-          setState(() {
-            _currentPage = page;
-          });
-        },
-        backgroundDecoration: BoxDecoration(
-          color: Colors.grey.shade200,
+        params: pdfrx_widget.PdfViewerParams(
+          onViewerReady: (document, controller) {
+            setState(() {
+              _totalPages = document.pages.length;
+            });
+            Log.debug('PDF文档在混合预览中加载: ${document.pages.length} 页');
+          },
+          onPageChanged: (pageNumber) {
+            setState(() {
+              _currentPage = pageNumber ?? 1;
+            });
+          },
         ),
       ),
     );

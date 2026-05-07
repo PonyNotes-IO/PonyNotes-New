@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
-import 'package:pdfx/pdfx.dart' as pdfx;
+import 'package:pdfrx/pdfrx.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:path/path.dart' as path;
@@ -30,22 +30,21 @@ class PdfEmbedComponent extends StatefulWidget {
 }
 
 class _PdfEmbedComponentState extends State<PdfEmbedComponent> {
-  late pdfx.PdfController _pdfController;
+  final PdfViewerController _pdfController = PdfViewerController();
   bool _isLoading = true;
   String? _error;
   int _currentPage = 1;
-  int _totalPages = 0;
-  
+  int? _totalPages;
+
   // 控制面板状态
   bool _showControls = true;
   bool _isFullscreen = false;
   double _zoom = 1.0;
-  
+
   @override
   void initState() {
     super.initState();
     _showControls = widget.showControls;
-    _initializePdf();
   }
 
   Future<void> _initializePdf() async {
@@ -55,25 +54,13 @@ class _PdfEmbedComponentState extends State<PdfEmbedComponent> {
       if (!file.existsSync()) {
         throw Exception('PDF文件不存在: ${widget.pdfPath}');
       }
-      
-      // 读取PDF文件
-      final bytes = await file.readAsBytes();
-      
-      // 初始化PDF控制器
-      _pdfController = pdfx.PdfController(
-        document: pdfx.PdfDocument.openData(bytes),
-      );
-      
-      // 获取文档信息
-      final document = await pdfx.PdfDocument.openData(bytes);
-      _totalPages = document.pagesCount;
-      
+
       setState(() {
         _isLoading = false;
       });
-      
-      Log.info('PDF embedded successfully: ${path.basename(widget.pdfPath)}, $_totalPages pages');
-      
+
+      Log.info('PDF embedded: ${path.basename(widget.pdfPath)}');
+
     } catch (e) {
       Log.error('Failed to initialize embedded PDF: $e');
       setState(() {
@@ -85,7 +72,6 @@ class _PdfEmbedComponentState extends State<PdfEmbedComponent> {
 
   @override
   void dispose() {
-    _pdfController.dispose();
     super.dispose();
   }
 
@@ -149,10 +135,10 @@ class _PdfEmbedComponentState extends State<PdfEmbedComponent> {
           ),
           
           // 页面导航
-          if (!_isLoading && _error == null && _totalPages > 1) ...[
+          if (!_isLoading && _error == null && (_totalPages ?? 0) > 1) ...[
             IconButton(
               icon: const Icon(Icons.chevron_left),
-              onPressed: _currentPage > 1 ? _previousPage : null,
+              onPressed: () => _pdfController.goToPage(pageNumber: (_currentPage - 1).clamp(1, _totalPages!)),
               iconSize: 20,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
@@ -164,13 +150,13 @@ class _PdfEmbedComponentState extends State<PdfEmbedComponent> {
                 border: Border.all(color: Colors.grey.shade300),
               ),
               child: Text(
-                '$_currentPage/$_totalPages',
+                '$_currentPage/${_totalPages ?? 0}',
                 style: const TextStyle(fontSize: 12),
               ),
             ),
             IconButton(
               icon: const Icon(Icons.chevron_right),
-              onPressed: _currentPage < _totalPages ? _nextPage : null,
+              onPressed: () => _pdfController.goToPage(pageNumber: (_currentPage + 1).clamp(1, _totalPages!)),
               iconSize: 20,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
@@ -288,19 +274,21 @@ class _PdfEmbedComponentState extends State<PdfEmbedComponent> {
 
     return Container(
       color: Colors.grey.shade100,
-      child: pdfx.PdfView(
+      child: PdfViewer.file(
+        widget.pdfPath,
         controller: _pdfController,
-        scrollDirection: Axis.vertical,
-        onDocumentLoaded: (document) {
-          Log.debug('PDF document loaded in embed: ${document.pagesCount} pages');
-        },
-        onPageChanged: (page) {
-          setState(() {
-            _currentPage = page;
-          });
-        },
-        backgroundDecoration: BoxDecoration(
-          color: Colors.grey.shade200,
+        params: PdfViewerParams(
+          onViewerReady: (document, controller) {
+            setState(() {
+              _totalPages = document.pages.length;
+            });
+            Log.debug('PDF document loaded in embed: ${document.pages.length} pages');
+          },
+          onPageChanged: (pageNumber) {
+            setState(() {
+              _currentPage = pageNumber ?? 1;
+            });
+          },
         ),
       ),
     );
@@ -329,7 +317,7 @@ class _PdfEmbedComponentState extends State<PdfEmbedComponent> {
               ),
             ),
           ),
-          if (_totalPages > 0)
+          if ((_totalPages ?? 0) > 0)
             Text(
               '共 $_totalPages 页',
               style: TextStyle(
@@ -342,29 +330,10 @@ class _PdfEmbedComponentState extends State<PdfEmbedComponent> {
     );
   }
 
-  void _previousPage() {
-    if (_currentPage > 1) {
-      _pdfController.previousPage(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-      );
-    }
-  }
-
-  void _nextPage() {
-    if (_currentPage < _totalPages) {
-      _pdfController.nextPage(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-      );
-    }
-  }
-
   void _zoomIn() {
     setState(() {
       _zoom = (_zoom + 0.25).clamp(0.5, 3.0);
     });
-    // 注意：pdfx可能不直接支持缩放，这里只是状态管理
   }
 
   void _zoomOut() {
