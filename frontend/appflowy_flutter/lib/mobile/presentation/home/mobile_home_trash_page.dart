@@ -2,9 +2,13 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
+import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
+import 'package:appflowy/plugins/document/application/document_service.dart';
+import 'package:appflowy/plugins/document/presentation/editor_configuration.dart';
 import 'package:appflowy/plugins/trash/application/prelude.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/trash.pb.dart';
+import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -357,6 +361,18 @@ class _DeletedFilesListView extends StatelessWidget {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
+              onTap: () {
+                showMobileBottomSheet(
+                  context,
+                  showHeader: true,
+                  showCloseButton: true,
+                  showDragHandle: true,
+                  title: deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name,
+                  builder: (_) => _TrashPreviewBottomSheet(
+                    trashId: deletedFile.id,
+                  ),
+                );
+              },
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -404,6 +420,189 @@ class _DeletedFilesListView extends StatelessWidget {
         itemCount: objects.length,
       ),
     );
+  }
+}
+
+class _TrashPreviewBottomSheet extends StatefulWidget {
+  const _TrashPreviewBottomSheet({required this.trashId});
+
+  final String trashId;
+
+  @override
+  State<_TrashPreviewBottomSheet> createState() =>
+      _TrashPreviewBottomSheetState();
+}
+
+class _TrashPreviewBottomSheetState extends State<_TrashPreviewBottomSheet> {
+  Document? _document;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDocument();
+  }
+
+  Future<void> _loadDocument() async {
+    final documentService = DocumentService();
+    final result = await documentService.getDocument(documentId: widget.trashId);
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        result.fold(
+          (docData) {
+            _document = docData.toDocument();
+            if (_document == null) {
+              _errorMessage = '无法解析文档数据';
+            }
+          },
+          (error) => _errorMessage = error.msg,
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.7,
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+      child: _isLoading
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          : _errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const FlowySvg(
+                        FlowySvgs.m_home_search_icon_m,
+                        size: Size.square(46),
+                      ),
+                      const VSpace(16),
+                      FlowyText.medium(
+                        '预览加载失败',
+                        fontSize: 16,
+                        textAlign: TextAlign.center,
+                      ),
+                      const VSpace(8),
+                      FlowyText.regular(
+                        _errorMessage!,
+                        fontSize: 14,
+                        textAlign: TextAlign.center,
+                        color: Theme.of(context).hintColor,
+                      ),
+                    ],
+                  ),
+                )
+              : _document != null
+                  ? _buildDocumentContent(context)
+                  : Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const FlowySvg(
+                            FlowySvgs.m_empty_trash_xl,
+                            size: Size.square(46),
+                          ),
+                          const VSpace(16),
+                          FlowyText.medium(
+                            '暂无内容',
+                            fontSize: 16,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+    );
+  }
+
+  Widget _buildDocumentContent(BuildContext context) {
+    final root = _document!.root;
+    final children = root.children;
+
+    if (children.isEmpty ||
+        (children.length == 1 &&
+            (children.first.delta == null || children.first.delta!.isEmpty))) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const FlowySvg(
+              FlowySvgs.m_empty_trash_xl,
+              size: Size.square(46),
+            ),
+            const VSpace(16),
+            FlowyText.medium(
+              '暂无内容',
+              fontSize: 16,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: children.length,
+      itemBuilder: (context, index) {
+        return _buildNodeWidget(context, children[index]);
+      },
+    );
+  }
+
+  Widget _buildNodeWidget(BuildContext context, Node node) {
+    final delta = node.delta;
+    if (delta == null || delta.isEmpty) {
+      return const SizedBox(height: 8);
+    }
+
+    final textStyle = _getTextStyleForNode(context, node);
+    final plainText = delta.toPlainText();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: SelectableText(
+        plainText,
+        style: textStyle,
+      ),
+    );
+  }
+
+  TextStyle _getTextStyleForNode(BuildContext context, Node node) {
+    final baseStyle = TextStyle(
+      fontSize: 14,
+      height: 1.5,
+      color: Theme.of(context).colorScheme.onSurface,
+    );
+
+    final type = node.type;
+    if (type == ParagraphBlockKeys.type) {
+      // Check for heading attribute (heading blocks are stored as paragraph with heading attribute)
+      final heading = node.attributes['heading'];
+      if (heading != null) {
+        switch (heading) {
+          case 1:
+            return baseStyle.copyWith(fontSize: 24, fontWeight: FontWeight.bold);
+          case 2:
+            return baseStyle.copyWith(fontSize: 20, fontWeight: FontWeight.bold);
+          case 3:
+            return baseStyle.copyWith(fontSize: 18, fontWeight: FontWeight.bold);
+        }
+      }
+    }
+
+    return baseStyle;
   }
 }
 
