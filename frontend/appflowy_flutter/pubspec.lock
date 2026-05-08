@@ -705,14 +705,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "12.0.1"
-  extension:
-    dependency: transitive
-    description:
-      name: extension
-      sha256: be3a6b7f8adad2f6e2e8c63c895d19811fcf203e23466c6296267941d0ff4f24
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.6.0"
   fake_async:
     dependency: transitive
     description:
@@ -740,9 +732,10 @@ packages:
   file_picker:
     dependency: "direct overridden"
     description:
-      path: "packages/file_picker"
-      relative: true
-    source: path
+      name: file_picker
+      sha256: "57d9a1dd5063f85fa3107fb42d1faffda52fdc948cefd5fe5ea85267a5fc7343"
+      url: "https://pub.dev"
+    source: hosted
     version: "10.3.10"
   file_selector_linux:
     dependency: transitive
@@ -1938,14 +1931,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.103"
-  pdfx:
-    dependency: "direct main"
-    description:
-      name: pdfx
-      sha256: c0f70ab6691b7cde02c0c204763a1edb2689ce245ac34eb629c66273a6aa1caf
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.6.0"
   percent_indicator:
     dependency: "direct main"
     description:
@@ -2019,14 +2004,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.2"
-  photo_view:
-    dependency: transitive
-    description:
-      name: photo_view
-      sha256: "8036802a00bae2a78fc197af8a158e3e2f7b500561ed23b4c458107685e645bb"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.14.0"
   pixel_snap:
     dependency: transitive
     description:
