@@ -1,7 +1,6 @@
 import 'package:appflowy/mobile/presentation/home/tab/_round_underline_tab_indicator.dart';
 import 'package:appflowy/workspace/presentation/notifications/widgets/notification_tab_bar.dart';
 import 'package:flutter/material.dart';
-import 'package:reorderable_tabbar/reorderable_tabbar.dart';
 
 class MobileNotificationTabBar extends StatelessWidget {
   const MobileNotificationTabBar({
@@ -20,32 +19,33 @@ class MobileNotificationTabBar extends StatelessWidget {
     final baseStyle = Theme.of(context).textTheme.bodyMedium;
     final labelStyle = baseStyle?.copyWith(
       fontWeight: FontWeight.w500,
-      fontSize: 16.0,
-      height: 22.0 / 16.0,
+      fontSize: 14.0,
+      height: 22.0 / 14.0,
     );
     final unselectedLabelStyle = baseStyle?.copyWith(
       fontWeight: FontWeight.w400,
-      fontSize: 15.0,
-      height: 22.0 / 15.0,
+      fontSize: 13.0,
+      height: 22.0 / 13.0,
     );
 
     return Container(
       height: height,
-      padding: const EdgeInsets.only(left: 8.0),
-      child: ReorderableTabBar(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      child: TabBar(
         controller: tabController,
         tabs: tabs.map((e) => Tab(text: e.tr)).toList(),
         indicatorSize: TabBarIndicatorSize.label,
-        isScrollable: true,
+        isScrollable: false,
         labelStyle: labelStyle,
-        labelColor: baseStyle?.color,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 12.0),
+        labelColor: const Color(0xFFFF3800),
+        labelPadding: EdgeInsets.zero,
         unselectedLabelStyle: unselectedLabelStyle,
+        unselectedLabelColor: baseStyle?.color,
         overlayColor: WidgetStateProperty.all(Colors.transparent),
         indicator: const RoundUnderlineTabIndicator(
           width: 28.0,
           borderSide: BorderSide(
-            color: Color(0xFF00C8FF),
+            color: Color(0xFFFF3800),
             width: 3,
           ),
         ),

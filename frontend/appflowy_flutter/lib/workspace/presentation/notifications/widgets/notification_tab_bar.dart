@@ -76,30 +76,34 @@ class NotificationTabBar extends StatelessWidget {
 
     return Container(
       height: height,
-      padding: const EdgeInsets.only(left: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: BlocBuilder<ReminderBloc, ReminderState>(
         builder: (context, state) {
           return TabBar(
             controller: tabController,
             tabs: tabs.map((tabType) {
               final unreadCount = _getUnreadCountForTab(state.reminders, tabType);
-              return Stack(
-                children: [
-                  Tab(text: tabType.tr),
-                  if (unreadCount > 0)
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: _buildUnreadBadge(context, unreadCount),
-                    ),
-                ],
+              return SizedBox(
+                width: 72,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Tab(text: tabType.tr),
+                    if (unreadCount > 0)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: _buildUnreadBadge(context, unreadCount),
+                      ),
+                  ],
+                ),
               );
             }).toList(),
             indicatorSize: TabBarIndicatorSize.label,
-            // isScrollable: true,
+            isScrollable: false,
+            labelPadding: EdgeInsets.zero,
             labelStyle: labelStyle,
             labelColor: baseStyle?.color,
-            labelPadding: const EdgeInsets.only(right: 20),
             unselectedLabelStyle: unselectedLabelStyle,
             overlayColor: WidgetStateProperty.all(Colors.transparent),
             indicator: RoundUnderlineTabIndicator(
