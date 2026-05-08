@@ -1,6 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
+import 'package:appflowy/mobile/presentation/widgets/show_flowy_mobile_confirm_dialog.dart';
 import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
 import 'package:appflowy/plugins/document/application/document_data_pb_extension.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
@@ -384,13 +385,22 @@ class _DeletedFilesListView extends StatelessWidget {
                       color: theme.colorScheme.onSurface,
                     ),
                     onPressed: () {
-                      context
-                          .read<TrashBloc>()
-                          .add(TrashEvent.putback(deletedFile.id));
-                      Fluttertoast.showToast(
-                        msg:
-                            '${deletedFile.name} ${LocaleKeys.trash_mobile_isRestored.tr()}',
-                        gravity: ToastGravity.BOTTOM,
+                      showCupertinoConfirmDialog(
+                        context: context,
+                        title: '确认恢复',
+                        content:
+                            '确定要恢复 "${deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name}" 吗？',
+                        confirmText: '恢复',
+                        onConfirm: () {
+                          context
+                              .read<TrashBloc>()
+                              .add(TrashEvent.putback(deletedFile.id));
+                          Fluttertoast.showToast(
+                            msg:
+                                '${deletedFile.name} ${LocaleKeys.trash_mobile_isRestored.tr()}',
+                            gravity: ToastGravity.BOTTOM,
+                          );
+                        },
                       );
                     },
                   ),
@@ -402,13 +412,23 @@ class _DeletedFilesListView extends StatelessWidget {
                       color: theme.colorScheme.onSurface,
                     ),
                     onPressed: () {
-                      context
-                          .read<TrashBloc>()
-                          .add(TrashEvent.delete(deletedFile));
-                      Fluttertoast.showToast(
-                        msg:
-                            '${deletedFile.name} ${LocaleKeys.trash_mobile_isDeleted.tr()}',
-                        gravity: ToastGravity.BOTTOM,
+                      showCupertinoConfirmDialog(
+                        context: context,
+                        title: '确认永久删除',
+                        content:
+                            '确定要永久删除 "${deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name}" 吗？此操作无法撤销。',
+                        confirmText: '删除',
+                        isDestructive: true,
+                        onConfirm: () {
+                          context
+                              .read<TrashBloc>()
+                              .add(TrashEvent.delete(deletedFile));
+                          Fluttertoast.showToast(
+                            msg:
+                                '${deletedFile.name} ${LocaleKeys.trash_mobile_isDeleted.tr()}',
+                            gravity: ToastGravity.BOTTOM,
+                          );
+                        },
                       );
                     },
                   ),
