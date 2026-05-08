@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// A simple underline tab indicator with rounded ends.
 class RoundUnderlineTabIndicator extends Decoration {
   const RoundUnderlineTabIndicator({
     this.borderRadius,
