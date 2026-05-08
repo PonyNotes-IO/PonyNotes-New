@@ -109,46 +109,34 @@ class _MobileSpaceTabBarState extends State<MobileSpaceTabBar> {
 
     final currentIndex = tabController.index;
     final animationOffset = tabController.offset;
-    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontWeight: FontWeight.w500,
-          fontSize: 16.0,
-        );
 
-    // Dynamic indicator width based on current tab text width
     const labelPadding = 12.0;
     const containerPadding = 8.0;
 
-    // Calculate tab positions based on actual tab bar layout
     final tabWidths = <double>[];
     for (int i = 0; i < length; i++) {
-      final tabWidth = _getTabTextWidth(context, i) + labelPadding * 2;
+      final tabWidth = _getTabTextWidth(i) + labelPadding * 2;
       tabWidths.add(tabWidth);
     }
 
-    // Dynamic indicator width matches current tab width
     final indicatorWidth = tabWidths[currentIndex];
-    // Minimum width for visual balance
     final finalIndicatorWidth = indicatorWidth.clamp(40.0, 100.0);
 
-    // Calculate position for current tab
     double currentTabStart = containerPadding;
     for (int i = 0; i < currentIndex; i++) {
       currentTabStart += tabWidths[i];
     }
     final currentTabCenter = currentTabStart + tabWidths[currentIndex] / 2;
 
-    // Calculate position for next tab (for animation)
     double nextTabCenter = currentTabCenter;
     if (animationOffset != 0.0 && currentIndex < length - 1) {
       double nextTabStart = currentTabStart + tabWidths[currentIndex];
       nextTabCenter = nextTabStart + tabWidths[currentIndex + 1] / 2;
     }
 
-    // Interpolate between current and next tab position based on animation
     final indicatorPosition =
         currentTabCenter + (nextTabCenter - currentTabCenter) * animationOffset;
 
-    // Center the indicator under the tab
     final left = indicatorPosition - finalIndicatorWidth / 2;
 
     return Positioned(
@@ -162,7 +150,7 @@ class _MobileSpaceTabBarState extends State<MobileSpaceTabBar> {
     );
   }
 
-  double _getTabTextWidth(BuildContext context, int index) {
+  double _getTabTextWidth(int index) {
     if (index < 0 || index >= widget.tabs.length) {
       return 0;
     }
