@@ -243,6 +243,11 @@ class _HomePageNavigationBar extends StatelessWidget {
 
   final StatefulNavigationShell navigationShell;
 
+  bool _isNotificationActive(BuildContext context) {
+    return GoRouterState.of(context).uri.path ==
+        MobileNotificationsScreenV2.routeName;
+  }
+
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
@@ -290,7 +295,7 @@ class _HomePageNavigationBar extends StatelessWidget {
                 _NavBarItem(
                   icon: BottomNavigationBarItemType.notification.iconWidget,
                   activeIcon: BottomNavigationBarItemType.notification.activeIcon,
-                  isSelected: navigationShell.currentIndex == 3,
+                  isSelected: _isNotificationActive(context),
                   onTap: () => _onTap(context, 4),
                 ),
               ],
@@ -314,17 +319,19 @@ class _HomePageNavigationBar extends StatelessWidget {
       GoRouter.of(context).go(BottomNavigationBarItemType.askAI.routeName!);
       return;
     } else if (label == BottomNavigationBarItemType.notification.label) {
+      // Navigate to notification page via GoRouter (not the navigation shell), like Ask AI
+      GoRouter.of(context).go(BottomNavigationBarItemType.notification.routeName!);
       getIt<ReminderBloc>().add(const ReminderEvent.refresh());
+      return;
     }
     bottomNavigationBarItemType.value = label;
 
     // Map bottom bar index to router branch index
     // bottom bar: [home=0, search=1, askAI=2, add=3, notification=4]
-    // router: [home=0, search=1, favorite=2, notification=3]
+    // router: [home=0, search=1, favorite=2]
     final routerIndex = switch (bottomBarIndex) {
       0 => 0,
       1 => 1,
-      4 => 3,
       _ => navigationShell.currentIndex,
     };
     navigationShell.goBranch(

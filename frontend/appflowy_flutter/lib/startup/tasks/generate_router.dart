@@ -108,6 +108,7 @@ GoRouter generateRouter(Widget child) {
         _mobileBlockSettingsPageRoute(),
 
         // notifications
+        _mobileNotificationsScreenRoute(),
         _mobileNotificationMultiSelectPageRoute(),
 
         // invite members
@@ -159,9 +160,6 @@ StatefulShellRoute _mobileHomeScreenWithNavigationBarRoute() {
         case 2:
           name = MobileFavoriteScreen.routeName;
           break;
-        case 3:
-          name = MobileNotificationsScreenV2.routeName;
-          break;
       }
       return MaterialExtendedPage(
         child: MobileBottomNavigationBar(navigationShell: navigationShell),
@@ -204,19 +202,20 @@ StatefulShellRoute _mobileHomeScreenWithNavigationBarRoute() {
           ),
         ],
       ),
-      StatefulShellBranch(
-        routes: <RouteBase>[
-          GoRoute(
-            name: MobileNotificationsScreenV2.routeName,
-            path: MobileNotificationsScreenV2.routeName,
-            pageBuilder: (context, state) => MaterialExtendedPage(
-              child: const MobileNotificationsScreenV2(),
-              name: MobileNotificationsScreenV2.routeName,
-            ),
-          ),
-        ],
-      ),
     ],
+  );
+}
+
+GoRoute _mobileNotificationsScreenRoute() {
+  return GoRoute(
+    path: MobileNotificationsScreenV2.routeName,
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    pageBuilder: (context, state) {
+      return MaterialExtendedPage(
+        child: const MobileNotificationsScreenV2(),
+        name: MobileNotificationsScreenV2.routeName,
+      );
+    },
   );
 }
 

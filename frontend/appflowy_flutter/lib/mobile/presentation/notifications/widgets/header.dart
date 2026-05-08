@@ -1,32 +1,65 @@
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/notifications/mobile_notifications_screen.dart';
 import 'package:appflowy/mobile/presentation/notifications/widgets/settings_popup_menu.dart';
 import 'package:appflowy/mobile/presentation/presentation.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class MobileNotificationPageHeader extends StatelessWidget {
-  const MobileNotificationPageHeader({
-    super.key,
-  });
+  const MobileNotificationPageHeader({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 56),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const HSpace(18.0),
-          FlowyText(
-            LocaleKeys.settings_notifications_titles_notifications.tr(),
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
+    final afTheme = AppFlowyTheme.of(context);
+    final theme = Theme.of(context);
+
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.5),
+            width: 0.5,
           ),
-          const Spacer(),
-          const NotificationSettingsPopupMenu(),
-          const HSpace(16.0),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(BottomNavigationBarItemType.home.routeName!);
+              }
+            },
+            icon: FlowySvg(
+              FlowySvgs.mobile_return_s,
+              size: const Size(7, 12),
+              color: afTheme.iconColorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: const Text(
+              '消息通知',
+              textAlign: TextAlign.center,
+            ),
+          ),
+          IconButton(
+            onPressed: () {},
+            icon: FlowySvg(
+              FlowySvgs.three_dots_s,
+              size: const Size.square(24),
+              color: afTheme.iconColorScheme.primary,
+            ),
+          ),
         ],
       ),
     );
