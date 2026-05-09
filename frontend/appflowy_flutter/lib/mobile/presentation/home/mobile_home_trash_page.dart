@@ -51,7 +51,7 @@ class _MobileHomeTrashPageState extends State<MobileHomeTrashPage> {
           return Scaffold(
             appBar: AppBar(
               leading: const AppBarBackButton(),
-              title: Text(LocaleKeys.trash_text.tr()),
+              title: const Text('垃圾箱'),
               centerTitle: true,
               actions: [
                 state.objects.isEmpty
@@ -337,108 +337,128 @@ class _DeletedFilesListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
+    return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: ListView.builder(
-        itemBuilder: (context, index) {
-          final deletedFile = objects[index];
+      itemCount: objects.length,
+      separatorBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Divider(
+          height: 1,
+          color: theme.dividerColor,
+        ),
+      ),
+      itemBuilder: (context, index) {
+        final deletedFile = objects[index];
 
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: ListTile(
-              // TODO: show different file type icon, implement this feature after TrashPB has file type field
-              leading: FlowySvg(
-                FlowySvgs.document_s,
-                size: const Size.square(24),
-                color: theme.colorScheme.onSurface,
+        return InkWell(
+          onTap: () {
+            showMobileBottomSheet(
+              context,
+              showHeader: true,
+              showCloseButton: true,
+              showDragHandle: true,
+              title: deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name,
+              builder: (_) => _TrashPreviewBottomSheet(
+                trashId: deletedFile.id,
               ),
-              title: Text(
-                deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name,
-                style: theme.textTheme.labelMedium
-                    ?.copyWith(color: theme.colorScheme.onSurface),
-              ),
-              horizontalTitleGap: 0,
-              tileColor: theme.colorScheme.onSurface.withValues(alpha: 0.1),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              onTap: () {
-                showMobileBottomSheet(
-                  context,
-                  showHeader: true,
-                  showCloseButton: true,
-                  showDragHandle: true,
-                  title: deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name,
-                  builder: (_) => _TrashPreviewBottomSheet(
-                    trashId: deletedFile.id,
+            );
+          },
+          child: Container(
+            color: theme.colorScheme.surface,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                FlowySvg(
+                  FlowySvgs.document_s,
+                  size: const Size.square(24),
+                  color: theme.colorScheme.onSurface,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                ),
+                const SizedBox(width: 8),
+                _TrashItemActions(deletedFile: deletedFile),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TrashItemActions extends StatelessWidget {
+  const _TrashItemActions({required this.deletedFile});
+
+  final TrashPB deletedFile;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: () {
+            showCupertinoConfirmDialog(
+              context: context,
+              title: '确认恢复',
+              content:
+                  '确定要恢复 "${deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name}" 吗？',
+              confirmText: '恢复',
+              onConfirm: () {
+                context
+                    .read<TrashBloc>()
+                    .add(TrashEvent.putback(deletedFile.id));
+                Fluttertoast.showToast(
+                  msg:
+                      '${deletedFile.name} ${LocaleKeys.trash_mobile_isRestored.tr()}',
+                  gravity: ToastGravity.BOTTOM,
                 );
               },
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    splashRadius: 20,
-                    icon: FlowySvg(
-                      FlowySvgs.m_trash_restore_m,
-                      size: const Size.square(24),
-                      color: theme.colorScheme.onSurface,
-                    ),
-                    onPressed: () {
-                      showCupertinoConfirmDialog(
-                        context: context,
-                        title: '确认恢复',
-                        content:
-                            '确定要恢复 "${deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name}" 吗？',
-                        confirmText: '恢复',
-                        onConfirm: () {
-                          context
-                              .read<TrashBloc>()
-                              .add(TrashEvent.putback(deletedFile.id));
-                          Fluttertoast.showToast(
-                            msg:
-                                '${deletedFile.name} ${LocaleKeys.trash_mobile_isRestored.tr()}',
-                            gravity: ToastGravity.BOTTOM,
-                          );
-                        },
-                      );
-                    },
-                  ),
-                  IconButton(
-                    splashRadius: 20,
-                    icon: FlowySvg(
-                      FlowySvgs.m_trash_delete_m,
-                      size: const Size.square(24),
-                      color: theme.colorScheme.onSurface,
-                    ),
-                    onPressed: () {
-                      showCupertinoConfirmDialog(
-                        context: context,
-                        title: '确认永久删除',
-                        content:
-                            '确定要永久删除 "${deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name}" 吗？此操作无法撤销。',
-                        confirmText: '删除',
-                        isDestructive: true,
-                        onConfirm: () {
-                          context
-                              .read<TrashBloc>()
-                              .add(TrashEvent.delete(deletedFile));
-                          Fluttertoast.showToast(
-                            msg:
-                                '${deletedFile.name} ${LocaleKeys.trash_mobile_isDeleted.tr()}',
-                            gravity: ToastGravity.BOTTOM,
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-        itemCount: objects.length,
-      ),
+            );
+          },
+          child: FlowySvg(
+            FlowySvgs.m_trash_restore_m,
+            size: const Size.square(24),
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(width: 16),
+        GestureDetector(
+          onTap: () {
+            showCupertinoConfirmDialog(
+              context: context,
+              title: '确认永久删除',
+              content:
+                  '确定要永久删除 "${deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name}" 吗？此操作无法撤销。',
+              confirmText: '删除',
+              isDestructive: true,
+              onConfirm: () {
+                context.read<TrashBloc>().add(TrashEvent.delete(deletedFile));
+                Fluttertoast.showToast(
+                  msg:
+                      '${deletedFile.name} ${LocaleKeys.trash_mobile_isDeleted.tr()}',
+                  gravity: ToastGravity.BOTTOM,
+                );
+              },
+            );
+          },
+          child:         FlowySvg(
+          FlowySvgs.m_trash_delete_m,
+          size: const Size.square(24),
+          color: theme.colorScheme.onSurface,
+        ),
+        ),
+      ],
     );
   }
 }
