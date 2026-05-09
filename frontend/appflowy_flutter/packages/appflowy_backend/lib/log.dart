@@ -31,13 +31,14 @@ class Log {
     dynamic error,
     StackTrace? stackTrace,
   ]) {
+    // rust_log 函数在 ffi.dart 中已经处理了 iOS 兼容性问题
     // ALWAYS write to file through Rust (even in debug mode)
     // Add Flutter log marker prefix for easy identification in logs
     String levelPrefix = _getFlutterLevelPrefix(rustLevel);
     String formattedMessage = _formatMessageWithStackTrace(msg, stackTrace);
     String markedMessage = "$levelPrefix $formattedMessage";
     rust_log(rustLevel, toNativeUtf8(markedMessage));
-    
+
     // Also output to Flutter console in debug mode for convenience
     if (shared.enableFlutterLog && kDebugMode) {
       shared._logger.log(msg, logLevel: level, stackTrace: stackTrace);

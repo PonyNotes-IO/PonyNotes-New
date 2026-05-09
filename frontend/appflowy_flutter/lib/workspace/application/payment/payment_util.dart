@@ -80,8 +80,14 @@ class PaymentUtil {
   static const MethodChannel _channel =
       MethodChannel('com.ponynotes.payment/channel');
   
-  // In-App Purchase 实例
-  static final InAppPurchase _inAppPurchase = InAppPurchase.instance;
+  // In-App Purchase 实例 - 延迟初始化
+  static InAppPurchase? _inAppPurchase;
+  
+  // 获取 InAppPurchase 实例（延迟初始化）
+  static InAppPurchase get _inAppPurchaseInstance {
+    _inAppPurchase ??= InAppPurchase.instance;
+    return _inAppPurchase!;
+  }
   
   // 购买结果监听器（用于处理异步购买结果）
   static StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
@@ -137,7 +143,7 @@ class PaymentUtil {
 
     try {
       // 检查是否可用
-      final bool available = await _inAppPurchase.isAvailable();
+      final bool available = await _inAppPurchaseInstance.isAvailable();
       if (!available) {
         return PaymentResult.failure(message: 'App Store 内购不可用');
       }
@@ -154,7 +160,7 @@ class PaymentUtil {
 
       // 设置购买结果监听器（如果还没有设置）
       if (_purchaseSubscription == null) {
-        _purchaseSubscription = _inAppPurchase.purchaseStream.listen(
+        _purchaseSubscription = _inAppPurchaseInstance.purchaseStream.listen(
           (List<PurchaseDetails> purchaseDetailsList) {
             _handlePurchaseUpdates(purchaseDetailsList);
           },
@@ -171,7 +177,7 @@ class PaymentUtil {
 
       // 获取产品详情
       final ProductDetailsResponse productDetailResponse =
-          await _inAppPurchase.queryProductDetails({productId});
+          await _inAppPurchaseInstance.queryProductDetails({productId});
 
       if (productDetailResponse.error != null) {
         Log.error('Apple Pay: 查询产品失败: ${productDetailResponse.error}');
@@ -195,7 +201,7 @@ class PaymentUtil {
       // 发起购买（根据产品类型选择合适的方法）
       // 如果是订阅类产品，使用 buyNonConsumable 或 buyConsumable
       // 如果是订阅，应该使用 buyNonConsumable（非消耗性产品）
-      final bool purchaseInitiated = await _inAppPurchase.buyNonConsumable(
+      final bool purchaseInitiated = await _inAppPurchaseInstance.buyNonConsumable(
         purchaseParam: purchaseParam,
       );
 
@@ -233,18 +239,18 @@ class PaymentUtil {
         // 验证收据（应该在后端验证）
         // 这里只是标记为已完成，实际验证应该在后端进行
         if (purchaseDetails.pendingCompletePurchase) {
-          _inAppPurchase.completePurchase(purchaseDetails);
+          _inAppPurchaseInstance.completePurchase(purchaseDetails);
         }
       } else if (purchaseDetails.status == PurchaseStatus.error) {
         Log.error('Apple Pay: 购买失败: ${purchaseDetails.error}');
         // 处理错误
         if (purchaseDetails.pendingCompletePurchase) {
-          _inAppPurchase.completePurchase(purchaseDetails);
+          _inAppPurchaseInstance.completePurchase(purchaseDetails);
         }
       } else if (purchaseDetails.status == PurchaseStatus.canceled) {
         Log.info('Apple Pay: 用户取消了购买');
         if (purchaseDetails.pendingCompletePurchase) {
-          _inAppPurchase.completePurchase(purchaseDetails);
+          _inAppPurchaseInstance.completePurchase(purchaseDetails);
         }
       }
     }

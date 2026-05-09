@@ -35,11 +35,9 @@ DynamicLibrary _open() {
   throw UnsupportedError('This platform is not supported.');
 }
 
-/// iOS 静态库中的符号带有下划线前缀
+/// iOS 静态库中的符号带有下划线前缀，
+/// 但 DynamicLibrary.executable() 会自动处理符号查找，不需要手动添加前缀
 String _symbolName(String name) {
-  if (Platform.isIOS) {
-    return '_$name';
-  }
   return name;
 }
 
@@ -166,11 +164,52 @@ void rust_log(
   int level,
   Pointer<ffi.Utf8> data,
 ) {
-  _invoke_rust_log(level, data);
+  // 非 iOS 平台：直接调用 Rust 日志
+  if (!Platform.isIOS) {
+    _invokeRustLog(level, data);
+    return;
+  }
+  
+  // iOS 平台：延迟初始化和检测
+  _invokeRustLog(level, data);
 }
 
-final _invoke_rust_log_Dart _invoke_rust_log = _dart_ffi_lib
-    .lookupFunction<_invoke_rust_log_C, _invoke_rust_log_Dart>(_symbolName('rust_log'));
+/// iOS 平台上 Rust 日志函数可用性（null 表示未检查）
+bool? _isIOSRustLogAvailable;
+
+/// 延迟初始化的 Rust 日志函数指针
+_invoke_rust_log_Dart? _cachedInvokeRustLog;
+
+void _invokeRustLog(int level, Pointer<ffi.Utf8> data) {
+  if (_cachedInvokeRustLog == null) {
+    _cachedInvokeRustLog = _initRustLogFunction();
+  }
+  
+  final func = _cachedInvokeRustLog;
+  if (func != null) {
+    func(level, data);
+  }
+}
+
+/// 初始化 Rust 日志函数指针（延迟初始化）
+_invoke_rust_log_Dart? _initRustLogFunction() {
+  if (!Platform.isIOS) {
+    // 非 iOS 平台直接查找
+    return _dart_ffi_lib.lookupFunction<_invoke_rust_log_C, _invoke_rust_log_Dart>(
+      _symbolName('rust_log'),
+    );
+  }
+  
+  // iOS 平台：尝试查找符号
+  try {
+    return _dart_ffi_lib.lookupFunction<_invoke_rust_log_C, _invoke_rust_log_Dart>('rust_log');
+  } catch (e) {
+    // iOS 上 Rust 日志不可用，记录警告
+    return null;
+  }
+}
+
+// rust_log 函数指针类型定义
 typedef _invoke_rust_log_C = Void Function(
   Int64 level,
   Pointer<ffi.Utf8> data,

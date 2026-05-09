@@ -35,7 +35,7 @@ dependencies:
   # BitsDojo Window for Windows
   bitsdojo_window: ^0.1.6
   bloc: ^9.0.0
-  cached_network_image: ^3.3.0
+  cached_network_image: ^3.4.1
   calendar_view:
     git:
       url: https://github.com/Xazin/flutter_calendar_view
@@ -104,10 +104,10 @@ dependencies:
 
   logger: ^2.6.2
   #  third party packages
-  intl: ^0.19.0
+  intl: ^0.20.2
   json_annotation: ^4.9.0
   keyboard_height_plugin: ^0.1.5
-  leak_tracker: ^10.0.0
+  leak_tracker: ^11.0.1
   linked_scroll_controller: ^0.2.0
 
   # Notifications
@@ -128,7 +128,7 @@ dependencies:
   pdf: ^3.11.1
   screenshot: ^3.0.0  # ✅ 用于手写笔记导出PDF时截图
   syncfusion_flutter_pdf: ^27.2.5
-  pdfrx: ^1.0.103  # ✅ 保持兼容版本，在现有API基础上优化性能
+  pdfrx: ^1.3.5
   percent_indicator: 4.2.3
   permission_handler: ^11.3.1
   protobuf: ^4.1.0
@@ -165,14 +165,14 @@ dependencies:
   talker_bloc_logger: ^4.8.1
   talker: ^4.7.1
 
-  analyzer: 6.11.0
+  analyzer: ^6.4.1
   media_kit: ^1.2.6
-  media_kit_video: ^1.3.1
+  media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7 # Native video dependencies.
-  media_kit_libs_android_video: ^1.0.9 # Android specific native video dependencies.
-  media_kit_libs_windows_video: ^1.0.9
-  media_kit_libs_ios_video: ^1.1.4
-  media_kit_libs_macos_video: 1.1.4
+#  media_kit_libs_android_video: ^1.3.7 # Android specific native video dependencies.
+#  media_kit_libs_windows_video: ^1.0.9
+#  media_kit_libs_ios_video: ^1.1.4
+#  media_kit_libs_macos_video: 1.1.4
   # Add irondash_engine_context explicitly to ensure native libraries are included
   irondash_engine_context: 0.5.4
   ffi: ^2.1.0
@@ -208,19 +208,15 @@ dev_dependencies:
   url_launcher_platform_interface: any
 
 dependency_overrides:
+  intl: ^0.20.2
   http: ^1.0.0
+  value_layout_builder: ^0.5.0
   device_info_plus: ^11.2.2
-  flutter_math_fork:
-    git:
-      url: https://github.com/PonyNotes-IO/flutter_math_fixed.git
-      ref: main
+  flutter_math_fork: ^0.7.3
   
-  # Fix flutter_quill compatibility issues with Flutter 3.27.4
-  quill_native_bridge_windows: 0.0.1
-  quill_native_bridge: 11.0.0
-  
-  # Fix volume_controller compatibility with Flutter 3.27.4
-  volume_controller: 3.3.1
+  # 使用官方兼容版本
+  quill_native_bridge: ^11.1.0
+  volume_controller: ^3.4.0
 
   url_protocol:
     git:
@@ -254,11 +250,7 @@ dependency_overrides:
 
   crypto: ^3.0.3
 
-  flutter_cache_manager:
-    git:
-      url: https://github.com/LucasXu0/flutter_cache_manager.git
-      commit: fbab857b1b1d209240a146d32f496379b9f62276
-      path: flutter_cache_manager
+  flutter_cache_manager: ^3.3.1
 
   flutter_sticky_header: ^0.7.0
 
@@ -291,13 +283,7 @@ dependency_overrides:
       url: https://github.com/LucasXu0/unsplash_client.git
       ref: a8411fc
 
-  # https://github.com/LucasXu0/flutter-permission-handler/commit/faef1c97970de29995642bfae61b884591798684
-  # Prevent the location from being accessed continuously on Windows
-  permission_handler:
-    git:
-      url: https://github.com/LucasXu0/flutter-permission-handler.git
-      path: permission_handler
-      ref: faef1c9
+  permission_handler: ^11.3.1
 
 flutter:
   generate: true

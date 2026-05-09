@@ -11,6 +11,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/src/material/input_decorator.dart';
 
 const double _kMinimumWidth = 112.0;
 
@@ -668,8 +669,8 @@ class _AFDropdownMenuState<T> extends State<AFDropdownMenu<T>> {
     }
     final InputDecorationTheme effectiveInputDecorationTheme =
         widget.inputDecorationTheme ??
-            theme.inputDecorationTheme ??
-            defaults.inputDecorationTheme!;
+            (theme.inputDecorationTheme as InputDecorationTheme?) ??
+            (defaults.inputDecorationTheme! as InputDecorationTheme);
 
     final MouseCursor effectiveMouseCursor =
         canRequestFocus() ? SystemMouseCursors.text : SystemMouseCursors.click;
@@ -1059,7 +1060,7 @@ class _DropdownMenuDefaultsM3 extends DropdownMenuThemeData {
   }
 
   @override
-  InputDecorationTheme get inputDecorationTheme {
-    return const InputDecorationTheme(border: OutlineInputBorder());
+  InputDecorationThemeData? get inputDecorationTheme {
+    return const InputDecorationThemeData(border: OutlineInputBorder());
   }
 }
