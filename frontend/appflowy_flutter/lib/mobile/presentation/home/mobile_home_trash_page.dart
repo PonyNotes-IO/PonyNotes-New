@@ -105,6 +105,7 @@ class _TrashDialogButton extends StatelessWidget {
       onTap: onTap,
       child: Container(
         height: 30,
+        width: double.infinity,
         decoration: BoxDecoration(
           color: isPrimary
               ? (isDestructive
@@ -185,21 +186,17 @@ class _MobileHomeTrashPageState extends State<MobileHomeTrashPage> {
                             showDragHandle: true,
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                             title: LocaleKeys.trash_mobile_actions.tr(),
-                            builder: (_) => Row(
+                            builder: (_) => Column(
                               children: [
-                                Expanded(
-                                  child: _TrashActionAllButton(
-                                    trashBloc: trashBloc,
-                                  ),
+                                _TrashActionAllButton(
+                                  trashBloc: trashBloc,
                                 ),
                                 const SizedBox(
-                                  width: 16,
+                                  height: 12,
                                 ),
-                                Expanded(
-                                  child: _TrashActionAllButton(
-                                    trashBloc: trashBloc,
-                                    type: _TrashActionType.restoreAll,
-                                  ),
+                                _TrashActionAllButton(
+                                  trashBloc: trashBloc,
+                                  type: _TrashActionType.restoreAll,
                                 ),
                               ],
                             ),

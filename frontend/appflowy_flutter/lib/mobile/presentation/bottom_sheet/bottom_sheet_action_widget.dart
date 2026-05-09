@@ -36,21 +36,31 @@ class BottomSheetActionWidget extends StatelessWidget {
       );
     }
 
-    return OutlinedButton.icon(
-      icon: FlowySvg(
-        svg!,
-        size: const Size.square(22.0),
-        color: iconColor,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.transparent,
       ),
-      label: FlowyText(
-        text,
-        overflow: TextOverflow.ellipsis,
+      child: OutlinedButton.icon(
+        icon: FlowySvg(
+          svg!,
+          size: const Size.square(22.0),
+          color: iconColor,
+        ),
+        label: FlowyText(
+          text,
+          overflow: TextOverflow.ellipsis,
+        ),
+        style: Theme.of(context)
+            .outlinedButtonTheme
+            .style
+            ?.copyWith(
+              alignment: Alignment.centerLeft,
+              minimumSize: WidgetStateProperty.all(
+                const Size(double.infinity, 30),
+              ),
+            ),
+        onPressed: onTap,
       ),
-      style: Theme.of(context)
-          .outlinedButtonTheme
-          .style
-          ?.copyWith(alignment: Alignment.centerLeft),
-      onPressed: onTap,
     );
   }
 }

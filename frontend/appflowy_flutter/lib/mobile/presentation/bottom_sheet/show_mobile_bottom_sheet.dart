@@ -253,7 +253,7 @@ class BottomSheetHeader extends StatelessWidget {
               ),
             if (showCloseButton)
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: Alignment.centerRight,
                 child: BottomSheetCloseButton(
                   onTap: onClose,
                 ),
