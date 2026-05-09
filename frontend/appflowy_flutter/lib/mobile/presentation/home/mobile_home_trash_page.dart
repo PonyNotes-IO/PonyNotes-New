@@ -20,7 +20,7 @@ import 'package:go_router/go_router.dart';
 
 Future<T?> showTrashConfirmDialog<T>({
   required BuildContext context,
-  required String title,
+  String? title,
   String? content,
   required String confirmText,
   String cancelText = '取消',
@@ -30,68 +30,50 @@ Future<T?> showTrashConfirmDialog<T>({
   return showDialog<T>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.25),
-    builder: (dialogContext) {
+      builder: (dialogContext) {
       final theme = Theme.of(context);
       return Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (isDestructive)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 16),
-                  child: FlowySvg(
-                    FlowySvgs.m_trash_delete_m,
-                    size: Size.square(32),
-                    color: Color(0xFFE53935),
-                  ),
-                )
-              else
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 16),
-                  child: FlowySvg(
-                    FlowySvgs.m_trash_restore_m,
-                    size: Size.square(32),
-                  ),
-                ),
-              FlowyText.medium(
-                title,
-                fontSize: 16,
-                textAlign: TextAlign.center,
-                color: theme.colorScheme.onSurface,
-              ),
-              if (content != null) ...[
-                const SizedBox(height: 8),
-                FlowyText.regular(
-                  content,
-                  fontSize: 14,
+              if (title != null) ...[
+                FlowyText.medium(
+                  title,
+                  fontSize: 16,
                   textAlign: TextAlign.center,
-                  color: theme.hintColor,
-                  maxLines: 10,
+                  color: theme.colorScheme.onSurface,
                 ),
               ],
-              const SizedBox(height: 24),
-              Row(
+              if (content != null) ...[
+                if (title != null) const SizedBox(height: 4),
+                FlowyText(
+                  content,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  textAlign: TextAlign.center,
+                  maxLines: 20,
+                ),
+              ],
+              const SizedBox(height: 12),
+              Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: _TrashDialogButton(
-                      text: cancelText,
-                      onTap: () => Navigator.of(dialogContext).pop(),
-                    ),
+                  _TrashDialogButton(
+                    text: confirmText,
+                    isPrimary: true,
+                    isDestructive: isDestructive,
+                    onTap: () {
+                      Navigator.of(dialogContext).pop();
+                      onConfirm?.call();
+                    },
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _TrashDialogButton(
-                      text: confirmText,
-                      isPrimary: true,
-                      isDestructive: isDestructive,
-                      onTap: () {
-                        Navigator.of(dialogContext).pop();
-                        onConfirm?.call();
-                      },
-                    ),
+                  const SizedBox(height: 8),
+                  _TrashDialogButton(
+                    text: cancelText,
+                    onTap: () => Navigator.of(dialogContext).pop(),
                   ),
                 ],
               ),
@@ -122,21 +104,30 @@ class _TrashDialogButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 44,
+        height: 30,
         decoration: BoxDecoration(
           color: isPrimary
               ? (isDestructive
-                  ? const Color(0xFFE53935)
-                  : theme.colorScheme.primary)
-              : const Color(0xFFF1F1F1),
+                  ? const Color(0xFFFFEBEE)
+                  : const Color(0xFFE8F5E9))
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isPrimary
+                ? (isDestructive
+                    ? const Color(0xFFC62828)
+                    : const Color(0xFF2E7D32))
+                : Colors.black,
+          ),
         ),
         alignment: Alignment.center,
         child: FlowyText.medium(
           text,
-          fontSize: 14,
+          fontSize: 12,
           color: isPrimary
-              ? Colors.white
+              ? (isDestructive
+                  ? const Color(0xFFC62828)
+                  : const Color(0xFF2E7D32))
               : theme.colorScheme.onSurface,
         ),
       ),
@@ -536,10 +527,8 @@ class _TrashItemActions extends StatelessWidget {
           onTap: () {
             showTrashConfirmDialog(
               context: context,
-              title: '确认恢复',
-              content:
-                  '确定要恢复 "${deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name}" 吗？',
-              confirmText: '恢复',
+              content: '确定要从垃圾箱恢复此页面吗？',
+              confirmText: '恢复页面',
               onConfirm: () {
                 context
                     .read<TrashBloc>()
@@ -563,10 +552,8 @@ class _TrashItemActions extends StatelessWidget {
           onTap: () {
             showTrashConfirmDialog(
               context: context,
-              title: '确认永久删除',
-              content:
-                  '确定要永久删除 "${deletedFile.name.isEmpty ? '无标题笔记' : deletedFile.name}" 吗？此操作无法撤销。',
-              confirmText: '删除',
+              content: '确定要从垃圾箱删除此页面吗？',
+              confirmText: '删除页面',
               isDestructive: true,
               onConfirm: () {
                 context.read<TrashBloc>().add(TrashEvent.delete(deletedFile));
