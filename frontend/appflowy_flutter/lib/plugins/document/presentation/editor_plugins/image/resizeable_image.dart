@@ -96,9 +96,6 @@ class _ResizableImageState extends State<ResizableImage> {
 
   late double imageWidth;
   double? imageHeight;
-  double? _computedHeight;
-  bool _hasSetInitialHeight = false;
-
   @visibleForTesting
   bool onFocus = false;
 
@@ -115,42 +112,24 @@ class _ResizableImageState extends State<ResizableImage> {
         context.read<DocumentBloc>().state.userProfilePB;
   }
 
-  void _ensureInitialHeight() {
-    if (!_hasSetInitialHeight && imageHeight == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _updateHeightFromRenderBox();
-      });
-    }
-  }
-
-  void _updateHeightFromRenderBox() {
-    if (!_hasSetInitialHeight && imageHeight == null && mounted) {
-      final renderBox =
-          _imageKey.currentContext?.findRenderObject() as RenderBox?;
+  void _measureHeightFromRenderBox() {
+    if (imageHeight == null) {
+      final renderBox = _imageKey.currentContext?.findRenderObject() as RenderBox?;
       if (renderBox != null && renderBox.hasSize && renderBox.size.height > 0) {
-        setState(() {
-          _computedHeight = renderBox.size.height;
-          _hasSetInitialHeight = true;
-        });
+        setState(() => imageHeight = renderBox.size.height);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    _ensureInitialHeight();
-
     return Align(
       alignment: widget.alignment,
       child: SizedBox(
         width: max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX),
-        height: _computedHeight != null
-            ? max(_kImageBlockComponentMinHeight,
-                _computedHeight! - moveDistanceY)
-            : imageHeight != null
-                ? max(_kImageBlockComponentMinHeight,
-                    imageHeight! - moveDistanceY)
-                : null,
+        height: imageHeight != null
+            ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
+            : null,
         child: MouseRegion(
           onEnter: (_) => setState(() => onFocus = true),
           onExit: (_) => setState(() => onFocus = false),
@@ -170,11 +149,9 @@ class _ResizableImageState extends State<ResizableImage> {
     Widget child;
     final src = widget.src;
     final currentWidth = max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
-    final currentHeight = _computedHeight != null
-        ? max(_kImageBlockComponentMinHeight, _computedHeight! - moveDistanceY)
-        : imageHeight != null
-            ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
-            : null;
+    final currentHeight = imageHeight != null
+        ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
+        : null;
 
     if (isURL(src)) {
       _cacheImage = FlowyNetworkImage(
@@ -217,13 +194,7 @@ class _ResizableImageState extends State<ResizableImage> {
       child = _cacheImage!;
     } else {
       // load local file
-      final currentWidth = max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
-      final currentHeight = _computedHeight != null
-          ? max(_kImageBlockComponentMinHeight, _computedHeight! - moveDistanceY)
-          : imageHeight != null
-              ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
-              : null;
-      _cacheImage ??= Image.file(
+      _cacheImage = Image.file(
         File(src),
         width: currentWidth,
         height: currentHeight,
@@ -401,7 +372,7 @@ class _ResizableImageState extends State<ResizableImage> {
                       imageWidth = newWidth;
                       initialOffsetX = 0;
                       moveDistanceX = 0;
-                      widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+                      widget.onResize(imageWidth, imageHeight);
                     };
                   },
                 ),
@@ -413,6 +384,7 @@ class _ResizableImageState extends State<ResizableImage> {
                   (_ImmediateVerticalDragGestureRecognizer instance) {
                     instance.onStart = (details) {
                       initialOffsetY = details.globalPosition.dy;
+                      _measureHeightFromRenderBox();
                     };
                     instance.onUpdate = (details) {
                       if (onUpdateY != null) {
@@ -421,20 +393,15 @@ class _ResizableImageState extends State<ResizableImage> {
                       }
                     };
                     instance.onEnd = (_) {
-                      final currentHeight = _computedHeight ?? imageHeight;
-                      if (currentHeight != null) {
-                        final newHeight = max(
-                            _kImageBlockComponentMinHeight,
-                            currentHeight - moveDistanceY);
-                        if (_computedHeight != null) {
-                          _computedHeight = newHeight;
-                        } else {
-                          imageHeight = newHeight;
-                        }
+                      if (imageHeight != null) {
+                        imageHeight = max(
+                          _kImageBlockComponentMinHeight,
+                          imageHeight! - moveDistanceY,
+                        );
                       }
                       initialOffsetY = 0;
                       moveDistanceY = 0;
-                      widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+                      widget.onResize(imageWidth, imageHeight);
                     };
                   },
                 ),
@@ -478,28 +445,20 @@ class _ResizableImageState extends State<ResizableImage> {
   }
 
   void _commitCornerResize() {
-    final newWidth = max(
-        _kImageBlockComponentMinWidth,
-        imageWidth - moveDistanceX);
-    imageWidth = newWidth;
+    imageWidth = max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
 
-    final currentHeight = _computedHeight ?? imageHeight;
-    if (currentHeight != null) {
-      final newHeight = max(
-          _kImageBlockComponentMinHeight,
-          currentHeight - moveDistanceY);
-      if (_computedHeight != null) {
-        _computedHeight = newHeight;
-      } else {
-        imageHeight = newHeight;
-      }
+    if (imageHeight != null) {
+      imageHeight = max(
+        _kImageBlockComponentMinHeight,
+        imageHeight! - moveDistanceY,
+      );
     }
 
     initialOffsetX = 0;
     initialOffsetY = 0;
     moveDistanceX = 0;
     moveDistanceY = 0;
-    widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+    widget.onResize(imageWidth, imageHeight);
   }
 
   Widget _buildCornerGesture(
@@ -530,6 +489,7 @@ class _ResizableImageState extends State<ResizableImage> {
               instance.onStart = (_) {
                 _cornerAccumulatedX = 0;
                 _cornerAccumulatedY = 0;
+                _measureHeightFromRenderBox();
               };
               instance.onUpdate = (details) {
                 _cornerAccumulatedX += details.delta.dx;
