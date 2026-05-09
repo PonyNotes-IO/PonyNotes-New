@@ -18,6 +18,132 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:go_router/go_router.dart';
 
+Future<T?> showTrashConfirmDialog<T>({
+  required BuildContext context,
+  required String title,
+  String? content,
+  required String confirmText,
+  String cancelText = '取消',
+  bool isDestructive = false,
+  VoidCallback? onConfirm,
+}) {
+  return showDialog<T>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.25),
+    builder: (dialogContext) {
+      final theme = Theme.of(context);
+      return Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isDestructive)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: FlowySvg(
+                    FlowySvgs.m_trash_delete_m,
+                    size: Size.square(32),
+                    color: Color(0xFFE53935),
+                  ),
+                )
+              else
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 16),
+                  child: FlowySvg(
+                    FlowySvgs.m_trash_restore_m,
+                    size: Size.square(32),
+                  ),
+                ),
+              FlowyText.medium(
+                title,
+                fontSize: 16,
+                textAlign: TextAlign.center,
+                color: theme.colorScheme.onSurface,
+              ),
+              if (content != null) ...[
+                const SizedBox(height: 8),
+                FlowyText.regular(
+                  content,
+                  fontSize: 14,
+                  textAlign: TextAlign.center,
+                  color: theme.hintColor,
+                  maxLines: 10,
+                ),
+              ],
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: _TrashDialogButton(
+                      text: cancelText,
+                      onTap: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _TrashDialogButton(
+                      text: confirmText,
+                      isPrimary: true,
+                      isDestructive: isDestructive,
+                      onTap: () {
+                        Navigator.of(dialogContext).pop();
+                        onConfirm?.call();
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _TrashDialogButton extends StatelessWidget {
+  const _TrashDialogButton({
+    required this.text,
+    required this.onTap,
+    this.isPrimary = false,
+    this.isDestructive = false,
+  });
+
+  final String text;
+  final VoidCallback onTap;
+  final bool isPrimary;
+  final bool isDestructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: isPrimary
+              ? (isDestructive
+                  ? const Color(0xFFE53935)
+                  : theme.colorScheme.primary)
+              : const Color(0xFFF1F1F1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        alignment: Alignment.center,
+        child: FlowyText.medium(
+          text,
+          fontSize: 14,
+          color: isPrimary
+              ? Colors.white
+              : theme.colorScheme.onSurface,
+        ),
+      ),
+    );
+  }
+}
+
 class MobileHomeTrashPage extends StatefulWidget {
   const MobileHomeTrashPage({super.key});
 
@@ -408,7 +534,7 @@ class _TrashItemActions extends StatelessWidget {
       children: [
         GestureDetector(
           onTap: () {
-            showCupertinoConfirmDialog(
+            showTrashConfirmDialog(
               context: context,
               title: '确认恢复',
               content:
@@ -435,7 +561,7 @@ class _TrashItemActions extends StatelessWidget {
         const SizedBox(width: 16),
         GestureDetector(
           onTap: () {
-            showCupertinoConfirmDialog(
+            showTrashConfirmDialog(
               context: context,
               title: '确认永久删除',
               content:
