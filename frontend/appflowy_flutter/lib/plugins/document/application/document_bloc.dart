@@ -25,6 +25,7 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart'
@@ -253,6 +254,23 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
   /// Retry fetching document state in background when initial fetch failed.
   Future<void> _startRetryFetch(FlowyError? initialError) async {
+    // 当 collab 不存在时（如协作区共享表格的行文档从未被创建），先创建空文档再重试
+    if (initialError?.code == ErrorCode.RecordNotFound) {
+      Log.info(
+        '[DocumentBloc] Collab not found for documentId: $documentId, attempting to create empty document',
+      );
+      final payload = CreateDocumentPayloadPB()..documentId = documentId;
+      final createResult = await DocumentEventCreateDocument(payload).send();
+      createResult.fold(
+        (_) => Log.info(
+          '[DocumentBloc] Created empty document for documentId: $documentId',
+        ),
+        (err) => Log.error(
+          '[DocumentBloc] Failed to create document for documentId: $documentId, error: $err',
+        ),
+      );
+    }
+
     const int maxAttempts = 12;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       // exponential-ish backoff: first quick, then longer
