@@ -194,8 +194,8 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
 
   void _move(ViewPB from, ViewPB to) {
     if (position == DraggableHoverPosition.center &&
-        to.layout != ViewLayoutPB.Document) {
-      // not support moving into a database
+        to.layout.isDatabaseView) {
+      // not support moving into a database view (Grid/Board/Calendar)
       return;
     }
 
