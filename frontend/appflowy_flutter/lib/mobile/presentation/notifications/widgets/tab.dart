@@ -11,6 +11,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'mobile_empty_notification.dart';
 
 class NotificationTab extends StatefulWidget {
   const NotificationTab({
@@ -38,10 +39,7 @@ class _NotificationTabState extends State<NotificationTab>
         final reminders = _filterReminders(state.reminders);
 
         if (reminders.isEmpty) {
-          // add refresh indicator to the empty notification.
-          return EmptyNotification(
-            type: widget.tabType,
-          );
+          return const MobileEmptyNotification();
         }
 
         final child = ListView.separated(
