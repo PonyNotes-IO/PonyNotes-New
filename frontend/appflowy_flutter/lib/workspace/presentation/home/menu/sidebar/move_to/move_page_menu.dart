@@ -4,6 +4,7 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_search_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_widget.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -91,18 +92,31 @@ class _MovePageMenuState extends State<MovePageMenu> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SpacePopup(
-          useIntrinsicWidth: false,
-          expand: true,
+        // 空间根目录行：直接可点击，移动到空间根目录
+        SizedBox(
           height: 30,
-          showCreateButton: false,
-          child: FlowyTooltip(
-            message: LocaleKeys.space_switchSpace.tr(),
-            child: CurrentSpace(
-              // move the page to current space
-              onTapBlankArea: () => widget.onSelected(space, space),
-              space: space,
+          child: FlowyButton(
+            margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+            text: Row(
+              children: [
+                SpaceIcon(
+                  dimension: 20,
+                  space: space,
+                  svgSize: 11,
+                  cornerRadius: 6.0,
+                ),
+                const HSpace(8),
+                Flexible(
+                  child: FlowyText.medium(
+                    space.name,
+                    fontSize: 14.0,
+                    figmaLineHeight: 18.0,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
+            onTap: () => widget.onSelected(space, space),
           ),
         ),
         Expanded(
@@ -117,7 +131,8 @@ class _MovePageMenuState extends State<MovePageMenu> {
                 if (_shouldIgnoreView(view, widget.sourceView)) {
                   return IgnoreViewType.hide;
                 }
-                if (view.layout != ViewLayoutPB.Document) {
+                // 仅禁用数据库视图（Grid/Board/Calendar），允许 Document/Folder/Notebook
+                if (view.layout.isDatabaseView) {
                   return IgnoreViewType.disable;
                 }
                 return IgnoreViewType.none;

@@ -85,11 +85,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
       },
       onAcceptWithDetails: (details) {
         final data = details.data;
-        // 只在中心位置执行移动操作
-        if (position == DraggableHoverPosition.center) {
-          _move(data, widget.view);
-        }
-        // 确保接受后清理位置状态
+        _move(data, widget.view);
         _updatePosition(DraggableHoverPosition.none);
       },
       feedback: IntrinsicWidth(
@@ -280,19 +276,23 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
   }
 
   DraggableHoverPosition _computeHoverPosition(Offset offset, Size size) {
-    // 只返回 center 位置，不允许在列表中间位置拖拽
-    // 这样可以确保拖拽只在列表项上起作用
+    final y = offset.dy;
+    final height = size.height;
+    // top 位置仅对列表第一项有效（prevViewId=null 表示插入到父级首位）
+    if (widget.isFirstChild && y <= height * 0.25) {
+      return DraggableHoverPosition.top;
+    }
+    // 悬停在下方 45% 区域时，作为该项的下一个兄弟插入
+    if (y >= height * 0.55) {
+      return DraggableHoverPosition.bottom;
+    }
     return DraggableHoverPosition.center;
   }
 
   bool _shouldAccept(ViewPB data, DraggableHoverPosition position) {
-    // 只接受中心位置的拖拽，不允许 top 和 bottom
-    if (position != DraggableHoverPosition.center) {
-      return false;
-    }
-
-    // could not move the view to a database
-    if (widget.view.layout.isDatabaseView) {
+    // center 位置不能拖入数据库视图（Grid/Board/Calendar），但 top/bottom 可以作为同级
+    if (position == DraggableHoverPosition.center &&
+        widget.view.layout.isDatabaseView) {
       return false;
     }
 
