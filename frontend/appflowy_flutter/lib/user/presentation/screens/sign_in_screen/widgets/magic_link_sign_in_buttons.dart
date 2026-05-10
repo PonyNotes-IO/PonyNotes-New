@@ -1,5 +1,6 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/slider_captcha.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/size.dart';
@@ -21,6 +22,10 @@ class _SignInWithMagicLinkButtonsState
     extends State<SignInWithMagicLinkButtons> {
   final controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+
+  bool _sliderVerified = false;
+  // ignore: prefer_final_fields — 在 setState 中会重新赋值用于重置滑块
+  Object _sliderResetKey = Object();
 
   @override
   void dispose() {
@@ -50,12 +55,18 @@ class _SignInWithMagicLinkButtonsState
                   fontSize: 14.0,
                 ),
             keyboardType: TextInputType.emailAddress,
-            onSubmitted: (_) => _sendMagicLink(context, controller.text),
+            onSubmitted: (_) => _focusNode.unfocus(),
             onTapOutside: (_) => _focusNode.unfocus(),
           ),
         ),
         const VSpace(12),
+        SliderCaptcha(
+          resetKey: _sliderResetKey,
+          onVerified: () => setState(() => _sliderVerified = true),
+        ),
+        const VSpace(12),
         _ConfirmButton(
+          enabled: _sliderVerified,
           onTap: () => _sendMagicLink(context, controller.text),
         ),
       ],
@@ -75,6 +86,12 @@ class _SignInWithMagicLinkButtonsState
         .read<SignInBloc>()
         .add(SignInEvent.signInWithMagicLink(email: email));
 
+    // 发送成功后重置滑块，防止用户在同一会话中无需再次验证就能重发
+    setState(() {
+      _sliderVerified = false;
+      _sliderResetKey = Object();
+    });
+
     showConfirmDialog(
       context: context,
       title: LocaleKeys.signIn_magicLinkSent.tr(),
@@ -86,9 +103,11 @@ class _SignInWithMagicLinkButtonsState
 class _ConfirmButton extends StatelessWidget {
   const _ConfirmButton({
     required this.onTap,
+    this.enabled = true,
   });
 
   final VoidCallback onTap;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +123,7 @@ class _ConfirmButton extends StatelessWidget {
               minimumSize: const Size(double.infinity, 32),
               maximumSize: const Size(double.infinity, 38),
             ),
-            onPressed: onTap,
+            onPressed: enabled ? onTap : null,
             child: FlowyText(
               name,
               fontSize: 14,
@@ -116,12 +135,16 @@ class _ConfirmButton extends StatelessWidget {
             height: 48,
             child: FlowyButton(
               isSelected: true,
-              onTap: onTap,
-              hoverColor: Theme.of(context).colorScheme.primary,
+              onTap: enabled ? onTap : () {},
+              hoverColor: enabled
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.primary.withValues(alpha: 0.4),
               text: FlowyText.medium(
                 name,
                 textAlign: TextAlign.center,
-                color: Theme.of(context).colorScheme.onPrimary,
+                color: enabled
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.5),
               ),
               radius: Corners.s6Border,
             ),
