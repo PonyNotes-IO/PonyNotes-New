@@ -15,6 +15,7 @@ enum _MobileSettingsPopupMenuItem {
   settings,
   members,
   trash,
+  fileLibrary,
   help,
   helpAndDocumentation,
 }
@@ -64,6 +65,12 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
         ),
         const PopupMenuDivider(height: 0.5),
         _buildItem(
+          value: _MobileSettingsPopupMenuItem.fileLibrary,
+          svg: FlowySvgs.icon_file_library_s,
+          text: '文件库',
+        ),
+        const PopupMenuDivider(height: 0.5),
+        _buildItem(
           value: _MobileSettingsPopupMenuItem.helpAndDocumentation,
           svg: FlowySvgs.help_and_documentation_s,
           text: LocaleKeys.settings_popupMenuItem_helpAndDocumentation.tr(),
@@ -82,6 +89,9 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
             break;
           case _MobileSettingsPopupMenuItem.trash:
             _openTrashPage(context);
+            break;
+          case _MobileSettingsPopupMenuItem.fileLibrary:
+            _openFileLibraryPage(context);
             break;
           case _MobileSettingsPopupMenuItem.settings:
             _openSettingsPage(context);
@@ -124,6 +134,10 @@ class HomePageSettingsPopupMenu extends StatelessWidget {
 
   void _openTrashPage(BuildContext context) {
     context.push(MobileHomeTrashPage.routeName);
+  }
+
+  void _openFileLibraryPage(BuildContext context) {
+    context.push(MobileFileLibraryPage.routeName);
   }
 
   void _openHelpPage(BuildContext context) {

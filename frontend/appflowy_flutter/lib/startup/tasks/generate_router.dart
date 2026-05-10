@@ -90,6 +90,9 @@ GoRouter generateRouter(Widget child) {
         // trash
         _mobileHomeTrashPageRoute(),
 
+        // file library
+        _mobileFileLibraryPageRoute(),
+
         // emoji picker
         _mobileEmojiPickerPageRoute(),
         _mobileImagePickerPageRoute(),
@@ -318,6 +321,19 @@ GoRoute _mobileHomeTrashPageRoute() {
       return const MaterialExtendedPage(
         child: MobileHomeTrashPage(),
         name: MobileHomeTrashPage.routeName,
+      );
+    },
+  );
+}
+
+GoRoute _mobileFileLibraryPageRoute() {
+  return GoRoute(
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    path: MobileFileLibraryPage.routeName,
+    pageBuilder: (context, state) {
+      return const MaterialExtendedPage(
+        child: MobileFileLibraryPage(),
+        name: MobileFileLibraryPage.routeName,
       );
     },
   );
