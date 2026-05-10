@@ -15,6 +15,7 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/workspace/application/view/view_publish_service.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/panels/publish_notifier.dart';
+import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -76,15 +77,94 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
 
   @override
   Widget build(BuildContext context) {
+    // 判断是否是免费套餐（plan.value == 0 表示免费版）
+    final subscriptionInfo =
+        context.read<UserWorkspaceBloc>().state.workspaceSubscriptionInfo;
+    final isFree = subscriptionInfo == null || subscriptionInfo.plan.value == 0;
+
     return SettingsBody(
       title: '共享发布',
       description: '',
       autoSeparate: false,
       children: [
-        _buildTabSection(),
-        const VSpace(8),
-        _buildTabContent(),
+        if (isFree)
+          _buildUpgradePrompt(context)
+        else ...[
+          _buildTabSection(),
+          const VSpace(8),
+          _buildTabContent(),
+        ],
       ],
+    );
+  }
+
+  Widget _buildUpgradePrompt(BuildContext context) {
+    return SizedBox(
+      height: 340,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF0E2),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.lock_outline_rounded,
+                  size: 36,
+                  color: Color(0xFFFF6B35),
+                ),
+              ),
+            ),
+            const VSpace(20),
+            const FlowyText(
+              '升级会员解锁共享发布功能',
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+            const VSpace(10),
+            FlowyText(
+              '升级到标准版及以上套餐，即可共享笔记给他人协作，\n并将笔记发布为公开网页。',
+              fontSize: 13,
+              color: Colors.grey[500],
+              textAlign: TextAlign.center,
+              maxLines: 2,
+            ),
+            const VSpace(28),
+            SizedBox(
+              height: 40,
+              child: ElevatedButton(
+                onPressed: () {
+                  context.read<SettingsDialogBloc>().add(
+                        const SettingsDialogEvent.setSelectedPage(
+                          SettingsPage.accountManagement,
+                        ),
+                      );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6B35),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const FlowyText(
+                  '立即升级会员',
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
