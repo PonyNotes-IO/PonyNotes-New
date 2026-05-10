@@ -162,44 +162,54 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildAppBar(context, afTheme, theme),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 32),
-                    _buildHeroSection(context, afTheme, theme),
-                    const SizedBox(height: 20),
-                  ],
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF89C7D), Color(0xFFFFFFFF)],
+            stops: [0.0, 0.4],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildAppBar(context, afTheme, theme),
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 32),
+                      _buildHeroSection(context, afTheme, theme),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            MobileAIInputBar(
-              textController: _textController,
-              focusNode: _focusNode,
-              selectedImages: _selectedImages,
-              isSending: _isSending,
-              isLoadingModels: _isLoadingModels,
-              availableModels: _availableModels,
-              selectedModel: _selectedModel,
-              isDeepThinkingEnabled: _isDeepThinkingEnabled,
-              isWebSearchEnabled: _isWebSearchEnabled,
-              afTheme: afTheme,
-              onSend: _sendMessage,
-              onPickImages: _pickImages,
-              onRemoveImage: _removeImage,
-              onDeepThinkingChanged: (v) =>
-                  setState(() => _isDeepThinkingEnabled = v),
-              onWebSearchChanged: (v) =>
-                  setState(() => _isWebSearchEnabled = v),
-              onModelSelected: (model) => setState(() => _selectedModel = model),
-            ),
-          ],
+              MobileAIInputBar(
+                textController: _textController,
+                focusNode: _focusNode,
+                selectedImages: _selectedImages,
+                isSending: _isSending,
+                isLoadingModels: _isLoadingModels,
+                availableModels: _availableModels,
+                selectedModel: _selectedModel,
+                isDeepThinkingEnabled: _isDeepThinkingEnabled,
+                isWebSearchEnabled: _isWebSearchEnabled,
+                afTheme: afTheme,
+                onSend: _sendMessage,
+                onPickImages: _pickImages,
+                onRemoveImage: _removeImage,
+                onDeepThinkingChanged: (v) =>
+                    setState(() => _isDeepThinkingEnabled = v),
+                onWebSearchChanged: (v) =>
+                    setState(() => _isWebSearchEnabled = v),
+                onModelSelected: (model) => setState(() => _selectedModel = model),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -214,7 +224,7 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
+        color: Colors.transparent,
         border: Border(
           bottom: BorderSide(
             color: theme.dividerColor.withValues(alpha: 0.5),
@@ -227,7 +237,7 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
           IconButton(
             onPressed: () =>
                 GoRouter.of(context).go(MobileHomeScreen.routeName),
-            icon: FlowySvg(
+            icon:               FlowySvg(
               FlowySvgs.mobile_return_s,
               size: const Size(7, 12),
               color: afTheme.iconColorScheme.primary,
@@ -235,7 +245,7 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
           ),
           const SizedBox(width: 4),
           Expanded(
-            child: Text(
+            child:               Text(
               '小马笔记AI',
               style: afTheme.textStyle.heading4.standard(
                 color: afTheme.textColorScheme.primary,
@@ -245,7 +255,7 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
           ),
           IconButton(
             onPressed: () {},
-            icon: FlowySvg(
+            icon:               FlowySvg(
               FlowySvgs.three_dots_s,
               size: const Size.square(24),
               color: afTheme.iconColorScheme.primary,
