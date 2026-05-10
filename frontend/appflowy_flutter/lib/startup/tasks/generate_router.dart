@@ -27,6 +27,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/code_block
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_picker_screen.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/mobile_toolbar_item/mobile_block_settings_screen.dart';
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
@@ -227,8 +228,9 @@ GoRoute _mobileHomeSettingPageRoute() {
     parentNavigatorKey: AppGlobals.rootNavKey,
     path: MobileHomeSettingPage.routeName,
     pageBuilder: (context, state) {
-      return const MaterialExtendedPage(
-        child: MobileHomeSettingPage(),
+      final workspaceState = state.extra as UserWorkspaceState?;
+      return MaterialExtendedPage(
+        child: MobileHomeSettingPage(workspaceState: workspaceState),
         name: MobileHomeSettingPage.routeName,
       );
     },

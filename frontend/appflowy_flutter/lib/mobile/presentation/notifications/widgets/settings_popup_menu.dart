@@ -1,3 +1,5 @@
+import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/presentation.dart';
@@ -75,7 +77,11 @@ class NotificationSettingsPopupMenu extends StatelessWidget {
             _onArchiveAll(context);
             break;
           case _NotificationSettingsPopupMenuItem.settings:
-            context.push(MobileHomeSettingPage.routeName);
+            UserWorkspaceState? workspaceState;
+            try {
+              workspaceState = context.read<UserWorkspaceBloc>().state;
+            } catch (_) {}
+            context.push(MobileHomeSettingPage.routeName, extra: workspaceState);
             break;
           case _NotificationSettingsPopupMenuItem.unarchiveAll:
             _onUnarchiveAll(context);
