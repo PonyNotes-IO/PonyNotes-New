@@ -213,6 +213,8 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       body: Column(
         children: [
           _buildAppBar(context),
+          if (_currentSection == MobileSettingsSection.menu && _userProfile != null)
+            _UserProfileHeader(userProfile: _userProfile!),
           Expanded(
             child: _buildContent(),
           ),
@@ -893,6 +895,106 @@ class _QuickEntryCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _UserProfileHeader extends StatelessWidget {
+  const _UserProfileHeader({required this.userProfile});
+
+  final UserProfilePB userProfile;
+
+  String get _displayName {
+    if (userProfile.name.isNotEmpty) return userProfile.name;
+    if (userProfile.hasPhone() && userProfile.phone.isNotEmpty) {
+      return userProfile.phone;
+    }
+    if (userProfile.email.isNotEmpty) return userProfile.email;
+    return '小马AI笔记的用户';
+  }
+
+  Widget _buildAvatar(double size) {
+    final iconUrl = userProfile.iconUrl;
+
+    if (iconUrl.isEmpty) return _buildDefaultAvatar(size);
+
+    if (iconUrl.startsWith('http://') || iconUrl.startsWith('https://')) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(size / 2),
+        child: Image.network(
+          iconUrl,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size / 2),
+      child: Image.file(
+        io.File(iconUrl),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
+      ),
+    );
+  }
+
+  Widget _buildDefaultAvatar(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(size / 2),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(size / 2),
+        child: Image.asset(
+          'assets/images/about_logo.png',
+          width: 80,
+          height: 80,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Icon(
+            Icons.person,
+            size: size,
+            color: Colors.grey[400],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    const double avatarSize = 48;
+    const double horizontalPadding = 16.0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(
+        horizontalPadding,
+        16,
+        horizontalPadding,
+        16,
+      ),
+      child: Row(
+        children: [
+          _buildAvatar(avatarSize),
+          const HSpace(16),
+          Text(
+            _displayName,
+            style: theme.textStyle.heading4.standard(
+              color: theme.textColorScheme.primary,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
