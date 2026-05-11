@@ -1,14 +1,15 @@
+plugins {
+    id 'com.android.application'
+    id 'kotlin-android'
+    id 'dev.flutter.flutter-gradle-plugin'
+}
+
 def localProperties = new Properties()
 def localPropertiesFile = rootProject.file('local.properties')
 if (localPropertiesFile.exists()) {
     localPropertiesFile.withReader('UTF-8') { reader ->
         localProperties.load(reader)
     }
-}
-
-def flutterRoot = localProperties.getProperty('flutter.sdk')
-if (flutterRoot == null) {
-    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")
 }
 
 def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
@@ -21,10 +22,6 @@ if (flutterVersionName == null) {
     flutterVersionName = '1.0'
 }
 
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
-
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
 if (keystorePropertiesFile.exists()) {
@@ -32,17 +29,18 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    compileSdkVersion 36
-    ndkVersion "26.1.10909125"
+    namespace 'com.xiaomabiji.app.note'
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
         coreLibraryDesugaringEnabled true
     }
 
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = JavaVersion.VERSION_11.toString()
     }
 
     sourceSets {
@@ -50,18 +48,15 @@ android {
             java.srcDirs += 'src/main/kotlin'
             jniLibs.srcDirs += [
                     'libs',
-                    'jniLibs',
-                    'build/app/intermediates/flutter/lib/arm64-v8a',
-                    'build/app/intermediates/flutter/lib/armeabi-v7a'
+                    'jniLibs'
             ]
         }
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId "com.xiaomabiji.app.note"
-        minSdkVersion 29
-        targetSdkVersion 34
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         multiDexEnabled true
@@ -70,17 +65,11 @@ android {
                 arguments "-DANDROID_ARM_NEON=TRUE", "-DANDROID_STL=c++_shared"
             }
         }
-//        ndkPath 'D:\\Android\\android-sdk\\ndk\\26.1.10909125'
-        // only support arm64-v8a
-        // ndk {
-        //     abiFilters 'arm64-v8a', 'armeabi-v7a'
-        // }
-        // Removed abiFilters to avoid conflict with --split-per-abi option
     }
 
     externalNativeBuild {
         cmake {
-            path "CMakeLists.txt"
+            path "src/main/CMakeLists.txt"
         }
     }
 
@@ -94,17 +83,7 @@ android {
     }
     buildTypes {
         release {
-            // use release instead when publishing the application to google play.
-//             signingConfig signingConfigs.release
             signingConfig signingConfigs.debug
-        }
-    }
-
-    namespace 'com.xiaomabiji.app.note'
-
-    externalNativeBuild {
-        cmake {
-            path "src/main/CMakeLists.txt"
         }
     }
 }
@@ -114,7 +93,6 @@ flutter {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    implementation "com.android.support:multidex:2.0.1"
-    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.2.2'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+    implementation 'com.tencent.mm.opensdk:wechat-sdk-android:6.8.24'
 }
