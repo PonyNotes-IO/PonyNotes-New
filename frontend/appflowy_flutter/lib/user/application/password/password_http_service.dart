@@ -113,7 +113,7 @@ class PasswordHttpService {
         'phone': phone,
         'create_user': false, // 密码重置时，用户应该已存在
       };
-      
+
       final result = await _makeRequest(
         endpoint: PasswordEndpoint.otp,
         body: body,
@@ -129,7 +129,7 @@ class PasswordHttpService {
       final body = <String, dynamic>{
         'email': email,
       };
-      
+
     final result = await _makeRequest(
       endpoint: PasswordEndpoint.forgotPassword,
         body: body,
@@ -141,6 +141,31 @@ class PasswordHttpService {
       (error) => FlowyResult.failure(error),
     );
     }
+  }
+
+  /// Sends OTP (One-Time Password) to phone for login/signup verification
+  ///
+  /// [phone] - The phone number to send OTP to
+  /// [createUser] - Whether to create a new user if not exists (default: true)
+  Future<FlowyResult<bool, FlowyError>> sendOtp({
+    required String phone,
+    bool createUser = true,
+  }) async {
+    final body = <String, dynamic>{
+      'phone': phone,
+      'create_user': createUser,
+    };
+
+    final result = await _makeRequest(
+      endpoint: PasswordEndpoint.otp,
+      body: body,
+      errorMessage: 'Failed to send OTP',
+    );
+
+    return result.fold(
+      (data) => FlowyResult.success(true),
+      (error) => FlowyResult.failure(error),
+    );
   }
 
   /// Sets up a password for a user that doesn't have one

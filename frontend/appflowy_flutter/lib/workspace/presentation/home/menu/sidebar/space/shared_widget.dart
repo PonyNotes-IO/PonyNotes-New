@@ -422,11 +422,13 @@ class _ConfirmPopupState extends State<ConfirmPopup> {
         if (widget.enableKeyboardListener) {
           if (event is KeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.escape) {
-            Navigator.of(context).pop();
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
           } else if (event is KeyUpEvent &&
               event.logicalKey == LogicalKeyboardKey.enter) {
             widget.onConfirm(context);
-            if (widget.closeOnAction) {
+            if (widget.closeOnAction && Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
             }
           }
@@ -519,7 +521,7 @@ class _ConfirmPopupState extends State<ConfirmPopup> {
         return SpaceOkButton(
           onConfirm: () {
             widget.onConfirm(context);
-            if (widget.closeOnAction) {
+            if (widget.closeOnAction && Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
             }
           },
@@ -531,11 +533,13 @@ class _ConfirmPopupState extends State<ConfirmPopup> {
         return SpaceCancelOrConfirmButton(
           onCancel: () {
             widget.onCancel?.call();
-            Navigator.of(context).pop();
+            if (widget.closeOnAction && Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
           },
           onConfirm: () {
             widget.onConfirm(context);
-            if (widget.closeOnAction) {
+            if (widget.closeOnAction && Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
             }
           },

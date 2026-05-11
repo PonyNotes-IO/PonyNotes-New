@@ -402,7 +402,6 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       return;
     }
 
-
     emit(
       state.copyWith(
         isSubmitting: true,
@@ -412,11 +411,28 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
       ),
     );
 
-    final result = await authService.signInWithMagicLink(email: email);
+    // 判断是手机号还是邮箱，使用不同的发送方式
+    final bool isPhone = _isValidPhone(email);
+
+    FlowyResult<void, FlowyError> result;
+    if (isPhone) {
+      // 手机号：使用 /otp 接口发送短信
+      if (passwordService == null) {
+        final sharedEnv = getIt<AppFlowyCloudSharedEnv>();
+        passwordService = PasswordHttpService(
+          baseUrl: sharedEnv.appflowyCloudConfig.gotrue_url,
+          authToken: '',
+        );
+      }
+      result = await passwordService!.sendOtp(phone: email);
+    } else {
+      // 邮箱：使用原有的 magic link 发送邮件
+      result = await authService.signInWithMagicLink(email: email);
+    }
 
     emit(
       result.fold(
-        (userProfile) => state.copyWith(
+        (void _) => state.copyWith(
           isSubmitting: false,
         ),
         (error) => _stateFromCode(error),
