@@ -67,6 +67,7 @@ class ViewTitleBar extends StatelessWidget {
                 SpacePermission.publicToAll => SharedSectionType.public,
                 SpacePermission.private => SharedSectionType.private,
                 SpacePermission.closed => SharedSectionType.private,
+                _ => SharedSectionType.private,
               };
               final bloc = context.read<PageAccessLevelBloc>();
               if (!bloc.isClosed && !bloc.state.isShared) {

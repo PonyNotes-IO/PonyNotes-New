@@ -143,6 +143,7 @@ Future<bool> _afLaunchLocalUri(
     ResultType.permissionDenied =>
       LocaleKeys.openFileMessage_permissionDenied.tr(),
     ResultType.error => LocaleKeys.failedToOpenUrl.tr(),
+    _ => LocaleKeys.failedToOpenUrl.tr(),
   };
   if (context != null && context.mounted) {
     showToastNotification(

@@ -27,6 +27,7 @@ class LocalAIStatusIndicator extends StatelessWidget {
             return switch (isReady) {
               true => const _LocalAIRunning(),
               false => const _RestartPluginButton(),
+              _ => const SizedBox.shrink(),
             };
           },
           orElse: () => const SizedBox.shrink(),

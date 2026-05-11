@@ -377,6 +377,7 @@ class _ToggleListBlockComponentWidgetState
     final turns = switch (textDirection) {
       TextDirection.ltr => collapsed ? 0.0 : 0.25,
       TextDirection.rtl => collapsed ? -0.5 : -0.75,
+      _ => 0.0,
     };
 
     return Container(
