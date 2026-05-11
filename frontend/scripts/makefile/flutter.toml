@@ -242,7 +242,7 @@ script = ["""
   cd appflowy_flutter/
   flutter pub get
   flutter packages pub get
-  flutter build ${TARGET_OS} --${BUILD_FLAG} --verbose
+  flutter build ${TARGET_OS} --${BUILD_FLAG} --verbose ${FLUTTER_BUILD_ARGS:-}
   """]
 script_runner = "@shell"
 

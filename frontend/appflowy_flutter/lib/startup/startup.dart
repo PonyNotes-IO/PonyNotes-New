@@ -357,6 +357,13 @@ IntegrationMode integrationMode() {
     return IntegrationMode.unitTest;
   }
 
+  // 通过 --dart-define=ENABLE_DEBUG_LOG=true 构建的 DMG 使用 develop 路径，
+  // 日志写入 data_dev_* 目录，与 IDE 调试模式路径相同，方便排查问题。
+  const enableDebugLog = bool.fromEnvironment('ENABLE_DEBUG_LOG');
+  if (enableDebugLog) {
+    return IntegrationMode.develop;
+  }
+
   if (kReleaseMode) {
     return IntegrationMode.release;
   }
