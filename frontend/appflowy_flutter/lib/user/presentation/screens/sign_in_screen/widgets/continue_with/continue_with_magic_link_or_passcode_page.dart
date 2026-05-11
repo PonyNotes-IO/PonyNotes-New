@@ -456,6 +456,10 @@ class _ContinueWithMagicLinkOrPasscodePageState
     final screenWidth = MediaQuery.of(context).size.width;
     final calculatedWidth = (screenWidth - (5 * spacing) - 40) / 6;
     final inputWidth = UniversalPlatform.isDesktop ? 56.0 : calculatedWidth;
+    // 根据深色/浅色模式适配背景色
+    final inputBackgroundColor = theme.brightness == Brightness.light
+        ? appTheme.badgeColorScheme.color19Light1
+        : const Color(0xFF3A3A3A);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(6, (index) {
@@ -465,7 +469,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
             width: inputWidth,
             height: inputWidth, // 保持正方形
             decoration: BoxDecoration(
-              color: appTheme.badgeColorScheme.color19Light1,
+              color: inputBackgroundColor,
               borderRadius: BorderRadius.circular(4),
             ),
             child: KeyboardListener(
