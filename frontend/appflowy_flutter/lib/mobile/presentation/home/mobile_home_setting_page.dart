@@ -8,8 +8,12 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
+import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/util/int64_extension.dart';
+import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:get_it/get_it.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
@@ -213,8 +217,6 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       body: Column(
         children: [
           _buildAppBar(context),
-          if (_currentSection == MobileSettingsSection.menu && _userProfile != null)
-            _UserProfileHeader(userProfile: _userProfile!),
           Expanded(
             child: _buildContent(),
           ),
@@ -306,31 +308,37 @@ class _MobileSettingsDrawer extends StatelessWidget {
               // 菜单列表
               _DrawerMenuItem(
                 label: '我的账户',
+                icon: FlowySvgs.person_s,
                 selected: currentSection == MobileSettingsSection.account,
                 onTap: () => onNavigate(MobileSettingsSection.account),
               ),
               _DrawerMenuItem(
                 label: '通用设置',
+                icon: FlowySvgs.m_notification_settings_s,
                 selected: currentSection == MobileSettingsSection.workspace,
                 onTap: () => onNavigate(MobileSettingsSection.workspace),
               ),
               _DrawerMenuItem(
                 label: '空间管理',
+                icon: FlowySvgs.folder_m,
                 selected: currentSection == MobileSettingsSection.workspaceManagement,
                 onTap: () => onNavigate(MobileSettingsSection.workspaceManagement),
               ),
               _DrawerMenuItem(
                 label: '人员管理',
+                icon: FlowySvgs.m_settings_member_s,
                 selected: currentSection == MobileSettingsSection.member,
                 onTap: () => onNavigate(MobileSettingsSection.member),
               ),
               _DrawerMenuItem(
                 label: '共享发布',
+                icon: FlowySvgs.share_s,
                 selected: currentSection == MobileSettingsSection.sharing,
                 onTap: () => onNavigate(MobileSettingsSection.sharing),
               ),
               _DrawerMenuItem(
                 label: '通知设置',
+                icon: FlowySvgs.m_notification_settings_s,
                 selected: currentSection == MobileSettingsSection.notifications,
                 onTap: () {
                   if (isQuickEntryUser) {
@@ -342,6 +350,7 @@ class _MobileSettingsDrawer extends StatelessWidget {
               ),
               _DrawerMenuItem(
                 label: '存储设置',
+                icon: FlowySvgs.icon_file_library_s,
                 selected: currentSection == MobileSettingsSection.storage,
                 onTap: () => onNavigate(MobileSettingsSection.storage),
               ),
@@ -351,6 +360,7 @@ class _MobileSettingsDrawer extends StatelessWidget {
                   currentWorkspace?.role != AFRolePB.Guest)
                 _DrawerMenuItem(
                   label: LocaleKeys.settings_sites_title.tr(),
+                  icon: FlowySvgs.m_share_s,
                   selected: currentSection == MobileSettingsSection.sites,
                   onTap: () => onNavigate(MobileSettingsSection.sites),
                 ),
@@ -358,11 +368,13 @@ class _MobileSettingsDrawer extends StatelessWidget {
               if (isBillingEnabled) ...[
                 _DrawerMenuItem(
                   label: LocaleKeys.settings_planPage_menuLabel.tr(),
+                  icon: FlowySvgs.upgrade_s,
                   selected: currentSection == MobileSettingsSection.plan,
                   onTap: () => onNavigate(MobileSettingsSection.plan),
                 ),
                 _DrawerMenuItem(
                   label: LocaleKeys.settings_billingPage_menuLabel.tr(),
+                  icon: FlowySvgs.upgrade_storage_s,
                   selected: currentSection == MobileSettingsSection.billing,
                   onTap: () => onNavigate(MobileSettingsSection.billing),
                 ),
@@ -375,6 +387,7 @@ class _MobileSettingsDrawer extends StatelessWidget {
 
               _DrawerMenuItem(
                 label: LocaleKeys.legal_aboutXiaoma.tr(),
+                icon: FlowySvgs.information_s,
                 selected: currentSection == MobileSettingsSection.about,
                 onTap: () => onNavigate(MobileSettingsSection.about),
               ),
@@ -382,6 +395,7 @@ class _MobileSettingsDrawer extends StatelessWidget {
               if (!isQuickEntryUser)
                 _DrawerMenuItem(
                   label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
+                  icon: FlowySvgs.icon_setting_upgrade_s,
                   selected: currentSection == MobileSettingsSection.accountManagement,
                   onTap: () => onNavigate(MobileSettingsSection.accountManagement),
                 ),
@@ -416,45 +430,85 @@ class _DrawerMenuItem extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.icon,
+    this.badge,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final FlowySvgData? icon;
+  final String? badge;
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
 
-    return Material(
-      color: selected
-          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.08)
-          : Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textStyle.heading4.standard(
-                    color: theme.textColorScheme.primary,
+    return Column(
+      children: [
+        Material(
+          color: selected
+              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.08)
+              : Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              child: Row(
+                children: [
+                  if (icon != null) ...[
+                    FlowySvg(
+                      icon!,
+                      size: const Size.square(22),
+                      color: selected
+                          ? theme.iconColorScheme.primary
+                          : theme.iconColorScheme.tertiary,
+                    ),
+                    const HSpace(12),
+                  ],
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: theme.textStyle.body.standard(
+                        color: theme.textColorScheme.primary,
+                      ),
+                    ),
                   ),
-                ),
+                  if (badge != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondary,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        badge!,
+                        style: theme.textStyle.caption.standard(
+                          color: Theme.of(context).colorScheme.onSecondary,
+                        ),
+                      ),
+                    ),
+                    const HSpace(8),
+                  ],
+                  if (selected || badge != null)
+                    FlowySvg(
+                      FlowySvgs.toolbar_arrow_right_m,
+                      size: const Size.square(20),
+                      color: theme.iconColorScheme.tertiary,
+                    ),
+                ],
               ),
-              if (selected)
-                FlowySvg(
-                  FlowySvgs.toolbar_arrow_right_m,
-                  size: const Size.square(24),
-                  color: theme.iconColorScheme.tertiary,
-                ),
-            ],
+            ),
           ),
         ),
-      ),
+        Divider(
+          color: theme.borderColorScheme.primary.withValues(alpha: 0.5),
+          height: 0.5,
+          indent: 20,
+          endIndent: 20,
+        ),
+      ],
     );
   }
 }
@@ -744,154 +798,261 @@ class _MobileSettingsMenuContent extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 快捷入口
-            _QuickEntryCard(
-              label: '我的账户',
-              onTap: () => onNavigate(MobileSettingsSection.account),
-            ),
-            const VSpace(12),
-            _QuickEntryCard(
-              label: '通用设置',
-              onTap: () => onNavigate(MobileSettingsSection.workspace),
-            ),
-            const VSpace(12),
-            _QuickEntryCard(
-              label: '空间管理',
-              onTap: () => onNavigate(MobileSettingsSection.workspaceManagement),
-            ),
-            const VSpace(12),
-            _QuickEntryCard(
-              label: '人员管理',
-              onTap: () => onNavigate(MobileSettingsSection.member),
-            ),
-
-            const VSpace(24),
-            FlowyText(
-              '其他设置',
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: theme.textColorScheme.secondary,
-            ),
-            const VSpace(8),
-            _QuickEntryCard(
-              label: '共享发布',
-              onTap: () => onNavigate(MobileSettingsSection.sharing),
-            ),
-            const VSpace(12),
-            _QuickEntryCard(
-              label: '通知设置',
-              onTap: () => onNavigate(MobileSettingsSection.notifications),
-            ),
-            const VSpace(12),
-            _QuickEntryCard(
-              label: '存储设置',
-              onTap: () => onNavigate(MobileSettingsSection.storage),
-            ),
-
-            if (isServerWorkspace &&
-                currentWorkspace?.role != null &&
-                currentWorkspace?.role != AFRolePB.Guest) ...[
-              const VSpace(24),
-              FlowyText(
-                '订阅服务',
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: theme.textColorScheme.secondary,
-              ),
-              const VSpace(8),
-              _QuickEntryCard(
-                label: LocaleKeys.settings_sites_title.tr(),
-                onTap: () => onNavigate(MobileSettingsSection.sites),
-              ),
-              if (isBillingEnabled) ...[
-                const VSpace(12),
-                _QuickEntryCard(
-                  label: LocaleKeys.settings_planPage_menuLabel.tr(),
-                  onTap: () => onNavigate(MobileSettingsSection.plan),
+            _UserProfileHeader(userProfile: userProfile),
+            const SizedBox(height: 16),
+            if (subscriptionInfo != null)
+              _MobileUpgradePlanCard(subscriptionInfo: subscriptionInfo!),
+            if (subscriptionInfo != null) const SizedBox(height: 16),
+            _SettingsGroupCard(
+              items: [
+                _SettingsItem(
+                  label: '我的账户',
+                  onTap: () => onNavigate(MobileSettingsSection.account),
                 ),
-                const VSpace(12),
-                _QuickEntryCard(
-                  label: LocaleKeys.settings_billingPage_menuLabel.tr(),
-                  onTap: () => onNavigate(MobileSettingsSection.billing),
+                _SettingsItem(
+                  label: '通用设置',
+                  onTap: () => onNavigate(MobileSettingsSection.workspace),
                 ),
+                _SettingsItem(
+                  label: '空间管理',
+                  onTap: () => onNavigate(MobileSettingsSection.workspaceManagement),
+                ),
+                _SettingsItem(
+                  label: '人员管理',
+                  onTap: () => onNavigate(MobileSettingsSection.member),
+                ),
+                _SettingsItem(
+                  label: '共享发布',
+                  onTap: () => onNavigate(MobileSettingsSection.sharing),
+                ),
+                _SettingsItem(
+                  label: '通知设置',
+                  onTap: () => onNavigate(MobileSettingsSection.notifications),
+                ),
+                _SettingsItem(
+                  label: '存储设置',
+                  onTap: () => onNavigate(MobileSettingsSection.storage),
+                ),
+                if (isServerWorkspace &&
+                    currentWorkspace?.role != null &&
+                    currentWorkspace?.role != AFRolePB.Guest)
+                  _SettingsItem(
+                    label: LocaleKeys.settings_sites_title.tr(),
+                    onTap: () => onNavigate(MobileSettingsSection.sites),
+                  ),
+                if (isBillingEnabled)
+                  _SettingsItem(
+                    label: LocaleKeys.settings_planPage_menuLabel.tr(),
+                    onTap: () => onNavigate(MobileSettingsSection.plan),
+                  ),
+                if (isBillingEnabled)
+                  _SettingsItem(
+                    label: LocaleKeys.settings_billingPage_menuLabel.tr(),
+                    onTap: () => onNavigate(MobileSettingsSection.billing),
+                  ),
+                _SettingsItem(
+                  label: LocaleKeys.legal_aboutXiaoma.tr(),
+                  onTap: () => onNavigate(MobileSettingsSection.about),
+                ),
+                if (userProfile.userAuthType == AuthTypePB.Server)
+                  _SettingsItem(
+                    label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
+                    onTap: () => onNavigate(MobileSettingsSection.accountManagement),
+                    showBottomDivider: false,
+                  ),
               ],
-            ],
-
-            const VSpace(24),
-            FlowyText(
-              '关于',
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: theme.textColorScheme.secondary,
             ),
-            const VSpace(8),
-            _QuickEntryCard(
-              label: LocaleKeys.legal_aboutXiaoma.tr(),
-              onTap: () => onNavigate(MobileSettingsSection.about),
+            const VSpace(16),
+            _SettingsGroupCard(
+              items: [
+                if (userProfile.userAuthType == AuthTypePB.Server) ...[
+                  _SettingsItem(
+                    label: '切换账号',
+                    onTap: () => _showSwitchAccountDialog(context),
+                    showArrow: false,
+                  ),
+                  _SettingsItem(
+                    label: '退出登录',
+                    onTap: () => _showLogoutDialog(context),
+                    textColor: const Color(0xFFFF0000),
+                    showBottomDivider: false,
+                    showArrow: false,
+                  ),
+                ] else ...[
+                  _SettingsItem(
+                    label: '登录',
+                    onTap: () => _showLoginDialog(context),
+                    textColor: const Color(0xFF00AA00),
+                    showBottomDivider: false,
+                    showArrow: false,
+                  ),
+                ],
+              ],
             ),
-
-            if (userProfile.userAuthType == AuthTypePB.Server) ...[
-              const VSpace(12),
-              _QuickEntryCard(
-                label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
-                onTap: () => onNavigate(MobileSettingsSection.accountManagement),
-              ),
-            ],
-
             const SizedBox(height: 32),
           ],
         ),
       ),
     );
   }
+
+  void _showSwitchAccountDialog(BuildContext context) {
+    showCancelAndConfirmDialog(
+      context: context,
+      title: '切换账号',
+      description: '确定要切换账号吗？',
+      confirmLabel: '确定',
+      onConfirm: (_) async {
+        try {
+          final signInBloc = getIt<SignInBloc>();
+          if (!signInBloc.isClosed) {
+            signInBloc.add(const SignInEvent.reset());
+          }
+        } catch (_) {}
+        await getIt<AuthService>().signOut();
+        if (context.mounted) {
+          Navigator.popUntil(context, (route) => route.isFirst);
+        }
+      },
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showCancelAndConfirmDialog(
+      context: context,
+      title: LocaleKeys.settings_accountPage_login_logoutLabel.tr(),
+      description: LocaleKeys.settings_menu_logoutPrompt.tr(),
+      confirmLabel: LocaleKeys.button_yes.tr(),
+      onConfirm: (_) async {
+        try {
+          final signInBloc = getIt<SignInBloc>();
+          if (!signInBloc.isClosed) {
+            signInBloc.add(const SignInEvent.reset());
+          }
+        } catch (_) {}
+        await getIt<AuthService>().signOut();
+        if (context.mounted) {
+          Navigator.popUntil(context, (route) => route.isFirst);
+        }
+      },
+    );
+  }
+
+  void _showLoginDialog(BuildContext context) {
+    showCancelAndConfirmDialog(
+      context: context,
+      title: '提示',
+      description: '确定要跳转到登录页面吗？',
+      confirmLabel: '确定',
+      onConfirm: (_) {
+        Navigator.popUntil(context, (route) => route.isFirst);
+      },
+    );
+  }
 }
 
-class _QuickEntryCard extends StatelessWidget {
-  const _QuickEntryCard({
+class _SettingsItem {
+  final String label;
+  final VoidCallback onTap;
+  final bool showBottomDivider;
+  final Color? textColor;
+  final bool showArrow;
+
+  const _SettingsItem({
     required this.label,
     required this.onTap,
+    this.showBottomDivider = true,
+    this.textColor,
+    this.showArrow = true,
+  });
+}
+
+class _SettingsGroupCard extends StatelessWidget {
+  const _SettingsGroupCard({required this.items});
+
+  final List<_SettingsItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.surfaceContainerColorScheme.layer01,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.borderColorScheme.primary.withValues(alpha: 0.08),
+          width: 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (int i = 0; i < items.length; i++) ...[
+            _SettingsItemRow(
+              label: items[i].label,
+              onTap: items[i].onTap,
+              textColor: items[i].textColor,
+              showArrow: items[i].showArrow,
+            ),
+            if (i < items.length - 1 && items[i].showBottomDivider)
+              Divider(
+                color: theme.borderColorScheme.primary.withValues(alpha: 0.5),
+                height: 0.5,
+                indent: 16,
+                endIndent: 16,
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsItemRow extends StatelessWidget {
+  const _SettingsItemRow({
+    required this.label,
+    required this.onTap,
+    this.textColor,
+    this.showArrow = true,
   });
 
   final String label;
   final VoidCallback onTap;
+  final Color? textColor;
+  final bool showArrow;
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
 
     return Material(
-      color: theme.surfaceContainerColorScheme.layer01,
-      borderRadius: BorderRadius.circular(12),
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: theme.borderColorScheme.primary.withValues(alpha: 0.08),
-              width: 1,
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
           child: Row(
             children: [
               Expanded(
                 child: Text(
                   label,
                   style: theme.textStyle.heading4.standard(
-                    color: theme.textColorScheme.primary,
+                    color: textColor ?? theme.textColorScheme.primary,
                   ),
+                  textAlign: showArrow ? TextAlign.start : TextAlign.center,
                 ),
               ),
-              FlowySvg(
-                FlowySvgs.toolbar_arrow_right_m,
-                size: const Size.square(24),
-                color: theme.iconColorScheme.tertiary,
-              ),
+              if (showArrow)
+                FlowySvg(
+                  FlowySvgs.toolbar_arrow_right_m,
+                  size: const Size.square(24),
+                  color: theme.iconColorScheme.tertiary,
+                ),
             ],
           ),
         ),
@@ -993,6 +1154,452 @@ class _UserProfileHeader extends StatelessWidget {
               color: theme.textColorScheme.primary,
             ),
             overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// 移动端会员升级卡片
+// ============================================================================
+
+class _MobileUpgradePlanCard extends StatelessWidget {
+  const _MobileUpgradePlanCard({required this.subscriptionInfo});
+
+  final WorkspaceSubscriptionInfoPB subscriptionInfo;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    return GestureDetector(
+      onTap: () => _showUpgradeDialog(context),
+      child: Stack(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF44326B),
+                  Color(0xFF7547C0),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  blurRadius: 8,
+                  color: const Color(0xFF7547C0).withValues(alpha: 0.3),
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  subscriptionInfo.label,
+                  style: theme.textStyle.heading2.standard(
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  subscriptionInfo.info,
+                  style: theme.textStyle.body.standard(
+                    color: Colors.white.withValues(alpha: 0.85),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    '立即升级',
+                  style: theme.textStyle.heading4.standard(
+                    color: const Color(0xFF44326B),
+                  ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 0,
+            child: Container(
+              height: 26,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: const BoxDecoration(
+                color: Color(0xFF4F3F5F),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  '当前方案',
+                  style: theme.textStyle.body.standard(
+                    color: Colors.white,
+                  ).copyWith(fontSize: 11),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUpgradeDialog(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const _MobileUpgradePlanPage(),
+      ),
+    );
+  }
+}
+
+class _MobileUpgradePlanPage extends StatelessWidget {
+  const _MobileUpgradePlanPage();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    return Scaffold(
+      backgroundColor: theme.surfaceColorScheme.primary,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back,
+            color: theme.iconColorScheme.primary,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          '会员升级',
+          style: theme.textStyle.heading4.standard(
+            color: theme.textColorScheme.primary,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: theme.surfaceColorScheme.primary,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        child: const _UpgradePlanBody(),
+      ),
+    );
+  }
+}
+
+class _UpgradePlanBody extends StatelessWidget {
+  const _UpgradePlanBody();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 24, bottom: 40),
+      child: Column(
+        children: [
+          Text(
+            '解锁全部高级功能',
+            style: theme.textStyle.heading2.standard(
+              color: theme.textColorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '选择一个适合您的方案',
+            style: theme.textStyle.body.standard(
+              color: theme.textColorScheme.secondary,
+            ),
+          ),
+          const SizedBox(height: 32),
+          _buildBenefitIcons(context),
+          const SizedBox(height: 32),
+          _buildUpgradePlanCards(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBenefitIcons(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    final benefits = [
+      {'label': '小马AI', 'icon': FlowySvgs.icon_rights_ai_xl},
+      {'label': '小马日历', 'icon': FlowySvgs.icon_rights_calendar_xl},
+      {'label': '小马收藏夹', 'icon': FlowySvgs.icon_rights_collect_xl},
+      {'label': '云端同步', 'icon': FlowySvgs.icon_rights_cloud_xl},
+      {'label': '云端空间', 'icon': FlowySvgs.icon_rights_storage_xl},
+    ];
+
+    return Wrap(
+      spacing: 16,
+      runSpacing: 12,
+      alignment: WrapAlignment.center,
+      children: benefits.map((benefit) {
+        return SizedBox(
+          width: 70,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isDarkMode ? Colors.white : null,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: FlowySvg(
+                    benefit['icon'] as FlowySvgData,
+                    size: const Size(48, 48),
+                    blendMode: null,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                benefit['label'] as String,
+                style: theme.textStyle.body.standard(
+                  color: theme.textColorScheme.secondary,
+                ).copyWith(fontSize: 11),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildUpgradePlanCards() {
+    return Column(
+      children: [
+        _UpgradePlanCard(
+          planName: '标准版',
+          price: '¥99',
+          period: '/年',
+          storage: '5GB',
+          workspaces: '5个',
+          aiQuota: '500次/月',
+          priceColor: const Color(0xFF2EACB2),
+        ),
+        const SizedBox(height: 12),
+        _UpgradePlanCard(
+          planName: '专业版',
+          price: '¥158',
+          period: '/年',
+          storage: '20GB',
+          workspaces: '20个',
+          aiQuota: '2000次/月',
+          priceColor: const Color(0xFF343543),
+          isHighlighted: true,
+        ),
+        const SizedBox(height: 12),
+        _UpgradePlanCard(
+          planName: '旗舰版',
+          price: '¥298',
+          period: '/年',
+          storage: '100GB',
+          workspaces: '100个',
+          aiQuota: '无限次',
+          priceColor: const Color(0xFF371A0D),
+        ),
+      ],
+    );
+  }
+}
+
+class _UpgradePlanCard extends StatelessWidget {
+  const _UpgradePlanCard({
+    required this.planName,
+    required this.price,
+    required this.period,
+    required this.storage,
+    required this.workspaces,
+    required this.aiQuota,
+    required this.priceColor,
+    this.isHighlighted = false,
+  });
+
+  final String planName;
+  final String price;
+  final String period;
+  final String storage;
+  final String workspaces;
+  final String aiQuota;
+  final Color priceColor;
+  final bool isHighlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: isHighlighted
+            ? (Theme.of(context).brightness == Brightness.light
+                ? const Color(0xFFFFF7F2)
+                : theme.surfaceColorScheme.layer02)
+            : theme.surfaceColorScheme.layer01,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isHighlighted
+              ? Theme.of(context).colorScheme.primary
+              : theme.borderColorScheme.primary,
+          width: isHighlighted ? 1.6 : 1.0,
+        ),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            planName,
+            style: theme.textStyle.heading4.standard(
+              color: theme.textColorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: priceColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: price,
+                        style: theme.textStyle.heading2.standard(
+                          color: priceColor == const Color(0xFF2EACB2)
+                              ? Colors.white
+                              : const Color(0xFFF9D8A7),
+                        ),
+                      ),
+                      TextSpan(
+                        text: period,
+                        style: theme.textStyle.body.standard(
+                          color: priceColor == const Color(0xFF2EACB2)
+                              ? Colors.white
+                              : const Color(0x99F9D8A7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '按年支付',
+                  style: theme.textStyle.body.standard(
+                    color: priceColor == const Color(0xFF2EACB2)
+                        ? Colors.white.withValues(alpha: 0.8)
+                        : const Color(0x99F9D8A7),
+                  ).copyWith(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 6,
+                padding: const EdgeInsets.only(top: 2),
+                child: FlowySvg(
+                  FlowySvgs.icon_plan_info_indicator_s,
+                  blendMode: null,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '云端空间 $storage',
+                      style: theme.textStyle.body.standard(
+                        color: theme.textColorScheme.secondary,
+                      ).copyWith(fontSize: 12),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '工作区限制 $workspaces',
+                      style: theme.textStyle.body.standard(
+                        color: theme.textColorScheme.secondary,
+                      ).copyWith(fontSize: 12),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '每月AI对话额度 $aiQuota',
+                      style: theme.textStyle.body.standard(
+                        color: theme.textColorScheme.secondary,
+                      ).copyWith(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: isHighlighted
+                    ? Theme.of(context).colorScheme.primary
+                    : theme.surfaceColorScheme.layer02,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  '选择此方案',
+                  style: theme.textStyle.heading4.standard(
+                    color: isHighlighted
+                        ? Colors.white
+                        : theme.textColorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),

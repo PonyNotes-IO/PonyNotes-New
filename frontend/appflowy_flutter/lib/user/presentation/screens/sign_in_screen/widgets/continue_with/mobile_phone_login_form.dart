@@ -68,7 +68,9 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
         // Email/Phone input
         DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0xFFF5F5F5),
+            color: Theme.of(context).brightness == Brightness.light
+                ? const Color(0xFFF5F5F5)
+                : const Color(0xFF2C2C2C),
             borderRadius: BorderRadius.circular(24),
           ),
           child: TextField(
@@ -76,7 +78,9 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
             decoration: InputDecoration(
               hintText: "输入邮箱或者手机号",
               hintStyle: TextStyle(
-                color: const Color(0xFF999999),
+                color: Theme.of(context).brightness == Brightness.light
+                    ? const Color(0xFF999999)
+                    : const Color(0xFF888888),
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -88,6 +92,9 @@ class _MobilePhoneLoginFormState extends State<MobilePhoneLoginForm> {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
+              color: Theme.of(context).brightness == Brightness.light
+                  ? Colors.black
+                  : Colors.white,
             ),
             keyboardType: TextInputType.emailAddress,
             onSubmitted: (value) => _handleSubmit(context, value),

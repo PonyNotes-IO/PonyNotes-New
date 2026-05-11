@@ -119,8 +119,8 @@ enum FeatureFlag {
     }
 
     switch (this) {
-      case FeatureFlag.planBilling: // 禁用付费计划和账单功能
-        return false;
+      case FeatureFlag.planBilling: // 启用付费计划和账单功能
+        return true;
       case FeatureFlag.collaborativeWorkspace: // 改为默认关闭
       case FeatureFlag.search:
       case FeatureFlag.syncDocument:
