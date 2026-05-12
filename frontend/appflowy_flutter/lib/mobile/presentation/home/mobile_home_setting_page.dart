@@ -10,6 +10,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/sign_in_screen.dart';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -24,6 +25,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 enum MobileSettingsSection {
   menu,
@@ -946,7 +948,10 @@ class _MobileSettingsMenuContent extends StatelessWidget {
       description: '确定要跳转到登录页面吗？',
       confirmLabel: '确定',
       onConfirm: (_) {
+        // 关闭设置页面
         Navigator.popUntil(context, (route) => route.isFirst);
+        // 跳转到登录页面
+        context.push(SignInScreen.routeName);
       },
     );
   }
