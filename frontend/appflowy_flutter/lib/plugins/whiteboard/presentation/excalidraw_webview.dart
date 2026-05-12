@@ -198,24 +198,12 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                     '[ExcalidrawWebView] 📝 Elements is string, length: ${elements.length}');
               }
             }
-            // 预下载云端图片：对于只有云 URL 的文件，在 Flutter 端下载并转为 base64
-            // 这样返回给 JS 的数据中已经包含 dataURL，避免 JS 端再次异步下载
+            // 不在 initData 阶段同步下载图片，避免白板首屏被大量 base64 转换阻塞。
+            // JS 恢复流程会通过 downloadCloudImages 兜底补全云端图片。
             if (normalizedData.containsKey('files') &&
                 normalizedData['files'] is Map) {
               final files = normalizedData['files'] as Map<String, dynamic>;
               Log.info('[ExcalidrawWebView] 📸 Files count: ${files.length}');
-              if (files.isNotEmpty) {
-                try {
-                  final processedFiles =
-                      await _preprocessFilesForLoading(files);
-                  normalizedData['files'] = processedFiles;
-                  Log.info(
-                      '[ExcalidrawWebView] 📸 Files preprocessed for loading');
-                } catch (e) {
-                  Log.warn(
-                      '[ExcalidrawWebView] ⚠️ Files preprocessing failed: $e');
-                }
-              }
             }
 
             // 设置数据到 LocalStorage
@@ -896,77 +884,6 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     }
 
     return normalized;
-  }
-
-  /// 预处理文件数据：确保所有文件都有有效的 base64 dataURL
-  /// 对于只有云 URL 的文件，下载并转换为 dataURL
-  Future<Map<String, dynamic>> _preprocessFilesForLoading(
-    Map<String, dynamic> files,
-  ) async {
-    final result = <String, dynamic>{};
-
-    for (final entry in files.entries) {
-      final fileId = entry.key;
-      final fileData = entry.value;
-
-      if (fileData is! Map) {
-        result[fileId] = fileData;
-        continue;
-      }
-
-      final fileDataMap = Map<String, dynamic>.from(fileData as Map);
-
-      // 检查是否已有有效的 base64 dataURL
-      final dataURL = fileDataMap['dataURL'] as String?;
-      final data = fileDataMap['data'] as String?;
-
-      final hasValidDataURL =
-          (dataURL != null && dataURL.startsWith('data:')) ||
-              (data != null && data.startsWith('data:'));
-
-      if (hasValidDataURL) {
-        // 已有 base64 dataURL，直接使用
-        result[fileId] = fileDataMap;
-        Log.info('[ExcalidrawWebView] 📸 File $fileId has valid dataURL');
-        continue;
-      }
-
-      // 检查是否有云 URL
-      final cloudUrl = fileDataMap['url'] as String? ??
-          (data != null && data.startsWith('http') ? data : null);
-
-      if (cloudUrl != null && cloudUrl.startsWith('http')) {
-        // 需要从云端下载
-        Log.info(
-            '[ExcalidrawWebView] 📸 Downloading cloud image for $fileId: $cloudUrl');
-        try {
-          final imageBytes = await _downloadCloudImage(cloudUrl);
-          if (imageBytes != null && imageBytes.isNotEmpty) {
-            final mimeType = fileDataMap['mimeType'] as String? ?? 'image/png';
-            final base64Data = base64Encode(imageBytes);
-            final newDataURL = 'data:$mimeType;base64,$base64Data';
-
-            fileDataMap['dataURL'] = newDataURL;
-            result[fileId] = fileDataMap;
-            Log.info(
-                '[ExcalidrawWebView] ✅ Downloaded and converted cloud image: $fileId (${imageBytes.length} bytes)');
-          } else {
-            Log.warn(
-                '[ExcalidrawWebView] ⚠️ Empty download for $fileId, keeping original');
-            result[fileId] = fileDataMap;
-          }
-        } catch (e) {
-          Log.error('[ExcalidrawWebView] ❌ Failed to download $fileId: $e');
-          result[fileId] = fileDataMap;
-        }
-      } else {
-        Log.warn(
-            '[ExcalidrawWebView] ⚠️ File $fileId has no valid dataURL or cloud URL');
-        result[fileId] = fileDataMap;
-      }
-    }
-
-    return result;
   }
 
   Future<Uint8List?> _downloadCloudImage(String url) async {
