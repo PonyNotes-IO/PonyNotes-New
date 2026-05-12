@@ -13,6 +13,37 @@
 
     // 保存原始localStorage的引用
     const originalLocalStorage = window.localStorage;
+    const urlParams = new URLSearchParams(window.location.search || '');
+    const whiteboardViewId = urlParams.get('viewId') || 'default';
+    const storagePrefix = `ponynotes:whiteboard:${encodeURIComponent(whiteboardViewId)}:`;
+    const rawWhiteboardKeys = new Set([
+        'excalidraw',
+        'excalidraw-state',
+        'excalidraw-files',
+        'excalidraw-theme'
+    ]);
+
+    const scopedStorageKey = (key) => `${storagePrefix}${key}`;
+
+    const scopedStorageKeys = () => {
+        const keys = [];
+        for (let i = 0; i < originalLocalStorage.length; i++) {
+            const key = originalLocalStorage.key(i);
+            if (key && key.startsWith(storagePrefix)) {
+                keys.push(key);
+            }
+        }
+        return keys;
+    };
+
+    const clearCurrentWhiteboardStorage = () => {
+        for (const key of scopedStorageKeys()) {
+            originalLocalStorage.removeItem(key);
+        }
+        for (const key of rawWhiteboardKeys) {
+            originalLocalStorage.removeItem(key);
+        }
+    };
 
     let init = false;
 
@@ -27,12 +58,12 @@
     // 创建隔离的localStorage代理
     const isolatedStorage = {
         getItem: function (key) {
-            const value = originalLocalStorage.getItem(key);
-            return value;
+            const scopedValue = originalLocalStorage.getItem(scopedStorageKey(key));
+            return scopedValue !== null ? scopedValue : originalLocalStorage.getItem(key);
         },
 
         setItem: function (key, value) {
-            originalLocalStorage.setItem(key, value);
+            originalLocalStorage.setItem(scopedStorageKey(key), value);
             if (init) {
                 window.flutter_inappwebview.callHandler('localStorageOnSet', { key: key, value });
 
@@ -102,6 +133,7 @@
         },
 
         removeItem: function (key) {
+            originalLocalStorage.removeItem(scopedStorageKey(key));
             originalLocalStorage.removeItem(key);
             if (init) {
                 window.flutter_inappwebview.callHandler('localStorageOnRemove', { key: key });
@@ -109,19 +141,20 @@
         },
 
         clear: function () {
-            originalLocalStorage.clear();
+            clearCurrentWhiteboardStorage();
             if (init) {
                 window.flutter_inappwebview.callHandler('localStorageOnClear');
             }
         },
 
         key: function (index) {
-            return originalLocalStorage.key(index);
+            const key = scopedStorageKeys()[index];
+            return key ? key.substring(storagePrefix.length) : null;
         },
 
         // ✅ 修复：返回正确的 length 值
         get length() {
-            return originalLocalStorage.length;
+            return scopedStorageKeys().length;
         }
     };
 
@@ -138,7 +171,7 @@
         console.error('[PonyNotes] ❌ Failed to install localStorage isolation:', e);
     }
 
-    originalLocalStorage.clear();
+    clearCurrentWhiteboardStorage();
 
     // ✅ 关键修复：initData 现在返回加载的数据
     // 将数据保存到 _initPayload，用于后续恢复（不依赖 localStorage）
@@ -569,7 +602,7 @@
         }
 
         if (!filesMap) {
-            const lsFiles = originalLocalStorage.getItem('excalidraw-files');
+            const lsFiles = isolatedStorage.getItem('excalidraw-files');
             if (lsFiles && lsFiles !== '{}' && lsFiles !== 'null') {
                 try {
                     filesMap = JSON.parse(lsFiles);

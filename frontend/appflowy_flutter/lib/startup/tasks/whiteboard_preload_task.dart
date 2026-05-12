@@ -26,7 +26,7 @@ class WhiteboardPreloadTask extends LaunchTask {
 
       // 2. 预先加载关键资源到内存中
       // 这样可以避免首次加载时的延迟
-      await _preloadCriticalAssets();
+      await _preloadCriticalAssets(assetServer);
 
       Log.info('✅ [WhiteboardPreload] Whiteboard preload completed successfully');
     } catch (e, stackTrace) {
@@ -42,7 +42,7 @@ class WhiteboardPreloadTask extends LaunchTask {
 
   /// 预先加载关键资源
   /// 将常用的 Excalidraw 资源加载到内存中，减少首次加载延迟
-  Future<void> _preloadCriticalAssets() async {
+  Future<void> _preloadCriticalAssets(LocalAssetServer assetServer) async {
     try {
       Log.info('📦 [WhiteboardPreload] Preloading critical assets...');
 
@@ -56,7 +56,11 @@ class WhiteboardPreloadTask extends LaunchTask {
       }
 
       final assetPaths = <String>{
+        'assets/excalidraw/index.html',
         'assets/excalidraw/flutter_bridge.js',
+        'assets/excalidraw/sw.js',
+        'assets/excalidraw/service-worker.js',
+        'assets/excalidraw/manifest.webmanifest',
       };
 
       if (indexHtml != null) {
@@ -67,14 +71,7 @@ class WhiteboardPreloadTask extends LaunchTask {
         }
       }
 
-      for (final assetPath in assetPaths) {
-        try {
-          await rootBundle.load(assetPath);
-          Log.info('✅ [WhiteboardPreload] Preloaded: $assetPath');
-        } catch (e) {
-          Log.warn('⚠️ [WhiteboardPreload] Failed to preload $assetPath: $e');
-        }
-      }
+      await assetServer.preloadAssets(assetPaths);
 
       Log.info('✅ [WhiteboardPreload] Critical assets preloaded');
     } catch (e, stackTrace) {

@@ -129,7 +129,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       // 使用带 viewId 的URL（用于调试和日志追踪）
       // 注意：localStorage 已在 HTML 中被完全禁用，数据隔离由 Flutter 管理
-      final url = '$baseUrl/index.html';
+      final viewId = Uri.encodeQueryComponent(widget.viewId);
+      const cacheVersion = 'ponynotes-whiteboard-v2';
+      final url = '$baseUrl/index.html?viewId=$viewId&v=$cacheVersion';
 
       Log.info('✅ [ExcalidrawWebView] 服务器已启动: $baseUrl');
       // debug logs removed
@@ -1229,8 +1231,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             _webViewCreated = true;
             _setupJavaScriptHandlers(controller);
             // ✅ 修复：不再在 onWebViewCreated 中设置 localStorage
-            // 原因：flutter_bridge.js 的 IIFE 会立即调用 originalLocalStorage.clear()
-            // 清空所有 localStorage，然后通过 initData handler 重新加载数据
+            // 原因：flutter_bridge.js 的 IIFE 会先清空当前白板的隔离缓存
+            // 然后通过 initData handler 重新加载数据
             // 所以在这里设置 localStorage 是无用的（会被立即清空）
             Log.debug('🌐 [ExcalidrawWebView] WebView created');
           },

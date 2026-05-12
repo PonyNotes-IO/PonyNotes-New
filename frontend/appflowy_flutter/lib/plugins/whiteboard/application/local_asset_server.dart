@@ -95,6 +95,19 @@ class LocalAssetServer {
     }
   }
 
+  /// Preload assets into the same memory cache used by HTTP requests.
+  Future<void> preloadAssets(Iterable<String> assetPaths) async {
+    final uniqueAssetPaths = assetPaths.toSet();
+    for (final assetPath in uniqueAssetPaths) {
+      try {
+        await _loadAssetBytes(assetPath);
+        Log.info('✅ [LocalAssetServer] Preloaded asset: $assetPath');
+      } catch (e) {
+        Log.warn('⚠️ [LocalAssetServer] Failed to preload $assetPath: $e');
+      }
+    }
+  }
+
   /// 根据文件扩展名确定Content-Type
   Future<Uint8List> _loadAssetBytes(String assetPath) async {
     final cached = _assetCache[assetPath];
