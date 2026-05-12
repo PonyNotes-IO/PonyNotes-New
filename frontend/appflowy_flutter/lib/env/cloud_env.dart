@@ -321,8 +321,5 @@ Future<String> _getAppFlowyCloudWSUrl(String baseURL) async {
 }
 
 Future<String> _getAppFlowyCloudGotrueUrl(String baseURL) async {
-  if (baseURL.contains("api.xiaomabiji.com")) {
-    return "https://gotrue.xiaomabiji.com";
-  }
   return "$baseURL/gotrue";
 }
