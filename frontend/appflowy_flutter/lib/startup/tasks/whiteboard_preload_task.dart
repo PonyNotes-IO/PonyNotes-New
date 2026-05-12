@@ -46,37 +46,33 @@ class WhiteboardPreloadTask extends LaunchTask {
     try {
       Log.info('📦 [WhiteboardPreload] Preloading critical assets...');
 
-      // 预加载主 HTML 文件
+      String? indexHtml;
       try {
-        await rootBundle.load('assets/excalidraw/index.html');
+        indexHtml =
+            await rootBundle.loadString('assets/excalidraw/index.html');
         Log.info('✅ [WhiteboardPreload] Preloaded: index.html');
       } catch (e) {
         Log.warn('⚠️ [WhiteboardPreload] Failed to preload index.html: $e');
       }
 
-      // 预加载 flutter_bridge.html（白板桥接文件）
-      try {
-        await rootBundle.load('assets/excalidraw/flutter_bridge.html');
-        Log.info('✅ [WhiteboardPreload] Preloaded: flutter_bridge.html');
-      } catch (e) {
-        Log.warn('⚠️ [WhiteboardPreload] Failed to preload flutter_bridge.html: $e');
+      final assetPaths = <String>{
+        'assets/excalidraw/flutter_bridge.js',
+      };
+
+      if (indexHtml != null) {
+        final assetRefRegex =
+            RegExp(r'''(?:src|href)=["']/assets/([^"']+\.(?:js|css))["']''');
+        for (final match in assetRefRegex.allMatches(indexHtml)) {
+          assetPaths.add('assets/excalidraw/assets/${match.group(1)}');
+        }
       }
 
-      // 预加载主要的 JavaScript 文件（如果存在）
-      final jsFiles = [
-        'assets/excalidraw/excalidraw.min.js',
-        'assets/excalidraw/excalidraw.js',
-        'assets/excalidraw/flutter_bridge.js',
-      ];
-
-      for (final jsFile in jsFiles) {
+      for (final assetPath in assetPaths) {
         try {
-          await rootBundle.load(jsFile);
-          Log.info('✅ [WhiteboardPreload] Preloaded: $jsFile');
-          break; // 只加载第一个存在的文件
+          await rootBundle.load(assetPath);
+          Log.info('✅ [WhiteboardPreload] Preloaded: $assetPath');
         } catch (e) {
-          // 文件不存在，继续尝试下一个
-          continue;
+          Log.warn('⚠️ [WhiteboardPreload] Failed to preload $assetPath: $e');
         }
       }
 
@@ -100,4 +96,3 @@ class WhiteboardPreloadTask extends LaunchTask {
     // 服务器应该在应用关闭时统一清理
   }
 }
-

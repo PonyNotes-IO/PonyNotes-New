@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -14,6 +15,8 @@ class LocalAssetServer {
   static final LocalAssetServer _instance = LocalAssetServer._internal();
   factory LocalAssetServer() => _instance;
   LocalAssetServer._internal();
+
+  final Map<String, Uint8List> _assetCache = {};
 
   /// 获取服务器URL
   String? get baseUrl => _port != null ? 'http://localhost:$_port' : null;
@@ -42,7 +45,7 @@ class LocalAssetServer {
 
         try {
           // 加载Flutter asset
-          final bytes = await rootBundle.load(assetPath);
+          final bytes = await _loadAssetBytes(assetPath);
           
           // 确定Content-Type
           final contentType = _getContentType(assetPath);
@@ -50,11 +53,11 @@ class LocalAssetServer {
           // 返回资源信息日志已移除
           
           return shelf.Response.ok(
-            bytes.buffer.asUint8List(),
+            bytes,
             headers: {
               'Content-Type': contentType,
               'Access-Control-Allow-Origin': '*',
-              'Cache-Control': 'no-cache',
+              'Cache-Control': _cacheControlForPath(requestPath),
             },
           );
         } catch (e) {
@@ -87,11 +90,42 @@ class LocalAssetServer {
       await _server!.close(force: true);
       _server = null;
       _port = null;
+      _assetCache.clear();
       Log.info('🛑 本地资源服务器已停止');
     }
   }
 
   /// 根据文件扩展名确定Content-Type
+  Future<Uint8List> _loadAssetBytes(String assetPath) async {
+    final cached = _assetCache[assetPath];
+    if (cached != null) {
+      return cached;
+    }
+
+    final bytes = await rootBundle.load(assetPath);
+    final data = bytes.buffer.asUint8List(
+      bytes.offsetInBytes,
+      bytes.lengthInBytes,
+    );
+    _assetCache[assetPath] = data;
+    return data;
+  }
+
+  String _cacheControlForPath(String requestPath) {
+    final normalizedPath = requestPath.replaceAll('\\', '/');
+    if (normalizedPath == 'index.html' ||
+        normalizedPath == 'sw.js' ||
+        normalizedPath == 'service-worker.js') {
+      return 'public, max-age=300';
+    }
+
+    if (normalizedPath.startsWith('assets/')) {
+      return 'public, max-age=31536000, immutable';
+    }
+
+    return 'public, max-age=86400';
+  }
+
   String _getContentType(String path) {
     final ext = path.split('.').last.toLowerCase();
     switch (ext) {
@@ -127,4 +161,3 @@ class LocalAssetServer {
     }
   }
 }
-

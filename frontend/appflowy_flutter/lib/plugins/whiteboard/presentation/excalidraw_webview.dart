@@ -24,6 +24,7 @@ class ExcalidrawWebView extends StatefulWidget {
     super.key,
     required this.viewId,
     this.initialData,
+    this.initialDataLoaded = false,
     this.onDataChanged,
     this.onExport,
     this.onError,
@@ -31,6 +32,7 @@ class ExcalidrawWebView extends StatefulWidget {
 
   final String viewId;
   final Map<String, dynamic>? initialData;
+  final bool initialDataLoaded;
   final Function(String type, Map<String, dynamic> data)? onDataChanged;
   final Function(String format, dynamic data)? onExport;
   final Function(String error)? onError;
@@ -108,7 +110,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       transparentBackground: true,
       useShouldOverrideUrlLoading: true,
       mediaPlaybackRequiresUserGesture: false,
-      cacheEnabled: false,
+      cacheEnabled: true,
       // Android 特定设置
       useHybridComposition: true,
       thirdPartyCookiesEnabled: false,
@@ -169,8 +171,11 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               '[ExcalidrawWebView] 🚀 initData called, loading whiteboard data...');
 
           try {
-            final service = WhiteboardDataService();
-            final data = await service.loadWhiteboardData(widget.viewId);
+            final data = widget.initialDataLoaded
+                ? Map<String, dynamic>.from(widget.initialData ?? const {})
+                : await WhiteboardDataService().loadWhiteboardData(
+                    widget.viewId,
+                  );
 
             Log.info(
                 '[ExcalidrawWebView] ✅ Data loaded, ${data.keys.length} keys found');

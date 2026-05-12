@@ -902,6 +902,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
       viewId: widget.view.id,
       initialData: _initialData,
+      initialDataLoaded: !_isLoadingData,
       onDataChanged: _onWhiteboardDataChanged,
       onExport: _onWhiteboardExport,
       onError: _onWhiteboardError,
