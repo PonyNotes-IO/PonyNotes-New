@@ -1,15 +1,16 @@
 use std::fs;
 use std::io;
 use std::io::Write;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::layer::FlowyFormattingLayer;
 use crate::stream_log::{StreamLog, StreamLogSender};
 use chrono::Local;
+use lazy_static::lazy_static;
 use lib_infra::util::OperatingSystem;
 use tracing::subscriber::set_global_default;
 use tracing_appender::rolling::Rotation;
-use tracing_appender::rolling::RollingFileAppender;
+use tracing_appender::{non_blocking::WorkerGuard, rolling::RollingFileAppender};
 use tracing_bunyan_formatter::JsonStorageLayer;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::MakeWriter;
@@ -17,6 +18,11 @@ use tracing_subscriber::{layer::SubscriberExt, EnvFilter};
 
 mod layer;
 pub mod stream_log;
+
+lazy_static! {
+  static ref APP_LOG_GUARD: RwLock<Option<WorkerGuard>> = RwLock::new(None);
+  static ref COLLAB_SYNC_LOG_GUARD: RwLock<Option<WorkerGuard>> = RwLock::new(None);
+}
 
 pub struct Builder {
   #[allow(dead_code)]
@@ -30,7 +36,6 @@ pub struct Builder {
 }
 
 const SYNC_TARGET: &str = "sync_trace_log";
-
 impl Builder {
   pub fn new(
     name: &str,
@@ -38,7 +43,7 @@ impl Builder {
     platform: &OperatingSystem,
     stream_log_sender: Option<Arc<dyn StreamLogSender>>,
   ) -> Self {
-    // 确保日志目录存在，避免 RollingFileAppender 因目录不存在而失败
+    // 确保日志目录存在，避免 RollingFileAppender 因目录缺失而无法创建日志文件
     if let Err(e) = fs::create_dir_all(directory) {
       eprintln!("[lib-log] 创建日志目录失败 '{}': {}", directory, e);
     }
@@ -82,12 +87,18 @@ impl Builder {
   pub fn build(self) -> Result<(), String> {
     let env_filter = EnvFilter::new(self.env_filter);
 
-    // 直接使用 RollingFileAppender 同步写入，避免 non_blocking 后台线程在进程退出时
-    // 因 WorkerGuard 未 drop（存于 lazy_static）而导致缓冲日志丢失
-    let app_file_layer = FlowyFormattingLayer::new(self.app_log_appender)
+    // non_blocking：日志写入交给后台线程，避免阻塞 Tokio worker 线程（否则网络/同步操作会极卡）
+    let (appflowy_log_non_blocking, app_log_guard) =
+      tracing_appender::non_blocking(self.app_log_appender);
+    *APP_LOG_GUARD.write().unwrap() = Some(app_log_guard);
+    let app_file_layer = FlowyFormattingLayer::new(appflowy_log_non_blocking)
       .with_target_filter(|target| target != SYNC_TARGET);
 
-    let collab_sync_file_layer = FlowyFormattingLayer::new(self.sync_log_appender)
+    let (sync_log_non_blocking, sync_log_guard) =
+      tracing_appender::non_blocking(self.sync_log_appender);
+    *COLLAB_SYNC_LOG_GUARD.write().unwrap() = Some(sync_log_guard);
+
+    let collab_sync_file_layer = FlowyFormattingLayer::new(sync_log_non_blocking)
       .with_target_filter(|target| target == SYNC_TARGET);
 
     if let Some(stream_log_sender) = &self.stream_log_sender {
