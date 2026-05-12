@@ -132,7 +132,9 @@ class LocalAssetServer {
       return 'public, max-age=300';
     }
 
-    if (normalizedPath.startsWith('assets/')) {
+    if (normalizedPath.startsWith('assets/') ||
+        normalizedPath.startsWith('fonts/') ||
+        normalizedPath.startsWith('locales/')) {
       return 'public, max-age=31536000, immutable';
     }
 

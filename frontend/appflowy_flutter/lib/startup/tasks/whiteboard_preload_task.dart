@@ -61,6 +61,9 @@ class WhiteboardPreloadTask extends LaunchTask {
         'assets/excalidraw/sw.js',
         'assets/excalidraw/service-worker.js',
         'assets/excalidraw/manifest.webmanifest',
+        'assets/excalidraw/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2',
+        'assets/excalidraw/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTQ3j6zbXWjgeg.woff2',
+        'assets/excalidraw/fonts/ComicShanns/ComicShanns-Regular-279a7b317d12eb88de06167bd672b4b4.woff2',
       };
 
       if (indexHtml != null) {
