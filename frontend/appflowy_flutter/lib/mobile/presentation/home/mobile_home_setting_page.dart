@@ -1778,29 +1778,11 @@ class _GeneralSettingsCard extends StatelessWidget {
             ),
           ),
           _ThemeModeSettingItem(),
-          _SettingsCardDivider(),
           _FontFamilySettingItem(),
-          _SettingsCardDivider(),
           _FontSizeSettingItem(),
-          _SettingsCardDivider(),
           _TextDirectionSettingItem(),
         ],
       ),
-    );
-  }
-}
-
-class _SettingsCardDivider extends StatelessWidget {
-  const _SettingsCardDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-    return Divider(
-      color: theme.borderColorScheme.primary.withValues(alpha: 0.5),
-      height: 0.5,
-      indent: 16,
-      endIndent: 16,
     );
   }
 }
@@ -1840,7 +1822,6 @@ class _SupportCard extends StatelessWidget {
             label: '加入 Discord',
             onTap: () => afLaunchUrlString('https://discord.gg/JucBXeU2FE'),
           ),
-          _SettingsCardDivider(),
           _SettingsActionItem(
             label: '上报问题',
             onTap: () => _showReportIssueSheet(context),
@@ -1903,7 +1884,7 @@ class _ThemeModeSettingItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
               Expanded(
@@ -1996,7 +1977,7 @@ class _FontFamilySettingItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
               Expanded(
@@ -2051,7 +2032,7 @@ class _FontSizeSettingItemState extends State<_FontSizeSettingItem> {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
               Expanded(
@@ -2121,7 +2102,7 @@ class _TextDirectionSettingItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
               Expanded(
@@ -2223,7 +2204,7 @@ class _SettingsLinkItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
               Expanded(
@@ -2266,7 +2247,7 @@ class _SettingsActionItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Text(
             label,
             style: theme.textStyle.heading4.standard(
