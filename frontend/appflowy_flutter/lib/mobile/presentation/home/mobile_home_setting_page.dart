@@ -5,6 +5,19 @@ import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/mobile/presentation/setting/about/about_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/ai/ai_settings_group.dart';
+import 'package:appflowy/mobile/presentation/setting/appearance/appearance_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/cloud/cloud_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/datetime/datetime_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/language_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/notifications_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/personal_info/personal_info_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/self_host_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/storage/storage_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/support_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/user_session_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/workspace/workspace_setting_group.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
@@ -175,10 +188,16 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
         child: Row(
           children: [
             IconButton(
-              onPressed: isMenu ? () => Navigator.pop(context) : () => _scaffoldKey.currentState?.openDrawer(),
+              onPressed: () {
+                if (isMenu) {
+                  Navigator.pop(context);
+                } else {
+                  setState(() => _currentSection = MobileSettingsSection.menu);
+                }
+              },
               icon: FlowySvg(
-                isMenu ? FlowySvgs.mobile_return_s : FlowySvgs.m_settings_more_s,
-                size: isMenu ? const Size(7, 12) : const Size(24, 24),
+                isMenu ? FlowySvgs.mobile_return_s : FlowySvgs.mobile_return_s,
+                size: const Size(7, 12),
                 color: afTheme.iconColorScheme.primary,
               ),
             ),
@@ -235,14 +254,74 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       return const Center(child: CircularProgressIndicator.adaptive());
     }
 
-    return _MobileSettingsMenuContent(
-      userProfile: _userProfile!,
-      subscriptionInfo: _subscriptionInfo,
-      currentSubscription: _currentSubscription,
-      currentWorkspace: widget.workspaceState?.currentWorkspace,
-      onNavigate: (section) {
-        setState(() => _currentSection = section);
-      },
+    if (_currentSection == MobileSettingsSection.menu) {
+      return _MobileSettingsMenuContent(
+        userProfile: _userProfile!,
+        subscriptionInfo: _subscriptionInfo,
+        currentSubscription: _currentSubscription,
+        currentWorkspace: widget.workspaceState?.currentWorkspace,
+        onNavigate: (section) {
+          setState(() => _currentSection = section);
+        },
+      );
+    }
+
+    return _buildSettingsSection();
+  }
+
+  Widget _buildSettingsSection() {
+    final isServerWorkspace =
+        _userProfile!.workspaceType == WorkspaceTypePB.ServerW;
+    final isBillingEnabled =
+        isServerWorkspace && FeatureFlag.planBilling.isOn && _subscriptionInfo != null;
+    final isQuickEntryUser = _userProfile!.userAuthType != AuthTypePB.Server;
+    final workspaceId = widget.workspaceState?.currentWorkspace?.workspaceId ?? '';
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            switch (_currentSection) {
+              MobileSettingsSection.account => PersonalInfoSettingGroup(
+                  userProfile: _userProfile!,
+                ),
+              MobileSettingsSection.workspace => const _GeneralSettingsContent(),
+              MobileSettingsSection.workspaceManagement =>
+                WorkspaceSettingGroup(),
+              MobileSettingsSection.member => WorkspaceSettingGroup(),
+              MobileSettingsSection.sharing => _ComingSoonGroup(
+                  title: '共享发布',
+                  description: '分享与发布功能开发中',
+                ),
+              MobileSettingsSection.notifications =>
+                NotificationsSettingGroup(),
+              MobileSettingsSection.storage => const StorageSettingGroup(),
+              MobileSettingsSection.sites => _ComingSoonGroup(
+                  title: LocaleKeys.settings_sites_title.tr(),
+                  description: '站点功能开发中',
+                ),
+              MobileSettingsSection.plan => _ComingSoonGroup(
+                  title: LocaleKeys.settings_planPage_menuLabel.tr(),
+                  description: '订阅计划功能开发中',
+                ),
+              MobileSettingsSection.billing => _ComingSoonGroup(
+                  title: LocaleKeys.settings_billingPage_menuLabel.tr(),
+                  description: '账单功能开发中',
+                ),
+              MobileSettingsSection.about => const AboutSettingGroup(),
+              MobileSettingsSection.accountManagement =>
+                UserSessionSettingGroup(
+                  userProfile: _userProfile!,
+                  showThirdPartyLogin: false,
+                ),
+              MobileSettingsSection.menu => const SizedBox.shrink(),
+            },
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1615,6 +1694,87 @@ class _UpgradePlanCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ============================================================================
+// General Settings Content (Appearance + DateTime + Language + AI)
+// ============================================================================
+
+class _GeneralSettingsContent extends StatelessWidget {
+  const _GeneralSettingsContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: const [
+        AppearanceSettingGroup(),
+        DateTimeSettingGroup(),
+        LanguageSettingGroup(),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// Coming Soon Placeholder
+// ============================================================================
+
+class _ComingSoonGroup extends StatelessWidget {
+  const _ComingSoonGroup({
+    required this.title,
+    required this.description,
+  });
+
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        VSpace(theme.spacing.s),
+        Text(
+          title,
+          style: theme.textStyle.heading4.enhanced(
+            color: theme.textColorScheme.primary,
+          ),
+        ),
+        VSpace(theme.spacing.m),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.surfaceColorScheme.layer01,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: theme.borderColorScheme.primary.withValues(alpha: 0.3),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            children: [
+              FlowySvg(
+                FlowySvgs.icon_plan_info_indicator_s,
+                size: const Size.square(32),
+                color: theme.iconColorScheme.tertiary,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                description,
+                style: theme.textStyle.body.standard(
+                  color: theme.textColorScheme.secondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
