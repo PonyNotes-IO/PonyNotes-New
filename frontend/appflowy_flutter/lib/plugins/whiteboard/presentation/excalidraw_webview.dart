@@ -43,6 +43,17 @@ class ExcalidrawWebView extends StatefulWidget {
 
 /// ExcalidrawWebView的State类，暴露公共方法供外部调用
 class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
+  static const Set<String> _stableAppStateKeys = {
+    'gridModeEnabled',
+    'gridSize',
+    'scrollX',
+    'scrollY',
+    'theme',
+    'viewBackgroundColor',
+    'zoom',
+    'zenModeEnabled',
+  };
+
   // 内部状态（保持原有实现）
   InAppWebViewController? _controller;
   bool _isLoading = true;
@@ -309,7 +320,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                   key.endsWith('_excalidraw-state')) {
                 if (value is String) {
                   try {
-                    final parsed = jsonDecode(value);
+                    final parsed = _sanitizeAppState(jsonDecode(value));
                     widget.onDataChanged?.call('update', {'appState': parsed});
                     return;
                   } catch (e) {
@@ -317,7 +328,10 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                         '⚠️ [ExcalidrawWebView] Failed to parse appState: $e');
                   }
                 }
-                widget.onDataChanged?.call('update', {'appState': value});
+                widget.onDataChanged?.call(
+                  'update',
+                  {'appState': _sanitizeAppState(value)},
+                );
                 return;
               }
 
@@ -452,7 +466,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           dataToLoad['elements'] = widget.initialData!['elements'];
         }
         if (widget.initialData!.containsKey('appState')) {
-          dataToLoad['appState'] = widget.initialData!['appState'];
+          dataToLoad['appState'] =
+              _sanitizeAppState(widget.initialData!['appState']);
         }
         if (widget.initialData!.containsKey('files')) {
           dataToLoad['files'] = widget.initialData!['files'];
@@ -466,7 +481,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               if (key.endsWith('_excalidraw')) {
                 dataToLoad['elements'] = jsonDecode(value);
               } else if (key.endsWith('_excalidraw-state')) {
-                dataToLoad['appState'] = jsonDecode(value);
+                dataToLoad['appState'] = _sanitizeAppState(jsonDecode(value));
               } else if (key.endsWith('_excalidraw-files')) {
                 // 📸 关键修复：从自定义 key 加载 files
                 dataToLoad['files'] = jsonDecode(value);
@@ -841,12 +856,12 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 (normalized['appState'] as Map).isEmpty)) {
           if (value is String) {
             try {
-              normalized['appState'] = jsonDecode(value);
+              normalized['appState'] = _sanitizeAppState(jsonDecode(value));
             } catch (e) {
-              normalized['appState'] = value;
+              normalized['appState'] = _sanitizeAppState(value);
             }
           } else {
-            normalized['appState'] = value;
+            normalized['appState'] = _sanitizeAppState(value);
           }
         }
       } else if (key == 'excalidraw-files' ||
@@ -870,12 +885,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
         if (value is String &&
             (key == 'elements' || key == 'appState' || key == 'files')) {
           try {
-            normalized[key] = jsonDecode(value);
+            final parsed = jsonDecode(value);
+            normalized[key] =
+                key == 'appState' ? _sanitizeAppState(parsed) : parsed;
           } catch (e) {
-            normalized[key] = value;
+            normalized[key] =
+                key == 'appState' ? _sanitizeAppState(value) : value;
           }
         } else {
-          normalized[key] = value;
+          normalized[key] =
+              key == 'appState' ? _sanitizeAppState(value) : value;
         }
       } else {
         // 其他键直接保留
@@ -884,6 +903,21 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
     }
 
     return normalized;
+  }
+
+  Map<String, dynamic> _sanitizeAppState(dynamic value) {
+    if (value is! Map) {
+      return <String, dynamic>{};
+    }
+
+    final source = Map<String, dynamic>.from(value);
+    final sanitized = <String, dynamic>{};
+    for (final key in _stableAppStateKeys) {
+      if (source.containsKey(key)) {
+        sanitized[key] = source[key];
+      }
+    }
+    return sanitized;
   }
 
   Future<Uint8List?> _downloadCloudImage(String url) async {
@@ -1028,6 +1062,13 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
     try {
       // ✅ 关键：包装为 {key, value} 结构，与 JS 接口匹配
+      if (key == 'appState') {
+        value = _sanitizeAppState(value);
+        if (value.isEmpty) {
+          return;
+        }
+      }
+
       final pushPayload = {
         'key': key,
         'value': value,

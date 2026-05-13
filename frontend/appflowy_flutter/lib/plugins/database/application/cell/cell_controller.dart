@@ -241,6 +241,9 @@ class CellDataNotifier<T> extends ChangeNotifier {
   bool Function(T? oldValue, T? newValue)? listenWhen;
 
   set value(T newValue) {
+    if (_value == newValue) {
+      return;
+    }
     if (listenWhen != null && !listenWhen!.call(_value, newValue)) {
       return;
     }

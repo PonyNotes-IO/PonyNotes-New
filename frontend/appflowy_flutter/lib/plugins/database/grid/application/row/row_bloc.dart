@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:collection/collection.dart';
 
 import 'package:appflowy/plugins/database/application/cell/cell_controller.dart';
 import 'package:appflowy/plugins/database/application/field/field_controller.dart';
@@ -34,6 +35,8 @@ class RowBloc extends Bloc<RowEvent, RowState> {
   final RowController _rowController;
   final String viewId;
   final String rowId;
+  static const ListEquality<CellContext> _cellContextEquality =
+      ListEquality<CellContext>();
 
   @override
   Future<void> close() async {
@@ -58,6 +61,12 @@ class RowBloc extends Bloc<RowEvent, RowState> {
                       .isVisibleState(),
                 )
                 .toList();
+            if (_cellContextEquality.equals(
+              state.cellContexts,
+              visibleCellContexts,
+            )) {
+              return;
+            }
             emit(
               state.copyWith(
                 cellContexts: visibleCellContexts,
