@@ -1784,52 +1784,8 @@ class _GeneralSettingsCard extends StatelessWidget {
           _FontSizeSettingItem(),
           _SettingsCardDivider(),
           _TextDirectionSettingItem(),
-          _SettingsCardDivider(),
-          _SettingsLinkItem(
-            label: '日期和时间',
-            onTap: () => context.push(DateTimePage.routeName),
-          ),
-          _SettingsCardDivider(),
-          _SettingsLinkItem(
-            label: '语言',
-            onTap: () => context.push('/language_picker'),
-          ),
-          _SettingsCardDivider(),
-          _SettingsActionItem(
-            label: '清除缓存',
-            onTap: () => _showClearCacheDialog(context),
-          ),
-          _SettingsCardDivider(),
-          _SettingsLinkItem(
-            label: '隐私政策',
-            onTap: () => afLaunchUrlString('https://appflowy.com/privacy'),
-          ),
-          _SettingsCardDivider(),
-          _SettingsLinkItem(
-            label: '关于',
-            onTap: () => context.push('/settings/about'),
-          ),
         ],
       ),
-    );
-  }
-
-  void _showClearCacheDialog(BuildContext context) {
-    showFlowyMobileConfirmDialog(
-      context,
-      title: const FlowyText('确定要清除缓存吗？', maxLines: 2),
-      content: const FlowyText(
-        '这将清除所有缓存数据，但不会删除您的笔记内容。',
-        fontSize: 12,
-        maxLines: 4,
-      ),
-      actionButtonTitle: '确定',
-      onActionButtonPressed: () async {
-        await getIt<FlowyCacheManager>().clearAllCache();
-        if (context.mounted) {
-          showToastNotification(message: '缓存已清除');
-        }
-      },
     );
   }
 }
