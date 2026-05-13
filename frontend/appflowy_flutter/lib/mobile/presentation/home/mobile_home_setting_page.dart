@@ -1707,10 +1707,12 @@ class _GeneralSettingsContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: const [
+    return const Column(
+      children: [
         AppearanceSettingGroup(),
+        SizedBox(height: 12),
         DateTimeSettingGroup(),
+        SizedBox(height: 12),
         LanguageSettingGroup(),
       ],
     );

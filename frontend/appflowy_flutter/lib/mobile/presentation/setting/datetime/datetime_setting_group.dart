@@ -1,17 +1,19 @@
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
-import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_group_widget.dart';
-import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_item_widget.dart';
-import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_trailing.dart';
-import 'package:appflowy/mobile/presentation/widgets/flowy_option_tile.dart';
+import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_row.dart';
+import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/application/settings/date_time/date_format_ext.dart';
 import 'package:appflowy/workspace/application/settings/date_time/time_format_ext.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/date_time.pbenum.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+
+import '../setting.dart';
 
 class DateTimeSettingGroup extends StatelessWidget {
   const DateTimeSettingGroup({super.key});
@@ -23,17 +25,30 @@ class DateTimeSettingGroup extends StatelessWidget {
         return MobileSettingGroup(
           groupTitle: LocaleKeys.settings_workspacePage_dateTime_title.tr(),
           settingItemList: [
-            MobileSettingItem(
+            MobileSettingRow(
               name: LocaleKeys.settings_workspacePage_dateTime_dateFormat_label
                   .tr(),
-              trailing: MobileSettingTrailing(
-                text: _dateFormatLabel(state.dateFormat),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _dateFormatLabel(state.dateFormat),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.secondary,
+                        ),
+                  ),
+                  const SizedBox(width: 8),
+                  FlowySvg(
+                    FlowySvgs.toolbar_arrow_right_m,
+                    size: const Size.square(24),
+                    color: AppFlowyTheme.of(context).iconColorScheme.tertiary,
+                  ),
+                ],
               ),
               onTap: () => _showDateFormatPicker(context, state.dateFormat),
             ),
-            MobileSettingItem(
-              name:
-                  LocaleKeys.settings_workspacePage_dateTime_24HourTime.tr(),
+            MobileSettingRow(
+              name: LocaleKeys.settings_workspacePage_dateTime_24HourTime.tr(),
               trailing: Switch.adaptive(
                 activeColor: Theme.of(context).colorScheme.primary,
                 value: state.timeFormat == UserTimeFormatPB.TwentyFourHour,
@@ -47,6 +62,8 @@ class DateTimeSettingGroup extends StatelessWidget {
               ),
             ),
           ],
+          wrapInCard: true,
+          showDivider: false,
         );
       },
     );
@@ -109,3 +126,4 @@ class DateTimeSettingGroup extends StatelessWidget {
     );
   }
 }
+
