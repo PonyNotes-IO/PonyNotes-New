@@ -16,6 +16,9 @@ import 'package:appflowy/mobile/presentation/notifications/mobile_notifications_
 import 'package:appflowy/mobile/presentation/presentation.dart';
 import 'package:appflowy/mobile/presentation/search/mobile_search_page.dart';
 import 'package:appflowy/mobile/presentation/setting/cloud/appflowy_cloud_page.dart';
+import 'package:appflowy/mobile/presentation/setting/appearance/appearance_page.dart';
+import 'package:appflowy/mobile/presentation/setting/about/about_page.dart';
+import 'package:appflowy/mobile/presentation/setting/datetime/datetime_page.dart';
 import 'package:appflowy/mobile/presentation/setting/font/font_picker_screen.dart';
 import 'package:appflowy/mobile/presentation/setting/language/language_picker_screen.dart';
 import 'package:appflowy/mobile/presentation/setting/launch_settings_page.dart';
@@ -70,6 +73,9 @@ GoRouter generateRouter(Widget child) {
         _mobileCloudSettingAppFlowyCloudPageRoute(),
         _mobileLaunchSettingsPageRoute(),
         _mobileFeatureFlagPageRoute(),
+        _mobileAppearancePageRoute(),
+        _mobileDateTimePageRoute(),
+        _mobileAboutPageRoute(),
 
         // view page
         _mobileEditorScreenRoute(),
@@ -310,6 +316,45 @@ GoRoute _mobileFeatureFlagPageRoute() {
       return const MaterialExtendedPage(
         child: FeatureFlagScreen(),
         name: FeatureFlagScreen.routeName,
+      );
+    },
+  );
+}
+
+GoRoute _mobileAppearancePageRoute() {
+  return GoRoute(
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    path: AppearancePage.routeName,
+    pageBuilder: (context, state) {
+      return const MaterialExtendedPage(
+        child: AppearancePage(),
+        name: AppearancePage.routeName,
+      );
+    },
+  );
+}
+
+GoRoute _mobileDateTimePageRoute() {
+  return GoRoute(
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    path: DateTimePage.routeName,
+    pageBuilder: (context, state) {
+      return const MaterialExtendedPage(
+        child: DateTimePage(),
+        name: DateTimePage.routeName,
+      );
+    },
+  );
+}
+
+GoRoute _mobileAboutPageRoute() {
+  return GoRoute(
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    path: AboutPage.routeName,
+    pageBuilder: (context, state) {
+      return const MaterialExtendedPage(
+        child: AboutPage(),
+        name: AboutPage.routeName,
       );
     },
   );

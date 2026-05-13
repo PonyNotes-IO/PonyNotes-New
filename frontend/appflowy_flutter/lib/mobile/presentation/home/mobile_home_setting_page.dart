@@ -1,15 +1,17 @@
 import 'dart:io' as io;
 
+import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/env/cloud_env.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_state.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/about/about_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/ai/ai_settings_group.dart';
-import 'package:appflowy/mobile/presentation/setting/appearance/appearance_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/appearance/appearance_page.dart';
 import 'package:appflowy/mobile/presentation/setting/cloud/cloud_setting_group.dart';
-import 'package:appflowy/mobile/presentation/setting/datetime/datetime_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/datetime/datetime_page.dart';
 import 'package:appflowy/mobile/presentation/setting/language_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/notifications_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/personal_info_setting_group.dart';
@@ -18,13 +20,17 @@ import 'package:appflowy/mobile/presentation/setting/storage/storage_setting_gro
 import 'package:appflowy/mobile/presentation/setting/support_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/user_session_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/workspace_setting_group.dart';
+import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
+import 'package:appflowy/shared/appflowy_cache_manager.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/startup/tasks/device_info_task.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/sign_in_screen.dart';
 import 'package:appflowy/util/int64_extension.dart';
+import 'package:appflowy/util/share_log_files.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:get_it/get_it.dart';
@@ -277,6 +283,11 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
     final isQuickEntryUser = _userProfile!.userAuthType != AuthTypePB.Server;
     final workspaceId = widget.workspaceState?.currentWorkspace?.workspaceId ?? '';
 
+    // _GeneralSettingsContent handles its own scroll + padding
+    if (_currentSection == MobileSettingsSection.workspace) {
+      return const _GeneralSettingsContent();
+    }
+
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -287,7 +298,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
               MobileSettingsSection.account => PersonalInfoSettingGroup(
                   userProfile: _userProfile!,
                 ),
-              MobileSettingsSection.workspace => const _GeneralSettingsContent(),
+              MobileSettingsSection.workspace => const SizedBox.shrink(), // handled above
               MobileSettingsSection.workspaceManagement =>
                 WorkspaceSettingGroup(),
               MobileSettingsSection.member => WorkspaceSettingGroup(),
@@ -1699,7 +1710,7 @@ class _UpgradePlanCard extends StatelessWidget {
 }
 
 // ============================================================================
-// General Settings Content (Appearance + DateTime + Language + AI)
+// General Settings Content (通用设置)
 // ============================================================================
 
 class _GeneralSettingsContent extends StatelessWidget {
@@ -1707,14 +1718,285 @@ class _GeneralSettingsContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      children: [
-        AppearanceSettingGroup(),
-        SizedBox(height: 12),
-        DateTimeSettingGroup(),
-        SizedBox(height: 12),
-        LanguageSettingGroup(),
-      ],
+    final theme = AppFlowyTheme.of(context);
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Column(
+          children: [
+            _GeneralSettingsCard(),
+            const SizedBox(height: 12),
+            const _SupportCard(),
+            const SizedBox(height: 16),
+            Text(
+              '版本 ${ApplicationInfo.applicationVersion} (${ApplicationInfo.buildNumber})',
+              style: theme.textStyle.body.standard(
+                color: theme.textColorScheme.secondary,
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GeneralSettingsCard extends StatelessWidget {
+  const _GeneralSettingsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.surfaceContainerColorScheme.layer01,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.borderColorScheme.primary
+              .withValues(alpha: isLightMode ? 0.3 : 0.08),
+          width: 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Text(
+              '外观',
+              style: theme.textStyle.heading4.standard(
+                color: theme.textColorScheme.primary,
+              ),
+            ),
+          ),
+          _SettingsLinkItem(
+            label: '外观与显示',
+            onTap: () => context.push(AppearancePage.routeName),
+          ),
+          _SettingsCardDivider(),
+          _SettingsLinkItem(
+            label: '日期和时间',
+            onTap: () => context.push(DateTimePage.routeName),
+          ),
+          _SettingsCardDivider(),
+          _SettingsLinkItem(
+            label: '语言',
+            onTap: () => context.push('/language_picker'),
+          ),
+          _SettingsCardDivider(),
+          _SettingsActionItem(
+            label: '清除缓存',
+            onTap: () => _showClearCacheDialog(context),
+          ),
+          _SettingsCardDivider(),
+          _SettingsLinkItem(
+            label: '隐私政策',
+            onTap: () => afLaunchUrlString('https://appflowy.com/privacy'),
+          ),
+          _SettingsCardDivider(),
+          _SettingsLinkItem(
+            label: '关于',
+            onTap: () => context.push('/settings/about'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showClearCacheDialog(BuildContext context) {
+    showFlowyMobileConfirmDialog(
+      context,
+      title: const FlowyText('确定要清除缓存吗？', maxLines: 2),
+      content: const FlowyText(
+        '这将清除所有缓存数据，但不会删除您的笔记内容。',
+        fontSize: 12,
+        maxLines: 4,
+      ),
+      actionButtonTitle: '确定',
+      onActionButtonPressed: () async {
+        await getIt<FlowyCacheManager>().clearAllCache();
+        if (context.mounted) {
+          showToastNotification(message: '缓存已清除');
+        }
+      },
+    );
+  }
+}
+
+class _SettingsCardDivider extends StatelessWidget {
+  const _SettingsCardDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Divider(
+      color: theme.borderColorScheme.primary.withValues(alpha: 0.5),
+      height: 0.5,
+      indent: 16,
+      endIndent: 16,
+    );
+  }
+}
+
+class _SupportCard extends StatelessWidget {
+  const _SupportCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.surfaceContainerColorScheme.layer01,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.borderColorScheme.primary
+              .withValues(alpha: isLightMode ? 0.3 : 0.08),
+          width: 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Text(
+              '联系与支持',
+              style: theme.textStyle.heading4.standard(
+                color: theme.textColorScheme.primary,
+              ),
+            ),
+          ),
+          _SettingsLinkItem(
+            label: '加入 Discord',
+            onTap: () => afLaunchUrlString('https://discord.gg/JucBXeU2FE'),
+          ),
+          _SettingsCardDivider(),
+          _SettingsActionItem(
+            label: '上报问题',
+            onTap: () => _showReportIssueSheet(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReportIssueSheet(BuildContext context) {
+    showMobileBottomSheet(
+      context,
+      showDragHandle: true,
+      showHeader: true,
+      title: '上报问题',
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (ctx) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FlowyOptionTile.text(
+              showTopBorder: false,
+              text: 'GitHub 上报问题',
+              onTap: () {
+                final String os = io.Platform.operatingSystem;
+                afLaunchUrlString(
+                  'https://github.com/AppFlowy-IO/AppFlowy/issues/new'
+                  '?assignees=&labels=&projects=&template=bug_report.yaml'
+                  '&title=[Bug]%20Mobile:%20&version=${ApplicationInfo.applicationVersion}&os=$os',
+                );
+                Navigator.pop(ctx);
+              },
+            ),
+            FlowyOptionTile.text(
+              showTopBorder: false,
+              text: '导出日志文件',
+              onTap: () {
+                shareLogFiles(ctx);
+                Navigator.pop(ctx);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SettingsLinkItem extends StatelessWidget {
+  const _SettingsLinkItem({
+    required this.label,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textStyle.heading4.standard(
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+              ),
+              FlowySvg(
+                FlowySvgs.toolbar_arrow_right_m,
+                size: const Size.square(24),
+                color: theme.iconColorScheme.tertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsActionItem extends StatelessWidget {
+  const _SettingsActionItem({
+    required this.label,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Text(
+            label,
+            style: theme.textStyle.heading4.standard(
+              color: theme.textColorScheme.primary,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

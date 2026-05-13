@@ -1,5 +1,8 @@
 export 'about/about.dart';
+export 'appearance/appearance_page.dart';
 export 'appearance/appearance_setting_group.dart';
+export 'datetime/datetime_page.dart';
+export 'datetime/datetime_setting_group.dart';
 export 'font/font_setting.dart';
 export 'language_setting_group.dart';
 export 'notifications_setting_group.dart';
