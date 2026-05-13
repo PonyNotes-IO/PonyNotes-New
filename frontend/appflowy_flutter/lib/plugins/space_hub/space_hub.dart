@@ -72,12 +72,13 @@ class SpaceHubPluginBuilder extends PluginBuilder {
 class SpaceHubPlugin extends Plugin {
   SpaceHubPlugin({
     required this.view,
+    ViewPB? initialSelectedView,
   })  : notifier = ViewPluginNotifier(view: view),
         _viewInfoBloc = ViewInfoBloc(view: view)
           ..add(const ViewInfoEvent.started()),
         _pageAccessLevelBloc = PageAccessLevelBloc(view: view)
           ..add(const PageAccessLevelEvent.initial()),
-        _selectedViewNotifier = ValueNotifier<ViewPB?>(null),
+        _selectedViewNotifier = ValueNotifier<ViewPB?>(initialSelectedView),
         _currentViewInfoBlocNotifier = ValueNotifier<ViewInfoBloc?>(null);
 
   final ViewPB view;
@@ -96,6 +97,7 @@ class SpaceHubPlugin extends Plugin {
         notifier: notifier,
         selectedViewNotifier: _selectedViewNotifier,
         currentViewInfoBlocNotifier: _currentViewInfoBlocNotifier,
+        initialSelectedView: _selectedViewNotifier.value,
       );
 
   @override
@@ -129,6 +131,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
     required this.pageAccessLevelBloc,
     required this.selectedViewNotifier,
     required this.currentViewInfoBlocNotifier,
+    this.initialSelectedView,
   });
 
   final ViewInfoBloc bloc;
@@ -136,6 +139,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   final PageAccessLevelBloc pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
   final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ViewPB? initialSelectedView;
 
   ViewPB get view => notifier.view;
 
@@ -222,6 +226,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           bloc: bloc,
           pageAccessLevelBloc: pageAccessLevelBloc,
           currentViewInfoBlocNotifier: currentViewInfoBlocNotifier,
+          initialSelectedView: initialSelectedView,
         );
       },
     );
@@ -268,6 +273,7 @@ class _SpaceHubBlocProvider extends StatefulWidget {
     required this.bloc,
     required this.pageAccessLevelBloc,
     required this.currentViewInfoBlocNotifier,
+    this.initialSelectedView,
   });
 
   final ViewPB spaceView;
@@ -277,6 +283,7 @@ class _SpaceHubBlocProvider extends StatefulWidget {
   final ViewInfoBloc bloc;
   final PageAccessLevelBloc pageAccessLevelBloc;
   final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ViewPB? initialSelectedView;
 
   @override
   State<_SpaceHubBlocProvider> createState() => _SpaceHubBlocProviderState();
@@ -335,6 +342,7 @@ class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
         selectedViewNotifier: widget.selectedViewNotifier,
         onDeleted: widget.onDeleted,
         currentViewInfoBlocNotifier: widget.currentViewInfoBlocNotifier,
+        initialSelectedView: widget.initialSelectedView,
       ),
     );
   }
@@ -347,12 +355,14 @@ class _SpaceHubContent extends StatefulWidget {
     required this.selectedViewNotifier,
     required this.onDeleted,
     required this.currentViewInfoBlocNotifier,
+    this.initialSelectedView,
   });
 
   final ViewPB spaceView;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
   final Function(ViewPB, int?)? onDeleted;
   final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ViewPB? initialSelectedView;
 
   @override
   State<_SpaceHubContent> createState() => _SpaceHubContentState();
@@ -398,8 +408,14 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   @override
   void initState() {
     super.initState();
-    // 尝试从 SpaceBloc 获取当前空间的第一个文档作为默认选中
-    _trySelectFirstDocument();
+    // 若有预选文档（从新选项卡打开），直接使用，否则尝试选第一个文档
+    if (widget.initialSelectedView != null) {
+      _selectedView = widget.initialSelectedView;
+      widget.selectedViewNotifier.value = widget.initialSelectedView;
+      _addToRecentViews(widget.initialSelectedView!.id);
+    } else {
+      _trySelectFirstDocument();
+    }
   }
 
   @override

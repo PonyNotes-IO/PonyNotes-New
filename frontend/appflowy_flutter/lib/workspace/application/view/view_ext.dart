@@ -140,10 +140,11 @@ extension ViewExtension on ViewPB {
 
   Plugin plugin({
     Map<String, dynamic> arguments = const {},
+    ViewPB? initialSelectedView,
   }) {
     // 如果是空间类型，返回 SpaceHubPlugin（空间统一页面）
     if (isSpace) {
-      return SpaceHubPlugin(view: this);
+      return SpaceHubPlugin(view: this, initialSelectedView: initialSelectedView);
     }
 
     switch (layout) {

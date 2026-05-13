@@ -908,8 +908,6 @@ class _HomeTopBarState extends State<HomeTopBar>
         child: Row(
           children: [
             HSpace(widget.layout.menuSpacing),
-            const FlowyNavigation(),
-            const HSpace(16),
             // 插件自带的右侧工具区域
             ChangeNotifierProvider.value(
               value: Provider.of<PageNotifier>(context, listen: false),

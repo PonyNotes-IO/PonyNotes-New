@@ -323,12 +323,19 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
               onViewChildViewsUpdated: (update) {
                 Log.info('[SpaceBloc] Received child views update for space: ${space.id}, deleteCount=${update.deleteChildViews.length}, createCount=${update.createChildViews.length}, updateCount=${update.updateChildViews.length}');
                 if (!isClosed) {
-                  // 延迟触发刷新，确保后端操作完成（特别是删除最后一条文档的情况）
-                  Future.delayed(const Duration(milliseconds: 300), () {
-                    if (!isClosed) {
-                      add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
-                    }
-                  });
+                  // 仅在有结构性变化（增删子视图）时才触发重载。
+                  // 纯 update-only 事件（只有 lastEdited 等元数据变化）跳过，
+                  // 避免协作同步时每秒触发数十次 didUpdateCurrentSpaceChildViews。
+                  final hasStructuralChange =
+                      update.deleteChildViews.isNotEmpty ||
+                          update.createChildViews.isNotEmpty;
+                  if (hasStructuralChange) {
+                    Future.delayed(const Duration(milliseconds: 300), () {
+                      if (!isClosed) {
+                        add(const SpaceEvent.didUpdateCurrentSpaceChildViews());
+                      }
+                    });
+                  }
                 } else {
                   Log.warn('[SpaceBloc] Bloc is closed, ignoring child views update');
                 }
