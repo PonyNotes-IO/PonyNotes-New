@@ -9,10 +9,9 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/about/about_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/ai/ai_settings_group.dart';
-import 'package:appflowy/mobile/presentation/setting/appearance/appearance_page.dart';
 import 'package:appflowy/mobile/presentation/setting/cloud/cloud_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/datetime/datetime_page.dart';
-import 'package:appflowy/mobile/presentation/setting/language_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/font/font_picker_screen.dart';
 import 'package:appflowy/mobile/presentation/setting/notifications_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/personal_info_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/self_host_setting_group.dart';
@@ -31,6 +30,9 @@ import 'package:appflowy/user/application/user_service.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/sign_in_screen.dart';
 import 'package:appflowy/util/int64_extension.dart';
 import 'package:appflowy/util/share_log_files.dart';
+import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
+import 'package:appflowy/util/font_family_extension.dart';
+import 'package:appflowy/util/theme_mode_extension.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:get_it/get_it.dart';
@@ -1773,10 +1775,9 @@ class _GeneralSettingsCard extends StatelessWidget {
               ),
             ),
           ),
-          _SettingsLinkItem(
-            label: '外观与显示',
-            onTap: () => context.push(AppearancePage.routeName),
-          ),
+          _ThemeModeSettingItem(),
+          _SettingsCardDivider(),
+          _FontFamilySettingItem(),
           _SettingsCardDivider(),
           _SettingsLinkItem(
             label: '日期和时间',
@@ -1922,6 +1923,144 @@ class _SupportCard extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _ThemeModeSettingItem extends StatelessWidget {
+  const _ThemeModeSettingItem();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final themeMode = context.watch<AppearanceSettingsCubit>().state.themeMode;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showThemePicker(context),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '主题模式',
+                  style: theme.textStyle.heading4.standard(
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+              ),
+              Text(
+                themeMode.labelText,
+                style: theme.textStyle.heading4.standard(
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              FlowySvg(
+                FlowySvgs.toolbar_arrow_right_m,
+                size: const Size.square(24),
+                color: theme.iconColorScheme.tertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showThemePicker(BuildContext context) {
+    showMobileBottomSheet(
+      context,
+      showDragHandle: true,
+      showHeader: true,
+      title: '主题模式',
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (ctx) {
+        final themeMode = ctx.read<AppearanceSettingsCubit>().state.themeMode;
+        return Column(
+          children: [
+            FlowyOptionTile.checkbox(
+              text: LocaleKeys.settings_appearance_themeMode_light.tr(),
+              leftIcon: const FlowySvg(FlowySvgs.m_theme_mode_light_s),
+              isSelected: themeMode == ThemeMode.light,
+              onTap: () {
+                ctx.read<AppearanceSettingsCubit>().setThemeMode(ThemeMode.light);
+                Navigator.pop(ctx);
+              },
+            ),
+            FlowyOptionTile.checkbox(
+              showTopBorder: false,
+              text: LocaleKeys.settings_appearance_themeMode_dark.tr(),
+              leftIcon: const FlowySvg(FlowySvgs.m_theme_mode_dark_s),
+              isSelected: themeMode == ThemeMode.dark,
+              onTap: () {
+                ctx.read<AppearanceSettingsCubit>().setThemeMode(ThemeMode.dark);
+                Navigator.pop(ctx);
+              },
+            ),
+            FlowyOptionTile.checkbox(
+              showTopBorder: false,
+              text: LocaleKeys.settings_appearance_themeMode_system.tr(),
+              leftIcon: const FlowySvg(FlowySvgs.m_theme_mode_system_s),
+              isSelected: themeMode == ThemeMode.system,
+              onTap: () {
+                ctx.read<AppearanceSettingsCubit>().setThemeMode(ThemeMode.system);
+                Navigator.pop(ctx);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FontFamilySettingItem extends StatelessWidget {
+  const _FontFamilySettingItem();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final selectedFont =
+        context.watch<AppearanceSettingsCubit>().state.font;
+    final name = selectedFont.fontFamilyDisplayName;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.push(FontPickerScreen.routeName),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '字体系列',
+                  style: theme.textStyle.heading4.standard(
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+              ),
+              Text(
+                name,
+                style: theme.textStyle.heading4.standard(
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              FlowySvg(
+                FlowySvgs.toolbar_arrow_right_m,
+                size: const Size.square(24),
+                color: theme.iconColorScheme.tertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
