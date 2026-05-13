@@ -12,6 +12,7 @@ import 'package:appflowy/mobile/presentation/setting/ai/ai_settings_group.dart';
 import 'package:appflowy/mobile/presentation/setting/cloud/cloud_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/datetime/datetime_page.dart';
 import 'package:appflowy/mobile/presentation/setting/font/font_picker_screen.dart';
+import 'package:appflowy/plugins/document/application/document_appearance_cubit.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/font_size_stepper.dart';
 import 'package:appflowy/mobile/presentation/setting/notifications_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/personal_info_setting_group.dart';
@@ -1782,6 +1783,8 @@ class _GeneralSettingsCard extends StatelessWidget {
           _SettingsCardDivider(),
           _FontSizeSettingItem(),
           _SettingsCardDivider(),
+          _TextDirectionSettingItem(),
+          _SettingsCardDivider(),
           _SettingsLinkItem(
             label: '日期和时间',
             onTap: () => context.push(DateTimePage.routeName),
@@ -2144,6 +2147,104 @@ class _FontSizeSettingItemState extends State<_FontSizeSettingItem> {
         );
       },
     );
+  }
+}
+
+class _TextDirectionSettingItem extends StatelessWidget {
+  const _TextDirectionSettingItem();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final textDirection =
+        context.watch<AppearanceSettingsCubit>().state.textDirection;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showTextDirectionPicker(context),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '默认文本方向',
+                  style: theme.textStyle.heading4.standard(
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+              ),
+              Text(
+                _textDirectionLabelText(textDirection),
+                style: theme.textStyle.heading4.standard(
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              FlowySvg(
+                FlowySvgs.toolbar_arrow_right_m,
+                size: const Size.square(24),
+                color: theme.iconColorScheme.tertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _textDirectionLabelText(AppFlowyTextDirection textDirection) {
+    switch (textDirection) {
+      case AppFlowyTextDirection.auto:
+        return '自动';
+      case AppFlowyTextDirection.rtl:
+        return '从右到左';
+      case AppFlowyTextDirection.ltr:
+        return '从左到右';
+    }
+  }
+
+  void _showTextDirectionPicker(BuildContext context) {
+    showMobileBottomSheet(
+      context,
+      showHeader: true,
+      showDragHandle: true,
+      showDivider: false,
+      title: '默认文本方向',
+      builder: (ctx) {
+        final textDirection =
+            ctx.read<AppearanceSettingsCubit>().state.textDirection;
+        return Column(
+          children: [
+            FlowyOptionTile.checkbox(
+              text: '从左到右',
+              isSelected: textDirection == AppFlowyTextDirection.ltr,
+              onTap: () => _applyAndPop(ctx, AppFlowyTextDirection.ltr),
+            ),
+            FlowyOptionTile.checkbox(
+              showTopBorder: false,
+              text: '从右到左',
+              isSelected: textDirection == AppFlowyTextDirection.rtl,
+              onTap: () => _applyAndPop(ctx, AppFlowyTextDirection.rtl),
+            ),
+            FlowyOptionTile.checkbox(
+              showTopBorder: false,
+              text: '自动',
+              isSelected: textDirection == AppFlowyTextDirection.auto,
+              onTap: () => _applyAndPop(ctx, AppFlowyTextDirection.auto),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _applyAndPop(BuildContext ctx, AppFlowyTextDirection direction) {
+    ctx.read<AppearanceSettingsCubit>().setTextDirection(direction);
+    ctx.read<DocumentAppearanceCubit>().syncDefaultTextDirection(direction.name);
+    Navigator.pop(ctx);
   }
 }
 
