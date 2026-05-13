@@ -251,6 +251,31 @@
         files: api.getFiles?.() || {},
     });
 
+    const stableAppStateKeys = new Set([
+        'gridModeEnabled',
+        'gridSize',
+        'scrollX',
+        'scrollY',
+        'theme',
+        'viewBackgroundColor',
+        'zoom',
+        'zenModeEnabled',
+    ]);
+
+    const pickStableAppState = (appState) => {
+        if (!appState || typeof appState !== 'object') {
+            return {};
+        }
+
+        const stableState = {};
+        for (const key of stableAppStateKeys) {
+            if (Object.prototype.hasOwnProperty.call(appState, key)) {
+                stableState[key] = appState[key];
+            }
+        }
+        return stableState;
+    };
+
     // Flutter 调用：导出
     window.exportExcalidraw = async function (format = 'png') {
         try {
@@ -565,6 +590,7 @@
                 if (typeof appState === 'string') {
                     try { appStateToRestore = JSON.parse(appState); } catch (e) { }
                 }
+                appStateToRestore = pickStableAppState(appStateToRestore);
 
                 if (elementsToRestore || appStateToRestore) {
                     console.log('[PonyNotes] 🎨 Applying scene from payload');
@@ -707,7 +733,10 @@
             if (data.key === 'elements') {
                 api.updateScene({ elements: data.value, commitToHistory: false });
             } else if (data.key === 'appState') {
-                api.updateScene({ appState: data.value, commitToHistory: false });
+                const stableAppState = pickStableAppState(data.value);
+                if (Object.keys(stableAppState).length > 0) {
+                    api.updateScene({ appState: stableAppState, commitToHistory: false });
+                }
             } else if (data.key === 'files') {
                 await _injectFiles(api, data.value);
             }

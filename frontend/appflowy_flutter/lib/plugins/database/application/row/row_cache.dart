@@ -56,6 +56,7 @@ class RowCache {
   final RowLifeCycle _rowLifeCycle;
   final RowFieldsDelegate _fieldDelegate;
   RowChangesetNotifier? _changedNotifier;
+  final Map<RowId, RowChangesetNotifier> _rowChangedNotifiers = {};
   bool _isInitialRows = false;
   final List<RowsVisibilityChangePB> _pendingVisibilityChanges = [];
 
@@ -96,9 +97,8 @@ class RowCache {
     final rowInfo = _rowList.get(rowMeta.id);
     if (rowInfo != null) {
       rowInfo.updateRowMeta(rowMeta);
+      _notifyRowChanged(rowMeta.id, const ChangedReason.didFetchRow());
     }
-
-    _changedNotifier?.receive(const ChangedReason.didFetchRow());
   }
 
   void dispose() {
@@ -106,6 +106,10 @@ class RowCache {
     _rowLifeCycle.onRowDisposed();
     _changedNotifier?.dispose();
     _changedNotifier = null;
+    for (final notifier in _rowChangedNotifiers.values) {
+      notifier.dispose();
+    }
+    _rowChangedNotifiers.clear();
     _cellMemCache.dispose();
   }
 
@@ -154,6 +158,7 @@ class RowCache {
       final deletedRow = _rowList.remove(rowId);
       if (deletedRow != null) {
         _changedNotifier?.receive(ChangedReason.delete(deletedRow));
+        _disposeRowNotifier(rowId);
       }
     }
   }
@@ -177,14 +182,9 @@ class RowCache {
   void _updateRows(List<UpdatedRowPB> updatedRows) {
     if (updatedRows.isEmpty) return;
     final List<RowMetaPB> updatedList = [];
+    final Set<RowId> updatedRowIds = {};
     for (final updatedRow in updatedRows) {
-      for (final fieldId in updatedRow.fieldIds) {
-        final key = CellContext(
-          fieldId: fieldId,
-          rowId: updatedRow.rowId,
-        );
-        _cellMemCache.remove(key);
-      }
+      updatedRowIds.add(updatedRow.rowId);
       if (updatedRow.hasRowMeta()) {
         updatedList.add(updatedRow.rowMeta);
       }
@@ -198,6 +198,25 @@ class RowCache {
     if (updatedIndexs.isNotEmpty) {
       _changedNotifier?.receive(ChangedReason.update(updatedIndexs));
     }
+
+    for (final rowId in updatedRowIds) {
+      final rowInfo = _rowList.get(rowId);
+      final rowIndex = _rowList.indexOfRow(rowId);
+      if (rowInfo == null || rowIndex == null) {
+        continue;
+      }
+
+      _notifyRowChanged(
+        rowId,
+        ChangedReason.update(
+          UpdatedIndexMap()
+            ..[rowId] = UpdatedIndex(
+              index: rowIndex,
+              rowId: rowId,
+            ),
+        ),
+      );
+    }
   }
 
   void _hideRows(List<RowId> invisibleRows) {
@@ -205,6 +224,7 @@ class RowCache {
       final deletedRow = _rowList.remove(rowId);
       if (deletedRow != null) {
         _changedNotifier?.receive(ChangedReason.delete(deletedRow));
+        _disposeRowNotifier(rowId);
       }
     }
   }
@@ -231,24 +251,37 @@ class RowCache {
     required RowId rowId,
     void Function(List<CellContext>, ChangedReason)? onRowChanged,
   }) {
-    void listenerHandler() async {
+    void emitRowChanged(ChangedReason reason) {
       if (onRowChanged != null) {
         final rowInfo = _rowList.get(rowId);
         if (rowInfo != null) {
           final cellDataMap = _makeCells(rowInfo.rowMeta);
-          if (_changedNotifier != null) {
-            onRowChanged(cellDataMap, _changedNotifier!.reason);
-          }
+          onRowChanged(cellDataMap, reason);
         }
       }
     }
 
-    _changedNotifier?.addListener(listenerHandler);
-    return listenerHandler;
+    final rowNotifier = _rowNotifierFor(rowId);
+
+    void rowListenerHandler() => emitRowChanged(rowNotifier.reason);
+    void globalListenerHandler() {
+      final reason = _changedNotifier?.reason;
+      if (reason is _FieldDidChange) {
+        emitRowChanged(reason);
+      }
+    }
+
+    rowNotifier.addListener(rowListenerHandler);
+    _changedNotifier?.addListener(globalListenerHandler);
+
+    return () {
+      rowNotifier.removeListener(rowListenerHandler);
+      _changedNotifier?.removeListener(globalListenerHandler);
+    };
   }
 
   void removeRowListener(VoidCallback callback) {
-    _changedNotifier?.removeListener(callback);
+    callback();
   }
 
   List<CellContext> loadCells(RowMetaPB rowMeta) {
@@ -268,14 +301,16 @@ class RowCache {
         final rowIndex = _rowList.indexOfRow(rowMetaPB.id);
         if (rowInfo != null && rowIndex != null) {
           rowInfo.rowMetaNotifier.value = rowMetaPB;
-
-          final UpdatedIndexMap updatedIndexs = UpdatedIndexMap();
-          updatedIndexs[rowMetaPB.id] = UpdatedIndex(
-            index: rowIndex,
-            rowId: rowMetaPB.id,
+          _notifyRowChanged(
+            rowMetaPB.id,
+            ChangedReason.update(
+              UpdatedIndexMap()
+                ..[rowMetaPB.id] = UpdatedIndex(
+                  index: rowIndex,
+                  rowId: rowMetaPB.id,
+                ),
+            ),
           );
-
-          _changedNotifier?.receive(ChangedReason.update(updatedIndexs));
         }
       },
       (err) => Log.error(err),
@@ -298,6 +333,19 @@ class RowCache {
       fields: _fieldDelegate.fieldInfos,
       rowMeta: rowMetaPB,
     );
+  }
+
+  RowChangesetNotifier _rowNotifierFor(RowId rowId) {
+    return _rowChangedNotifiers.putIfAbsent(rowId, RowChangesetNotifier.new);
+  }
+
+  void _notifyRowChanged(RowId rowId, ChangedReason reason) {
+    _rowNotifierFor(rowId).receive(reason);
+  }
+
+  void _disposeRowNotifier(RowId rowId) {
+    final notifier = _rowChangedNotifiers.remove(rowId);
+    notifier?.dispose();
   }
 }
 
