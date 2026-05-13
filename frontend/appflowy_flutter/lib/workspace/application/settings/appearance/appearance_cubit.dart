@@ -81,9 +81,8 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
       textScaleFactor.toString(),
     );
 
-    // don't allow the text scale factor to be greater than 1.0, it will cause
-    // ui issues
-    emit(state.copyWith(textScaleFactor: textScaleFactor.clamp(0.7, 1.0)));
+    // clamp to [0.7, 1.2] to prevent ui issues
+    emit(state.copyWith(textScaleFactor: textScaleFactor.clamp(0.7, 1.2)));
   }
 
   Future<void> readTextScaleFactor() async {
@@ -92,7 +91,7 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
           (value) => double.parse(value),
         ) ??
         1.0;
-    emit(state.copyWith(textScaleFactor: textScaleFactor.clamp(0.7, 1.0)));
+    emit(state.copyWith(textScaleFactor: textScaleFactor.clamp(0.7, 1.2)));
   }
 
   /// Update selected theme in the user's settings and emit an updated state

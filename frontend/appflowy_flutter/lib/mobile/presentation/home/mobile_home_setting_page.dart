@@ -12,6 +12,7 @@ import 'package:appflowy/mobile/presentation/setting/ai/ai_settings_group.dart';
 import 'package:appflowy/mobile/presentation/setting/cloud/cloud_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/datetime/datetime_page.dart';
 import 'package:appflowy/mobile/presentation/setting/font/font_picker_screen.dart';
+import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/font_size_stepper.dart';
 import 'package:appflowy/mobile/presentation/setting/notifications_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/personal_info_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/self_host_setting_group.dart';
@@ -1779,6 +1780,8 @@ class _GeneralSettingsCard extends StatelessWidget {
           _SettingsCardDivider(),
           _FontFamilySettingItem(),
           _SettingsCardDivider(),
+          _FontSizeSettingItem(),
+          _SettingsCardDivider(),
           _SettingsLinkItem(
             label: '日期和时间',
             onTap: () => context.push(DateTimePage.routeName),
@@ -2061,6 +2064,85 @@ class _FontFamilySettingItem extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FontSizeSettingItem extends StatefulWidget {
+  const _FontSizeSettingItem();
+
+  @override
+  State<_FontSizeSettingItem> createState() => _FontSizeSettingItemState();
+}
+
+class _FontSizeSettingItemState extends State<_FontSizeSettingItem> {
+  static const _minValue = 0.8;
+  static const _maxValue = 1.2;
+  static const _divisions = 4;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final textScaleFactor =
+        context.watch<AppearanceSettingsCubit>().state.textScaleFactor;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showFontSizePicker(context, textScaleFactor),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '字号',
+                  style: theme.textStyle.heading4.standard(
+                    color: theme.textColorScheme.primary,
+                  ),
+                ),
+              ),
+              Text(
+                textScaleFactor.toStringAsFixed(1),
+                style: theme.textStyle.heading4.standard(
+                  color: theme.textColorScheme.secondary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              FlowySvg(
+                FlowySvgs.toolbar_arrow_right_m,
+                size: const Size.square(24),
+                color: theme.iconColorScheme.tertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFontSizePicker(BuildContext context, double currentValue) {
+    showMobileBottomSheet(
+      context,
+      showHeader: true,
+      showDragHandle: true,
+      showDivider: false,
+      title: '字号',
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: FontSizeStepper(
+            value: currentValue.clamp(_minValue, _maxValue),
+            minimumValue: _minValue,
+            maximumValue: _maxValue,
+            divisions: _divisions,
+            onChanged: (newValue) {
+              ctx.read<AppearanceSettingsCubit>().setTextScaleFactor(newValue);
+            },
+          ),
+        );
+      },
     );
   }
 }
