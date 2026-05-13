@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:collection/collection.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_listener.dart';
 import 'package:appflowy_backend/log.dart';
@@ -36,6 +37,17 @@ class WhiteboardCollabAdapter {
 
   // ✅ 减少防抖延迟：从 500ms 改为 100ms，更及时保存
   static const _debounceDuration = Duration(milliseconds: 100);
+  static const DeepCollectionEquality _deepEquality = DeepCollectionEquality();
+  static const Set<String> _stableAppStateKeys = {
+    'gridModeEnabled',
+    'gridSize',
+    'scrollX',
+    'scrollY',
+    'theme',
+    'viewBackgroundColor',
+    'zoom',
+    'zenModeEnabled',
+  };
 
   bool _disposed = false;
   bool _isSyncing = false;
@@ -91,8 +103,9 @@ class WhiteboardCollabAdapter {
       } else if (key == 'excalidraw-state' ||
           key.endsWith('_excalidraw-state')) {
         if (!normalized.containsKey('appState')) {
-          normalized['appState'] =
-              value is String ? _tryParseJson(value) : value;
+          normalized['appState'] = _sanitizeAppState(
+            value is String ? _tryParseJson(value) : value,
+          );
         }
       } else if (key == 'excalidraw-files' ||
           key.endsWith('_excalidraw-files')) {
@@ -101,7 +114,10 @@ class WhiteboardCollabAdapter {
         }
       } else if (key == 'elements' || key == 'appState' || key == 'files') {
         // 标准键名优先（不覆盖已有的标准键名数据）
-        normalized[key] = value is String ? _tryParseJson(value) : value;
+        normalized[key] = _sanitizeWhiteboardValue(
+          key,
+          value is String ? _tryParseJson(value) : value,
+        );
       } else {
         normalized[key] = value;
       }
@@ -122,6 +138,31 @@ class WhiteboardCollabAdapter {
   /// 白板数据变更回调（模仿 DocumentBloc 的 transactionStream）
   ///
   /// 关键：立即同步到后端（模仿 TransactionAdapter.apply()）
+  dynamic _sanitizeWhiteboardValue(String key, dynamic value) {
+    if (key == 'appState') {
+      return _sanitizeAppState(value);
+    }
+    if (key == 'files' && value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    return value;
+  }
+
+  Map<String, dynamic> _sanitizeAppState(dynamic value) {
+    if (value is! Map) {
+      return <String, dynamic>{};
+    }
+
+    final source = Map<String, dynamic>.from(value);
+    final sanitized = <String, dynamic>{};
+    for (final key in _stableAppStateKeys) {
+      if (source.containsKey(key)) {
+        sanitized[key] = source[key];
+      }
+    }
+    return sanitized;
+  }
+
   void onWhiteboardDataChanged(String type, Map<String, dynamic> data) {
     if (_disposed) {
       return;
@@ -132,21 +173,25 @@ class WhiteboardCollabAdapter {
 
     // 更新全量数据缓存
     data.forEach((key, value) {
+      final sanitizedValue = _sanitizeWhiteboardValue(key, value);
       if (key == 'files' && value is Map) {
         _fullData[key] = _mergeFiles(_fullData[key] as Map<String, dynamic>?,
             value as Map<String, dynamic>);
         _pendingFiles.addAll(value);
       } else {
-        _fullData[key] = value;
+        _fullData[key] = sanitizedValue;
       }
     });
 
     _hasUnsavedChanges = true;
-    _pendingData.addAll(data);
+    _pendingData.addAll(
+      data.map(
+        (key, value) => MapEntry(key, _sanitizeWhiteboardValue(key, value)),
+      ),
+    );
     _pendingType = type;
 
     // 通知上层数据已变更（用于 UI 更新）
-    onDataChanged(data);
 
     // 取消之前的防抖定时器，重新开始计时
     _debounceTimer?.cancel();
@@ -294,6 +339,7 @@ class WhiteboardCollabAdapter {
       if (value is String) {
         parsedValue = _tryParseJson(value);
       }
+      parsedValue = _sanitizeWhiteboardValue(key, parsedValue);
 
       // 更新全量数据
       if (key == 'files' && parsedValue is Map) {
@@ -302,6 +348,11 @@ class WhiteboardCollabAdapter {
           Map<String, dynamic>.from(parsedValue),
         );
       } else {
+        if (_deepEquality.equals(_fullData[key], parsedValue)) {
+          Log.debug(
+              '[WhiteboardCollabAdapter] Skip echoed remote update for key=$key');
+          return;
+        }
         _fullData[key] = parsedValue;
       }
 

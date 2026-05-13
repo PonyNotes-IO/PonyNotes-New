@@ -140,7 +140,7 @@ class GridBloc extends Bloc<GridEvent, GridState> {
   void _startListening() {
     _databaseCallbacks = DatabaseCallbacks(
       onNumOfRowsChanged: (rowInfos, _, reason) {
-        if (!isClosed) {
+        if (!isClosed && _shouldRebuildRows(reason)) {
           add(GridEvent.didLoadRows(rowInfos, reason));
         }
       },
@@ -152,12 +152,8 @@ class GridBloc extends Bloc<GridEvent, GridState> {
         }
       },
       onRowsUpdated: (rows, reason) {
-        // TODO(nathan): separate different reasons
-        if (!isClosed) {
-          add(
-            GridEvent.didLoadRows(databaseController.rowCache.rowInfos, reason),
-          );
-        }
+        // Row-level updates are handled by RowController/RowCache to avoid
+        // turning a single-cell change into a full-grid rebuild.
       },
       onFieldsChanged: (fields) {
         if (!isClosed) {
@@ -176,6 +172,21 @@ class GridBloc extends Bloc<GridEvent, GridState> {
       },
     );
     databaseController.addListener(onDatabaseChanged: _databaseCallbacks);
+  }
+
+  bool _shouldRebuildRows(ChangedReason reason) {
+    return reason.map(
+      insert: (_) => true,
+      delete: (_) => true,
+      update: (_) => false,
+      fieldDidChange: (_) => false,
+      initial: (_) => false,
+      didFetchRow: (_) => false,
+      reorderRows: (_) => true,
+      reorderSingleRow: (_) => true,
+      updateRowsVisibility: (_) => true,
+      setInitialRows: (_) => true,
+    );
   }
 
   Future<void> _openGrid(Emitter<GridState> emit) async {
