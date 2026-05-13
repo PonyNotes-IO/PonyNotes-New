@@ -201,8 +201,11 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
+
     return Scaffold(
       key: _scaffoldKey,
+      backgroundColor: isLightMode ? const Color(0xFFF9F9F9) : null,
       drawer: _userProfile != null
           ? _MobileSettingsDrawer(
               userProfile: _userProfile!,
@@ -643,6 +646,7 @@ class _UserInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Container(
@@ -651,7 +655,8 @@ class _UserInfoCard extends StatelessWidget {
         color: theme.surfaceContainerColorScheme.layer01,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: theme.borderColorScheme.primary.withValues(alpha: 0.1),
+          color: theme.borderColorScheme.primary
+              .withValues(alpha: isLightMode ? 0.3 : 0.1),
           width: 1,
         ),
       ),
@@ -981,13 +986,15 @@ class _SettingsGroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
 
     return Container(
       decoration: BoxDecoration(
         color: theme.surfaceContainerColorScheme.layer01,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: theme.borderColorScheme.primary.withValues(alpha: 0.08),
+          color: theme.borderColorScheme.primary
+              .withValues(alpha: isLightMode ? 0.3 : 0.08),
           width: 1,
         ),
       ),
