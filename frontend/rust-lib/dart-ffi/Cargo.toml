@@ -8,7 +8,7 @@ edition = "2018"
 name = "dart_ffi"
 # this value will change depending on the target os
 # setup-crate-type task replaces "staticlib" with ${CRATE_TYPE} (staticlib for Android)
-crate-type = ["staticlib", "rlib"]
+crate-type = ["staticlib", "rlib","cdylib"]
 
 
 [dependencies]
