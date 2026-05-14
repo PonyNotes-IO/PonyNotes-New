@@ -1,5 +1,5 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/plugins/base/drag_handler.dart';
 import 'package:appflowy/plugins/database/application/cell/bloc/date_cell_editor_bloc.dart';
 import 'package:appflowy/plugins/database/application/cell/cell_controller_builder.dart';
@@ -41,7 +41,9 @@ class _MobileDateCellEditScreenState extends State<MobileDateCellEditScreen> {
 
   Widget _buildFullScreen() {
     return Scaffold(
-      appBar: FlowyAppBar(titleText: LocaleKeys.titleBar_date.tr()),
+      appBar: MobileAppBar(
+        title: LocaleKeys.titleBar_date.tr(),
+      ),
       body: _buildDatePicker(),
     );
   }

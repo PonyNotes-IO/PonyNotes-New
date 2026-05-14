@@ -1,6 +1,6 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_row.dart';
 import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
@@ -42,8 +42,8 @@ class _AppearancePageContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: FlowyAppBar(
-        titleText: LocaleKeys.settings_menu_appearance.tr(),
+      appBar: MobileAppBar(
+        title: LocaleKeys.settings_menu_appearance.tr(),
       ),
       body: SingleChildScrollView(
         child: Padding(

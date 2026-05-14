@@ -1,5 +1,5 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/database/field/mobile_full_field_editor.dart';
 import 'package:appflowy/plugins/database/application/field/field_info.dart';
 import 'package:appflowy/plugins/database/domain/field_backend_service.dart';
@@ -54,9 +54,9 @@ class _MobileEditPropertyScreenState extends State<MobileEditPropertyScreen> {
         }
       },
       child: Scaffold(
-        appBar: FlowyAppBar(
-          titleText: LocaleKeys.grid_field_editProperty.tr(),
-          onTapLeading: () => context.pop(_fieldOptionValues),
+        appBar: MobileAppBar(
+          title: LocaleKeys.grid_field_editProperty.tr(),
+          onBackPressed: () => context.pop(_fieldOptionValues),
         ),
         body: MobileFieldEditor(
           mode: FieldOptionMode.edit,

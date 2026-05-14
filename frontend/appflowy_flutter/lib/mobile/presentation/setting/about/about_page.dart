@@ -1,5 +1,5 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/startup/tasks/device_info_task.dart';
 import 'package:appflowy/workspace/presentation/settings/widgets/feature_flags/mobile_feature_flag_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -24,8 +24,8 @@ class _AboutPageContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: FlowyAppBar(
-        titleText: '关于',
+      appBar: MobileAppBar(
+        title: '关于',
       ),
       body: SingleChildScrollView(
         child: Padding(

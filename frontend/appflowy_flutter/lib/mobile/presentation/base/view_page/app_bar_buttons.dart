@@ -3,8 +3,8 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/base/mobile_view_page_bloc.dart';
 import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/app_bar_actions.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/base/view_page/more_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/plugins/document/presentation/editor_notification.dart';
@@ -16,6 +16,7 @@ import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/theme_extension.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -27,13 +28,11 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
     super.key,
     required this.preferredSize,
     required this.appBarOpacity,
-    required this.title,
     required this.actions,
     required this.view,
   });
 
   final ValueListenable appBarOpacity;
-  final Widget title;
   final List<Widget> actions;
   final ViewPB? view;
   @override
@@ -41,28 +40,41 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
 
   @override
   Widget build(BuildContext context) {
+    final afTheme = AppFlowyTheme.of(context);
+    final theme = Theme.of(context);
     return ValueListenableBuilder(
       valueListenable: appBarOpacity,
-      builder: (_, opacity, __) => FlowyAppBar(
-        backgroundColor:
-            AppBarTheme.of(context).backgroundColor?.withValues(alpha: opacity),
-        showDivider: false,
-        title: _buildTitle(context, opacity: opacity),
-        leadingWidth: 44,
-        leading: Padding(
-          padding: const EdgeInsets.only(top: 4.0, bottom: 4.0, left: 12.0),
-          child: _buildAppBarBackButton(context),
+      builder: (_, opacity, __) => Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppBarTheme.of(context).backgroundColor
+              ?.withValues(alpha: opacity),
         ),
-        actions: actions,
+        child: SafeArea(
+          bottom: false,
+          child: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0, bottom: 4.0, left: 12.0),
+                child: _buildAppBarBackButton(context),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  '',
+                  style: afTheme.textStyle.heading4.standard(
+                    color: afTheme.textColorScheme.primary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              ...actions,
+              const SizedBox(width: 8),
+            ],
+          ),
+        ),
       ),
     );
-  }
-
-  Widget _buildTitle(
-    BuildContext context, {
-    required double opacity,
-  }) {
-    return title;
   }
 
   Widget _buildAppBarBackButton(BuildContext context) {

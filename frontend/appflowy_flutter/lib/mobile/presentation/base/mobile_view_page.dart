@@ -6,7 +6,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/base/mobile_view_page_bloc.dart';
 import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/base/view_page/app_bar_buttons.dart';
 import 'package:appflowy/mobile/presentation/presentation.dart';
 import 'package:appflowy/mobile/presentation/widgets/flowy_mobile_state_container.dart';
@@ -160,32 +160,34 @@ class _MobileViewPageState extends State<MobileViewPage> {
     final isDocument = view?.layout.isDocumentView ?? false;
     final title = _buildTitle(context, view);
     final actions = _buildAppBarActions(context, view);
-    final appBar = isDocument
-        ? MobileViewPageImmersiveAppBar(
-            preferredSize: Size(
-              double.infinity,
-              AppBarTheme.of(context).toolbarHeight ?? kToolbarHeight,
-            ),
-            title: title,
-            appBarOpacity: _appBarOpacity,
-            actions: actions,
-            view: view,
-          )
-        : FlowyAppBar(title: title, actions: actions);
-    final body = isDocument
-        ? Builder(
-            builder: (context) {
-              _rebuildScrollNotificationObserver(context);
-              return child;
-            },
-          )
-        : SafeArea(child: child);
     return Scaffold(
       extendBodyBehindAppBar: isDocument,
-      appBar: appBar,
+      appBar: isDocument
+          ? MobileViewPageImmersiveAppBar(
+              preferredSize: Size(
+                double.infinity,
+                AppBarTheme.of(context).toolbarHeight ?? kToolbarHeight,
+              ),
+              appBarOpacity: _appBarOpacity,
+              actions: actions,
+              view: view,
+            )
+          : MobileAppBar(
+              title: '',
+              leading: title,
+              showBackButton: false,
+              actions: actions,
+            ) as PreferredSizeWidget,
       body: Padding(
         padding: EdgeInsets.only(top: widget.bodyPaddingTop),
-        child: body,
+        child: isDocument
+            ? Builder(
+                builder: (context) {
+                  _rebuildScrollNotificationObserver(context);
+                  return child;
+                },
+              )
+            : SafeArea(child: child),
       ),
     );
   }

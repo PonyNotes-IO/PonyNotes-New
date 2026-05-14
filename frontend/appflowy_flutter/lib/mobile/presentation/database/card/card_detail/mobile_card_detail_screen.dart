@@ -1,7 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/app_bar_actions.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/database/card/card_detail/widgets/row_page_button.dart';
 import 'package:appflowy/mobile/presentation/widgets/flowy_mobile_quick_action_button.dart';
@@ -87,9 +87,10 @@ class _MobileRowDetailPageState extends State<MobileRowDetailPage> {
     return BlocProvider.value(
       value: _bloc,
       child: Scaffold(
-        appBar: FlowyAppBar(
-          leadingType: FlowyAppBarLeadingType.close,
+        appBar: MobileAppBar(
+          title: '',
           showDivider: false,
+          leadingType: MobileAppBarLeadingType.close,
           actions: [
             AppBarMoreButton(
               onTap: (_) => _showCardActions(context),

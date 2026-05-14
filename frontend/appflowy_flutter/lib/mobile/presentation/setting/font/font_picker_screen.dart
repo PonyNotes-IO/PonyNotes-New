@@ -1,5 +1,5 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/widgets/flowy_mobile_search_text_field.dart';
 import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
 import 'package:appflowy/shared/google_fonts_extension.dart';
@@ -49,8 +49,8 @@ class _LanguagePickerPageState extends State<LanguagePickerPage> {
     final selectedFontFamilyName =
         context.watch<AppearanceSettingsCubit>().state.font;
     return Scaffold(
-      appBar: FlowyAppBar(
-        titleText: LocaleKeys.titleBar_font.tr(),
+      appBar: MobileAppBar(
+        title: LocaleKeys.titleBar_font.tr(),
       ),
       body: SafeArea(
         child: Scrollbar(

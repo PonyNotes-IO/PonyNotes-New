@@ -1,5 +1,5 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/database/field/mobile_full_field_editor.dart';
 import 'package:appflowy/util/field_type_extension.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/field_entities.pbenum.dart';
@@ -45,10 +45,10 @@ class _MobileNewPropertyScreenState extends State<MobileNewPropertyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: FlowyAppBar(
+      appBar: MobileAppBar(
         centerTitle: true,
-        titleText: LocaleKeys.grid_field_newProperty.tr(),
-        leadingType: FlowyAppBarLeadingType.cancel,
+        title: LocaleKeys.grid_field_newProperty.tr(),
+        leadingType: MobileAppBarLeadingType.cancel,
         actions: [
           _SaveButton(
             onSave: () {
