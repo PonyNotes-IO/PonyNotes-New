@@ -1749,13 +1749,6 @@ class _GeneralSettingsContent extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             const _SupportCard(),
-            const SizedBox(height: 16),
-            Text(
-              '版本 ${ApplicationInfo.applicationVersion} (${ApplicationInfo.buildNumber})',
-              style: theme.textStyle.body.standard(
-                color: theme.textColorScheme.secondary,
-              ),
-            ),
             const SizedBox(height: 32),
           ],
         ),
