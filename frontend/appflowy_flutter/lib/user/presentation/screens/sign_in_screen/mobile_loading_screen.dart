@@ -1,5 +1,5 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -16,9 +16,10 @@ class MobileLoadingScreen extends StatelessWidget {
     const double spacing = 16;
 
     return Scaffold(
-      appBar: FlowyAppBar(
+      appBar: MobileAppBar(
+        title: '',
         showDivider: false,
-        onTapLeading: () => context.read<SignInBloc>().add(
+        onBackPressed: () => context.read<SignInBloc>().add(
               const SignInEvent.cancel(),
             ),
       ),

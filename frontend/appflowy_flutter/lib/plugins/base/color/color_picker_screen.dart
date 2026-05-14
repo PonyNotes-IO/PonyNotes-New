@@ -1,5 +1,5 @@
 import 'package:appflowy/generated/locale_keys.g.dart';
-import 'package:appflowy/mobile/presentation/base/app_bar/app_bar.dart';
+import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/plugins/base/color/color_picker.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -16,8 +16,8 @@ class MobileColorPickerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: FlowyAppBar(
-        titleText: title ?? LocaleKeys.titleBar_pageIcon.tr(),
+      appBar: MobileAppBar(
+        title: title ?? LocaleKeys.titleBar_pageIcon.tr(),
       ),
       body: SafeArea(
         child: FlowyMobileColorPicker(

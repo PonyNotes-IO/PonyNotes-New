@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../generated/locale_keys.g.dart';
-import '../../../mobile/presentation/base/app_bar/app_bar.dart';
+import '../../../mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import '../../../shared/icon_emoji_picker/tab.dart';
 
 class MobileEmojiPickerScreen extends StatelessWidget {
@@ -30,8 +30,8 @@ class MobileEmojiPickerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: FlowyAppBar(
-        titleText: title ?? LocaleKeys.titleBar_pageIcon.tr(),
+      appBar: MobileAppBar(
+        title: title ?? LocaleKeys.titleBar_pageIcon.tr(),
       ),
       body: SafeArea(
         child: FlowyIconEmojiPicker(
