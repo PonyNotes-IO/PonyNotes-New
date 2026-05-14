@@ -45,6 +45,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/language.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1730,6 +1731,8 @@ class _GeneralSettingsContent extends StatelessWidget {
           children: [
             _GeneralSettingsCard(),
             const SizedBox(height: 12),
+            const _LanguageSettingsCard(),
+            const SizedBox(height: 12),
             const _SupportCard(),
             const SizedBox(height: 16),
             Text(
@@ -1784,6 +1787,98 @@ class _GeneralSettingsCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _LanguageSettingsCard extends StatelessWidget {
+  const _LanguageSettingsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.surfaceContainerColorScheme.layer01,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.borderColorScheme.primary
+              .withValues(alpha: isLightMode ? 0.3 : 0.08),
+          width: 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Text(
+              LocaleKeys.settings_menu_language.tr(),
+              style: theme.textStyle.heading4.standard(
+                color: theme.textColorScheme.primary,
+              ),
+            ),
+          ),
+          _LanguageSettingItem(),
+        ],
+      ),
+    );
+  }
+}
+
+class _LanguageSettingItem extends StatelessWidget {
+  const _LanguageSettingItem();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return BlocBuilder<AppearanceSettingsCubit, AppearanceSettingsState>(
+      builder: (ctx, state) {
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _showLanguagePicker(ctx, state.locale),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      LocaleKeys.settings_menu_language.tr(),
+                      style: theme.textStyle.heading4.standard(
+                        color: theme.textColorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    languageFromLocale(state.locale),
+                    style: theme.textStyle.body.standard(
+                      color: theme.textColorScheme.secondary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FlowySvg(
+                    FlowySvgs.toolbar_arrow_right_m,
+                    size: const Size.square(24),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showLanguagePicker(BuildContext ctx, Locale currentLocale) async {
+    final newLocale = await ctx.push<Locale>('/language_picker');
+    if (newLocale != null && newLocale != currentLocale && ctx.mounted) {
+      ctx.read<AppearanceSettingsCubit>().setLocale(ctx, newLocale);
+    }
   }
 }
 
