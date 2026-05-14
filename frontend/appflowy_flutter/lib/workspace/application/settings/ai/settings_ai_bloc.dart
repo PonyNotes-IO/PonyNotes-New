@@ -130,14 +130,16 @@ class SettingsAIBloc extends Bloc<SettingsAIEvent, SettingsAIState> {
       );
 
   void _loadModelList() {
+    Log.info('[SettingsAIBloc] 开始加载模型列表...');
     final payload = ModelSourcePB(source: kGlobalAIModelSource);
     AIEventGetSettingModelSelection(payload).send().then((result) {
       result.fold((models) {
+        Log.info('[SettingsAIBloc] 获取到 ${models.models.length} 个可用模型');
         if (!isClosed) {
           add(SettingsAIEvent.didLoadAvailableModels(models));
         }
       }, (err) {
-        Log.error(err);
+        Log.error('[SettingsAIBloc] 获取模型列表失败: ${err.msg}');
       });
     });
   }

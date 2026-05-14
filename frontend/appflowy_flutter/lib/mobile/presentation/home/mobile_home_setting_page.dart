@@ -1901,10 +1901,14 @@ class _AISettingItem extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
     return BlocBuilder<SettingsAIBloc, SettingsAIState>(
       builder: (ctx, state) {
+        final models = state.availableModels?.models ?? [];
+        final selectedModelName = state.availableModels?.selectedModel.name;
+        final isLoading = state.availableModels == null;
+
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => _showModelPicker(ctx, state),
+            onTap: models.isEmpty ? null : () => _showModelPicker(ctx, state),
             borderRadius: BorderRadius.circular(12),
             child: Container(
               width: double.infinity,
@@ -1920,16 +1924,23 @@ class _AISettingItem extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    state.availableModels?.selectedModel.name ?? "",
+                    isLoading
+                        ? '加载中...'
+                        : (selectedModelName?.isNotEmpty == true
+                            ? selectedModelName!
+                            : '暂无可用模型'),
                     style: theme.textStyle.body.standard(
                       color: theme.textColorScheme.secondary,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  FlowySvg(
-                    FlowySvgs.toolbar_arrow_right_m,
-                    size: const Size.square(24),
-                  ),
+                  if (models.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    FlowySvg(
+                      FlowySvgs.toolbar_arrow_right_m,
+                      size: const Size.square(24),
+                      color: theme.iconColorScheme.tertiary,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1941,6 +1952,45 @@ class _AISettingItem extends StatelessWidget {
 
   void _showModelPicker(BuildContext ctx, SettingsAIState state) {
     final availableModels = state.availableModels;
+    if (availableModels == null || availableModels.models.isEmpty) {
+      // 如果没有可用模型，显示提示
+      showMobileBottomSheet(
+        ctx,
+        showHeader: true,
+        showDragHandle: true,
+        showDivider: false,
+        title: LocaleKeys.settings_aiPage_keys_llmModelType.tr(),
+        builder: (_) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.info_outline,
+                  size: 48,
+                  color: Colors.grey,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '暂无可用模型',
+                  style: Theme.of(ctx).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '请联系管理员配置AI模型',
+                  style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey,
+                      ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+      return;
+    }
+
     showMobileBottomSheet(
       ctx,
       showHeader: true,
@@ -1949,7 +1999,7 @@ class _AISettingItem extends StatelessWidget {
       title: LocaleKeys.settings_aiPage_keys_llmModelType.tr(),
       builder: (_) {
         return Column(
-          children: (availableModels?.models ?? [])
+          children: availableModels.models
               .asMap()
               .entries
               .map(
@@ -1957,7 +2007,7 @@ class _AISettingItem extends StatelessWidget {
                   text: entry.value.name,
                   showTopBorder: entry.key == 0,
                   isSelected:
-                      availableModels?.selectedModel.name == entry.value.name,
+                      availableModels.selectedModel.name == entry.value.name,
                   onTap: () {
                     ctx
                         .read<SettingsAIBloc>()
@@ -2009,6 +2059,7 @@ class _LanguageSettingItem extends StatelessWidget {
                   FlowySvg(
                     FlowySvgs.toolbar_arrow_right_m,
                     size: const Size.square(24),
+                    color: theme.iconColorScheme.tertiary,
                   ),
                 ],
               ),
