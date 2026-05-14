@@ -9,6 +9,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/about/about_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/ai/ai_settings_group.dart';
+import 'package:appflowy/workspace/application/settings/ai/settings_ai_bloc.dart';
 import 'package:appflowy/mobile/presentation/setting/cloud/cloud_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/datetime/datetime_page.dart';
 import 'package:appflowy/mobile/presentation/setting/font/font_picker_screen.dart';
@@ -290,7 +291,10 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
 
     // _GeneralSettingsContent handles its own scroll + padding
     if (_currentSection == MobileSettingsSection.workspace) {
-      return const _GeneralSettingsContent();
+      return _GeneralSettingsContent(
+        userProfile: _userProfile!,
+        workspaceId: widget.workspaceState?.currentWorkspace?.workspaceId ?? '',
+      );
     }
 
     return SingleChildScrollView(
@@ -1719,7 +1723,13 @@ class _UpgradePlanCard extends StatelessWidget {
 // ============================================================================
 
 class _GeneralSettingsContent extends StatelessWidget {
-  const _GeneralSettingsContent();
+  const _GeneralSettingsContent({
+    required this.userProfile,
+    required this.workspaceId,
+  });
+
+  final UserProfilePB userProfile;
+  final String workspaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -1731,7 +1741,12 @@ class _GeneralSettingsContent extends StatelessWidget {
           children: [
             _GeneralSettingsCard(),
             const SizedBox(height: 12),
-            const _LanguageSettingsCard(),
+            _LanguageSettingsCard(),
+            const SizedBox(height: 12),
+            _AISettingsCard(
+              userProfile: userProfile,
+              workspaceId: workspaceId,
+            ),
             const SizedBox(height: 12),
             const _SupportCard(),
             const SizedBox(height: 16),
@@ -1824,6 +1839,136 @@ class _LanguageSettingsCard extends StatelessWidget {
           _LanguageSettingItem(),
         ],
       ),
+    );
+  }
+}
+
+class _AISettingsCard extends StatelessWidget {
+  const _AISettingsCard({
+    required this.userProfile,
+    required this.workspaceId,
+  });
+
+  final UserProfilePB userProfile;
+  final String workspaceId;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final isLightMode = Theme.of(context).brightness == Brightness.light;
+    return BlocProvider(
+      create: (context) => SettingsAIBloc(
+        userProfile,
+        workspaceId,
+      )..add(const SettingsAIEvent.started()),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.surfaceContainerColorScheme.layer01,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: theme.borderColorScheme.primary
+                .withValues(alpha: isLightMode ? 0.3 : 0.08),
+            width: 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Text(
+                LocaleKeys.settings_aiPage_title.tr(),
+                style: theme.textStyle.heading4.standard(
+                  color: theme.textColorScheme.primary,
+                ),
+              ),
+            ),
+            const _AISettingItem(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AISettingItem extends StatelessWidget {
+  const _AISettingItem();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    return BlocBuilder<SettingsAIBloc, SettingsAIState>(
+      builder: (ctx, state) {
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _showModelPicker(ctx, state),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      LocaleKeys.settings_aiPage_keys_llmModelType.tr(),
+                      style: theme.textStyle.heading4.standard(
+                        color: theme.textColorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    state.availableModels?.selectedModel.name ?? "",
+                    style: theme.textStyle.body.standard(
+                      color: theme.textColorScheme.secondary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FlowySvg(
+                    FlowySvgs.toolbar_arrow_right_m,
+                    size: const Size.square(24),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showModelPicker(BuildContext ctx, SettingsAIState state) {
+    final availableModels = state.availableModels;
+    showMobileBottomSheet(
+      ctx,
+      showHeader: true,
+      showDragHandle: true,
+      showDivider: false,
+      title: LocaleKeys.settings_aiPage_keys_llmModelType.tr(),
+      builder: (_) {
+        return Column(
+          children: (availableModels?.models ?? [])
+              .asMap()
+              .entries
+              .map(
+                (entry) => FlowyOptionTile.checkbox(
+                  text: entry.value.name,
+                  showTopBorder: entry.key == 0,
+                  isSelected:
+                      availableModels?.selectedModel.name == entry.value.name,
+                  onTap: () {
+                    ctx
+                        .read<SettingsAIBloc>()
+                        .add(SettingsAIEvent.selectModel(entry.value));
+                    ctx.pop();
+                  },
+                ),
+              )
+              .toList(),
+        );
+      },
     );
   }
 }
