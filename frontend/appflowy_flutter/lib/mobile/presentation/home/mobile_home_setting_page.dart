@@ -103,6 +103,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       (user) async {
         if (mounted) {
           setState(() => _userProfile = user);
+          _loadSubscriptionInfo();
         }
       },
       (error) => Log.error('Failed to get user: ${error.msg}'),
@@ -112,7 +113,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_userProfile?.workspaceType == WorkspaceTypePB.ServerW) {
+    if (_userProfile != null) {
       _loadSubscriptionInfo();
     }
   }
@@ -1285,66 +1286,66 @@ class _MobileUpgradePlanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
 
-    return GestureDetector(
-      onTap: () => _showUpgradeDialog(context),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF44326B),
-              Color(0xFF7547C0),
-            ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardWidth = constraints.maxWidth;
+        final cardHeight = cardWidth / (704 / 268);
+
+        return UnconstrainedBox(
+          child: SizedBox(
+            width: cardWidth,
+            height: cardHeight,
+            child: GestureDetector(
+              onTap: () => _showUpgradeDialog(context),
+              child: Container(
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/navigation/m_setting_profile.png'),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      subscriptionInfo.label,
+                      style: theme.textStyle.heading2.standard(
+                        color: Colors.white,
+                      ).copyWith(fontSize: 18),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subscriptionInfo.info,
+                      style: theme.textStyle.body.standard(
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ).copyWith(fontSize: 12),
+                      maxLines: 2,
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        '立即升级',
+                        style: theme.textStyle.heading4.standard(
+                          color: const Color(0xFF44326B),
+                        ).copyWith(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          boxShadow: [
-            BoxShadow(
-              blurRadius: 8,
-              color: const Color(0xFF7547C0).withValues(alpha: 0.3),
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              subscriptionInfo.label,
-              style: theme.textStyle.heading2.standard(
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subscriptionInfo.info,
-              style: theme.textStyle.body.standard(
-                color: Colors.white.withValues(alpha: 0.85),
-              ),
-              maxLines: 2,
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                '立即升级',
-              style: theme.textStyle.heading4.standard(
-                color: const Color(0xFF44326B),
-              ),
-              ),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 
