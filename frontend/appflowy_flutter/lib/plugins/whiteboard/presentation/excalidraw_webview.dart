@@ -674,6 +674,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           .App-toolbar * {
             pointer-events: auto !important;
           }
+
+          .App-toolbar {
+            min-height: 56px !important;
+            padding: 8px 12px !important;
+            gap: 8px !important;
+            align-items: center !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+            border-bottom: 1px solid rgba(17, 24, 39, 0.08) !important;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06) !important;
+          }
           
           /* 确保工具栏按钮可以正常点击 */
           .App-toolbar .ToolIcon,
@@ -683,6 +693,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             display: inline-flex !important;
             visibility: visible !important;
             opacity: 1 !important;
+            min-width: 34px !important;
+            min-height: 34px !important;
+            border-radius: 8px !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+
+          .App-toolbar svg {
+            width: 18px !important;
+            height: 18px !important;
           }
         `;
         

@@ -1,3 +1,5 @@
+import 'package:flowy_infra/size.dart';
+
 class HomeSizes {
   static const double menuAddButtonHeight = 60;
   static const double topBarHeight = 44;
@@ -6,10 +8,13 @@ class HomeSizes {
   static const double notificationPanelWidth = 380;
   static const double tabBarHeight = 40;
   static const double tabBarWidth = 200;
-  static const double workspaceSectionHeight = 32;
-  static const double searchSectionHeight = 30;
-  static const double newPageSectionHeight = 30;
-  static const double minimumSidebarWidth = 288;
+  static double get workspaceSectionHeight => 40 * Sizes.hitScale;
+  static double get searchSectionHeight => 38 * Sizes.hitScale;
+  static double get newPageSectionHeight => 38 * Sizes.hitScale;
+  static const double minimumSidebarWidth = 260;
+  static const double maximumSidebarResizeOffset = 96;
+  static const double maximumSidebarWidth =
+      minimumSidebarWidth + maximumSidebarResizeOffset;
 }
 
 class HomeInsets {
@@ -19,7 +24,7 @@ class HomeInsets {
 
 class HomeSpaceViewSizes {
   static const double leftPadding = 16.0;
-  static const double viewHeight = 30.0;
+  static double get viewHeight => 38 * Sizes.hitScale;
 
   // mobile, m represents mobile
   static const double mViewHeight = 48.0;

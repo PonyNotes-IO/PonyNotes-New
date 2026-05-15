@@ -42,6 +42,12 @@ abstract class HomeStackDelegate {
   void didDeleteStackWidget(ViewPB view, int? index);
 }
 
+Color _middleColumnBackground(BuildContext context) {
+  return Theme.of(context).isLightMode
+      ? const Color(0xFFF7F8FB)
+      : const Color(0xFF20232A);
+}
+
 class HomeStack extends StatefulWidget {
   const HomeStack({
     super.key,
@@ -287,7 +293,7 @@ class _PageStackState extends State<PageStack>
     super.build(context);
 
     return Container(
-      color: Theme.of(context).colorScheme.surface,
+      color: _middleColumnBackground(context),
       child: FocusTraversalGroup(
         child: widget.pageManager.stackWidget(
           userProfile: widget.userProfile,
@@ -930,7 +936,7 @@ class _HomeTopBarState extends State<HomeTopBar>
 
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: _middleColumnBackground(context),
       ),
       height: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding,
       child: Padding(
@@ -967,7 +973,7 @@ class HomeSecondaryTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: Theme.of(context).colorScheme.surface,
       ),
       height: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding,
       child: Padding(

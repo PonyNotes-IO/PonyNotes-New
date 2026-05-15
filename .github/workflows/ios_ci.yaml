@@ -27,6 +27,7 @@ concurrency:
 
 jobs:
   integration-tests:
+    if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/') }}
     runs-on: macos-latest
 
     steps:

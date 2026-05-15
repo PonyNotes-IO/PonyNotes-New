@@ -27,13 +27,13 @@ class SidebarHomeButton extends StatelessWidget {
             size: AFButtonSize.l,
             onTap: () => _openHomePage(context, state),
             padding: EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 10,
+              horizontal: 10,
+              vertical: 11,
             ),
             borderRadius: theme.borderRadius.s,
             iconBuilder: (context, isHover, disabled) => FlowySvg(
               FlowySvgs.icon_home_s,
-              size: const Size.square(16.0),
+              size: const Size.square(18.0),
             ),
           ),
         );

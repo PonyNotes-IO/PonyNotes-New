@@ -15,6 +15,7 @@ env:
 
 jobs:
   tests:
+    if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code

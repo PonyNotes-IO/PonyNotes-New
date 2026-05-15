@@ -28,7 +28,7 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
     final currentWorkspace = userWorkspaceBloc.state.currentWorkspace;
     final workspaceId = currentWorkspace?.workspaceId;
     final userProfile = userWorkspaceBloc.state.userProfile;
-    
+
     return BlocProvider(
       create: (_) => FavoriteBloc(
         workspaceId: workspaceId,
@@ -42,9 +42,9 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
           // 工作区切换时，更新 FavoriteBloc 的工作区ID
           final newWorkspaceId = state.currentWorkspace?.workspaceId;
           context.read<FavoriteBloc>().setWorkspaceId(
-            newWorkspaceId,
-            userProfile: state.userProfile,
-          );
+                newWorkspaceId,
+                userProfile: state.userProfile,
+              );
         },
         child: BlocBuilder<FavoriteBloc, FavoriteState>(
           builder: (context, state) {
@@ -74,26 +74,26 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8.0),
       child: AFGhostIconTextButton.primary(
-            text: '最爱',
-            mainAxisAlignment: MainAxisAlignment.start,
-            size: AFButtonSize.l,
-            onTap: () {
-              setState(() => _isExpanded = !_isExpanded);
-            },
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 10,
-            ),
-            borderRadius: theme.borderRadius.s,
-            iconBuilder: (context, isHover, disabled) => FlowySvg(
-              FlowySvgs.icon_favorite_s,
-              size: const Size.square(16.0),
-              color: Theme.of(context).textTheme.bodyMedium?.color,
-            ),
-            showExpandArrow: true,
-            isExpanded: _isExpanded,
-            expandArrowPosition: AFExpandArrowPosition.rowEnd,
-          ),
+        text: '最爱',
+        mainAxisAlignment: MainAxisAlignment.start,
+        size: AFButtonSize.l,
+        onTap: () {
+          setState(() => _isExpanded = !_isExpanded);
+        },
+        padding: const EdgeInsets.symmetric(
+          horizontal: 8,
+          vertical: 10,
+        ),
+        borderRadius: theme.borderRadius.s,
+        iconBuilder: (context, isHover, disabled) => FlowySvg(
+          FlowySvgs.icon_favorite_s,
+          size: const Size.square(18.0),
+          color: Theme.of(context).textTheme.bodyMedium?.color,
+        ),
+        showExpandArrow: true,
+        isExpanded: _isExpanded,
+        expandArrowPosition: AFExpandArrowPosition.rowEnd,
+      ),
     );
   }
 
@@ -127,5 +127,3 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
     }).toList();
   }
 }
-
-

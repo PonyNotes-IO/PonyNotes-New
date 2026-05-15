@@ -30,7 +30,7 @@ class Insets {
 }
 
 class FontSizes {
-  static double get scale => 1;
+  static double scale = 1;
 
   static double get s11 => 11 * scale;
 

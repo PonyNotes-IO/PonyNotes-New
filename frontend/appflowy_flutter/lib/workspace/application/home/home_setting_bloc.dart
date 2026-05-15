@@ -10,6 +10,8 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'home_setting_bloc.freezed.dart';
 
+const _maximumSidebarResizeOffset = 96.0;
+
 class HomeSettingBloc extends Bloc<HomeSettingEvent, HomeSettingState> {
   HomeSettingBloc(
     WorkspaceLatestPB workspaceSetting,
@@ -102,7 +104,9 @@ class HomeSettingBloc extends Bloc<HomeSettingEvent, HomeSettingState> {
           },
           editPanelResized: (_EditPanelResized e) {
             final newPosition =
-                (state.resizeStart + e.offset).clamp(0, 200).toDouble();
+                (state.resizeStart + e.offset)
+                    .clamp(0, _maximumSidebarResizeOffset)
+                    .toDouble();
             if (state.resizeOffset != newPosition) {
               emit(state.copyWith(resizeOffset: newPosition));
             }

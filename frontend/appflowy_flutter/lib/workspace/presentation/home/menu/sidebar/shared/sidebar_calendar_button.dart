@@ -28,7 +28,7 @@ class SidebarCalendarButton extends StatelessWidget {
             borderRadius: theme.borderRadius.s,
             iconBuilder: (context, isHover, disabled) => FlowySvg(
               FlowySvgs.icon_calendar_s,
-              size: const Size.square(16.0),
+              size: const Size.square(18.0),
               color: Theme.of(context).textTheme.bodyMedium?.color,
             ),
           ),
@@ -48,11 +48,10 @@ class SidebarCalendarButton extends StatelessWidget {
 
       // 在新标签页中打开日历
       context.read<TabsBloc>().add(
-        TabsEvent.openPlugin(plugin: calendarPlugin),
-      );
+            TabsEvent.openPlugin(plugin: calendarPlugin),
+          );
     } catch (e) {
       // 静默处理错误，不显示用户
     }
   }
-
 }

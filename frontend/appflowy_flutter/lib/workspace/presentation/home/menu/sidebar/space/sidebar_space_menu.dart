@@ -45,9 +45,9 @@ class SidebarSpaceMenu extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 8.0),
                 child: FlowyDivider(),
               ),
-              const SizedBox(
+              SizedBox(
                 height: HomeSpaceViewSizes.viewHeight,
-                child: _CreateSpaceButton(),
+                child: const _CreateSpaceButton(),
               ),
             ],
           ],
@@ -241,8 +241,11 @@ class _SidebarSpaceMenuItemState extends State<SidebarSpaceMenuItem> {
                               showToastNotification(message: '无法获取当前用户信息，加入失败');
                               return;
                             }
-                            final addRes = await UserBackendService(userId: user.id)
-                                .addWorkspaceMember(context.read<SpaceBloc>().workspaceId, user.email);
+                            final addRes =
+                                await UserBackendService(userId: user.id)
+                                    .addWorkspaceMember(
+                                        context.read<SpaceBloc>().workspaceId,
+                                        user.email);
                             addRes.fold((_) {
                               showToastNotification(message: '已加入空间');
                               // refresh spaces/members

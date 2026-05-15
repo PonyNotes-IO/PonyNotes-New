@@ -4,6 +4,7 @@ import 'package:appflowy/mobile/application/mobile_router.dart';
 import 'package:appflowy/plugins/document/application/document_appearance_cubit.dart';
 import 'package:appflowy/shared/clipboard_state.dart';
 import 'package:appflowy/shared/easy_localiation_service.dart';
+import 'package:appflowy/shared/adaptive_display.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/icon_emoji_picker/icon_picker.dart';
 import 'package:appflowy/shared/icon_emoji_picker/icon.dart';
@@ -27,6 +28,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/theme.dart';
+import 'package:flowy_infra/size.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -51,11 +53,12 @@ class InitAppWidgetTask extends LaunchTask {
     await super.initialize(context);
 
     WidgetsFlutterBinding.ensureInitialized();
-    
+
     // 配置 Flutter ImageCache 内存限制，防止内存溢出
     // 设置最大缓存图片数量为 1000 张，最大内存为 200MB
     PaintingBinding.instance.imageCache.maximumSize = 1000;
-    PaintingBinding.instance.imageCache.maximumSizeBytes = 200 * 1024 * 1024; // 200MB
+    PaintingBinding.instance.imageCache.maximumSizeBytes =
+        200 * 1024 * 1024; // 200MB
 
     await NotificationService.initialize();
 
@@ -267,6 +270,24 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
                       final fontFamily = state.font
                           .orDefault(defaultFontFamily)
                           .fontFamilyName;
+                      final adaptiveMetrics =
+                          AdaptiveDisplayMetrics.of(context);
+                      final textScaleFactor =
+                          (state.textScaleFactor * adaptiveMetrics.textScale)
+                              .clamp(
+                                AppearanceSettingsCubit.minTextScaleFactor,
+                                AppearanceSettingsCubit.maxTextScaleFactor,
+                              )
+                              .toDouble();
+                      final uiScaleFactor =
+                          state.textScaleFactor.clamp(1.0, 1.18).toDouble();
+
+                      Insets.scale = adaptiveMetrics.layoutScale;
+                      FontSizes.scale = adaptiveMetrics.textScale;
+                      Sizes.hitScale =
+                          (adaptiveMetrics.hitScale * uiScaleFactor)
+                              .clamp(1.0, 1.22)
+                              .toDouble();
 
                       return AnimatedAppFlowyTheme(
                         data: brightness == Brightness.light
@@ -276,8 +297,7 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
                           // use the 1.0 as the textScaleFactor to avoid the text size
                           //  affected by the system setting.
                           data: MediaQuery.of(context).copyWith(
-                            textScaler:
-                                TextScaler.linear(state.textScaleFactor),
+                            textScaler: TextScaler.linear(textScaleFactor),
                           ),
                           child: overlayManagerBuilder(
                             context,

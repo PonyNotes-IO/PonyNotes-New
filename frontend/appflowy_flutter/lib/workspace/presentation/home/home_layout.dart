@@ -15,9 +15,12 @@ class HomeLayout {
     final homeSetting = context.read<HomeSettingBloc>().state;
     showEditPanel = homeSetting.panelContext != null;
 
-    menuWidth = max(
-      HomeSizes.minimumSidebarWidth + homeSetting.resizeOffset,
-      HomeSizes.minimumSidebarWidth,
+    menuWidth = min(
+      max(
+        HomeSizes.minimumSidebarWidth + homeSetting.resizeOffset,
+        HomeSizes.minimumSidebarWidth,
+      ),
+      HomeSizes.maximumSidebarWidth,
     );
 
     final screenWidthPx = context.widthPx;

@@ -38,6 +38,7 @@ env:
 
 jobs:
   build-universal-lib:
+    if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/') }}
     runs-on: macos-latest
     name: Build macOS Universal Library (x86_64 + arm64)
 

@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   build-app:
-    if: github.event.pull_request.draft != true
+    if: ${{ (github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/')) && github.event.pull_request.draft != true }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code

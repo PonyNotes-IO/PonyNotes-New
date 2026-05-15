@@ -12,6 +12,7 @@ typedef AFGhostIconBuilder = Widget Function(
 enum AFExpandArrowPosition {
   /// 紧跟在文字后面
   afterText,
+
   /// 在整个 Row 的最右边
   rowEnd,
 }
@@ -157,12 +158,23 @@ class AFGhostIconTextButton extends StatelessWidget {
       builder: (context, isHovering, disabled) {
         final textColor = this.textColor?.call(context, isHovering, disabled) ??
             theme.textColorScheme.primary;
+        final textStyle = size.buildTextStyle(context).copyWith(
+              color: textColor,
+              height: 1.35,
+              leadingDistribution: TextLeadingDistribution.even,
+            );
 
         // 构建展开箭头
         Widget? expandArrow;
         if (showExpandArrow) {
-          expandArrow = expandArrowBuilder?.call(context, isHovering, disabled) ??
-              _buildDefaultExpandArrow(context, isHovering, disabled, textColor);
+          expandArrow =
+              expandArrowBuilder?.call(context, isHovering, disabled) ??
+                  _buildDefaultExpandArrow(
+                    context,
+                    isHovering,
+                    disabled,
+                    textColor,
+                  );
         }
 
         return Row(
@@ -180,21 +192,25 @@ class AFGhostIconTextButton extends StatelessWidget {
               Expanded(
                 child: Text(
                   text,
-                  style: size.buildTextStyle(context).copyWith(
-                        color: textColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold
-                      ),
+                  style: textStyle,
+                  strutStyle: StrutStyle.fromTextStyle(
+                    textStyle,
+                    forceStrutHeight: true,
+                    height: 1.35,
+                    leadingDistribution: TextLeadingDistribution.even,
+                  ),
                 ),
               )
             else
               Text(
                 text,
-                style: size.buildTextStyle(context).copyWith(
-                      color: textColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold
-                    ),
+                style: textStyle,
+                strutStyle: StrutStyle.fromTextStyle(
+                  textStyle,
+                  forceStrutHeight: true,
+                  height: 1.35,
+                  leadingDistribution: TextLeadingDistribution.even,
+                ),
               ),
             // 箭头在文字后
             if (showExpandArrow &&

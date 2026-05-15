@@ -139,6 +139,7 @@ class SettingsWorkspaceView extends StatelessWidget {
                     currentFont:
                         context.read<AppearanceSettingsCubit>().state.font,
                   ),
+                  const _DisplaySizeSlider(),
                   // SettingsDashedDivider(
                   //   color: Theme.of(context).colorScheme.outline,
                   // ),
@@ -648,7 +649,8 @@ class _ThemeDropdown extends StatelessWidget {
                 ).then((val) {
                   if (val != null && context.mounted) {
                     showToastNotification(
-                      message: LocaleKeys.settings_appearance_themeUpload_uploadSuccess
+                      message: LocaleKeys
+                          .settings_appearance_themeUpload_uploadSuccess
                           .tr(),
                     );
                   }
@@ -664,7 +666,6 @@ class _ThemeDropdown extends StatelessWidget {
                   context.read<AppearanceSettingsCubit>().resetTheme();
                   showToastNotification(
                     message: '主题重置成功',
-                    type: ToastificationType.success,
                   );
                 },
               ),
@@ -843,6 +844,96 @@ class _SelectedModeIndicator extends StatelessWidget {
   }
 }
 
+class _DisplaySizeSlider extends StatelessWidget {
+  const _DisplaySizeSlider();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<AppearanceSettingsCubit, AppearanceSettingsState>(
+      builder: (context, state) {
+        final current = state.textScaleFactor
+            .clamp(
+              AppearanceSettingsCubit.minTextScaleFactor,
+              AppearanceSettingsCubit.maxTextScaleFactor,
+            )
+            .toDouble();
+        final percent = (current * 100).round();
+
+        return SettingListTile(
+          label: LocaleKeys.settings_appearance_displaySize.tr(),
+          hint: '拖动滑杆调整整体字体和界面比例，会叠加当前设备和窗口自适应。',
+          subtitle: [
+            const VSpace(8),
+            Row(
+              children: [
+                FlowyText.regular(
+                  '90%',
+                  fontSize: 12,
+                  color: Theme.of(context).hintColor,
+                ),
+                Expanded(
+                  child: SliderTheme(
+                    data: Theme.of(context).sliderTheme.copyWith(
+                          showValueIndicator: ShowValueIndicator.never,
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 8,
+                          ),
+                          overlayShape: SliderComponentShape.noThumb,
+                        ),
+                    child: Slider(
+                      value: current,
+                      min: AppearanceSettingsCubit.minTextScaleFactor,
+                      max: AppearanceSettingsCubit.maxTextScaleFactor,
+                      divisions: 40,
+                      onChanged: (value) {
+                        unawaited(
+                          context
+                              .read<AppearanceSettingsCubit>()
+                              .setTextScaleFactor(value),
+                        );
+                      },
+                      onChangeEnd: (_) {
+                        unawaited(
+                          context.read<DocumentAppearanceCubit>().fetch(),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                FlowyText.regular(
+                  '130%',
+                  fontSize: 12,
+                  color: Theme.of(context).hintColor,
+                ),
+                const HSpace(12),
+                SizedBox(
+                  width: 44,
+                  child: FlowyText.medium(
+                    '$percent%',
+                    fontSize: 13,
+                    textAlign: TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          onResetRequested: state.textScaleFactor == 1.0
+              ? null
+              : () async {
+                  await context
+                      .read<AppearanceSettingsCubit>()
+                      .setTextScaleFactor(1.0);
+                  if (!context.mounted) {
+                    return;
+                  }
+                  unawaited(context.read<DocumentAppearanceCubit>().fetch());
+                },
+        );
+      },
+    );
+  }
+}
+
 class _FontSelectorDropdown extends StatefulWidget {
   const _FontSelectorDropdown({required this.currentFont});
 
@@ -855,10 +946,14 @@ class _FontSelectorDropdown extends StatefulWidget {
 class _FontSelectorDropdownState extends State<_FontSelectorDropdown> {
   late final _options = () {
     final allKeys = GoogleFonts.asMap().keys.toList();
-    final googleChineseInMap = chineseFontKeys.where((k) => allKeys.contains(k));
+    final googleChineseInMap =
+        chineseFontKeys.where((k) => allKeys.contains(k));
     final otherKeys = allKeys
-        .where((k) =>
-            !chineseFontKeys.contains(k) && !systemChineseFontKeys.contains(k))
+        .where(
+          (k) =>
+              !chineseFontKeys.contains(k) &&
+              !systemChineseFontKeys.contains(k),
+        )
         .toList();
     return [
       defaultFontFamily,
@@ -906,8 +1001,7 @@ class _FontSelectorDropdownState extends State<_FontSelectorDropdown> {
     final appearance = context.watch<AppearanceSettingsCubit>().state;
     final currentFontName = appearance.font.fontFamilyDisplayName;
     // 当外部传入的 currentFont 与当前状态不同时更新文本
-    if (_textController.text != currentFontName &&
-        !_focusNode.hasFocus) {
+    if (_textController.text != currentFontName && !_focusNode.hasFocus) {
       _textController.text = currentFontName;
     }
     return LayoutBuilder(
@@ -1003,7 +1097,6 @@ class _FontSelectorDropdownState extends State<_FontSelectorDropdown> {
                   message: LocaleKeys
                       .settings_appearance_fontFamily_resetSuccess
                       .tr(),
-                  type: ToastificationType.success,
                 );
               },
               child: SizedBox(
@@ -1117,7 +1210,8 @@ class _FontListPopupState extends State<_FontListPopup> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: FlowyText.medium(
                 widget.textController.text.trim().isEmpty
-                    ? LocaleKeys.settings_workspacePage_workspaceFont_noFontHint.tr()
+                    ? LocaleKeys.settings_workspacePage_workspaceFont_noFontHint
+                        .tr()
                     : '搜索结果为空',
               ),
             ),

@@ -66,7 +66,7 @@ class ViewItem extends StatelessWidget {
     this.isFirstChild = false,
     this.isDraggable = true,
     required this.isFeedback,
-    this.height = HomeSpaceViewSizes.viewHeight,
+    this.height,
     this.isHoverEnabled = false,
     this.isPlaceholder = false,
     this.isHovered,
@@ -111,7 +111,7 @@ class ViewItem extends StatelessWidget {
   // identify if the view item is rendered as feedback widget inside DraggableItem
   final bool isFeedback;
 
-  final double height;
+  final double? height;
 
   final bool isHoverEnabled;
 
@@ -186,6 +186,7 @@ class ViewItem extends StatelessWidget {
                 .toList();
           }
 
+          final itemHeight = height ?? HomeSpaceViewSizes.viewHeight;
           final Widget child = InnerViewItem(
             view: state.view,
             parentView: parentView,
@@ -202,7 +203,7 @@ class ViewItem extends StatelessWidget {
             isFirstChild: isFirstChild,
             isDraggable: isDraggable,
             isFeedback: isFeedback,
-            height: height,
+            height: itemHeight,
             isHoverEnabled: isHoverEnabled,
             isPlaceholder: isPlaceholder,
             isHovered: isHovered,
@@ -308,7 +309,6 @@ class InnerViewItem extends StatefulWidget {
 }
 
 class _InnerViewItemState extends State<InnerViewItem> {
-
   @override
   Widget build(BuildContext context) {
     Widget child = ValueListenableBuilder(
@@ -431,7 +431,6 @@ class _InnerViewItemState extends State<InnerViewItem> {
 
     return child;
   }
-
 }
 
 class SingleInnerViewItem extends StatefulWidget {
@@ -703,16 +702,28 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
   }
 
   Widget _buildNameText() {
+    final textStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
+          fontSize: 14.0,
+          height: 1.35,
+          leadingDistribution: TextLeadingDistribution.even,
+        );
+
     return GestureDetector(
       onDoubleTap: () {
         // 双击开始重命名
         _startRenaming();
       },
-      child: FlowyText.regular(
+      child: Text(
         widget.view.nameOrDefault,
         overflow: TextOverflow.ellipsis,
-        fontSize: 14.0,
-        figmaLineHeight: 18.0,
+        maxLines: 1,
+        style: textStyle,
+        strutStyle: StrutStyle.fromTextStyle(
+          textStyle,
+          forceStrutHeight: true,
+          height: 1.35,
+          leadingDistribution: TextLeadingDistribution.even,
+        ),
       ),
     );
   }
@@ -727,13 +738,14 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         }
       },
       child: SizedBox(
-        height: 20.0,
+        height: 24.0,
         child: TextField(
           controller: _renameController,
           focusNode: _renameFocusNode,
           style: const TextStyle(
             fontSize: 14.0,
-            height: 18.0 / 14.0,
+            height: 1.35,
+            leadingDistribution: TextLeadingDistribution.even,
           ),
           decoration: InputDecoration(
             border: OutlineInputBorder(

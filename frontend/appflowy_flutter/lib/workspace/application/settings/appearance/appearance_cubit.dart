@@ -71,6 +71,9 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
     readTextScaleFactor();
   }
 
+  static const double minTextScaleFactor = 0.90;
+  static const double maxTextScaleFactor = 1.30;
+
   final AppearanceSettingsPB _appearanceSettings;
   final DateTimeSettingsPB _dateTimeSettings;
 
@@ -81,9 +84,13 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
       textScaleFactor.toString(),
     );
 
-    // don't allow the text scale factor to be greater than 1.0, it will cause
-    // ui issues
-    emit(state.copyWith(textScaleFactor: textScaleFactor.clamp(0.7, 1.0)));
+    emit(
+      state.copyWith(
+        textScaleFactor: textScaleFactor
+            .clamp(minTextScaleFactor, maxTextScaleFactor)
+            .toDouble(),
+      ),
+    );
   }
 
   Future<void> readTextScaleFactor() async {
@@ -92,7 +99,13 @@ class AppearanceSettingsCubit extends Cubit<AppearanceSettingsState> {
           (value) => double.parse(value),
         ) ??
         1.0;
-    emit(state.copyWith(textScaleFactor: textScaleFactor.clamp(0.7, 1.0)));
+    emit(
+      state.copyWith(
+        textScaleFactor: textScaleFactor
+            .clamp(minTextScaleFactor, maxTextScaleFactor)
+            .toDouble(),
+      ),
+    );
   }
 
   /// Update selected theme in the user's settings and emit an updated state

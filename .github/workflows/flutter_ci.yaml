@@ -36,7 +36,7 @@ concurrency:
 
 jobs:
   prepare-linux:
-    if: github.event.pull_request.draft != true
+    if: ${{ (github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/')) && github.event.pull_request.draft != true }}
     strategy:
       fail-fast: true
       matrix:
@@ -70,7 +70,7 @@ jobs:
           flutter_profile: ${{ matrix.flutter_profile }}
 
   prepare-windows:
-    if: github.event.pull_request.draft != true
+    if: ${{ (github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/')) && github.event.pull_request.draft != true }}
     strategy:
       fail-fast: true
       matrix:
@@ -97,7 +97,7 @@ jobs:
           flutter_profile: ${{ matrix.flutter_profile }}
 
   prepare-macos:
-    if: github.event.pull_request.draft != true
+    if: ${{ (github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/')) && github.event.pull_request.draft != true }}
     strategy:
       fail-fast: true
       matrix:
@@ -124,7 +124,7 @@ jobs:
 
   unit_test:
     needs: [ prepare-linux ]
-    if: github.event.pull_request.draft != true
+    if: ${{ (github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/')) && github.event.pull_request.draft != true }}
     strategy:
       fail-fast: false
       matrix:
@@ -218,6 +218,7 @@ jobs:
 
   cloud_integration_test:
     needs: [ prepare-linux ]
+    if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/') }}
     strategy:
       fail-fast: false
       matrix:
@@ -341,7 +342,7 @@ jobs:
 
   integration_test:
     needs: [ prepare-linux ]
-    if: github.event.pull_request.draft != true
+    if: ${{ (github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/')) && github.event.pull_request.draft != true }}
     strategy:
       fail-fast: false
       matrix:
