@@ -1287,91 +1287,63 @@ class _MobileUpgradePlanCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: () => _showUpgradeDialog(context),
-      child: Stack(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF44326B),
-                  Color(0xFF7547C0),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  blurRadius: 8,
-                  color: const Color(0xFF7547C0).withValues(alpha: 0.3),
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  subscriptionInfo.label,
-                  style: theme.textStyle.heading2.standard(
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  subscriptionInfo.info,
-                  style: theme.textStyle.body.standard(
-                    color: Colors.white.withValues(alpha: 0.85),
-                  ),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    '立即升级',
-                  style: theme.textStyle.heading4.standard(
-                    color: const Color(0xFF44326B),
-                  ),
-                  ),
-                ),
-              ],
-            ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF44326B),
+              Color(0xFF7547C0),
+            ],
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            child: Container(
-              height: 26,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: const BoxDecoration(
-                color: Color(0xFF4F3F5F),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(4),
-                  topRight: Radius.circular(4),
-                  bottomRight: Radius.circular(4),
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  '当前方案',
-                  style: theme.textStyle.body.standard(
-                    color: Colors.white,
-                  ).copyWith(fontSize: 11),
-                ),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 8,
+              color: const Color(0xFF7547C0).withValues(alpha: 0.3),
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              subscriptionInfo.label,
+              style: theme.textStyle.heading2.standard(
+                color: Colors.white,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              subscriptionInfo.info,
+              style: theme.textStyle.body.standard(
+                color: Colors.white.withValues(alpha: 0.85),
+              ),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                '立即升级',
+              style: theme.textStyle.heading4.standard(
+                color: const Color(0xFF44326B),
+              ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
