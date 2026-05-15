@@ -114,6 +114,18 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
     );
   }
 
+  Future<void> _refreshUserProfile() async {
+    final authResult = await getIt<AuthService>().getUser();
+    authResult.fold(
+      (user) {
+        if (mounted) {
+          setState(() => _userProfile = user);
+        }
+      },
+      (error) => Log.error('Failed to refresh user: ${error.msg}'),
+    );
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -331,6 +343,10 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
             switch (_currentSection) {
               MobileSettingsSection.account => PersonalInfoSettingGroup(
                   userProfile: _userProfile!,
+                  onUserProfileUpdated: () {
+                    // Refresh user profile to update cached iconUrl
+                    _refreshUserProfile();
+                  },
                 ),
               MobileSettingsSection.workspace => const SizedBox.shrink(), // handled above
               MobileSettingsSection.workspaceManagement =>
@@ -743,27 +759,9 @@ class _UserInfoCard extends StatelessWidget {
   }
 
   Widget _buildDefaultAvatar(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(size / 2),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(size / 2),
-        child: Image.asset(
-          'assets/images/about_logo.png',
-          width: 80,
-          height: 80,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.person,
-            size: size,
-            color: Colors.grey[400],
-          ),
-        ),
-      ),
+    return AFAvatar(
+      name: _getDisplayName(),
+      size: AFAvatarSize.s,
     );
   }
 
@@ -1247,27 +1245,9 @@ class _UserProfileHeader extends StatelessWidget {
   }
 
   Widget _buildDefaultAvatar(double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(size / 2),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(size / 2),
-        child: Image.asset(
-          'assets/images/about_logo.png',
-          width: 80,
-          height: 80,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.person,
-            size: size,
-            color: Colors.grey[400],
-          ),
-        ),
-      ),
+    return AFAvatar(
+      name: _displayName,
+      size: AFAvatarSize.s,
     );
   }
 
