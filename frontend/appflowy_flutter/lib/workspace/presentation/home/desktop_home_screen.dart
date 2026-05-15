@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/features/workspace/data/repositories/rust_workspace_repository_impl.dart';
@@ -35,6 +36,7 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/style_widget/container.dart';
+import 'package:flowy_infra/size.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sized_context/sized_context.dart';
@@ -120,7 +122,8 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                 create: (_) {
                   // 触发 TabsBloc 初始化，确保当前页面被添加到最近访问
                   getIt<TabsBloc>().add(const TabsEvent.initial());
-                  return HomeBloc(workspaceLatest)..add(const HomeEvent.initial());
+                  return HomeBloc(workspaceLatest)
+                    ..add(const HomeEvent.initial());
                 },
               ),
               BlocProvider<HomeSettingBloc>(
@@ -136,7 +139,8 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
               ),
             ],
             child: Scaffold(
-              floatingActionButton: BlocBuilder<HomeSettingBloc, HomeSettingState>(
+              floatingActionButton:
+                  BlocBuilder<HomeSettingBloc, HomeSettingState>(
                 buildWhen: (p, c) => p.menuStatus != c.menuStatus,
                 builder: (context, state) {
                   final isMenuHidden = state.menuStatus == MenuStatus.hidden;
@@ -164,9 +168,11 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                     final currentPageManager =
                         context.read<TabsBloc>().state.currentPageManager;
 
-            if (currentPageManager.plugin.pluginType == PluginType.blank) {
+                    if (currentPageManager.plugin.pluginType ==
+                        PluginType.blank) {
                       if (view.id.isEmpty) {
-                        Log.error('DesktopHomeScreen: latestView.id is empty, skip opening plugin');
+                        Log.error(
+                            'DesktopHomeScreen: latestView.id is empty, skip opening plugin');
                       } else {
                         getIt<TabsBloc>().openPlugin(view);
                       }
@@ -189,12 +195,18 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                       ..add(UserWorkspaceEvent.fetchWorkspaces()),
                     child: BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
                       listenWhen: (previous, current) =>
-                          previous.currentWorkspace != current.currentWorkspace ||
-                          previous.workspaces.length != current.workspaces.length ||
-                          _workspacesChanged(previous.workspaces, current.workspaces) ||
-                          (previous.actionResult?.actionType == WorkspaceActionType.create &&
-                              current.actionResult?.actionType == WorkspaceActionType.create &&
-                              previous.actionResult?.isLoading != current.actionResult?.isLoading),
+                          previous.currentWorkspace !=
+                              current.currentWorkspace ||
+                          previous.workspaces.length !=
+                              current.workspaces.length ||
+                          _workspacesChanged(
+                              previous.workspaces, current.workspaces) ||
+                          (previous.actionResult?.actionType ==
+                                  WorkspaceActionType.create &&
+                              current.actionResult?.actionType ==
+                                  WorkspaceActionType.create &&
+                              previous.actionResult?.isLoading !=
+                                  current.actionResult?.isLoading),
                       listener: (context, state) {
                         if (!context.mounted) return;
                         final workspaceBloc =
@@ -209,14 +221,14 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                         _checkAndHandleWorkspaceRemoved(context, state);
                       },
                       child: _WorkspaceLifecycleRefresher(
-                      child: HomeHotKeys(
-                        userProfile: userProfile,
-                        child: FlowyContainer(
-                          Theme.of(context).colorScheme.surface,
-                          child: _buildBody(
-                            context,
-                            userProfile,
-                            workspaceLatest,
+                        child: HomeHotKeys(
+                          userProfile: userProfile,
+                          child: FlowyContainer(
+                            Theme.of(context).colorScheme.surface,
+                            child: _buildBody(
+                              context,
+                              userProfile,
+                              workspaceLatest,
                             ),
                           ),
                         ),
@@ -253,10 +265,16 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
       workspaceSetting: workspaceSetting,
     );
     final notificationPanel = NotificationPanel();
-    final sliderHoverTrigger = SliderMenuHoverTrigger();
+    final sliderHoverTrigger = SliderMenuHoverTrigger(
+      touchOptimized: context.widthPx < PageBreaks.tabletLandscape,
+      onOpen: () => context.read<HomeSettingBloc>().add(
+            const HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+          ),
+    );
 
-    final homeMenuResizer =
-        layout.showMenu ? const SidebarResizer() : const SizedBox.shrink();
+    final homeMenuResizer = layout.showMenu && !layout.menuIsDrawer
+        ? const SidebarResizer()
+        : const SizedBox.shrink();
     final editPanel = _buildEditPanel(context, layout: layout);
 
     // 使用 BlocBuilder 监听 TabsBloc 状态变化，以便在切换标签时更新问号按钮的显示
@@ -337,6 +355,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     bool isFullWindow = false,
   }) {
     final isSliderbarShowing = layout.showMenu;
+    final isDrawerMenu = isSliderbarShowing && layout.menuIsDrawer;
     // 全窗口时主内容区铺满；非全窗口时为主内容区留出左侧偏移
     final homeStackLeft = isFullWindow ? 0.0 : layout.homePageLOffset;
     final homeStackRight = layout.homePageROffset;
@@ -376,21 +395,45 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
               duration: layout.animDuration.inMilliseconds * 0.001,
             )
             .positioned(
-              left: isFullWindow ? 0 : (isSliderbarShowing ? layout.menuWidth : 0),
-              top: isSliderbarShowing ? 0 : 52,
+              left: isFullWindow
+                  ? 0
+                  : (isSliderbarShowing && !isDrawerMenu
+                      ? layout.menuWidth
+                      : 0),
+              top: isSliderbarShowing && !isDrawerMenu ? 0 : 52,
               width: layout.notificationPanelWidth,
               bottom: 0,
             ),
+        if (!isFullWindow && isDrawerMenu)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => context.read<HomeSettingBloc>().add(
+                    const HomeSettingEvent.changeMenuStatus(MenuStatus.hidden),
+                  ),
+              child: ColoredBox(
+                color: Colors.black.withOpacity(0.08),
+              ),
+            ),
+          ),
         // 左侧菜单：Positioned 必须是 Stack 直接子组件才能正确布局；全屏时宽度为 0 不占位
         Positioned(
           left: 0,
-          top: 0,
-          bottom: 0,
+          top: isDrawerMenu ? 12 : 0,
+          bottom: isDrawerMenu ? 12 : 0,
           width: isFullWindow ? 0 : layout.menuWidth,
           child: Visibility(
             visible: !isFullWindow,
             maintainState: true,
-            child: sidebar.animatedPanelX(
+            child: (isDrawerMenu
+                    ? ClipRRect(
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(14),
+                        ),
+                        child: sidebar,
+                      )
+                    : sidebar)
+                .animatedPanelX(
               closeX: -layout.menuWidth,
               isClosed: !isSliderbarShowing,
               curve: Curves.easeOutQuad,
@@ -405,12 +448,18 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
           bottom: 0,
           width: isFullWindow ? 0 : null,
           child: Visibility(
-            visible: !isFullWindow,
+            visible: !isFullWindow && !isDrawerMenu,
             maintainState: true,
-            child: homeMenuResizer
-                .animate(layout.animDuration, Curves.easeOutQuad),
+            child: homeMenuResizer.animate(
+                layout.animDuration, Curves.easeOutQuad),
           ),
         ),
+        if (!isFullWindow && !isSliderbarShowing)
+          Positioned(
+            left: 6,
+            top: Platform.isWindows ? 56 : 12,
+            child: sliderHoverTrigger,
+          ),
       ],
     );
   }
@@ -480,7 +529,8 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
         }
 
         showToastNotification(
-          message: LocaleKeys.settings_appearance_members_removeFromWorkspace.tr(),
+          message:
+              LocaleKeys.settings_appearance_members_removeFromWorkspace.tr(),
           type: ToastificationType.warning,
         );
       }
@@ -504,7 +554,7 @@ class _WorkspaceLifecycleRefresherState
     extends State<_WorkspaceLifecycleRefresher> with WidgetsBindingObserver {
   DateTime? _lastRefreshTime;
   static const _refreshDebounceDuration = Duration(seconds: 2);
-  
+
   /// 定期刷新定时器，用于检测用户是否被踢出工作区
   /// 间隔设置为 5 分钟，作为 WebSocket 实时通知的后备机制
   /// WebSocket 连接断开时，此定时器可以确保用户最终会被踢出
@@ -515,11 +565,11 @@ class _WorkspaceLifecycleRefresherState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
+
     // 启动定期刷新定时器，用于检测用户是否被踢出工作区
     _startPeriodicRefresh();
   }
-  
+
   /// 启动定期刷新定时器
   void _startPeriodicRefresh() {
     _periodicRefreshTimer?.cancel();
@@ -531,7 +581,8 @@ class _WorkspaceLifecycleRefresherState
         }
       },
     );
-    LogUtils.info('WorkspaceLifecycleRefresher: started periodic refresh timer');
+    LogUtils.info(
+        'WorkspaceLifecycleRefresher: started periodic refresh timer');
   }
 
   @override
@@ -558,12 +609,17 @@ class _WorkspaceLifecycleRefresherState
   Future<void> _checkMembershipStatus() async {
     try {
       // 获取当前工作区ID
-      final workspaceId = context.read<UserWorkspaceBloc?>()?.state.currentWorkspace?.workspaceId;
+      final workspaceId = context
+          .read<UserWorkspaceBloc?>()
+          ?.state
+          .currentWorkspace
+          ?.workspaceId;
       // 检查会员状态
       await context.checkMembershipStatus(workspaceId: workspaceId);
-      
+
       // 检查存储限制
-      await context.checkAndHandleCloudSyncStorageLimit(workspaceId: workspaceId);
+      await context.checkAndHandleCloudSyncStorageLimit(
+          workspaceId: workspaceId);
     } catch (e) {
       Log.error('Failed to check membership status: $e');
     }
@@ -616,14 +672,15 @@ class DesktopHomeScreenStackAdaptor extends HomeStackDelegate {
       (result) => result.fold(
         (parentView) {
           final List<ViewPB> views = parentView.childViews;
-            if (views.isNotEmpty) {
+          if (views.isNotEmpty) {
             ViewPB lastView = views.last;
             if (index != null && index != 0 && views.length > index - 1) {
               lastView = views[index - 1];
             }
 
             if (lastView.id.isEmpty) {
-              Log.error('DesktopHomeScreen: lastView.id is empty, skip opening plugin');
+              Log.error(
+                  'DesktopHomeScreen: lastView.id is empty, skip opening plugin');
               return;
             }
             return getIt<TabsBloc>().openPlugin(lastView);

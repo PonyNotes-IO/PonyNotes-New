@@ -39,10 +39,12 @@ class SettingsHeader extends StatelessWidget {
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: theme.spacing.l),
                 child: Text(
-          title,
-          textAlign: TextAlign.center,
-          style: theme.textStyle.heading2.enhanced(
-            color: theme.textColorScheme.primary,
+                  title,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textStyle.heading2.enhanced(
+                    color: theme.textColorScheme.primary,
                   ),
                 ),
               ),

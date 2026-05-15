@@ -61,7 +61,10 @@ class HomeSettingBloc extends Bloc<HomeSettingEvent, HomeSettingState> {
               );
             }
             emit(
-              state.copyWith(menuStatus: status),
+              state.copyWith(
+                menuStatus: status,
+                hasColappsedMenuManually: true,
+              ),
             );
           },
           collapseNotificationPanel: (_) {
@@ -103,10 +106,9 @@ class HomeSettingBloc extends Bloc<HomeSettingEvent, HomeSettingState> {
             );
           },
           editPanelResized: (_EditPanelResized e) {
-            final newPosition =
-                (state.resizeStart + e.offset)
-                    .clamp(0, _maximumSidebarResizeOffset)
-                    .toDouble();
+            final newPosition = (state.resizeStart + e.offset)
+                .clamp(0, _maximumSidebarResizeOffset)
+                .toDouble();
             if (state.resizeOffset != newPosition) {
               emit(state.copyWith(resizeOffset: newPosition));
             }

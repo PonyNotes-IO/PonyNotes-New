@@ -6,18 +6,17 @@ import 'package:flutter/material.dart';
 import '../../../../generated/flowy_svgs.g.dart';
 
 class SettingsMenuElement extends StatelessWidget {
-  const SettingsMenuElement({
-    super.key,
-    required this.page,
-    required this.label,
-    required this.changeSelectedPage,
-    required this.selectedPage,
-    this.showArrow = true, // 默认显示箭头
-    this.trailingText,
-    this.isEnabled = true,
-    this.showIcon = false,
-    this.svg
-  });
+  const SettingsMenuElement(
+      {super.key,
+      required this.page,
+      required this.label,
+      required this.changeSelectedPage,
+      required this.selectedPage,
+      this.showArrow = true, // 默认显示箭头
+      this.trailingText,
+      this.isEnabled = true,
+      this.showIcon = false,
+      this.svg});
 
   final SettingsPage page;
   final SettingsPage selectedPage;
@@ -55,13 +54,15 @@ class SettingsMenuElement extends StatelessWidget {
               FlowySvg(
                 svg ?? FlowySvgs.icon_setting_upgrade_s,
                 blendMode: null,
-                size: Size(18,18),
+                size: Size(18, 18),
               ),
               const HSpace(4),
             ],
             Expanded(
               child: Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textStyle.body.standard(
                   color: theme.textColorScheme.primary,
                 ),
@@ -69,15 +70,20 @@ class SettingsMenuElement extends StatelessWidget {
             ),
             if (trailingText != null && trailingText!.isNotEmpty) ...[
               const HSpace(8),
-              Text(
-                trailingText!,
-                style: theme.textStyle.body
-                    .standard(
-                      color: isEnabled
-                          ? theme.textColorScheme.secondary
-                          : theme.textColorScheme.secondary.withOpacity(0.5),
-                    )
-                    .copyWith(fontSize: 12),
+              Flexible(
+                child: Text(
+                  trailingText!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: theme.textStyle.body
+                      .standard(
+                        color: isEnabled
+                            ? theme.textColorScheme.secondary
+                            : theme.textColorScheme.secondary.withOpacity(0.5),
+                      )
+                      .copyWith(fontSize: 12),
+                ),
               ),
             ],
             if (showArrow) ...[
