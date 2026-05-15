@@ -37,7 +37,10 @@ import 'package:appflowy/workspace/application/settings/appearance/appearance_cu
 import 'package:appflowy/util/font_family_extension.dart';
 import 'package:appflowy/util/theme_mode_extension.dart';
 import 'package:appflowy/workspace/application/settings/plan/workspace_subscription_ext.dart';
+import 'package:appflowy/workspace/application/settings/plan/workspace_usage_ext.dart';
+import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
 import 'package:get_it/get_it.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -88,6 +91,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
   MobileSettingsSection _currentSection = MobileSettingsSection.menu;
   UserProfilePB? _userProfile;
   WorkspaceSubscriptionInfoPB? _subscriptionInfo;
+  WorkspaceUsagePB? _workspaceUsage;
   CurrentSubscription? _currentSubscription;
   bool _subscriptionLoaded = false;
 
@@ -129,22 +133,41 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
       try {
         state = context.read<UserWorkspaceBloc>().state;
       } catch (_) {
-        // Bloc not available in context — skip loading subscription info
         return;
       }
     }
     final workspaceId = state!.currentWorkspace?.workspaceId ?? '';
     if (workspaceId.isEmpty) return;
 
-    final result =
-        await UserBackendService.getWorkspaceSubscriptionInfo(workspaceId);
-    result.fold(
+    final service = WorkspaceService(
+      workspaceId: workspaceId,
+      userId: _userProfile!.id,
+    );
+
+    final results = await Future.wait([
+      UserBackendService.getWorkspaceSubscriptionInfo(workspaceId),
+      service.getWorkspaceUsage(),
+    ]);
+
+    final subscriptionResult = results[0];
+    final usageResult = results[1];
+
+    subscriptionResult.fold(
       (info) {
         if (mounted) {
-          setState(() => _subscriptionInfo = info);
+          setState(() => _subscriptionInfo = info as WorkspaceSubscriptionInfoPB);
         }
       },
       (error) => Log.error('Failed to load subscription info: ${error.msg}'),
+    );
+
+    usageResult.fold(
+      (usage) {
+        if (mounted) {
+          setState(() => _workspaceUsage = usage as WorkspaceUsagePB?);
+        }
+      },
+      (error) => Log.error('Failed to load workspace usage: ${error.msg}'),
     );
   }
 
@@ -273,6 +296,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
         subscriptionInfo: _subscriptionInfo,
         currentSubscription: _currentSubscription,
         currentWorkspace: widget.workspaceState?.currentWorkspace,
+        workspaceUsage: _workspaceUsage,
         onNavigate: (section) {
           setState(() => _currentSection = section);
         },
@@ -885,6 +909,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
     required this.currentSubscription,
     required this.currentWorkspace,
     required this.onNavigate,
+    this.workspaceUsage,
   });
 
   final UserProfilePB userProfile;
@@ -892,6 +917,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
   final CurrentSubscription? currentSubscription;
   final UserWorkspacePB? currentWorkspace;
   final void Function(MobileSettingsSection) onNavigate;
+  final WorkspaceUsagePB? workspaceUsage;
 
   @override
   Widget build(BuildContext context) {
@@ -909,7 +935,10 @@ class _MobileSettingsMenuContent extends StatelessWidget {
             _UserProfileHeader(userProfile: userProfile),
             const SizedBox(height: 16),
             if (subscriptionInfo != null)
-              _MobileUpgradePlanCard(subscriptionInfo: subscriptionInfo!),
+              _MobileUpgradePlanCard(
+                subscriptionInfo: subscriptionInfo!,
+                workspaceUsage: workspaceUsage,
+              ),
             if (subscriptionInfo != null) const SizedBox(height: 16),
             _SettingsGroupCard(
               items: [
@@ -1278,9 +1307,13 @@ class _UserProfileHeader extends StatelessWidget {
 // ============================================================================
 
 class _MobileUpgradePlanCard extends StatelessWidget {
-  const _MobileUpgradePlanCard({required this.subscriptionInfo});
+  const _MobileUpgradePlanCard({
+    required this.subscriptionInfo,
+    this.workspaceUsage,
+  });
 
   final WorkspaceSubscriptionInfoPB subscriptionInfo;
+  final WorkspaceUsagePB? workspaceUsage;
 
   String _formatDateRange(int endDate) {
     final end = DateTime.fromMillisecondsSinceEpoch(endDate * 1000);
@@ -1346,21 +1379,37 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                         maxLines: 2,
                       ),
                     const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        '立即升级',
-                        style: theme.textStyle.heading4.standard(
-                          color: const Color(0xFF44326B),
-                        ).copyWith(fontSize: 12),
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (workspaceUsage != null)
+                          Text(
+                            '剩余 ${workspaceUsage!.currentBlobInGb} / ${workspaceUsage!.totalBlobInGb} GB',
+                            style: const TextStyle(
+                              color: Colors.black,
+                              fontSize: 10,
+                            ),
+                          )
+                        else
+                          const SizedBox(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFADECA),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            '会员升级',
+                            style: theme.textStyle.heading4.standard(
+                              color: const Color(0xFF44326B),
+                            ).copyWith(fontSize: 12),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
