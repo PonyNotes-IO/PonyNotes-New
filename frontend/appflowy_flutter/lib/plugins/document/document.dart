@@ -13,6 +13,8 @@ import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/presentation/widgets/dialogs.dart'
+    show showToastNotification, ToastificationType;
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
@@ -201,6 +203,15 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
                   if (hasParent) {
                     // Navigate to parent view
                     final parentView = ancestors[ancestors.length - 2];
+                    // Validate parentView before opening
+                    if (parentView.id.isEmpty) {
+                      Log.warn('Back navigation skipped: parentView has empty id');
+                      showToastNotification(
+                        message: '无法返回上级：视图数据不完整',
+                        type: ToastificationType.warning,
+                      );
+                      return;
+                    }
                     final tabsBloc = getIt<TabsBloc>();
                     tabsBloc.openPlugin(parentView);
                   } else {
@@ -214,6 +225,10 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
                   }
                 } catch (e) {
                   Log.error('Failed to navigate back: $e');
+                  showToastNotification(
+                    message: '导航失败，请重试',
+                    type: ToastificationType.error,
+                  );
                 }
               },
             ),

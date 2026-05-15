@@ -196,7 +196,9 @@ class _SettingsSharingViewState extends State<SettingsSharingView> {
 
       final token = userProfile.token;
       if (token.isEmpty) {
-        throw Exception('未找到用户凭证，请重新登录');
+        Log.warn('[_loadUserSharedNotes] Token is empty, user may be in offline mode');
+        setState(() { _isLoadingShared = false; _sharedError = '需要登录才能查看共享笔记'; });
+        return;
       }
 
       final uri = Uri.parse(baseUrl).replace(

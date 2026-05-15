@@ -145,7 +145,10 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
 
       final token = userProfile.token;
       if (token.isEmpty) {
-        throw Exception('未找到用户凭证，请重新登录');
+        Log.warn('[_loadSharedNotes] Token is empty, user may be in offline mode');
+        if (!showLoading) setState(() => _isRefreshing = false);
+        setState(() => _isLoading = false);
+        return;
       }
 
       // 提取 access_token（可能是 JSON 格式）

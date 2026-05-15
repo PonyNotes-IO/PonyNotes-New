@@ -415,7 +415,6 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     print('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
 
     final adapter = _collabAdapter;
-    _collabAdapter = null;
 
     // 注销所有控制器（同步操作）
     _unregisterControllers();
@@ -423,6 +422,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     // fire-and-forget：先 forceSync 完成后再 dispose adapter
     if (adapter != null) {
       adapter.forceSync().then((_) {
+        _collabAdapter = null;
         print('[WhiteboardPage] ✅ Force sync completed, disposing adapter');
         logDiagnosticEvent(
           'WhiteboardLoad',
@@ -437,6 +437,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
         );
         adapter.dispose();
       }).catchError((e) {
+        _collabAdapter = null;
         print('[WhiteboardPage] ❌ Force sync failed: $e');
         logDiagnosticEvent(
           'WhiteboardLoad',

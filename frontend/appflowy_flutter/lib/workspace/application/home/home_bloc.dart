@@ -196,7 +196,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   /// This handles the "folder is not initialized" error that occurs during workspace switching
   /// Added overall timeout to prevent indefinite waiting
   Future<void> _requestWorkspaceSettingWithRetry(String workspaceId) async {
-    const maxRetries = 10; // 增加重试次数
+    const maxRetries = 30; // 慢机器上 Folder 初始化需要更长时间
     const retryDelay = Duration(milliseconds: 500); // 增加重试间隔
     const totalTimeout = Duration(seconds: 10); // 总超时时间10秒
 

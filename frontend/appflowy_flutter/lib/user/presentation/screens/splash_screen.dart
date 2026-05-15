@@ -192,7 +192,7 @@ class _SplashScreenState extends State<SplashScreen> {
     // 🔧 修复登录后卡住问题：添加重试逻辑，等待 Folder 初始化完成
     // 原因：runAppFlowy() 重新初始化应用时，Folder 可能还未完全初始化
     int retryCount = 0;
-    const maxRetries = 20; // 最多等待10秒（每次500ms）
+    const maxRetries = 30; // 最多等待15秒（每次500ms），慢机器上需要更长时间
     const retryDelay = Duration(milliseconds: 500);
     
     while (retryCount < maxRetries) {

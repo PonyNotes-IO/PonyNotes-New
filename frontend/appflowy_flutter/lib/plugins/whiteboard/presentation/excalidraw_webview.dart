@@ -245,6 +245,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
                 lsKey = 'excalidraw-state';
               }
 
+              if (_controller == null || !mounted) return null;
+
               await _controller!.webStorage.localStorage.setItem(
                 key: lsKey,
                 value: stringValue,
@@ -266,7 +268,8 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             return normalizedData;
           } catch (e, stack) {
             Log.error('[ExcalidrawWebView] ❌ initData failed: $e\n$stack');
-            if (!_initializationCompleter!.isCompleted) {
+            if (_initializationCompleter != null &&
+                !_initializationCompleter!.isCompleted) {
               _initializationCompleter!.completeError(e);
             }
             return null;
@@ -459,6 +462,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   }
 
   Future<void> _initializeExcalidraw() async {
+    if (!mounted || _controller == null || !_webViewCreated) return;
     try {
       // debug logs removed
 
@@ -1223,7 +1227,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           },
 
           onLoadStop: (controller, url) async {
-            if (mounted) {
+            if (mounted && _controller != null) {
               setState(() {
                 _isLoading = false;
                 _pageLoaded = true;
