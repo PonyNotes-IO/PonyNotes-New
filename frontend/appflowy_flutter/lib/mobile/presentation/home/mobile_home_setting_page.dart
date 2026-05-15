@@ -1337,28 +1337,26 @@ class _MobileUpgradePlanCard extends StatelessWidget {
           child: SizedBox(
             width: cardWidth,
             height: cardHeight,
-            child: GestureDetector(
-              onTap: () => _showUpgradeDialog(context),
-              child: Container(
-                decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/navigation/m_setting_profile.png'),
-                    fit: BoxFit.cover,
-                  ),
+            child: Container(
+              decoration: const BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage('assets/navigation/m_setting_profile.png'),
+                  fit: BoxFit.cover,
                 ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      subscriptionInfo.label,
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    subscriptionInfo.label,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 2),
+                  ),
+                  const SizedBox(height: 2),
                     if (subscriptionInfo.planSubscription.endDate.toInt() > 0 &&
                         subscriptionInfo.plan.value != 0)
                       Text(
@@ -1384,29 +1382,60 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         if (workspaceUsage != null)
-                          Text(
-                            '剩余 ${workspaceUsage!.currentBlobInGb} / ${workspaceUsage!.totalBlobInGb} GB',
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontSize: 10,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                '${workspaceUsage!.currentBlobInGb}G / ${workspaceUsage!.totalBlobInGb}G',
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              GestureDetector(
+                                onTap: null,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.transparent,
+                                    border: Border.all(
+                                      color: const Color(0xFF44326B),
+                                      width: 1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '剩余空间',
+                                    style: theme.textStyle.heading4.standard(
+                                      color: const Color(0xFF44326B),
+                                    ).copyWith(fontSize: 10),
+                                  ),
+                                ),
+                              ),
+                            ],
                           )
                         else
                           const SizedBox(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFADECA),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            '会员升级',
-                            style: theme.textStyle.heading4.standard(
-                              color: const Color(0xFF44326B),
-                            ).copyWith(fontSize: 12),
+                        GestureDetector(
+                          onTap: () => _showUpgradeDialog(context),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFADECA),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              '会员升级',
+                              style: theme.textStyle.heading4.standard(
+                                color: const Color(0xFF44326B),
+                              ).copyWith(fontSize: 12),
+                            ),
                           ),
                         ),
                       ],
@@ -1415,7 +1444,6 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                 ),
               ),
             ),
-          ),
         );
       },
     );
