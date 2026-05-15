@@ -22,6 +22,8 @@ class WhiteboardCollabAdapter {
   WhiteboardCollabAdapter({
     required this.viewId,
     required this.onDataChanged,
+    this.traceId,
+    this.sessionId,
   }) {
     _service = WhiteboardDataService();
     _listener = WhiteboardListener(id: viewId);
@@ -31,6 +33,8 @@ class WhiteboardCollabAdapter {
 
   final String viewId;
   final Function(Map<String, dynamic>) onDataChanged;
+  final String? traceId;
+  final String? sessionId;
 
   late final WhiteboardDataService _service;
   late final WhiteboardListener _listener;

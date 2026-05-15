@@ -4,6 +4,7 @@
 #include <shellapi.h>
 
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <utility>
@@ -109,6 +110,40 @@ std::string CheckPendingDeepLink() {
   return "";
 }
 
+void ConfigureBundledWebView2Runtime() {
+  if (GetEnvironmentVariableW(L"WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", nullptr,
+                              0) > 0) {
+    OutputDebugStringW(
+        L"[WebView2] Respecting existing browser executable override\n");
+    return;
+  }
+
+  wchar_t module_path[MAX_PATH];
+  DWORD length = GetModuleFileNameW(nullptr, module_path, MAX_PATH);
+  if (length == 0 || length == MAX_PATH) {
+    OutputDebugStringW(L"[WebView2] Failed to resolve executable path\n");
+    return;
+  }
+
+  std::filesystem::path executable_path(module_path);
+  std::filesystem::path bundled_runtime_dir =
+      executable_path.parent_path() / L"webview2_fixed";
+  std::filesystem::path bundled_runtime_exe =
+      bundled_runtime_dir / L"msedgewebview2.exe";
+
+  if (!std::filesystem::exists(bundled_runtime_exe)) {
+    OutputDebugStringW(L"[WebView2] No bundled runtime found, using system "
+                       L"installed runtime\n");
+    return;
+  }
+
+  SetEnvironmentVariableW(L"WEBVIEW2_BROWSER_EXECUTABLE_FOLDER",
+                          bundled_runtime_dir.c_str());
+  OutputDebugStringW(L"[WebView2] Using bundled runtime from ");
+  OutputDebugStringW(bundled_runtime_dir.c_str());
+  OutputDebugStringW(L"\n");
+}
+
 }  // namespace
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
@@ -161,6 +196,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  ConfigureBundledWebView2Runtime();
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
   flutter::DartProject project(L"data");

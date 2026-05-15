@@ -7,6 +7,7 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
@@ -191,10 +192,27 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   // 主题监听
   Brightness? _lastBrightness;
+  late final String _sessionTraceId;
+  late final String _loadTraceId;
+  late final Stopwatch _loadStopwatch;
 
   @override
   void initState() {
     super.initState();
+    _sessionTraceId =
+        ponyNotesDiagTraceId('whiteboard-session', widget.view.id);
+    _loadTraceId = ponyNotesDiagTraceId('whiteboard', widget.view.id);
+    _loadStopwatch = Stopwatch()..start();
+    logDiagnosticEvent(
+      'WhiteboardLoad',
+      'page_init',
+      {
+        'sessionId': _sessionTraceId,
+        'traceId': _loadTraceId,
+        'viewId': widget.view.id,
+        'viewName': widget.view.name,
+      },
+    );
     // debug logs removed
 
     // ✅ 关键修复：为每个视图创建唯一的GlobalKey
@@ -268,7 +286,18 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
   /// 从文件路径导入白板数据
   Future<void> _importFromFilePath(String filePath) async {
+    final importStopwatch = Stopwatch()..start();
     try {
+      logDiagnosticEvent(
+        'WhiteboardLoad',
+        'import_start',
+        {
+          'sessionId': _sessionTraceId,
+          'traceId': _loadTraceId,
+          'viewId': widget.view.id,
+          'filePath': filePath,
+        },
+      );
       // 读取文件内容
       final fileContent = await File(filePath).readAsString();
       final data = jsonDecode(fileContent) as Map<String, dynamic>;
@@ -313,10 +342,40 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       }
 
       Log.info('[Whiteboard] 导入成功');
+      logDiagnosticEvent(
+        'WhiteboardLoad',
+        'import_done',
+        {
+          'sessionId': _sessionTraceId,
+          'traceId': _loadTraceId,
+          'viewId': widget.view.id,
+          'durationMs': importStopwatch.elapsedMilliseconds,
+          'elementsCount': sceneData['elements'] is List
+              ? (sceneData['elements'] as List).length
+              : null,
+          'filesCount': sceneData['files'] is Map
+              ? (sceneData['files'] as Map).length
+              : null,
+          'reloadCounter': _importReloadCounter,
+        },
+      );
       if (mounted) _showSuccessSnackBar('导入成功');
     } catch (e, stackTrace) {
       Log.error('[Whiteboard] 导入失败: $e');
       Log.error('[Whiteboard] 堆栈: $stackTrace');
+      logDiagnosticEvent(
+        'WhiteboardLoad',
+        'import_done',
+        {
+          'sessionId': _sessionTraceId,
+          'traceId': _loadTraceId,
+          'viewId': widget.view.id,
+          'durationMs': importStopwatch.elapsedMilliseconds,
+          'success': false,
+          'error': '$e',
+        },
+        warning: true,
+      );
       if (mounted) _showErrorSnackBar('导入失败: $e');
     }
   }
@@ -342,6 +401,16 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   @override
   void dispose() {
     _isDisposing = true;
+    logDiagnosticEvent(
+      'WhiteboardLoad',
+      'page_dispose_start',
+      {
+        'sessionId': _sessionTraceId,
+        'traceId': _loadTraceId,
+        'viewId': widget.view.id,
+        'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+      },
+    );
 
     print('[WhiteboardPage] 🔄 Dispose: starting cleanup...');
 
@@ -355,9 +424,33 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     if (adapter != null) {
       adapter.forceSync().then((_) {
         print('[WhiteboardPage] ✅ Force sync completed, disposing adapter');
+        logDiagnosticEvent(
+          'WhiteboardLoad',
+          'page_dispose_force_sync_done',
+          {
+            'sessionId': _sessionTraceId,
+            'traceId': _loadTraceId,
+            'viewId': widget.view.id,
+            'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+            'success': true,
+          },
+        );
         adapter.dispose();
       }).catchError((e) {
         print('[WhiteboardPage] ❌ Force sync failed: $e');
+        logDiagnosticEvent(
+          'WhiteboardLoad',
+          'page_dispose_force_sync_done',
+          {
+            'sessionId': _sessionTraceId,
+            'traceId': _loadTraceId,
+            'viewId': widget.view.id,
+            'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+            'success': false,
+            'error': '$e',
+          },
+          warning: true,
+        );
         adapter.dispose();
       });
     }
@@ -416,6 +509,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   void _initCollabAdapter() {
     _collabAdapter = WhiteboardCollabAdapter(
       viewId: widget.view.id,
+      traceId: _loadTraceId,
+      sessionId: _sessionTraceId,
       onDataChanged: (data) {
         // ✅ 关键：当收到远程同步更新时，将其推送到 WebView
         if (!_isDisposing && mounted) {
@@ -429,9 +524,43 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
   }
 
   Future<void> _loadInitialData() async {
+    final stageStopwatch = Stopwatch()..start();
+    logDiagnosticEvent(
+      'WhiteboardLoad',
+      'local_data_start',
+      {
+        'sessionId': _sessionTraceId,
+        'traceId': _loadTraceId,
+        'viewId': widget.view.id,
+        'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+      },
+    );
     // debug log removed
     final service = WhiteboardDataService();
-    final data = await service.loadWhiteboardData(widget.view.id);
+    final data = await service.loadWhiteboardData(
+      widget.view.id,
+      traceId: _loadTraceId,
+      sessionId: _sessionTraceId,
+      source: 'page-load',
+    );
+    logDiagnosticEvent(
+      'WhiteboardLoad',
+      'local_data_done',
+      {
+        'sessionId': _sessionTraceId,
+        'traceId': _loadTraceId,
+        'viewId': widget.view.id,
+        'durationMs': stageStopwatch.elapsedMilliseconds,
+        'elapsedMs': _loadStopwatch.elapsedMilliseconds,
+        'hasData': data.isNotEmpty,
+        'keys': data.keys.length,
+        'elements':
+            data['elements'] is List ? (data['elements'] as List).length : null,
+        'files': data['files'] is Map ? (data['files'] as Map).length : null,
+        'slow': stageStopwatch.elapsedMilliseconds > 1000,
+      },
+      warning: stageStopwatch.elapsedMilliseconds > 1000,
+    );
 
     // debug log removed
 
@@ -901,6 +1030,8 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     return ExcalidrawWebView(
       key: _webViewKey, // 使用基于view.id的GlobalKey，既保证唯一性又能调用方法
       viewId: widget.view.id,
+      sessionTraceId: _sessionTraceId,
+      loadTraceId: _loadTraceId,
       initialData: _initialData,
       initialDataLoaded: !_isLoadingData,
       onDataChanged: _onWhiteboardDataChanged,

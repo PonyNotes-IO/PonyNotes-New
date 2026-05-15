@@ -6,6 +6,7 @@ import 'package:appflowy/plugins/database/domain/cell_listener.dart';
 import 'package:appflowy/plugins/database/application/field/type_option/type_option_data_parser.dart';
 import 'package:appflowy/plugins/database/application/row/row_cache.dart';
 import 'package:appflowy/plugins/database/application/row/row_service.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
@@ -204,6 +205,9 @@ class CellController<T, D> {
     _loadDataOperation?.cancel();
 
     _loadDataOperation = Timer(const Duration(milliseconds: 10), () {
+      final previousValue = _cellDataNotifier?.value;
+      final stopwatch =
+          ponyNotesDiagnosticBuildEnabled ? (Stopwatch()..start()) : null;
       _cellDataLoader
           .loadData(viewId: viewId, cellContext: _cellContext)
           .then((data) {
@@ -212,7 +216,45 @@ class CellController<T, D> {
         } else {
           _cellCache.remove(_cellContext);
         }
+        final valueChanged = previousValue != data;
+        logDiagnosticEvent(
+          'GridRefresh',
+          valueChanged ? 'cell_loaded' : 'cell_load_same_value',
+          {
+            'viewId': viewId,
+            'rowId': rowId,
+            'fieldId': fieldId,
+            'durationMs': stopwatch?.elapsedMilliseconds,
+            'hadCachedValue': previousValue != null,
+            'hasNewValue': data != null,
+            'valueChanged': valueChanged,
+          },
+          warning:
+              !valueChanged || (stopwatch?.elapsedMilliseconds ?? 0) >= 120,
+        );
         _cellDataNotifier?.value = data;
+        final durationMs = stopwatch?.elapsedMilliseconds ?? -1;
+        if (ponyNotesDiagnosticBuildEnabled &&
+            (durationMs >= 120 || (previousValue == null && data != null))) {
+          logDiagnosticMessage(
+            'grid.cell.load',
+            'viewId=$viewId rowId=$rowId fieldId=$fieldId '
+                'durationMs=$durationMs hadCachedValue=${previousValue != null} '
+                'hasNewValue=${data != null}',
+          );
+        }
+      }).catchError((error, stackTrace) {
+        Log.error(
+          '[CellController] failed to load cell data viewId=$viewId rowId=$rowId fieldId=$fieldId: $error',
+          error,
+          stackTrace,
+        );
+        logDiagnosticMessage(
+          'grid.cell.load',
+          'viewId=$viewId rowId=$rowId fieldId=$fieldId '
+              'durationMs=${stopwatch?.elapsedMilliseconds ?? -1} '
+              'success=false error=$error',
+        );
       });
     });
   }

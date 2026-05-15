@@ -1,7 +1,8 @@
-import 'dart:convert';
-
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/import_page/file_upload_service.dart';
+import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/shared/custom_image_cache_manager.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy/util/string_extension.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -75,12 +76,17 @@ class FlowyNetworkImageState extends State<FlowyNetworkImage> {
 
   // This is used to clear the retry count when the widget is disposed in case of the url is the same.
   String? retryTag;
+  late final String traceId;
+  String? _overrideAuthorizationAccessToken;
+  bool _didRetryAfterTokenRefresh = false;
+  bool _isRefreshingAuthorizationToken = false;
 
   @override
   void initState() {
     super.initState();
 
     assert(isURL(widget.url));
+    traceId = ponyNotesDiagTraceId('image', widget.url);
 
     if (widget.url.isAppFlowyCloudUrl) {
       assert(
@@ -89,12 +95,35 @@ class FlowyNetworkImageState extends State<FlowyNetworkImage> {
     }
 
     retryTag = retryCounter.add(widget.url);
+    final authorizationToken = widget.userProfilePB?.authorizationAccessToken;
+    _logImageEvent(
+      'init',
+      {
+        'requestUrl': diagnosticRedactedUrl(widget.url),
+        'hasUserProfile': widget.userProfilePB != null,
+        'hasToken': widget.userProfilePB?.token.isNotEmpty ?? false,
+        'tokenLength': widget.userProfilePB?.token.length,
+        'hasAuthorizationToken': authorizationToken?.isNotEmpty ?? false,
+        'authorizationTokenLength': authorizationToken?.length,
+        'tokenSource':
+            widget.userProfilePB?.authorizationAccessTokenSource ?? 'none',
+        'isAppFlowyCloudUrl': widget.url.isAppFlowyCloudUrl,
+      },
+    );
 
     manager.getFileFromCache(widget.url).then((file) {
+      final cacheHit = file != null &&
+          file.file.path.isNotEmpty &&
+          file.originalUrl == widget.url;
+      _logImageEvent(
+        'cache_checked',
+        {
+          'cacheHit': cacheHit,
+          'cachePathPresent': file?.file.path.isNotEmpty,
+        },
+      );
       widget.onImageLoaded?.call(
-        file != null &&
-            file.file.path.isNotEmpty &&
-            file.originalUrl == widget.url,
+        cacheHit,
       );
     });
   }
@@ -131,10 +160,19 @@ class FlowyNetworkImageState extends State<FlowyNetworkImage> {
       listenable: retryCounter,
       builder: (context, child) {
         final retryCount = retryCounter.getRetryCount(widget.url);
+        final headers = _buildRequestHeader();
+        _logImageEvent(
+          'build',
+          {
+            'requestUrl': diagnosticRedactedUrl(widget.url),
+            'retryCount': retryCount,
+            'hasAuthorization': headers.containsKey('Authorization'),
+          },
+        );
         return CachedNetworkImage(
           key: ValueKey('${widget.url}_$retryCount'),
           cacheManager: manager,
-          httpHeaders: _buildRequestHeader(),
+          httpHeaders: headers,
           imageUrl: widget.url,
           fit: widget.fit,
           width: widget.width,
@@ -142,13 +180,25 @@ class FlowyNetworkImageState extends State<FlowyNetworkImage> {
           progressIndicatorBuilder: widget.progressIndicatorBuilder,
           errorWidget: _errorWidgetBuilder,
           errorListener: (value) async {
-            Log.error(
-              'Unable to load image: ${value.toString()} - retryCount: $retryCount',
+            _logImageEvent(
+              'load_error',
+              {
+                ...diagnosticImageErrorFields(
+                  widget.url,
+                  source: 'CachedNetworkImage.errorListener',
+                  error: value,
+                ),
+                'retryCount': retryCount,
+              },
+              error: value,
             );
 
             // clear the cache and retry
             await manager.removeFile(widget.url);
-            _retryLoadImage();
+            final didRefreshToken = await _retryAfterTokenRefresh(value);
+            if (!didRefreshToken) {
+              _retryLoadImage();
+            }
           },
         );
       },
@@ -158,6 +208,21 @@ class FlowyNetworkImageState extends State<FlowyNetworkImage> {
   /// if the error is 404 and the retry count is less than the max retries, it return a loading indicator.
   Widget _errorWidgetBuilder(BuildContext context, String url, Object error) {
     final retryCount = retryCounter.getRetryCount(url);
+    _logImageEvent(
+      'error_widget',
+      {
+        ...diagnosticImageErrorFields(
+          url,
+          source: 'CachedNetworkImage.errorWidget',
+          error: error,
+        ),
+        'retryCount': retryCount,
+        'willRetry': error is HttpExceptionWithStatus &&
+            widget.retryErrorCodes.contains(error.statusCode) &&
+            retryCount < widget.maxRetries,
+      },
+      warning: true,
+    );
     if (error is HttpExceptionWithStatus) {
       if (widget.retryErrorCodes.contains(error.statusCode) &&
           retryCount < widget.maxRetries) {
@@ -185,18 +250,120 @@ class FlowyNetworkImageState extends State<FlowyNetworkImage> {
 
   Map<String, String> _buildRequestHeader() {
     final header = <String, String>{};
-    final token = widget.userProfilePB?.token;
+    final token = _overrideAuthorizationAccessToken ??
+        widget.userProfilePB?.authorizationAccessToken;
+    final tokenSource = _overrideAuthorizationAccessToken != null
+        ? 'refresh_override'
+        : widget.userProfilePB?.authorizationAccessTokenSource ?? 'none';
     if (token != null && token.isNotEmpty) {
-      // token 已经是 access_token 字符串，不需要解析
       header['Authorization'] = 'Bearer $token';
     }
+    _logImageEvent(
+      'headers_built',
+      {
+        'requestUrl': diagnosticRedactedUrl(widget.url),
+        'hasToken': widget.userProfilePB?.token.isNotEmpty ?? false,
+        'rawTokenLength': widget.userProfilePB?.token.length,
+        'hasAuthorizationToken': token != null && token.isNotEmpty,
+        'authorizationTokenLength': token?.length,
+        'tokenSource': tokenSource,
+        'usingRefreshedToken': _overrideAuthorizationAccessToken != null,
+        'hasAuthorization': header.containsKey('Authorization'),
+      },
+    );
     return header;
+  }
+
+  Future<bool> _retryAfterTokenRefresh(Object error) async {
+    if (error is! HttpExceptionWithStatus) {
+      return false;
+    }
+
+    if (error.statusCode != 401 && error.statusCode != 403) {
+      return false;
+    }
+
+    if (_didRetryAfterTokenRefresh || _isRefreshingAuthorizationToken) {
+      _logImageEvent(
+        'auth_retry_skipped',
+        {
+          'requestUrl': diagnosticRedactedUrl(widget.url),
+          'statusCode': error.statusCode,
+          'didRetryAfterTokenRefresh': _didRetryAfterTokenRefresh,
+          'isRefreshingAuthorizationToken': _isRefreshingAuthorizationToken,
+        },
+        warning: true,
+      );
+      return false;
+    }
+
+    _isRefreshingAuthorizationToken = true;
+    try {
+      final freshToken = await FileUploadService.forceRefreshAccessToken();
+      if (freshToken == null || freshToken.isEmpty) {
+        _logImageEvent(
+          'auth_refresh_failed',
+          {
+            'requestUrl': diagnosticRedactedUrl(widget.url),
+            'statusCode': error.statusCode,
+            'reason': 'empty_token',
+          },
+          warning: true,
+        );
+        return false;
+      }
+
+      _didRetryAfterTokenRefresh = true;
+      _overrideAuthorizationAccessToken = freshToken;
+      _logImageEvent(
+        'auth_refresh_retry',
+        {
+          'requestUrl': diagnosticRedactedUrl(widget.url),
+          'statusCode': error.statusCode,
+          'authorizationTokenLength': freshToken.length,
+        },
+        warning: true,
+      );
+
+      if (mounted) {
+        setState(() {});
+      }
+      retryCounter.increment(widget.url);
+      return true;
+    } catch (refreshError) {
+      _logImageEvent(
+        'auth_refresh_failed',
+        {
+          ...diagnosticImageErrorFields(
+            widget.url,
+            source: 'ImageLoad.authRefresh',
+            error: refreshError,
+          ),
+          'statusCode': error.statusCode,
+        },
+        warning: true,
+        error: refreshError,
+      );
+      return false;
+    } finally {
+      _isRefreshingAuthorizationToken = false;
+    }
   }
 
   void _retryLoadImage() {
     final retryCount = retryCounter.getRetryCount(widget.url);
     if (retryCount < widget.maxRetries) {
       Future.delayed(widget.retryDuration, () {
+        _logImageEvent(
+          'retry_scheduled',
+          {
+            'requestUrl': diagnosticRedactedUrl(widget.url),
+            'retryCount': retryCount,
+            'retryDelayMs': widget.retryDuration.inMilliseconds,
+            'maxRetries': widget.maxRetries,
+          },
+          warning: true,
+        );
         Log.debug(
           'Retry load image: ${widget.url}, retry count: $retryCount',
         );
@@ -204,6 +371,25 @@ class FlowyNetworkImageState extends State<FlowyNetworkImage> {
         retryCounter.increment(widget.url);
       });
     }
+  }
+
+  void _logImageEvent(
+    String stage,
+    Map<String, Object?> fields, {
+    bool warning = false,
+    Object? error,
+  }) {
+    logDiagnosticEvent(
+      'ImageLoad',
+      stage,
+      {
+        'traceId': traceId,
+        ...diagnosticSafeUrlFields(widget.url),
+        ...fields,
+      },
+      warning: warning,
+      error: error,
+    );
   }
 }
 
@@ -254,7 +440,7 @@ class FlowyNetworkRetryCounter with ChangeNotifier {
         (retryCount != null && retryCount >= maxRetries)) {
       _values.remove(url);
     }
-    
+
     // 定期清理过期的 URL，防止内存泄漏
     // 如果缓存超过 1000 个 URL，清理最旧的 500 个
     if (_values.length > 1000) {

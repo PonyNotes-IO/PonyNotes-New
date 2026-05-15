@@ -1,57 +1,57 @@
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:appflowy/util/diagnostic_build.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:flutter/services.dart';
 import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
-import 'package:appflowy_backend/log.dart';
 
-/// 本地资源HTTP服务器
-/// 用于解决file://协议下JavaScript模块加载的安全限制
 class LocalAssetServer {
   HttpServer? _server;
   int? _port;
 
-  /// 单例模式
   static final LocalAssetServer _instance = LocalAssetServer._internal();
   factory LocalAssetServer() => _instance;
   LocalAssetServer._internal();
 
   final Map<String, Uint8List> _assetCache = {};
 
-  /// 获取服务器URL
   String? get baseUrl => _port != null ? 'http://localhost:$_port' : null;
 
-  /// 启动服务器
   Future<String> start() async {
     if (_server != null) {
       return baseUrl!;
     }
 
     try {
-      // 创建请求处理器
       final handler = (shelf.Request request) async {
-        // 处理路径：根路径映射到 index.html，移除前导斜杠
-        String requestPath = request.url.path;
+        final stopwatch = Stopwatch()..start();
+        var requestPath = request.url.path;
         if (requestPath.isEmpty || requestPath == '/') {
           requestPath = 'index.html';
-        } else {
-          // 移除前导斜杠
-          requestPath = requestPath.startsWith('/') 
-              ? requestPath.substring(1) 
-              : requestPath;
+        } else if (requestPath.startsWith('/')) {
+          requestPath = requestPath.substring(1);
         }
-        
+
         final assetPath = 'assets/excalidraw/$requestPath';
+        final cacheHit = _assetCache.containsKey(assetPath);
 
         try {
-          // 加载Flutter asset
           final bytes = await _loadAssetBytes(assetPath);
-          
-          // 确定Content-Type
           final contentType = _getContentType(assetPath);
-          
-          // 返回资源信息日志已移除
-          
+          if (!cacheHit || requestPath == 'index.html') {
+            logDiagnosticEvent(
+              'WhiteboardLoad',
+              'asset_request_ok',
+              {
+                'requestPath': requestPath,
+                'assetPath': assetPath,
+                'cacheHit': cacheHit,
+                'contentType': contentType,
+                'elapsedMs': stopwatch.elapsedMilliseconds,
+              },
+            );
+          }
+
           return shelf.Response.ok(
             bytes,
             headers: {
@@ -60,55 +60,63 @@ class LocalAssetServer {
               'Cache-Control': _cacheControlForPath(requestPath),
             },
           );
-        } catch (e) {
-          Log.error('❌ 加载资源失败 $assetPath: $e');
+        } catch (error) {
+          Log.error('Failed to load whiteboard asset $assetPath: $error');
+          logDiagnosticEvent(
+            'WhiteboardLoad',
+            'asset_request_anomaly',
+            {
+              'requestPath': requestPath,
+              'assetPath': assetPath,
+              'cacheHit': cacheHit,
+              'status': 404,
+              'elapsedMs': stopwatch.elapsedMilliseconds,
+              'error': '$error',
+            },
+            warning: true,
+          );
           return shelf.Response.notFound('Asset not found: $assetPath');
         }
       };
 
-      // 启动HTTP服务器
       _server = await shelf_io.serve(
         handler,
         InternetAddress.loopbackIPv4,
-        0, // 自动选择可用端口
+        0,
       );
-
       _port = _server!.port;
 
-      Log.info('🚀 本地资源服务器已启动: $baseUrl');
-
+      Log.info('LocalAssetServer started: $baseUrl');
       return baseUrl!;
-    } catch (e) {
-      Log.error('❌ 启动本地资源服务器失败: $e');
+    } catch (error) {
+      Log.error('Failed to start LocalAssetServer: $error');
       rethrow;
     }
   }
 
-  /// 停止服务器
   Future<void> stop() async {
-    if (_server != null) {
-      await _server!.close(force: true);
-      _server = null;
-      _port = null;
-      _assetCache.clear();
-      Log.info('🛑 本地资源服务器已停止');
+    if (_server == null) {
+      return;
     }
+
+    await _server!.close(force: true);
+    _server = null;
+    _port = null;
+    _assetCache.clear();
+    Log.info('LocalAssetServer stopped');
   }
 
-  /// Preload assets into the same memory cache used by HTTP requests.
   Future<void> preloadAssets(Iterable<String> assetPaths) async {
-    final uniqueAssetPaths = assetPaths.toSet();
-    for (final assetPath in uniqueAssetPaths) {
+    for (final assetPath in assetPaths.toSet()) {
       try {
         await _loadAssetBytes(assetPath);
-        Log.info('✅ [LocalAssetServer] Preloaded asset: $assetPath');
-      } catch (e) {
-        Log.warn('⚠️ [LocalAssetServer] Failed to preload $assetPath: $e');
+        Log.info('[LocalAssetServer] Preloaded asset: $assetPath');
+      } catch (error) {
+        Log.warn('[LocalAssetServer] Failed to preload $assetPath: $error');
       }
     }
   }
 
-  /// 根据文件扩展名确定Content-Type
   Future<Uint8List> _loadAssetBytes(String assetPath) async {
     final cached = _assetCache[assetPath];
     if (cached != null) {

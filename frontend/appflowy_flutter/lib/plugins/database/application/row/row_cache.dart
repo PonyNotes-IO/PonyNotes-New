@@ -4,6 +4,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:appflowy/plugins/database/application/field/field_info.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -114,6 +115,24 @@ class RowCache {
   }
 
   void applyRowsChanged(RowsChangePB changeset) {
+    logDiagnosticEvent(
+      'GridRefresh',
+      'rows_changed',
+      {
+        'viewId': viewId,
+        'deleted': changeset.deletedRows.length,
+        'inserted': changeset.insertedRows.length,
+        'updated': changeset.updatedRows.length,
+        'scope': changeset.updatedRows.length == 1 &&
+                changeset.deletedRows.isEmpty &&
+                changeset.insertedRows.isEmpty
+            ? 'single_row'
+            : 'multi_row',
+      },
+      warning: changeset.updatedRows.length > 10 ||
+          changeset.deletedRows.isNotEmpty ||
+          changeset.insertedRows.isNotEmpty,
+    );
     _deleteRows(changeset.deletedRows);
     _insertRows(changeset.insertedRows);
     _updateRows(changeset.updatedRows);
@@ -340,6 +359,15 @@ class RowCache {
   }
 
   void _notifyRowChanged(RowId rowId, ChangedReason reason) {
+    logDiagnosticEvent(
+      'GridRefresh',
+      'row_notify',
+      {
+        'viewId': viewId,
+        'rowId': rowId,
+        'reason': reason.runtimeType,
+      },
+    );
     _rowNotifierFor(rowId).receive(reason);
   }
 

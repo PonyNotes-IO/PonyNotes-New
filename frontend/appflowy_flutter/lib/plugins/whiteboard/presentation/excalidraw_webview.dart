@@ -23,6 +23,8 @@ class ExcalidrawWebView extends StatefulWidget {
   const ExcalidrawWebView({
     super.key,
     required this.viewId,
+    required this.sessionTraceId,
+    required this.loadTraceId,
     this.initialData,
     this.initialDataLoaded = false,
     this.onDataChanged,
@@ -31,6 +33,8 @@ class ExcalidrawWebView extends StatefulWidget {
   });
 
   final String viewId;
+  final String sessionTraceId;
+  final String loadTraceId;
   final Map<String, dynamic>? initialData;
   final bool initialDataLoaded;
   final Function(String type, Map<String, dynamic> data)? onDataChanged;

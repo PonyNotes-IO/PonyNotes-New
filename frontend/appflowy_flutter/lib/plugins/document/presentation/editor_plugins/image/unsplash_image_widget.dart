@@ -1,3 +1,4 @@
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy/mobile/presentation/widgets/flowy_mobile_search_text_field.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -212,6 +213,26 @@ class _UnsplashImage extends StatelessWidget {
           child: Image.network(
             photo.urls.thumb.toString(),
             fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              logDiagnosticEvent(
+                'ImageLoad',
+                'unsplash_image_error',
+                {
+                  ...diagnosticImageErrorFields(
+                    photo.urls.thumb.toString(),
+                    source: 'UnsplashImageWidget.network',
+                    error: error,
+                    stackTrace: stackTrace,
+                  ),
+                  'imageType': type.name,
+                  'photoId': photo.id,
+                },
+                warning: true,
+                error: error,
+                stackTrace: stackTrace,
+              );
+              return const SizedBox.shrink();
+            },
           ),
         ),
         const HSpace(2.0),
@@ -231,6 +252,26 @@ class _UnsplashImage extends StatelessWidget {
               fit: BoxFit.cover,
               width: constraints.maxWidth,
               height: constraints.maxHeight,
+              errorBuilder: (context, error, stackTrace) {
+                logDiagnosticEvent(
+                  'ImageLoad',
+                  'unsplash_image_error',
+                  {
+                    ...diagnosticImageErrorFields(
+                      photo.urls.thumb.toString(),
+                      source: 'UnsplashImageWidget.network',
+                      error: error,
+                      stackTrace: stackTrace,
+                    ),
+                    'imageType': type.name,
+                    'photoId': photo.id,
+                  },
+                  warning: true,
+                  error: error,
+                  stackTrace: stackTrace,
+                );
+                return const SizedBox.shrink();
+              },
             ),
           ),
           Positioned(

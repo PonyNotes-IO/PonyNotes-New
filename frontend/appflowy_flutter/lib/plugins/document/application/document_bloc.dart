@@ -19,6 +19,7 @@ import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/util/color_generator/color_generator.dart';
 import 'package:appflowy/util/color_to_hex_string.dart';
 import 'package:appflowy/util/debounce.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy/util/throttle.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -199,7 +200,8 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
                 [currentEditorState.document.root],
               );
             } catch (e) {
-              Log.error('cleanup document resources before permanent delete failed: $e');
+              Log.error(
+                  'cleanup document resources before permanent delete failed: $e');
             }
           }
           final result = await _trashService.deleteViews([documentId]);
@@ -339,13 +341,40 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
   /// Fetch document
   Future<FlowyResult<EditorState?, FlowyError>> _fetchDocumentState() async {
+    final openStopwatch =
+        ponyNotesDiagnosticBuildEnabled ? (Stopwatch()..start()) : null;
     final result = await _documentService.openDocument(
       documentId: documentId,
       workspaceId: workspaceId,
     );
     return result.fold(
-      (s) async => FlowyResult.success(await _initAppFlowyEditorState(s)),
-      (e) => FlowyResult.failure(e),
+      (s) async {
+        logDiagnosticMessage(
+          'document.open',
+          'documentId=$documentId workspaceId=${workspaceId ?? ''} '
+              'durationMs=${openStopwatch?.elapsedMilliseconds ?? -1} '
+              'success=true',
+        );
+
+        final initStopwatch =
+            ponyNotesDiagnosticBuildEnabled ? (Stopwatch()..start()) : null;
+        final editorState = await _initAppFlowyEditorState(s);
+        logDiagnosticMessage(
+          'document.init',
+          'documentId=$documentId durationMs=${initStopwatch?.elapsedMilliseconds ?? -1} '
+              'editorReady=${editorState != null}',
+        );
+        return FlowyResult.success(editorState);
+      },
+      (e) {
+        logDiagnosticMessage(
+          'document.open',
+          'documentId=$documentId workspaceId=${workspaceId ?? ''} '
+              'durationMs=${openStopwatch?.elapsedMilliseconds ?? -1} '
+              'success=false error=$e',
+        );
+        return FlowyResult.failure(e);
+      },
     );
   }
 

@@ -39,28 +39,36 @@ class AuthRouter {
     BuildContext context,
     UserProfilePB userProfile,
   ) async {
-    Log.info('🔵 [AuthRouter] goHomeScreen called for user: ${userProfile.email}');
+    Log.info(
+      '[AuthRouter] goHomeScreen called for user: ${userProfile.email}',
+    );
     final result = await FolderEventGetCurrentWorkspaceSetting().send();
-    Log.info('🔵 [AuthRouter] FolderEventGetCurrentWorkspaceSetting result received');
+    Log.info(
+      '[AuthRouter] FolderEventGetCurrentWorkspaceSetting result received',
+    );
     result.fold(
       (workspaceSetting) {
-        Log.info('🔵 [AuthRouter] Workspace setting obtained, navigating to home screen');
+        Log.info(
+          '[AuthRouter] Workspace setting obtained, navigating to home screen',
+        );
         // Replace SignInScreen or SkipLogInScreen as root page.
         // If user click back button, it will exit app rather than go back to SignInScreen or SkipLogInScreen
         if (UniversalPlatform.isMobile) {
-          Log.info('🔵 [AuthRouter] Navigating to MobileHomeScreen');
+          Log.info('[AuthRouter] Navigating to MobileHomeScreen');
           context.go(
             MobileHomeScreen.routeName,
           );
         } else {
-          Log.info('🔵 [AuthRouter] Navigating to DesktopHomeScreen');
+          Log.info('[AuthRouter] Navigating to DesktopHomeScreen');
           context.go(
             DesktopHomeScreen.routeName,
           );
         }
       },
       (error) {
-        Log.error('🔵 [AuthRouter] Failed to get workspace setting: ${error.msg}');
+        Log.error(
+          '[AuthRouter] Failed to get workspace setting: ${error.msg}',
+        );
         pushWorkspaceStartScreen(context, userProfile);
       },
     );

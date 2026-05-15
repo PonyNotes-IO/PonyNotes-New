@@ -1,10 +1,10 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
+import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/file_picker/file_picker_impl.dart';
@@ -240,10 +240,17 @@ class InteractiveImageToolbar extends StatelessWidget {
       );
 
       if (savePath != null) {
-        final uri = Uri.parse(currentImage.url);
+        final token = userProfile!.authorizationAccessToken;
+        if (token == null || token.isEmpty) {
+          if (context.mounted) {
+            showSnapBar(
+              context,
+              LocaleKeys.document_plugins_image_imageDownloadFailedToken.tr(),
+            );
+          }
+          return;
+        }
 
-        // token 已经是 access_token 字符串，不需要解析
-        final token = userProfile!.token;
         final response = await http.get(
           uri,
           headers: {'Authorization': 'Bearer $token'},

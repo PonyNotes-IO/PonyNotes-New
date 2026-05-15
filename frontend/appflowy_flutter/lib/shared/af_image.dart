@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:flutter/material.dart';
 
 import 'package:appflowy/shared/appflowy_network_image.dart';
@@ -44,6 +45,22 @@ class AFImage extends StatelessWidget {
         fit: fit,
         isAntiAlias: true,
         errorBuilder: (context, error, stackTrace) {
+          logDiagnosticEvent(
+            'ImageLoad',
+            'af_image_error',
+            {
+              ...diagnosticImageErrorFields(
+                url,
+                source: 'AFImage.network',
+                error: error,
+                stackTrace: stackTrace,
+              ),
+              'uploadType': uploadType.name,
+            },
+            warning: true,
+            error: error,
+            stackTrace: stackTrace,
+          );
           return const SizedBox.shrink();
         },
       );
@@ -55,6 +72,23 @@ class AFImage extends StatelessWidget {
         fit: fit,
         isAntiAlias: true,
         errorBuilder: (context, error, stackTrace) {
+          logDiagnosticEvent(
+            'ImageLoad',
+            'af_image_error',
+            {
+              ...diagnosticImageErrorFields(
+                url,
+                source: 'AFImage.file',
+                error: error,
+                stackTrace: stackTrace,
+                isLocalPath: true,
+              ),
+              'uploadType': uploadType.name,
+            },
+            warning: true,
+            error: error,
+            stackTrace: stackTrace,
+          );
           return const SizedBox.shrink();
         },
       );
@@ -65,6 +99,20 @@ class AFImage extends StatelessWidget {
         height: height,
         width: width,
         errorWidgetBuilder: (context, url, error) {
+          logDiagnosticEvent(
+            'ImageLoad',
+            'af_image_error',
+            {
+              ...diagnosticImageErrorFields(
+                url,
+                source: 'AFImage.cloud',
+                error: error,
+              ),
+              'uploadType': uploadType.name,
+            },
+            warning: true,
+            error: error,
+          );
           return const SizedBox.shrink();
         },
       );

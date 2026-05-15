@@ -45,6 +45,41 @@ endfunction()
 
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 
+# Bundle a copy of the installed WebView2 Runtime outside the system-managed
+# EdgeWebView directory so startup can avoid the sticky system runtime.
+set(PONYNOTES_BUNDLED_WEBVIEW2_SOURCE_DIR "" CACHE PATH
+  "Optional WebView2 runtime folder to package next to PonyNotes.exe")
+if(NOT PONYNOTES_BUNDLED_WEBVIEW2_SOURCE_DIR)
+  set(PONYNOTES_WEBVIEW2_INSTALL_ROOT
+    "C:/Program Files (x86)/Microsoft/EdgeWebView/Application")
+  if(EXISTS "${PONYNOTES_WEBVIEW2_INSTALL_ROOT}")
+    file(GLOB PONYNOTES_WEBVIEW2_RUNTIME_CANDIDATES
+      RELATIVE "${PONYNOTES_WEBVIEW2_INSTALL_ROOT}"
+      "${PONYNOTES_WEBVIEW2_INSTALL_ROOT}/*")
+    set(PONYNOTES_WEBVIEW2_BEST_VERSION "")
+    foreach(candidate ${PONYNOTES_WEBVIEW2_RUNTIME_CANDIDATES})
+      if(candidate MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$"
+         AND EXISTS "${PONYNOTES_WEBVIEW2_INSTALL_ROOT}/${candidate}/msedgewebview2.exe")
+        if(NOT PONYNOTES_WEBVIEW2_BEST_VERSION
+           OR "${candidate}" VERSION_GREATER "${PONYNOTES_WEBVIEW2_BEST_VERSION}")
+          set(PONYNOTES_WEBVIEW2_BEST_VERSION "${candidate}")
+        endif()
+      endif()
+    endforeach()
+
+    if(PONYNOTES_WEBVIEW2_BEST_VERSION)
+      set(PONYNOTES_BUNDLED_WEBVIEW2_SOURCE_DIR
+        "${PONYNOTES_WEBVIEW2_INSTALL_ROOT}/${PONYNOTES_WEBVIEW2_BEST_VERSION}")
+    endif()
+  endif()
+endif()
+
+if(PONYNOTES_BUNDLED_WEBVIEW2_SOURCE_DIR)
+  message(STATUS "Bundling WebView2 runtime from: ${PONYNOTES_BUNDLED_WEBVIEW2_SOURCE_DIR}")
+else()
+  message(STATUS "No WebView2 runtime bundle source detected; PonyNotes will use the system runtime")
+endif()
+
 # Flutter library and tool build rules.
 add_subdirectory(${FLUTTER_MANAGED_DIR})
 
@@ -103,3 +138,10 @@ install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
+
+if(PONYNOTES_BUNDLED_WEBVIEW2_SOURCE_DIR
+   AND EXISTS "${PONYNOTES_BUNDLED_WEBVIEW2_SOURCE_DIR}/msedgewebview2.exe")
+  install(DIRECTORY "${PONYNOTES_BUNDLED_WEBVIEW2_SOURCE_DIR}/"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/webview2_fixed"
+    COMPONENT Runtime)
+endif()

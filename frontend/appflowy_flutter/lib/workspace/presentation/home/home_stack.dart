@@ -10,6 +10,7 @@ import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/startup/tasks/windows.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -61,6 +62,23 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
   int selectedIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+
+    if (UniversalPlatform.isWindows) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+
+        unawaited(
+          refreshWindowsSurfaceAfterNavigation(reason: 'home-first-frame'),
+        );
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BlocProvider<TabsBloc>.value(
       value: getIt<TabsBloc>(),
@@ -73,7 +91,9 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                 Column(
                   children: [
                     if (UniversalPlatform.isWindows && useCustomWindowTitleBar)
-                      WindowTitleBar(leftChildren: [_buildToggleMenuButton(context)]),
+                      WindowTitleBar(
+                        leftChildren: [_buildToggleMenuButton(context)],
+                      ),
                     Padding(
                       padding: EdgeInsets.only(left: widget.layout.menuSpacing),
                       child: TabsManager(
@@ -82,7 +102,9 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                             // Unfocus editor to hide selection toolbar
                             FocusScope.of(context).unfocus();
 
-                            context.read<TabsBloc>().add(TabsEvent.selectTab(index));
+                            context
+                                .read<TabsBloc>()
+                                .add(TabsEvent.selectTab(index));
                             setState(() => selectedIndex = index);
                           }
                         },
@@ -96,34 +118,37 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                             children: state.pageManagers
                                 .map(
                                   (pm) => LayoutBuilder(
-                                builder: (context, constraints) {
-                                  return Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          children: [
-                                            pm.stackTopBar(layout: widget.layout),
-                                            Expanded(
-                                              child: PageStack(
-                                                pageManager: pm,
-                                                delegate: widget.delegate,
-                                                userProfile: widget.userProfile,
-                                              ),
+                                    builder: (context, constraints) {
+                                      return Row(
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              children: [
+                                                pm.stackTopBar(
+                                                  layout: widget.layout,
+                                                ),
+                                                Expanded(
+                                                  child: PageStack(
+                                                    pageManager: pm,
+                                                    delegate: widget.delegate,
+                                                    userProfile:
+                                                        widget.userProfile,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                      if (!isFullWindow)
-                                        SecondaryView(
-                                          pageManager: pm,
-                                          adaptedPercentageWidth:
-                                          constraints.maxWidth * 3 / 7,
-                                        ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            )
+                                          ),
+                                          if (!isFullWindow)
+                                            SecondaryView(
+                                              pageManager: pm,
+                                              adaptedPercentageWidth:
+                                                  constraints.maxWidth * 3 / 7,
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                )
                                 .toList(),
                           ),
                           // Overlay original right-side actions for folder/fileLibrary plugins
@@ -144,13 +169,19 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                                 }
 
                                 return Positioned(
-                                  top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding - (HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding) /*0*/,
-                                  right: HomeInsets.topBarTitleHorizontalPadding,
+                                  top: HomeSizes.topBarHeight +
+                                      HomeInsets.topBarTitleVerticalPadding -
+                                      (HomeSizes.topBarHeight +
+                                          HomeInsets
+                                              .topBarTitleVerticalPadding) /*0*/,
+                                  right:
+                                      HomeInsets.topBarTitleHorizontalPadding,
                                   child: ChangeNotifierProvider.value(
                                     value: pm.notifier,
                                     child: Consumer<PageNotifier>(
                                       builder: (_, notifier, __) =>
-                                      notifier.plugin.widgetBuilder.rightBarItem ??
+                                          notifier.plugin.widgetBuilder
+                                              .rightBarItem ??
                                           const SizedBox.shrink(),
                                     ),
                                   ),
@@ -165,12 +196,12 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                 Visibility(
                   visible: UniversalPlatform.isMacOS,
                   child: Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: NotificationPermissionBanner()
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: NotificationPermissionBanner(),
                   ),
-                )
+                ),
               ],
             );
           },
@@ -758,7 +789,9 @@ class PageManager {
     // top area without extra spacing.
     try {
       final pluginType = _notifier.plugin.pluginType;
-      if (pluginType == PluginType.fileLibrary || pluginType == PluginType.folder || pluginType == PluginType.calendar) {
+      if (pluginType == PluginType.fileLibrary ||
+          pluginType == PluginType.folder ||
+          pluginType == PluginType.calendar) {
         // Hide the top bar entirely for these plugins so the left sidebar
         // can align directly under the window title bar. Right-side actions
         // are rendered in the WindowTitleBar via rightChildren.
@@ -787,7 +820,7 @@ class PageManager {
           }
 
           final pluginSandbox = getIt<PluginSandbox>();
-          
+
           // Check if the plugin type is registered before trying to get its index
           if (!pluginSandbox.hasPlugin(notifier.plugin.pluginType)) {
             // If plugin is not registered yet, show blank page

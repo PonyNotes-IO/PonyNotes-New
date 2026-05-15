@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_service.dart';
+import 'package:appflowy/shared/af_user_profile_extension.dart';
 import 'package:appflowy/shared/custom_image_cache_manager.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/xfile_ext.dart';
@@ -158,8 +158,20 @@ Future<void> downloadMediaFile(
     if (UniversalPlatform.isMobile) {
       onDownloadBegin?.call();
 
-      final response =
-          await http.get(uri, headers: {'Authorization': 'Bearer $token'});
+      final authorizationToken = userProfile.authorizationAccessToken;
+      if (token.isEmpty ||
+          authorizationToken == null ||
+          authorizationToken.isEmpty) {
+        showToastNotification(
+          message: LocaleKeys.grid_media_downloadFailedToken.tr(),
+        );
+        return;
+      }
+
+      final response = await http.get(
+        uri,
+        headers: {'Authorization': 'Bearer $authorizationToken'},
+      );
 
       if (response.statusCode == 200) {
         final tempFile = File(uri.pathSegments.last);
@@ -190,8 +202,20 @@ Future<void> downloadMediaFile(
 
       onDownloadBegin?.call();
 
-      final response =
-          await http.get(uri, headers: {'Authorization': 'Bearer $token'});
+      final authorizationToken = userProfile.authorizationAccessToken;
+      if (token.isEmpty ||
+          authorizationToken == null ||
+          authorizationToken.isEmpty) {
+        showToastNotification(
+          message: LocaleKeys.grid_media_downloadFailedToken.tr(),
+        );
+        return;
+      }
+
+      final response = await http.get(
+        uri,
+        headers: {'Authorization': 'Bearer $authorizationToken'},
+      );
 
       if (response.statusCode == 200) {
         final imgFile = File(savePath);
@@ -246,8 +270,7 @@ Future<void> insertLocalFile(
 
     // 检查2：已用空间 + 本次文件大小 不能超过订阅计划允许的最大云存储空间
     if (userProfile != null) {
-      final hasEnoughSpace =
-          await hasEnoughCloudStorage(userProfile, fileSize);
+      final hasEnoughSpace = await hasEnoughCloudStorage(userProfile, fileSize);
       if (!hasEnoughSpace) {
         if (context.mounted) {
           await showSimpleAFDialog(
@@ -257,9 +280,9 @@ Future<void> insertLocalFile(
             primaryAction: (
               '升级',
               (ctx) => MembershipCheckerService().navigateToUpgradePage(
-                ctx,
-                userProfile: userProfile,
-              ),
+                    ctx,
+                    userProfile: userProfile,
+                  ),
             ),
             secondaryAction: ('取消', null),
           );
@@ -343,9 +366,9 @@ Future<void> insertLocalFiles(
               primaryAction: (
                 '升级',
                 (ctx) => MembershipCheckerService().navigateToUpgradePage(
-                  ctx,
-                  userProfile: userProfile,
-                ),
+                      ctx,
+                      userProfile: userProfile,
+                    ),
               ),
               secondaryAction: ('取消', null),
             );

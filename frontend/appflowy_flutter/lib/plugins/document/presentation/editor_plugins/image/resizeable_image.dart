@@ -7,6 +7,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/prelude.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
 import 'package:appflowy/shared/appflowy_network_image.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -56,7 +57,8 @@ const _kImageBlockComponentMinWidth = 30.0;
 const _kImageBlockComponentMinHeight = 30.0;
 
 /// 立即接受横向拖动，避免被父级 ScrollView 抢走手势
-class _ImmediateHorizontalDragGestureRecognizer extends HorizontalDragGestureRecognizer {
+class _ImmediateHorizontalDragGestureRecognizer
+    extends HorizontalDragGestureRecognizer {
   @override
   void addAllowedPointer(PointerDownEvent event) {
     super.addAllowedPointer(event);
@@ -65,7 +67,8 @@ class _ImmediateHorizontalDragGestureRecognizer extends HorizontalDragGestureRec
 }
 
 /// 立即接受纵向拖动（与横向一致，保证角点双向都能赢）
-class _ImmediateVerticalDragGestureRecognizer extends VerticalDragGestureRecognizer {
+class _ImmediateVerticalDragGestureRecognizer
+    extends VerticalDragGestureRecognizer {
   @override
   void addAllowedPointer(PointerDownEvent event) {
     super.addAllowedPointer(event);
@@ -85,6 +88,7 @@ class _ImmediatePanGestureRecognizer extends PanGestureRecognizer {
 class _ResizableImageState extends State<ResizableImage> {
   final documentService = DocumentService();
   final _imageKey = GlobalKey();
+  late final String traceId;
 
   double initialOffsetX = 0;
   double initialOffsetY = 0;
@@ -105,6 +109,7 @@ class _ResizableImageState extends State<ResizableImage> {
   void initState() {
     super.initState();
 
+    traceId = ponyNotesDiagTraceId('resizable_image', widget.src);
     imageWidth = widget.width;
     imageHeight = widget.height;
 
@@ -114,7 +119,8 @@ class _ResizableImageState extends State<ResizableImage> {
 
   void _measureHeightFromRenderBox() {
     if (imageHeight == null) {
-      final renderBox = _imageKey.currentContext?.findRenderObject() as RenderBox?;
+      final renderBox =
+          _imageKey.currentContext?.findRenderObject() as RenderBox?;
       if (renderBox != null && renderBox.hasSize && renderBox.size.height > 0) {
         setState(() => imageHeight = renderBox.size.height);
       }
@@ -148,7 +154,8 @@ class _ResizableImageState extends State<ResizableImage> {
   Widget _buildResizableImage(BuildContext context) {
     Widget child;
     final src = widget.src;
-    final currentWidth = max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
+    final currentWidth =
+        max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
     final currentHeight = imageHeight != null
         ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
         : null;
@@ -177,6 +184,25 @@ class _ResizableImageState extends State<ResizableImage> {
           return _buildLoading(context);
         },
         errorWidgetBuilder: (_, __, error) {
+          final retryCount = FlowyNetworkRetryCounter().getRetryCount(src);
+          logDiagnosticEvent(
+            'ImageLoad',
+            'resizable_image_error',
+            {
+              'traceId': traceId,
+              'imageType': widget.type.name,
+              'width': currentWidth,
+              'height': currentHeight,
+              'retryCount': retryCount,
+              ...diagnosticImageErrorFields(
+                src,
+                source: 'ResizableImage.errorWidget',
+                error: error,
+              ),
+            },
+            warning: true,
+            error: error,
+          );
           widget.onStateChange?.call(ResizableImageState.failed);
           return _ImageLoadFailedWidget(
             width: imageWidth,
@@ -216,8 +242,7 @@ class _ResizableImageState extends State<ResizableImage> {
             left: 0,
             bottom: 0,
             width: 16,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = distance),
+            onUpdateX: (distance) => setState(() => moveDistanceX = distance),
           ),
           // Right edge - horizontal resize
           _buildEdgeGesture(
@@ -228,8 +253,7 @@ class _ResizableImageState extends State<ResizableImage> {
             right: 0,
             bottom: 0,
             width: 16,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = -distance),
+            onUpdateX: (distance) => setState(() => moveDistanceX = -distance),
           ),
           // Top edge - vertical resize
           _buildEdgeGesture(
@@ -240,8 +264,7 @@ class _ResizableImageState extends State<ResizableImage> {
             left: 0,
             right: 0,
             height: 16,
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = distance),
+            onUpdateY: (distance) => setState(() => moveDistanceY = distance),
           ),
           // Bottom edge - vertical resize
           _buildEdgeGesture(
@@ -252,8 +275,7 @@ class _ResizableImageState extends State<ResizableImage> {
             left: 0,
             right: 0,
             height: 16,
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = -distance),
+            onUpdateY: (distance) => setState(() => moveDistanceY = -distance),
           ),
           // Top-left corner
           _buildCornerGesture(
@@ -262,10 +284,8 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: true,
             top: 0,
             left: 0,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = distance),
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = distance),
+            onUpdateX: (distance) => setState(() => moveDistanceX = distance),
+            onUpdateY: (distance) => setState(() => moveDistanceY = distance),
           ),
           // Top-right corner
           _buildCornerGesture(
@@ -274,10 +294,8 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: false,
             top: 0,
             right: 0,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = -distance),
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = distance),
+            onUpdateX: (distance) => setState(() => moveDistanceX = -distance),
+            onUpdateY: (distance) => setState(() => moveDistanceY = distance),
           ),
           // Bottom-left corner
           _buildCornerGesture(
@@ -286,10 +304,8 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: true,
             bottom: 0,
             left: 0,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = distance),
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = -distance),
+            onUpdateX: (distance) => setState(() => moveDistanceX = distance),
+            onUpdateY: (distance) => setState(() => moveDistanceY = -distance),
           ),
           // Bottom-right corner
           _buildCornerGesture(
@@ -298,10 +314,8 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: false,
             bottom: 0,
             right: 0,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = -distance),
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = -distance),
+            onUpdateX: (distance) => setState(() => moveDistanceX = -distance),
+            onUpdateY: (distance) => setState(() => moveDistanceY = -distance),
           ),
         ],
       ],
@@ -350,7 +364,8 @@ class _ResizableImageState extends State<ResizableImage> {
         gestures: isHorizontal
             ? <Type, GestureRecognizerFactory>{
                 _ImmediateHorizontalDragGestureRecognizer:
-                    GestureRecognizerFactoryWithHandlers<_ImmediateHorizontalDragGestureRecognizer>(
+                    GestureRecognizerFactoryWithHandlers<
+                        _ImmediateHorizontalDragGestureRecognizer>(
                   () => _ImmediateHorizontalDragGestureRecognizer(),
                   (_ImmediateHorizontalDragGestureRecognizer instance) {
                     instance.onStart = (details) {
@@ -358,7 +373,8 @@ class _ResizableImageState extends State<ResizableImage> {
                     };
                     instance.onUpdate = (details) {
                       if (onUpdateX != null) {
-                        double offset = details.globalPosition.dx - initialOffsetX;
+                        double offset =
+                            details.globalPosition.dx - initialOffsetX;
                         if (widget.alignment == Alignment.center) {
                           offset *= 2.0;
                         }
@@ -367,8 +383,9 @@ class _ResizableImageState extends State<ResizableImage> {
                     };
                     instance.onEnd = (_) {
                       final newWidth = max(
-                          _kImageBlockComponentMinWidth,
-                          imageWidth - moveDistanceX);
+                        _kImageBlockComponentMinWidth,
+                        imageWidth - moveDistanceX,
+                      );
                       imageWidth = newWidth;
                       initialOffsetX = 0;
                       moveDistanceX = 0;
@@ -379,7 +396,8 @@ class _ResizableImageState extends State<ResizableImage> {
               }
             : <Type, GestureRecognizerFactory>{
                 _ImmediateVerticalDragGestureRecognizer:
-                    GestureRecognizerFactoryWithHandlers<_ImmediateVerticalDragGestureRecognizer>(
+                    GestureRecognizerFactoryWithHandlers<
+                        _ImmediateVerticalDragGestureRecognizer>(
                   () => _ImmediateVerticalDragGestureRecognizer(),
                   (_ImmediateVerticalDragGestureRecognizer instance) {
                     instance.onStart = (details) {
@@ -388,7 +406,8 @@ class _ResizableImageState extends State<ResizableImage> {
                     };
                     instance.onUpdate = (details) {
                       if (onUpdateY != null) {
-                        final offset = details.globalPosition.dy - initialOffsetY;
+                        final offset =
+                            details.globalPosition.dy - initialOffsetY;
                         onUpdateY(offset);
                       }
                     };
@@ -482,8 +501,8 @@ class _ResizableImageState extends State<ResizableImage> {
       child: RawGestureDetector(
         behavior: HitTestBehavior.opaque,
         gestures: <Type, GestureRecognizerFactory>{
-          _ImmediatePanGestureRecognizer:
-              GestureRecognizerFactoryWithHandlers<_ImmediatePanGestureRecognizer>(
+          _ImmediatePanGestureRecognizer: GestureRecognizerFactoryWithHandlers<
+              _ImmediatePanGestureRecognizer>(
             () => _ImmediatePanGestureRecognizer(),
             (_ImmediatePanGestureRecognizer instance) {
               instance.onStart = (_) {
@@ -524,7 +543,6 @@ class _ResizableImageState extends State<ResizableImage> {
                       ),
                       border: Border.all(
                         color: Colors.black.withValues(alpha: 0.3),
-                        width: 1,
                       ),
                     ),
                   ),

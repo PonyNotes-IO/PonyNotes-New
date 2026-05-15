@@ -6,6 +6,7 @@ import 'package:collection/collection.dart';
 import 'package:appflowy/plugins/database/application/cell/cell_controller.dart';
 import 'package:appflowy/plugins/database/application/field/field_controller.dart';
 import 'package:appflowy/plugins/database/widgets/setting/field_visibility_extension.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -65,8 +66,30 @@ class RowBloc extends Bloc<RowEvent, RowState> {
               state.cellContexts,
               visibleCellContexts,
             )) {
+              logDiagnosticEvent(
+                'GridRefresh',
+                'row_emit_skipped',
+                {
+                  'viewId': viewId,
+                  'rowId': rowId,
+                  'reason': 'same_visible_cells',
+                  'cellCount': visibleCellContexts.length,
+                  'changeReason': reason.runtimeType,
+                },
+              );
               return;
             }
+            logDiagnosticEvent(
+              'GridRefresh',
+              'row_emit',
+              {
+                'viewId': viewId,
+                'rowId': rowId,
+                'cellCount': visibleCellContexts.length,
+                'previousCellCount': state.cellContexts.length,
+                'changeReason': reason.runtimeType,
+              },
+            );
             emit(
               state.copyWith(
                 cellContexts: visibleCellContexts,

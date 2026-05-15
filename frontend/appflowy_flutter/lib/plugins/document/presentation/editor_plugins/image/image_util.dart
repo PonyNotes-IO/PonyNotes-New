@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
@@ -6,6 +7,7 @@ import 'package:appflowy/plugins/document/application/prelude.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
 import 'package:appflowy/shared/custom_image_cache_manager.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/startup/tasks/file_storage_task.dart';
 import 'package:appflowy/workspace/application/settings/application_data_storage.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/dispatch/error.dart';
@@ -15,6 +17,8 @@ import 'package:flowy_infra/uuid.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path/path.dart' as p;
+
+const _kImageUploadReadyTimeout = Duration(seconds: 90);
 
 /// 读取本地图片文件的像素尺寸（宽×高）。
 /// 若读取失败或文件不存在，返回 null。
@@ -74,6 +78,11 @@ Future<(String? path, String? errorMessage)> saveImageToCloudStorage(
         s.url,
         File(localImagePath).readAsBytesSync(),
       );
+      final uploadError = await _waitForImageUploadReady(s.url);
+      if (uploadError != null) {
+        await CustomImageCacheManager().removeFile(s.url);
+        return (null, uploadError);
+      }
       return (s.url, null);
     },
     (err) {
@@ -90,6 +99,65 @@ Future<(String? path, String? errorMessage)> saveImageToCloudStorage(
       return (null, err.msg);
     },
   );
+}
+
+Future<String?> _waitForImageUploadReady(String url) async {
+  final fileStorageService = getIt<FileStorageService>();
+  final notifier = fileStorageService.onFileProgress(fileUrl: url);
+  final completer = Completer<String?>();
+
+  void resolve(String? value) {
+    if (!completer.isCompleted) {
+      completer.complete(value);
+    }
+  }
+
+  void listener() {
+    final progress = notifier.value;
+    if (progress.error != null && progress.error!.isNotEmpty) {
+      Log.error(
+        '[ImageUpload] upload progress failed before image became visible: url=$url, error=${progress.error}',
+      );
+      resolve(progress.error);
+      return;
+    }
+
+    if (progress.progress >= 1.0) {
+      Log.debug('[ImageUpload] upload completed, image can be inserted: $url');
+      resolve(null);
+    }
+  }
+
+  notifier.addListener(listener);
+
+  try {
+    final initialState = await fileStorageService.getFileState(url);
+    initialState.fold(
+      (state) {
+        if (state.isFinish) {
+          resolve(null);
+        }
+      },
+      (err) {
+        Log.error(
+          '[ImageUpload] unable to query initial file state: url=$url, error=${err.msg}',
+        );
+      },
+    );
+
+    return await completer.future.timeout(
+      _kImageUploadReadyTimeout,
+      onTimeout: () {
+        Log.error(
+          '[ImageUpload] timed out waiting for upload completion: url=$url, timeout=${_kImageUploadReadyTimeout.inSeconds}s',
+        );
+        return LocaleKeys.button_uploadFailed.tr();
+      },
+    );
+  } finally {
+    notifier.removeListener(listener);
+    notifier.dispose();
+  }
 }
 
 Future<List<ImageBlockData>> extractAndUploadImages(

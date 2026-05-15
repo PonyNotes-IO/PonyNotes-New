@@ -12,6 +12,7 @@ import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -190,21 +191,35 @@ class GridBloc extends Bloc<GridEvent, GridState> {
   }
 
   Future<void> _openGrid(Emitter<GridState> emit) async {
+    final stopwatch =
+        ponyNotesDiagnosticBuildEnabled ? (Stopwatch()..start()) : null;
     final result = await databaseController.open();
     result.fold(
       (grid) {
         databaseController.setIsLoading(false);
+        logDiagnosticMessage(
+          'grid.open',
+          'viewId=$viewId durationMs=${stopwatch?.elapsedMilliseconds ?? -1} '
+              'rowCount=${rowCache.rowInfos.length} success=true',
+        );
         emit(
           state.copyWith(
             loadingState: LoadingState.finish(FlowyResult.success(null)),
           ),
         );
       },
-      (err) => emit(
-        state.copyWith(
-          loadingState: LoadingState.finish(FlowyResult.failure(err)),
-        ),
-      ),
+      (err) {
+        logDiagnosticMessage(
+          'grid.open',
+          'viewId=$viewId durationMs=${stopwatch?.elapsedMilliseconds ?? -1} '
+              'rowCount=${rowCache.rowInfos.length} success=false error=$err',
+        );
+        emit(
+          state.copyWith(
+            loadingState: LoadingState.finish(FlowyResult.failure(err)),
+          ),
+        );
+      },
     );
   }
 }

@@ -164,7 +164,7 @@ class FlowyRunner {
         const WhiteboardPreloadTask(),
         // Load Baidu Cloud configuration
         const BaiduCloudConfigTask(),
-        
+
         // Initialize notification service and check permissions
         const NotificationServiceTask(),
 
@@ -174,6 +174,7 @@ class FlowyRunner {
           // The DeviceOrApplicationInfoTask should be placed before the AppWidgetTask to fetch the app information.
           // It is unable to get the device information from the test environment.
           const ApplicationInfoTask(),
+          AutoExportDebugLogsTask(),
           // The auto update task should be placed after the ApplicationInfoTask to fetch the latest version.
           if (!mode.isIntegrationTest) AutoUpdateTask(),
           const HotKeyTask(),
@@ -194,7 +195,8 @@ class FlowyRunner {
       // 使用更可靠的默认路径
       if (Platform.isAndroid) {
         // 在Android上使用缓存目录作为默认路径
-        applicationDataDirectory = Directory('/data/data/com.xiaomabiji.app.note/cache');
+        applicationDataDirectory =
+            Directory('/data/data/com.xiaomabiji.app.note/cache');
       } else {
         applicationDataDirectory = Directory('./data');
       }
