@@ -158,6 +158,8 @@ pub extern "C" fn init_sdk(_port: i64, data: *mut c_char) -> i64 {
   let runtime = Arc::new(AFPluginRuntime::new().unwrap());
   let cloned_runtime = runtime.clone();
   let handle = std::thread::spawn(move || {
+    #[cfg(target_os = "windows")]
+    cpu_detect::apply_cpu_scheduling();
     let local_set = LocalSet::new();
     cloned_runtime.block_on(local_set.run_until(Runner { rx: task_rx }));
   });
@@ -252,6 +254,133 @@ pub extern "C" fn set_log_stream_port(port: i64) -> i32 {
 #[inline(never)]
 #[no_mangle]
 pub extern "C" fn link_me_please() {}
+
+// CPU adaptive scheduling (Windows only).
+#[cfg(target_os = "windows")]
+mod cpu_detect {
+  use std::mem::size_of;
+  use std::ptr::null_mut;
+  use std::slice;
+
+  use windows_sys::Win32::System::SystemInformation::{
+    GetLogicalProcessorInformationEx, RelationProcessorCore, GROUP_AFFINITY,
+    SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX,
+  };
+  use windows_sys::Win32::System::Threading::{
+    GetCurrentThread, SetThreadGroupAffinity, SetThreadPriority, THREAD_PRIORITY_HIGHEST,
+  };
+
+  #[derive(Clone, Copy)]
+  struct CoreAffinity {
+    efficiency_class: u8,
+    group_affinity: GROUP_AFFINITY,
+  }
+
+  pub fn detect_hybrid_cpu() -> Option<GROUP_AFFINITY> {
+    unsafe {
+      let mut len = 0;
+      let _ = GetLogicalProcessorInformationEx(RelationProcessorCore, null_mut(), &mut len);
+      if len == 0 {
+        return None;
+      }
+
+      let word_len = (len as usize + size_of::<usize>() - 1) / size_of::<usize>();
+      let mut buf = vec![0usize; word_len];
+      if GetLogicalProcessorInformationEx(
+        RelationProcessorCore,
+        buf.as_mut_ptr() as *mut SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX,
+        &mut len,
+      ) == 0
+      {
+        return None;
+      }
+
+      let mut cores = Vec::new();
+      let mut offset = 0usize;
+      let total_len = len as usize;
+      let base = buf.as_ptr() as *const u8;
+
+      while offset + size_of::<SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>() <= total_len {
+        let info = &*(base.add(offset) as *const SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX);
+        let size = info.Size as usize;
+        if size == 0 || offset + size > total_len {
+          return None;
+        }
+
+        if info.Relationship == RelationProcessorCore {
+          let processor = info.Anonymous.Processor;
+          let group_masks =
+            slice::from_raw_parts(processor.GroupMask.as_ptr(), processor.GroupCount as usize);
+          for group_affinity in group_masks {
+            if group_affinity.Mask != 0 {
+              cores.push(CoreAffinity {
+                efficiency_class: processor.EfficiencyClass,
+                group_affinity: *group_affinity,
+              });
+            }
+          }
+        }
+
+        offset += size;
+      }
+
+      let min_class = cores.iter().map(|core| core.efficiency_class).min()?;
+      let max_class = cores.iter().map(|core| core.efficiency_class).max()?;
+      if min_class == max_class {
+        return None;
+      }
+
+      let target_group = cores
+        .iter()
+        .find(|core| core.efficiency_class == max_class)?
+        .group_affinity
+        .Group;
+      let mut target_mask = 0usize;
+      for core in cores {
+        if core.efficiency_class == max_class && core.group_affinity.Group == target_group {
+          target_mask |= core.group_affinity.Mask;
+        }
+      }
+
+      if target_mask == 0 {
+        None
+      } else {
+        Some(GROUP_AFFINITY {
+          Mask: target_mask,
+          Group: target_group,
+          Reserved: [0; 3],
+        })
+      }
+    }
+  }
+
+  pub fn apply_cpu_scheduling() {
+    unsafe {
+      let thread = GetCurrentThread();
+      if SetThreadPriority(thread, THREAD_PRIORITY_HIGHEST) == 0 {
+        tracing::warn!("[CPU] Failed to raise dispatch thread priority");
+      }
+
+      if let Some(p_core_affinity) = detect_hybrid_cpu() {
+        if SetThreadGroupAffinity(thread, &p_core_affinity, null_mut()) != 0 {
+          tracing::info!(
+            "[CPU] Hybrid detected, locking dispatch thread to P-cores. Group: {}, Mask: 0x{:X}",
+            p_core_affinity.Group,
+            p_core_affinity.Mask
+          );
+        } else {
+          tracing::warn!(
+            "[CPU] Hybrid detected, but failed to lock dispatch thread to P-cores. Group: {}, Mask: 0x{:X}",
+            p_core_affinity.Group,
+            p_core_affinity.Mask
+          );
+        }
+      } else {
+        tracing::info!("[CPU] Homogeneous CPU, default scheduling with raised priority");
+      }
+    }
+  }
+}
 
 #[inline(always)]
 #[allow(clippy::blocks_in_conditions)]

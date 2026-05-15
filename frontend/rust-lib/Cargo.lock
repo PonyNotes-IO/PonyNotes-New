@@ -2135,6 +2135,7 @@ dependencies = [
  "serde_yaml",
  "tokio",
  "tracing",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
