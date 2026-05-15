@@ -371,30 +371,41 @@ impl ModelSource for ServerAiSource {
 
   async fn list_chat_models(&self, _workspace_id: &Uuid) -> Vec<Model> {
     let now = timestamp();
-    let should_fetch = {
+    let (should_fetch, cached_count) = {
       let cached = self.cached_models.read().await;
-      cached.models.is_empty() || cached.timestamp.is_none_or(|ts| now - ts >= 300)
+      let should_fetch = cached.models.is_empty() || cached.timestamp.is_none_or(|ts| now - ts >= 300);
+      (should_fetch, cached.models.len())
     };
+    
+    info!(
+      "[ServerAiSource] list_chat_models: should_fetch={}, cached_count={}",
+      should_fetch, cached_count
+    );
+    
     if !should_fetch {
+      info!("[ServerAiSource] 使用缓存的 {} 个模型", cached_count);
       return self.cached_models.read().await.models.clone();
     }
+    
+    info!("[ServerAiSource] 开始从自定义API获取模型列表...");
     
     // 使用自定义的AI模型接口而不是AppFlowy Cloud的接口
     match Self::fetch_models_from_custom_api().await {
       Ok(models) => {
-        info!("[ModelSelect] 从自定义API获取到 {} 个模型", models.len());
+        info!("[ServerAiSource] 从自定义API获取到 {} 个模型", models.len());
         if let Err(e) = self.update_models_cache(&models, now).await {
           error!("Failed to update cache: {}", e);
         }
         models
       },
       Err(err) => {
-        error!("Failed to fetch models from custom API: {}", err);
+        error!("[ServerAiSource] API调用失败: {}", err);
         let cached = self.cached_models.read().await;
         if !cached.models.is_empty() {
-          info!("Returning expired cache due to error");
+          info!("[ServerAiSource] 使用过期缓存: {} 个模型", cached.models.len());
           return cached.models.clone();
         }
+        info!("[ServerAiSource] 无缓存且API失败，返回空列表");
         Vec::new()
       },
     }
