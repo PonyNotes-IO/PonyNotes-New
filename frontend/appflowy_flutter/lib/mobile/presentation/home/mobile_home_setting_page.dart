@@ -1282,6 +1282,15 @@ class _MobileUpgradePlanCard extends StatelessWidget {
 
   final WorkspaceSubscriptionInfoPB subscriptionInfo;
 
+  String _formatDateRange(int endDate) {
+    final end = DateTime.fromMillisecondsSinceEpoch(endDate * 1000);
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
+    return '$startStr ~ $endStr';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
@@ -1310,18 +1319,32 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                   children: [
                     Text(
                       subscriptionInfo.label,
-                      style: theme.textStyle.heading2.standard(
-                        color: Colors.white,
-                      ).copyWith(fontSize: 18),
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      subscriptionInfo.info,
-                      style: theme.textStyle.body.standard(
-                        color: Colors.white.withValues(alpha: 0.85),
-                      ).copyWith(fontSize: 12),
-                      maxLines: 2,
-                    ),
+                    if (subscriptionInfo.planSubscription.endDate.toInt() > 0 &&
+                        subscriptionInfo.plan.value != 0)
+                      Text(
+                        _formatDateRange(subscriptionInfo.planSubscription.endDate.toInt()),
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 10,
+                        ),
+                      ),
+                    const SizedBox(height: 2),
+                    if (subscriptionInfo.plan.value == 0)
+                      Text(
+                        subscriptionInfo.info,
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 10,
+                        ),
+                        maxLines: 2,
+                      ),
                     const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(
