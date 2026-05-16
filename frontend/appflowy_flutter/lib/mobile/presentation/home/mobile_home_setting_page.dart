@@ -1445,6 +1445,55 @@ class _MobileUpgradePlanCard extends StatelessWidget {
   }
 }
 
+class _BenefitCard extends StatelessWidget {
+  const _BenefitCard({
+    required this.label,
+    required this.icon,
+    required this.isDarkMode,
+    required this.theme,
+  });
+
+  final String label;
+  final FlowySvgData icon;
+  final bool isDarkMode;
+  final AppFlowyThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.surfaceColorScheme.layer01,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.borderColorScheme.primary,
+          width: 1.0,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FlowySvg(
+            icon,
+            size: const Size(32, 32),
+            blendMode: null,
+          ),
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textStyle.body.standard(
+                color: theme.textColorScheme.secondary,
+              ).copyWith(fontSize: 12),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 enum _BillingPeriod { monthly, yearly }
 
 class _MobileUpgradePlanPage extends StatefulWidget {
@@ -1653,11 +1702,11 @@ class _UpgradePlanBody extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     final benefits = [
-      {'label': '小马AI', 'icon': FlowySvgs.icon_rights_ai_xl},
-      {'label': '小马日历', 'icon': FlowySvgs.icon_rights_calendar_xl},
-      {'label': '小马收藏夹', 'icon': FlowySvgs.icon_rights_collect_xl},
-      {'label': '云端同步', 'icon': FlowySvgs.icon_rights_cloud_xl},
-      {'label': '云端空间', 'icon': FlowySvgs.icon_rights_storage_xl},
+      {'label': '小马AI', 'icon': FlowySvgs.m_rights_ai_xl},
+      {'label': '小马日历', 'icon': FlowySvgs.m_rights_calender_xl},
+      {'label': '云端同步', 'icon': FlowySvgs.m_rights_cloud_xl},
+      {'label': '小马收藏夹', 'icon': FlowySvgs.m_rights_collect_xl},
+      {'label': '云端空间', 'icon': FlowySvgs.m_rights_storage_xl},
     ];
 
     return Column(
@@ -1671,44 +1720,24 @@ class _UpgradePlanBody extends StatelessWidget {
           textAlign: TextAlign.left,
         ),
         const SizedBox(height: 16),
-        Wrap(
-          spacing: 16,
-          runSpacing: 12,
-          alignment: WrapAlignment.start,
-          children: benefits.map((benefit) {
-            return SizedBox(
-              width: 70,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: isDarkMode ? Colors.white : null,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: FlowySvg(
-                        benefit['icon'] as FlowySvgData,
-                        size: const Size(48, 48),
-                        blendMode: null,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    benefit['label'] as String,
-                    style: theme.textStyle.body.standard(
-                      color: theme.textColorScheme.secondary,
-                    ).copyWith(fontSize: 11),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
+        // 第一排：3个
+        Row(
+          children: [
+            Expanded(child: _BenefitCard(label: benefits[0]['label'] as String, icon: benefits[0]['icon'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            const SizedBox(width: 8),
+            Expanded(child: _BenefitCard(label: benefits[1]['label'] as String, icon: benefits[1]['icon'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            const SizedBox(width: 8),
+            Expanded(child: _BenefitCard(label: benefits[2]['label'] as String, icon: benefits[2]['icon'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        // 第二排：2个居中
+        Row(
+          children: [
+            Expanded(child: _BenefitCard(label: benefits[3]['label'] as String, icon: benefits[3]['icon'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            const SizedBox(width: 8),
+            Expanded(child: _BenefitCard(label: benefits[4]['label'] as String, icon: benefits[4]['icon'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+          ],
         ),
       ],
     );
