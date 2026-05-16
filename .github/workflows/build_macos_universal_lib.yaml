@@ -6,6 +6,7 @@ on:
       - "main"
       - "develop"
       - "release/*"
+      - "!backup/**"
     paths:
       - ".github/workflows/build_macos_universal_lib.yaml"
       - "frontend/rust-lib/**"

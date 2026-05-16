@@ -179,6 +179,7 @@ class WhiteboardPage extends StatefulWidget {
 class _WhiteboardPageState extends State<WhiteboardPage> {
   Map<String, dynamic>? _initialData;
   bool _isLoadingData = true;
+  bool get _showLegacyBlockingLoader => false;
   bool _isDisposing = false; // 标记是否正在销毁
   int _importReloadCounter = 0; // 每次导入递增，强制重建 WebView
 
@@ -786,7 +787,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
     }
     _lastBrightness = currentBrightness;
 
-    if (_isLoadingData) {
+    if (_isLoadingData && _showLegacyBlockingLoader) {
       Log.debug('⏳ [WhiteboardPage] Showing loading indicator');
       return Scaffold(
         body: const Center(
@@ -810,7 +811,32 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
           _buildTopActionsBar(context),
           // 白板内容
           Expanded(
-            child: _buildExcalidrawView(),
+            child: Stack(
+              children: [
+                _buildExcalidrawView(),
+                if (_isLoadingData)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: ColoredBox(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surface
+                            .withValues(alpha: 0.92),
+                        child: const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 16),
+                              Text('姝ｅ湪鍔犺浇鐧芥澘鏁版嵁...'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -878,7 +904,18 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
                           ? Icons.fullscreen_exit_rounded
                           : Icons.fullscreen_rounded,
                     ),
-                    onPressed: FullWindowController.toggle,
+                    onPressed: () {
+                      if (FullWindowController.isFullWindow.value) {
+                        FullWindowController.exit();
+                        return;
+                      }
+                      context.read<HomeSettingBloc>().add(
+                            const HomeSettingEvent.changeMenuStatus(
+                              MenuStatus.hidden,
+                            ),
+                          );
+                      FullWindowController.enter();
+                    },
                   ),
                 ),
               );
@@ -1035,6 +1072,7 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       loadTraceId: _loadTraceId,
       initialData: _initialData,
       initialDataLoaded: !_isLoadingData,
+      deferInitialDataLoad: true,
       onDataChanged: _onWhiteboardDataChanged,
       onExport: _onWhiteboardExport,
       onError: _onWhiteboardError,

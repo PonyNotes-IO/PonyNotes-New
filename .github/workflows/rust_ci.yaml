@@ -6,6 +6,7 @@ on:
       - "main"
       - "develop"
       - "release/*"
+      - "!backup/**"
     paths:
       - "frontend/rust-lib/**"
       - ".github/workflows/rust_ci.yaml"

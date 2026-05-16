@@ -5,6 +5,7 @@ on:
     branches:
       - "main"
       - "release/*"
+      - "!backup/**"
     paths:
       - "frontend/rust-lib/**"
 

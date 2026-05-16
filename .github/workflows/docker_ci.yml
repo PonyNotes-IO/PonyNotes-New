@@ -2,7 +2,7 @@ name: Docker-CI
 
 on:
   push:
-    branches: [ "main", "release/*" ]
+    branches: [ "main", "release/*", "!backup/**" ]
   pull_request:
     branches: [ "main", "release/*" ]
   workflow_dispatch:

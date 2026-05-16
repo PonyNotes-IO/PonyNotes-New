@@ -11,7 +11,7 @@ class HomeSizes {
   static double get workspaceSectionHeight => 40 * Sizes.hitScale;
   static double get searchSectionHeight => 38 * Sizes.hitScale;
   static double get newPageSectionHeight => 38 * Sizes.hitScale;
-  static const double minimumSidebarWidth = 260;
+  static const double minimumSidebarWidth = 240;
   static const double maximumSidebarResizeOffset = 96;
   static const double maximumSidebarWidth =
       minimumSidebarWidth + maximumSidebarResizeOffset;

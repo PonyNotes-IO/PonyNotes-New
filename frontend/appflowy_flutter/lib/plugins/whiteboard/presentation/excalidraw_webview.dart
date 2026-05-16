@@ -27,6 +27,7 @@ class ExcalidrawWebView extends StatefulWidget {
     required this.loadTraceId,
     this.initialData,
     this.initialDataLoaded = false,
+    this.deferInitialDataLoad = false,
     this.onDataChanged,
     this.onExport,
     this.onError,
@@ -37,6 +38,7 @@ class ExcalidrawWebView extends StatefulWidget {
   final String loadTraceId;
   final Map<String, dynamic>? initialData;
   final bool initialDataLoaded;
+  final bool deferInitialDataLoad;
   final Function(String type, Map<String, dynamic> data)? onDataChanged;
   final Function(String format, dynamic data)? onExport;
   final Function(String error)? onError;
@@ -82,6 +84,20 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
     _initializeSettings();
     _loadExcalidrawHTML();
+  }
+
+  @override
+  void didUpdateWidget(covariant ExcalidrawWebView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.initialDataLoaded &&
+        widget.initialDataLoaded &&
+        widget.initialData != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          loadData(widget.initialData!);
+        }
+      });
+    }
   }
 
   /// 统一的 JS 执行入口：在引擎重启/插件尚未就绪等场景下进行重试，避免 MissingPluginException
@@ -188,7 +204,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
               '[ExcalidrawWebView] 🚀 initData called, loading whiteboard data...');
 
           try {
-            final data = widget.initialDataLoaded
+            final data = widget.initialDataLoaded || widget.deferInitialDataLoad
                 ? Map<String, dynamic>.from(widget.initialData ?? const {})
                 : await WhiteboardDataService().loadWhiteboardData(
                     widget.viewId,

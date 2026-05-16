@@ -865,7 +865,9 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                   valueListenable: FullWindowController.isFullWindow,
                   builder: (context, isFullWindow, _) {
                     final shouldCollapseHeaderActions =
-                        widget.isDrawerMenu || isFullWindow;
+                        widget.isDrawerMenu ||
+                            isFullWindow ||
+                            HomeSizes.minimumSidebarWidth <= 250;
                     if (shouldCollapseHeaderActions) {
                       return Row(
                         mainAxisSize: MainAxisSize.min,

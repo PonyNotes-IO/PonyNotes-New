@@ -1,7 +1,7 @@
 name: Translation Notify
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "!backup/**" ]
     paths:
       - "frontend/appflowy_flutter/assets/translations/en.json"
 

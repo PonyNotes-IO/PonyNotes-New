@@ -171,21 +171,27 @@ Future<void> refreshWindowsSurfaceAfterNavigation({
       final currentSize = await windowManager.getSize();
       final currentPosition = await windowManager.getPosition();
       final nudgeSize = Size(
-        (currentSize.width - 1)
-            .clamp(
-              WindowSizeManager.minWindowWidth,
-              WindowSizeManager.maxWindowWidth,
-            )
-            .toDouble(),
-        (currentSize.height - 1)
-            .clamp(
-              WindowSizeManager.minWindowHeight,
-              WindowSizeManager.maxWindowHeight,
-            )
-            .toDouble(),
+        _surfaceRefreshNudgeDimension(
+          currentSize.width,
+          WindowSizeManager.minWindowWidth,
+          WindowSizeManager.maxWindowWidth,
+        ),
+        _surfaceRefreshNudgeDimension(
+          currentSize.height,
+          WindowSizeManager.minWindowHeight,
+          WindowSizeManager.maxWindowHeight,
+        ),
+      );
+      final didResizeNudge = nudgeSize != currentSize;
+
+      Log.info(
+        '[Windows] surface refresh requested after $reason: '
+        'currentSize=${currentSize.width}x${currentSize.height}, '
+        'nudgeSize=${nudgeSize.width}x${nudgeSize.height}, '
+        'didResizeNudge=$didResizeNudge',
       );
 
-      if (nudgeSize != currentSize) {
+      if (didResizeNudge) {
         await windowManager.setSize(nudgeSize);
         await Future<void>.delayed(const Duration(milliseconds: 16));
         await windowManager.setSize(currentSize);
@@ -204,4 +210,21 @@ Future<void> refreshWindowsSurfaceAfterNavigation({
       stackTrace,
     );
   }
+}
+
+double _surfaceRefreshNudgeDimension(
+  double value,
+  double minValue,
+  double maxValue,
+) {
+  const delta = 1.0;
+
+  if (value <= minValue + delta) {
+    return (value + delta).clamp(minValue, maxValue).toDouble();
+  }
+  if (value >= maxValue - delta) {
+    return (value - delta).clamp(minValue, maxValue).toDouble();
+  }
+
+  return (value - delta).clamp(minValue, maxValue).toDouble();
 }
