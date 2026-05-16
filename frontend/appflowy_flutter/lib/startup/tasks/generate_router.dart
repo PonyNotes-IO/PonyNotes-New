@@ -17,6 +17,8 @@ import 'package:appflowy/mobile/presentation/presentation.dart';
 import 'package:appflowy/mobile/presentation/search/mobile_search_page.dart';
 import 'package:appflowy/mobile/presentation/setting/cloud/appflowy_cloud_page.dart';
 import 'package:appflowy/mobile/presentation/setting/appearance/appearance_page.dart';
+import 'package:appflowy/mobile/presentation/setting/personal_info/email_bind_page.dart';
+import 'package:appflowy/mobile/presentation/setting/personal_info/phone_bind_page.dart';
 import 'package:appflowy/mobile/presentation/setting/about/about_page.dart';
 import 'package:appflowy/mobile/presentation/setting/datetime/datetime_page.dart';
 import 'package:appflowy/mobile/presentation/setting/font/font_picker_screen.dart';
@@ -76,6 +78,8 @@ GoRouter generateRouter(Widget child) {
         _mobileAppearancePageRoute(),
         _mobileDateTimePageRoute(),
         _mobileAboutPageRoute(),
+        _mobilePhoneBindPageRoute(),
+        _mobileEmailBindPageRoute(),
 
         // view page
         _mobileEditorScreenRoute(),
@@ -355,6 +359,32 @@ GoRoute _mobileAboutPageRoute() {
       return const MaterialExtendedPage(
         child: AboutPage(),
         name: AboutPage.routeName,
+      );
+    },
+  );
+}
+
+GoRoute _mobilePhoneBindPageRoute() {
+  return GoRoute(
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    path: MobilePhoneBindPage.routeName,
+    pageBuilder: (context, state) {
+      return const MaterialExtendedPage(
+        child: MobilePhoneBindPage(),
+        name: MobilePhoneBindPage.routeName,
+      );
+    },
+  );
+}
+
+GoRoute _mobileEmailBindPageRoute() {
+  return GoRoute(
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    path: MobileEmailBindPage.routeName,
+    pageBuilder: (context, state) {
+      return const MaterialExtendedPage(
+        child: MobileEmailBindPage(),
+        name: MobileEmailBindPage.routeName,
       );
     },
   );
