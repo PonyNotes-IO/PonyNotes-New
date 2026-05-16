@@ -1546,11 +1546,9 @@ class _UpgradePlanBody extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          _buildBillingToggle(context),
+          _buildUpgradePlanCards(context),
           const SizedBox(height: 24),
           _buildBenefitIcons(context),
-          const SizedBox(height: 24),
-          _buildUpgradePlanCards(context),
         ],
       ),
     );
@@ -1662,50 +1660,66 @@ class _UpgradePlanBody extends StatelessWidget {
       {'label': '云端空间', 'icon': FlowySvgs.icon_rights_storage_xl},
     ];
 
-    return Wrap(
-      spacing: 16,
-      runSpacing: 12,
-      alignment: WrapAlignment.center,
-      children: benefits.map((benefit) {
-        return SizedBox(
-          width: 70,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: isDarkMode ? Colors.white : null,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: FlowySvg(
-                    benefit['icon'] as FlowySvgData,
-                    size: const Size(48, 48),
-                    blendMode: null,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                benefit['label'] as String,
-                style: theme.textStyle.body.standard(
-                  color: theme.textColorScheme.secondary,
-                ).copyWith(fontSize: 11),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-              ),
-            ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '获赠权益',
+            style: theme.textStyle.body.standard(
+              color: theme.textColorScheme.primary,
+            ).copyWith(fontSize: 16, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.left,
           ),
-        );
-      }).toList(),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 16,
+            runSpacing: 12,
+            alignment: WrapAlignment.center,
+            children: benefits.map((benefit) {
+              return SizedBox(
+                width: 70,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? Colors.white : null,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: FlowySvg(
+                          benefit['icon'] as FlowySvgData,
+                          size: const Size(48, 48),
+                          blendMode: null,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      benefit['label'] as String,
+                      style: theme.textStyle.body.standard(
+                        color: theme.textColorScheme.secondary,
+                      ).copyWith(fontSize: 11),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildUpgradePlanCards(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth = screenWidth - 80;
+    const cardWidth = 200.0;
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -1719,8 +1733,8 @@ class _UpgradePlanBody extends StatelessWidget {
                 storage: '1GB',
                 workspaces: '3个',
                 aiQuota: '50次/月',
-                priceColor: const Color(0xFF4A7C59),
-                priceBgColor: const Color(0xFFE8F5E9),
+                priceColor: const Color(0xFFFFFFFF),
+                priceBgColor: const Color(0xFF2EACB2),
                 isYearly: billingPeriod == _BillingPeriod.yearly,
                 cardWidth: cardWidth,
               ),
@@ -1730,10 +1744,10 @@ class _UpgradePlanBody extends StatelessWidget {
                 priceMonthly: '¥9',
                 priceAnnual: '¥99',
                 storage: '10GB',
-                workspaces: '无限个',
+                workspaces: '5个工作区',
                 aiQuota: '300次/月',
-                priceColor: const Color(0xFF2E7D9B),
-                priceBgColor: const Color(0xFFE3F2FD),
+                priceColor: const Color(0xFFF9D8A7),
+                priceBgColor: const Color(0xFF343543),
                 priceColor2: Colors.white,
                 isYearly: billingPeriod == _BillingPeriod.yearly,
                 cardWidth: cardWidth,
@@ -1744,10 +1758,10 @@ class _UpgradePlanBody extends StatelessWidget {
                 priceMonthly: '¥15',
                 priceAnnual: '¥158',
                 storage: '50GB',
-                workspaces: '无限个',
+                workspaces: '10个工作区',
                 aiQuota: '1200次/月',
-                priceColor: const Color(0xFF343543),
-                priceBgColor: const Color(0xFFF5F5F5),
+                priceColor: const Color(0xFFFFE4C4),
+                priceBgColor: const Color(0xFF371A0D),
                 priceColor2: const Color(0xFFF9D8A7),
                 isHighlighted: true,
                 isYearly: billingPeriod == _BillingPeriod.yearly,
@@ -1759,10 +1773,10 @@ class _UpgradePlanBody extends StatelessWidget {
                 priceMonthly: '¥29',
                 priceAnnual: '¥298',
                 storage: '150GB',
-                workspaces: '无限个',
+                workspaces: '18个工作区',
                 aiQuota: '3000次/月',
-                priceColor: const Color(0xFF8B4513),
-                priceBgColor: const Color(0xFFFFF7F2),
+                priceColor: const Color(0xFFADD8E6),
+                priceBgColor: const Color(0xFF1E3A5F),
                 priceColor2: const Color(0xFFF9D8A7),
                 isYearly: billingPeriod == _BillingPeriod.yearly,
                 cardWidth: cardWidth,
