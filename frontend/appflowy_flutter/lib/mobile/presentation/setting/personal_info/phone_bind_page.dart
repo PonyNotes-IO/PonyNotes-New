@@ -45,11 +45,11 @@ class _MobilePhoneBindPageState extends State<MobilePhoneBindPage> {
 
   String get _codeButtonText {
     if (_countdown > 0) {
-      return '$_countdown s';
+      return '${_countdown}s';
     } else if (_hasRequestedCode) {
-      return 'Resend';
+      return '重新获取';
     } else {
-      return 'Get code';
+      return '获取验证码';
     }
   }
 
@@ -110,7 +110,7 @@ class _MobilePhoneBindPageState extends State<MobilePhoneBindPage> {
     result.fold(
       (data) {
         Navigator.pop(context, true);
-        showToastNotification(message: 'Binding successful');
+        showToastNotification(message: '绑定成功');
       },
       (error) {
         showToastNotification(message: error.msg);
@@ -124,7 +124,7 @@ class _MobilePhoneBindPageState extends State<MobilePhoneBindPage> {
 
     return Scaffold(
       appBar: MobileAppBar(
-        title: 'Bind Phone',
+        title: '绑定手机号',
         onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(
@@ -135,7 +135,7 @@ class _MobilePhoneBindPageState extends State<MobilePhoneBindPage> {
             children: [
               const SizedBox(height: 24),
               Text(
-                'Phone Number',
+                '手机号',
                 style: theme.textStyle.body.standard(
                   color: theme.textColorScheme.primary,
                 ),
@@ -171,7 +171,7 @@ class _MobilePhoneBindPageState extends State<MobilePhoneBindPage> {
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
                       decoration: InputDecoration(
-                        hintText: 'Enter phone number',
+                        hintText: '请输入手机号',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -187,7 +187,7 @@ class _MobilePhoneBindPageState extends State<MobilePhoneBindPage> {
               ),
               const SizedBox(height: 24),
               Text(
-                'Verification Code',
+                '验证码',
                 style: theme.textStyle.body.standard(
                   color: theme.textColorScheme.primary,
                 ),
@@ -201,7 +201,7 @@ class _MobilePhoneBindPageState extends State<MobilePhoneBindPage> {
                       keyboardType: TextInputType.number,
                       maxLength: 6,
                       decoration: InputDecoration(
-                        hintText: '6-digit code',
+                        hintText: '请输入验证码',
                         counterText: '',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -250,7 +250,7 @@ class _MobilePhoneBindPageState extends State<MobilePhoneBindPage> {
               SizedBox(
                 width: double.infinity,
                 child: AFFilledTextButton.primary(
-                  text: _isBinding ? 'Binding...' : 'Bind Phone',
+                  text: _isBinding ? '绑定中...' : '绑定手机号',
                   onTap: () {
                     if (!_isBinding) _bindPhone();
                   },

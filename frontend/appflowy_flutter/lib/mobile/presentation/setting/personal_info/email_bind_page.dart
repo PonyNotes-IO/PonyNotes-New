@@ -50,11 +50,11 @@ class _MobileEmailBindPageState extends State<MobileEmailBindPage> {
 
   String get _codeButtonText {
     if (_countdown > 0) {
-      return '$_countdown s';
+      return '${_countdown}s';
     } else if (_hasRequestedCode) {
-      return 'Resend';
+      return '重新获取';
     } else {
-      return 'Get code';
+      return '获取验证码';
     }
   }
 
@@ -74,7 +74,7 @@ class _MobileEmailBindPageState extends State<MobileEmailBindPage> {
     if (isRegistered) {
       if (!mounted) return;
       setState(() => _isSending = false);
-      showToastNotification(message: 'This email is already registered');
+      showToastNotification(message: '该邮箱已被其他账号注册');
       return;
     }
 
@@ -127,7 +127,7 @@ class _MobileEmailBindPageState extends State<MobileEmailBindPage> {
     result.fold(
       (success) {
         Navigator.pop(context, true);
-        showToastNotification(message: 'Binding successful');
+        showToastNotification(message: '绑定成功');
       },
       (error) {
         showToastNotification(message: error.msg);
@@ -141,7 +141,7 @@ class _MobileEmailBindPageState extends State<MobileEmailBindPage> {
 
     return Scaffold(
       appBar: MobileAppBar(
-        title: 'Bind Email',
+        title: '绑定邮箱',
         onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(
@@ -152,7 +152,7 @@ class _MobileEmailBindPageState extends State<MobileEmailBindPage> {
             children: [
               const SizedBox(height: 24),
               Text(
-                'Email Address',
+                '邮箱地址',
                 style: theme.textStyle.body.standard(
                   color: theme.textColorScheme.primary,
                 ),
@@ -162,7 +162,7 @@ class _MobileEmailBindPageState extends State<MobileEmailBindPage> {
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
-                  hintText: 'Enter email address',
+                  hintText: '请输入邮箱地址',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -175,7 +175,7 @@ class _MobileEmailBindPageState extends State<MobileEmailBindPage> {
               ),
               const SizedBox(height: 24),
               Text(
-                'Verification Code',
+                '验证码',
                 style: theme.textStyle.body.standard(
                   color: theme.textColorScheme.primary,
                 ),
@@ -189,7 +189,7 @@ class _MobileEmailBindPageState extends State<MobileEmailBindPage> {
                       keyboardType: TextInputType.number,
                       maxLength: 6,
                       decoration: InputDecoration(
-                        hintText: '6-digit code',
+                        hintText: '请输入验证码',
                         counterText: '',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -238,7 +238,7 @@ class _MobileEmailBindPageState extends State<MobileEmailBindPage> {
               SizedBox(
                 width: double.infinity,
                 child: AFFilledTextButton.primary(
-                  text: _isBinding ? 'Binding...' : 'Bind Email',
+                  text: _isBinding ? '绑定中...' : '绑定邮箱',
                   onTap: () {
                     if (!_isBinding) _bindEmail();
                   },
