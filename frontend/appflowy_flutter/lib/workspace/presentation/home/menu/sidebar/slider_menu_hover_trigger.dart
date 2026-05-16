@@ -20,8 +20,9 @@ class _SliderMenuHoverTriggerState extends State<SliderMenuHoverTrigger> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final visualSize = widget.touchOptimized ? 44.0 : 36.0;
-    final hitSize = widget.touchOptimized ? 48.0 : 44.0;
+    final visualSize = widget.touchOptimized ? 48.0 : 40.0;
+    final hitWidth = widget.touchOptimized ? 72.0 : 56.0;
+    final hitHeight = widget.touchOptimized ? 80.0 : 64.0;
     final opacity = widget.touchOptimized || _isHovered ? 1.0 : 0.72;
 
     return MouseRegion(
@@ -33,8 +34,8 @@ class _SliderMenuHoverTriggerState extends State<SliderMenuHoverTrigger> {
           button: true,
           label: '打开侧边栏',
           child: SizedBox(
-            width: hitSize,
-            height: hitSize,
+            width: hitWidth,
+            height: hitHeight,
             child: Center(
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 120),
@@ -42,7 +43,7 @@ class _SliderMenuHoverTriggerState extends State<SliderMenuHoverTrigger> {
                 child: Material(
                   color: theme.colorScheme.surface,
                   elevation: _isHovered ? 8 : 4,
-                  shadowColor: Colors.black.withOpacity(0.14),
+                  shadowColor: Colors.black.withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(999),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(999),
@@ -53,7 +54,8 @@ class _SliderMenuHoverTriggerState extends State<SliderMenuHoverTrigger> {
                       child: Icon(
                         Icons.keyboard_double_arrow_right_rounded,
                         size: widget.touchOptimized ? 24 : 21,
-                        color: theme.colorScheme.onSurface.withOpacity(0.74),
+                        color:
+                            theme.colorScheme.onSurface.withValues(alpha: 0.74),
                       ),
                     ),
                   ),

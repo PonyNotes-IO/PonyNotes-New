@@ -411,9 +411,9 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
             ),
         if (isDrawerMenu)
           Positioned.fill(
-            child: GestureDetector(
+            child: Listener(
               behavior: HitTestBehavior.opaque,
-              onTap: () => context.read<HomeSettingBloc>().add(
+              onPointerDown: (_) => context.read<HomeSettingBloc>().add(
                     const HomeSettingEvent.changeMenuStatus(MenuStatus.hidden),
                   ),
               child: ColoredBox(

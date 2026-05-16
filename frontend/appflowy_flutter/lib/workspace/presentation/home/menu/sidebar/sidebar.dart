@@ -1032,7 +1032,16 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             size: 20,
             color: Theme.of(context).colorScheme.onSurface,
           ),
-          onTap: FullWindowController.toggle,
+          onTap: () {
+            if (FullWindowController.isFullWindow.value) {
+              FullWindowController.exit();
+              return;
+            }
+            context.read<HomeSettingBloc>().add(
+                  const HomeSettingEvent.changeMenuStatus(MenuStatus.hidden),
+                );
+            FullWindowController.enter();
+          },
         ),
       ),
     );
