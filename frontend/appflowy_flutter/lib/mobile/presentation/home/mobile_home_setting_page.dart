@@ -40,13 +40,13 @@ import 'package:appflowy/workspace/application/settings/plan/workspace_subscript
 import 'package:appflowy/workspace/application/settings/plan/workspace_usage_ext.dart';
 import 'package:appflowy/workspace/application/workspace/workspace_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
-import 'package:appflowy_backend/protobuf/flowy-user/workspace.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:get_it/get_it.dart';
 import 'package:appflowy/workspace/application/settings/settings_dialog_bloc.dart';
+import 'package:appflowy/workspace/application/settings/plan/settings_plan_bloc.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/workspace.pb.dart';
-import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/language.dart';
@@ -936,6 +936,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
               _MobileUpgradePlanCard(
                 subscriptionInfo: subscriptionInfo!,
                 workspaceUsage: workspaceUsage,
+                onUpgrade: () => _showUpgradeDialog(context),
               ),
             if (subscriptionInfo != null) const SizedBox(height: 16),
             _SettingsGroupCard(
@@ -1026,6 +1027,18 @@ class _MobileSettingsMenuContent extends StatelessWidget {
             ),
             const SizedBox(height: 32),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showUpgradeDialog(BuildContext context) {
+    final workspaceId = currentWorkspace?.workspaceId ?? '';
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => _MobileUpgradePlanPage(
+          subscriptionInfo: subscriptionInfo,
+          workspaceId: workspaceId,
         ),
       ),
     );
@@ -1290,10 +1303,12 @@ class _MobileUpgradePlanCard extends StatelessWidget {
   const _MobileUpgradePlanCard({
     required this.subscriptionInfo,
     this.workspaceUsage,
+    required this.onUpgrade,
   });
 
   final WorkspaceSubscriptionInfoPB subscriptionInfo;
   final WorkspaceUsagePB? workspaceUsage;
+  final VoidCallback onUpgrade;
 
   String _formatDateRange(int endDate) {
     final end = DateTime.fromMillisecondsSinceEpoch(endDate * 1000);
@@ -1400,7 +1415,7 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                         else
                           const SizedBox(),
                         GestureDetector(
-                          onTap: () => _showUpgradeDialog(context),
+                          onTap: onUpgrade,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 10,
@@ -1414,7 +1429,7 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                               '会员升级',
                               style: theme.textStyle.heading4.standard(
                                 color: const Color(0xFF44326B),
-                              ).copyWith(fontSize: 12),
+                              ).copyWith(fontSize: 12.0),
                             ),
                           ),
                         ),
@@ -1428,18 +1443,27 @@ class _MobileUpgradePlanCard extends StatelessWidget {
       },
     );
   }
-
-  void _showUpgradeDialog(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const _MobileUpgradePlanPage(),
-      ),
-    );
-  }
 }
 
-class _MobileUpgradePlanPage extends StatelessWidget {
-  const _MobileUpgradePlanPage();
+enum _BillingPeriod { monthly, yearly }
+
+class _MobileUpgradePlanPage extends StatefulWidget {
+  const _MobileUpgradePlanPage({
+    required this.subscriptionInfo,
+    required this.workspaceId,
+  });
+
+  final WorkspaceSubscriptionInfoPB? subscriptionInfo;
+  final String workspaceId;
+
+  @override
+  State<_MobileUpgradePlanPage> createState() => _MobileUpgradePlanPageState();
+}
+
+class _MobileUpgradePlanPageState extends State<_MobileUpgradePlanPage> {
+  _BillingPeriod _billingPeriod = _BillingPeriod.yearly;
+
+  int _currentPlanValue() => widget.subscriptionInfo?.plan.value ?? 0;
 
   @override
   Widget build(BuildContext context) {
@@ -1475,14 +1499,30 @@ class _MobileUpgradePlanPage extends StatelessWidget {
             topRight: Radius.circular(24),
           ),
         ),
-        child: const _UpgradePlanBody(),
+        child: _UpgradePlanBody(
+          subscriptionInfo: widget.subscriptionInfo,
+          billingPeriod: _billingPeriod,
+          onBillingPeriodChanged: (period) {
+            setState(() => _billingPeriod = period);
+          },
+        ),
       ),
     );
   }
 }
 
 class _UpgradePlanBody extends StatelessWidget {
-  const _UpgradePlanBody();
+  const _UpgradePlanBody({
+    required this.subscriptionInfo,
+    required this.billingPeriod,
+    required this.onBillingPeriodChanged,
+  });
+
+  final WorkspaceSubscriptionInfoPB? subscriptionInfo;
+  final _BillingPeriod billingPeriod;
+  final void Function(_BillingPeriod) onBillingPeriodChanged;
+
+  int _currentPlanValue() => subscriptionInfo?.plan.value ?? 0;
 
   @override
   Widget build(BuildContext context) {
@@ -1505,12 +1545,111 @@ class _UpgradePlanBody extends StatelessWidget {
               color: theme.textColorScheme.secondary,
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
+          _buildBillingToggle(context),
+          const SizedBox(height: 24),
           _buildBenefitIcons(context),
-          const SizedBox(height: 32),
-          _buildUpgradePlanCards(),
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 420,
+            child: _buildUpgradePlanCards(),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildBillingToggle(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final isYearly = billingPeriod == _BillingPeriod.yearly;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: () => onBillingPeriodChanged(_BillingPeriod.monthly),
+          child: Text(
+            '按月',
+            style: theme.textStyle.body.standard(
+              color: !isYearly
+                  ? theme.textColorScheme.primary
+                  : theme.textColorScheme.secondary,
+            ).copyWith(
+              fontWeight: !isYearly ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          width: 44,
+          height: 24,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: theme.surfaceColorScheme.layer02,
+          ),
+          child: Stack(
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 200),
+                left: isYearly ? 22 : 2,
+                top: 2,
+                child: GestureDetector(
+                  onTap: () => onBillingPeriodChanged(
+                    isYearly ? _BillingPeriod.monthly : _BillingPeriod.yearly,
+                  ),
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: theme.surfaceColorScheme.primary,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        GestureDetector(
+          onTap: () => onBillingPeriodChanged(_BillingPeriod.yearly),
+          child: Row(
+            children: [
+              Text(
+                '按年',
+                style: theme.textStyle.body.standard(
+                  color: isYearly
+                      ? theme.textColorScheme.primary
+                      : theme.textColorScheme.secondary,
+                ).copyWith(
+                  fontWeight: isYearly ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFE5B4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '省2月',
+                  style: theme.textStyle.body.standard(
+                    color: const Color(0xFF8B4513),
+                  ).copyWith(fontSize: 10, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1568,39 +1707,76 @@ class _UpgradePlanBody extends StatelessWidget {
   }
 
   Widget _buildUpgradePlanCards() {
-    return Column(
-      children: [
-        _UpgradePlanCard(
-          planName: '标准版',
-          price: '¥99',
-          period: '/年',
-          storage: '5GB',
-          workspaces: '5个',
-          aiQuota: '500次/月',
-          priceColor: const Color(0xFF2EACB2),
-        ),
-        const SizedBox(height: 12),
-        _UpgradePlanCard(
-          planName: '专业版',
-          price: '¥158',
-          period: '/年',
-          storage: '20GB',
-          workspaces: '20个',
-          aiQuota: '2000次/月',
-          priceColor: const Color(0xFF343543),
-          isHighlighted: true,
-        ),
-        const SizedBox(height: 12),
-        _UpgradePlanCard(
-          planName: '旗舰版',
-          price: '¥298',
-          period: '/年',
-          storage: '100GB',
-          workspaces: '100个',
-          aiQuota: '无限次',
-          priceColor: const Color(0xFF371A0D),
-        ),
-      ],
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: [
+          _UpgradePlanCard(
+            planName: '学生版',
+            description: '适合学生使用的经济实惠方案',
+            priceMonthly: '¥5',
+            priceAnnual: '¥50',
+            storage: '1GB',
+            workspaces: '3个',
+            aiQuota: '50次/月',
+            versionHistory: '7天',
+            imageGen: '-',
+            priceColor: const Color(0xFF4A7C59),
+            priceBgColor: const Color(0xFFE8F5E9),
+            isYearly: billingPeriod == _BillingPeriod.yearly,
+          ),
+          const SizedBox(width: 12),
+          _UpgradePlanCard(
+            planName: '标准版',
+            description: '适合个人和小团队的标准方案',
+            priceMonthly: '¥9',
+            priceAnnual: '¥99',
+            storage: '10GB',
+            workspaces: '无限个',
+            aiQuota: '300次/月',
+            versionHistory: '7天',
+            imageGen: '10张/月',
+            priceColor: const Color(0xFF2E7D9B),
+            priceBgColor: const Color(0xFFE3F2FD),
+            priceColor2: Colors.white,
+            isYearly: billingPeriod == _BillingPeriod.yearly,
+          ),
+          const SizedBox(width: 12),
+          _UpgradePlanCard(
+            planName: '专业版',
+            description: '适合专业用户的增强方案',
+            priceMonthly: '¥15',
+            priceAnnual: '¥158',
+            storage: '50GB',
+            workspaces: '无限个',
+            aiQuota: '1200次/月',
+            versionHistory: '30天',
+            imageGen: '30张/月',
+            priceColor: const Color(0xFF343543),
+            priceBgColor: const Color(0xFFF5F5F5),
+            priceColor2: const Color(0xFFF9D8A7),
+            isHighlighted: true,
+            isYearly: billingPeriod == _BillingPeriod.yearly,
+          ),
+          const SizedBox(width: 12),
+          _UpgradePlanCard(
+            planName: '高级版',
+            description: '适合团队和企业的终极方案',
+            priceMonthly: '¥29',
+            priceAnnual: '¥298',
+            storage: '150GB',
+            workspaces: '无限个',
+            aiQuota: '3000次/月',
+            versionHistory: '30天',
+            imageGen: '50张/月',
+            priceColor: const Color(0xFF8B4513),
+            priceBgColor: const Color(0xFFFFF7F2),
+            priceColor2: const Color(0xFFF9D8A7),
+            isYearly: billingPeriod == _BillingPeriod.yearly,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1608,30 +1784,43 @@ class _UpgradePlanBody extends StatelessWidget {
 class _UpgradePlanCard extends StatelessWidget {
   const _UpgradePlanCard({
     required this.planName,
-    required this.price,
-    required this.period,
+    required this.description,
+    required this.priceMonthly,
+    required this.priceAnnual,
     required this.storage,
     required this.workspaces,
     required this.aiQuota,
+    required this.versionHistory,
+    required this.imageGen,
     required this.priceColor,
+    required this.priceBgColor,
+    this.priceColor2,
     this.isHighlighted = false,
+    this.isYearly = true,
   });
 
   final String planName;
-  final String price;
-  final String period;
+  final String description;
+  final String priceMonthly;
+  final String priceAnnual;
   final String storage;
   final String workspaces;
   final String aiQuota;
+  final String versionHistory;
+  final String imageGen;
   final Color priceColor;
+  final Color priceBgColor;
+  final Color? priceColor2;
   final bool isHighlighted;
+  final bool isYearly;
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return Container(
-      width: double.infinity,
+      width: screenWidth - 32,
       decoration: BoxDecoration(
         color: isHighlighted
             ? (Theme.of(context).brightness == Brightness.light
@@ -1646,7 +1835,7 @@ class _UpgradePlanCard extends StatelessWidget {
           width: isHighlighted ? 1.6 : 1.0,
         ),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1656,12 +1845,19 @@ class _UpgradePlanCard extends StatelessWidget {
               color: theme.textColorScheme.primary,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 2),
+          Text(
+            description,
+            style: theme.textStyle.body.standard(
+              color: theme.textColorScheme.secondary,
+            ).copyWith(fontSize: 12.0),
+          ),
+          const SizedBox(height: 8),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
-              color: priceColor,
+              color: priceBgColor,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -1670,79 +1866,66 @@ class _UpgradePlanCard extends StatelessWidget {
                   text: TextSpan(
                     children: [
                       TextSpan(
-                        text: price,
+                        text: isYearly ? priceAnnual : priceMonthly,
                         style: theme.textStyle.heading2.standard(
-                          color: priceColor == const Color(0xFF2EACB2)
-                              ? Colors.white
-                              : const Color(0xFFF9D8A7),
+                          color: priceColor,
                         ),
                       ),
                       TextSpan(
-                        text: period,
+                        text: isYearly ? '/年' : '/月',
                         style: theme.textStyle.body.standard(
-                          color: priceColor == const Color(0xFF2EACB2)
-                              ? Colors.white
-                              : const Color(0x99F9D8A7),
+                          color: priceColor.withValues(alpha: 0.7),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  '按年支付',
+                  isYearly ? '按年支付' : '按月支付',
                   style: theme.textStyle.body.standard(
-                    color: priceColor == const Color(0xFF2EACB2)
-                        ? Colors.white.withValues(alpha: 0.8)
-                        : const Color(0x99F9D8A7),
-                  ).copyWith(fontSize: 12),
+                    color: priceColor.withValues(alpha: 0.7),
+                  ).copyWith(fontSize: 12.0),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 6,
-                padding: const EdgeInsets.only(top: 2),
-                child: FlowySvg(
-                  FlowySvgs.icon_plan_info_indicator_s,
-                  blendMode: null,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '云端空间 $storage',
-                      style: theme.textStyle.body.standard(
-                        color: theme.textColorScheme.secondary,
-                      ).copyWith(fontSize: 12),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '工作区限制 $workspaces',
-                      style: theme.textStyle.body.standard(
-                        color: theme.textColorScheme.secondary,
-                      ).copyWith(fontSize: 12),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '每月AI对话额度 $aiQuota',
-                      style: theme.textStyle.body.standard(
-                        color: theme.textColorScheme.secondary,
-                      ).copyWith(fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          const SizedBox(height: 8),
+          _buildFeatureRow(
+            theme,
+            FlowySvgs.icon_plan_info_indicator_s,
+            '云端空间',
+            storage,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 4),
+          _buildFeatureRow(
+            theme,
+            FlowySvgs.icon_plan_info_indicator_s,
+            '版本历史',
+            versionHistory,
+          ),
+          const SizedBox(height: 4),
+          _buildFeatureRow(
+            theme,
+            FlowySvgs.icon_plan_info_indicator_s,
+            '图片生成',
+            imageGen,
+          ),
+          const SizedBox(height: 4),
+          _buildFeatureRow(
+            theme,
+            FlowySvgs.icon_plan_info_indicator_s,
+            '工作区限制',
+            workspaces,
+          ),
+          const SizedBox(height: 4),
+          _buildFeatureRow(
+            theme,
+            FlowySvgs.icon_plan_info_indicator_s,
+            '每月AI对话额度',
+            aiQuota,
+          ),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: Container(
@@ -1767,6 +1950,37 @@ class _UpgradePlanCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFeatureRow(
+    dynamic theme,
+    FlowySvgData icon,
+    String label,
+    String value,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 16,
+          height: 16,
+          child: FlowySvg(
+            icon,
+            size: const Size.square(16),
+            blendMode: null,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            '$label $value',
+            style: theme.textStyle.body.standard(
+              color: theme.textColorScheme.secondary,
+            ).copyWith(fontSize: 12.0),
+          ),
+        ),
+      ],
     );
   }
 }
