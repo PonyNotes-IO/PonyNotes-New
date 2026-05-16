@@ -1891,21 +1891,18 @@ class _UpgradePlanCard extends StatelessWidget {
             theme,
             isYearly ? '每年存储空间' : '每月存储空间',
             storage,
-            dotCount: 1,
           ),
           const SizedBox(height: 4),
           _buildFeatureRow(
             theme,
             '工作区限制',
             workspaces,
-            dotCount: 2,
           ),
           const SizedBox(height: 4),
           _buildFeatureRow(
             theme,
             isYearly ? '每年AI对话额度' : '每月AI对话额度',
             aiQuota,
-            dotCount: 3,
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -1938,27 +1935,17 @@ class _UpgradePlanCard extends StatelessWidget {
   Widget _buildFeatureRow(
     dynamic theme,
     String label,
-    String value, {
-    required int dotCount,
-  }) {
+    String value,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(
-            3,
-            (i) => Container(
-              width: 4,
-              height: 4,
-              margin: const EdgeInsets.only(right: 2),
-              decoration: BoxDecoration(
-                color: i < dotCount
-                    ? priceColor
-                    : theme.textColorScheme.secondary.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
-              ),
-            ),
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: theme.textColorScheme.secondary,
+            shape: BoxShape.circle,
           ),
         ),
         const SizedBox(width: 6),
