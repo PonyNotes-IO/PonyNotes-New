@@ -43,13 +43,18 @@ class _SliderCaptchaState extends State<SliderCaptcha>
       duration: const Duration(milliseconds: 250),
     );
     _resetAnimation = Tween<double>(begin: 0, end: 0).animate(_resetController);
+    _resetController.addListener(() {
+      if (mounted) {
+        setState(() => _dragX = _resetAnimation.value);
+      }
+    });
   }
 
   @override
   void didUpdateWidget(SliderCaptcha oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.resetKey != oldWidget.resetKey && !_verified) {
-      _animateReset();
+    if (widget.resetKey != oldWidget.resetKey) {
+      _resetToStart();
     }
   }
 
@@ -62,12 +67,23 @@ class _SliderCaptchaState extends State<SliderCaptcha>
   double get _maxDrag => (_trackWidth - _thumbSize).clamp(0, double.infinity);
   double get _progress => _maxDrag > 0 ? _dragX / _maxDrag : 0.0;
 
-  void _animateReset() {
+  void _resetToStart({bool animated = true}) {
+    _resetController.stop();
+    if (!animated || _dragX == 0) {
+      if (_dragX == 0 && !_verified) {
+        return;
+      }
+      setState(() {
+        _dragX = 0;
+        _verified = false;
+      });
+      return;
+    }
+
+    setState(() => _verified = false);
     _resetAnimation = Tween<double>(begin: _dragX, end: 0).animate(
       CurvedAnimation(parent: _resetController, curve: Curves.easeOut),
-    )..addListener(() {
-        setState(() => _dragX = _resetAnimation.value);
-      });
+    );
     _resetController.forward(from: 0);
   }
 
@@ -77,6 +93,7 @@ class _SliderCaptchaState extends State<SliderCaptcha>
       _dragX = (_dragX + details.delta.dx).clamp(0.0, _maxDrag);
     });
     if (_progress >= _verifyThreshold) {
+      _resetController.stop();
       setState(() {
         _dragX = _maxDrag;
         _verified = true;
@@ -87,7 +104,7 @@ class _SliderCaptchaState extends State<SliderCaptcha>
 
   void _onDragEnd(DragEndDetails details) {
     if (!_verified) {
-      _animateReset();
+      _resetToStart();
     }
   }
 
@@ -187,7 +204,7 @@ class _SliderCaptchaState extends State<SliderCaptcha>
         style: TextStyle(
           fontSize: 13,
           color: theme.textColorScheme.tertiary,
-          letterSpacing: 0.5,
+          letterSpacing: 0,
         ),
       ),
     );

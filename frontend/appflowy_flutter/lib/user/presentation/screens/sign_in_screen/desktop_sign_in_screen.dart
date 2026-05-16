@@ -19,6 +19,7 @@ import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/contin
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/password_login_dialog.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/wechat_webview_dialog.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/douyin_webview_dialog.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/slider_captcha.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -314,48 +315,85 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
           // 移除了 Focus 包装器 - 键盘状态错误现在由 KeyboardStateFixTask 全局处理
           // Focus 包装器可能会干扰 TextField 的正常输入
           return Scaffold(
-              appBar: _buildAppBar(),
-              backgroundColor: theme.surfaceColorScheme.layer01,
-              body: Container(
-                width: double.infinity,
-                height: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      theme.surfaceColorScheme.layer01,
-                      theme.surfaceColorScheme.layer01,
-                    ],
-                  ),
+            appBar: _buildAppBar(),
+            backgroundColor: theme.surfaceColorScheme.layer01,
+            body: Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    theme.surfaceColorScheme.layer01,
+                    theme.surfaceColorScheme.layer01,
+                  ],
                 ),
-                child: Center(
-                  child: SingleChildScrollView(
-                    child: Container(
-                      width: 380,
-                      padding: const EdgeInsets.symmetric(vertical: 40),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Logo部分 - 小马笔记 Logo
-                          const _PonyNotesLogo(
-                            size: Size.square(60),
-                          ),
-                          const VSpace(10),
+              ),
+              child: Center(
+                child: SingleChildScrollView(
+                  child: Container(
+                    width: 380,
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Logo部分 - 小马笔记 Logo
+                        const _PonyNotesLogo(
+                          size: Size.square(60),
+                        ),
+                        const VSpace(10),
 
-                          // 标题 - 中文化
-                          Text(
-                            LocaleKeys.welcomeToPonyNotes.tr(),
-                            style: TextStyle(
-                              color: theme.textColorScheme.primary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        // 标题 - 中文化
+                        Text(
+                          LocaleKeys.welcomeToPonyNotes.tr(),
+                          style: TextStyle(
+                            color: theme.textColorScheme.primary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
                           ),
-                          const VSpace(30),
+                        ),
+                        const VSpace(30),
 
-                          // 邮箱输入框和登录按钮
-                          _EmailLoginSection(
+                        // 邮箱输入框和登录按钮
+                        _EmailLoginSection(
+                          checkTermsAgreement: () {
+                            if (!_agreedToTerms) {
+                              showToastNotification(
+                                message: "请先同意用户协议和隐私政策",
+                                type: ToastificationType.error,
+                              );
+                              return false;
+                            }
+                            return true;
+                          },
+                        ),
+                        const VSpace(12),
+                        // 快速开始按钮
+                        QuickStartButton(
+                          onTap: () {
+                            context
+                                .read<SignInBloc>()
+                                .add(const SignInEvent.signInAsGuest());
+                          },
+                          checkTermsAgreement: () {
+                            if (!_agreedToTerms) {
+                              showToastNotification(
+                                message: "请先同意用户协议和隐私政策",
+                                type: ToastificationType.error,
+                              );
+                              return false;
+                            }
+                            return true;
+                          },
+                        ),
+                        const VSpace(20),
+                        // 分割线
+                        const _OrDivider(),
+                        const VSpace(20),
+                        // 第三方登录部分
+                        if (isAuthEnabled) ...[
+                          _CustomThirdPartyButtons(
                             checkTermsAgreement: () {
                               if (!_agreedToTerms) {
                                 showToastNotification(
@@ -365,62 +403,25 @@ class _DesktopSignInScreenState extends State<DesktopSignInScreen>
                                 return false;
                               }
                               return true;
-                            },
-                          ),
-                          const VSpace(12),
-                          // 快速开始按钮
-                          QuickStartButton(
-                            onTap: () {
-                              context
-                                  .read<SignInBloc>()
-                                  .add(const SignInEvent.signInAsGuest());
-                            },
-                            checkTermsAgreement: () {
-                              if (!_agreedToTerms) {
-                                showToastNotification(
-                                  message: "请先同意用户协议和隐私政策",
-                                  type: ToastificationType.error,
-                                );
-                                return false;
-                              }
-                              return true;
-                            },
-                          ),
-                          const VSpace(20),
-                          // 分割线
-                          const _OrDivider(),
-                          const VSpace(20),
-                          // 第三方登录部分
-                          if (isAuthEnabled) ...[
-                            _CustomThirdPartyButtons(
-                              checkTermsAgreement: () {
-                                if (!_agreedToTerms) {
-                                  showToastNotification(
-                                    message: "请先同意用户协议和隐私政策",
-                                    type: ToastificationType.error,
-                                  );
-                                  return false;
-                                }
-                                return true;
-                              },
-                            ),
-                          ],
-                          const VSpace(20),
-                          // 用户协议部分（移到三方登录下方）
-                          TermsAndConditionsSection(
-                            agreedToTerms: _agreedToTerms,
-                            onAgreedToTermsChanged: (value) {
-                              setState(() {
-                                _agreedToTerms = value;
-                              });
                             },
                           ),
                         ],
-                      ),
+                        const VSpace(20),
+                        // 用户协议部分（移到三方登录下方）
+                        TermsAndConditionsSection(
+                          agreedToTerms: _agreedToTerms,
+                          onAgreedToTermsChanged: (value) {
+                            setState(() {
+                              _agreedToTerms = value;
+                            });
+                          },
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
+            ),
           ); // Scaffold结束
         },
       ),
@@ -572,6 +573,8 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _agreedToTerms = true; // 默认选中协议
+  bool _sliderVerified = false;
+  int _sliderResetNonce = 0;
 
   @override
   void initState() {
@@ -580,7 +583,10 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
   }
 
   void _onAccountInputChanged() {
-    setState(() {});
+    setState(() {
+      _sliderVerified = false;
+      _sliderResetNonce++;
+    });
   }
 
   @override
@@ -635,6 +641,14 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
     } else if (!_agreedToTerms) {
       showToastNotification(
         message: "请先同意用户协议和隐私政策",
+        type: ToastificationType.error,
+      );
+      return;
+    }
+
+    if (!_sliderVerified) {
+      showToastNotification(
+        message: "请先完成滑动验证",
         type: ToastificationType.error,
       );
       return;
@@ -757,6 +771,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
       if (!context.mounted) {
         return;
       }
+      _resetSliderCaptcha();
       showToastNotification(
         message: '发送验证码失败，请稍后重试',
         type: ToastificationType.error,
@@ -770,10 +785,12 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
 
     final state = signInBloc.state;
     if (state.emailError != null) {
+      _resetSliderCaptcha();
       return;
     }
     final navigator = Navigator.of(context);
     if (state.successOrFail?.isFailure == true) {
+      _resetSliderCaptcha();
       // 限流等错误由外层 BlocListener 展示，不再显示“已发送”成功提示
       unawaited(
         navigator.push(
@@ -783,6 +800,7 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
       return;
     }
 
+    _resetSliderCaptcha();
     showToastNotification(
       message: isEmail ? "验证码已发送，请查看您的邮箱" : "验证码已发送，请查看您的手机短信",
       type: ToastificationType.success,
@@ -822,6 +840,16 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
       cleanPhone = cleanPhone.substring(2);
     }
     return cleanPhone;
+  }
+
+  void _resetSliderCaptcha() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _sliderVerified = false;
+      _sliderResetNonce++;
+    });
   }
 
   @override
@@ -877,6 +905,13 @@ class _EmailLoginSectionState extends State<_EmailLoginSection> {
             ),
             onSubmitted: (_) => _handleSubmit(context),
           ),
+        ),
+        const VSpace(12),
+        SliderCaptcha(
+          resetKey: _sliderResetNonce,
+          onVerified: () {
+            setState(() => _sliderVerified = true);
+          },
         ),
         const VSpace(12),
 

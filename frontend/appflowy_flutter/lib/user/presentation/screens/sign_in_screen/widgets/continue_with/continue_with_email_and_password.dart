@@ -13,6 +13,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../../env/cloud_env.dart';
 import '../../../../../../startup/startup.dart';
+import '../slider_captcha.dart';
 
 class ContinueWithEmailAndPassword extends StatefulWidget {
   const ContinueWithEmailAndPassword({super.key});
@@ -31,6 +32,8 @@ class _ContinueWithEmailAndPasswordState
   bool _hasPushedContinueWithMagicLinkOrPasscodePage = false;
   bool _agreed = false;
   bool _isLoading = false;
+  bool _sliderVerified = false;
+  int _sliderResetNonce = 0;
 
   @override
   void dispose() {
@@ -88,14 +91,34 @@ class _ContinueWithEmailAndPasswordState
                   fontWeight: FontWeight.w500,
                 ),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 19, vertical: 10),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 19, vertical: 10),
               ),
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
               ),
-              onSubmitted: (value) => _signInWithEmail(context, value),
+              onChanged: (_) => _resetSliderCaptcha(),
+              onSubmitted: (value) {
+                if (!_sliderVerified) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('请先完成滑动验证'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                  return;
+                }
+                _signInWithEmail(context, value);
+              },
             ),
+          ),
+          VSpace(20),
+          SliderCaptcha(
+            resetKey: _sliderResetNonce,
+            onVerified: () {
+              setState(() => _sliderVerified = true);
+            },
           ),
           VSpace(20),
           GestureDetector(
@@ -103,7 +126,7 @@ class _ContinueWithEmailAndPasswordState
                 ? () {}
                 : () {
                     final emailOrPhone = controller.text.trim();
-                    
+
                     if (!Validator.isValidEmailOrPhone(emailOrPhone)) {
                       emailKey.currentState?.syncError(
                         errorText: '请输入有效的邮箱或手机号',
@@ -148,26 +171,30 @@ class _ContinueWithEmailAndPasswordState
                                     children: [
                                       TextSpan(text: '小马AI笔记 '),
                                       TextSpan(
-                                        text: '《${LocaleKeys.settings_mobile_userAgreement.tr()}》',
+                                        text:
+                                            '《${LocaleKeys.settings_mobile_userAgreement.tr()}》',
                                         style: TextStyle(
                                           color: const Color(0xFFFF4D4F),
                                         ),
                                         recognizer: TapGestureRecognizer()
                                           ..onTap = () {
                                             Navigator.of(dialogContext).pop();
-                                            _navigateToUserAgreement(parentContext);
+                                            _navigateToUserAgreement(
+                                                parentContext);
                                           },
                                       ),
                                       TextSpan(text: ' 和 '),
                                       TextSpan(
-                                        text: '《${LocaleKeys.settings_mobile_privacyPolicy.tr()}》',
+                                        text:
+                                            '《${LocaleKeys.settings_mobile_privacyPolicy.tr()}》',
                                         style: TextStyle(
                                           color: const Color(0xFFFF4D4F),
                                         ),
                                         recognizer: TapGestureRecognizer()
                                           ..onTap = () {
                                             Navigator.of(dialogContext).pop();
-                                            _navigateToPrivacyPolicy(parentContext);
+                                            _navigateToPrivacyPolicy(
+                                                parentContext);
                                           },
                                       ),
                                     ],
@@ -186,7 +213,8 @@ class _ContinueWithEmailAndPasswordState
                                   },
                                   child: Container(
                                     width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFFF4D4F),
                                       borderRadius: BorderRadius.circular(8),
@@ -210,7 +238,8 @@ class _ContinueWithEmailAndPasswordState
                                   },
                                   child: Container(
                                     width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       border: Border.all(
@@ -237,11 +266,21 @@ class _ContinueWithEmailAndPasswordState
                       );
                       return;
                     }
+                    if (!_sliderVerified) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('请先完成滑动验证'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
                     if (Validator.isValidEmail(emailOrPhone)) {
                       _signInWithEmail(context, emailOrPhone);
                     } else if (Validator.isValidPhone(emailOrPhone)) {
                       // 清理手机号格式（移除+86等国际区号）
-                      final cleanPhone = Validator.cleanPhoneNumber(emailOrPhone);
+                      final cleanPhone =
+                          Validator.cleanPhoneNumber(emailOrPhone);
                       _signInWithPhone(context, cleanPhone);
                     }
                   },
@@ -256,9 +295,7 @@ class _ContinueWithEmailAndPasswordState
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Text(
-                    _isLoading
-                        ? "登录中..."
-                        : "登录/注册",
+                    _isLoading ? "登录中..." : "登录/注册",
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
@@ -290,7 +327,8 @@ class _ContinueWithEmailAndPasswordState
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: _agreed ? primaryColor : const Color(0xFF979797),
+                          color:
+                              _agreed ? primaryColor : const Color(0xFF979797),
                           width: 2,
                         ),
                         color: _agreed ? primaryColor : Colors.transparent,
@@ -324,7 +362,8 @@ class _ContinueWithEmailAndPasswordState
                         },
                         child: Builder(
                           builder: (context) {
-                            final primaryColor = Theme.of(context).colorScheme.primary;
+                            final primaryColor =
+                                Theme.of(context).colorScheme.primary;
                             return Text(
                               "《用户协议》",
                               style: TextStyle(
@@ -346,7 +385,8 @@ class _ContinueWithEmailAndPasswordState
                         },
                         child: Builder(
                           builder: (context) {
-                            final primaryColor = Theme.of(context).colorScheme.primary;
+                            final primaryColor =
+                                Theme.of(context).colorScheme.primary;
                             return Text(
                               "《隐私政策》",
                               style: TextStyle(
@@ -375,7 +415,7 @@ class _ContinueWithEmailAndPasswordState
     // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
     final signInBloc = context.read<SignInBloc>();
     signInBloc.add(const SignInEvent.cancel());
-    
+
     setState(() {
       _isLoading = true;
     });
@@ -387,10 +427,10 @@ class _ContinueWithEmailAndPasswordState
           email: input,
         ),
       );
-      
+
       // 等待密码状态检查完成
       await Future.delayed(const Duration(milliseconds: 800));
-      
+
       // 获取当前状态
       final currentState = signInBloc.state;
       if (mounted) {
@@ -399,6 +439,7 @@ class _ContinueWithEmailAndPasswordState
           _pushContinueWithPasswordPage(context, input);
         } else {
           // 用户未设置密码，发送验证码并跳转到验证码输入页面
+          _resetSliderCaptcha();
           signInBloc.add(SignInEvent.signInWithMagicLink(email: input));
           _pushContinueWithMagicLinkOrPasscodePage(context, input);
         }
@@ -419,11 +460,11 @@ class _ContinueWithEmailAndPasswordState
 
   void _signInWithPhone(BuildContext context, String phone) async {
     if (_isLoading) return;
-    
+
     // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
     final signInBloc = context.read<SignInBloc>();
     signInBloc.add(const SignInEvent.cancel());
-    
+
     setState(() {
       _isLoading = true;
     });
@@ -435,10 +476,10 @@ class _ContinueWithEmailAndPasswordState
           phone: phone,
         ),
       );
-      
+
       // 等待密码状态检查完成
       await Future.delayed(const Duration(milliseconds: 800));
-      
+
       // 获取当前状态
       final currentState = signInBloc.state;
       if (mounted) {
@@ -447,6 +488,7 @@ class _ContinueWithEmailAndPasswordState
           _pushContinueWithPasswordPage(context, phone);
         } else {
           // 用户未设置密码，发送验证码并跳转到验证码输入页面
+          _resetSliderCaptcha();
           signInBloc.add(SignInEvent.signInWithMagicLink(email: phone));
           _pushContinueWithMagicLinkOrPasscodePage(context, phone);
         }
@@ -535,6 +577,7 @@ class _ContinueWithEmailAndPasswordState
               context
                   .read<SignInBloc>()
                   .add(SignInEvent.signInWithMagicLink(email: email));
+              _resetSliderCaptcha();
               _pushContinueWithMagicLinkOrPasscodePage(context, email);
             },
             child: const Text('验证码登录'),
@@ -557,7 +600,8 @@ class _ContinueWithEmailAndPasswordState
     Navigator.push(
       context,
       MaterialPageRoute(
-        settings: const RouteSettings(name: '/continue-with-email-verification'),
+        settings:
+            const RouteSettings(name: '/continue-with-email-verification'),
         builder: (context) => BlocProvider.value(
           value: signInBloc,
           child: ContinueWithMagicLinkOrPasscodePage(
@@ -577,7 +621,7 @@ class _ContinueWithEmailAndPasswordState
             onEnterPasscode: (passcode) {
               // 重置SignInBloc状态，确保没有进行中的操作阻止新的请求
               signInBloc.add(const SignInEvent.cancel());
-              
+
               // 给一点时间让cancel事件处理完成
               Future.delayed(const Duration(milliseconds: 100), () {
                 signInBloc.add(
@@ -662,5 +706,15 @@ class _ContinueWithEmailAndPasswordState
         ),
       ),
     );
+  }
+
+  void _resetSliderCaptcha() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _sliderVerified = false;
+      _sliderResetNonce++;
+    });
   }
 }
