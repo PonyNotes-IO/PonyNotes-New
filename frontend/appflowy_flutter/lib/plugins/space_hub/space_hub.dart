@@ -45,6 +45,19 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../generated/locale_keys.g.dart';
 import '../../workspace/application/tabs/tabs_bloc.dart';
 
+class SpaceHubMiddlePanelController {
+  SpaceHubMiddlePanelController._();
+
+  static final ValueNotifier<String?> _revealRequest = ValueNotifier(null);
+
+  static ValueListenable<String?> get revealRequest => _revealRequest;
+
+  static void reveal(String spaceId) {
+    _revealRequest.value = null;
+    _revealRequest.value = spaceId;
+  }
+}
+
 /// SpaceHubPluginBuilder 用于创建空间统一页面插件
 /// 左侧显示空间下的文档/文件夹列表，右侧显示选中文档的详情
 class SpaceHubPluginBuilder extends PluginBuilder {
@@ -85,7 +98,8 @@ class SpaceHubPlugin extends Plugin {
   final ViewInfoBloc _viewInfoBloc;
   final PageAccessLevelBloc _pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> _selectedViewNotifier;
-  final ValueNotifier<ViewInfoBloc?> _currentViewInfoBlocNotifier; // ✅ 用于跟踪当前文档的 ViewInfoBloc
+  final ValueNotifier<ViewInfoBloc?>
+      _currentViewInfoBlocNotifier; // ✅ 用于跟踪当前文档的 ViewInfoBloc
 
   @override
   final ViewPluginNotifier notifier;
@@ -138,7 +152,8 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   final ViewPluginNotifier notifier;
   final PageAccessLevelBloc pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
-  final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ValueNotifier<ViewInfoBloc?>
+      currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
   final ViewPB? initialSelectedView;
 
   ViewPB get view => notifier.view;
@@ -165,7 +180,8 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
               final effectiveViewInfoBloc = currentViewInfoBloc ?? bloc;
               return MultiBlocProvider(
                 providers: [
-                  BlocProvider<ViewInfoBloc>.value(value: effectiveViewInfoBloc),
+                  BlocProvider<ViewInfoBloc>.value(
+                      value: effectiveViewInfoBloc),
                 ],
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -190,7 +206,9 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
                       view: selectedView,
                     ),
                     const HSpace(10),
-                    MoreViewActions(view: selectedView, viewInfoBloc: effectiveViewInfoBloc),
+                    MoreViewActions(
+                        view: selectedView,
+                        viewInfoBloc: effectiveViewInfoBloc),
                     const HSpace(10),
                   ],
                 ),
@@ -282,7 +300,8 @@ class _SpaceHubBlocProvider extends StatefulWidget {
   final PluginContext pluginContext;
   final ViewInfoBloc bloc;
   final PageAccessLevelBloc pageAccessLevelBloc;
-  final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ValueNotifier<ViewInfoBloc?>
+      currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
   final ViewPB? initialSelectedView;
 
   @override
@@ -361,7 +380,8 @@ class _SpaceHubContent extends StatefulWidget {
   final ViewPB spaceView;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
   final Function(ViewPB, int?)? onDeleted;
-  final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ValueNotifier<ViewInfoBloc?>
+      currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
   final ViewPB? initialSelectedView;
 
   @override
@@ -386,6 +406,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   /// 为每个子文档视图创建的 ViewInfoBloc（用于字数统计）
   final List<ViewInfoBloc> _childViewInfoBlocs = [];
 
+  bool _isDocumentListVisible = true;
+
   /// 添加视图到最近访问列表（带防抖）
   void _addToRecentViews(String viewId) {
     // 防抖：如果是同一个视图，跳过
@@ -408,6 +430,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   @override
   void initState() {
     super.initState();
+    SpaceHubMiddlePanelController.revealRequest
+        .addListener(_handleRevealDocumentList);
     // 若有预选文档（从新选项卡打开），直接使用，否则尝试选第一个文档
     if (widget.initialSelectedView != null) {
       _selectedView = widget.initialSelectedView;
@@ -419,17 +443,47 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   }
 
   @override
+  void dispose() {
+    SpaceHubMiddlePanelController.revealRequest
+        .removeListener(_handleRevealDocumentList);
+    for (final bloc in _childViewInfoBlocs) {
+      bloc.close();
+    }
+    _childViewInfoBlocs.clear();
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(_SpaceHubContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     // 如果空间切换了，重置选中文档状态
     if (oldWidget.spaceView.id != widget.spaceView.id) {
       setState(() {
         _selectedView = null;
+        _isDocumentListVisible = true;
       });
       widget.selectedViewNotifier.value = null;
       // 重新尝试选中新空间的第一个文档
       _trySelectFirstDocument();
     }
+  }
+
+  void _handleRevealDocumentList() {
+    final requestedSpaceId = SpaceHubMiddlePanelController.revealRequest.value;
+    if (!mounted || requestedSpaceId != widget.spaceView.id) {
+      return;
+    }
+    if (_isDocumentListVisible) {
+      return;
+    }
+    setState(() => _isDocumentListVisible = true);
+  }
+
+  void _hideDocumentList() {
+    if (!_isDocumentListVisible) {
+      return;
+    }
+    setState(() => _isDocumentListVisible = false);
   }
 
   void _trySelectFirstDocument() {
@@ -467,9 +521,13 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     }
 
     final rightPanel = Expanded(
-      child: _selectedView != null
-          ? _buildSelectedViewContent(_selectedView!)
-          : _buildEmptyState(),
+      child: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => _hideDocumentList(),
+        child: _selectedView != null
+            ? _buildSelectedViewContent(_selectedView!)
+            : _buildEmptyState(),
+      ),
     );
 
     // ✅ 全窗口模式：隐藏 SpaceHub 左侧菜单栏（文档列表）与拖拽分隔线
@@ -490,7 +548,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           children: [
             // 左侧：空间文档列表
             Visibility(
-              visible: !isFullWindow,
+              visible: _isDocumentListVisible,
               child: Container(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 width: _leftPanelWidth,
@@ -515,8 +573,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                               FullWindowController.exit();
                             }
                             context.read<HomeSettingBloc>().add(
-                              HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
-                            );
+                                  HomeSettingEvent.changeMenuStatus(
+                                      MenuStatus.expanded),
+                                );
                           },
                         ),
                       ),
@@ -551,7 +610,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             ),
             // 可拖动分隔线 - 增强对比度并支持拖动调整大小
             Visibility(
-                visible: !isFullWindow,
+                visible: _isDocumentListVisible,
                 child: ResizableDivider(
                   initialLeftWidth: _leftPanelWidth,
                   minLeftWidth: _minLeftWidth,
@@ -581,8 +640,10 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           if (curr.currentSpace?.id != widget.spaceView.id) {
             return false;
           }
-          final prevIds = prev.currentSpace?.childViews.map((v) => v.id).join(',');
-          final currIds = curr.currentSpace?.childViews.map((v) => v.id).join(',');
+          final prevIds =
+              prev.currentSpace?.childViews.map((v) => v.id).join(',');
+          final currIds =
+              curr.currentSpace?.childViews.map((v) => v.id).join(',');
           return prev.currentSpace?.id != curr.currentSpace?.id ||
               prevIds != currIds ||
               prev.isInitialized != curr.isInitialized;
@@ -631,12 +692,14 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 
           ViewInfoBloc viewInfoBloc;
           if (existingBloc != null) {
-            Log.debug('SpaceHub: Reusing existing ViewInfoBloc for view: ${view.id}, hashCode: ${existingBloc.hashCode}');
+            Log.debug(
+                'SpaceHub: Reusing existing ViewInfoBloc for view: ${view.id}, hashCode: ${existingBloc.hashCode}');
             viewInfoBloc = existingBloc;
           } else {
             viewInfoBloc = ViewInfoBloc(view: view)
               ..add(const ViewInfoEvent.started());
-            Log.debug('SpaceHub: Created new ViewInfoBloc for view: ${view.id}, hashCode: ${viewInfoBloc.hashCode}');
+            Log.debug(
+                'SpaceHub: Created new ViewInfoBloc for view: ${view.id}, hashCode: ${viewInfoBloc.hashCode}');
             _childViewInfoBlocs.add(viewInfoBloc);
           }
 
@@ -883,15 +946,18 @@ class _SpaceDocumentList extends StatelessWidget {
                     (view) async {
                       // ✅ 关键修复：强制更新 view_type，确保即使在 Space 下创建也能正确识别
                       // 某些情况下 Space 下创建 Document 可能会丢失 extra，这里二次确认
-                      if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+                      if (pluginBuilder.pluginType ==
+                          PluginType.handwritingSaber) {
                         try {
                           await ViewBackendService.updateView(
                             viewId: view.id,
-                            extra: jsonEncode({'view_type': 'handwriting_saber'}),
+                            extra:
+                                jsonEncode({'view_type': 'handwriting_saber'}),
                           );
                           // 更新本地 view 对象，确保 UI 立即渲染正确
-                          if (view.extra.isEmpty || !view.extra.contains('view_type')) {
-                             view.extra = '{"view_type":"handwriting_saber"}';
+                          if (view.extra.isEmpty ||
+                              !view.extra.contains('view_type')) {
+                            view.extra = '{"view_type":"handwriting_saber"}';
                           }
                         } catch (e) {
                           Log.error('Failed to force update view type: $e');
@@ -919,18 +985,21 @@ class _SpaceDocumentList extends StatelessWidget {
                   );
                   await result.fold((view) async {
                     // ✅ 关键修复：强制更新 view_type (Fallback)
-                    if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
-                        try {
-                          await ViewBackendService.updateView(
-                            viewId: view.id,
-                            extra: jsonEncode({'view_type': 'handwriting_saber'}),
-                          );
-                           if (view.extra.isEmpty || !view.extra.contains('view_type')) {
-                             view.extra = '{"view_type":"handwriting_saber"}';
-                          }
-                        } catch (e) {
-                          Log.error('Failed to force update view type (fallback): $e');
+                    if (pluginBuilder.pluginType ==
+                        PluginType.handwritingSaber) {
+                      try {
+                        await ViewBackendService.updateView(
+                          viewId: view.id,
+                          extra: jsonEncode({'view_type': 'handwriting_saber'}),
+                        );
+                        if (view.extra.isEmpty ||
+                            !view.extra.contains('view_type')) {
+                          view.extra = '{"view_type":"handwriting_saber"}';
                         }
+                      } catch (e) {
+                        Log.error(
+                            'Failed to force update view type (fallback): $e');
+                      }
                     }
                     // Fallback create success
                     onViewCreated(view);

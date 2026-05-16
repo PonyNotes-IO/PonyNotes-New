@@ -1,4 +1,5 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
+import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
@@ -286,6 +287,7 @@ class _SectionFolderState extends State<SectionFolder> {
                   // 使用 SpaceBloc 打开空间（加载空间下的文档列表）
                   final spaceBloc = context.read<SpaceBloc>();
                   spaceBloc.add(SpaceEvent.open(space: view));
+                  SpaceHubMiddlePanelController.reveal(view.id);
 
                   // 打开空间统一页面插件
                   if (HardwareKeyboard.instance.isControlPressed) {

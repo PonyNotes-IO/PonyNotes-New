@@ -98,7 +98,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                   children: [
                     if (UniversalPlatform.isWindows && useCustomWindowTitleBar)
                       WindowTitleBar(
-                        leftChildren: [_buildToggleMenuButton(context)],
+                        leftChildren: [_buildTitleBarControls(context)],
                       ),
                     Padding(
                       padding: EdgeInsets.only(left: widget.layout.menuSpacing),
@@ -144,12 +144,11 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                                               ],
                                             ),
                                           ),
-                                          if (!isFullWindow)
-                                            SecondaryView(
-                                              pageManager: pm,
-                                              adaptedPercentageWidth:
-                                                  constraints.maxWidth * 3 / 7,
-                                            ),
+                                          SecondaryView(
+                                            pageManager: pm,
+                                            adaptedPercentageWidth:
+                                                constraints.maxWidth * 3 / 7,
+                                          ),
                                         ],
                                       );
                                     },
@@ -216,11 +215,21 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     );
   }
 
-  Widget _buildToggleMenuButton(BuildContext context) {
-    if (context.read<HomeSettingBloc>().isMenuExpanded) {
-      return const SizedBox.shrink();
-    }
+  Widget _buildTitleBarControls(BuildContext context) {
+    return SizedBox(
+      height: HomeSizes.topBarHeight,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleMenuButton(context),
+          const HSpace(4),
+          _buildFullWindowButton(context),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildToggleMenuButton(BuildContext context) {
     final textSpan = TextSpan(
       children: [
         TextSpan(
@@ -252,13 +261,52 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
           child: Container(
             width: 24,
             padding: const EdgeInsets.all(4),
-            child: const RotatedBox(
-              quarterTurns: 2,
-              child: FlowySvg(FlowySvgs.hide_menu_s),
+            child: RotatedBox(
+              quarterTurns:
+                  context.read<HomeSettingBloc>().isMenuExpanded ? 0 : 2,
+              child: const FlowySvg(FlowySvgs.hide_menu_s),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildFullWindowButton(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        return FlowyTooltip(
+          message: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+          child: FlowyHover(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                splashRadius: 16,
+                iconSize: 18,
+                icon: Icon(
+                  isFullWindow
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                onPressed: () {
+                  if (!FullWindowController.isFullWindow.value) {
+                    context.read<HomeSettingBloc>().add(
+                          const HomeSettingEvent.changeMenuStatus(
+                            MenuStatus.hidden,
+                          ),
+                        );
+                  }
+                  FullWindowController.toggle();
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

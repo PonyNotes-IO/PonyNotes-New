@@ -807,21 +807,25 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 ),
                 const HSpace(6),
                 // 小马笔记文字和向下箭头
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FlowyText.medium(
-                      LocaleKeys.sidebar_appName.tr(),
-                      color: Theme.of(context).colorScheme.tertiary,
-                      overflow: TextOverflow.ellipsis,
-                      fontSize: 15.0,
-                    ),
-                    const HSpace(2), // 紧贴文字的小间距
-                    FlowySvg(
-                      FlowySvgs.drop_menu_show_s,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ],
+                Flexible(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: FlowyText.medium(
+                          LocaleKeys.sidebar_appName.tr(),
+                          color: Theme.of(context).colorScheme.tertiary,
+                          overflow: TextOverflow.ellipsis,
+                          fontSize: 15.0,
+                        ),
+                      ),
+                      const HSpace(2),
+                      FlowySvg(
+                        FlowySvgs.drop_menu_show_s,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ],
+                  ),
                 ),
                 const Spacer(), // 推送按钮到右边
                 // 云同步按钮 (fill header height)

@@ -355,7 +355,8 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     bool isFullWindow = false,
   }) {
     final isSliderbarShowing = layout.showMenu;
-    final isDrawerMenu = isSliderbarShowing && layout.menuIsDrawer;
+    final isDrawerMenu =
+        isSliderbarShowing && (layout.menuIsDrawer || isFullWindow);
     // 全窗口时主内容区铺满；非全窗口时为主内容区留出左侧偏移
     final homeStackLeft = isFullWindow ? 0.0 : layout.homePageLOffset;
     final homeStackRight = layout.homePageROffset;
@@ -404,7 +405,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
               width: layout.notificationPanelWidth,
               bottom: 0,
             ),
-        if (!isFullWindow && isDrawerMenu)
+        if (isDrawerMenu)
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -421,9 +422,9 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
           left: 0,
           top: isDrawerMenu ? 12 : 0,
           bottom: isDrawerMenu ? 12 : 0,
-          width: isFullWindow ? 0 : layout.menuWidth,
+          width: layout.menuWidth,
           child: Visibility(
-            visible: !isFullWindow,
+            visible: isSliderbarShowing,
             maintainState: true,
             child: (isDrawerMenu
                     ? ClipRRect(
@@ -454,7 +455,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                 layout.animDuration, Curves.easeOutQuad),
           ),
         ),
-        if (!isFullWindow && !isSliderbarShowing)
+        if (!isSliderbarShowing)
           Positioned(
             left: 6,
             top: Platform.isWindows ? 56 : 12,
