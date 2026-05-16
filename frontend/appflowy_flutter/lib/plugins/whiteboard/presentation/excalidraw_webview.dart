@@ -1086,6 +1086,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
   /// 注意：此方法会重置整个场景
   Future<void> loadData(Map<String, dynamic> data) async {
     try {
+      if (mounted) {
+        setState(() => _isInitializing = true);
+      }
       await _safeEvalJs('''
         if (window.loadExcalidrawData) {
           window.loadExcalidrawData(${jsonEncode(data)});
@@ -1096,6 +1099,10 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
       await reinitializeUI();
     } catch (e) {
       widget.onError?.call('加载数据失败: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isInitializing = false);
+      }
     }
   }
 
