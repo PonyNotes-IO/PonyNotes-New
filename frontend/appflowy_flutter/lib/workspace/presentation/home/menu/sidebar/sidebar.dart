@@ -71,11 +71,14 @@ class HomeSideBar extends StatelessWidget {
     super.key,
     required this.userProfile,
     required this.workspaceSetting,
+    this.isDrawerMenu = false,
   });
 
   final UserProfilePB userProfile;
 
   final WorkspaceLatestPB workspaceSetting;
+
+  final bool isDrawerMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -336,7 +339,10 @@ class HomeSideBar extends StatelessWidget {
                   },
                 ),
               ],
-              child: _Sidebar(userProfile: userProfile),
+              child: _Sidebar(
+                userProfile: userProfile,
+                isDrawerMenu: isDrawerMenu,
+              ),
             ),
           );
         },
@@ -417,9 +423,14 @@ class HomeSideBar extends StatelessWidget {
 }
 
 class _Sidebar extends StatefulWidget {
-  const _Sidebar({required this.userProfile});
+  const _Sidebar({
+    required this.userProfile,
+    required this.isDrawerMenu,
+  });
 
   final UserProfilePB userProfile;
+
+  final bool isDrawerMenu;
 
   @override
   State<_Sidebar> createState() => _SidebarState();
@@ -479,7 +490,10 @@ class _SidebarState extends State<_Sidebar> {
                   ? HomeSizes.workspaceSectionHeight + 8
                   : HomeSizes.workspaceSectionHeight,
               padding: menuHorizontalInset - const EdgeInsets.only(right: 6),
-              child: _PonyNotesHeader(userProfile: widget.userProfile),
+              child: _PonyNotesHeader(
+                userProfile: widget.userProfile,
+                isDrawerMenu: widget.isDrawerMenu,
+              ),
             ),
             if (FeatureFlag.search.isOn) ...[
               const VSpace(6),
@@ -730,9 +744,14 @@ class _SidebarSearchButton extends StatelessWidget {
 }
 
 class _PonyNotesHeader extends StatefulWidget {
-  const _PonyNotesHeader({required this.userProfile});
+  const _PonyNotesHeader({
+    required this.userProfile,
+    required this.isDrawerMenu,
+  });
 
   final UserProfilePB userProfile;
+
+  final bool isDrawerMenu;
 
   @override
   State<_PonyNotesHeader> createState() => _PonyNotesHeaderState();
@@ -845,7 +864,9 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 ValueListenableBuilder<bool>(
                   valueListenable: FullWindowController.isFullWindow,
                   builder: (context, isFullWindow, _) {
-                    if (isFullWindow) {
+                    final shouldCollapseHeaderActions =
+                        widget.isDrawerMenu || isFullWindow;
+                    if (shouldCollapseHeaderActions) {
                       return Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -879,7 +900,9 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 ValueListenableBuilder<bool>(
                   valueListenable: FullWindowController.isFullWindow,
                   builder: (context, isFullWindow, _) {
-                    if (!Platform.isWindows || isFullWindow) {
+                    if (!Platform.isWindows ||
+                        widget.isDrawerMenu ||
+                        isFullWindow) {
                       return const SizedBox.shrink();
                     }
                     return Row(

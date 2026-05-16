@@ -172,7 +172,8 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                         PluginType.blank) {
                       if (view.id.isEmpty) {
                         Log.error(
-                            'DesktopHomeScreen: latestView.id is empty, skip opening plugin');
+                          'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
+                        );
                       } else {
                         getIt<TabsBloc>().openPlugin(view);
                       }
@@ -200,7 +201,9 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                           previous.workspaces.length !=
                               current.workspaces.length ||
                           _workspacesChanged(
-                              previous.workspaces, current.workspaces) ||
+                            previous.workspaces,
+                            current.workspaces,
+                          ) ||
                           (previous.actionResult?.actionType ==
                                   WorkspaceActionType.create &&
                               current.actionResult?.actionType ==
@@ -312,6 +315,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
     final homeMenu = HomeSideBar(
       userProfile: userProfile,
       workspaceSetting: workspaceSetting,
+      isDrawerMenu: layout.menuIsDrawer,
     );
     return FocusTraversalGroup(child: RepaintBoundary(child: homeMenu));
   }
@@ -413,7 +417,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                     const HomeSettingEvent.changeMenuStatus(MenuStatus.hidden),
                   ),
               child: ColoredBox(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
               ),
             ),
           ),
@@ -452,7 +456,9 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
             visible: !isFullWindow && !isDrawerMenu,
             maintainState: true,
             child: homeMenuResizer.animate(
-                layout.animDuration, Curves.easeOutQuad),
+              layout.animDuration,
+              Curves.easeOutQuad,
+            ),
           ),
         ),
         if (!isSliderbarShowing)
@@ -583,7 +589,8 @@ class _WorkspaceLifecycleRefresherState
       },
     );
     LogUtils.info(
-        'WorkspaceLifecycleRefresher: started periodic refresh timer');
+      'WorkspaceLifecycleRefresher: started periodic refresh timer',
+    );
   }
 
   @override
@@ -617,10 +624,14 @@ class _WorkspaceLifecycleRefresherState
           ?.workspaceId;
       // 检查会员状态
       await context.checkMembershipStatus(workspaceId: workspaceId);
+      if (!mounted) {
+        return;
+      }
 
       // 检查存储限制
       await context.checkAndHandleCloudSyncStorageLimit(
-          workspaceId: workspaceId);
+        workspaceId: workspaceId,
+      );
     } catch (e) {
       Log.error('Failed to check membership status: $e');
     }
@@ -681,7 +692,8 @@ class DesktopHomeScreenStackAdaptor extends HomeStackDelegate {
 
             if (lastView.id.isEmpty) {
               Log.error(
-                  'DesktopHomeScreen: lastView.id is empty, skip opening plugin');
+                'DesktopHomeScreen: lastView.id is empty, skip opening plugin',
+              );
               return;
             }
             return getIt<TabsBloc>().openPlugin(lastView);
