@@ -27,6 +27,7 @@ import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/home/home_bloc.dart';
 import 'package:appflowy/workspace/presentation/command_palette/command_palette.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/header/sidebar_top_menu.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_folder.dart';
@@ -156,10 +157,12 @@ class HomeSideBar extends StatelessWidget {
                     if (view != null) {
                       if (view.id.isEmpty) {
                         Log.error(
-                            'Sidebar: lastCreatedRootView.id is empty, aborting openPlugin');
+                          'Sidebar: lastCreatedRootView.id is empty, aborting openPlugin',
+                        );
                         // Open a blank page as a safe fallback to avoid passing empty id downstream.
                         context.read<TabsBloc>().add(
-                            TabsEvent.openPlugin(plugin: BlankPagePlugin()));
+                              TabsEvent.openPlugin(plugin: BlankPagePlugin()),
+                            );
                       } else {
                         context.read<TabsBloc>().openPlugin(view);
                       }
@@ -170,23 +173,27 @@ class HomeSideBar extends StatelessWidget {
                   listenWhen: (prev, curr) =>
                       prev.lastCreatedPage?.id != curr.lastCreatedPage?.id ||
                       prev.isDuplicatingSpace != curr.isDuplicatingSpace ||
-                      (prev.currentSpace?.id != curr.currentSpace?.id && curr.currentSpace?.isSpace == true),
+                      (prev.currentSpace?.id != curr.currentSpace?.id &&
+                          curr.currentSpace?.isSpace == true),
                   listener: (context, state) {
                     final page = state.lastCreatedPage;
                     final currentSpace = state.currentSpace;
-                    
+
                     // 如果当前空间存在且是空间类型视图
                     if (currentSpace != null && currentSpace.isSpace) {
                       // 检查当前打开的插件是否是空间统一页面（SpaceHubPlugin）
                       final tabsBloc = context.read<TabsBloc>();
-                      final currentPageManager = tabsBloc.state.currentPageManager;
+                      final currentPageManager =
+                          tabsBloc.state.currentPageManager;
                       final currentPlugin = currentPageManager.plugin;
-                      
+
                       // SpaceHubPlugin 的 id 是空间的 id，pluginType 是 folder
-                      if (currentPlugin.id == currentSpace.id && 
+                      if (currentPlugin.id == currentSpace.id &&
                           currentPlugin.pluginType == PluginType.folder) {
                         // 当前已经打开了空间统一页面，不需要做任何操作
-                        Log.info('[SIDEBAR] Space hub is already open, skipping auto-open');
+                        Log.info(
+                          '[SIDEBAR] Space hub is already open, skipping auto-open',
+                        );
                         if (state.isDuplicatingSpace) {
                           _duplicateSpaceLoading ??= Loading(context);
                           _duplicateSpaceLoading?.start();
@@ -196,15 +203,17 @@ class HomeSideBar extends StatelessWidget {
                         }
                         return;
                       }
-                      
+
                       // 如果当前没有打开空间统一页面，且 lastCreatedPage 是空间的子视图
                       // 说明这是通过 SpaceEvent.open 设置的，应该打开空间统一页面而不是文档
-                      if (page != null && 
+                      if (page != null &&
                           page.id.isNotEmpty &&
                           currentSpace.childViews.any((v) => v.id == page.id)) {
                         if (currentPlugin.pluginType == PluginType.blank) {
                           // 仅在空白页阶段自动打开空间统一页面，避免抢占当前业务页面（如文件库/日历）
-                          Log.info('[SIDEBAR] Opening space hub for space: ${currentSpace.name}');
+                          Log.info(
+                            '[SIDEBAR] Opening space hub for space: ${currentSpace.name}',
+                          );
                           context.read<TabsBloc>().openPlugin(currentSpace);
                         } else {
                           Log.info(
@@ -220,12 +229,14 @@ class HomeSideBar extends StatelessWidget {
                         }
                         return;
                       }
-                      
+
                       // 如果空间刚被设置为 currentSpace，但没有 lastCreatedPage
                       // 说明是工作区切换后自动加载的空间，应该打开空间统一页面
                       if (page == null || page.id.isEmpty) {
                         if (currentPlugin.pluginType == PluginType.blank) {
-                          Log.info('[SIDEBAR] Opening space hub after workspace switch: ${currentSpace.name}');
+                          Log.info(
+                            '[SIDEBAR] Opening space hub after workspace switch: ${currentSpace.name}',
+                          );
                           context.read<TabsBloc>().openPlugin(currentSpace);
                         } else {
                           Log.info(
@@ -242,7 +253,7 @@ class HomeSideBar extends StatelessWidget {
                         return;
                       }
                     }
-                    
+
                     // 非空间类型或普通文档的处理
                     if (page == null || page.id.isEmpty) {
                       // open the blank page
@@ -455,12 +466,13 @@ class _SidebarState extends State<_Sidebar> {
           children: [
             // top menu (hide on Windows)
             !Platform.isWindows
-             ? Padding(
-                padding: menuHorizontalInset,
-                child: SidebarTopMenu(
-                  isSidebarOnHover: _isHovered,
-                ),
-              ): HSpace(12),
+                ? Padding(
+                    padding: menuHorizontalInset,
+                    child: SidebarTopMenu(
+                      isSidebarOnHover: _isHovered,
+                    ),
+                  )
+                : HSpace(12),
             // PonyNotes custom header
             Container(
               height: Platform.isWindows
@@ -498,7 +510,8 @@ class _SidebarState extends State<_Sidebar> {
             const VSpace(14),
             // Fixed bottom actions (trash, settings) - keep outside the scrollable area
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
@@ -727,6 +740,7 @@ class _PonyNotesHeader extends StatefulWidget {
 
 class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
   final PopoverController _popoverController = PopoverController();
+  final PopoverController _headerActionsPopoverController = PopoverController();
 
   @override
   Widget build(BuildContext context) {
@@ -791,7 +805,6 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                     borderRadius: BorderRadius.circular(8.0),
                     color: const Color(0xFFFBE8FB),
                     border: Border.all(
-                      width: 1,
                       color: const Color(0x19171717),
                     ),
                   ),
@@ -829,59 +842,174 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                 ),
                 const Spacer(), // 推送按钮到右边
                 // 云同步按钮 (fill header height)
-                SizedBox(
-                  height: Platform.isWindows
-                      ? HomeSizes.workspaceSectionHeight + 8
-                      : HomeSizes.workspaceSectionHeight,
-                  child: Center(child: const SidebarCloudSyncButton()),
-                ),
-                const HSpace(8.0),
-                // 上传按钮
-                SizedBox(
-                  height: Platform.isWindows
-                      ? HomeSizes.workspaceSectionHeight + 8
-                      : HomeSizes.workspaceSectionHeight,
-                  child: Center(child: const SidebarUploadButton()),
-                ),
-                const HSpace(8.0),
-                // 消息按钮
-                SizedBox(
-                  height: Platform.isWindows
-                      ? HomeSizes.workspaceSectionHeight + 8
-                      : HomeSizes.workspaceSectionHeight,
-                  child: Center(
-                      child: NotificationButton(
-                          key: ValueKey(widget.userProfile.id))),
-                ),
-                // 在 Windows 上将收起按钮放在通知右侧
-                if (Platform.isWindows) ...[
-                  const HSpace(8.0),
-                  SizedBox(
-                    height: Platform.isWindows
-                        ? HomeSizes.workspaceSectionHeight + 8
-                        : HomeSizes.workspaceSectionHeight,
-                    child: Center(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.translucent,
-                        onTap: () =>
-                            context.read<HomeSettingBloc>().collapseMenu(),
-                        child: SizedBox(
-                          width: 24,
-                          child: FlowySvg(
-                            FlowySvgs.double_back_arrow_m,
-                            color: AppFlowyTheme.of(context)
-                                .iconColorScheme
-                                .secondary,
+                ValueListenableBuilder<bool>(
+                  valueListenable: FullWindowController.isFullWindow,
+                  builder: (context, isFullWindow, _) {
+                    if (isFullWindow) {
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildHeaderActionsMoreButton(context),
+                          const HSpace(6.0),
+                          _buildHeaderFullWindowButton(context, isFullWindow),
+                        ],
+                      );
+                    }
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildHeaderActionSlot(
+                          const SidebarCloudSyncButton(),
+                        ),
+                        const HSpace(8.0),
+                        _buildHeaderActionSlot(
+                          const SidebarUploadButton(),
+                        ),
+                        const HSpace(8.0),
+                        _buildHeaderActionSlot(
+                          NotificationButton(
+                            key: ValueKey(widget.userProfile.id),
                           ),
                         ),
-                      ),
-                    ),
-                  ),
-                ],
+                      ],
+                    );
+                  },
+                ),
+                // 在 Windows 上将收起按钮放在通知右侧
+                ValueListenableBuilder<bool>(
+                  valueListenable: FullWindowController.isFullWindow,
+                  builder: (context, isFullWindow, _) {
+                    if (!Platform.isWindows || isFullWindow) {
+                      return const SizedBox.shrink();
+                    }
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const HSpace(8.0),
+                        SizedBox(
+                          height: HomeSizes.workspaceSectionHeight + 8,
+                          child: Center(
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: () => context
+                                  .read<HomeSettingBloc>()
+                                  .collapseMenu(),
+                              child: SizedBox(
+                                width: 24,
+                                child: FlowySvg(
+                                  FlowySvgs.double_back_arrow_m,
+                                  color: AppFlowyTheme.of(context)
+                                      .iconColorScheme
+                                      .secondary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
                 const HSpace(10.0),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderActionSlot(Widget child) {
+    return SizedBox(
+      height: Platform.isWindows
+          ? HomeSizes.workspaceSectionHeight + 8
+          : HomeSizes.workspaceSectionHeight,
+      child: Center(child: child),
+    );
+  }
+
+  Widget _buildHeaderActionsMoreButton(BuildContext context) {
+    return AppFlowyPopover(
+      controller: _headerActionsPopoverController,
+      direction: PopoverDirection.bottomWithCenterAligned,
+      clickHandler: PopoverClickHandler.gestureDetector,
+      constraints: const BoxConstraints(maxWidth: 180, maxHeight: 72),
+      margin: EdgeInsets.zero,
+      offset: const Offset(0, 8),
+      popupBuilder: (_) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: colorScheme.copyWith(onSurface: Colors.white),
+          ),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.24),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SidebarCloudSyncButton(isHover: true),
+                  const HSpace(18),
+                  const SidebarUploadButton(isHover: true),
+                  const HSpace(18),
+                  NotificationButton(
+                    key: ValueKey('${widget.userProfile.id}_drawer_more'),
+                    isHover: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      child: FlowyTooltip(
+        message: LocaleKeys.menuAppHeader_moreButtonToolTip.tr(),
+        child: SizedBox.square(
+          dimension: 28,
+          child: FlowyButton(
+            useIntrinsicWidth: true,
+            margin: EdgeInsets.zero,
+            text: FlowySvg(
+              FlowySvgs.workspace_three_dots_s,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            onTap: () => _headerActionsPopoverController.show(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderFullWindowButton(
+    BuildContext context,
+    bool isFullWindow,
+  ) {
+    return FlowyTooltip(
+      message: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+      child: SizedBox.square(
+        dimension: 28,
+        child: FlowyButton(
+          useIntrinsicWidth: true,
+          margin: EdgeInsets.zero,
+          text: Icon(
+            isFullWindow
+                ? Icons.fullscreen_exit_rounded
+                : Icons.fullscreen_rounded,
+            size: 20,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+          onTap: FullWindowController.toggle,
         ),
       ),
     );
