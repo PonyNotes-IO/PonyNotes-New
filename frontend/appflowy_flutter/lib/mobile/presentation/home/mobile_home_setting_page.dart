@@ -1660,60 +1660,57 @@ class _UpgradePlanBody extends StatelessWidget {
       {'label': '云端空间', 'icon': FlowySvgs.icon_rights_storage_xl},
     ];
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '获赠权益',
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.primary,
-            ).copyWith(fontSize: 16, fontWeight: FontWeight.w600),
-            textAlign: TextAlign.left,
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 16,
-            runSpacing: 12,
-            alignment: WrapAlignment.center,
-            children: benefits.map((benefit) {
-              return SizedBox(
-                width: 70,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: isDarkMode ? Colors.white : null,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: FlowySvg(
-                          benefit['icon'] as FlowySvgData,
-                          size: const Size(48, 48),
-                          blendMode: null,
-                        ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '获赠权益',
+          style: theme.textStyle.body.standard(
+            color: theme.textColorScheme.primary,
+          ).copyWith(fontSize: 16, fontWeight: FontWeight.w600),
+          textAlign: TextAlign.left,
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          alignment: WrapAlignment.start,
+          children: benefits.map((benefit) {
+            return SizedBox(
+              width: 70,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: isDarkMode ? Colors.white : null,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: FlowySvg(
+                        benefit['icon'] as FlowySvgData,
+                        size: const Size(48, 48),
+                        blendMode: null,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      benefit['label'] as String,
-                      style: theme.textStyle.body.standard(
-                        color: theme.textColorScheme.secondary,
-                      ).copyWith(fontSize: 11),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    benefit['label'] as String,
+                    style: theme.textStyle.body.standard(
+                      color: theme.textColorScheme.secondary,
+                    ).copyWith(fontSize: 11),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
