@@ -4,6 +4,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/edit_username_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/email_bind_page.dart';
+import 'package:appflowy/mobile/presentation/setting/personal_info/identity_verification_page.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/phone_bind_page.dart';
 import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_trailing.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_util.dart';
@@ -116,7 +117,7 @@ class PersonalInfoSettingGroup extends StatelessWidget {
                         text: _maskPhone(profile.phone),
                       ),
                       onTap: () {
-                        context.push(MobilePhoneBindPage.routeName);
+                        _showPhoneChangeFlow(context, profile);
                       },
                     )
                   else if (isServerUser)
@@ -137,7 +138,7 @@ class PersonalInfoSettingGroup extends StatelessWidget {
                         text: _maskEmail(profile.email),
                       ),
                       onTap: () {
-                        context.push(MobileEmailBindPage.routeName);
+                        _showEmailChangeFlow(context, profile);
                       },
                     ),
                 ],
@@ -161,6 +162,43 @@ class PersonalInfoSettingGroup extends StatelessWidget {
     final local = parts[0];
     if (local.length <= 3) return email;
     return '${local.substring(0, 3)}***@${parts[1]}';
+  }
+
+  void _showPhoneChangeFlow(BuildContext context, UserProfilePB profile) {
+    // 已有手机号 → 先身份验证，再换绑
+    final phoneNumber = profile.phone.isNotEmpty ? profile.phone : profile.email;
+    context.push(
+      MobileIdentityVerificationPage.routeName,
+      extra: {
+        'phoneNumber': phoneNumber,
+        'emailAddress': profile.email,
+        'onVerified': () {
+          // 身份验证通过后，跳转到换绑页面
+          context.push(MobilePhoneBindPage.routeName).then((_) {
+            // 刷新用户资料
+            onUserProfileUpdated?.call();
+          });
+        },
+      },
+    );
+  }
+
+  void _showEmailChangeFlow(BuildContext context, UserProfilePB profile) {
+    // 已有邮箱 → 先身份验证，再换绑
+    context.push(
+      MobileIdentityVerificationPage.routeName,
+      extra: {
+        'phoneNumber': profile.phone,
+        'emailAddress': profile.email,
+        'onVerified': () {
+          // 身份验证通过后，跳转到换绑页面
+          context.push(MobileEmailBindPage.routeName).then((_) {
+            // 刷新用户资料
+            onUserProfileUpdated?.call();
+          });
+        },
+      },
+    );
   }
 }
 

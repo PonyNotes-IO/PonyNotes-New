@@ -18,6 +18,7 @@ import 'package:appflowy/mobile/presentation/search/mobile_search_page.dart';
 import 'package:appflowy/mobile/presentation/setting/cloud/appflowy_cloud_page.dart';
 import 'package:appflowy/mobile/presentation/setting/appearance/appearance_page.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/email_bind_page.dart';
+import 'package:appflowy/mobile/presentation/setting/personal_info/identity_verification_page.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/phone_bind_page.dart';
 import 'package:appflowy/mobile/presentation/setting/about/about_page.dart';
 import 'package:appflowy/mobile/presentation/setting/datetime/datetime_page.dart';
@@ -78,6 +79,7 @@ GoRouter generateRouter(Widget child) {
         _mobileAppearancePageRoute(),
         _mobileDateTimePageRoute(),
         _mobileAboutPageRoute(),
+        _mobileIdentityVerificationPageRoute(),
         _mobilePhoneBindPageRoute(),
         _mobileEmailBindPageRoute(),
 
@@ -359,6 +361,24 @@ GoRoute _mobileAboutPageRoute() {
       return const MaterialExtendedPage(
         child: AboutPage(),
         name: AboutPage.routeName,
+      );
+    },
+  );
+}
+
+GoRoute _mobileIdentityVerificationPageRoute() {
+  return GoRoute(
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    path: MobileIdentityVerificationPage.routeName,
+    pageBuilder: (context, state) {
+      final extra = state.extra as Map<String, dynamic>?;
+      return MaterialExtendedPage(
+        child: MobileIdentityVerificationPage(
+          phoneNumber: extra?['phoneNumber'] ?? '',
+          emailAddress: extra?['emailAddress'],
+          onVerificationComplete: extra?['onVerified'] ?? () {},
+        ),
+        name: MobileIdentityVerificationPage.routeName,
       );
     },
   );
