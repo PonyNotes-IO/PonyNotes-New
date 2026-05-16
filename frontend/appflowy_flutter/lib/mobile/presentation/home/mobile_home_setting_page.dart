@@ -1517,44 +1517,65 @@ class _MobileUpgradePlanPageState extends State<_MobileUpgradePlanPage> {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
+    final pageTheme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.surfaceColorScheme.primary,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: theme.iconColorScheme.primary,
+      backgroundColor: pageTheme.scaffoldBackgroundColor,
+      body: Column(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: pageTheme.scaffoldBackgroundColor,
+                border: Border(
+                  bottom: BorderSide(
+                    color: pageTheme.dividerColor.withValues(alpha: 0.5),
+                    width: 0.5,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: FlowySvg(
+                      FlowySvgs.mobile_return_s,
+                      size: const Size(7, 12),
+                      color: theme.iconColorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '会员升级',
+                      style: theme.textStyle.heading4.standard(
+                        color: theme.textColorScheme.primary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
           ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          '会员升级',
-          style: theme.textStyle.heading4.standard(
-            color: theme.textColorScheme.primary,
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _UpgradePlanBody(
+                subscriptionInfo: widget.subscriptionInfo,
+                billingPeriod: _billingPeriod,
+                onBillingPeriodChanged: (period) {
+                  setState(() => _billingPeriod = period);
+                },
+              ),
+            ),
           ),
-        ),
-        centerTitle: true,
-      ),
-      body: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: theme.surfaceColorScheme.primary,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-        ),
-        child: _UpgradePlanBody(
-          subscriptionInfo: widget.subscriptionInfo,
-          billingPeriod: _billingPeriod,
-          onBillingPeriodChanged: (period) {
-            setState(() => _billingPeriod = period);
-          },
-        ),
+        ],
       ),
     );
   }
@@ -1702,11 +1723,11 @@ class _UpgradePlanBody extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     final benefits = [
-      {'label': '小马AI', 'icon': FlowySvgs.m_rights_ai_xl},
-      {'label': '小马日历', 'icon': FlowySvgs.m_rights_calender_xl},
-      {'label': '云端同步', 'icon': FlowySvgs.m_rights_cloud_xl},
-      {'label': '小马收藏夹', 'icon': FlowySvgs.m_rights_collect_xl},
-      {'label': '云端空间', 'icon': FlowySvgs.m_rights_storage_xl},
+      {'label': '小马AI', 'iconLight': FlowySvgs.m_rights_ai_xl, 'iconDark': FlowySvgs.md_rights_ai_xl},
+      {'label': '小马日历', 'iconLight': FlowySvgs.m_rights_calender_xl, 'iconDark': FlowySvgs.md_rights_calender_xl},
+      {'label': '云端同步', 'iconLight': FlowySvgs.m_rights_cloud_xl, 'iconDark': FlowySvgs.md_rights_cloud_xl},
+      {'label': '小马收藏夹', 'iconLight': FlowySvgs.m_rights_collect_xl, 'iconDark': FlowySvgs.md_rights_collect_xl},
+      {'label': '云端空间', 'iconLight': FlowySvgs.m_rights_storage_xl, 'iconDark': FlowySvgs.md_rights_storage_xl},
     ];
 
     return Column(
@@ -1723,20 +1744,20 @@ class _UpgradePlanBody extends StatelessWidget {
         // 第一排：3个
         Row(
           children: [
-            Expanded(child: _BenefitCard(label: benefits[0]['label'] as String, icon: benefits[0]['icon'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            Expanded(child: _BenefitCard(label: benefits[0]['label'] as String, icon: isDarkMode ? benefits[0]['iconDark'] as FlowySvgData : benefits[0]['iconLight'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
             const SizedBox(width: 8),
-            Expanded(child: _BenefitCard(label: benefits[1]['label'] as String, icon: benefits[1]['icon'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            Expanded(child: _BenefitCard(label: benefits[1]['label'] as String, icon: isDarkMode ? benefits[1]['iconDark'] as FlowySvgData : benefits[1]['iconLight'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
             const SizedBox(width: 8),
-            Expanded(child: _BenefitCard(label: benefits[2]['label'] as String, icon: benefits[2]['icon'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            Expanded(child: _BenefitCard(label: benefits[2]['label'] as String, icon: isDarkMode ? benefits[2]['iconDark'] as FlowySvgData : benefits[2]['iconLight'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
           ],
         ),
         const SizedBox(height: 8),
         // 第二排：2个居中
         Row(
           children: [
-            Expanded(child: _BenefitCard(label: benefits[3]['label'] as String, icon: benefits[3]['icon'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            Expanded(child: _BenefitCard(label: benefits[3]['label'] as String, icon: isDarkMode ? benefits[3]['iconDark'] as FlowySvgData : benefits[3]['iconLight'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
             const SizedBox(width: 8),
-            Expanded(child: _BenefitCard(label: benefits[4]['label'] as String, icon: benefits[4]['icon'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            Expanded(child: _BenefitCard(label: benefits[4]['label'] as String, icon: isDarkMode ? benefits[4]['iconDark'] as FlowySvgData : benefits[4]['iconLight'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
           ],
         ),
       ],
