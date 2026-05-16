@@ -1552,7 +1552,7 @@ class _UpgradePlanBody extends StatelessWidget {
           const SizedBox(height: 24),
           SizedBox(
             height: 340,
-            child: _buildUpgradePlanCards(),
+            child: _buildUpgradePlanCards(context),
           ),
         ],
       ),
@@ -1706,7 +1706,10 @@ class _UpgradePlanBody extends StatelessWidget {
     );
   }
 
-  Widget _buildUpgradePlanCards() {
+  Widget _buildUpgradePlanCards(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardWidth = screenWidth - 48;
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
@@ -1723,6 +1726,7 @@ class _UpgradePlanBody extends StatelessWidget {
             priceColor: const Color(0xFF4A7C59),
             priceBgColor: const Color(0xFFE8F5E9),
             isYearly: billingPeriod == _BillingPeriod.yearly,
+            cardWidth: cardWidth,
           ),
           const SizedBox(width: 12),
           _UpgradePlanCard(
@@ -1737,6 +1741,7 @@ class _UpgradePlanBody extends StatelessWidget {
             priceBgColor: const Color(0xFFE3F2FD),
             priceColor2: Colors.white,
             isYearly: billingPeriod == _BillingPeriod.yearly,
+            cardWidth: cardWidth,
           ),
           const SizedBox(width: 12),
           _UpgradePlanCard(
@@ -1752,6 +1757,7 @@ class _UpgradePlanBody extends StatelessWidget {
             priceColor2: const Color(0xFFF9D8A7),
             isHighlighted: true,
             isYearly: billingPeriod == _BillingPeriod.yearly,
+            cardWidth: cardWidth,
           ),
           const SizedBox(width: 12),
           _UpgradePlanCard(
@@ -1766,6 +1772,7 @@ class _UpgradePlanBody extends StatelessWidget {
             priceBgColor: const Color(0xFFFFF7F2),
             priceColor2: const Color(0xFFF9D8A7),
             isYearly: billingPeriod == _BillingPeriod.yearly,
+            cardWidth: cardWidth,
           ),
         ],
       ),
@@ -1787,6 +1794,7 @@ class _UpgradePlanCard extends StatelessWidget {
     this.priceColor2,
     this.isHighlighted = false,
     this.isYearly = true,
+    required this.cardWidth,
   });
 
   final String planName;
@@ -1801,14 +1809,14 @@ class _UpgradePlanCard extends StatelessWidget {
   final Color? priceColor2;
   final bool isHighlighted;
   final bool isYearly;
+  final double cardWidth;
 
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final screenWidth = MediaQuery.of(context).size.width;
 
     return Container(
-      width: screenWidth - 32,
+      width: cardWidth,
       decoration: BoxDecoration(
         color: isHighlighted
             ? (Theme.of(context).brightness == Brightness.light
@@ -1881,23 +1889,23 @@ class _UpgradePlanCard extends StatelessWidget {
           const SizedBox(height: 8),
           _buildFeatureRow(
             theme,
-            FlowySvgs.icon_plan_info_indicator_s,
             isYearly ? '每年存储空间' : '每月存储空间',
             storage,
+            dotCount: 1,
           ),
           const SizedBox(height: 4),
           _buildFeatureRow(
             theme,
-            FlowySvgs.icon_plan_info_indicator_s,
             '工作区限制',
             workspaces,
+            dotCount: 2,
           ),
           const SizedBox(height: 4),
           _buildFeatureRow(
             theme,
-            FlowySvgs.icon_plan_info_indicator_s,
             isYearly ? '每年AI对话额度' : '每月AI对话额度',
             aiQuota,
+            dotCount: 3,
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -1929,20 +1937,28 @@ class _UpgradePlanCard extends StatelessWidget {
 
   Widget _buildFeatureRow(
     dynamic theme,
-    FlowySvgData icon,
     String label,
-    String value,
-  ) {
+    String value, {
+    required int dotCount,
+  }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SizedBox(
-          width: 16,
-          height: 16,
-          child: FlowySvg(
-            icon,
-            size: const Size.square(16),
-            blendMode: null,
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(
+            3,
+            (i) => Container(
+              width: 4,
+              height: 4,
+              margin: const EdgeInsets.only(right: 2),
+              decoration: BoxDecoration(
+                color: i < dotCount
+                    ? priceColor
+                    : theme.textColorScheme.secondary.withValues(alpha: 0.2),
+                shape: BoxShape.circle,
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 6),
