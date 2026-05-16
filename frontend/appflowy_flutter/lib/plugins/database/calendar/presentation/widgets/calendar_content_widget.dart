@@ -226,6 +226,17 @@ class _CalendarContentState extends State<CalendarContent> {
     super.dispose();
   }
 
+  // 判断视图是否是数据库类型（Grid/Board/Calendar）的子页面（如表格行展开的页面）
+  bool _isChildOfDatabaseView(ViewPB view, Map<String, ViewPB> viewById) {
+    final pid = view.parentViewId;
+    if (pid.isEmpty) return false;
+    final parent = viewById[pid];
+    if (parent == null) return false;
+    return parent.layout == ViewLayoutPB.Grid ||
+        parent.layout == ViewLayoutPB.Board ||
+        parent.layout == ViewLayoutPB.Calendar;
+  }
+
   // 判断是否为系统视图
   bool _isSystemView(String viewName) {
     // 系统视图名称列表
@@ -271,12 +282,14 @@ class _CalendarContentState extends State<CalendarContent> {
           _viewById = {for (final v in allViews.items) v.id: v};
 
           final documentViews = allViews.items
-              .where((view) =>
-              !view.isSpace &&
-              // 显示所有文档，包括有父视图的（我的空间）和孤儿视图（日历创建）
-              view.name.isNotEmpty && // 只过滤掉名称为空的文档
-              // 排除系统视图，如"Workspace"等
-              !_isSystemView(view.name)) // 排除系统视图
+              .where(
+                (view) =>
+                    !view.isSpace &&
+                    view.name.isNotEmpty &&
+                    !_isSystemView(view.name) &&
+                    // 排除数据库类型（Grid/Board/Calendar）子页面（表格行展开的页面、图片等）
+                    !_isChildOfDatabaseView(view, _viewById),
+              )
               .toList();
 
           // 根据选中日期过滤笔记
