@@ -1551,7 +1551,7 @@ class _UpgradePlanBody extends StatelessWidget {
           _buildBenefitIcons(context),
           const SizedBox(height: 24),
           SizedBox(
-            height: 420,
+            height: 340,
             child: _buildUpgradePlanCards(),
           ),
         ],
@@ -1720,8 +1720,6 @@ class _UpgradePlanBody extends StatelessWidget {
             storage: '1GB',
             workspaces: '3个',
             aiQuota: '50次/月',
-            versionHistory: '7天',
-            imageGen: '-',
             priceColor: const Color(0xFF4A7C59),
             priceBgColor: const Color(0xFFE8F5E9),
             isYearly: billingPeriod == _BillingPeriod.yearly,
@@ -1735,8 +1733,6 @@ class _UpgradePlanBody extends StatelessWidget {
             storage: '10GB',
             workspaces: '无限个',
             aiQuota: '300次/月',
-            versionHistory: '7天',
-            imageGen: '10张/月',
             priceColor: const Color(0xFF2E7D9B),
             priceBgColor: const Color(0xFFE3F2FD),
             priceColor2: Colors.white,
@@ -1751,8 +1747,6 @@ class _UpgradePlanBody extends StatelessWidget {
             storage: '50GB',
             workspaces: '无限个',
             aiQuota: '1200次/月',
-            versionHistory: '30天',
-            imageGen: '30张/月',
             priceColor: const Color(0xFF343543),
             priceBgColor: const Color(0xFFF5F5F5),
             priceColor2: const Color(0xFFF9D8A7),
@@ -1768,8 +1762,6 @@ class _UpgradePlanBody extends StatelessWidget {
             storage: '150GB',
             workspaces: '无限个',
             aiQuota: '3000次/月',
-            versionHistory: '30天',
-            imageGen: '50张/月',
             priceColor: const Color(0xFF8B4513),
             priceBgColor: const Color(0xFFFFF7F2),
             priceColor2: const Color(0xFFF9D8A7),
@@ -1790,8 +1782,6 @@ class _UpgradePlanCard extends StatelessWidget {
     required this.storage,
     required this.workspaces,
     required this.aiQuota,
-    required this.versionHistory,
-    required this.imageGen,
     required this.priceColor,
     required this.priceBgColor,
     this.priceColor2,
@@ -1806,8 +1796,6 @@ class _UpgradePlanCard extends StatelessWidget {
   final String storage;
   final String workspaces;
   final String aiQuota;
-  final String versionHistory;
-  final String imageGen;
   final Color priceColor;
   final Color priceBgColor;
   final Color? priceColor2;
@@ -1894,22 +1882,8 @@ class _UpgradePlanCard extends StatelessWidget {
           _buildFeatureRow(
             theme,
             FlowySvgs.icon_plan_info_indicator_s,
-            '云端空间',
+            isYearly ? '每年存储空间' : '每月存储空间',
             storage,
-          ),
-          const SizedBox(height: 4),
-          _buildFeatureRow(
-            theme,
-            FlowySvgs.icon_plan_info_indicator_s,
-            '版本历史',
-            versionHistory,
-          ),
-          const SizedBox(height: 4),
-          _buildFeatureRow(
-            theme,
-            FlowySvgs.icon_plan_info_indicator_s,
-            '图片生成',
-            imageGen,
           ),
           const SizedBox(height: 4),
           _buildFeatureRow(
@@ -1922,7 +1896,7 @@ class _UpgradePlanCard extends StatelessWidget {
           _buildFeatureRow(
             theme,
             FlowySvgs.icon_plan_info_indicator_s,
-            '每月AI对话额度',
+            isYearly ? '每年AI对话额度' : '每月AI对话额度',
             aiQuota,
           ),
           const SizedBox(height: 12),
