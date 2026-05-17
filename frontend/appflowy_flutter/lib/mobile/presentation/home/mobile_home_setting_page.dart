@@ -167,7 +167,8 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
     subscriptionResult.fold(
       (info) {
         if (mounted) {
-          setState(() => _subscriptionInfo = info as WorkspaceSubscriptionInfoPB);
+          setState(
+              () => _subscriptionInfo = info as WorkspaceSubscriptionInfoPB);
         }
       },
       (error) => Log.error('Failed to load subscription info: ${error.msg}'),
@@ -244,7 +245,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
                 }
               },
               icon: FlowySvg(
-                isMenu ? FlowySvgs.mobile_return_s : FlowySvgs.mobile_return_s,
+                FlowySvgs.m_app_bar_back_s,
                 size: const Size(7, 12),
                 color: afTheme.iconColorScheme.primary,
               ),
@@ -321,10 +322,12 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
   Widget _buildSettingsSection() {
     final isServerWorkspace =
         _userProfile!.workspaceType == WorkspaceTypePB.ServerW;
-    final isBillingEnabled =
-        isServerWorkspace && FeatureFlag.planBilling.isOn && _subscriptionInfo != null;
+    final isBillingEnabled = isServerWorkspace &&
+        FeatureFlag.planBilling.isOn &&
+        _subscriptionInfo != null;
     final isQuickEntryUser = _userProfile!.userAuthType != AuthTypePB.Server;
-    final workspaceId = widget.workspaceState?.currentWorkspace?.workspaceId ?? '';
+    final workspaceId =
+        widget.workspaceState?.currentWorkspace?.workspaceId ?? '';
 
     // _GeneralSettingsContent handles its own scroll + padding
     if (_currentSection == MobileSettingsSection.workspace) {
@@ -348,7 +351,8 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
                     _refreshUserProfile();
                   },
                 ),
-              MobileSettingsSection.workspace => const SizedBox.shrink(), // handled above
+              MobileSettingsSection.workspace =>
+                const SizedBox.shrink(), // handled above
               MobileSettingsSection.workspaceManagement =>
                 WorkspaceSettingGroup(),
               MobileSettingsSection.member => WorkspaceSettingGroup(),
@@ -416,8 +420,9 @@ class _MobileSettingsDrawer extends StatelessWidget {
     final isQuickEntryUser = userProfile.userAuthType != AuthTypePB.Server;
     final isServerWorkspace =
         userProfile.workspaceType == WorkspaceTypePB.ServerW;
-    final isBillingEnabled =
-        isServerWorkspace && FeatureFlag.planBilling.isOn && subscriptionInfo != null;
+    final isBillingEnabled = isServerWorkspace &&
+        FeatureFlag.planBilling.isOn &&
+        subscriptionInfo != null;
 
     return Drawer(
       width: MediaQuery.of(context).size.width * 0.78,
@@ -447,7 +452,9 @@ class _MobileSettingsDrawer extends StatelessWidget {
                 ),
               ),
               const VSpace(16),
-              Divider(color: theme.borderColorScheme.primary.withValues(alpha: 0.3), height: 0.5),
+              Divider(
+                  color: theme.borderColorScheme.primary.withValues(alpha: 0.3),
+                  height: 0.5),
               const VSpace(8),
 
               // 菜单列表
@@ -466,8 +473,10 @@ class _MobileSettingsDrawer extends StatelessWidget {
               _DrawerMenuItem(
                 label: '空间管理',
                 icon: FlowySvgs.folder_m,
-                selected: currentSection == MobileSettingsSection.workspaceManagement,
-                onTap: () => onNavigate(MobileSettingsSection.workspaceManagement),
+                selected:
+                    currentSection == MobileSettingsSection.workspaceManagement,
+                onTap: () =>
+                    onNavigate(MobileSettingsSection.workspaceManagement),
               ),
               _DrawerMenuItem(
                 label: '人员管理',
@@ -526,8 +535,12 @@ class _MobileSettingsDrawer extends StatelessWidget {
               ],
 
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Divider(color: theme.borderColorScheme.primary.withValues(alpha: 0.3), height: 0.5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Divider(
+                    color:
+                        theme.borderColorScheme.primary.withValues(alpha: 0.3),
+                    height: 0.5),
               ),
 
               _DrawerMenuItem(
@@ -539,10 +552,13 @@ class _MobileSettingsDrawer extends StatelessWidget {
 
               if (!isQuickEntryUser)
                 _DrawerMenuItem(
-                  label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
+                  label:
+                      LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
                   icon: FlowySvgs.icon_setting_upgrade_s,
-                  selected: currentSection == MobileSettingsSection.accountManagement,
-                  onTap: () => onNavigate(MobileSettingsSection.accountManagement),
+                  selected:
+                      currentSection == MobileSettingsSection.accountManagement,
+                  onTap: () =>
+                      onNavigate(MobileSettingsSection.accountManagement),
                 ),
 
               const SizedBox(height: 24),
@@ -622,7 +638,8 @@ class _DrawerMenuItem extends StatelessWidget {
                   ),
                   if (badge != null) ...[
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.secondary,
                         borderRadius: BorderRadius.circular(10),
@@ -693,11 +710,16 @@ class _UserInfoCard extends StatelessWidget {
   String _getPlanNameFromPB(WorkspacePlanPB? plan) {
     if (plan == null) return '免费版';
     switch (plan.value) {
-      case 0: return '免费版';
-      case 1: return '标准版';
-      case 2: return '专业版';
-      case 3: return '高级版';
-      default: return '免费版';
+      case 0:
+        return '免费版';
+      case 1:
+        return '标准版';
+      case 2:
+        return '专业版';
+      case 3:
+        return '高级版';
+      default:
+        return '免费版';
     }
   }
 
@@ -715,8 +737,7 @@ class _UserInfoCard extends StatelessWidget {
     if (userProfile.name.isNotEmpty) {
       return userProfile.name;
     }
-    if (userProfile.hasPhone() &&
-        userProfile.phone.isNotEmpty) {
+    if (userProfile.hasPhone() && userProfile.phone.isNotEmpty) {
       return userProfile.phone;
     }
     if (userProfile.email.isNotEmpty) {
@@ -871,12 +892,11 @@ class _ValidityPeriod extends StatelessWidget {
     DateTime? startDateTime = summary?.startDate;
     if (startDateTime == null) {
       if (interval == RecurringIntervalPB.Year) {
-        startDateTime = DateTime(
-            endDateTime.year - 1, endDateTime.month, endDateTime.day);
+        startDateTime =
+            DateTime(endDateTime.year - 1, endDateTime.month, endDateTime.day);
       } else {
         if (endDateTime.month == 1) {
-          startDateTime = DateTime(
-              endDateTime.year - 1, 12, endDateTime.day);
+          startDateTime = DateTime(endDateTime.year - 1, 12, endDateTime.day);
         } else {
           startDateTime = DateTime(
               endDateTime.year, endDateTime.month - 1, endDateTime.day);
@@ -922,8 +942,9 @@ class _MobileSettingsMenuContent extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
     final isServerWorkspace =
         userProfile.workspaceType == WorkspaceTypePB.ServerW;
-    final isBillingEnabled =
-        isServerWorkspace && FeatureFlag.planBilling.isOn && subscriptionInfo != null;
+    final isBillingEnabled = isServerWorkspace &&
+        FeatureFlag.planBilling.isOn &&
+        subscriptionInfo != null;
 
     return SingleChildScrollView(
       child: Padding(
@@ -951,7 +972,8 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                 ),
                 _SettingsItem(
                   label: '空间管理',
-                  onTap: () => onNavigate(MobileSettingsSection.workspaceManagement),
+                  onTap: () =>
+                      onNavigate(MobileSettingsSection.workspaceManagement),
                 ),
                 _SettingsItem(
                   label: '人员管理',
@@ -992,8 +1014,10 @@ class _MobileSettingsMenuContent extends StatelessWidget {
                 ),
                 if (userProfile.userAuthType == AuthTypePB.Server)
                   _SettingsItem(
-                    label: LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
-                    onTap: () => onNavigate(MobileSettingsSection.accountManagement),
+                    label:
+                        LocaleKeys.settings_billingPage_membershipUpgrades.tr(),
+                    onTap: () =>
+                        onNavigate(MobileSettingsSection.accountManagement),
                     showBottomDivider: false,
                   ),
               ],
@@ -1314,8 +1338,10 @@ class _MobileUpgradePlanCard extends StatelessWidget {
     final end = DateTime.fromMillisecondsSinceEpoch(endDate * 1000);
     final now = DateTime.now();
     final start = DateTime(now.year, now.month, now.day);
-    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
-    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
+    final startStr =
+        '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+    final endStr =
+        '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
     return '$startStr ~ $endStr';
   }
 
@@ -1352,93 +1378,98 @@ class _MobileUpgradePlanCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                    if (subscriptionInfo.planSubscription.endDate.toInt() > 0 &&
-                        subscriptionInfo.plan.value != 0)
-                      Text(
-                        _formatDateRange(subscriptionInfo.planSubscription.endDate.toInt()),
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 10,
-                        ),
+                  if (subscriptionInfo.planSubscription.endDate.toInt() > 0 &&
+                      subscriptionInfo.plan.value != 0)
+                    Text(
+                      _formatDateRange(
+                          subscriptionInfo.planSubscription.endDate.toInt()),
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 10,
                       ),
-                    const SizedBox(height: 2),
-                    if (subscriptionInfo.plan.value == 0)
-                      Text(
-                        subscriptionInfo.info,
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 10,
-                        ),
-                        maxLines: 2,
+                    ),
+                  const SizedBox(height: 2),
+                  if (subscriptionInfo.plan.value == 0)
+                    Text(
+                      subscriptionInfo.info,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 10,
                       ),
-                    const Spacer(),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (workspaceUsage != null)
-                          Row(
-                            children: [
-                              Text(
-                                '${workspaceUsage!.currentBlobInGb}G / ${workspaceUsage!.totalBlobInGb}G',
-                                style: const TextStyle(
-                                  color: Colors.black,
-                                  fontSize: 14,
+                      maxLines: 2,
+                    ),
+                  const Spacer(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (workspaceUsage != null)
+                        Row(
+                          children: [
+                            Text(
+                              '${workspaceUsage!.currentBlobInGb}G / ${workspaceUsage!.totalBlobInGb}G',
+                              style: const TextStyle(
+                                color: Colors.black,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: null,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.transparent,
+                                  border: Border.all(
+                                    color: const Color(0xFF44326B),
+                                    width: 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '剩余空间',
+                                  style: theme.textStyle.heading4
+                                      .standard(
+                                        color: const Color(0xFF44326B),
+                                      )
+                                      .copyWith(fontSize: 10),
                                 ),
                               ),
-                              const SizedBox(width: 4),
-                              GestureDetector(
-                                onTap: null,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.transparent,
-                                    border: Border.all(
-                                      color: const Color(0xFF44326B),
-                                      width: 1,
-                                    ),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    '剩余空间',
-                                    style: theme.textStyle.heading4.standard(
-                                      color: const Color(0xFF44326B),
-                                    ).copyWith(fontSize: 10),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        else
-                          const SizedBox(),
-                        GestureDetector(
-                          onTap: onUpgrade,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
                             ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFADECA),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              '会员升级',
-                              style: theme.textStyle.heading4.standard(
-                                color: const Color(0xFF44326B),
-                              ).copyWith(fontSize: 12.0),
-                            ),
+                          ],
+                        )
+                      else
+                        const SizedBox(),
+                      GestureDetector(
+                        onTap: onUpgrade,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFADECA),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            '会员升级',
+                            style: theme.textStyle.heading4
+                                .standard(
+                                  color: const Color(0xFF44326B),
+                                )
+                                .copyWith(fontSize: 12.0),
                           ),
                         ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
+          ),
         );
       },
     );
@@ -1481,9 +1512,11 @@ class _BenefitCard extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: theme.textStyle.body.standard(
-                color: theme.textColorScheme.secondary,
-              ).copyWith(fontSize: 12),
+              style: theme.textStyle.body
+                  .standard(
+                    color: theme.textColorScheme.secondary,
+                  )
+                  .copyWith(fontSize: 12),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1542,7 +1575,7 @@ class _MobileUpgradePlanPageState extends State<_MobileUpgradePlanPage> {
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: FlowySvg(
-                      FlowySvgs.mobile_return_s,
+                      FlowySvgs.m_app_bar_back_s,
                       size: const Size(7, 12),
                       color: theme.iconColorScheme.primary,
                     ),
@@ -1635,13 +1668,15 @@ class _UpgradePlanBody extends StatelessWidget {
           onTap: () => onBillingPeriodChanged(_BillingPeriod.monthly),
           child: Text(
             '按月',
-            style: theme.textStyle.body.standard(
-              color: !isYearly
-                  ? theme.textColorScheme.primary
-                  : theme.textColorScheme.secondary,
-            ).copyWith(
-              fontWeight: !isYearly ? FontWeight.w600 : FontWeight.normal,
-            ),
+            style: theme.textStyle.body
+                .standard(
+                  color: !isYearly
+                      ? theme.textColorScheme.primary
+                      : theme.textColorScheme.secondary,
+                )
+                .copyWith(
+                  fontWeight: !isYearly ? FontWeight.w600 : FontWeight.normal,
+                ),
           ),
         ),
         const SizedBox(width: 12),
@@ -1689,13 +1724,16 @@ class _UpgradePlanBody extends StatelessWidget {
             children: [
               Text(
                 '按年',
-                style: theme.textStyle.body.standard(
-                  color: isYearly
-                      ? theme.textColorScheme.primary
-                      : theme.textColorScheme.secondary,
-                ).copyWith(
-                  fontWeight: isYearly ? FontWeight.w600 : FontWeight.normal,
-                ),
+                style: theme.textStyle.body
+                    .standard(
+                      color: isYearly
+                          ? theme.textColorScheme.primary
+                          : theme.textColorScheme.secondary,
+                    )
+                    .copyWith(
+                      fontWeight:
+                          isYearly ? FontWeight.w600 : FontWeight.normal,
+                    ),
               ),
               const SizedBox(width: 6),
               Container(
@@ -1706,9 +1744,11 @@ class _UpgradePlanBody extends StatelessWidget {
                 ),
                 child: Text(
                   '省2月',
-                  style: theme.textStyle.body.standard(
-                    color: const Color(0xFF8B4513),
-                  ).copyWith(fontSize: 10, fontWeight: FontWeight.w600),
+                  style: theme.textStyle.body
+                      .standard(
+                        color: const Color(0xFF8B4513),
+                      )
+                      .copyWith(fontSize: 10, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -1723,11 +1763,31 @@ class _UpgradePlanBody extends StatelessWidget {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     final benefits = [
-      {'label': '小马AI', 'iconLight': FlowySvgs.m_rights_ai_xl, 'iconDark': FlowySvgs.md_rights_ai_xl},
-      {'label': '小马日历', 'iconLight': FlowySvgs.m_rights_calender_xl, 'iconDark': FlowySvgs.md_rights_calender_xl},
-      {'label': '云端同步', 'iconLight': FlowySvgs.m_rights_cloud_xl, 'iconDark': FlowySvgs.md_rights_cloud_xl},
-      {'label': '小马收藏夹', 'iconLight': FlowySvgs.m_rights_collect_xl, 'iconDark': FlowySvgs.md_rights_collect_xl},
-      {'label': '云端空间', 'iconLight': FlowySvgs.m_rights_storage_xl, 'iconDark': FlowySvgs.md_rights_storage_xl},
+      {
+        'label': '小马AI',
+        'iconLight': FlowySvgs.icon_rights_ai_xl,
+        'iconDark': FlowySvgs.icon_rights_ai_xl,
+      },
+      {
+        'label': '小马日历',
+        'iconLight': FlowySvgs.icon_rights_calendar_xl,
+        'iconDark': FlowySvgs.icon_rights_calendar_xl,
+      },
+      {
+        'label': '云端同步',
+        'iconLight': FlowySvgs.icon_rights_cloud_xl,
+        'iconDark': FlowySvgs.icon_rights_cloud_xl,
+      },
+      {
+        'label': '小马收藏夹',
+        'iconLight': FlowySvgs.icon_rights_collect_xl,
+        'iconDark': FlowySvgs.icon_rights_collect_xl,
+      },
+      {
+        'label': '云端空间',
+        'iconLight': FlowySvgs.icon_rights_storage_xl,
+        'iconDark': FlowySvgs.icon_rights_storage_xl,
+      },
     ];
 
     return Column(
@@ -1735,29 +1795,66 @@ class _UpgradePlanBody extends StatelessWidget {
       children: [
         Text(
           '获赠权益',
-          style: theme.textStyle.body.standard(
-            color: theme.textColorScheme.primary,
-          ).copyWith(fontSize: 16, fontWeight: FontWeight.w600),
+          style: theme.textStyle.body
+              .standard(
+                color: theme.textColorScheme.primary,
+              )
+              .copyWith(fontSize: 16, fontWeight: FontWeight.w600),
           textAlign: TextAlign.left,
         ),
         const SizedBox(height: 16),
         // 第一排：3个
         Row(
           children: [
-            Expanded(child: _BenefitCard(label: benefits[0]['label'] as String, icon: isDarkMode ? benefits[0]['iconDark'] as FlowySvgData : benefits[0]['iconLight'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            Expanded(
+                child: _BenefitCard(
+                    label: benefits[0]['label'] as String,
+                    icon: isDarkMode
+                        ? benefits[0]['iconDark'] as FlowySvgData
+                        : benefits[0]['iconLight'] as FlowySvgData,
+                    isDarkMode: isDarkMode,
+                    theme: theme)),
             const SizedBox(width: 8),
-            Expanded(child: _BenefitCard(label: benefits[1]['label'] as String, icon: isDarkMode ? benefits[1]['iconDark'] as FlowySvgData : benefits[1]['iconLight'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            Expanded(
+                child: _BenefitCard(
+                    label: benefits[1]['label'] as String,
+                    icon: isDarkMode
+                        ? benefits[1]['iconDark'] as FlowySvgData
+                        : benefits[1]['iconLight'] as FlowySvgData,
+                    isDarkMode: isDarkMode,
+                    theme: theme)),
             const SizedBox(width: 8),
-            Expanded(child: _BenefitCard(label: benefits[2]['label'] as String, icon: isDarkMode ? benefits[2]['iconDark'] as FlowySvgData : benefits[2]['iconLight'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            Expanded(
+                child: _BenefitCard(
+                    label: benefits[2]['label'] as String,
+                    icon: isDarkMode
+                        ? benefits[2]['iconDark'] as FlowySvgData
+                        : benefits[2]['iconLight'] as FlowySvgData,
+                    isDarkMode: isDarkMode,
+                    theme: theme)),
           ],
         ),
         const SizedBox(height: 8),
         // 第二排：2个居中
         Row(
           children: [
-            Expanded(child: _BenefitCard(label: benefits[3]['label'] as String, icon: isDarkMode ? benefits[3]['iconDark'] as FlowySvgData : benefits[3]['iconLight'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            Expanded(
+                child: _BenefitCard(
+                    label: benefits[3]['label'] as String,
+                    icon: isDarkMode
+                        ? benefits[3]['iconDark'] as FlowySvgData
+                        : benefits[3]['iconLight'] as FlowySvgData,
+                    isDarkMode: isDarkMode,
+                    theme: theme)),
             const SizedBox(width: 8),
-            Expanded(child: _BenefitCard(label: benefits[4]['label'] as String, icon: isDarkMode ? benefits[4]['iconDark'] as FlowySvgData : benefits[4]['iconLight'] as FlowySvgData, isDarkMode: isDarkMode, theme: theme)),
+            Expanded(
+                child: _BenefitCard(
+                    label: benefits[4]['label'] as String,
+                    icon: isDarkMode
+                        ? benefits[4]['iconDark'] as FlowySvgData
+                        : benefits[4]['iconLight'] as FlowySvgData,
+                    isDarkMode: isDarkMode,
+                    theme: theme)),
           ],
         ),
       ],
@@ -1773,61 +1870,61 @@ class _UpgradePlanBody extends StatelessWidget {
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
-              _UpgradePlanCard(
-                planName: '学生版',
-                priceMonthly: '¥5',
-                priceAnnual: '¥50',
-                storage: '1GB',
-                workspaces: '3个',
-                aiQuota: '50次/月',
-                priceColor: const Color(0xFFFFFFFF),
-                priceBgColor: const Color(0xFF2EACB2),
-                isYearly: billingPeriod == _BillingPeriod.yearly,
-                cardWidth: cardWidth,
-              ),
+          _UpgradePlanCard(
+            planName: '学生版',
+            priceMonthly: '¥5',
+            priceAnnual: '¥50',
+            storage: '1GB',
+            workspaces: '3个',
+            aiQuota: '50次/月',
+            priceColor: const Color(0xFFFFFFFF),
+            priceBgColor: const Color(0xFF2EACB2),
+            isYearly: billingPeriod == _BillingPeriod.yearly,
+            cardWidth: cardWidth,
+          ),
           const SizedBox(width: 12),
-              _UpgradePlanCard(
-                planName: '标准版',
-                priceMonthly: '¥9',
-                priceAnnual: '¥99',
-                storage: '10GB',
-                workspaces: '5个工作区',
-                aiQuota: '300次/月',
-                priceColor: const Color(0xFFF9D8A7),
-                priceBgColor: const Color(0xFF343543),
-                priceColor2: Colors.white,
-                isYearly: billingPeriod == _BillingPeriod.yearly,
-                cardWidth: cardWidth,
-              ),
+          _UpgradePlanCard(
+            planName: '标准版',
+            priceMonthly: '¥9',
+            priceAnnual: '¥99',
+            storage: '10GB',
+            workspaces: '5个工作区',
+            aiQuota: '300次/月',
+            priceColor: const Color(0xFFF9D8A7),
+            priceBgColor: const Color(0xFF343543),
+            priceColor2: Colors.white,
+            isYearly: billingPeriod == _BillingPeriod.yearly,
+            cardWidth: cardWidth,
+          ),
           const SizedBox(width: 12),
-              _UpgradePlanCard(
-                planName: '专业版',
-                priceMonthly: '¥15',
-                priceAnnual: '¥158',
-                storage: '50GB',
-                workspaces: '10个工作区',
-                aiQuota: '1200次/月',
-                priceColor: const Color(0xFFFFE4C4),
-                priceBgColor: const Color(0xFF371A0D),
-                priceColor2: const Color(0xFFF9D8A7),
-                isHighlighted: true,
-                isYearly: billingPeriod == _BillingPeriod.yearly,
-                cardWidth: cardWidth,
-              ),
+          _UpgradePlanCard(
+            planName: '专业版',
+            priceMonthly: '¥15',
+            priceAnnual: '¥158',
+            storage: '50GB',
+            workspaces: '10个工作区',
+            aiQuota: '1200次/月',
+            priceColor: const Color(0xFFFFE4C4),
+            priceBgColor: const Color(0xFF371A0D),
+            priceColor2: const Color(0xFFF9D8A7),
+            isHighlighted: true,
+            isYearly: billingPeriod == _BillingPeriod.yearly,
+            cardWidth: cardWidth,
+          ),
           const SizedBox(width: 12),
-              _UpgradePlanCard(
-                planName: '高级版',
-                priceMonthly: '¥29',
-                priceAnnual: '¥298',
-                storage: '150GB',
-                workspaces: '18个工作区',
-                aiQuota: '3000次/月',
-                priceColor: const Color(0xFFADD8E6),
-                priceBgColor: const Color(0xFF1E3A5F),
-                priceColor2: const Color(0xFFF9D8A7),
-                isYearly: billingPeriod == _BillingPeriod.yearly,
-                cardWidth: cardWidth,
-              ),
+          _UpgradePlanCard(
+            planName: '高级版',
+            priceMonthly: '¥29',
+            priceAnnual: '¥298',
+            storage: '150GB',
+            workspaces: '18个工作区',
+            aiQuota: '3000次/月',
+            priceColor: const Color(0xFFADD8E6),
+            priceBgColor: const Color(0xFF1E3A5F),
+            priceColor2: const Color(0xFFF9D8A7),
+            isYearly: billingPeriod == _BillingPeriod.yearly,
+            cardWidth: cardWidth,
+          ),
         ],
       ),
     );
@@ -1924,9 +2021,11 @@ class _UpgradePlanCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   isYearly ? '按年支付' : '按月支付',
-                  style: theme.textStyle.body.standard(
-                    color: priceColor.withValues(alpha: 0.7),
-                  ).copyWith(fontSize: 12.0),
+                  style: theme.textStyle.body
+                      .standard(
+                        color: priceColor.withValues(alpha: 0.7),
+                      )
+                      .copyWith(fontSize: 12.0),
                 ),
               ],
             ),
@@ -1975,9 +2074,11 @@ class _UpgradePlanCard extends StatelessWidget {
         Expanded(
           child: Text(
             '$label $value',
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.secondary,
-            ).copyWith(fontSize: 12.0),
+            style: theme.textStyle.body
+                .standard(
+                  color: theme.textColorScheme.secondary,
+                )
+                .copyWith(fontSize: 12.0),
           ),
         ),
       ],
@@ -2481,7 +2582,9 @@ class _ThemeModeSettingItem extends StatelessWidget {
               leftIcon: const FlowySvg(FlowySvgs.m_theme_mode_light_s),
               isSelected: themeMode == ThemeMode.light,
               onTap: () {
-                ctx.read<AppearanceSettingsCubit>().setThemeMode(ThemeMode.light);
+                ctx
+                    .read<AppearanceSettingsCubit>()
+                    .setThemeMode(ThemeMode.light);
                 Navigator.pop(ctx);
               },
             ),
@@ -2491,7 +2594,9 @@ class _ThemeModeSettingItem extends StatelessWidget {
               leftIcon: const FlowySvg(FlowySvgs.m_theme_mode_dark_s),
               isSelected: themeMode == ThemeMode.dark,
               onTap: () {
-                ctx.read<AppearanceSettingsCubit>().setThemeMode(ThemeMode.dark);
+                ctx
+                    .read<AppearanceSettingsCubit>()
+                    .setThemeMode(ThemeMode.dark);
                 Navigator.pop(ctx);
               },
             ),
@@ -2501,7 +2606,9 @@ class _ThemeModeSettingItem extends StatelessWidget {
               leftIcon: const FlowySvg(FlowySvgs.m_theme_mode_system_s),
               isSelected: themeMode == ThemeMode.system,
               onTap: () {
-                ctx.read<AppearanceSettingsCubit>().setThemeMode(ThemeMode.system);
+                ctx
+                    .read<AppearanceSettingsCubit>()
+                    .setThemeMode(ThemeMode.system);
                 Navigator.pop(ctx);
               },
             ),
@@ -2518,8 +2625,7 @@ class _FontFamilySettingItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final selectedFont =
-        context.watch<AppearanceSettingsCubit>().state.font;
+    final selectedFont = context.watch<AppearanceSettingsCubit>().state.font;
     final name = selectedFont.fontFamilyDisplayName;
     return Material(
       color: Colors.transparent,
@@ -2731,7 +2837,9 @@ class _TextDirectionSettingItem extends StatelessWidget {
 
   void _applyAndPop(BuildContext ctx, AppFlowyTextDirection direction) {
     ctx.read<AppearanceSettingsCubit>().setTextDirection(direction);
-    ctx.read<DocumentAppearanceCubit>().syncDefaultTextDirection(direction.name);
+    ctx
+        .read<DocumentAppearanceCubit>()
+        .syncDefaultTextDirection(direction.name);
     Navigator.pop(ctx);
   }
 }

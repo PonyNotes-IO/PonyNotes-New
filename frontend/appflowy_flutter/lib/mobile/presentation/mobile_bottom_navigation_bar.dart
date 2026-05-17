@@ -73,7 +73,7 @@ enum BottomNavigationBarItemType {
       search =>
         const FlowySvg(FlowySvgs.m_home_search_icon_active_m, blendMode: null),
       askAI => const _AskAIcon(),
-      add => const FlowySvg(FlowySvgs.m_home_add_active_m, blendMode: null),
+      add => const FlowySvg(FlowySvgs.m_home_add_m, blendMode: null),
       notification => const _NotificationNavigationBarItemIcon(isActive: true),
     };
   }
@@ -265,41 +265,42 @@ class _HomePageNavigationBar extends StatelessWidget {
             top: false,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Row(
-              children: [
-                _NavBarItem(
-                  icon: BottomNavigationBarItemType.home.iconWidget,
-                  activeIcon: BottomNavigationBarItemType.home.activeIcon,
-                  isSelected: navigationShell.currentIndex == 0,
-                  onTap: () => _onTap(context, 0),
-                ),
-                _NavBarItem(
-                  icon: BottomNavigationBarItemType.search.iconWidget,
-                  activeIcon: BottomNavigationBarItemType.search.activeIcon,
-                  isSelected: navigationShell.currentIndex == 1,
-                  onTap: () => _onTap(context, 1),
-                ),
-                _NavBarItem(
-                  icon: BottomNavigationBarItemType.askAI.iconWidget,
-                  activeIcon: BottomNavigationBarItemType.askAI.activeIcon,
-                  isSelected: navigationShell.currentIndex == 2,
-                  onTap: () => _onTap(context, 2),
-                  flex: 2,
-                ),
-                _NavBarItem(
-                  icon: BottomNavigationBarItemType.add.iconWidget,
-                  activeIcon: BottomNavigationBarItemType.add.activeIcon,
-                  isSelected: false,
-                  onTap: () => _onTap(context, 3),
-                ),
-                _NavBarItem(
-                  icon: BottomNavigationBarItemType.notification.iconWidget,
-                  activeIcon: BottomNavigationBarItemType.notification.activeIcon,
-                  isSelected: _isNotificationActive(context),
-                  onTap: () => _onTap(context, 4),
-                ),
-              ],
-            ),
+              child: Row(
+                children: [
+                  _NavBarItem(
+                    icon: BottomNavigationBarItemType.home.iconWidget,
+                    activeIcon: BottomNavigationBarItemType.home.activeIcon,
+                    isSelected: navigationShell.currentIndex == 0,
+                    onTap: () => _onTap(context, 0),
+                  ),
+                  _NavBarItem(
+                    icon: BottomNavigationBarItemType.search.iconWidget,
+                    activeIcon: BottomNavigationBarItemType.search.activeIcon,
+                    isSelected: navigationShell.currentIndex == 1,
+                    onTap: () => _onTap(context, 1),
+                  ),
+                  _NavBarItem(
+                    icon: BottomNavigationBarItemType.askAI.iconWidget,
+                    activeIcon: BottomNavigationBarItemType.askAI.activeIcon,
+                    isSelected: navigationShell.currentIndex == 2,
+                    onTap: () => _onTap(context, 2),
+                    flex: 2,
+                  ),
+                  _NavBarItem(
+                    icon: BottomNavigationBarItemType.add.iconWidget,
+                    activeIcon: BottomNavigationBarItemType.add.activeIcon,
+                    isSelected: false,
+                    onTap: () => _onTap(context, 3),
+                  ),
+                  _NavBarItem(
+                    icon: BottomNavigationBarItemType.notification.iconWidget,
+                    activeIcon:
+                        BottomNavigationBarItemType.notification.activeIcon,
+                    isSelected: _isNotificationActive(context),
+                    onTap: () => _onTap(context, 4),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -320,7 +321,8 @@ class _HomePageNavigationBar extends StatelessWidget {
       return;
     } else if (label == BottomNavigationBarItemType.notification.label) {
       // Navigate to notification page via GoRouter (not the navigation shell), like Ask AI
-      GoRouter.of(context).go(BottomNavigationBarItemType.notification.routeName!);
+      GoRouter.of(context)
+          .go(BottomNavigationBarItemType.notification.routeName!);
       getIt<ReminderBloc>().add(const ReminderEvent.refresh());
       return;
     }
@@ -368,9 +370,7 @@ class _NavBarItem extends StatelessWidget {
           alignment: Alignment.center,
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: isSelected
-                ? (activeIcon ?? icon)
-                : icon,
+            child: isSelected ? (activeIcon ?? icon) : icon,
           ),
         ),
       ),

@@ -1,4 +1,3 @@
-import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/home/tab/_round_underline_tab_indicator.dart';
 import 'package:appflowy/mobile/presentation/home/tab/space_order_bloc.dart';
 import 'package:flutter/material.dart';
@@ -142,10 +141,13 @@ class _MobileSpaceTabBarState extends State<MobileSpaceTabBar> {
     return Positioned(
       left: left,
       bottom: 0,
-      child: FlowySvg(
-        FlowySvgs.mf_select_s,
-        size: Size(finalIndicatorWidth, 8),
-        blendMode: null,
+      child: Container(
+        width: finalIndicatorWidth,
+        height: 4,
+        decoration: const ShapeDecoration(
+          color: Color(0xFFFF3800),
+          shape: StadiumBorder(),
+        ),
       ),
     );
   }

@@ -30,7 +30,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   late final MenuSharedState menuSharedState;
   late final CachedRecentService _recentService;
-  
+
   /// 上次添加到最近访问的视图 ID（用于防抖）
   String? _lastAddedRecentViewId;
 
@@ -215,7 +215,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
   void _setLatestOpenView([ViewPB? view]) {
     ViewPB? targetView = view;
-    
+
     if (targetView != null) {
       menuSharedState.latestOpenView = targetView;
     } else {
@@ -227,13 +227,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         menuSharedState.latestOpenView = targetView;
       }
     }
-    
+
     // 自动添加到最近访问列表（过滤掉空间视图）
     if (targetView != null && !targetView.isSpace) {
       _addToRecentViews(targetView.id);
     }
   }
-  
+
   /// 添加视图到最近访问列表的异步方法（带防抖）
   void _addToRecentViews(String viewId) {
     // 防抖：如果是同一个视图，跳过
@@ -241,7 +241,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       return;
     }
     _lastAddedRecentViewId = viewId;
-    
+
     // 使用异步方式更新最近访问，避免阻塞UI
     Future.microtask(() async {
       try {
@@ -255,10 +255,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   /// 展开视图祖先链（优化版本，使用缓存）
   Future<void> _expandAncestors(ViewPB view) async {
     final viewExpanderRegistry = getIt.get<ViewExpanderRegistry>();
-    
+
     // 快速检查：如果父视图已展开，跳过
     if (viewExpanderRegistry.isViewExpanded(view.parentViewId)) return;
-    
+
     // 使用缓存检查（同步操作，非常快）
     final cache = ExpandedViewsCache.instance;
     if (cache.isExpanded(view.parentViewId)) {
@@ -269,22 +269,24 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       }
       return;
     }
-    
+
     // 异步获取祖先链（后台操作，不阻塞 UI）
     try {
       final ancestors = await ViewBackendService.getViewAncestors(view.id)
           .fold((s) => s.items.map((e) => e.id).toList(), (f) => <String>[]);
-      
+
       if (ancestors.isEmpty) return;
-      
+
       // 批量更新缓存
       cache.setExpandedBatch(ancestors, true);
-      
+
       // 找到第一个未展开的祖先并展开
       ViewExpander? viewExpander;
       for (final id in ancestors) {
         final expander = viewExpanderRegistry.getExpander(id);
-        if (expander != null && !expander.isViewExpanded && viewExpander == null) {
+        if (expander != null &&
+            !expander.isViewExpanded &&
+            viewExpander == null) {
           viewExpander = expander;
           break;
         }
@@ -312,6 +314,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   /// Adds a [TabsEvent.openTab] event for the provided [ViewPB]
+  /// 如果当前 Tab 是 SpaceHub，新 Tab 也使用同一空间的 SpaceHub 三栏布局打开
   void openTab(ViewPB view) {
     try {
       if (view.id.isEmpty) {
@@ -322,13 +325,30 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         );
         return;
       }
+
+      // 同步检查当前 Tab 是否为 SpaceHub，若是则复用同一空间的 SpaceHub 三栏布局
+      if (!view.isSpace) {
+        final currentPlugin = state.currentPageManager.plugin;
+        if (currentPlugin.pluginType == PluginType.folder) {
+          final notifier = currentPlugin.notifier;
+          if (notifier is ViewPluginNotifier && notifier.view.isSpace) {
+            final spaceHubPlugin =
+                notifier.view.plugin(initialSelectedView: view);
+            add(TabsEvent.openTab(plugin: spaceHubPlugin, view: view));
+            return;
+          }
+        }
+      }
+
       final plugin = view.plugin();
       add(TabsEvent.openTab(plugin: plugin, view: view));
     } catch (e, stackTrace) {
-      Log.error('Failed to open tab for view: ${view.id}, layout: ${view.layout}', e);
+      Log.error(
+        'Failed to open tab for view: ${view.id}, layout: ${view.layout}',
+        e,
+      );
       Log.error('Stack trace:', stackTrace);
-      
-      // 显示错误提示
+
       String errorMessage = '加载笔记失败';
       if (e is UnimplementedError) {
         errorMessage = '不支持的笔记类型: ${view.layout}';
@@ -337,18 +357,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       } else {
         errorMessage = '加载笔记失败: ${e.toString()}';
       }
-      
+
       showToastNotification(
         message: errorMessage,
         type: ToastificationType.error,
       );
-      
-      // 如果打开失败，尝试打开一个空白页面作为降级方案
-      try {
-        add(TabsEvent.openTab(plugin: BlankPagePlugin(), view: view));
-      } catch (fallbackError) {
-        Log.error('Failed to open blank page as fallback', fallbackError);
-      }
     }
   }
 
@@ -374,9 +387,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         ),
       );
     } catch (e, stackTrace) {
-      Log.error('Failed to open plugin for view: ${view.id}, layout: ${view.layout}', e);
+      Log.error(
+          'Failed to open plugin for view: ${view.id}, layout: ${view.layout}',
+          e);
       Log.error('Stack trace:', stackTrace);
-      
+
       // 显示错误提示
       String errorMessage = '加载笔记失败';
       if (e is UnimplementedError) {
@@ -386,20 +401,20 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       } else {
         errorMessage = '加载笔记失败: ${e.toString()}';
       }
-      
+
       showToastNotification(
         message: errorMessage,
         type: ToastificationType.error,
       );
-      
+
       // 如果打开失败，尝试打开一个空白页面作为降级方案
       try {
-    add(
-      TabsEvent.openPlugin(
+        add(
+          TabsEvent.openPlugin(
             plugin: BlankPagePlugin(),
-        view: view,
-      ),
-    );
+            view: view,
+          ),
+        );
       } catch (fallbackError) {
         Log.error('Failed to open blank page as fallback', fallbackError);
       }
@@ -443,7 +458,7 @@ class TabsEvent with _$TabsEvent {
 
   const factory TabsEvent.switchWorkspace(String workspaceId) =
       _SwitchWorkspace;
-      
+
   const factory TabsEvent.initial() = _Initial;
 }
 

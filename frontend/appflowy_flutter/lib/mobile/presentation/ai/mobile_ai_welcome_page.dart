@@ -206,7 +206,8 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
                     setState(() => _isDeepThinkingEnabled = v),
                 onWebSearchChanged: (v) =>
                     setState(() => _isWebSearchEnabled = v),
-                onModelSelected: (model) => setState(() => _selectedModel = model),
+                onModelSelected: (model) =>
+                    setState(() => _selectedModel = model),
               ),
             ],
           ),
@@ -237,15 +238,15 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
           IconButton(
             onPressed: () =>
                 GoRouter.of(context).go(MobileHomeScreen.routeName),
-            icon:               FlowySvg(
-              FlowySvgs.mobile_return_s,
+            icon: FlowySvg(
+              FlowySvgs.m_app_bar_back_s,
               size: const Size(7, 12),
               color: afTheme.iconColorScheme.primary,
             ),
           ),
           const SizedBox(width: 4),
           Expanded(
-            child:               Text(
+            child: Text(
               '小马笔记AI',
               style: afTheme.textStyle.heading4.standard(
                 color: afTheme.textColorScheme.primary,
@@ -255,7 +256,7 @@ class _MobileAIWelcomePageState extends State<MobileAIWelcomePage> {
           ),
           IconButton(
             onPressed: () {},
-            icon:               FlowySvg(
+            icon: FlowySvg(
               FlowySvgs.three_dots_s,
               size: const Size.square(24),
               color: afTheme.iconColorScheme.primary,

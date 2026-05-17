@@ -5,12 +5,8 @@ import 'package:appflowy_ui/appflowy_ui.dart';
 import '../../../generated/flowy_svgs.g.dart';
 
 class LegalDocumentScreen extends StatelessWidget {
-  const LegalDocumentScreen({
-    super.key,
-    required this.title,
-    this.url,
-    this.content
-  });
+  const LegalDocumentScreen(
+      {super.key, required this.title, this.url, this.content});
 
   final String title;
   final String? url;
@@ -24,7 +20,7 @@ class LegalDocumentScreen extends StatelessWidget {
         title: Text(title),
         leading: IconButton(
           icon: FlowySvg(
-            FlowySvgs.mobile_return_s,
+            FlowySvgs.m_app_bar_back_s,
             size: const Size(7, 12),
             color: theme.textColorScheme.primary,
           ),
@@ -33,34 +29,35 @@ class LegalDocumentScreen extends StatelessWidget {
         backgroundColor: theme.surfaceColorScheme.primary,
         foregroundColor: theme.textColorScheme.primary,
       ),
-      body: url != null && url?.isNotEmpty == true ? InAppWebView(
-        initialUrlRequest: URLRequest(url: WebUri(url ?? "")),
-        initialSettings: InAppWebViewSettings(
-          javaScriptEnabled: true,
-          supportZoom: true,
-        ),
-      ) : LayoutBuilder(
-        builder: (context, constraints) {
-          return SizedBox(
-            width: constraints.maxWidth,
-            height: constraints.maxHeight,
-            child: SingleChildScrollView(
-              child: Container(
-                width: constraints.maxWidth,
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight,
-                ),
-                padding: const EdgeInsets.all(16.0),
-                child: SelectableText(
-                  content ?? '',
-                  style: const TextStyle(fontSize: 14, height: 1.6),
-                ),
+      body: url != null && url?.isNotEmpty == true
+          ? InAppWebView(
+              initialUrlRequest: URLRequest(url: WebUri(url ?? "")),
+              initialSettings: InAppWebViewSettings(
+                javaScriptEnabled: true,
+                supportZoom: true,
               ),
+            )
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                return SizedBox(
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  child: SingleChildScrollView(
+                    child: Container(
+                      width: constraints.maxWidth,
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      padding: const EdgeInsets.all(16.0),
+                      child: SelectableText(
+                        content ?? '',
+                        style: const TextStyle(fontSize: 14, height: 1.6),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 }
-

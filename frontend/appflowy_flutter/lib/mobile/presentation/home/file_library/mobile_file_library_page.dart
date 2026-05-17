@@ -127,7 +127,7 @@ class _MobileFileLibraryPageState extends State<MobileFileLibraryPage> {
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
             icon: FlowySvg(
-              FlowySvgs.mobile_return_s,
+              FlowySvgs.m_app_bar_back_s,
               size: const Size(7, 12),
               color: afTheme.iconColorScheme.primary,
             ),
@@ -168,7 +168,8 @@ class _MobileFileLibraryPageState extends State<MobileFileLibraryPage> {
         decoration: InputDecoration(
           hintText: '搜索文件',
           isDense: true,
-          prefixIconConstraints: const BoxConstraints(minWidth: 38, minHeight: 40),
+          prefixIconConstraints:
+              const BoxConstraints(minWidth: 38, minHeight: 40),
           prefixIcon: Padding(
             padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
             child: FlowySvg(
@@ -295,7 +296,8 @@ class _MobileFileLibraryPageState extends State<MobileFileLibraryPage> {
     );
   }
 
-  void _showSortMenu(BuildContext context, AppFlowyThemeData afTheme, String currentSort) {
+  void _showSortMenu(
+      BuildContext context, AppFlowyThemeData afTheme, String currentSort) {
     final sortOptions = ['添加日期', '标题名称', '文件大小'];
     showModalBottomSheet(
       context: context,
@@ -367,7 +369,8 @@ class _MobileFileLibraryPageState extends State<MobileFileLibraryPage> {
         final filteredFiles = _searchQuery.isEmpty
             ? state.filteredFiles
             : state.filteredFiles
-                .where((f) => f.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+                .where((f) =>
+                    f.name.toLowerCase().contains(_searchQuery.toLowerCase()))
                 .toList();
 
         if (filteredFiles.isEmpty) {
@@ -409,7 +412,8 @@ class _MobileFileLibraryPageState extends State<MobileFileLibraryPage> {
     );
   }
 
-  Widget _buildFileItem(FileLibraryItem file, AppFlowyThemeData afTheme, ThemeData theme) {
+  Widget _buildFileItem(
+      FileLibraryItem file, AppFlowyThemeData afTheme, ThemeData theme) {
     final isSelected = _selectedFileIds.contains(file.id);
     return InkWell(
       onTap: () {
@@ -444,14 +448,11 @@ class _MobileFileLibraryPageState extends State<MobileFileLibraryPage> {
                 width: 20,
                 height: 20,
                 decoration: BoxDecoration(
-                  color: isSelected
-                      ? const Color(0xFFFF6B35)
-                      : Colors.transparent,
+                  color:
+                      isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isSelected
-                        ? const Color(0xFFFF6B35)
-                        : Colors.grey,
+                    color: isSelected ? const Color(0xFFFF6B35) : Colors.grey,
                     width: 1.5,
                   ),
                 ),
@@ -484,7 +485,8 @@ class _MobileFileLibraryPageState extends State<MobileFileLibraryPage> {
                         _formatDate(file.createdAt),
                         style: TextStyle(
                           fontSize: 12,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.5),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -492,7 +494,8 @@ class _MobileFileLibraryPageState extends State<MobileFileLibraryPage> {
                         _formatFileSize(file.size),
                         style: TextStyle(
                           fontSize: 12,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.5),
                         ),
                       ),
                       if (file.duration != null) ...[
@@ -501,7 +504,8 @@ class _MobileFileLibraryPageState extends State<MobileFileLibraryPage> {
                           _formatDuration(file.duration!),
                           style: TextStyle(
                             fontSize: 12,
-                            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.5),
                           ),
                         ),
                       ],
@@ -660,9 +664,7 @@ class _CategoryTabItem extends StatelessWidget {
             height: 2,
             width: label.length * 14.0,
             decoration: BoxDecoration(
-              color: isSelected
-                  ? const Color(0xFFFF6B35)
-                  : Colors.transparent,
+              color: isSelected ? const Color(0xFFFF6B35) : Colors.transparent,
               borderRadius: BorderRadius.circular(1),
             ),
           ),

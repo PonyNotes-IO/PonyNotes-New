@@ -69,7 +69,7 @@ extension MinimalViewExtension on FolderViewMinimalPB {
         style: TextStyle(fontSize: 16.0),
       );
     }
-    
+
     // 其他类型返回 SVG 图标
     return FlowySvg(
       switch (layout) {
@@ -109,7 +109,7 @@ extension ViewExtension on ViewPB {
         style: TextStyle(fontSize: 16.0),
       );
     }
-    
+
     // 其他类型返回 SVG 图标
     return FlowySvg(
       switch (layout) {
@@ -140,10 +140,12 @@ extension ViewExtension on ViewPB {
 
   Plugin plugin({
     Map<String, dynamic> arguments = const {},
+    ViewPB? initialSelectedView,
   }) {
     // 如果是空间类型，返回 SpaceHubPlugin（空间统一页面）
     if (isSpace) {
-      return SpaceHubPlugin(view: this);
+      return SpaceHubPlugin(
+          view: this, initialSelectedView: initialSelectedView);
     }
 
     switch (layout) {
@@ -408,7 +410,8 @@ extension ViewLayoutExtension on ViewLayoutPB {
         ViewLayoutPB.Grid => FlowySvgs.icon_grid_s,
         ViewLayoutPB.Document => FlowySvgs.icon_document_s,
         ViewLayoutPB.Chat => FlowySvgs.chat_ai_page_s,
-        ViewLayoutPB.Whiteboard => FlowySvgs.icon_board_s, // 使用看板图标，后续可更换为专用白板图标
+        ViewLayoutPB.Whiteboard =>
+          FlowySvgs.icon_board_s, // 使用看板图标，后续可更换为专用白板图标
         ViewLayoutPB.Folder => FlowySvgs.folder_m,
         ViewLayoutPB.Notebook => FlowySvgs.folder_m, // 使用文件夹图标，后面可以改为专门的笔记本图标
         _ => FlowySvgs.icon_document_s,
@@ -430,22 +433,28 @@ extension ViewLayoutExtension on ViewLayoutPB {
         ViewLayoutPB.Board ||
         ViewLayoutPB.Calendar =>
           true,
-        ViewLayoutPB.Document || 
+        ViewLayoutPB.Document ||
         ViewLayoutPB.Chat ||
-        ViewLayoutPB.Whiteboard => false,
+        ViewLayoutPB.Whiteboard =>
+          false,
         _ => false, // 临时处理：未知layout type返回false而不是抛异常
       };
 
   /// Returns the localized default name for each view layout type
   String get defaultName => switch (this) {
-        ViewLayoutPB.Document => LocaleKeys.menuAppHeader_defaultNewDocumentName.tr(),
+        ViewLayoutPB.Document =>
+          LocaleKeys.menuAppHeader_defaultNewDocumentName.tr(),
         ViewLayoutPB.Grid => LocaleKeys.menuAppHeader_defaultNewGridName.tr(),
         ViewLayoutPB.Board => LocaleKeys.menuAppHeader_defaultNewBoardName.tr(),
-        ViewLayoutPB.Calendar => LocaleKeys.menuAppHeader_defaultNewCalendarName.tr(),
+        ViewLayoutPB.Calendar =>
+          LocaleKeys.menuAppHeader_defaultNewCalendarName.tr(),
         ViewLayoutPB.Chat => LocaleKeys.menuAppHeader_defaultNewChatName.tr(),
-        ViewLayoutPB.Whiteboard => LocaleKeys.menuAppHeader_defaultNewWhiteboardName.tr(),
-        ViewLayoutPB.Folder => LocaleKeys.menuAppHeader_defaultNewFolderName.tr(),
-        ViewLayoutPB.Notebook => LocaleKeys.menuAppHeader_defaultNewNotebookName.tr(),
+        ViewLayoutPB.Whiteboard =>
+          LocaleKeys.menuAppHeader_defaultNewWhiteboardName.tr(),
+        ViewLayoutPB.Folder =>
+          LocaleKeys.menuAppHeader_defaultNewFolderName.tr(),
+        ViewLayoutPB.Notebook =>
+          LocaleKeys.menuAppHeader_defaultNewNotebookName.tr(),
         _ => LocaleKeys.menuAppHeader_defaultNewPageName.tr(),
       };
 
@@ -456,7 +465,10 @@ extension ViewLayoutExtension on ViewLayoutPB {
       };
 
   double get pluginHeight => switch (this) {
-        ViewLayoutPB.Document || ViewLayoutPB.Board || ViewLayoutPB.Chat => 450, // || ViewLayoutPB.Whiteboard 暂时注释
+        ViewLayoutPB.Document ||
+        ViewLayoutPB.Board ||
+        ViewLayoutPB.Chat =>
+          450, // || ViewLayoutPB.Whiteboard 暂时注释
         ViewLayoutPB.Calendar => 650,
         ViewLayoutPB.Grid => double.infinity,
         _ => 450, // 临时处理：未知layout type返回默认高度
@@ -468,7 +480,8 @@ extension ViewLayoutExtension on ViewLayoutPB {
         ViewLayoutPB.Chat ||
         ViewLayoutPB.Grid ||
         ViewLayoutPB.Board ||
-        ViewLayoutPB.Calendar => false,
+        ViewLayoutPB.Calendar =>
+          false,
         _ => false,
       };
 }

@@ -72,19 +72,21 @@ class SpaceHubPluginBuilder extends PluginBuilder {
 class SpaceHubPlugin extends Plugin {
   SpaceHubPlugin({
     required this.view,
+    ViewPB? initialSelectedView,
   })  : notifier = ViewPluginNotifier(view: view),
         _viewInfoBloc = ViewInfoBloc(view: view)
           ..add(const ViewInfoEvent.started()),
         _pageAccessLevelBloc = PageAccessLevelBloc(view: view)
           ..add(const PageAccessLevelEvent.initial()),
-        _selectedViewNotifier = ValueNotifier<ViewPB?>(null),
+        _selectedViewNotifier = ValueNotifier<ViewPB?>(initialSelectedView),
         _currentViewInfoBlocNotifier = ValueNotifier<ViewInfoBloc?>(null);
 
   final ViewPB view;
   final ViewInfoBloc _viewInfoBloc;
   final PageAccessLevelBloc _pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> _selectedViewNotifier;
-  final ValueNotifier<ViewInfoBloc?> _currentViewInfoBlocNotifier; // ✅ 用于跟踪当前文档的 ViewInfoBloc
+  final ValueNotifier<ViewInfoBloc?>
+      _currentViewInfoBlocNotifier; // ✅ 用于跟踪当前文档的 ViewInfoBloc
 
   @override
   final ViewPluginNotifier notifier;
@@ -96,6 +98,7 @@ class SpaceHubPlugin extends Plugin {
         notifier: notifier,
         selectedViewNotifier: _selectedViewNotifier,
         currentViewInfoBlocNotifier: _currentViewInfoBlocNotifier,
+        initialSelectedView: _selectedViewNotifier.value,
       );
 
   @override
@@ -129,13 +132,16 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
     required this.pageAccessLevelBloc,
     required this.selectedViewNotifier,
     required this.currentViewInfoBlocNotifier,
+    this.initialSelectedView,
   });
 
   final ViewInfoBloc bloc;
   final ViewPluginNotifier notifier;
   final PageAccessLevelBloc pageAccessLevelBloc;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
-  final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ValueNotifier<ViewInfoBloc?>
+      currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ViewPB? initialSelectedView;
 
   ViewPB get view => notifier.view;
 
@@ -161,7 +167,8 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
               final effectiveViewInfoBloc = currentViewInfoBloc ?? bloc;
               return MultiBlocProvider(
                 providers: [
-                  BlocProvider<ViewInfoBloc>.value(value: effectiveViewInfoBloc),
+                  BlocProvider<ViewInfoBloc>.value(
+                      value: effectiveViewInfoBloc),
                 ],
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -186,7 +193,9 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
                       view: selectedView,
                     ),
                     const HSpace(10),
-                    MoreViewActions(view: selectedView, viewInfoBloc: effectiveViewInfoBloc),
+                    MoreViewActions(
+                        view: selectedView,
+                        viewInfoBloc: effectiveViewInfoBloc),
                     const HSpace(10),
                   ],
                 ),
@@ -222,6 +231,7 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
           bloc: bloc,
           pageAccessLevelBloc: pageAccessLevelBloc,
           currentViewInfoBlocNotifier: currentViewInfoBlocNotifier,
+          initialSelectedView: initialSelectedView,
         );
       },
     );
@@ -268,6 +278,7 @@ class _SpaceHubBlocProvider extends StatefulWidget {
     required this.bloc,
     required this.pageAccessLevelBloc,
     required this.currentViewInfoBlocNotifier,
+    this.initialSelectedView,
   });
 
   final ViewPB spaceView;
@@ -276,7 +287,9 @@ class _SpaceHubBlocProvider extends StatefulWidget {
   final PluginContext pluginContext;
   final ViewInfoBloc bloc;
   final PageAccessLevelBloc pageAccessLevelBloc;
-  final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ValueNotifier<ViewInfoBloc?>
+      currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ViewPB? initialSelectedView;
 
   @override
   State<_SpaceHubBlocProvider> createState() => _SpaceHubBlocProviderState();
@@ -335,6 +348,7 @@ class _SpaceHubBlocProviderState extends State<_SpaceHubBlocProvider> {
         selectedViewNotifier: widget.selectedViewNotifier,
         onDeleted: widget.onDeleted,
         currentViewInfoBlocNotifier: widget.currentViewInfoBlocNotifier,
+        initialSelectedView: widget.initialSelectedView,
       ),
     );
   }
@@ -347,12 +361,15 @@ class _SpaceHubContent extends StatefulWidget {
     required this.selectedViewNotifier,
     required this.onDeleted,
     required this.currentViewInfoBlocNotifier,
+    this.initialSelectedView,
   });
 
   final ViewPB spaceView;
   final ValueNotifier<ViewPB?> selectedViewNotifier;
   final Function(ViewPB, int?)? onDeleted;
-  final ValueNotifier<ViewInfoBloc?> currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ValueNotifier<ViewInfoBloc?>
+      currentViewInfoBlocNotifier; // ✅ 用于 rightBarItem 获取当前文档的 ViewInfoBloc
+  final ViewPB? initialSelectedView;
 
   @override
   State<_SpaceHubContent> createState() => _SpaceHubContentState();
@@ -398,8 +415,14 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   @override
   void initState() {
     super.initState();
-    // 尝试从 SpaceBloc 获取当前空间的第一个文档作为默认选中
-    _trySelectFirstDocument();
+    // 若有预选文档（从新选项卡打开），直接使用，否则尝试选第一个文档
+    if (widget.initialSelectedView != null) {
+      _selectedView = widget.initialSelectedView;
+      widget.selectedViewNotifier.value = widget.initialSelectedView;
+      _addToRecentViews(widget.initialSelectedView!.id);
+    } else {
+      _trySelectFirstDocument();
+    }
   }
 
   @override
@@ -499,8 +522,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                               FullWindowController.exit();
                             }
                             context.read<HomeSettingBloc>().add(
-                              HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
-                            );
+                                  HomeSettingEvent.changeMenuStatus(
+                                      MenuStatus.expanded),
+                                );
                           },
                         ),
                       ),
@@ -565,8 +589,10 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           if (curr.currentSpace?.id != widget.spaceView.id) {
             return false;
           }
-          final prevIds = prev.currentSpace?.childViews.map((v) => v.id).join(',');
-          final currIds = curr.currentSpace?.childViews.map((v) => v.id).join(',');
+          final prevIds =
+              prev.currentSpace?.childViews.map((v) => v.id).join(',');
+          final currIds =
+              curr.currentSpace?.childViews.map((v) => v.id).join(',');
           return prev.currentSpace?.id != curr.currentSpace?.id ||
               prevIds != currIds ||
               prev.isInitialized != curr.isInitialized;
@@ -615,12 +641,14 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
 
           ViewInfoBloc viewInfoBloc;
           if (existingBloc != null) {
-            Log.debug('SpaceHub: Reusing existing ViewInfoBloc for view: ${view.id}, hashCode: ${existingBloc.hashCode}');
+            Log.debug(
+                'SpaceHub: Reusing existing ViewInfoBloc for view: ${view.id}, hashCode: ${existingBloc.hashCode}');
             viewInfoBloc = existingBloc;
           } else {
             viewInfoBloc = ViewInfoBloc(view: view)
               ..add(const ViewInfoEvent.started());
-            Log.debug('SpaceHub: Created new ViewInfoBloc for view: ${view.id}, hashCode: ${viewInfoBloc.hashCode}');
+            Log.debug(
+                'SpaceHub: Created new ViewInfoBloc for view: ${view.id}, hashCode: ${viewInfoBloc.hashCode}');
             _childViewInfoBlocs.add(viewInfoBloc);
           }
 
@@ -867,15 +895,18 @@ class _SpaceDocumentList extends StatelessWidget {
                     (view) async {
                       // ✅ 关键修复：强制更新 view_type，确保即使在 Space 下创建也能正确识别
                       // 某些情况下 Space 下创建 Document 可能会丢失 extra，这里二次确认
-                      if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
+                      if (pluginBuilder.pluginType ==
+                          PluginType.handwritingSaber) {
                         try {
                           await ViewBackendService.updateView(
                             viewId: view.id,
-                            extra: jsonEncode({'view_type': 'handwriting_saber'}),
+                            extra:
+                                jsonEncode({'view_type': 'handwriting_saber'}),
                           );
                           // 更新本地 view 对象，确保 UI 立即渲染正确
-                          if (view.extra.isEmpty || !view.extra.contains('view_type')) {
-                             view.extra = '{"view_type":"handwriting_saber"}';
+                          if (view.extra.isEmpty ||
+                              !view.extra.contains('view_type')) {
+                            view.extra = '{"view_type":"handwriting_saber"}';
                           }
                         } catch (e) {
                           Log.error('Failed to force update view type: $e');
@@ -903,18 +934,21 @@ class _SpaceDocumentList extends StatelessWidget {
                   );
                   await result.fold((view) async {
                     // ✅ 关键修复：强制更新 view_type (Fallback)
-                    if (pluginBuilder.pluginType == PluginType.handwritingSaber) {
-                        try {
-                          await ViewBackendService.updateView(
-                            viewId: view.id,
-                            extra: jsonEncode({'view_type': 'handwriting_saber'}),
-                          );
-                           if (view.extra.isEmpty || !view.extra.contains('view_type')) {
-                             view.extra = '{"view_type":"handwriting_saber"}';
-                          }
-                        } catch (e) {
-                          Log.error('Failed to force update view type (fallback): $e');
+                    if (pluginBuilder.pluginType ==
+                        PluginType.handwritingSaber) {
+                      try {
+                        await ViewBackendService.updateView(
+                          viewId: view.id,
+                          extra: jsonEncode({'view_type': 'handwriting_saber'}),
+                        );
+                        if (view.extra.isEmpty ||
+                            !view.extra.contains('view_type')) {
+                          view.extra = '{"view_type":"handwriting_saber"}';
                         }
+                      } catch (e) {
+                        Log.error(
+                            'Failed to force update view type (fallback): $e');
+                      }
                     }
                     // Fallback create success
                     onViewCreated(view);

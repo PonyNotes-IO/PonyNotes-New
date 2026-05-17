@@ -30,7 +30,7 @@ Future<T?> showTrashConfirmDialog<T>({
   return showDialog<T>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.25),
-      builder: (dialogContext) {
+    builder: (dialogContext) {
       final theme = Theme.of(context);
       return Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -273,7 +273,9 @@ class _TrashSearchBar extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(4, 10, 8, 10),
                         child: FlowySvg(
                           FlowySvgs.search_clear_m,
-                          color: AppFlowyTheme.of(context).iconColorScheme.tertiary,
+                          color: AppFlowyTheme.of(context)
+                              .iconColorScheme
+                              .tertiary,
                           size: const Size.square(20),
                         ),
                       ),
@@ -390,7 +392,7 @@ class _TrashActionAllButton extends StatelessWidget {
     return BlocProvider.value(
       value: trashBloc,
       child: BottomSheetActionWidget(
-        svg: isDeleteAll ? FlowySvgs.m_trash_delete_m : FlowySvgs.m_trash_restore_m,
+        svg: isDeleteAll ? FlowySvgs.m_delete_m : FlowySvgs.m_restore_m,
         text: isDeleteAll
             ? LocaleKeys.trash_deleteAll.tr()
             : LocaleKeys.trash_restoreAll.tr(),
@@ -539,7 +541,7 @@ class _TrashItemActions extends StatelessWidget {
             );
           },
           child: FlowySvg(
-            FlowySvgs.m_trash_restore_m,
+            FlowySvgs.m_restore_m,
             size: const Size.square(24),
             color: theme.colorScheme.onSurface,
           ),
@@ -562,11 +564,11 @@ class _TrashItemActions extends StatelessWidget {
               },
             );
           },
-          child:         FlowySvg(
-          FlowySvgs.m_trash_delete_m,
-          size: const Size.square(24),
-          color: theme.colorScheme.onSurface,
-        ),
+          child: FlowySvg(
+            FlowySvgs.m_delete_m,
+            size: const Size.square(24),
+            color: theme.colorScheme.onSurface,
+          ),
         ),
       ],
     );
@@ -596,7 +598,8 @@ class _TrashPreviewBottomSheetState extends State<_TrashPreviewBottomSheet> {
 
   Future<void> _loadDocument() async {
     final documentService = DocumentService();
-    final result = await documentService.getDocument(documentId: widget.trashId);
+    final result =
+        await documentService.getDocument(documentId: widget.trashId);
 
     if (mounted) {
       setState(() {
@@ -743,11 +746,14 @@ class _TrashPreviewBottomSheetState extends State<_TrashPreviewBottomSheet> {
       if (heading != null) {
         switch (heading) {
           case 1:
-            return baseStyle.copyWith(fontSize: 24, fontWeight: FontWeight.bold);
+            return baseStyle.copyWith(
+                fontSize: 24, fontWeight: FontWeight.bold);
           case 2:
-            return baseStyle.copyWith(fontSize: 20, fontWeight: FontWeight.bold);
+            return baseStyle.copyWith(
+                fontSize: 20, fontWeight: FontWeight.bold);
           case 3:
-            return baseStyle.copyWith(fontSize: 18, fontWeight: FontWeight.bold);
+            return baseStyle.copyWith(
+                fontSize: 18, fontWeight: FontWeight.bold);
         }
       }
     }
