@@ -26,7 +26,17 @@ class InitRustSDKTask extends LaunchTask {
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
 
-    final root = await getApplicationSupportDirectory();
+    Directory root;
+    try {
+      root = await getApplicationSupportDirectory();
+    } catch (e) {
+      Log.error('Failed to get application support directory: $e');
+      if (Platform.isAndroid) {
+        root = Directory('/data/data/com.xiaomabiji.app.note/cache');
+      } else {
+        root = Directory('./data');
+      }
+    }
     final applicationPath = await appFlowyApplicationDataDirectory();
     final dir = customApplicationPath ?? applicationPath;
     final deviceId = await getDeviceId();
