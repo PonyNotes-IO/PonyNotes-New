@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 
+import '../../util/log_utils.dart';
 import '../startup.dart';
 
 class InitLocalizationTask extends LaunchTask {
@@ -7,9 +8,12 @@ class InitLocalizationTask extends LaunchTask {
 
   @override
   Future<void> initialize(LaunchContext context) async {
-    await super.initialize(context);
+    try {
+      await EasyLocalization.ensureInitialized();
+      EasyLocalization.logger.enableBuildModes = [];
+    } catch (e) {
+      LogUtils.error(e.runtimeType);
+    }
 
-    await EasyLocalization.ensureInitialized();
-    EasyLocalization.logger.enableBuildModes = [];
   }
 }

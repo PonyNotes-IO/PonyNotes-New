@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:appflowy_backend/log.dart';
 
+import '../../util/log_utils.dart';
 import '../startup.dart';
 
 class InitMediaKitTask extends LaunchTask {
@@ -13,8 +14,12 @@ class InitMediaKitTask extends LaunchTask {
   @override
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
-    WidgetsFlutterBinding.ensureInitialized();
-    MediaKit.ensureInitialized();
+    try {
+      MediaKit.ensureInitialized();
+    } catch (e) {
+      LogUtils.error(e.runtimeType);
+    }
+
     // Initialize media_kit for video/audio playback support
     // Skip initialization on macOS as it requires additional native libraries
   }

@@ -146,15 +146,14 @@ class FlowyRunner {
         MemoryLeakDetectorTask(),
         DebugTask(),
         const FeatureFlagTask(),
-        // init media_kit for video/audio playback
-        const InitMediaKitTask(),
-
-        // localization
-        const InitLocalizationTask(),
         // init the app window
         InitAppWindowTask(),
-        // Init Rust SDK
+        // Init Rust SDK - must be initialized first to ensure platform channels work
         InitRustSDKTask(),
+
+        // localization - moved after Rust SDK to ensure platform channels are ready
+        const InitLocalizationTask(),
+        
         // Load Plugins, like document, grid ...
         const PluginLoadTask(),
         const FileStorageTask(),
@@ -167,7 +166,8 @@ class FlowyRunner {
         
         // Initialize notification service and check permissions
         const NotificationServiceTask(),
-
+        // init media_kit for video/audio playback
+        const InitMediaKitTask(),
         // init the app widget
         // ignore in test mode
         if (!mode.isUnitTest) ...[
