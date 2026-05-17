@@ -1037,6 +1037,7 @@ class _MobileSettingsMenuContent extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => _MobileUpgradePlanPage(
+          userProfile: userProfile,
           subscriptionInfo: subscriptionInfo,
           workspaceId: workspaceId,
         ),
@@ -1498,10 +1499,12 @@ enum _BillingPeriod { monthly, yearly }
 
 class _MobileUpgradePlanPage extends StatefulWidget {
   const _MobileUpgradePlanPage({
+    required this.userProfile,
     required this.subscriptionInfo,
     required this.workspaceId,
   });
 
+  final UserProfilePB userProfile;
   final WorkspaceSubscriptionInfoPB? subscriptionInfo;
   final String workspaceId;
 
@@ -1567,6 +1570,7 @@ class _MobileUpgradePlanPageState extends State<_MobileUpgradePlanPage> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: _UpgradePlanBody(
+                userProfile: widget.userProfile,
                 subscriptionInfo: widget.subscriptionInfo,
                 billingPeriod: _billingPeriod,
                 onBillingPeriodChanged: (period) {
@@ -1583,11 +1587,13 @@ class _MobileUpgradePlanPageState extends State<_MobileUpgradePlanPage> {
 
 class _UpgradePlanBody extends StatelessWidget {
   const _UpgradePlanBody({
+    required this.userProfile,
     required this.subscriptionInfo,
     required this.billingPeriod,
     required this.onBillingPeriodChanged,
   });
 
+  final UserProfilePB userProfile;
   final WorkspaceSubscriptionInfoPB? subscriptionInfo;
   final _BillingPeriod billingPeriod;
   final void Function(_BillingPeriod) onBillingPeriodChanged;
@@ -1596,25 +1602,13 @@ class _UpgradePlanBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
-
     return SingleChildScrollView(
       padding: const EdgeInsets.only(top: 24, bottom: 40),
-      child: Column(
+        child: Column(
         children: [
-          Text(
-            '解锁全部高级功能',
-            style: theme.textStyle.heading2.standard(
-              color: theme.textColorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '选择一个适合您的方案',
-            style: theme.textStyle.body.standard(
-              color: theme.textColorScheme.secondary,
-            ),
-          ),
+          _buildUserInfo(context),
+          const SizedBox(height: 16),
+          _buildBillingToggle(context),
           const SizedBox(height: 24),
           _buildUpgradePlanCards(context),
           const SizedBox(height: 24),
@@ -1624,97 +1618,144 @@ class _UpgradePlanBody extends StatelessWidget {
     );
   }
 
+  Widget _buildUserInfo(BuildContext context) {
+    const double avatarSize = 48;
+    const double horizontalPadding = 16.0;
+    final theme = AppFlowyTheme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(
+        horizontalPadding,
+        16,
+        horizontalPadding,
+        16,
+      ),
+      child: Row(
+        children: [
+          _buildAvatar(avatarSize),
+          const HSpace(16),
+          Text(
+            _displayName,
+            style: theme.textStyle.heading4.standard(
+              color: theme.textColorScheme.primary,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String get _displayName {
+    if (userProfile.name.isNotEmpty) return userProfile.name;
+    if (userProfile.hasPhone() && userProfile.phone.isNotEmpty) {
+      return userProfile.phone;
+    }
+    if (userProfile.email.isNotEmpty) return userProfile.email;
+    return '小马AI笔记的用户';
+  }
+
+  Widget _buildAvatar(double size) {
+    final iconUrl = userProfile.iconUrl;
+
+    if (iconUrl.isEmpty) return _buildDefaultAvatar(size);
+
+    if (iconUrl.startsWith('http://') || iconUrl.startsWith('https://')) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(size / 2),
+        child: Image.network(
+          iconUrl,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size / 2),
+      child: Image.file(
+        io.File(iconUrl),
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildDefaultAvatar(size),
+      ),
+    );
+  }
+
+  Widget _buildDefaultAvatar(double size) {
+    return AFAvatar(
+      name: _displayName,
+      size: AFAvatarSize.s,
+    );
+  }
+
   Widget _buildBillingToggle(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     final isYearly = billingPeriod == _BillingPeriod.yearly;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        GestureDetector(
-          onTap: () => onBillingPeriodChanged(_BillingPeriod.monthly),
-          child: Text(
-            '按月',
-            style: theme.textStyle.body.standard(
-              color: !isYearly
-                  ? theme.textColorScheme.primary
-                  : theme.textColorScheme.secondary,
-            ).copyWith(
-              fontWeight: !isYearly ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Container(
-          width: 44,
-          height: 24,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: theme.surfaceColorScheme.layer02,
-          ),
-          child: Stack(
-            children: [
-              AnimatedPositioned(
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: theme.surfaceColorScheme.layer02,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onBillingPeriodChanged(_BillingPeriod.monthly),
+              child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                left: isYearly ? 22 : 2,
-                top: 2,
-                child: GestureDetector(
-                  onTap: () => onBillingPeriodChanged(
-                    isYearly ? _BillingPeriod.monthly : _BillingPeriod.yearly,
-                  ),
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: theme.surfaceColorScheme.primary,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                decoration: BoxDecoration(
+                  color: !isYearly ? theme.surfaceColorScheme.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Text(
+                    '月份会员',
+                    style: theme.textStyle.body.standard(
+                      color: !isYearly
+                          ? theme.textColorScheme.onFill
+                          : theme.textColorScheme.secondary,
+                    ).copyWith(
+                      fontWeight: !isYearly ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        GestureDetector(
-          onTap: () => onBillingPeriodChanged(_BillingPeriod.yearly),
-          child: Row(
-            children: [
-              Text(
-                '按年',
-                style: theme.textStyle.body.standard(
-                  color: isYearly
-                      ? theme.textColorScheme.primary
-                      : theme.textColorScheme.secondary,
-                ).copyWith(
-                  fontWeight: isYearly ? FontWeight.w600 : FontWeight.normal,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onBillingPeriodChanged(_BillingPeriod.yearly),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFE5B4),
+                  color: isYearly ? theme.surfaceColorScheme.primary : Colors.transparent,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  '省2月',
-                  style: theme.textStyle.body.standard(
-                    color: const Color(0xFF8B4513),
-                  ).copyWith(fontSize: 10, fontWeight: FontWeight.w600),
+                child: Center(
+                  child: Text(
+                    '年付会员',
+                    style: theme.textStyle.body.standard(
+                      color: isYearly
+                          ? theme.textColorScheme.onFill
+                          : theme.textColorScheme.secondary,
+                    ).copyWith(
+                      fontWeight: isYearly ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
