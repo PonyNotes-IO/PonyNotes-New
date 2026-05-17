@@ -354,6 +354,7 @@ flutter:
     - assets/excalidraw/
     - assets/excalidraw/assets/
     - assets/excalidraw/assets/locales/
+    - assets/navigation/
 
     # The following assets will be excluded in release.
     # BEGIN: EXCLUDE_IN_RELEASE
