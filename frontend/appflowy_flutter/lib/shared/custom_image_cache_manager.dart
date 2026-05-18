@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:appflowy/shared/appflowy_cache_manager.dart';
 import 'package:appflowy/startup/tasks/prelude.dart';
 import 'package:file/file.dart' hide FileSystem;
@@ -5,27 +7,30 @@ import 'package:file/local.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path/path.dart' as p;
 
-class CustomImageCacheManager extends CacheManager
-    with ImageCacheManager
-    implements ICache {
+class CustomImageCacheManager extends CacheManager implements ICache {
+  static CustomImageCacheManager? _instance;
+
+  static const key = 'image_cache';
+
+  static CustomImageCacheManager get instance {
+    if (_instance == null) {
+      _instance = CustomImageCacheManager._();
+    }
+    return _instance!;
+  }
+
   CustomImageCacheManager._()
       : super(
           Config(
             key,
-            fileSystem: CustomIOFileSystem(key),
+            fileSystem: _LazyFileSystem(key),
           ),
         );
 
-  factory CustomImageCacheManager() => _instance;
-
-  static final CustomImageCacheManager _instance = CustomImageCacheManager._();
-
-  static const key = 'image_cache';
+  factory CustomImageCacheManager() => instance;
 
   @override
   Future<int> cacheSize() async {
-    // https://github.com/Baseflow/flutter_cache_manager/issues/239#issuecomment-719475429
-    // this package does not provide a way to get the cache size
     return 0;
   }
 
@@ -35,27 +40,40 @@ class CustomImageCacheManager extends CacheManager
   }
 }
 
-class CustomIOFileSystem implements FileSystem {
-  CustomIOFileSystem(this._cacheKey) : _fileDir = createDirectory(_cacheKey);
-  final Future<Directory> _fileDir;
+class _LazyFileSystem implements FileSystem {
+  _LazyFileSystem(this._cacheKey);
   final String _cacheKey;
+  FileSystem? _delegate;
 
-  static Future<Directory> createDirectory(String key) async {
-    final baseDir = await appFlowyApplicationDataDirectory();
-    final path = p.join(baseDir.path, key);
+  Future<FileSystem> _getDelegate() async {
+    if (_delegate == null) {
+      final baseDir = await appFlowyApplicationDataDirectory();
+      final path = p.join(baseDir.path, _cacheKey);
 
-    const fs = LocalFileSystem();
-    final directory = fs.directory(path);
-    await directory.create(recursive: true);
-    return directory;
+      const fs = LocalFileSystem();
+      final directory = fs.directory(path);
+      await directory.create(recursive: true);
+      _delegate = _RealFileSystem(directory);
+    }
+    return _delegate!;
   }
 
   @override
   Future<File> createFile(String name) async {
-    final directory = await _fileDir;
-    if (!(await directory.exists())) {
-      await createDirectory(_cacheKey);
+    final delegate = await _getDelegate();
+    return delegate.createFile(name);
+  }
+}
+
+class _RealFileSystem implements FileSystem {
+  _RealFileSystem(this._directory);
+  final Directory _directory;
+
+  @override
+  Future<File> createFile(String name) async {
+    if (!(await _directory.exists())) {
+      await _directory.create(recursive: true);
     }
-    return directory.childFile(name);
+    return _directory.childFile(name);
   }
 }

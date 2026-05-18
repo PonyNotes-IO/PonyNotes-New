@@ -27,9 +27,8 @@ class FlowyNetworkSvg extends StatefulWidget {
     this.fadeDuration = Duration.zero,
     this.colorFilter,
     this.placeholderBuilder,
-    BaseCacheManager? cacheManager,
-  })  : cacheManager = cacheManager ?? CustomImageCacheManager(),
-        super(key: key ?? ValueKey(url));
+    this.cacheManager,
+  }) : super(key: key ?? ValueKey(url));
 
   final String url;
   final String? cacheKey;
@@ -48,7 +47,7 @@ class FlowyNetworkSvg extends StatefulWidget {
   final SvgTheme theme;
   final Duration fadeDuration;
   final WidgetBuilder? placeholderBuilder;
-  final BaseCacheManager cacheManager;
+  final CustomImageCacheManager? cacheManager;
 
   @override
   State<FlowyNetworkSvg> createState() => _FlowyNetworkSvgState();
@@ -108,12 +107,13 @@ class _FlowyNetworkSvgState extends State<FlowyNetworkSvg>
     try {
       _setToLoadingAfter15MsIfNeeded();
 
-      var file = (await widget.cacheManager.getFileFromMemory(_cacheKey))?.file;
+      final cacheManager = widget.cacheManager ?? CustomImageCacheManager();
 
-      file ??= await widget.cacheManager.getSingleFile(
+      var file = (await cacheManager.getFileFromMemory(_cacheKey))?.file;
+
+      file ??= await cacheManager.getSingleFile(
         widget.url,
-        key: _cacheKey,
-        headers: widget.headers ?? {},
+        headers: widget.headers,
       );
 
       _imageFile = file;
