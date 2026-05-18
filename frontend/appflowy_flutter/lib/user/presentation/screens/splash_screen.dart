@@ -256,7 +256,7 @@ class Body extends StatelessWidget {
     return Container(
       alignment: Alignment.center,
       child: UniversalPlatform.isMobile
-          ? const FlowySvg(FlowySvgs.app_logo_xl, blendMode: null)
+          ? const _MobileSplashBody()
           : const _DesktopSplashBody(),
     );
   }
@@ -280,6 +280,24 @@ class _DesktopSplashBody extends StatelessWidget {
               'assets/images/appflowy_launch_splash.jpg',
             ),
           ),
+          const CircularProgressIndicator.adaptive(),
+        ],
+      ),
+    );
+  }
+}
+
+class _MobileSplashBody extends StatelessWidget {
+  const _MobileSplashBody();
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return SingleChildScrollView(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          FlowySvg(FlowySvgs.app_logo_xl, blendMode: null),
           const CircularProgressIndicator.adaptive(),
         ],
       ),
