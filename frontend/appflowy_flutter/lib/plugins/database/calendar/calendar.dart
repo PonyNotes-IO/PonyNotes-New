@@ -1837,11 +1837,17 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
 
       return await allViewsResult.fold(
         (allViews) async {
+          final viewById = {for (final v in allViews.items) v.id: v};
+
           final documentViews = allViews.items
-              .where((view) =>
-                  view.layout == ViewLayoutPB.Document &&
-                  view.name.isNotEmpty &&
-                  !_isSystemView(view.name))
+              .where(
+                (view) =>
+                    view.layout == ViewLayoutPB.Document &&
+                    view.name.isNotEmpty &&
+                    !_isSystemView(view.name) &&
+                    // 排除祖先链中包含被过滤节点的视图（他人私有空间内的子文档）
+                    _isAncestorChainAccessible(view, viewById),
+              )
               .toList();
 
           final selectedDateStart = DateTime(date.year, date.month, date.day);
@@ -1910,6 +1916,22 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
         viewName.toLowerCase().contains('workspace') ||
         viewName.toLowerCase().contains('system') ||
         viewName.toLowerCase().contains('setting');
+  }
+
+  // Rust 层只过滤他人私有空间的根节点，子文档仍存在于 allViews 中。
+  // 沿 parentViewId 向上追溯，若遇到不在 viewById 中的非空父节点，
+  // 说明祖先已被过滤（属于他人私有空间），应排除。
+  bool _isAncestorChainAccessible(ViewPB view, Map<String, ViewPB> viewById) {
+    final seen = <String>{};
+    String? currentId = view.parentViewId.isEmpty ? null : view.parentViewId;
+    while (currentId != null) {
+      if (seen.contains(currentId)) break;
+      seen.add(currentId);
+      final parent = viewById[currentId];
+      if (parent == null) return false;
+      currentId = parent.parentViewId.isEmpty ? null : parent.parentViewId;
+    }
+    return true;
   }
 
   Widget _buildEmptyState() {

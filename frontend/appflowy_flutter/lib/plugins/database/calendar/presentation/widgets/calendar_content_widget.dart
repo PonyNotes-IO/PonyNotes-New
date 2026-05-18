@@ -237,6 +237,26 @@ class _CalendarContentState extends State<CalendarContent> {
         parent.layout == ViewLayoutPB.Calendar;
   }
 
+  // 判断视图的祖先链是否完整可达。
+  // Rust 层仅过滤掉他人私有空间的根节点 ID，但其子文档仍存在于 allViews 中。
+  // 若沿 parentViewId 向上追溯时遇到"非空但不存在于 viewById 的父节点"，
+  // 则说明该视图的祖先被过滤掉了（属于他人的私有空间），应将其排除。
+  bool _isAncestorChainAccessible(ViewPB view, Map<String, ViewPB> viewById) {
+    final seen = <String>{};
+    String? currentId = view.parentViewId.isEmpty ? null : view.parentViewId;
+    while (currentId != null) {
+      if (seen.contains(currentId)) break; // 防止循环
+      seen.add(currentId);
+      final parent = viewById[currentId];
+      if (parent == null) {
+        // parentViewId 非空但在 viewById 中找不到，说明祖先被过滤
+        return false;
+      }
+      currentId = parent.parentViewId.isEmpty ? null : parent.parentViewId;
+    }
+    return true;
+  }
+
   // 判断是否为系统视图
   bool _isSystemView(String viewName) {
     // 系统视图名称列表
@@ -288,7 +308,10 @@ class _CalendarContentState extends State<CalendarContent> {
                     view.name.isNotEmpty &&
                     !_isSystemView(view.name) &&
                     // 排除数据库类型（Grid/Board/Calendar）子页面（表格行展开的页面、图片等）
-                    !_isChildOfDatabaseView(view, _viewById),
+                    !_isChildOfDatabaseView(view, _viewById) &&
+                    // 排除祖先链不完整的视图（即其父节点已被 Rust 过滤，
+                    // 属于他人私有空间内的子文档，不应对当前用户可见）
+                    _isAncestorChainAccessible(view, _viewById),
               )
               .toList();
 
