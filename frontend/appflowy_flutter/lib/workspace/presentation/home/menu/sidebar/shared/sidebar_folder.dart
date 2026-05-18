@@ -8,11 +8,11 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/folder/_section_folder.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ai_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_calendar_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_home_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_favorite_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_share_button.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_publish_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
@@ -34,24 +34,23 @@ class SidebarFolder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // debug log removed
-    const sectionPadding = 4.0;
     return ValueListenableBuilder(
       valueListenable: getIt<MenuSharedState>().notifier,
       builder: (context, value, child) {
         // debug log removed
         return Column(
           children: [
-            const VSpace(sectionPadding),
+            const VSpace(sidebarEntryGroupTopGap),
             // home button
             const SidebarHomeButton(),
             // AI button
-            const VSpace(sectionPadding),
+            const VSpace(sidebarPrimaryEntryGap),
             const SidebarAiButton(),
             // calendar button
-            const VSpace(sectionPadding),
+            const VSpace(sidebarPrimaryEntryGap),
             const SidebarCalendarButton(),
             // favorite
-            const VSpace(sectionPadding),
+            const VSpace(sidebarPrimaryEntryGap),
             const SidebarFavoriteButton(),
             // BlocBuilder<SidebarSectionsBloc, SidebarSectionsState>(
             //   builder: (context, state) {
@@ -102,9 +101,6 @@ class SidebarFolder extends StatelessWidget {
             ),
             // 共享
             const SidebarShareButton(),
-            // 发布
-            // const VSpace(sectionPadding),
-            const SidebarPublishButton(),
             // 模板
             // const VSpace(4.0),
             // const SidebarTemplateNewButton(),

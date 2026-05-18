@@ -47,6 +47,22 @@ class SubscriptionService {
     String? caller,
   }) async {
     final callerInfo = caller != null ? ' (from: $caller)' : '';
+
+    // Fast path: if cloud URL is not configured, skip network request entirely
+    try {
+      final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
+      if (cloudEnv.appflowyCloudConfig.base_url.isEmpty) {
+        if (_cachedSubscription != null) {
+          Log.info('Cloud URL not configured, returning cached subscription$callerInfo');
+          return _cachedSubscription;
+        }
+        Log.warn('Cloud URL not configured, no cached subscription$callerInfo');
+        return null;
+      }
+    } catch (_) {
+      // If getIt fails, proceed with normal flow
+    }
+
     // 尝试获取订阅信息，带重试机制
     CurrentSubscription? subscription;
     try {
@@ -197,7 +213,7 @@ class SubscriptionService {
           'Content-Type': 'application/json',
         },
       ).timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 5),
         onTimeout: () {
           Log.warn('Fetching subscription info timed out');
           return http.Response('', 408);

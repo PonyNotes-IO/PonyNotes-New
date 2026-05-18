@@ -101,7 +101,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     // 关键修复：接收的发布文档检查必须在 creator 检查之前
     // 因为 receive_published_collab 复制文档时 created_by 设为了接收者的 uid，
     // 如果先检查 creator，接收者会被误判为"创建者"而获得 fullAccess
-    final receivedReadonlyResult = await _getReceivedPublishedCollabReadonly(pageId);
+    final authToken = _extractAuthToken(user);
+    final receivedReadonlyResult = await _getReceivedPublishedCollabReadonly(pageId, authToken: authToken);
     if (receivedReadonlyResult.isReceived && receivedReadonlyResult.isReadonly) {
       Log.debug('page $pageId is a received published collab, setting to readonly');
       return FlowyResult.success(ShareAccessLevel.readOnly);
@@ -180,9 +181,11 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
   }
 
   /// 查询接收的发布文档只读状态
+  /// [authToken] 已解析好的 Bearer token，避免重复调用 GET_PROFILE
   Future<({bool isReceived, bool isReadonly})> _getReceivedPublishedCollabReadonly(
-    String pageId,
-  ) async {
+    String pageId, {
+    String? authToken,
+  }) async {
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
       final baseUrl = cloudEnv.appflowyCloudConfig.base_url;
@@ -197,8 +200,8 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
         path: '/api/workspace/published/received/$pageId/readonly',
       );
 
-      final authToken = await _getAuthToken();
-      if (authToken == null || authToken.isEmpty) {
+      final token = authToken ?? await _getAuthToken();
+      if (token == null || token.isEmpty) {
         Log.warn('[PageAccessLevel] Auth token 为空，无法检查接收文档只读状态');
         return (isReceived: false, isReadonly: false);
       }
@@ -208,7 +211,7 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
             uri,
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer $authToken',
+              'Authorization': 'Bearer $token',
             },
           )
           .timeout(
@@ -238,24 +241,27 @@ class RustPageAccessLevelRepositoryImpl implements PageAccessLevelRepository {
     return (isReceived: false, isReadonly: false);
   }
 
+  /// 从 UserProfilePB 中提取 Bearer token（不触发网络请求）
+  String? _extractAuthToken(UserProfilePB user) {
+    final rawToken = user.authToken;
+    if (rawToken == null || rawToken.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(rawToken);
+      if (decoded is Map<String, dynamic>) {
+        final accessToken = decoded['access_token'] as String?;
+        if (accessToken != null && accessToken.isNotEmpty) {
+          return accessToken;
+        }
+      }
+    } catch (_) {}
+    return rawToken;
+  }
+
   Future<String?> _getAuthToken() async {
     try {
       final userResult = await UserBackendService.getCurrentUserProfile();
       return userResult.fold(
-        (user) {
-          final rawToken = user.authToken;
-          if (rawToken == null || rawToken.isEmpty) return null;
-          try {
-            final decoded = jsonDecode(rawToken);
-            if (decoded is Map<String, dynamic>) {
-              final accessToken = decoded['access_token'] as String?;
-              if (accessToken != null && accessToken.isNotEmpty) {
-                return accessToken;
-              }
-            }
-          } catch (_) {}
-          return rawToken;
-        },
+        (user) => _extractAuthToken(user),
         (error) {
           Log.warn('[PageAccessLevel] 获取用户信息失败: $error');
           return null;

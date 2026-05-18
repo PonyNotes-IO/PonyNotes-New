@@ -19,9 +19,12 @@ pub(crate) fn init_log(
   if !INIT_LOG.load(Ordering::SeqCst) {
     INIT_LOG.store(true, Ordering::SeqCst);
 
-    let _ = lib_log::Builder::new("log", &config.storage_path, platform, stream_log_sender)
+    if let Err(e) = lib_log::Builder::new("log", &config.storage_path, platform, stream_log_sender)
       .env_filter(&config.log_filter)
-      .build();
+      .build()
+    {
+      eprintln!("[log_filter] 日志系统初始化失败: {}", e);
+    }
   }
 }
 

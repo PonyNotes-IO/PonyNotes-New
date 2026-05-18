@@ -974,9 +974,10 @@ class UserWorkspaceBloc extends Bloc<UserWorkspaceEvent, UserWorkspaceState> {
     if (newSyncState.isFinish && !newSyncState.isSyncing) {
       // 同步完成，更新订阅信息
       _safeAdd(UserWorkspaceEvent.fetchCurrentSubscription());
-      
+
       // 检查存储限制（只有当间隔大于5分钟后才检查）
       if (_shouldCheckStorage()) {
+        _lastStorageCheckTime = DateTime.now(); // 立即更新，防止并发多次触发
         try {
           final userResult = await UserBackendService.getCurrentUserProfile();
           final userProfile = userResult.fold(

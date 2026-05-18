@@ -55,7 +55,8 @@ class _SettingsAccountViewState extends State<SettingsAccountView> {
       builder: (context, settingsState) {
         final latestUserProfile = settingsState.userProfile;
         final currentSubscription = settingsState.currentSubscription;
-        final isLoadingSubscription = settingsState.isLoadingCurrentSubscription;
+        final isLoadingSubscription =
+            settingsState.isLoadingCurrentSubscription;
         final theme = AppFlowyTheme.of(context);
         return BlocProvider<SettingsUserViewBloc>(
           create: (context) =>
@@ -86,10 +87,8 @@ class _SettingsAccountViewState extends State<SettingsAccountView> {
   // 根据用户类型构建登录或退出登录按钮
   Widget _buildAccountActionButton(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final latestProfile =
-        context.read<SettingsDialogBloc>().state.userProfile;
-    final isQuickEntryUser =
-        latestProfile.userAuthType != AuthTypePB.Server;
+    final latestProfile = context.read<SettingsDialogBloc>().state.userProfile;
+    final isQuickEntryUser = latestProfile.userAuthType != AuthTypePB.Server;
 
     if (isQuickEntryUser) {
       // 匿名用户（快速进入）：显示"登录"按钮，点击弹出登录窗口
@@ -168,12 +167,9 @@ class _AccountQuickActionsSection extends StatelessWidget {
     final theme = AppFlowyTheme.of(context);
     final storageUsage = _buildStorageUsageSubtitle();
     final aiUsage = _buildAiUsageSubtitle();
-    final isCloudSignedIn = context
-        .read<SettingsDialogBloc>()
-        .state
-        .userProfile
-        .userAuthType ==
-        AuthTypePB.Server;
+    final isCloudSignedIn =
+        context.read<SettingsDialogBloc>().state.userProfile.userAuthType ==
+            AuthTypePB.Server;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,10 +187,8 @@ class _AccountQuickActionsSection extends StatelessWidget {
           showArrow: false,
         ),
         GestureDetector(
-          onTap: () =>
-              context
-                  .read<SettingsDialogBloc>()
-                  .add(const SettingsDialogEvent.setSelectedPage(
+          onTap: () => context.read<SettingsDialogBloc>().add(
+              const SettingsDialogEvent.setSelectedPage(
                   SettingsPage.userProfile)),
           child: _buildRow(
             context,
@@ -227,7 +221,8 @@ class _AccountQuickActionsSection extends StatelessWidget {
     );
   }
 
-  Widget _buildRow(BuildContext context, {
+  Widget _buildRow(
+    BuildContext context, {
     required String title,
     required String trailing,
     required bool showArrow,
@@ -245,10 +240,15 @@ class _AccountQuickActionsSection extends StatelessWidget {
             ),
           ),
           if (trailing.isNotEmpty)
-            FlowyText(
-              trailing,
-              fontSize: 14,
-              color: theme.textColorScheme.secondary,
+            Flexible(
+              child: FlowyText(
+                trailing,
+                fontSize: 14,
+                color: theme.textColorScheme.secondary,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.end,
+                maxLines: 1,
+              ),
             ),
           if (showArrow)
             const Icon(
@@ -303,14 +303,13 @@ class _AccountQuickActionsSection extends StatelessWidget {
       final outerContext = context;
       showDialog(
         context: context,
-        builder: (dialogContext) =>
-            IdentityVerificationDialog(
-              phoneNumber: latestUserProfile.phone.isNotEmpty
-                  ? latestUserProfile.phone
-                  : '',
-              emailAddress: emailAddress,
-              onVerificationComplete: () => _showEmailBindingDialog(outerContext, isChange: true),
-            ),
+        builder: (dialogContext) => IdentityVerificationDialog(
+          phoneNumber:
+              latestUserProfile.phone.isNotEmpty ? latestUserProfile.phone : '',
+          emailAddress: emailAddress,
+          onVerificationComplete: () =>
+              _showEmailBindingDialog(outerContext, isChange: true),
+        ),
       );
     } else {
       // 未绑定邮箱 → 直接进入绑定流程
@@ -323,26 +322,25 @@ class _AccountQuickActionsSection extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (context) =>
-          EmailBindingDialog(
-            title: isChange ? '更换邮箱' : '绑定邮箱',
-            onBindingComplete: () async {
-              showToastNotification(message: isChange ? '邮箱更换成功' : '邮箱绑定成功');
+      builder: (context) => EmailBindingDialog(
+        title: isChange ? '更换邮箱' : '绑定邮箱',
+        onBindingComplete: () async {
+          showToastNotification(message: isChange ? '邮箱更换成功' : '邮箱绑定成功');
 
-              Log.info('📧 开始刷新用户资料...');
-              final result = await UserBackendService.getCurrentUserProfile();
-              result.fold(
-                    (newProfile) {
-                  settingsBloc.add(
-                      SettingsDialogEvent.didReceiveUserProfile(newProfile));
-                  Log.info('✅ 用户资料已刷新');
-                },
-                    (error) {
-                  Log.error('❌ 刷新用户资料失败: ${error.msg}');
-                },
-              );
+          Log.info('📧 开始刷新用户资料...');
+          final result = await UserBackendService.getCurrentUserProfile();
+          result.fold(
+            (newProfile) {
+              settingsBloc
+                  .add(SettingsDialogEvent.didReceiveUserProfile(newProfile));
+              Log.info('✅ 用户资料已刷新');
             },
-          ),
+            (error) {
+              Log.error('❌ 刷新用户资料失败: ${error.msg}');
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -367,12 +365,11 @@ class _AccountQuickActionsSection extends StatelessWidget {
     final outerContext = context;
     showDialog(
       context: context,
-      builder: (dialogContext) =>
-          IdentityVerificationDialog(
-            phoneNumber: phoneNumber,
-            emailAddress: latestUserProfile.email,
-            onVerificationComplete: () => _showPhoneChangeDialog(outerContext),
-          ),
+      builder: (dialogContext) => IdentityVerificationDialog(
+        phoneNumber: phoneNumber,
+        emailAddress: latestUserProfile.email,
+        onVerificationComplete: () => _showPhoneChangeDialog(outerContext),
+      ),
     );
   }
 
@@ -401,22 +398,21 @@ class _AccountQuickActionsSection extends StatelessWidget {
 
     showDialog(
       context: context,
-      builder: (dialogContext) =>
-          PhoneChangeDialog(
-            onChangeComplete: () async {
-              showToastNotification(message: '手机号更改成功');
+      builder: (dialogContext) => PhoneChangeDialog(
+        onChangeComplete: () async {
+          showToastNotification(message: '手机号更改成功');
 
-              Log.info('📱 开始刷新用户资料...');
-              final result = await UserBackendService.getCurrentUserProfile();
-              result.fold(
-                    (newProfile) {
-                  settingsBloc.add(
-                      SettingsDialogEvent.didReceiveUserProfile(newProfile));
-                },
-                    (error) => Log.error('❌ 刷新用户资料失败: ${error.msg}'),
-              );
+          Log.info('📱 开始刷新用户资料...');
+          final result = await UserBackendService.getCurrentUserProfile();
+          result.fold(
+            (newProfile) {
+              settingsBloc
+                  .add(SettingsDialogEvent.didReceiveUserProfile(newProfile));
             },
-          ),
+            (error) => Log.error('❌ 刷新用户资料失败: ${error.msg}'),
+          );
+        },
+      ),
     );
   }
 }

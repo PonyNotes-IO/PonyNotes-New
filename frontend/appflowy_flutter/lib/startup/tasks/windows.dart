@@ -1,17 +1,19 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/startup/tasks/app_window_size_manager.dart';
+import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:scaled_app/scaled_app.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 class InitAppWindowTask extends LaunchTask with WindowListener {
-  InitAppWindowTask({this.title = 'AppFlowy'});
+  InitAppWindowTask({this.title = 'PonyNotes'});
 
   final String title;
   final windowSizeManager = WindowSizeManager();
@@ -62,19 +64,14 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
         useCustomWindowTitleBar ? TitleBarStyle.hidden : TitleBarStyle.normal,
       );
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        // Do not restore a saved maximized state before the first Windows
+        // show. Creating Flutter's surface directly in maximized bounds can
+        // leave the first frame with a stale client area until a manual resize.
+        await windowSizeManager.setWindowMaximized(false);
+        await windowManager.center();
+
         await windowManager.show();
         await windowManager.focus();
-
-        /// on Windows we maximize the window if it was previously closed
-        /// from a maximized state.
-        final isMaximized = await windowSizeManager.getWindowMaximized();
-        if (isMaximized) {
-          await windowManager.maximize();
-        } else {
-          // Avoid restoring stale coordinates from previous monitor layouts
-          // that can place the window in a visually "half-screen" position.
-          await windowManager.center();
-        }
       });
     } else {
       await windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -152,4 +149,82 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
 
     windowManager.removeListener(this);
   }
+}
+
+Future<void> refreshWindowsSurfaceAfterNavigation({
+  String reason = 'navigation',
+}) async {
+  if (!Platform.isWindows) {
+    return;
+  }
+
+  try {
+    if (await windowManager.isMinimized()) {
+      await windowManager.restore();
+    }
+
+    if (await windowManager.isMaximized()) {
+      await windowManager.unmaximize();
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+      await windowManager.maximize();
+    } else {
+      final currentSize = await windowManager.getSize();
+      final currentPosition = await windowManager.getPosition();
+      final nudgeSize = Size(
+        _surfaceRefreshNudgeDimension(
+          currentSize.width,
+          WindowSizeManager.minWindowWidth,
+          WindowSizeManager.maxWindowWidth,
+        ),
+        _surfaceRefreshNudgeDimension(
+          currentSize.height,
+          WindowSizeManager.minWindowHeight,
+          WindowSizeManager.maxWindowHeight,
+        ),
+      );
+      final didResizeNudge = nudgeSize != currentSize;
+
+      Log.info(
+        '[Windows] surface refresh requested after $reason: '
+        'currentSize=${currentSize.width}x${currentSize.height}, '
+        'nudgeSize=${nudgeSize.width}x${nudgeSize.height}, '
+        'didResizeNudge=$didResizeNudge',
+      );
+
+      if (didResizeNudge) {
+        await windowManager.setSize(nudgeSize);
+        await Future<void>.delayed(const Duration(milliseconds: 16));
+        await windowManager.setSize(currentSize);
+      }
+
+      await windowManager.setPosition(currentPosition);
+    }
+
+    await windowManager.show();
+    await windowManager.focus();
+    Log.info('[Windows] refreshed surface after $reason');
+  } catch (error, stackTrace) {
+    Log.warn(
+      '[Windows] failed to refresh surface after $reason: $error',
+      error,
+      stackTrace,
+    );
+  }
+}
+
+double _surfaceRefreshNudgeDimension(
+  double value,
+  double minValue,
+  double maxValue,
+) {
+  const delta = 1.0;
+
+  if (value <= minValue + delta) {
+    return (value + delta).clamp(minValue, maxValue).toDouble();
+  }
+  if (value >= maxValue - delta) {
+    return (value - delta).clamp(minValue, maxValue).toDouble();
+  }
+
+  return (value - delta).clamp(minValue, maxValue).toDouble();
 }

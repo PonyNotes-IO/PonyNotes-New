@@ -163,6 +163,12 @@ class _GridPageState extends State<GridPage> {
           }
         },
         child: BlocConsumer<GridBloc, GridState>(
+          listenWhen: (previous, current) =>
+              previous.loadingState != current.loadingState ||
+              previous.openRowDetail != current.openRowDetail ||
+              previous.createdRow != current.createdRow,
+          buildWhen: (previous, current) =>
+              previous.loadingState != current.loadingState,
           listener: listener,
           builder: (context, state) => state.loadingState.map(
             idle: (_) => const SizedBox.shrink(),
@@ -323,7 +329,12 @@ class _GridHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isEditable =
+        context.select((PageAccessLevelBloc bloc) => bloc.state.isEditable);
     Widget child = BlocBuilder<GridBloc, GridState>(
+      buildWhen: (previous, current) =>
+          previous.viewId != current.viewId ||
+          previous.fields != current.fields,
       builder: (_, state) => GridHeaderSliverAdaptor(
         viewId: state.viewId,
         anchorScrollController: headerScrollController,
@@ -331,7 +342,7 @@ class _GridHeader extends StatelessWidget {
       ),
     );
 
-    if (!editable) {
+    if (!isEditable) {
       child = IgnorePointer(
         child: child,
       );
@@ -409,61 +420,71 @@ class _GridRowsState extends State<_GridRows> {
 
   @override
   Widget build(BuildContext context) {
-    final paddingLeft = context
-            .read<DatabasePluginWidgetBuilderSize?>()
-            ?.paddingLeftWithMaxDocumentWidth ??
-        0.0;
-    Widget child;
-    if (widget.shrinkWrap) {
-      child = Scrollbar(
-        controller: widget.scrollController.horizontalController,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          controller: widget.scrollController.horizontalController,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: GridLayout.headerWidth(
-                context
-                            .read<DatabasePluginWidgetBuilderSize>()
-                            .horizontalPadding *
-                        3 +
-                    paddingLeft,
-                context.read<GridBloc>().state.fields,
+    return BlocBuilder<GridBloc, GridState>(
+      buildWhen: (previous, current) =>
+          previous.rowInfos != current.rowInfos ||
+          previous.rowCount != current.rowCount ||
+          previous.visibleRows != current.visibleRows ||
+          previous.sorts != current.sorts ||
+          previous.fields != current.fields,
+      builder: (context, state) {
+        final paddingLeft = context
+                .read<DatabasePluginWidgetBuilderSize?>()
+                ?.paddingLeftWithMaxDocumentWidth ??
+            0.0;
+        Widget child;
+        if (widget.shrinkWrap) {
+          child = Scrollbar(
+            controller: widget.scrollController.horizontalController,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              controller: widget.scrollController.horizontalController,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: GridLayout.headerWidth(
+                    context
+                                .read<DatabasePluginWidgetBuilderSize>()
+                                .horizontalPadding *
+                            3 +
+                        paddingLeft,
+                    state.fields,
+                  ),
+                ),
+                child: _shrinkWrapRenderList(state),
               ),
             ),
-            child: _shrinkWrapRenderList(context),
-          ),
-        ),
-      );
-    } else {
-      child = _WrapScrollView(
-        scrollController: widget.scrollController,
-        contentWidth: GridLayout.headerWidth(
-          context.read<DatabasePluginWidgetBuilderSize>().horizontalPadding,
-          context.read<GridBloc>().state.fields,
-        ),
-        child: BlocListener<GridBloc, GridState>(
-          listenWhen: (previous, current) =>
-              previous.rowCount != current.rowCount,
-          listener: (context, state) => _evaluateFloatingCalculations(),
-          child: ScrollConfiguration(
-            behavior:
-                ScrollConfiguration.of(context).copyWith(scrollbars: false),
-            child: _renderList(context),
-          ),
-        ),
-      );
-    }
+          );
+        } else {
+          child = _WrapScrollView(
+            scrollController: widget.scrollController,
+            contentWidth: GridLayout.headerWidth(
+              context.read<DatabasePluginWidgetBuilderSize>().horizontalPadding,
+              state.fields,
+            ),
+            child: BlocListener<GridBloc, GridState>(
+              listenWhen: (previous, current) =>
+                  previous.rowCount != current.rowCount,
+              listener: (context, state) => _evaluateFloatingCalculations(),
+              child: ScrollConfiguration(
+                behavior:
+                    ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                child: _renderList(state),
+              ),
+            ),
+          );
+        }
 
-    if (widget.shrinkWrap) {
-      return child;
-    }
+        if (widget.shrinkWrap) {
+          return child;
+        }
 
-    return Flexible(child: child);
+        return Flexible(child: child);
+      },
+    );
   }
 
-  Widget _shrinkWrapRenderList(BuildContext context) {
-    final state = context.read<GridBloc>().state;
+  Widget _shrinkWrapRenderList(GridState state) {
+    final context = this.context;
     final databaseSize = context.read<DatabasePluginWidgetBuilderSize?>();
     return ListView(
       shrinkWrap: true,
@@ -488,8 +509,7 @@ class _GridRowsState extends State<_GridRows> {
     );
   }
 
-  Widget _renderList(BuildContext context) {
-    final state = context.read<GridBloc>().state;
+  Widget _renderList(GridState state) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,

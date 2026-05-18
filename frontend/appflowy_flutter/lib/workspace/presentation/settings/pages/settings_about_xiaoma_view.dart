@@ -1,5 +1,7 @@
+import 'package:appflowy/startup/tasks/auto_export_debug_logs_task.dart';
 import 'package:appflowy/startup/tasks/device_info_task.dart';
 import 'package:appflowy/user/presentation/screens/legal_document_screen.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_body.dart';
 import 'package:appflowy/workspace/presentation/settings/shared/settings_category_spacer.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -8,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:universal_platform/universal_platform.dart';
 import '../../../../env/cloud_env.dart';
 
 class SettingsAboutXiaomaView extends StatefulWidget {
@@ -19,8 +22,13 @@ class SettingsAboutXiaomaView extends StatefulWidget {
 }
 
 class _SettingsAboutXiaomaViewState extends State<SettingsAboutXiaomaView> {
+  bool _isExportingDiagnosticLogs = false;
+
   @override
   Widget build(BuildContext context) {
+    final showDiagnosticExport =
+        UniversalPlatform.isWindows || ponyNotesDiagnosticBuildEnabled;
+
     return SettingsBody(
       title: LocaleKeys.legal_aboutXiaoma.tr(),
       autoSeparate: false,
@@ -45,8 +53,20 @@ class _SettingsAboutXiaomaViewState extends State<SettingsAboutXiaomaView> {
           onTap: () {
             // TODO: 处理版本更新点击
           },
-          child: _buildTextItem(context, "版本更新", showArrow: false, subtitle: "V${ApplicationInfo.applicationVersion}"),
+          child: _buildTextItem(context, "版本更新",
+              showArrow: false,
+              subtitle: "V${ApplicationInfo.applicationVersion}"),
         ),
+        if (showDiagnosticExport)
+          GestureDetector(
+            onTap: _exportDiagnosticLogs,
+            child: _buildTextItem(
+              context,
+              _isExportingDiagnosticLogs ? "正在导出诊断日志..." : "导出诊断日志",
+              showArrow: false,
+              subtitle: "生成日志文件夹",
+            ),
+          ),
       ],
     );
   }
@@ -97,7 +117,7 @@ class _SettingsAboutXiaomaViewState extends State<SettingsAboutXiaomaView> {
     String subtitle = '',
   }) {
     final theme = AppFlowyTheme.of(context);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Row(
@@ -128,7 +148,7 @@ class _SettingsAboutXiaomaViewState extends State<SettingsAboutXiaomaView> {
 
   void _showSubscriptionDetailsDialog(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -225,7 +245,7 @@ class _SettingsAboutXiaomaViewState extends State<SettingsAboutXiaomaView> {
 
   void _showLegalTermsDialog(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -303,7 +323,7 @@ class _SettingsAboutXiaomaViewState extends State<SettingsAboutXiaomaView> {
 
   Widget _buildLegalMenuItem(BuildContext context, String title) {
     final theme = Theme.of(context);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: Row(
@@ -356,7 +376,7 @@ class _SettingsAboutXiaomaViewState extends State<SettingsAboutXiaomaView> {
 
   void _showDetailDialog(BuildContext context, String title, String content) {
     final theme = Theme.of(context);
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -460,8 +480,63 @@ class _SettingsAboutXiaomaViewState extends State<SettingsAboutXiaomaView> {
       ),
     );
   }
+
+  Future<void> _exportDiagnosticLogs() async {
+    if (_isExportingDiagnosticLogs) {
+      return;
+    }
+
+    setState(() => _isExportingDiagnosticLogs = true);
+    try {
+      final directory = await AutoExportDebugLogsTask.exportOnce(
+        reason: 'manual-settings',
+      );
+      if (!mounted) {
+        return;
+      }
+
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('诊断日志已导出'),
+          content: SelectableText(
+            '导出目录：\n${directory.path}\n\n'
+            '包含内容：\n'
+            '1. 原始日志 data/ 与 support/\n'
+            '2. 模块化日志/02-通用运行日志\n'
+            '3. 模块化日志/03-白板详细日志\n'
+            '4. 模块化日志/04-表格问题详细日志',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('诊断日志导出失败'),
+          content: SelectableText('$error'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingDiagnosticLogs = false);
+      }
+    }
+  }
 }
-
-
-
-

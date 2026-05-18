@@ -26,7 +26,7 @@ class WhiteboardPreloadTask extends LaunchTask {
 
       // 2. 预先加载关键资源到内存中
       // 这样可以避免首次加载时的延迟
-      await _preloadCriticalAssets();
+      await _preloadCriticalAssets(assetServer);
 
       Log.info('✅ [WhiteboardPreload] Whiteboard preload completed successfully');
     } catch (e, stackTrace) {
@@ -42,43 +42,39 @@ class WhiteboardPreloadTask extends LaunchTask {
 
   /// 预先加载关键资源
   /// 将常用的 Excalidraw 资源加载到内存中，减少首次加载延迟
-  Future<void> _preloadCriticalAssets() async {
+  Future<void> _preloadCriticalAssets(LocalAssetServer assetServer) async {
     try {
       Log.info('📦 [WhiteboardPreload] Preloading critical assets...');
 
-      // 预加载主 HTML 文件
+      String? indexHtml;
       try {
-        await rootBundle.load('assets/excalidraw/index.html');
+        indexHtml =
+            await rootBundle.loadString('assets/excalidraw/index.html');
         Log.info('✅ [WhiteboardPreload] Preloaded: index.html');
       } catch (e) {
         Log.warn('⚠️ [WhiteboardPreload] Failed to preload index.html: $e');
       }
 
-      // 预加载 flutter_bridge.html（白板桥接文件）
-      try {
-        await rootBundle.load('assets/excalidraw/flutter_bridge.html');
-        Log.info('✅ [WhiteboardPreload] Preloaded: flutter_bridge.html');
-      } catch (e) {
-        Log.warn('⚠️ [WhiteboardPreload] Failed to preload flutter_bridge.html: $e');
-      }
-
-      // 预加载主要的 JavaScript 文件（如果存在）
-      final jsFiles = [
-        'assets/excalidraw/excalidraw.min.js',
-        'assets/excalidraw/excalidraw.js',
+      final assetPaths = <String>{
+        'assets/excalidraw/index.html',
         'assets/excalidraw/flutter_bridge.js',
-      ];
+        'assets/excalidraw/sw.js',
+        'assets/excalidraw/service-worker.js',
+        'assets/excalidraw/manifest.webmanifest',
+        'assets/excalidraw/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2',
+        'assets/excalidraw/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTQ3j6zbXWjgeg.woff2',
+        'assets/excalidraw/fonts/ComicShanns/ComicShanns-Regular-279a7b317d12eb88de06167bd672b4b4.woff2',
+      };
 
-      for (final jsFile in jsFiles) {
-        try {
-          await rootBundle.load(jsFile);
-          Log.info('✅ [WhiteboardPreload] Preloaded: $jsFile');
-          break; // 只加载第一个存在的文件
-        } catch (e) {
-          // 文件不存在，继续尝试下一个
-          continue;
+      if (indexHtml != null) {
+        final assetRefRegex =
+            RegExp(r'''(?:src|href)=["']/assets/([^"']+\.(?:js|css))["']''');
+        for (final match in assetRefRegex.allMatches(indexHtml)) {
+          assetPaths.add('assets/excalidraw/assets/${match.group(1)}');
         }
       }
+
+      await assetServer.preloadAssets(assetPaths);
 
       Log.info('✅ [WhiteboardPreload] Critical assets preloaded');
     } catch (e, stackTrace) {
@@ -100,4 +96,3 @@ class WhiteboardPreloadTask extends LaunchTask {
     // 服务器应该在应用关闭时统一清理
   }
 }
-

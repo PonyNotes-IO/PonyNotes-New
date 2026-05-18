@@ -10,6 +10,7 @@ import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/contin
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/continue_with_button.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/title_logo.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/verifying_button.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/slider_captcha.dart';
 import 'package:appflowy/util/validator.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -49,6 +50,9 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
   int _countdown = 0;
   Timer? _timer;
 
+  bool _sliderVerified = false;
+  Object _sliderResetKey = Object();
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -71,6 +75,8 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
             children: [
               _buildLogoAndTitle(),
               _buildPhoneField(),
+              VSpace(spacing),
+              _buildSliderCaptcha(),
               VSpace(spacing),
               _buildCodeField(),
               VSpace(spacing),
@@ -177,7 +183,14 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
           );
   }
 
-  bool _canResendCode() => _countdown == 0 && !_isSending;
+  Widget _buildSliderCaptcha() {
+    return SliderCaptcha(
+      resetKey: _sliderResetKey,
+      onVerified: () => setState(() => _sliderVerified = true),
+    );
+  }
+
+  bool _canResendCode() => _sliderVerified && _countdown == 0 && !_isSending;
 
   String _getButtonText() {
     if (_countdown > 0) return '重新获取(${_countdown}s)';
@@ -220,14 +233,18 @@ class _PhoneBindScreenState extends State<PhoneBindScreen> {
             _hasRequestedCode = true;
             _phoneIsRegistered = true;
             _countdown = 60;
+            _sliderVerified = false;
+            _sliderResetKey = Object();
           });
           _startCountdown();
           _showExistingPhoneConfirmDialog(e164Phone);
         } else if (res.codeSent) {
-          // 正常发送验证码
+          // 正常发送验证码，重置滑块防止免验证重发
           setState(() {
             _hasRequestedCode = true;
             _countdown = 60;
+            _sliderVerified = false;
+            _sliderResetKey = Object();
           });
           _startCountdown();
         }

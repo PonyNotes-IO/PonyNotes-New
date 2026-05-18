@@ -6,6 +6,7 @@ on:
       - "main"
       - "develop"
       - "release/*"
+      - "!backup/**"
     paths:
       - "frontend/rust-lib/**"
       - ".github/workflows/rust_ci.yaml"
@@ -23,6 +24,7 @@ env:
 
 jobs:
   ubuntu-job:
+    if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/') }}
     runs-on: ubuntu-latest
     steps:
       - name: Set timezone for action

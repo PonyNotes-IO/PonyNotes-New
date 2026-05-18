@@ -7,6 +7,7 @@ import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/prelude.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/common.dart';
 import 'package:appflowy/shared/appflowy_network_image.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -56,7 +57,8 @@ const _kImageBlockComponentMinWidth = 30.0;
 const _kImageBlockComponentMinHeight = 30.0;
 
 /// 立即接受横向拖动，避免被父级 ScrollView 抢走手势
-class _ImmediateHorizontalDragGestureRecognizer extends HorizontalDragGestureRecognizer {
+class _ImmediateHorizontalDragGestureRecognizer
+    extends HorizontalDragGestureRecognizer {
   @override
   void addAllowedPointer(PointerDownEvent event) {
     super.addAllowedPointer(event);
@@ -65,7 +67,8 @@ class _ImmediateHorizontalDragGestureRecognizer extends HorizontalDragGestureRec
 }
 
 /// 立即接受纵向拖动（与横向一致，保证角点双向都能赢）
-class _ImmediateVerticalDragGestureRecognizer extends VerticalDragGestureRecognizer {
+class _ImmediateVerticalDragGestureRecognizer
+    extends VerticalDragGestureRecognizer {
   @override
   void addAllowedPointer(PointerDownEvent event) {
     super.addAllowedPointer(event);
@@ -85,20 +88,17 @@ class _ImmediatePanGestureRecognizer extends PanGestureRecognizer {
 class _ResizableImageState extends State<ResizableImage> {
   final documentService = DocumentService();
   final _imageKey = GlobalKey();
+  late final String traceId;
 
   double initialOffsetX = 0;
   double initialOffsetY = 0;
   double moveDistanceX = 0;
-  double moveDistanceY = 0;
   double _cornerAccumulatedX = 0;
   double _cornerAccumulatedY = 0;
   Widget? _cacheImage;
 
   late double imageWidth;
   double? imageHeight;
-  double? _computedHeight;
-  bool _hasSetInitialHeight = false;
-
   @visibleForTesting
   bool onFocus = false;
 
@@ -108,6 +108,7 @@ class _ResizableImageState extends State<ResizableImage> {
   void initState() {
     super.initState();
 
+    traceId = ponyNotesDiagTraceId('resizable_image', widget.src);
     imageWidth = widget.width;
     imageHeight = widget.height;
 
@@ -115,73 +116,120 @@ class _ResizableImageState extends State<ResizableImage> {
         context.read<DocumentBloc>().state.userProfilePB;
   }
 
-  void _ensureInitialHeight() {
-    if (!_hasSetInitialHeight && imageHeight == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _updateHeightFromRenderBox();
-      });
-    }
-  }
-
-  void _updateHeightFromRenderBox() {
-    if (!_hasSetInitialHeight && imageHeight == null && mounted) {
+  void _measureHeightFromRenderBox() {
+    if (imageHeight == null) {
       final renderBox =
           _imageKey.currentContext?.findRenderObject() as RenderBox?;
       if (renderBox != null && renderBox.hasSize && renderBox.size.height > 0) {
-        setState(() {
-          _computedHeight = renderBox.size.height;
-          _hasSetInitialHeight = true;
-        });
+        setState(() => imageHeight = renderBox.size.height);
       }
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    _ensureInitialHeight();
+  double get _aspectRatio {
+    final height = imageHeight;
+    if (height != null && height > 0 && imageWidth > 0) {
+      return imageWidth / height;
+    }
 
-    return Align(
-      alignment: widget.alignment,
-      child: SizedBox(
-        width: max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX),
-        height: _computedHeight != null
-            ? max(_kImageBlockComponentMinHeight,
-                _computedHeight! - moveDistanceY)
-            : imageHeight != null
-                ? max(_kImageBlockComponentMinHeight,
-                    imageHeight! - moveDistanceY)
-                : null,
-        child: MouseRegion(
-          onEnter: (_) => setState(() => onFocus = true),
-          onExit: (_) => setState(() => onFocus = false),
-          child: GestureDetector(
-            onDoubleTap: widget.onDoubleTap,
-            child: KeyedSubtree(
-              key: _imageKey,
-              child: _buildResizableImage(context),
-            ),
-          ),
-        ),
-      ),
+    final renderBox =
+        _imageKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox != null && renderBox.hasSize && renderBox.size.height > 0) {
+      return renderBox.size.width / renderBox.size.height;
+    }
+
+    return 1.0;
+  }
+
+  double _minimumResizeWidth(double aspectRatio) {
+    return max(
+      _kImageBlockComponentMinWidth,
+      _kImageBlockComponentMinHeight * aspectRatio,
     );
   }
 
-  Widget _buildResizableImage(BuildContext context) {
+  double _previewImageWidth({
+    required double aspectRatio,
+    required double maxWidth,
+  }) {
+    final minManualWidth = _minimumResizeWidth(aspectRatio);
+    final resizedWidth =
+        (imageWidth - moveDistanceX).clamp(minManualWidth, imageWidth);
+
+    if (maxWidth.isFinite && maxWidth > 0) {
+      return min(resizedWidth.toDouble(), maxWidth);
+    }
+    return resizedWidth.toDouble();
+  }
+
+  void _commitProportionalResize() {
+    final aspectRatio = _aspectRatio;
+    final minManualWidth = _minimumResizeWidth(aspectRatio);
+
+    imageWidth = (imageWidth - moveDistanceX)
+        .clamp(minManualWidth, imageWidth)
+        .toDouble();
+    imageHeight = imageWidth / aspectRatio;
+
+    initialOffsetX = 0;
+    initialOffsetY = 0;
+    moveDistanceX = 0;
+    _cornerAccumulatedX = 0;
+    _cornerAccumulatedY = 0;
+    widget.onResize(imageWidth, imageHeight);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final aspectRatio = _aspectRatio;
+        final currentWidth = _previewImageWidth(
+          aspectRatio: aspectRatio,
+          maxWidth: constraints.maxWidth,
+        );
+        final currentHeight = currentWidth / aspectRatio;
+
+        return Align(
+          alignment: widget.alignment,
+          child: SizedBox(
+            width: currentWidth,
+            height: currentHeight,
+            child: MouseRegion(
+              onEnter: (_) => setState(() => onFocus = true),
+              onExit: (_) => setState(() => onFocus = false),
+              child: GestureDetector(
+                onDoubleTap: widget.onDoubleTap,
+                child: KeyedSubtree(
+                  key: _imageKey,
+                  child: _buildResizableImage(
+                    context,
+                    currentWidth,
+                    currentHeight,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildResizableImage(
+    BuildContext context,
+    double currentWidth,
+    double currentHeight,
+  ) {
     Widget child;
     final src = widget.src;
-    final currentWidth = max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
-    final currentHeight = _computedHeight != null
-        ? max(_kImageBlockComponentMinHeight, _computedHeight! - moveDistanceY)
-        : imageHeight != null
-            ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
-            : null;
 
     if (isURL(src)) {
       _cacheImage = FlowyNetworkImage(
         url: widget.src,
         width: currentWidth,
         height: currentHeight,
-        fit: currentHeight != null ? BoxFit.fill : BoxFit.contain,
+        fit: BoxFit.contain,
         userProfilePB: _userProfilePB,
         onImageLoaded: (isImageInCache) {
           if (isImageInCache) {
@@ -200,6 +248,25 @@ class _ResizableImageState extends State<ResizableImage> {
           return _buildLoading(context);
         },
         errorWidgetBuilder: (_, __, error) {
+          final retryCount = FlowyNetworkRetryCounter().getRetryCount(src);
+          logDiagnosticEvent(
+            'ImageLoad',
+            'resizable_image_error',
+            {
+              'traceId': traceId,
+              'imageType': widget.type.name,
+              'width': currentWidth,
+              'height': currentHeight,
+              'retryCount': retryCount,
+              ...diagnosticImageErrorFields(
+                src,
+                source: 'ResizableImage.errorWidget',
+                error: error,
+              ),
+            },
+            warning: true,
+            error: error,
+          );
           widget.onStateChange?.call(ResizableImageState.failed);
           return _ImageLoadFailedWidget(
             width: imageWidth,
@@ -217,17 +284,11 @@ class _ResizableImageState extends State<ResizableImage> {
       child = _cacheImage!;
     } else {
       // load local file
-      final currentWidth = max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
-      final currentHeight = _computedHeight != null
-          ? max(_kImageBlockComponentMinHeight, _computedHeight! - moveDistanceY)
-          : imageHeight != null
-              ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
-              : null;
-      _cacheImage ??= Image.file(
+      _cacheImage = Image.file(
         File(src),
         width: currentWidth,
         height: currentHeight,
-        fit: currentHeight != null ? BoxFit.fill : BoxFit.contain,
+        fit: BoxFit.contain,
       );
       child = _cacheImage!;
     }
@@ -245,8 +306,7 @@ class _ResizableImageState extends State<ResizableImage> {
             left: 0,
             bottom: 0,
             width: 16,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = distance),
+            onUpdateX: (distance) => setState(() => moveDistanceX = distance),
           ),
           // Right edge - horizontal resize
           _buildEdgeGesture(
@@ -257,8 +317,7 @@ class _ResizableImageState extends State<ResizableImage> {
             right: 0,
             bottom: 0,
             width: 16,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = -distance),
+            onUpdateX: (distance) => setState(() => moveDistanceX = -distance),
           ),
           // Top edge - vertical resize
           _buildEdgeGesture(
@@ -269,8 +328,9 @@ class _ResizableImageState extends State<ResizableImage> {
             left: 0,
             right: 0,
             height: 16,
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = distance),
+            onUpdateY: (distance) => setState(
+              () => moveDistanceX = distance * _aspectRatio,
+            ),
           ),
           // Bottom edge - vertical resize
           _buildEdgeGesture(
@@ -281,8 +341,9 @@ class _ResizableImageState extends State<ResizableImage> {
             left: 0,
             right: 0,
             height: 16,
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = -distance),
+            onUpdateY: (distance) => setState(
+              () => moveDistanceX = -distance * _aspectRatio,
+            ),
           ),
           // Top-left corner
           _buildCornerGesture(
@@ -291,10 +352,6 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: true,
             top: 0,
             left: 0,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = distance),
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = distance),
           ),
           // Top-right corner
           _buildCornerGesture(
@@ -303,10 +360,6 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: false,
             top: 0,
             right: 0,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = -distance),
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = distance),
           ),
           // Bottom-left corner
           _buildCornerGesture(
@@ -315,10 +368,6 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: true,
             bottom: 0,
             left: 0,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = distance),
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = -distance),
           ),
           // Bottom-right corner
           _buildCornerGesture(
@@ -327,10 +376,6 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: false,
             bottom: 0,
             right: 0,
-            onUpdateX: (distance) =>
-                setState(() => moveDistanceX = -distance),
-            onUpdateY: (distance) =>
-                setState(() => moveDistanceY = -distance),
           ),
         ],
       ],
@@ -379,7 +424,8 @@ class _ResizableImageState extends State<ResizableImage> {
         gestures: isHorizontal
             ? <Type, GestureRecognizerFactory>{
                 _ImmediateHorizontalDragGestureRecognizer:
-                    GestureRecognizerFactoryWithHandlers<_ImmediateHorizontalDragGestureRecognizer>(
+                    GestureRecognizerFactoryWithHandlers<
+                        _ImmediateHorizontalDragGestureRecognizer>(
                   () => _ImmediateHorizontalDragGestureRecognizer(),
                   (_ImmediateHorizontalDragGestureRecognizer instance) {
                     instance.onStart = (details) {
@@ -387,7 +433,8 @@ class _ResizableImageState extends State<ResizableImage> {
                     };
                     instance.onUpdate = (details) {
                       if (onUpdateX != null) {
-                        double offset = details.globalPosition.dx - initialOffsetX;
+                        double offset =
+                            details.globalPosition.dx - initialOffsetX;
                         if (widget.alignment == Alignment.center) {
                           offset *= 2.0;
                         }
@@ -395,46 +442,30 @@ class _ResizableImageState extends State<ResizableImage> {
                       }
                     };
                     instance.onEnd = (_) {
-                      final newWidth = max(
-                          _kImageBlockComponentMinWidth,
-                          imageWidth - moveDistanceX);
-                      imageWidth = newWidth;
-                      initialOffsetX = 0;
-                      moveDistanceX = 0;
-                      widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+                      _commitProportionalResize();
                     };
                   },
                 ),
               }
             : <Type, GestureRecognizerFactory>{
                 _ImmediateVerticalDragGestureRecognizer:
-                    GestureRecognizerFactoryWithHandlers<_ImmediateVerticalDragGestureRecognizer>(
+                    GestureRecognizerFactoryWithHandlers<
+                        _ImmediateVerticalDragGestureRecognizer>(
                   () => _ImmediateVerticalDragGestureRecognizer(),
                   (_ImmediateVerticalDragGestureRecognizer instance) {
                     instance.onStart = (details) {
                       initialOffsetY = details.globalPosition.dy;
+                      _measureHeightFromRenderBox();
                     };
                     instance.onUpdate = (details) {
                       if (onUpdateY != null) {
-                        final offset = details.globalPosition.dy - initialOffsetY;
+                        final offset =
+                            details.globalPosition.dy - initialOffsetY;
                         onUpdateY(offset);
                       }
                     };
                     instance.onEnd = (_) {
-                      final currentHeight = _computedHeight ?? imageHeight;
-                      if (currentHeight != null) {
-                        final newHeight = max(
-                            _kImageBlockComponentMinHeight,
-                            currentHeight - moveDistanceY);
-                        if (_computedHeight != null) {
-                          _computedHeight = newHeight;
-                        } else {
-                          imageHeight = newHeight;
-                        }
-                      }
-                      initialOffsetY = 0;
-                      moveDistanceY = 0;
-                      widget.onResize(imageWidth, _computedHeight ?? imageHeight);
+                      _commitProportionalResize();
                     };
                   },
                 ),
@@ -477,31 +508,6 @@ class _ResizableImageState extends State<ResizableImage> {
     );
   }
 
-  void _commitCornerResize() {
-    final newWidth = max(
-        _kImageBlockComponentMinWidth,
-        imageWidth - moveDistanceX);
-    imageWidth = newWidth;
-
-    final currentHeight = _computedHeight ?? imageHeight;
-    if (currentHeight != null) {
-      final newHeight = max(
-          _kImageBlockComponentMinHeight,
-          currentHeight - moveDistanceY);
-      if (_computedHeight != null) {
-        _computedHeight = newHeight;
-      } else {
-        imageHeight = newHeight;
-      }
-    }
-
-    initialOffsetX = 0;
-    initialOffsetY = 0;
-    moveDistanceX = 0;
-    moveDistanceY = 0;
-    widget.onResize(imageWidth, _computedHeight ?? imageHeight);
-  }
-
   Widget _buildCornerGesture(
     BuildContext context, {
     required bool isTop,
@@ -510,8 +516,6 @@ class _ResizableImageState extends State<ResizableImage> {
     double? left,
     double? right,
     double? bottom,
-    void Function(double distance)? onUpdateX,
-    void Function(double distance)? onUpdateY,
   }) {
     return Positioned(
       top: top,
@@ -523,29 +527,29 @@ class _ResizableImageState extends State<ResizableImage> {
       child: RawGestureDetector(
         behavior: HitTestBehavior.opaque,
         gestures: <Type, GestureRecognizerFactory>{
-          _ImmediatePanGestureRecognizer:
-              GestureRecognizerFactoryWithHandlers<_ImmediatePanGestureRecognizer>(
+          _ImmediatePanGestureRecognizer: GestureRecognizerFactoryWithHandlers<
+              _ImmediatePanGestureRecognizer>(
             () => _ImmediatePanGestureRecognizer(),
             (_ImmediatePanGestureRecognizer instance) {
               instance.onStart = (_) {
                 _cornerAccumulatedX = 0;
                 _cornerAccumulatedY = 0;
+                _measureHeightFromRenderBox();
               };
               instance.onUpdate = (details) {
                 _cornerAccumulatedX += details.delta.dx;
                 _cornerAccumulatedY += details.delta.dy;
-                double finalOffsetX = _cornerAccumulatedX;
+                double widthShrink =
+                    isLeft ? _cornerAccumulatedX : -_cornerAccumulatedX;
                 if (widget.alignment == Alignment.center) {
-                  finalOffsetX *= 2.0;
+                  widthShrink *= 2.0;
                 }
-                if (onUpdateX != null) {
-                  onUpdateX(finalOffsetX);
-                }
-                if (onUpdateY != null) {
-                  onUpdateY(_cornerAccumulatedY);
-                }
+                final heightShrink =
+                    (isTop ? _cornerAccumulatedY : -_cornerAccumulatedY) *
+                        _aspectRatio;
+                setState(() => moveDistanceX = max(widthShrink, heightShrink));
               };
-              instance.onEnd = (_) => _commitCornerResize();
+              instance.onEnd = (_) => _commitProportionalResize();
             },
           ),
         },
@@ -564,7 +568,6 @@ class _ResizableImageState extends State<ResizableImage> {
                       ),
                       border: Border.all(
                         color: Colors.black.withValues(alpha: 0.3),
-                        width: 1,
                       ),
                     ),
                   ),

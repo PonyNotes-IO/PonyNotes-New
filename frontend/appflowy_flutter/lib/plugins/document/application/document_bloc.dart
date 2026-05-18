@@ -19,12 +19,14 @@ import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/util/color_generator/color_generator.dart';
 import 'package:appflowy/util/color_to_hex_string.dart';
 import 'package:appflowy/util/debounce.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:appflowy/util/throttle.dart';
 import 'package:appflowy/workspace/application/view/view_listener.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/entities.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-document/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-error/code.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart'
@@ -198,7 +200,8 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
                 [currentEditorState.document.root],
               );
             } catch (e) {
-              Log.error('cleanup document resources before permanent delete failed: $e');
+              Log.error(
+                  'cleanup document resources before permanent delete failed: $e');
             }
           }
           final result = await _trashService.deleteViews([documentId]);
@@ -253,6 +256,23 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
   /// Retry fetching document state in background when initial fetch failed.
   Future<void> _startRetryFetch(FlowyError? initialError) async {
+    // 当 collab 不存在时（如协作区共享表格的行文档从未被创建），先创建空文档再重试
+    if (initialError?.code == ErrorCode.RecordNotFound) {
+      Log.info(
+        '[DocumentBloc] Collab not found for documentId: $documentId, attempting to create empty document',
+      );
+      final payload = CreateDocumentPayloadPB()..documentId = documentId;
+      final createResult = await DocumentEventCreateDocument(payload).send();
+      createResult.fold(
+        (_) => Log.info(
+          '[DocumentBloc] Created empty document for documentId: $documentId',
+        ),
+        (err) => Log.error(
+          '[DocumentBloc] Failed to create document for documentId: $documentId, error: $err',
+        ),
+      );
+    }
+
     const int maxAttempts = 12;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       // exponential-ish backoff: first quick, then longer
@@ -321,13 +341,40 @@ class DocumentBloc extends Bloc<DocumentEvent, DocumentState> {
 
   /// Fetch document
   Future<FlowyResult<EditorState?, FlowyError>> _fetchDocumentState() async {
+    final openStopwatch =
+        ponyNotesDiagnosticBuildEnabled ? (Stopwatch()..start()) : null;
     final result = await _documentService.openDocument(
       documentId: documentId,
       workspaceId: workspaceId,
     );
     return result.fold(
-      (s) async => FlowyResult.success(await _initAppFlowyEditorState(s)),
-      (e) => FlowyResult.failure(e),
+      (s) async {
+        logDiagnosticMessage(
+          'document.open',
+          'documentId=$documentId workspaceId=${workspaceId ?? ''} '
+              'durationMs=${openStopwatch?.elapsedMilliseconds ?? -1} '
+              'success=true',
+        );
+
+        final initStopwatch =
+            ponyNotesDiagnosticBuildEnabled ? (Stopwatch()..start()) : null;
+        final editorState = await _initAppFlowyEditorState(s);
+        logDiagnosticMessage(
+          'document.init',
+          'documentId=$documentId durationMs=${initStopwatch?.elapsedMilliseconds ?? -1} '
+              'editorReady=${editorState != null}',
+        );
+        return FlowyResult.success(editorState);
+      },
+      (e) {
+        logDiagnosticMessage(
+          'document.open',
+          'documentId=$documentId workspaceId=${workspaceId ?? ''} '
+              'durationMs=${openStopwatch?.elapsedMilliseconds ?? -1} '
+              'success=false error=$e',
+        );
+        return FlowyResult.failure(e);
+      },
     );
   }
 

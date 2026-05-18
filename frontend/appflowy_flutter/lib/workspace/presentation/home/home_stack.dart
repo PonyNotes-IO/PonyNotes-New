@@ -10,6 +10,7 @@ import 'package:appflowy/shared/window_frame_policy.dart';
 import 'package:appflowy/shared/window_title_bar.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/startup/tasks/windows.dart';
 import 'package:appflowy/util/theme_extension.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -41,6 +42,12 @@ abstract class HomeStackDelegate {
   void didDeleteStackWidget(ViewPB view, int? index);
 }
 
+Color homeContentBackgroundColor(BuildContext context) {
+  return Theme.of(context).isLightMode
+      ? const Color(0xFFF7F8FB)
+      : const Color(0xFF20232A);
+}
+
 class HomeStack extends StatefulWidget {
   const HomeStack({
     super.key,
@@ -61,6 +68,23 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
   int selectedIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+
+    if (UniversalPlatform.isWindows) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+
+        unawaited(
+          refreshWindowsSurfaceAfterNavigation(reason: 'home-first-frame'),
+        );
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BlocProvider<TabsBloc>.value(
       value: getIt<TabsBloc>(),
@@ -72,22 +96,30 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
               children: [
                 Column(
                   children: [
-                    if (UniversalPlatform.isWindows && useCustomWindowTitleBar)
-                      WindowTitleBar(leftChildren: [_buildToggleMenuButton(context)]),
-                    Padding(
-                      padding: EdgeInsets.only(left: widget.layout.menuSpacing),
-                      child: TabsManager(
-                        onIndexChanged: (index) {
-                          if (selectedIndex != index) {
-                            // Unfocus editor to hide selection toolbar
-                            FocusScope.of(context).unfocus();
-
-                            context.read<TabsBloc>().add(TabsEvent.selectTab(index));
-                            setState(() => selectedIndex = index);
-                          }
-                        },
+                    if (!isFullWindow &&
+                        UniversalPlatform.isWindows &&
+                        useCustomWindowTitleBar)
+                      WindowTitleBar(
+                        leftChildren: [_buildTitleBarControls(context)],
                       ),
-                    ),
+                    if (!isFullWindow)
+                      Padding(
+                        padding:
+                            EdgeInsets.only(left: widget.layout.menuSpacing),
+                        child: TabsManager(
+                          onIndexChanged: (index) {
+                            if (selectedIndex != index) {
+                              // Unfocus editor to hide selection toolbar
+                              FocusScope.of(context).unfocus();
+
+                              context
+                                  .read<TabsBloc>()
+                                  .add(TabsEvent.selectTab(index));
+                              setState(() => selectedIndex = index);
+                            }
+                          },
+                        ),
+                      ),
                     Expanded(
                       child: Stack(
                         children: [
@@ -96,38 +128,46 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                             children: state.pageManagers
                                 .map(
                                   (pm) => LayoutBuilder(
-                                builder: (context, constraints) {
-                                  return Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          children: [
-                                            pm.stackTopBar(layout: widget.layout),
-                                            Expanded(
-                                              child: PageStack(
-                                                pageManager: pm,
-                                                delegate: widget.delegate,
-                                                userProfile: widget.userProfile,
-                                              ),
+                                    builder: (context, constraints) {
+                                      return Row(
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              children: [
+                                                if (!isFullWindow)
+                                                  pm.stackTopBar(
+                                                    layout: widget.layout,
+                                                  ),
+                                                Expanded(
+                                                  child: PageStack(
+                                                    pageManager: pm,
+                                                    delegate: widget.delegate,
+                                                    userProfile:
+                                                        widget.userProfile,
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                      if (!isFullWindow)
-                                        SecondaryView(
-                                          pageManager: pm,
-                                          adaptedPercentageWidth:
-                                          constraints.maxWidth * 3 / 7,
-                                        ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            )
+                                          ),
+                                          Visibility(
+                                            visible: !isFullWindow,
+                                            maintainState: true,
+                                            maintainAnimation: true,
+                                            child: SecondaryView(
+                                              pageManager: pm,
+                                              adaptedPercentageWidth:
+                                                  constraints.maxWidth * 3 / 7,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                )
                                 .toList(),
                           ),
                           // Overlay original right-side actions for folder/fileLibrary plugins
-                          if (state.pageManagers.isNotEmpty)
+                          if (!isFullWindow && state.pageManagers.isNotEmpty)
                             Builder(
                               builder: (ctx) {
                                 final currentIndex = state.currentIndex;
@@ -144,13 +184,19 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                                 }
 
                                 return Positioned(
-                                  top: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding - (HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding) /*0*/,
-                                  right: HomeInsets.topBarTitleHorizontalPadding,
+                                  top: HomeSizes.topBarHeight +
+                                      HomeInsets.topBarTitleVerticalPadding -
+                                      (HomeSizes.topBarHeight +
+                                          HomeInsets
+                                              .topBarTitleVerticalPadding) /*0*/,
+                                  right:
+                                      HomeInsets.topBarTitleHorizontalPadding,
                                   child: ChangeNotifierProvider.value(
                                     value: pm.notifier,
                                     child: Consumer<PageNotifier>(
                                       builder: (_, notifier, __) =>
-                                      notifier.plugin.widgetBuilder.rightBarItem ??
+                                          notifier.plugin.widgetBuilder
+                                              .rightBarItem ??
                                           const SizedBox.shrink(),
                                     ),
                                   ),
@@ -162,15 +208,15 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                     ),
                   ],
                 ),
-                Visibility(
-                  visible: UniversalPlatform.isMacOS,
-                  child: Positioned(
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      child: NotificationPermissionBanner()
+                if (!isFullWindow && UniversalPlatform.isMacOS)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: NotificationPermissionBanner(),
                   ),
-                )
+                if (isFullWindow)
+                  _buildFullWindowOverlayActions(context, state),
               ],
             );
           },
@@ -179,11 +225,79 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     );
   }
 
-  Widget _buildToggleMenuButton(BuildContext context) {
-    if (context.read<HomeSettingBloc>().isMenuExpanded) {
-      return const SizedBox.shrink();
+  Widget _buildTitleBarControls(BuildContext context) {
+    return SizedBox(
+      height: HomeSizes.topBarHeight,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleMenuButton(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFullWindowOverlayActions(
+    BuildContext context,
+    TabsState state,
+  ) {
+    Widget? fullWindowMoreItem;
+    if (state.currentIndex >= 0 && state.currentIndex < state.pageManagers.length) {
+      final pm = state.pageManagers[state.currentIndex];
+      final currentMoreItem = pm.plugin.widgetBuilder.fullWindowMoreItem;
+      if (currentMoreItem != null) {
+        fullWindowMoreItem = ChangeNotifierProvider.value(
+          value: pm.notifier,
+          child: Consumer<PageNotifier>(
+            builder: (_, notifier, __) =>
+                notifier.plugin.widgetBuilder.fullWindowMoreItem ??
+                const SizedBox.shrink(),
+          ),
+        );
+      }
     }
 
+    return Positioned(
+      top: 12,
+      right: 12,
+      child: SafeArea(
+        child: Material(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
+          elevation: 8,
+          shadowColor: Colors.black.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(999),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (fullWindowMoreItem != null) ...[
+                const HSpace(4),
+                fullWindowMoreItem,
+              ],
+              FlowyTooltip(
+                message: 'Exit full window',
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    splashRadius: 20,
+                    iconSize: 22,
+                    icon: Icon(
+                      Icons.fullscreen_exit_rounded,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    onPressed: FullWindowController.exit,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleMenuButton(BuildContext context) {
     final textSpan = TextSpan(
       children: [
         TextSpan(
@@ -215,13 +329,45 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
           child: Container(
             width: 24,
             padding: const EdgeInsets.all(4),
-            child: const RotatedBox(
-              quarterTurns: 2,
-              child: FlowySvg(FlowySvgs.hide_menu_s),
+            child: RotatedBox(
+              quarterTurns:
+                  context.read<HomeSettingBloc>().isMenuExpanded ? 0 : 2,
+              child: const FlowySvg(FlowySvgs.hide_menu_s),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildFullWindowButton(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        return FlowyTooltip(
+          message: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+          child: FlowyHover(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                splashRadius: 16,
+                iconSize: 18,
+                icon: Icon(
+                  isFullWindow
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                onPressed: () {
+                  FullWindowController.toggle();
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -256,7 +402,7 @@ class _PageStackState extends State<PageStack>
     super.build(context);
 
     return Container(
-      color: Theme.of(context).colorScheme.surface,
+      color: homeContentBackgroundColor(context),
       child: FocusTraversalGroup(
         child: widget.pageManager.stackWidget(
           userProfile: widget.userProfile,
@@ -667,6 +813,7 @@ abstract mixin class NavigationItem {
   String? get viewName;
   Widget get leftBarItem;
   Widget? get rightBarItem => null;
+  Widget? get fullWindowMoreItem => null;
   Widget tabBarItem(String pluginId, [bool shortForm = false]);
 
   NavigationCallback get action => (id) => throw UnimplementedError();
@@ -758,7 +905,9 @@ class PageManager {
     // top area without extra spacing.
     try {
       final pluginType = _notifier.plugin.pluginType;
-      if (pluginType == PluginType.fileLibrary || pluginType == PluginType.folder || pluginType == PluginType.calendar) {
+      if (pluginType == PluginType.fileLibrary ||
+          pluginType == PluginType.folder ||
+          pluginType == PluginType.calendar) {
         // Hide the top bar entirely for these plugins so the left sidebar
         // can align directly under the window title bar. Right-side actions
         // are rendered in the WindowTitleBar via rightChildren.
@@ -787,7 +936,7 @@ class PageManager {
           }
 
           final pluginSandbox = getIt<PluginSandbox>();
-          
+
           // Check if the plugin type is registered before trying to get its index
           if (!pluginSandbox.hasPlugin(notifier.plugin.pluginType)) {
             // If plugin is not registered yet, show blank page
@@ -897,7 +1046,7 @@ class _HomeTopBarState extends State<HomeTopBar>
 
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: homeContentBackgroundColor(context),
       ),
       height: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding,
       child: Padding(
@@ -908,8 +1057,6 @@ class _HomeTopBarState extends State<HomeTopBar>
         child: Row(
           children: [
             HSpace(widget.layout.menuSpacing),
-            const FlowyNavigation(),
-            const HSpace(16),
             // 插件自带的右侧工具区域
             ChangeNotifierProvider.value(
               value: Provider.of<PageNotifier>(context, listen: false),
@@ -936,7 +1083,7 @@ class HomeSecondaryTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: Theme.of(context).colorScheme.surface,
       ),
       height: HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding,
       child: Padding(

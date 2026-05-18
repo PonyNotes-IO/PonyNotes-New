@@ -73,10 +73,24 @@ class SettingsDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width * 0.7;
-    final height = MediaQuery.of(context).size.height * 0.8;
-    final minHeight = math.min(600.0, height);
-    final maxHeight = math.max(height, minHeight);
+    final screenSize = MediaQuery.of(context).size;
+    const goldenRatio = 1.618;
+    final horizontalMargin = screenSize.width < 900 ? 24.0 : 80.0;
+    final verticalMargin = screenSize.height < 720 ? 24.0 : 80.0;
+    final availableWidth = math.max(360.0, screenSize.width - horizontalMargin);
+    final availableHeight = math.max(420.0, screenSize.height - verticalMargin);
+    final minWidth = math.min(720.0, availableWidth);
+    final maxWidth = math.min(1120.0, availableWidth);
+    final width = math.min(
+      maxWidth,
+      math.max(minWidth, screenSize.width * 0.72),
+    );
+    final minHeight = math.min(560.0, availableHeight);
+    final maxHeight = math.min(760.0, availableHeight);
+    final height = math.min(
+      maxHeight,
+      math.max(minHeight, width / goldenRatio),
+    );
     final theme = AppFlowyTheme.of(context);
     final currentWorkspaceMemberRole =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.role;
@@ -87,14 +101,14 @@ class SettingsDialog extends StatelessWidget {
         initPage: initPage,
       )..add(const SettingsDialogEvent.initial()),
       child: BlocBuilder<SettingsDialogBloc, SettingsDialogState>(
-                builder: (context, state) => FlowyDialog(
+        builder: (context, state) => FlowyDialog(
           width: width,
           backgroundColor: theme.backgroundColorScheme.primary,
           constraints: BoxConstraints(
-            minWidth: 564,
-            maxWidth: 1200,
+            minWidth: width,
+            maxWidth: width,
             minHeight: minHeight,
-            maxHeight: maxHeight,
+            maxHeight: height,
           ),
           expandHeight: false,
           child: ScaffoldMessenger(
@@ -111,54 +125,60 @@ class SettingsDialog extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                      Expanded(
-                        flex: 2,
-                        child: SettingsMenu(
-                          userProfile: state.userProfile,
-                          changeSelectedPage: (index) => context
-                              .read<SettingsDialogBloc>()
-                              .add(SettingsDialogEvent.setSelectedPage(index)),
-                          currentPage:
-                              context.read<SettingsDialogBloc>().state.page,
-                          currentUserRole: currentWorkspaceMemberRole,
-                          isBillingEnabled: state.isBillingEnabled,
-                          workspaceId: workspaceState.currentWorkspace?.workspaceId ?? '',
-                          currentSubscription:
-                              context.read<SettingsDialogBloc>().state.currentSubscription,
-                        ),
-                      ),
-                      AFDivider(
-                        axis: Axis.vertical,
-                        color: theme.borderColorScheme.primary,
-                      ),
-                      Expanded(
-                        flex: 5,
-                        child: Container(
-                          // Ensure right pane fully covers dialog area to avoid tiny gap
-                          // caused by rounding or inner padding of children.
-                          color: theme.backgroundColorScheme.primary,
-                          child: Padding(
-                            // Only reduce right padding to avoid visible gap on dialog edge.
-                            padding: const EdgeInsets.only(right: 12),
-                            child: currentWorkspace == null
-                                ? const Center(
-                                    child: CircularProgressIndicator.adaptive(),
-                                  )
-                                : getSettingsView(
-                                    currentWorkspace,
-                                    context
-                                        .read<SettingsDialogBloc>()
-                                        .state
-                                        .page,
-                                    state.userProfile,
-                                    currentWorkspace.role,
-                                    context,
-                                  ),
+                        Expanded(
+                          flex: 3,
+                          child: SettingsMenu(
+                            userProfile: state.userProfile,
+                            changeSelectedPage: (index) => context
+                                .read<SettingsDialogBloc>()
+                                .add(
+                                    SettingsDialogEvent.setSelectedPage(index)),
+                            currentPage:
+                                context.read<SettingsDialogBloc>().state.page,
+                            currentUserRole: currentWorkspaceMemberRole,
+                            isBillingEnabled: state.isBillingEnabled,
+                            workspaceId:
+                                workspaceState.currentWorkspace?.workspaceId ??
+                                    '',
+                            currentSubscription: context
+                                .read<SettingsDialogBloc>()
+                                .state
+                                .currentSubscription,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
+                        AFDivider(
+                          axis: Axis.vertical,
+                          color: theme.borderColorScheme.primary,
+                        ),
+                        Expanded(
+                          flex: 5,
+                          child: Container(
+                            // Ensure right pane fully covers dialog area to avoid tiny gap
+                            // caused by rounding or inner padding of children.
+                            color: theme.backgroundColorScheme.primary,
+                            child: Padding(
+                              // Only reduce right padding to avoid visible gap on dialog edge.
+                              padding: const EdgeInsets.only(right: 12),
+                              child: currentWorkspace == null
+                                  ? const Center(
+                                      child:
+                                          CircularProgressIndicator.adaptive(),
+                                    )
+                                  : getSettingsView(
+                                      currentWorkspace,
+                                      context
+                                          .read<SettingsDialogBloc>()
+                                          .state
+                                          .page,
+                                      state.userProfile,
+                                      currentWorkspace.role,
+                                      context,
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   );
                 },
               ),
@@ -275,7 +295,7 @@ class SettingsDialog extends StatelessWidget {
         );
       case SettingsPage.featureFlags:
         return const FeatureFlagsPage();
-        // return const SizedBox.shrink();
+      // return const SizedBox.shrink();
     }
   }
 }
@@ -320,7 +340,8 @@ class _SimpleSettingsDialogState extends State<SimpleSettingsDialog> {
               // Server configuration is now determined at compile time
               // Users cannot change server settings at runtime
               // 服务器配置现在在编译时确定，用户无法在运行时更改
-              _ServerInfoDisplay(key: ValueKey('serverinfo${settings.hashCode}')),
+              _ServerInfoDisplay(
+                  key: ValueKey('serverinfo${settings.hashCode}')),
               const VSpace(22.0),
 
               // support
@@ -357,13 +378,14 @@ class _ServerInfoDisplay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
-    final authenticatorType = AuthenticatorType.fromValue(Env.authenticatorType);
-    
+    final authenticatorType =
+        AuthenticatorType.fromValue(Env.authenticatorType);
+
     String environmentName;
     String serverUrl;
     String webDomain;
     Color statusColor;
-    
+
     switch (authenticatorType) {
       case AuthenticatorType.appflowyCloudDevelop:
         environmentName = "开发环境 (Development)";
@@ -390,7 +412,7 @@ class _ServerInfoDisplay extends StatelessWidget {
         statusColor = const Color(0xFF7F8C8D);
         break;
     }
-    
+
     return SettingsCategory(
       title: "服务器配置",
       children: [
@@ -416,7 +438,7 @@ class _ServerInfoDisplay extends StatelessWidget {
           ],
         ),
         const VSpace(12),
-        
+
         // Server URL
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,7 +463,7 @@ class _ServerInfoDisplay extends StatelessWidget {
           ],
         ),
         const VSpace(8),
-        
+
         // Web domain
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,7 +488,7 @@ class _ServerInfoDisplay extends StatelessWidget {
           ],
         ),
         const VSpace(12),
-        
+
         // Info message
         Container(
           padding: const EdgeInsets.all(12),

@@ -65,8 +65,9 @@ class _SettingsMenuState extends State<SettingsMenu> {
   }
 
   Future<void> _loadSubscriptionInfo() async {
-    final result = await UserBackendService.getWorkspaceSubscriptionInfo(widget.workspaceId);
-    
+    final result = await UserBackendService.getWorkspaceSubscriptionInfo(
+        widget.workspaceId);
+
     result.fold(
       (info) {
         if (mounted) {
@@ -101,7 +102,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
   // 获取显示名称：优先显示昵称，其次显示手机号
   String _getUserDisplayName() {
     // debug logs removed
-    
+
     // 优先显示用户名
     if (widget.userProfile.name.isNotEmpty) {
       // debug log removed
@@ -126,7 +127,8 @@ class _SettingsMenuState extends State<SettingsMenu> {
   Widget build(BuildContext context) {
     final theme = AppFlowyTheme.of(context);
     final storageUsage = _buildStorageUsageText();
-    final isQuickEntryUser = widget.userProfile.userAuthType != AuthTypePB.Server;
+    final isQuickEntryUser =
+        widget.userProfile.userAuthType != AuthTypePB.Server;
 
     return Container(
       decoration: BoxDecoration(
@@ -149,7 +151,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
           children: [
             // 账号标题 + 用户信息卡片
             Container(
-              margin: EdgeInsets.only(top: 20,left: 20),
+              margin: EdgeInsets.only(top: 20, left: 20),
               alignment: Alignment.centerLeft,
               child: FlowyText(
                 '账号',
@@ -251,7 +253,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
               label: LocaleKeys.legal_aboutXiaoma.tr(),
               changeSelectedPage: widget.changeSelectedPage,
             ),
-            
+
             if (!isQuickEntryUser)
               // 会员升级入口
               SettingsMenuElement(
@@ -297,8 +299,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     final summary = sub?.subscription;
     final planDetails = sub?.planDetails;
 
-    final currentPlan =
-        _subscriptionInfo?.plan;
+    final currentPlan = _subscriptionInfo?.plan;
     final planName = summary?.planNameCn?.isNotEmpty == true
         ? summary!.planNameCn!
         : (summary?.planCode?.isNotEmpty == true
@@ -340,7 +341,7 @@ class _SettingsMenuState extends State<SettingsMenu> {
     Widget buildAvatar() {
       final double size = 48;
       final iconUrl = widget.userProfile.iconUrl;
-      
+
       return ClipRRect(
         borderRadius: BorderRadius.circular(size / 2),
         child: iconUrl.isNotEmpty
@@ -360,76 +361,74 @@ class _SettingsMenuState extends State<SettingsMenu> {
         ),
       ),
       child: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              buildAvatar(),
-              const HSpace(12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          buildAvatar(),
+          const HSpace(12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const VSpace(6),
+                Row(
                   children: [
-                    const VSpace(6),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Flexible(
-                                child: FlowyText(
-                                  _getUserDisplayName(),
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.textColorScheme.primary,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const HSpace(8),
-                              Builder(
-                                builder: (context) {
-                                  final primaryColor = Theme.of(context).colorScheme.primary;
-                                  return Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: primaryColor.withOpacity(0.11),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                        color: primaryColor,
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      planName,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: primaryColor,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    Expanded(
+                      child: FlowyText(
+                        _getUserDisplayName(),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: theme.textColorScheme.primary,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
                     ),
-                    const VSpace(6),
-                    if (hasValidity)
-                      _buildValidityPeriod(context,
-                          start: summary?.startDate, end: summary?.endDate)
-                    else
-                      SizedBox(height: 24),
+                    const HSpace(8),
+                    Flexible(
+                      child: Builder(
+                        builder: (context) {
+                          final primaryColor =
+                              Theme.of(context).colorScheme.primary;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withOpacity(0.11),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: primaryColor,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              planName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: primaryColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            ],
+                const VSpace(6),
+                if (hasValidity)
+                  _buildValidityPeriod(context,
+                      start: summary?.startDate, end: summary?.endDate)
+                else
+                  SizedBox(height: 24),
+              ],
+            ),
           ),
+        ],
+      ),
     );
   }
 
@@ -450,7 +449,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
       ),
     );
   }
-
 
   Widget _buildValidityPeriod(
     BuildContext context, {
@@ -482,13 +480,13 @@ class _SettingsMenuState extends State<SettingsMenu> {
     if (endDate == null) {
       return const SizedBox.shrink();
     }
-    
+
     // 格式化日期为 yyyy.MM.dd 格式
     final dateFormat = 'yyyy.MM.dd';
     final startDateStr =
         startDate != null ? DateFormat(dateFormat).format(startDate) : '--';
     final endDateStr = DateFormat(dateFormat).format(endDate);
-    
+
     return FittedBox(
       child: FlowyText(
         '有效期: $startDateStr至$endDateStr',
@@ -497,7 +495,6 @@ class _SettingsMenuState extends State<SettingsMenu> {
       ),
     );
   }
-
 }
 
 class SimpleSettingsMenu extends StatelessWidget {

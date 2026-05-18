@@ -64,8 +64,8 @@ class KVKeys {
   /// The key for saving the text scale factor.
   ///
   /// The value is a double string.
-  /// The value range is from 0.8 to 1.0. If it's greater than 1.0, it will cause
-  ///   the text to be too large and not aligned with the icon
+  /// The value range is intentionally conservative because it combines with
+  /// adaptive device scaling at runtime.
   static const String textScaleFactor = 'textScaleFactor';
 
   /// The key for saving the feature flags

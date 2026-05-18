@@ -15,9 +15,12 @@ class HomeLayout {
     final homeSetting = context.read<HomeSettingBloc>().state;
     showEditPanel = homeSetting.panelContext != null;
 
-    menuWidth = max(
-      HomeSizes.minimumSidebarWidth + homeSetting.resizeOffset,
-      HomeSizes.minimumSidebarWidth,
+    menuWidth = min(
+      max(
+        HomeSizes.minimumSidebarWidth + homeSetting.resizeOffset,
+        HomeSizes.minimumSidebarWidth,
+      ),
+      HomeSizes.maximumSidebarWidth,
     );
 
     final screenWidthPx = context.widthPx;
@@ -26,9 +29,9 @@ class HomeLayout {
         .add(HomeSettingEvent.checkScreenSize(screenWidthPx));
 
     showMenu = homeSetting.menuStatus == MenuStatus.expanded;
-    if (showMenu) {
-      menuIsDrawer = context.widthPx <= PageBreaks.tabletPortrait;
-    }
+    menuIsDrawer = showMenu &&
+        !Platform.isWindows &&
+        context.widthPx < PageBreaks.tabletLandscape;
 
     showNotificationPanel = !homeSetting.isNotificationPanelCollapsed;
 

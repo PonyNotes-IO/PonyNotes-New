@@ -312,6 +312,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   /// Adds a [TabsEvent.openTab] event for the provided [ViewPB]
+  /// 如果当前 Tab 是 SpaceHub，新 Tab 也使用同一空间的 SpaceHub 三栏布局打开
   void openTab(ViewPB view) {
     try {
       if (view.id.isEmpty) {
@@ -322,13 +323,30 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         );
         return;
       }
+
+      // 同步检查当前 Tab 是否为 SpaceHub，若是则复用同一空间的 SpaceHub 三栏布局
+      if (!view.isSpace) {
+        final currentPlugin = state.currentPageManager.plugin;
+        if (currentPlugin.pluginType == PluginType.folder) {
+          final notifier = currentPlugin.notifier;
+          if (notifier is ViewPluginNotifier && notifier.view.isSpace) {
+            final spaceHubPlugin =
+                notifier.view.plugin(initialSelectedView: view);
+            add(TabsEvent.openTab(plugin: spaceHubPlugin, view: view));
+            return;
+          }
+        }
+      }
+
       final plugin = view.plugin();
       add(TabsEvent.openTab(plugin: plugin, view: view));
     } catch (e, stackTrace) {
-      Log.error('Failed to open tab for view: ${view.id}, layout: ${view.layout}', e);
+      Log.error(
+        'Failed to open tab for view: ${view.id}, layout: ${view.layout}',
+        e,
+      );
       Log.error('Stack trace:', stackTrace);
-      
-      // 显示错误提示
+
       String errorMessage = '加载笔记失败';
       if (e is UnimplementedError) {
         errorMessage = '不支持的笔记类型: ${view.layout}';
@@ -337,18 +355,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       } else {
         errorMessage = '加载笔记失败: ${e.toString()}';
       }
-      
+
       showToastNotification(
         message: errorMessage,
         type: ToastificationType.error,
       );
-      
-      // 如果打开失败，尝试打开一个空白页面作为降级方案
-      try {
-        add(TabsEvent.openTab(plugin: BlankPagePlugin(), view: view));
-      } catch (fallbackError) {
-        Log.error('Failed to open blank page as fallback', fallbackError);
-      }
     }
   }
 

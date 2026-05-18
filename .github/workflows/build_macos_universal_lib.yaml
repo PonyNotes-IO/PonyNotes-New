@@ -6,6 +6,7 @@ on:
       - "main"
       - "develop"
       - "release/*"
+      - "!backup/**"
     paths:
       - ".github/workflows/build_macos_universal_lib.yaml"
       - "frontend/rust-lib/**"
@@ -38,6 +39,7 @@ env:
 
 jobs:
   build-universal-lib:
+    if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/heads/backup/') }}
     runs-on: macos-latest
     name: Build macOS Universal Library (x86_64 + arm64)
 

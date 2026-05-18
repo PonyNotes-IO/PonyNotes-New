@@ -1,3 +1,4 @@
+use std::fs;
 use std::io;
 use std::io::Write;
 use std::sync::{Arc, RwLock};
@@ -42,12 +43,20 @@ impl Builder {
     platform: &OperatingSystem,
     stream_log_sender: Option<Arc<dyn StreamLogSender>>,
   ) -> Self {
+    // 确保日志目录存在，避免 RollingFileAppender 因目录缺失而无法创建日志文件
+    if let Err(e) = fs::create_dir_all(directory) {
+      eprintln!("[lib-log] 创建日志目录失败 '{}': {}", directory, e);
+    }
+
     let app_log_appender = RollingFileAppender::builder()
       .rotation(Rotation::DAILY)
       .filename_prefix(name)
       .max_log_files(6)
       .build(directory)
-      .unwrap_or(tracing_appender::rolling::daily(directory, name));
+      .unwrap_or_else(|e| {
+        eprintln!("[lib-log] RollingFileAppender 构建失败 '{}': {}", directory, e);
+        tracing_appender::rolling::daily(directory, name)
+      });
 
     let sync_log_name = "log.sync";
     let sync_log_appender = RollingFileAppender::builder()
@@ -55,7 +64,10 @@ impl Builder {
       .filename_prefix(sync_log_name)
       .max_log_files(24)
       .build(directory)
-      .unwrap_or(tracing_appender::rolling::hourly(directory, sync_log_name));
+      .unwrap_or_else(|e| {
+        eprintln!("[lib-log] sync RollingFileAppender 构建失败 '{}': {}", directory, e);
+        tracing_appender::rolling::hourly(directory, sync_log_name)
+      });
 
     Builder {
       name: name.to_owned(),
@@ -74,6 +86,8 @@ impl Builder {
 
   pub fn build(self) -> Result<(), String> {
     let env_filter = EnvFilter::new(self.env_filter);
+
+    // non_blocking：日志写入交给后台线程，避免阻塞 Tokio worker 线程（否则网络/同步操作会极卡）
     let (appflowy_log_non_blocking, app_log_guard) =
       tracing_appender::non_blocking(self.app_log_appender);
     *APP_LOG_GUARD.write().unwrap() = Some(app_log_guard);

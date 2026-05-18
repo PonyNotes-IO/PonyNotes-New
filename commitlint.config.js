@@ -3,7 +3,7 @@ module.exports = {
     rules: {
         'header-max-length': [2, 'always', 100],
 
-        'type-enum': [2, 'always', ['build', 'chore', 'ci', 'docs', 'feat', 'feature', 'fix', 'refactor', 'style', 'test']],
+        'type-enum': [2, 'always', ['backup', 'build', 'chore', 'ci', 'docs', 'feat', 'feature', 'fix', 'refactor', 'style', 'test']],
         'type-empty': [2, 'never'],
         'type-case': [2, 'always', 'lower-case'],
 
@@ -22,4 +22,3 @@ module.exports = {
         'footer-max-line-length': [2, 'always', 100]
     },
 };
-

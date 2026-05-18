@@ -1,6 +1,8 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/plugins/space_hub/space_hub.dart';
 import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
+import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/create_space_popup.dart';
@@ -45,9 +47,9 @@ class SidebarSpaceMenu extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 8.0),
                 child: FlowyDivider(),
               ),
-              const SizedBox(
+              SizedBox(
                 height: HomeSpaceViewSizes.viewHeight,
-                child: _CreateSpaceButton(),
+                child: const _CreateSpaceButton(),
               ),
             ],
           ],
@@ -144,6 +146,8 @@ class _SidebarSpaceMenuItemState extends State<SidebarSpaceMenuItem> {
                     : (_isHovered ? _buildActionButton(context, space) : null)),
             onTap: () {
               context.read<SpaceBloc>().add(SpaceEvent.open(space: space));
+              SpaceHubMiddlePanelController.reveal(space.id);
+              context.read<TabsBloc>().openPlugin(space);
               PopoverContainer.of(context).close();
             },
           );
@@ -241,8 +245,11 @@ class _SidebarSpaceMenuItemState extends State<SidebarSpaceMenuItem> {
                               showToastNotification(message: '无法获取当前用户信息，加入失败');
                               return;
                             }
-                            final addRes = await UserBackendService(userId: user.id)
-                                .addWorkspaceMember(context.read<SpaceBloc>().workspaceId, user.email);
+                            final addRes =
+                                await UserBackendService(userId: user.id)
+                                    .addWorkspaceMember(
+                                        context.read<SpaceBloc>().workspaceId,
+                                        user.email);
                             addRes.fold((_) {
                               showToastNotification(message: '已加入空间');
                               // refresh spaces/members

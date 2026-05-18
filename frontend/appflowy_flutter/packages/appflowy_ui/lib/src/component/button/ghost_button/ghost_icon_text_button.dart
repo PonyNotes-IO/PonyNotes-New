@@ -12,6 +12,7 @@ typedef AFGhostIconBuilder = Widget Function(
 enum AFExpandArrowPosition {
   /// 紧跟在文字后面
   afterText,
+
   /// 在整个 Row 的最右边
   rowEnd,
 }
@@ -27,6 +28,8 @@ class AFGhostIconTextButton extends StatelessWidget {
     this.size = AFButtonSize.m,
     this.padding,
     this.borderRadius,
+    this.textStyle,
+    this.iconTextGap,
     this.disabled = false,
     this.mainAxisAlignment = MainAxisAlignment.center,
     this.showExpandArrow = false,
@@ -44,6 +47,8 @@ class AFGhostIconTextButton extends StatelessWidget {
     AFButtonSize size = AFButtonSize.m,
     EdgeInsetsGeometry? padding,
     double? borderRadius,
+    TextStyle? textStyle,
+    double? iconTextGap,
     bool disabled = false,
     MainAxisAlignment mainAxisAlignment = MainAxisAlignment.center,
     bool showExpandArrow = false,
@@ -59,6 +64,8 @@ class AFGhostIconTextButton extends StatelessWidget {
       size: size,
       padding: padding,
       borderRadius: borderRadius,
+      textStyle: textStyle,
+      iconTextGap: iconTextGap,
       disabled: disabled,
       mainAxisAlignment: mainAxisAlignment,
       showExpandArrow: showExpandArrow,
@@ -93,6 +100,8 @@ class AFGhostIconTextButton extends StatelessWidget {
     AFButtonSize size = AFButtonSize.m,
     EdgeInsetsGeometry? padding,
     double? borderRadius,
+    TextStyle? textStyle,
+    double? iconTextGap,
     MainAxisAlignment mainAxisAlignment = MainAxisAlignment.center,
   }) {
     return AFGhostIconTextButton(
@@ -103,6 +112,8 @@ class AFGhostIconTextButton extends StatelessWidget {
       size: size,
       padding: padding,
       borderRadius: borderRadius,
+      textStyle: textStyle,
+      iconTextGap: iconTextGap,
       disabled: true,
       mainAxisAlignment: mainAxisAlignment,
       backgroundColor: (context, isHovering, disabled) {
@@ -121,6 +132,8 @@ class AFGhostIconTextButton extends StatelessWidget {
   final AFButtonSize size;
   final EdgeInsetsGeometry? padding;
   final double? borderRadius;
+  final TextStyle? textStyle;
+  final double? iconTextGap;
 
   final AFGhostIconBuilder iconBuilder;
 
@@ -157,12 +170,24 @@ class AFGhostIconTextButton extends StatelessWidget {
       builder: (context, isHovering, disabled) {
         final textColor = this.textColor?.call(context, isHovering, disabled) ??
             theme.textColorScheme.primary;
+        final textStyle =
+            (this.textStyle ?? size.buildTextStyle(context)).copyWith(
+          color: textColor,
+          height: 1.35,
+          leadingDistribution: TextLeadingDistribution.even,
+        );
 
         // 构建展开箭头
         Widget? expandArrow;
         if (showExpandArrow) {
-          expandArrow = expandArrowBuilder?.call(context, isHovering, disabled) ??
-              _buildDefaultExpandArrow(context, isHovering, disabled, textColor);
+          expandArrow =
+              expandArrowBuilder?.call(context, isHovering, disabled) ??
+                  _buildDefaultExpandArrow(
+                    context,
+                    isHovering,
+                    disabled,
+                    textColor,
+                  );
         }
 
         return Row(
@@ -174,27 +199,37 @@ class AFGhostIconTextButton extends StatelessWidget {
               isHovering,
               disabled,
             ),
-            SizedBox(width: theme.spacing.m),
+            SizedBox(width: iconTextGap ?? theme.spacing.m),
             // 文字
             if (expandArrowPosition == AFExpandArrowPosition.rowEnd)
               Expanded(
                 child: Text(
                   text,
-                  style: size.buildTextStyle(context).copyWith(
-                        color: textColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold
-                      ),
+                  style: textStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  strutStyle: StrutStyle.fromTextStyle(
+                    textStyle,
+                    forceStrutHeight: true,
+                    height: 1.35,
+                    leadingDistribution: TextLeadingDistribution.even,
+                  ),
                 ),
               )
             else
-              Text(
-                text,
-                style: size.buildTextStyle(context).copyWith(
-                      color: textColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold
-                    ),
+              Flexible(
+                child: Text(
+                  text,
+                  style: textStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  strutStyle: StrutStyle.fromTextStyle(
+                    textStyle,
+                    forceStrutHeight: true,
+                    height: 1.35,
+                    leadingDistribution: TextLeadingDistribution.even,
+                  ),
+                ),
               ),
             // 箭头在文字后
             if (showExpandArrow &&

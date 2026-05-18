@@ -1,4 +1,3 @@
-import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/reminder/reminder_bloc.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
@@ -7,6 +6,7 @@ import 'package:appflowy/workspace/presentation/notifications/number_red_dot.dar
 import 'package:appflowy_backend/protobuf/flowy-user/reminder.pb.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
+import 'package:flowy_svg/flowy_svg.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -14,9 +14,11 @@ class NotificationButton extends StatefulWidget {
   const NotificationButton({
     super.key,
     this.isHover = false,
+    this.alwaysShow = false,
   });
 
   final bool isHover;
+  final bool alwaysShow;
 
   @override
   State<NotificationButton> createState() => _NotificationButtonState();
@@ -49,8 +51,9 @@ class _NotificationButtonState extends State<NotificationButton> {
               final homeSettingBloc = context.read<HomeSettingBloc>();
               return BlocBuilder<ReminderBloc, ReminderState>(
                 builder: (context, state) {
-                  return notificationSettingsState
-                          .isShowNotificationsIconEnabled
+                  return (widget.alwaysShow ||
+                          notificationSettingsState
+                              .isShowNotificationsIconEnabled)
                       ? _buildNotificationIcon(
                           context,
                           state.reminders,
@@ -83,12 +86,16 @@ class _NotificationButtonState extends State<NotificationButton> {
               child: FlowyButton(
                 useIntrinsicWidth: true,
                 margin: EdgeInsets.zero,
-                text: FlowySvg(
-                  FlowySvgs.icon_notification_s,
-                  color: widget.isHover
-                      ? Theme.of(context).colorScheme.onSurface
+                text: SvgPicture.asset(
+                  'assets/images/icons/sidebar_notification_custom.svg',
+                  width: 24,
+                  height: 24,
+                  colorFilter: widget.isHover
+                      ? ColorFilter.mode(
+                          Theme.of(context).colorScheme.onSurface,
+                          BlendMode.srcIn,
+                        )
                       : null,
-                  opacity: 0.7,
                 ),
                 onTap: () {
                   // 显示通知面板而不是折叠

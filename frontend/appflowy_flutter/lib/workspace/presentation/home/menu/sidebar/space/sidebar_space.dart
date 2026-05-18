@@ -13,11 +13,11 @@ import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/shared_w
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_space_header.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_ai_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_calendar_button.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_home_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_settings_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_favorite_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_share_button.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_publish_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_template_new_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_trash_item.dart';
@@ -59,18 +59,18 @@ class SidebarSpace extends StatelessWidget {
         value: userProfile,
         child: Column(
           children: [
-            const VSpace(4.0),
+            const VSpace(sidebarEntryGroupTopGap),
             // PonyNotes 主菜单按钮
             // home button
             const SidebarHomeButton(),
             // AI button
-            const VSpace(4.0),
+            const VSpace(sidebarPrimaryEntryGap),
             const SidebarAiButton(),
             // calendar button
-            const VSpace(4.0),
+            const VSpace(sidebarPrimaryEntryGap),
             const SidebarCalendarButton(),
             // favorite button
-            const VSpace(4.0),
+            const VSpace(sidebarPrimaryEntryGap),
             const SidebarFavoriteButton(),
 
             // public or private (只在协作工作空间显示)
@@ -87,21 +87,21 @@ class SidebarSpace extends StatelessWidget {
                 return Column(
                   children: isCollaborativeWorkspace
                       ? [
-                    // 私有空间（仅 Space）
-                    PrivateSectionFolder(
-                      views: privateSpaces,
-                    ),
-                    // 协作区 / 公共空间（仅 Space）
-                    PublicSectionFolder(
-                      views: publicSpaces,
-                    ),
-                  ]
+                          // 私有空间（仅 Space）
+                          PrivateSectionFolder(
+                            views: privateSpaces,
+                          ),
+                          // 协作区 / 公共空间（仅 Space）
+                          PublicSectionFolder(
+                            views: publicSpaces,
+                          ),
+                        ]
                       : [
-                    // 非协作工作区：个人空间仅使用公共空间中的 Space
-                    PersonalSectionFolder(
-                      views: publicSpaces,
-                    ),
-                  ],
+                          // 非协作工作区：个人空间仅使用公共空间中的 Space
+                          PersonalSectionFolder(
+                            views: publicSpaces,
+                          ),
+                        ],
                 );
               },
             ),
@@ -109,7 +109,6 @@ class SidebarSpace extends StatelessWidget {
             // 共享
             const SidebarShareButton(),
             // 发布
-            const SidebarPublishButton(),
             // 文件库
             // const VSpace(4.0),
             // const SidebarFileLibraryButton(),

@@ -1325,7 +1325,7 @@
         "opacityEmptyError": "不透明度不能为空",
         "opacityRangeError": "不透明度必须介于 1 到 100 之间",
         "app": "应用程序",
-        "flowy": "弗洛菲",
+        "flowy": "小马笔记",
         "apply": "申请",
         "changeWidth": "更改",
         "width": "文档宽度"

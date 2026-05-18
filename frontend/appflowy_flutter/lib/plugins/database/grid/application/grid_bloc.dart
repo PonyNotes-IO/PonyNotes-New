@@ -12,6 +12,7 @@ import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:appflowy/util/diagnostic_build.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -140,7 +141,7 @@ class GridBloc extends Bloc<GridEvent, GridState> {
   void _startListening() {
     _databaseCallbacks = DatabaseCallbacks(
       onNumOfRowsChanged: (rowInfos, _, reason) {
-        if (!isClosed) {
+        if (!isClosed && _shouldRebuildRows(reason)) {
           add(GridEvent.didLoadRows(rowInfos, reason));
         }
       },
@@ -152,12 +153,8 @@ class GridBloc extends Bloc<GridEvent, GridState> {
         }
       },
       onRowsUpdated: (rows, reason) {
-        // TODO(nathan): separate different reasons
-        if (!isClosed) {
-          add(
-            GridEvent.didLoadRows(databaseController.rowCache.rowInfos, reason),
-          );
-        }
+        // Row-level updates are handled by RowController/RowCache to avoid
+        // turning a single-cell change into a full-grid rebuild.
       },
       onFieldsChanged: (fields) {
         if (!isClosed) {
@@ -178,22 +175,51 @@ class GridBloc extends Bloc<GridEvent, GridState> {
     databaseController.addListener(onDatabaseChanged: _databaseCallbacks);
   }
 
+  bool _shouldRebuildRows(ChangedReason reason) {
+    return reason.map(
+      insert: (_) => true,
+      delete: (_) => true,
+      update: (_) => false,
+      fieldDidChange: (_) => false,
+      initial: (_) => false,
+      didFetchRow: (_) => false,
+      reorderRows: (_) => true,
+      reorderSingleRow: (_) => true,
+      updateRowsVisibility: (_) => true,
+      setInitialRows: (_) => true,
+    );
+  }
+
   Future<void> _openGrid(Emitter<GridState> emit) async {
+    final stopwatch =
+        ponyNotesDiagnosticBuildEnabled ? (Stopwatch()..start()) : null;
     final result = await databaseController.open();
     result.fold(
       (grid) {
         databaseController.setIsLoading(false);
+        logDiagnosticMessage(
+          'grid.open',
+          'viewId=$viewId durationMs=${stopwatch?.elapsedMilliseconds ?? -1} '
+              'rowCount=${rowCache.rowInfos.length} success=true',
+        );
         emit(
           state.copyWith(
             loadingState: LoadingState.finish(FlowyResult.success(null)),
           ),
         );
       },
-      (err) => emit(
-        state.copyWith(
-          loadingState: LoadingState.finish(FlowyResult.failure(err)),
-        ),
-      ),
+      (err) {
+        logDiagnosticMessage(
+          'grid.open',
+          'viewId=$viewId durationMs=${stopwatch?.elapsedMilliseconds ?? -1} '
+              'rowCount=${rowCache.rowInfos.length} success=false error=$err',
+        );
+        emit(
+          state.copyWith(
+            loadingState: LoadingState.finish(FlowyResult.failure(err)),
+          ),
+        );
+      },
     );
   }
 }

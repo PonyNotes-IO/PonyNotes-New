@@ -6,6 +6,7 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:appflowy_backend/log.dart';
 
@@ -26,17 +27,15 @@ class SidebarAiButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.start,
             size: AFButtonSize.l,
             onTap: () => _openAiWelcomePage(context),
-            padding: EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 10,
-            ),
+            padding: sidebarEntryPadding,
             borderRadius: theme.borderRadius.s,
-            iconBuilder: (context, isHover, disabled) =>
-                Image.asset(
-                  'assets/images/home_icon_ai.png',
-                  width: 18,
-                  height: 18,
-                )
+            textStyle: sidebarEntryTextStyle(context),
+            iconTextGap: sidebarEntryIconTextGap,
+            iconBuilder: (context, isHover, disabled) => Image.asset(
+              'assets/images/home_icon_ai.png',
+              width: 18,
+              height: 18,
+            ),
             //     FlowySvg(
             //   FlowySvgs.icon_ai_s,
             //   size: const Size.square(16.0),
@@ -55,14 +54,14 @@ class SidebarAiButton extends StatelessWidget {
       // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
       CalendarUnsavedGuard.instance.maybeConfirmLeave(context, () {
         // 创建AI欢迎页插件
-        final plugin = makePlugin(pluginType: PluginType.aiWelcome, data: null);
+        final plugin = makePlugin(pluginType: PluginType.aiWelcome);
 
         // 使用TabsBloc打开插件
         context.read<TabsBloc>().add(
-          TabsEvent.openPlugin(
-            plugin: plugin,
-          ),
-        );
+              TabsEvent.openPlugin(
+                plugin: plugin,
+              ),
+            );
 
         Log.info('✅ 侧边栏: AI欢迎页已打开');
       });

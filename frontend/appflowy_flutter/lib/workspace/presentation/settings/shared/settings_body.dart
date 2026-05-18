@@ -26,34 +26,39 @@ class SettingsBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          VSpace(20),
-          SettingsHeader(
-            title: title,
-            description: description,
-            descriptionBuilder: descriptionBuilder,
-            leadingBuilder: headerLeadingBuilder,
-            trailingBuilder: headerTrailingBuilder,
-          ),
-          Expanded(
-            child: SingleChildScrollView(
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      VSpace(20),
+      SettingsHeader(
+        title: title,
+        description: description,
+        descriptionBuilder: descriptionBuilder,
+        leadingBuilder: headerLeadingBuilder,
+        trailingBuilder: headerTrailingBuilder,
+      ),
+      Expanded(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final horizontalPadding = constraints.maxWidth < 460 ? 16.0 : 24.0;
+            final verticalPadding = constraints.maxWidth < 460 ? 18.0 : 24.0;
+            return SingleChildScrollView(
                 physics: const ClampingScrollPhysics(),
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding,
+                  vertical: verticalPadding,
+                ),
                 child: Column(children: [
                   if (children.isNotEmpty) ...[
-                    const SizedBox(height: 24),
+                    SizedBox(height: verticalPadding),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: children,
                     ),
                   ],
-                ])
-            ),
-          ),
-          bottomWidget != null ? bottomWidget! : SizedBox.shrink()
-        ]
-    );
+                ]));
+          },
+        ),
+      ),
+      bottomWidget != null ? bottomWidget! : SizedBox.shrink()
+    ]);
   }
 }

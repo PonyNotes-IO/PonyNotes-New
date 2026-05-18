@@ -52,6 +52,10 @@ class PageAccessLevelBloc
   // in the row details page, we don't need to check the page access level
   final bool ignorePageAccessLevel;
 
+  // DidUpdateSharedUsers 节流：最多每 5 分钟刷新一次访问级别
+  DateTime? _lastRefreshAccessLevelTime;
+  static const Duration _refreshAccessLevelThrottle = Duration(minutes: 5);
+
   @override
   Future<void> close() async {
     await listener.stop();
@@ -76,7 +80,13 @@ class PageAccessLevelBloc
       objectId: view.id,
       handler: (FolderNotification ty, FlowyResult<Uint8List, FlowyError> _) {
         if (ty == FolderNotification.DidUpdateSharedUsers) {
-          add(const PageAccessLevelEvent.refreshAccessLevel());
+          final now = DateTime.now();
+          if (_lastRefreshAccessLevelTime == null ||
+              now.difference(_lastRefreshAccessLevelTime!) >
+                  _refreshAccessLevelThrottle) {
+            _lastRefreshAccessLevelTime = now;
+            add(const PageAccessLevelEvent.refreshAccessLevel());
+          }
         }
       },
     );

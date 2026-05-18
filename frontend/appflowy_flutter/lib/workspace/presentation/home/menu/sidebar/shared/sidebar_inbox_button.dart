@@ -20,13 +20,13 @@ class SidebarInboxButton extends StatelessWidget {
         size: AFButtonSize.l,
         onTap: () => _openInboxPage(context),
         padding: EdgeInsets.symmetric(
-          horizontal: 8,
-          vertical: 10,
+          horizontal: 10,
+          vertical: 11,
         ),
         borderRadius: theme.borderRadius.s,
         iconBuilder: (context, isHover, disabled) => FlowySvg(
           FlowySvgs.icon_inbox_s,
-          size: const Size.square(16.0),
+          size: const Size.square(18.0),
           color: Theme.of(context).textTheme.bodyMedium?.color,
         ),
       ),

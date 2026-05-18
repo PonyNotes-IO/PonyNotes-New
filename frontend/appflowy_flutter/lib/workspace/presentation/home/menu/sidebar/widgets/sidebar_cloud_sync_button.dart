@@ -75,7 +75,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
             if (workspaceId != null && workspaceId.isNotEmpty) {
               workspaceBloc.add(
                 UserWorkspaceEvent.fetchWorkspaceSubscriptionInfo(
-                    workspaceId: workspaceId),
+                  workspaceId: workspaceId,
+                ),
               );
             }
           }
@@ -141,7 +142,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
     final Size buttonSize = renderBox.size;
 
     Log.info(
-        '[云同步] 显示弹框，会员信息状态: subscriptionInfo=${subscriptionInfo?.plan}, currentSubscription=${currentSubscription?.subscription?.planCode}');
+      '[云同步] 显示弹框，会员信息状态: subscriptionInfo=${subscriptionInfo?.plan}, currentSubscription=${currentSubscription?.subscription?.planCode}',
+    );
 
     // 判断会员状态
     final membershipStatus = _determineMembershipStatus(
@@ -158,7 +160,6 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
 
     await showDialog(
       context: context,
-      barrierDismissible: true,
       barrierColor: Colors.transparent,
       builder: (BuildContext dialogContext) {
         // 尝试获取 UserWorkspaceBloc，如果存在则监听状态变化
@@ -183,7 +184,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
               );
 
               Log.info(
-                  '[云同步弹框] 更新会员信息: subscriptionInfo=${latestSubscriptionInfo?.plan}, currentSubscription=${latestCurrentSubscription?.subscription?.planCode}, status=$latestMembershipStatus, isCloudSyncEnabled=$latestIsCloudSyncEnabled');
+                '[云同步弹框] 更新会员信息: subscriptionInfo=${latestSubscriptionInfo?.plan}, currentSubscription=${latestCurrentSubscription?.subscription?.planCode}, status=$latestMembershipStatus, isCloudSyncEnabled=$latestIsCloudSyncEnabled',
+              );
 
               return _buildDialogContent(
                 originalContext, // 使用原始 context，用于访问 UserWorkspaceBloc
@@ -356,19 +358,19 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
           margin: EdgeInsets.zero,
           text: FlowySvg(
             FlowySvgs.cloud_sync_m,
-            color:
-                widget.isHover ? Theme.of(context).colorScheme.onSurface : null,
-            opacity: 0.7,
+            color: widget.isHover ? Colors.white : null,
+            opacity: widget.isHover ? 1.0 : 0.7,
           ),
           onTap: onTap,
         ),
       );
     }
 
-    final hasWarning = membershipStatus == CloudSyncMembershipStatus.expiringSoon ||
-        membershipStatus == CloudSyncMembershipStatus.gracePeriod ||
-        membershipStatus == CloudSyncMembershipStatus.expired ||
-        membershipStatus == CloudSyncMembershipStatus.storageFull;
+    final hasWarning =
+        membershipStatus == CloudSyncMembershipStatus.expiringSoon ||
+            membershipStatus == CloudSyncMembershipStatus.gracePeriod ||
+            membershipStatus == CloudSyncMembershipStatus.expired ||
+            membershipStatus == CloudSyncMembershipStatus.storageFull;
 
     if (!isCloudSyncEnabled) {
       return SizedBox.square(
@@ -382,9 +384,8 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
               margin: EdgeInsets.zero,
               text: FlowySvg(
                 FlowySvgs.cloud_sync_m,
-                color:
-                    widget.isHover ? Theme.of(context).colorScheme.onSurface : null,
-                opacity: 0.7,
+                color: widget.isHover ? Colors.white : null,
+                opacity: widget.isHover ? 1.0 : 0.7,
               ),
               onTap: onTap,
             ),
@@ -453,18 +454,14 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
                         turns: _rotationController,
                         child: FlowySvg(
                           iconData,
-                          color: widget.isHover
-                              ? Theme.of(context).colorScheme.onSurface
-                              : iconColor,
-                          opacity: widget.isHover ? 0.7 : 1.0,
+                          color: widget.isHover ? Colors.white : iconColor,
+                          opacity: 1.0,
                         ),
                       )
                     : FlowySvg(
                         iconData,
-                        color: widget.isHover
-                            ? Theme.of(context).colorScheme.onSurface
-                            : iconColor,
-                        opacity: widget.isHover ? 0.7 : 1.0,
+                        color: widget.isHover ? Colors.white : iconColor,
+                        opacity: 1.0,
                       ),
                 onTap: onTap,
               ),
@@ -483,14 +480,13 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
         minWidth: 24.0,
         maxHeight: 14.0,
       ),
-      padding:
-          const EdgeInsets.symmetric(horizontal: 5.0, vertical: 1.5),
+      padding: const EdgeInsets.symmetric(horizontal: 5.0, vertical: 1.5),
       decoration: BoxDecoration(
         color: labelColor,
         borderRadius: BorderRadius.circular(7.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 2.0,
             offset: const Offset(0, 1.0),
           ),
@@ -498,7 +494,6 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
       ),
       child: FittedBox(
         fit: BoxFit.scaleDown,
-        alignment: Alignment.center,
         child: Text(
           labelText,
           style: const TextStyle(
@@ -536,7 +531,7 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
         decoration: BoxDecoration(
           color: dotColor,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 1.0),
+          border: Border.all(color: Colors.white),
         ),
       ),
     );
