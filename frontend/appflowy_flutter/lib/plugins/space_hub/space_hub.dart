@@ -227,6 +227,38 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
   }
 
   @override
+  Widget? get fullWindowMoreItem {
+    return ValueListenableBuilder<ViewPB?>(
+      valueListenable: selectedViewNotifier,
+      builder: (context, selectedView, _) {
+        final effectiveView = selectedView ?? view;
+
+        try {
+          return ValueListenableBuilder<ViewInfoBloc?>(
+            valueListenable: currentViewInfoBlocNotifier,
+            builder: (context, currentViewInfoBloc, _) {
+              final effectiveViewInfoBloc = currentViewInfoBloc ?? bloc;
+              return MultiBlocProvider(
+                providers: [
+                  BlocProvider<ViewInfoBloc>.value(
+                    value: effectiveViewInfoBloc,
+                  ),
+                ],
+                child: MoreViewActions(
+                  view: effectiveView,
+                  viewInfoBloc: effectiveViewInfoBloc,
+                ),
+              );
+            },
+          );
+        } catch (_) {
+          return const SizedBox.shrink();
+        }
+      },
+    );
+  }
+
+  @override
   Widget buildWidget({
     required PluginContext context,
     required bool shrinkWrap,
@@ -403,6 +435,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   final List<ViewInfoBloc> _childViewInfoBlocs = [];
 
   bool _isDocumentListVisible = true;
+  bool? _documentListVisibleBeforeFullWindow;
 
   /// 添加视图到最近访问列表（带防抖）
   void _addToRecentViews(String viewId) {
@@ -428,6 +461,8 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     super.initState();
     SpaceHubMiddlePanelController.revealRequest
         .addListener(_handleRevealDocumentList);
+    FullWindowController.isFullWindow.addListener(_handleFullWindowChanged);
+    _handleFullWindowChanged();
     // 若有预选文档（从新选项卡打开），直接使用，否则尝试选第一个文档
     if (widget.initialSelectedView != null) {
       _selectedView = widget.initialSelectedView;
@@ -442,6 +477,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
   void dispose() {
     SpaceHubMiddlePanelController.revealRequest
         .removeListener(_handleRevealDocumentList);
+    FullWindowController.isFullWindow.removeListener(_handleFullWindowChanged);
     for (final bloc in _childViewInfoBlocs) {
       bloc.close();
     }
@@ -456,7 +492,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     if (oldWidget.spaceView.id != widget.spaceView.id) {
       setState(() {
         _selectedView = null;
-        _isDocumentListVisible = true;
+        _isDocumentListVisible = !FullWindowController.isFullWindow.value;
       });
       widget.selectedViewNotifier.value = null;
       // 重新尝试选中新空间的第一个文档
@@ -473,6 +509,27 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
       return;
     }
     setState(() => _isDocumentListVisible = true);
+  }
+
+  void _handleFullWindowChanged() {
+    if (!mounted) {
+      return;
+    }
+
+    final isFullWindow = FullWindowController.isFullWindow.value;
+    if (isFullWindow) {
+      _documentListVisibleBeforeFullWindow ??= _isDocumentListVisible;
+      if (_isDocumentListVisible) {
+        setState(() => _isDocumentListVisible = false);
+      }
+      return;
+    }
+
+    final restoreVisible = _documentListVisibleBeforeFullWindow;
+    _documentListVisibleBeforeFullWindow = null;
+    if (restoreVisible != null && restoreVisible != _isDocumentListVisible) {
+      setState(() => _isDocumentListVisible = restoreVisible);
+    }
   }
 
   void _hideDocumentList() {
@@ -517,13 +574,9 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     }
 
     final rightPanel = Expanded(
-      child: Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) => _hideDocumentList(),
-        child: _selectedView != null
-            ? _buildSelectedViewContent(_selectedView!)
-            : _buildEmptyState(),
-      ),
+      child: _selectedView != null
+          ? _buildSelectedViewContent(_selectedView!)
+          : _buildEmptyState(),
     );
 
     // ✅ 全窗口模式：隐藏 SpaceHub 左侧菜单栏（文档列表）与拖拽分隔线
@@ -539,7 +592,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
             ? HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding
             : 0.0;
         final useFloatingDocumentList =
-            isFullWindow || menuStatus != MenuStatus.expanded;
+            !isFullWindow && menuStatus != MenuStatus.expanded;
         final documentListPanel = Padding(
           padding: useFloatingDocumentList
               ? EdgeInsets.only(top: contentTopPadding + 12, bottom: 12)
@@ -551,7 +604,7 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
                   )
                 : BorderRadius.zero,
             child: Container(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              color: homeContentBackgroundColor(context),
               width: _leftPanelWidth,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -616,12 +669,14 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
           children: [
             // 左侧：空间文档列表
             Visibility(
-              visible: _isDocumentListVisible,
+              visible: _isDocumentListVisible && !isFullWindow,
               child: documentListPanel,
             ),
             // 可拖动分隔线 - 增强对比度并支持拖动调整大小
             Visibility(
-              visible: _isDocumentListVisible && !useFloatingDocumentList,
+              visible: _isDocumentListVisible &&
+                  !isFullWindow &&
+                  !useFloatingDocumentList,
               child: ResizableDivider(
                 initialLeftWidth: _leftPanelWidth,
                 onResize: (newWidth) {
@@ -917,6 +972,7 @@ class _SpaceDocumentList extends StatelessWidget {
               spaceView.name,
               fontSize: 16,
               fontWeight: FontWeight.w500,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           SizedBox(

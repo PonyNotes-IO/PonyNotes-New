@@ -86,6 +86,35 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # Application build
 add_subdirectory("runner")
 
+# media_kit_video expects libmpv / ANGLE under the active CMake binary dir,
+# while media_kit_libs_windows_video populates them under LOCALAPPDATA cache.
+# Mirror the cache into the active build directory before plugin discovery so
+# Windows diagnostic builds do not depend on stale manual copies.
+if(DEFINED ENV{LOCALAPPDATA})
+  file(TO_CMAKE_PATH "$ENV{LOCALAPPDATA}/media-kit-libs-cache/windows"
+    PONYNOTES_MEDIA_KIT_CACHE_DIR)
+
+  set(PONYNOTES_MEDIA_KIT_LIBMPV_CACHE_DIR
+    "${PONYNOTES_MEDIA_KIT_CACHE_DIR}/libmpv")
+  set(PONYNOTES_MEDIA_KIT_LIBMPV_BUILD_DIR "${CMAKE_BINARY_DIR}/libmpv")
+  if(EXISTS "${PONYNOTES_MEDIA_KIT_LIBMPV_CACHE_DIR}/include/client.h"
+     AND NOT EXISTS "${PONYNOTES_MEDIA_KIT_LIBMPV_BUILD_DIR}/include/client.h")
+    file(REMOVE_RECURSE "${PONYNOTES_MEDIA_KIT_LIBMPV_BUILD_DIR}")
+    file(COPY "${PONYNOTES_MEDIA_KIT_LIBMPV_CACHE_DIR}"
+      DESTINATION "${CMAKE_BINARY_DIR}")
+  endif()
+
+  set(PONYNOTES_MEDIA_KIT_ANGLE_CACHE_DIR
+    "${PONYNOTES_MEDIA_KIT_CACHE_DIR}/ANGLE")
+  set(PONYNOTES_MEDIA_KIT_ANGLE_BUILD_DIR "${CMAKE_BINARY_DIR}/ANGLE")
+  if(EXISTS "${PONYNOTES_MEDIA_KIT_ANGLE_CACHE_DIR}/include/EGL/egl.h"
+     AND NOT EXISTS "${PONYNOTES_MEDIA_KIT_ANGLE_BUILD_DIR}/include/EGL/egl.h")
+    file(REMOVE_RECURSE "${PONYNOTES_MEDIA_KIT_ANGLE_BUILD_DIR}")
+    file(COPY "${PONYNOTES_MEDIA_KIT_ANGLE_CACHE_DIR}"
+      DESTINATION "${CMAKE_BINARY_DIR}")
+  endif()
+endif()
+
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)

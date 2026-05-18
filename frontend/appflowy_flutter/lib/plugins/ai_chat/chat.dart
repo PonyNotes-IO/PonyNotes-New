@@ -221,4 +221,45 @@ class AIChatPagePluginWidgetBuilder extends PluginWidgetBuilder
           },
         ),
       );
+
+  @override
+  Widget? get fullWindowMoreItem => MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: viewInfoBloc),
+          BlocProvider.value(value: pageAccessLevelBloc),
+          BlocProvider.value(value: chatMessageSelectorBloc),
+        ],
+        child: BlocBuilder<ChatSelectMessageBloc, ChatSelectMessageState>(
+          builder: (context, state) {
+            if (state.isSelectingMessages) {
+              return const SizedBox.shrink();
+            }
+
+            return MoreViewActions(
+              key: ValueKey(notifier.view.id),
+              view: notifier.view,
+              customActions: [
+                CustomViewAction(
+                  view: notifier.view,
+                  disabled: !state.enabled,
+                  leftIcon: FlowySvgs.ai_add_to_page_s,
+                  label: LocaleKeys.moreAction_saveAsNewPage.tr(),
+                  tooltipMessage: state.enabled
+                      ? null
+                      : LocaleKeys.moreAction_saveAsNewPageDisabled.tr(),
+                  onTap: () {
+                    chatMessageSelectorBloc.add(
+                      const ChatSelectMessageEvent.toggleSelectingMessages(),
+                    );
+                  },
+                ),
+                ViewAction(
+                  type: ViewMoreActionType.divider,
+                  view: notifier.view,
+                ),
+              ],
+            );
+          },
+        ),
+      );
 }

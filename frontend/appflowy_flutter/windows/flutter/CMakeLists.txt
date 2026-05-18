@@ -14,12 +14,42 @@ if (NOT DEFINED FLUTTER_TARGET_PLATFORM)
   set(FLUTTER_TARGET_PLATFORM "windows-x64")
 endif()
 
+set(FLUTTER_ENGINE_ARTIFACTS_DIR
+  "${FLUTTER_ROOT}/bin/cache/artifacts/engine/${FLUTTER_TARGET_PLATFORM}")
+set(FLUTTER_HEADER_ROOT "${EPHEMERAL_DIR}")
+set(FLUTTER_LIBRARY_ROOT "${EPHEMERAL_DIR}")
+set(FLUTTER_ICU_ROOT "${EPHEMERAL_DIR}")
+
+# Some local Windows builds intermittently regenerate only the wrapper headers
+# under the ephemeral tree. Fall back to the engine artifact copy so release
+# builds can still compile against the canonical wrapper sources.
+if (NOT EXISTS "${FLUTTER_HEADER_ROOT}/flutter_windows.h")
+  set(FLUTTER_HEADER_ROOT "${FLUTTER_ENGINE_ARTIFACTS_DIR}")
+endif()
+
+if (NOT EXISTS "${WRAPPER_ROOT}/core_implementations.cc")
+  set(WRAPPER_ROOT
+    "${FLUTTER_ENGINE_ARTIFACTS_DIR}/cpp_client_wrapper")
+endif()
+
+# The runtime DLL must come from the config-specific ephemeral directory that
+# tool_backend.bat generates for the active build mode. Falling back to the
+# generic engine artifacts directory can silently mix a non-release engine DLL
+# into a release AOT package, which then fails at startup looking for
+# kernel_blob.bin instead of loading data/app.so.
+#
+# Keep the fallback only for wrapper sources and headers above. The release
+# packaging/install steps should always consume the ephemeral runtime artifacts.
+if (NOT EXISTS "${FLUTTER_ICU_ROOT}/icudtl.dat")
+  set(FLUTTER_ICU_ROOT "${FLUTTER_ENGINE_ARTIFACTS_DIR}")
+endif()
+
 # === Flutter Library ===
-set(FLUTTER_LIBRARY "${EPHEMERAL_DIR}/flutter_windows.dll")
+set(FLUTTER_LIBRARY "${FLUTTER_LIBRARY_ROOT}/flutter_windows.dll")
 
 # Published to parent scope for install step.
 set(FLUTTER_LIBRARY ${FLUTTER_LIBRARY} PARENT_SCOPE)
-set(FLUTTER_ICU_DATA_FILE "${EPHEMERAL_DIR}/icudtl.dat" PARENT_SCOPE)
+set(FLUTTER_ICU_DATA_FILE "${FLUTTER_ICU_ROOT}/icudtl.dat" PARENT_SCOPE)
 set(DART_FFI_DLL "${CMAKE_CURRENT_SOURCE_DIR}/dart_ffi/dart_ffi.dll" PARENT_SCOPE)
 set(PROJECT_BUILD_DIR "${PROJECT_DIR}/build/" PARENT_SCOPE)
 set(AOT_LIBRARY "${PROJECT_DIR}/build/windows/app.so" PARENT_SCOPE)
@@ -31,10 +61,10 @@ list(APPEND FLUTTER_LIBRARY_HEADERS
   "flutter_plugin_registrar.h"
   "flutter_texture_registrar.h"
 )
-list(TRANSFORM FLUTTER_LIBRARY_HEADERS PREPEND "${EPHEMERAL_DIR}/")
+list(TRANSFORM FLUTTER_LIBRARY_HEADERS PREPEND "${FLUTTER_HEADER_ROOT}/")
 add_library(flutter INTERFACE)
 target_include_directories(flutter INTERFACE
-  "${EPHEMERAL_DIR}"
+  "${FLUTTER_HEADER_ROOT}"
 )
 target_link_libraries(flutter INTERFACE "${FLUTTER_LIBRARY}.lib")
 add_dependencies(flutter flutter_assemble)

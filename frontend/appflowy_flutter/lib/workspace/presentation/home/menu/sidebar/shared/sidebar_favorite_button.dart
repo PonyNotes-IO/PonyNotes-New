@@ -1,5 +1,4 @@
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
-import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
@@ -80,19 +79,11 @@ class _SidebarFavoriteButtonState extends State<SidebarFavoriteButton> {
         onTap: () {
           setState(() => _isExpanded = !_isExpanded);
         },
-        padding: const EdgeInsets.symmetric(
-          horizontal: 8,
-          vertical: 10,
-        ),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         borderRadius: theme.borderRadius.s,
-        iconBuilder: (context, isHover, disabled) => FlowySvg(
-          FlowySvgs.icon_favorite_s,
-          size: const Size.square(18.0),
-          color: Theme.of(context).textTheme.bodyMedium?.color,
-        ),
+        iconBuilder: (context, isHover, disabled) => const SizedBox.shrink(),
         showExpandArrow: true,
         isExpanded: _isExpanded,
-        expandArrowPosition: AFExpandArrowPosition.rowEnd,
       ),
     );
   }

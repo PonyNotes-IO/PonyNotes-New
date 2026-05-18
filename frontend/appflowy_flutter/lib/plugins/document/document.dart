@@ -305,5 +305,18 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
   }
 
   @override
+  Widget? get fullWindowMoreItem => MultiBlocProvider(
+        providers: [
+          BlocProvider<ViewInfoBloc>.value(
+            value: bloc,
+          ),
+          BlocProvider<PageAccessLevelBloc>.value(
+            value: pageAccessLevelBloc,
+          ),
+        ],
+        child: MoreViewActions(view: view, viewInfoBloc: bloc),
+      );
+
+  @override
   List<NavigationItem> get navigationItems => [this];
 }

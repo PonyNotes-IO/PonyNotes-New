@@ -549,6 +549,7 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
       // 隐藏欢迎界面和其他不需要的UI元素
       await _hideUnwantedUI();
+      await _installResizeGuard();
 
       // 设置主题
       final theme =
@@ -692,9 +693,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           }
 
           .App-toolbar {
-            min-height: 56px !important;
-            padding: 8px 12px !important;
-            gap: 8px !important;
+            min-height: 73px !important;
+            padding: 10px 16px !important;
+            gap: 10px !important;
             align-items: center !important;
             background: rgba(255, 255, 255, 0.96) !important;
             border-bottom: 1px solid rgba(17, 24, 39, 0.08) !important;
@@ -709,16 +710,25 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             display: inline-flex !important;
             visibility: visible !important;
             opacity: 1 !important;
-            min-width: 34px !important;
-            min-height: 34px !important;
-            border-radius: 8px !important;
+            min-width: 44px !important;
+            min-height: 44px !important;
+            border-radius: 10px !important;
             align-items: center !important;
             justify-content: center !important;
           }
 
           .App-toolbar svg {
-            width: 18px !important;
-            height: 18px !important;
+            width: 23px !important;
+            height: 23px !important;
+          }
+
+          html,
+          body,
+          #root,
+          .excalidraw,
+          .excalidraw-container {
+            width: 100% !important;
+            height: 100% !important;
           }
         `;
         
@@ -786,6 +796,60 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
 
   /// 隐藏加载阶段的 Excalidraw 底图标志（闪屏）
   /// 注意：只隐藏欢迎界面中心的LOGO，不隐藏工具栏和其他功能元素
+  Future<void> _installResizeGuard() async {
+    await _safeEvalJs('''
+      (function() {
+        const dispatchStableResize = () => {
+          window.dispatchEvent(new Event('resize'));
+          requestAnimationFrame(() => {
+            window.dispatchEvent(new Event('resize'));
+            const api = window.excalidrawAPI ||
+              window.__EXCALIDRAW_API__ ||
+              window._excalidrawAPI;
+            if (api && typeof api.refresh === 'function') {
+              api.refresh();
+            }
+          });
+        };
+
+        if (window._ponynotesResizeObserver) {
+          window._ponynotesResizeObserver.disconnect();
+        }
+        if (window._ponynotesResizeHandler) {
+          window.removeEventListener('resize', window._ponynotesResizeHandler);
+        }
+
+        let lastWidth = 0;
+        let lastHeight = 0;
+        const onContainerResize = () => {
+          const root = document.querySelector('.excalidraw') || document.body;
+          const rect = root.getBoundingClientRect();
+          if (Math.abs(rect.width - lastWidth) < 0.5 &&
+              Math.abs(rect.height - lastHeight) < 0.5) {
+            return;
+          }
+          lastWidth = rect.width;
+          lastHeight = rect.height;
+          clearTimeout(window._ponynotesResizeTimer);
+          window._ponynotesResizeTimer = setTimeout(dispatchStableResize, 40);
+        };
+
+        window._ponynotesResizeHandler = onContainerResize;
+        window.addEventListener('resize', onContainerResize, { passive: true });
+        window._ponynotesResizeObserver = new ResizeObserver(onContainerResize);
+        window._ponynotesResizeObserver.observe(document.body);
+        const root = document.querySelector('.excalidraw');
+        if (root) {
+          window._ponynotesResizeObserver.observe(root);
+        }
+
+        onContainerResize();
+        setTimeout(dispatchStableResize, 120);
+        setTimeout(dispatchStableResize, 360);
+      })();
+    ''', tag: 'installResizeGuard');
+  }
+
   Future<void> _hideLoadingLogo() async {
     await _safeEvalJs('''
       (function() {

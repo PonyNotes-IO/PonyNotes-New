@@ -93,7 +93,6 @@ class _ResizableImageState extends State<ResizableImage> {
   double initialOffsetX = 0;
   double initialOffsetY = 0;
   double moveDistanceX = 0;
-  double moveDistanceY = 0;
   double _cornerAccumulatedX = 0;
   double _cornerAccumulatedY = 0;
   Widget? _cacheImage;
@@ -127,45 +126,110 @@ class _ResizableImageState extends State<ResizableImage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: widget.alignment,
-      child: SizedBox(
-        width: max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX),
-        height: imageHeight != null
-            ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
-            : null,
-        child: MouseRegion(
-          onEnter: (_) => setState(() => onFocus = true),
-          onExit: (_) => setState(() => onFocus = false),
-          child: GestureDetector(
-            onDoubleTap: widget.onDoubleTap,
-            child: KeyedSubtree(
-              key: _imageKey,
-              child: _buildResizableImage(context),
-            ),
-          ),
-        ),
-      ),
+  double get _aspectRatio {
+    final height = imageHeight;
+    if (height != null && height > 0 && imageWidth > 0) {
+      return imageWidth / height;
+    }
+
+    final renderBox =
+        _imageKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox != null && renderBox.hasSize && renderBox.size.height > 0) {
+      return renderBox.size.width / renderBox.size.height;
+    }
+
+    return 1.0;
+  }
+
+  double _minimumResizeWidth(double aspectRatio) {
+    return max(
+      _kImageBlockComponentMinWidth,
+      _kImageBlockComponentMinHeight * aspectRatio,
     );
   }
 
-  Widget _buildResizableImage(BuildContext context) {
+  double _previewImageWidth({
+    required double aspectRatio,
+    required double maxWidth,
+  }) {
+    final minManualWidth = _minimumResizeWidth(aspectRatio);
+    final resizedWidth =
+        (imageWidth - moveDistanceX).clamp(minManualWidth, imageWidth);
+
+    if (maxWidth.isFinite && maxWidth > 0) {
+      return min(resizedWidth.toDouble(), maxWidth);
+    }
+    return resizedWidth.toDouble();
+  }
+
+  void _commitProportionalResize() {
+    final aspectRatio = _aspectRatio;
+    final minManualWidth = _minimumResizeWidth(aspectRatio);
+
+    imageWidth = (imageWidth - moveDistanceX)
+        .clamp(minManualWidth, imageWidth)
+        .toDouble();
+    imageHeight = imageWidth / aspectRatio;
+
+    initialOffsetX = 0;
+    initialOffsetY = 0;
+    moveDistanceX = 0;
+    _cornerAccumulatedX = 0;
+    _cornerAccumulatedY = 0;
+    widget.onResize(imageWidth, imageHeight);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final aspectRatio = _aspectRatio;
+        final currentWidth = _previewImageWidth(
+          aspectRatio: aspectRatio,
+          maxWidth: constraints.maxWidth,
+        );
+        final currentHeight = currentWidth / aspectRatio;
+
+        return Align(
+          alignment: widget.alignment,
+          child: SizedBox(
+            width: currentWidth,
+            height: currentHeight,
+            child: MouseRegion(
+              onEnter: (_) => setState(() => onFocus = true),
+              onExit: (_) => setState(() => onFocus = false),
+              child: GestureDetector(
+                onDoubleTap: widget.onDoubleTap,
+                child: KeyedSubtree(
+                  key: _imageKey,
+                  child: _buildResizableImage(
+                    context,
+                    currentWidth,
+                    currentHeight,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildResizableImage(
+    BuildContext context,
+    double currentWidth,
+    double currentHeight,
+  ) {
     Widget child;
     final src = widget.src;
-    final currentWidth =
-        max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
-    final currentHeight = imageHeight != null
-        ? max(_kImageBlockComponentMinHeight, imageHeight! - moveDistanceY)
-        : null;
 
     if (isURL(src)) {
       _cacheImage = FlowyNetworkImage(
         url: widget.src,
         width: currentWidth,
         height: currentHeight,
-        fit: currentHeight != null ? BoxFit.fill : BoxFit.contain,
+        fit: BoxFit.contain,
         userProfilePB: _userProfilePB,
         onImageLoaded: (isImageInCache) {
           if (isImageInCache) {
@@ -224,7 +288,7 @@ class _ResizableImageState extends State<ResizableImage> {
         File(src),
         width: currentWidth,
         height: currentHeight,
-        fit: currentHeight != null ? BoxFit.fill : BoxFit.contain,
+        fit: BoxFit.contain,
       );
       child = _cacheImage!;
     }
@@ -264,7 +328,9 @@ class _ResizableImageState extends State<ResizableImage> {
             left: 0,
             right: 0,
             height: 16,
-            onUpdateY: (distance) => setState(() => moveDistanceY = distance),
+            onUpdateY: (distance) => setState(
+              () => moveDistanceX = distance * _aspectRatio,
+            ),
           ),
           // Bottom edge - vertical resize
           _buildEdgeGesture(
@@ -275,7 +341,9 @@ class _ResizableImageState extends State<ResizableImage> {
             left: 0,
             right: 0,
             height: 16,
-            onUpdateY: (distance) => setState(() => moveDistanceY = -distance),
+            onUpdateY: (distance) => setState(
+              () => moveDistanceX = -distance * _aspectRatio,
+            ),
           ),
           // Top-left corner
           _buildCornerGesture(
@@ -284,8 +352,6 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: true,
             top: 0,
             left: 0,
-            onUpdateX: (distance) => setState(() => moveDistanceX = distance),
-            onUpdateY: (distance) => setState(() => moveDistanceY = distance),
           ),
           // Top-right corner
           _buildCornerGesture(
@@ -294,8 +360,6 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: false,
             top: 0,
             right: 0,
-            onUpdateX: (distance) => setState(() => moveDistanceX = -distance),
-            onUpdateY: (distance) => setState(() => moveDistanceY = distance),
           ),
           // Bottom-left corner
           _buildCornerGesture(
@@ -304,8 +368,6 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: true,
             bottom: 0,
             left: 0,
-            onUpdateX: (distance) => setState(() => moveDistanceX = distance),
-            onUpdateY: (distance) => setState(() => moveDistanceY = -distance),
           ),
           // Bottom-right corner
           _buildCornerGesture(
@@ -314,8 +376,6 @@ class _ResizableImageState extends State<ResizableImage> {
             isLeft: false,
             bottom: 0,
             right: 0,
-            onUpdateX: (distance) => setState(() => moveDistanceX = -distance),
-            onUpdateY: (distance) => setState(() => moveDistanceY = -distance),
           ),
         ],
       ],
@@ -382,14 +442,7 @@ class _ResizableImageState extends State<ResizableImage> {
                       }
                     };
                     instance.onEnd = (_) {
-                      final newWidth = max(
-                        _kImageBlockComponentMinWidth,
-                        imageWidth - moveDistanceX,
-                      );
-                      imageWidth = newWidth;
-                      initialOffsetX = 0;
-                      moveDistanceX = 0;
-                      widget.onResize(imageWidth, imageHeight);
+                      _commitProportionalResize();
                     };
                   },
                 ),
@@ -412,15 +465,7 @@ class _ResizableImageState extends State<ResizableImage> {
                       }
                     };
                     instance.onEnd = (_) {
-                      if (imageHeight != null) {
-                        imageHeight = max(
-                          _kImageBlockComponentMinHeight,
-                          imageHeight! - moveDistanceY,
-                        );
-                      }
-                      initialOffsetY = 0;
-                      moveDistanceY = 0;
-                      widget.onResize(imageWidth, imageHeight);
+                      _commitProportionalResize();
                     };
                   },
                 ),
@@ -463,23 +508,6 @@ class _ResizableImageState extends State<ResizableImage> {
     );
   }
 
-  void _commitCornerResize() {
-    imageWidth = max(_kImageBlockComponentMinWidth, imageWidth - moveDistanceX);
-
-    if (imageHeight != null) {
-      imageHeight = max(
-        _kImageBlockComponentMinHeight,
-        imageHeight! - moveDistanceY,
-      );
-    }
-
-    initialOffsetX = 0;
-    initialOffsetY = 0;
-    moveDistanceX = 0;
-    moveDistanceY = 0;
-    widget.onResize(imageWidth, imageHeight);
-  }
-
   Widget _buildCornerGesture(
     BuildContext context, {
     required bool isTop,
@@ -488,8 +516,6 @@ class _ResizableImageState extends State<ResizableImage> {
     double? left,
     double? right,
     double? bottom,
-    void Function(double distance)? onUpdateX,
-    void Function(double distance)? onUpdateY,
   }) {
     return Positioned(
       top: top,
@@ -513,18 +539,17 @@ class _ResizableImageState extends State<ResizableImage> {
               instance.onUpdate = (details) {
                 _cornerAccumulatedX += details.delta.dx;
                 _cornerAccumulatedY += details.delta.dy;
-                double finalOffsetX = _cornerAccumulatedX;
+                double widthShrink =
+                    isLeft ? _cornerAccumulatedX : -_cornerAccumulatedX;
                 if (widget.alignment == Alignment.center) {
-                  finalOffsetX *= 2.0;
+                  widthShrink *= 2.0;
                 }
-                if (onUpdateX != null) {
-                  onUpdateX(finalOffsetX);
-                }
-                if (onUpdateY != null) {
-                  onUpdateY(_cornerAccumulatedY);
-                }
+                final heightShrink =
+                    (isTop ? _cornerAccumulatedY : -_cornerAccumulatedY) *
+                        _aspectRatio;
+                setState(() => moveDistanceX = max(widthShrink, heightShrink));
               };
-              instance.onEnd = (_) => _commitCornerResize();
+              instance.onEnd = (_) => _commitProportionalResize();
             },
           ),
         },

@@ -7,6 +7,7 @@ import 'package:flowy_infra/size.dart';
 import 'package:flowy_infra/time/duration.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 part 'home_setting_bloc.freezed.dart';
 
@@ -80,6 +81,10 @@ class HomeSettingBloc extends Bloc<HomeSettingEvent, HomeSettingState> {
             final bool isScreenSmall =
                 e.screenWidthPx < PageBreaks.tabletLandscape;
             if (state.isScreenSmall == isScreenSmall) return;
+            if (UniversalPlatform.isWindows) {
+              emit(state.copyWith(isScreenSmall: isScreenSmall));
+              return;
+            }
             if (state.hasColappsedMenuManually) {
               emit(state.copyWith(isScreenSmall: isScreenSmall));
             } else {

@@ -713,16 +713,22 @@ class _SingleInnerViewItemState extends State<SingleInnerViewItem> {
         // 双击开始重命名
         _startRenaming();
       },
-      child: Text(
-        widget.view.nameOrDefault,
-        overflow: TextOverflow.ellipsis,
-        maxLines: 1,
-        style: textStyle,
-        strutStyle: StrutStyle.fromTextStyle(
-          textStyle,
-          forceStrutHeight: true,
-          height: 1.35,
-          leadingDistribution: TextLeadingDistribution.even,
+      child: FlowyTooltip(
+        message: widget.view.nameOrDefault,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 28),
+          child: Text(
+            widget.view.nameOrDefault,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: textStyle,
+            strutStyle: StrutStyle.fromTextStyle(
+              textStyle,
+              forceStrutHeight: true,
+              height: 1.35,
+              leadingDistribution: TextLeadingDistribution.even,
+            ),
+          ),
         ),
       ),
     );

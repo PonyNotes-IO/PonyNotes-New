@@ -6,6 +6,7 @@ param(
   [string]$ArtifactSuffix = "",
   [string[]]$FlutterBuildArgs = @(),
   [switch]$EnableDiagnosticAutoExport,
+  [switch]$SkipIceValidation,
   [switch]$SkipBuild
 )
 
@@ -369,7 +370,35 @@ if ($LASTEXITCODE -ne 0) {
   throw "WiX candle failed with exit code $LASTEXITCODE"
 }
 
-& $light -nologo -cultures:zh-CN -loc $wixZhCnLocalizationPath -ext WixUIExtension -ext WixUtilExtension -out $msiPath $wixObjPath
+$lightArguments = @(
+  '-nologo',
+  '-cultures:zh-CN',
+  '-loc', $wixZhCnLocalizationPath,
+  '-ext', 'WixUIExtension',
+  '-ext', 'WixUtilExtension'
+)
+
+if ($SkipIceValidation) {
+  $lightArguments += @(
+    '-sval',
+    '-sice:ICE01',
+    '-sice:ICE02',
+    '-sice:ICE03',
+    '-sice:ICE04',
+    '-sice:ICE05',
+    '-sice:ICE06',
+    '-sice:ICE07',
+    '-sice:ICE08',
+    '-sice:ICE09'
+  )
+}
+
+$lightArguments += @(
+  '-out', $msiPath,
+  $wixObjPath
+)
+
+& $light @lightArguments
 if ($LASTEXITCODE -ne 0) {
   throw "WiX light failed with exit code $LASTEXITCODE"
 }

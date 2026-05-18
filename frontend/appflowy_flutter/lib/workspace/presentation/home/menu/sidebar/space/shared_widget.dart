@@ -6,7 +6,7 @@ import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
- 
+
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_space_menu.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_icon.dart';
 import 'package:appflowy/workspace/presentation/home/menu/view/view_item.dart';
@@ -121,10 +121,11 @@ class _SpacePermissionSwitchState extends State<SpacePermissionSwitch> {
           ),
 
           // 快速用户不展示私有空间创建选项
-          if (!_isQuickEntryUser) SpacePermissionButton(
-            permission: SpacePermission.private,
-            onTap: () => _onPermissionChanged(SpacePermission.private),
-          ),
+          if (!_isQuickEntryUser)
+            SpacePermissionButton(
+              permission: SpacePermission.private,
+              onTap: () => _onPermissionChanged(SpacePermission.private),
+            ),
           // SpacePermissionButton(
           //   permission: SpacePermission.closed,
           //   onTap: () => _onPermissionChanged(SpacePermission.closed),
@@ -181,7 +182,7 @@ class SpacePermissionButton extends StatelessWidget {
 
     final button = FlowyButton(
       margin: EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
-      radius: showBorder 
+      radius: showBorder
           ? BorderRadius.circular(8)
           : (showArrow ? BorderRadius.circular(10) : BorderRadius.zero),
       iconPadding: 16.0,
@@ -265,8 +266,11 @@ class SpaceCancelOrConfirmButton extends StatelessWidget {
           DecoratedBox(
             decoration: ShapeDecoration(
               color: enable
-                  ? (confirmButtonColor ?? Theme.of(context).colorScheme.primary)
-                  : Theme.of(context).scaffoldBackgroundColor.withValues(alpha: 0.6),
+                  ? (confirmButtonColor ??
+                      Theme.of(context).colorScheme.primary)
+                  : Theme.of(context)
+                      .scaffoldBackgroundColor
+                      .withValues(alpha: 0.6),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
                 side: enable
@@ -618,12 +622,19 @@ class CurrentSpace extends StatelessWidget {
         ),
         const HSpace(10),
         Flexible(
-          child: FlowyText.medium(
-            space.name,
-            fontSize: 14.0,
-            figmaLineHeight: 18.0,
-            overflow: TextOverflow.ellipsis,
-            color: isHovered ? Theme.of(context).colorScheme.onSurface : null,
+          child: FlowyTooltip(
+            message: space.name,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 28),
+              child: FlowyText.medium(
+                space.name,
+                fontSize: 14.0,
+                figmaLineHeight: 18.0,
+                overflow: TextOverflow.ellipsis,
+                color:
+                    isHovered ? Theme.of(context).colorScheme.onSurface : null,
+              ),
+            ),
           ),
         ),
         const HSpace(4.0),

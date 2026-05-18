@@ -4,15 +4,19 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/util.dart';
 import 'package:appflowy/startup/plugin/plugin.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/util/diagnostic_build.dart';
+import 'package:appflowy/workspace/application/favorite/favorite_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
-import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
+import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/tab_bar_item.dart';
 import 'package:appflowy/workspace/presentation/widgets/view_title_bar.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -20,22 +24,18 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_data_service.dart';
 import 'package:appflowy/plugins/whiteboard/application/whiteboard_collab_adapter.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/excalidraw_webview.dart';
 import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:get_it/get_it.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
 import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_export_action.dart';
 import 'package:appflowy_popover/appflowy_popover.dart' as appflowy_popover;
-import 'package:appflowy/shared/feature_flags.dart';
-import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
-import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 
 class WhiteboardPluginBuilder extends PluginBuilder {
   @override
@@ -78,10 +78,12 @@ class WhiteboardPlugin extends Plugin {
   @override
   late final ViewPluginNotifier notifier;
   late final PluginType _pluginType;
+  late final ViewInfoBloc _viewInfoBloc;
   late final PageAccessLevelBloc _pageAccessLevelBloc;
 
   @override
   PluginWidgetBuilder get widgetBuilder => WhiteboardPluginWidgetBuilder(
+        bloc: _viewInfoBloc,
         notifier: notifier,
         pageAccessLevelBloc: _pageAccessLevelBloc,
       );
@@ -95,6 +97,8 @@ class WhiteboardPlugin extends Plugin {
   @override
   void init() {
     // debug log removed
+    _viewInfoBloc = ViewInfoBloc(view: notifier.view)
+      ..add(const ViewInfoEvent.started());
     _pageAccessLevelBloc = PageAccessLevelBloc(view: notifier.view)
       ..add(const PageAccessLevelEvent.initial());
     // debug log removed
@@ -102,6 +106,7 @@ class WhiteboardPlugin extends Plugin {
 
   @override
   void dispose() {
+    _viewInfoBloc.close();
     _pageAccessLevelBloc.close();
     notifier.dispose();
   }
@@ -109,12 +114,19 @@ class WhiteboardPlugin extends Plugin {
 
 class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
   WhiteboardPluginWidgetBuilder({
+    required this.bloc,
     required this.notifier,
     required this.pageAccessLevelBloc,
   });
 
+  final ViewInfoBloc bloc;
   final ViewPluginNotifier notifier;
   final PageAccessLevelBloc pageAccessLevelBloc;
+
+  ViewPB get view => notifier.view;
+
+  @override
+  EdgeInsets get contentPadding => EdgeInsets.zero;
 
   @override
   Widget buildWidget({
@@ -123,8 +135,15 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
     Map<String, dynamic>? data,
   }) {
     // debug logs removed
-    final widget = BlocProvider<PageAccessLevelBloc>.value(
-      value: pageAccessLevelBloc,
+    final widget = MultiBlocProvider(
+      providers: [
+        BlocProvider<ViewInfoBloc>.value(
+          value: bloc,
+        ),
+        BlocProvider<PageAccessLevelBloc>.value(
+          value: pageAccessLevelBloc,
+        ),
+      ],
       child: WhiteboardPage(
         key: ValueKey('whiteboard_page_${notifier.view.id}'),
         view: notifier.view,
@@ -149,6 +168,12 @@ class WhiteboardPluginWidgetBuilder extends PluginWidgetBuilder {
           view: notifier.view,
         ),
       );
+
+  @override
+  Widget? get rightBarItem => null;
+
+  @override
+  Widget? get fullWindowMoreItem => null;
 
   @override
   Widget tabBarItem(String pluginId, [bool shortForm = false]) =>
@@ -805,129 +830,111 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
 
     Log.debug('✅ [WhiteboardPage] Building whiteboard content');
     return Scaffold(
-      body: Column(
-        children: [
-          // 顶部按钮栏（与手写笔记和文档视图统一）
-          _buildTopActionsBar(context),
-          // 白板内容
-          Expanded(
-            child: Stack(
-              children: [
-                _buildExcalidrawView(),
-                if (_isLoadingData)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: ColoredBox(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surface
-                            .withValues(alpha: 0.92),
-                        child: const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 16),
-                              Text('姝ｅ湪鍔犺浇鐧芥澘鏁版嵁...'),
-                            ],
-                          ),
+      body: ValueListenableBuilder<bool>(
+        valueListenable: FullWindowController.isFullWindow,
+        builder: (context, isFullWindow, _) {
+          return Stack(
+            children: [
+              _buildExcalidrawView(),
+              if (_isLoadingData)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ColoredBox(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surface
+                          .withValues(alpha: 0.92),
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 16),
+                            Text('姝ｅ湪鍔犺浇鐧芥澘鏁版嵁...'),
+                          ],
                         ),
                       ),
                     ),
                   ),
-              ],
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTopActionsBar(
+    BuildContext context, {
+    required bool isFullWindow,
+  }) {
+    final rightPadding = isFullWindow ? 84.0 : 18.0;
+    final topPadding = isFullWindow ? 12.0 : 8.0;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(18.0, topPadding, rightPadding, 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Spacer(),
+          // Whiteboard actions: share, favorite, more.
+          _buildHeaderAction(
+            ShareButton(
+              key: ValueKey('share_button_${widget.view.id}'),
+              view: widget.view,
             ),
+            width: 36,
           ),
+          const SizedBox(width: 8),
+          _buildHeaderAction(_buildFavoriteAction(context), width: 36),
+          const SizedBox(width: 8),
+          _buildHeaderAction(_buildMoreActionsButton(context), width: 36),
         ],
       ),
     );
   }
 
-  Widget _buildTopActionsBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Row(
-        children: [
-          const Spacer(),
-          // 收藏、分享、更多、全窗口按钮
-          if (FeatureFlag.syncDocument.isOn) ...[
-            DocumentCollaborators(
-              key: ValueKey('collaborators_${widget.view.id}'),
-              width: 120,
-              height: 32,
-              view: widget.view,
-            ),
-            const SizedBox(width: 16),
-          ] else
-            const SizedBox(width: 8),
-          ViewFavoriteButton(
-            key: ValueKey('favorite_button_${widget.view.id}'),
-            view: widget.view,
-          ),
-          const SizedBox(width: 10),
-          ShareButton(
-            key: ValueKey('share_button_${widget.view.id}'),
-            view: widget.view,
-          ),
-          const SizedBox(width: 4),
-          MoreViewActions(view: widget.view),
-          const SizedBox(width: 8),
-          // 导出按钮 - 直接调用 WhiteboardPage 的导出方法
-          _buildExportButton(context),
-          const SizedBox(width: 12),
-          // 全窗口 / 退出全窗口按钮：通过 FullWindowController 控制全局布局
-          ValueListenableBuilder<bool>(
-            valueListenable: FullWindowController.isFullWindow,
-            builder: (context, isFullWindow, _) {
-              return Tooltip(
-                message: isFullWindow ? '退出全窗口显示' : '全窗口显示',
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest
-                        .withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(999),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: IconButton(
-                    iconSize: 18,
-                    padding: const EdgeInsets.all(8),
-                    icon: Icon(
-                      isFullWindow
-                          ? Icons.fullscreen_exit_rounded
-                          : Icons.fullscreen_rounded,
-                    ),
-                    onPressed: () {
-                      if (FullWindowController.isFullWindow.value) {
-                        FullWindowController.exit();
-                        return;
-                      }
-                      context.read<HomeSettingBloc>().add(
-                            const HomeSettingEvent.changeMenuStatus(
-                              MenuStatus.hidden,
-                            ),
-                          );
-                      FullWindowController.enter();
-                    },
+  Widget _buildHeaderAction(Widget child, {double width = 36}) {
+    return SizedBox(
+      width: width,
+      height: 36,
+      child: Center(child: child),
+    );
+  }
+
+  Widget _buildFavoriteAction(BuildContext context) {
+    return BlocBuilder<FavoriteBloc, FavoriteState>(
+      builder: (context, state) {
+        final isFavorite = state.views.any((v) => v.item.id == widget.view.id);
+        return Listener(
+          onPointerDown: (_) => context
+              .read<FavoriteBloc>()
+              .add(FavoriteEvent.toggle(widget.view)),
+          child: FlowyTooltip(
+            message: isFavorite
+                ? LocaleKeys.button_removeFromFavorites.tr()
+                : LocaleKeys.button_addToFavorites.tr(),
+            child: FlowyHover(
+              resetHoverOnRebuild: false,
+              child: SizedBox.square(
+                dimension: 36,
+                child: Center(
+                  child: FlowySvg(
+                    isFavorite ? FlowySvgs.favorited_s : FlowySvgs.favorite_s,
+                    size: const Size.square(18),
+                    blendMode: isFavorite ? null : BlendMode.srcIn,
                   ),
                 ),
-              );
-            },
+              ),
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   /// 构建导出按钮 - 直接调用 WhiteboardPage 的导出方法
-  Widget _buildExportButton(BuildContext context) {
+  Widget _buildMoreActionsButton(BuildContext context) {
     return AppFlowyPopover(
       direction: PopoverDirection.leftWithTopAligned,
       constraints: const BoxConstraints(
@@ -941,22 +948,17 @@ class _WhiteboardPageState extends State<WhiteboardPage> {
       clickHandler: PopoverClickHandler.gestureDetector,
       offset: const Offset(-10, 0),
       popupBuilder: (_) => _buildExportMenu(context),
-      child: Container(
-        height: 34,
-        padding: const EdgeInsets.symmetric(vertical: 2.0),
-        child: FlowyIconTextButton(
-          expandText: false,
-          margin: const EdgeInsets.symmetric(horizontal: 6),
-          leftIconBuilder: (_) => const Icon(
-            Icons.file_download_outlined,
-            size: 16,
-          ),
-          iconPadding: 10.0,
-          textBuilder: (_) => FlowyText.regular(
-            '导出'.tr(),
-            fontSize: 14.0,
-            lineHeight: 1.0,
-            figmaLineHeight: 18.0,
+      child: FlowyTooltip(
+        message: LocaleKeys.button_more.tr(),
+        child: SizedBox.square(
+          dimension: 36,
+          child: FlowyButton(
+            useIntrinsicWidth: true,
+            margin: EdgeInsets.zero,
+            text: const FlowySvg(
+              FlowySvgs.workspace_three_dots_s,
+              size: Size.square(18),
+            ),
           ),
         ),
       ),

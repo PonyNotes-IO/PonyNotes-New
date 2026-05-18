@@ -25,6 +25,7 @@ import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
 import 'package:appflowy/workspace/application/view/prelude.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
@@ -75,7 +76,8 @@ class _DocumentPageState extends State<DocumentPage>
   bool _handledDeletedInSpaceHub = false;
   bool _handledForceCloseNavigation = false;
   bool _editorStateRegistered = false; // 避免重复注册 ViewInfoBloc
-  late final documentBloc = DocumentBloc(documentId: widget.view.id, workspaceId: widget.view.workspaceId)
+  late final documentBloc = DocumentBloc(
+      documentId: widget.view.id, workspaceId: widget.view.workspaceId)
     ..add(const DocumentEvent.initial());
 
   @override
@@ -152,12 +154,15 @@ class _DocumentPageState extends State<DocumentPage>
                     try {
                       context.read<TabsBloc>().add(
                             TabsEvent.openPlugin(
-                              plugin: makePlugin(pluginType: PluginType.homepage),
+                              plugin:
+                                  makePlugin(pluginType: PluginType.homepage),
                             ),
                           );
                     } catch (_) {
                       // Fallback: if opening homepage fails, close the current tab.
-                      context.read<TabsBloc>().add(const TabsEvent.closeCurrentTab());
+                      context
+                          .read<TabsBloc>()
+                          .add(const TabsEvent.closeCurrentTab());
                     }
                   });
                 }
@@ -171,7 +176,8 @@ class _DocumentPageState extends State<DocumentPage>
                 _editorStateRegistered = true;
                 // 从 context 中获取 ViewInfoBloc
                 final viewInfoBloc = context.read<ViewInfoBloc>();
-                Log.debug('DocumentPage: registerEditorState for view: ${widget.view.id}, bloc hashCode: ${viewInfoBloc.hashCode}');
+                Log.debug(
+                    'DocumentPage: registerEditorState for view: ${widget.view.id}, bloc hashCode: ${viewInfoBloc.hashCode}');
                 viewInfoBloc.add(
                   ViewInfoEvent.registerEditorState(editorState: editorState),
                 );
@@ -319,8 +325,15 @@ class _DocumentPageState extends State<DocumentPage>
         editorState: state.editorState!,
         child: Column(
           children: [
-            // Top bar with back button and actions
-            _buildTopBar(context),
+            ValueListenableBuilder<bool>(
+              valueListenable: FullWindowController.isFullWindow,
+              builder: (context, isFullWindow, _) {
+                if (isFullWindow) {
+                  return const SizedBox.shrink();
+                }
+                return _buildTopBar(context);
+              },
+            ),
             // the banner only shows on desktop
             if (state.isDeleted && UniversalPlatform.isDesktop)
               buildBanner(context),
@@ -336,7 +349,9 @@ class _DocumentPageState extends State<DocumentPage>
     final effectiveViewInfoBloc = widget.viewInfoBloc;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0,),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16.0,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -365,7 +380,8 @@ class _DocumentPageState extends State<DocumentPage>
                 ),
                 const SizedBox(width: 4),
                 if (effectiveViewInfoBloc != null)
-                  MoreViewActions(view: widget.view, viewInfoBloc: effectiveViewInfoBloc)
+                  MoreViewActions(
+                      view: widget.view, viewInfoBloc: effectiveViewInfoBloc)
                 else
                   MoreViewActions(view: widget.view),
               ],
@@ -405,7 +421,8 @@ class _DocumentPageState extends State<DocumentPage>
           ),
           const SizedBox(width: 4),
           if (effectiveViewInfoBloc != null)
-            MoreViewActions(view: widget.view, viewInfoBloc: effectiveViewInfoBloc)
+            MoreViewActions(
+                view: widget.view, viewInfoBloc: effectiveViewInfoBloc)
           else
             MoreViewActions(view: widget.view),
         ],
@@ -418,8 +435,8 @@ class _DocumentPageState extends State<DocumentPage>
       listenWhen: (prev, curr) {
         // 监听恢复成功：从删除状态变为非删除状态
         // 或者监听彻底删除：forceClose 变为 true
-        return (prev.isDeleted && !curr.isDeleted) || 
-               (!prev.forceClose && curr.forceClose);
+        return (prev.isDeleted && !curr.isDeleted) ||
+            (!prev.forceClose && curr.forceClose);
       },
       listener: (context, state) {
         // 恢复成功或彻底删除后，刷新 SpaceBloc 列表
@@ -468,7 +485,7 @@ class _DocumentPageState extends State<DocumentPage>
     try {
       // 尝试从外层 context 获取 SpaceBloc
       SpaceBloc? spaceBloc;
-      
+
       // 方法1: 尝试从当前 context 读取（可能是外层提供的）
       try {
         spaceBloc = context.read<SpaceBloc>();
@@ -482,7 +499,7 @@ class _DocumentPageState extends State<DocumentPage>
           // 根 context 也没有 SpaceBloc，忽略
         }
       }
-      
+
       if (spaceBloc != null && !spaceBloc.isClosed) {
         // 触发子视图更新事件，刷新列表
         spaceBloc.add(const SpaceEvent.didUpdateCurrentSpaceChildViews());

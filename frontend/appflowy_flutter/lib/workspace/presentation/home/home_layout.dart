@@ -29,7 +29,9 @@ class HomeLayout {
         .add(HomeSettingEvent.checkScreenSize(screenWidthPx));
 
     showMenu = homeSetting.menuStatus == MenuStatus.expanded;
-    menuIsDrawer = showMenu && context.widthPx < PageBreaks.tabletLandscape;
+    menuIsDrawer = showMenu &&
+        !Platform.isWindows &&
+        context.widthPx < PageBreaks.tabletLandscape;
 
     showNotificationPanel = !homeSetting.isNotificationPanelCollapsed;
 

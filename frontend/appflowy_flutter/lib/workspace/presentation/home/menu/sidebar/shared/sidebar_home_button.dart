@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 
 class SidebarHomeButton extends StatelessWidget {
@@ -26,11 +27,10 @@ class SidebarHomeButton extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.start,
             size: AFButtonSize.l,
             onTap: () => _openHomePage(context, state),
-            padding: EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 11,
-            ),
+            padding: sidebarHomeEntryPadding,
             borderRadius: theme.borderRadius.s,
+            textStyle: sidebarEntryTextStyle(context),
+            iconTextGap: sidebarEntryIconTextGap,
             iconBuilder: (context, isHover, disabled) => FlowySvg(
               FlowySvgs.icon_home_s,
               size: const Size.square(18.0),
@@ -42,14 +42,15 @@ class SidebarHomeButton extends StatelessWidget {
   }
 
   void _openHomePage(
-      BuildContext context, UserWorkspaceState workspaceState) async {
+    BuildContext context,
+    UserWorkspaceState workspaceState,
+  ) async {
     try {
       // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
       CalendarUnsavedGuard.instance.maybeConfirmLeave(context, () {
         // 创建主页插件
         final homePlugin = makePlugin(
           pluginType: PluginType.homepage,
-          data: null,
         );
 
         // 在新标签页中打开主页

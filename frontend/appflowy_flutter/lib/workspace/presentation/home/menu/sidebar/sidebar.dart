@@ -11,7 +11,6 @@ import 'package:appflowy/plugins/document/presentation/editor_notification.dart'
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/shared/loading.dart';
 import 'package:appflowy/startup/startup.dart';
-import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_file_library_button.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/workspace/application/action_navigation/action_navigation_bloc.dart';
 import 'package:appflowy/workspace/application/action_navigation/navigation_action.dart';
@@ -31,6 +30,7 @@ import 'package:appflowy/workspace/presentation/home/full_window_controller.dart
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/header/sidebar_top_menu.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_folder.dart';
+import 'package:appflowy/workspace/presentation/home/menu/sidebar/shared/sidebar_entry_style.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/sidebar_space.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/space/space_migration.dart';
 import 'package:appflowy/workspace/presentation/home/menu/sidebar/workspace/_sidebar_workspace_menu.dart';
@@ -182,18 +182,18 @@ class HomeSideBar extends StatelessWidget {
                     final page = state.lastCreatedPage;
                     final currentSpace = state.currentSpace;
 
-                    // 如果当前空间存在且是空间类型视图
+                    // 濡傛灉褰撳墠绌洪棿瀛樺湪涓旀槸绌洪棿绫诲瀷瑙嗗浘
                     if (currentSpace != null && currentSpace.isSpace) {
-                      // 检查当前打开的插件是否是空间统一页面（SpaceHubPlugin）
+                      // 妫€鏌ュ綋鍓嶆墦寮€鐨勬彃浠舵槸鍚︽槸绌洪棿缁熶竴椤甸潰锛圫paceHubPlugin锛?
                       final tabsBloc = context.read<TabsBloc>();
                       final currentPageManager =
                           tabsBloc.state.currentPageManager;
                       final currentPlugin = currentPageManager.plugin;
 
-                      // SpaceHubPlugin 的 id 是空间的 id，pluginType 是 folder
+                      // SpaceHubPlugin 鐨?id 鏄┖闂寸殑 id锛宲luginType 鏄?folder
                       if (currentPlugin.id == currentSpace.id &&
                           currentPlugin.pluginType == PluginType.folder) {
-                        // 当前已经打开了空间统一页面，不需要做任何操作
+                        // 褰撳墠宸茬粡鎵撳紑浜嗙┖闂寸粺涓€椤甸潰锛屼笉闇€瑕佸仛浠讳綍鎿嶄綔
                         Log.info(
                           '[SIDEBAR] Space hub is already open, skipping auto-open',
                         );
@@ -207,13 +207,13 @@ class HomeSideBar extends StatelessWidget {
                         return;
                       }
 
-                      // 如果当前没有打开空间统一页面，且 lastCreatedPage 是空间的子视图
-                      // 说明这是通过 SpaceEvent.open 设置的，应该打开空间统一页面而不是文档
+                      // 濡傛灉褰撳墠娌℃湁鎵撳紑绌洪棿缁熶竴椤甸潰锛屼笖 lastCreatedPage 鏄┖闂寸殑瀛愯鍥?
+                      // 璇存槑杩欐槸閫氳繃 SpaceEvent.open 璁剧疆鐨勶紝搴旇鎵撳紑绌洪棿缁熶竴椤甸潰鑰屼笉鏄枃妗?
                       if (page != null &&
                           page.id.isNotEmpty &&
                           currentSpace.childViews.any((v) => v.id == page.id)) {
                         if (currentPlugin.pluginType == PluginType.blank) {
-                          // 仅在空白页阶段自动打开空间统一页面，避免抢占当前业务页面（如文件库/日历）
+                          // 浠呭湪绌虹櫧椤甸樁娈佃嚜鍔ㄦ墦寮€绌洪棿缁熶竴椤甸潰锛岄伩鍏嶆姠鍗犲綋鍓嶄笟鍔￠〉闈紙濡傛枃浠跺簱/鏃ュ巻锛?
                           Log.info(
                             '[SIDEBAR] Opening space hub for space: ${currentSpace.name}',
                           );
@@ -233,8 +233,8 @@ class HomeSideBar extends StatelessWidget {
                         return;
                       }
 
-                      // 如果空间刚被设置为 currentSpace，但没有 lastCreatedPage
-                      // 说明是工作区切换后自动加载的空间，应该打开空间统一页面
+                      // 濡傛灉绌洪棿鍒氳璁剧疆涓?currentSpace锛屼絾娌℃湁 lastCreatedPage
+                      // 璇存槑鏄伐浣滃尯鍒囨崲鍚庤嚜鍔ㄥ姞杞界殑绌洪棿锛屽簲璇ユ墦寮€绌洪棿缁熶竴椤甸潰
                       if (page == null || page.id.isEmpty) {
                         if (currentPlugin.pluginType == PluginType.blank) {
                           Log.info(
@@ -257,7 +257,7 @@ class HomeSideBar extends StatelessWidget {
                       }
                     }
 
-                    // 非空间类型或普通文档的处理
+                    // 闈炵┖闂寸被鍨嬫垨鏅€氭枃妗ｇ殑澶勭悊
                     if (page == null || page.id.isEmpty) {
                       // open the blank page
                       context
@@ -299,7 +299,7 @@ class HomeSideBar extends StatelessWidget {
                           .read<TabsBloc>()
                           .add(TabsEvent.switchWorkspace(workspaceId));
 
-                      // 当工作区切换时，刷新侧边栏区域（包括"我的空间"）
+                      // 褰撳伐浣滃尯鍒囨崲鏃讹紝鍒锋柊渚ц竟鏍忓尯鍩燂紙鍖呮嫭"鎴戠殑绌洪棿"锛?
                       context.read<SidebarSectionsBloc>().add(
                             SidebarSectionsEvent.reset(
                               userProfile,
@@ -390,7 +390,7 @@ class HomeSideBar extends StatelessWidget {
       final space =
           (await ViewBackendService.getView(firstAncestor.id)).toNullable();
       if (space != null) {
-        // Log.info( // PonyNotes: 关闭非白板日志
+        // Log.info( // PonyNotes: 鍏抽棴闈炵櫧鏉挎棩蹇?
         //   'Switching space from (${firstAncestor.name}-${firstAncestor.id}) to (${space.name}-${space.id})',
         // );
         spaceBloc.add(SpaceEvent.open(space: space, afterOpen: afterOpen));
@@ -496,27 +496,16 @@ class _SidebarState extends State<_Sidebar> {
               ),
             ),
             if (FeatureFlag.search.isOn) ...[
-              const VSpace(6),
+              const VSpace(sidebarSearchTopGap),
               Container(
                 padding: menuHorizontalInset,
-                height: HomeSizes.searchSectionHeight,
+                height: 34,
                 child: const _SidebarSearchButton(),
               ),
             ],
 
             // scrollable document list
-            const VSpace(12.0),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0),
-              child: ValueListenableBuilder(
-                valueListenable: _scrollOffset,
-                builder: (_, offset, child) => Opacity(
-                  opacity: offset > 0 ? 1 : 0,
-                  child: child,
-                ),
-                child: const FlowyDivider(),
-              ),
-            ),
+            const VSpace(sidebarSearchToEntryGroupGap),
             _renderFolderOrSpace(menuHorizontalInset),
             const VSpace(8),
             _renderUpgradeSpaceButton(menuHorizontalInset),
@@ -529,9 +518,7 @@ class _SidebarState extends State<_Sidebar> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                  // 文件库
-                  SidebarFileLibraryButton(),
-                  VSpace(6),
+                  // 鏂囦欢搴?
                   SidebarTrashItem(),
                   VSpace(6),
                   SidebarSettingsButton(),
@@ -549,7 +536,7 @@ class _SidebarState extends State<_Sidebar> {
     final workspaceState = context.read<UserWorkspaceBloc>().state;
 
     if (!spaceState.isInitialized) {
-      // Log.debug('SpaceBloc not initialized, showing empty widget'); // PonyNotes: 关闭非白板日志
+      // Log.debug('SpaceBloc not initialized, showing empty widget'); // PonyNotes: 鍏抽棴闈炵櫧鏉挎棩蹇?
       return const SizedBox.shrink();
     }
 
@@ -567,7 +554,7 @@ class _SidebarState extends State<_Sidebar> {
         spaceState.spaces.isEmpty ||
         !workspaceState.isCollabWorkspaceOn;
 
-    // Log.debug( // PonyNotes: 关闭非白板日志
+    // Log.debug( // PonyNotes: 鍏抽棴闈炵櫧鏉挎棩蹇?
     //   'Sidebar render decision: containsSpace=$containsSpace, '
     //   'spaces.length=${spaceState.spaces.length}, '
     //   'isCollabWorkspaceOn=${workspaceState.isCollabWorkspaceOn}, '
@@ -629,17 +616,17 @@ class _SidebarState extends State<_Sidebar> {
     return ValueListenableBuilder(
       valueListenable: ApplicationInfo.latestVersionNotifier,
       builder: (context, latestVersion, _) {
-        // 检查是否有新版本可用
+        // 妫€鏌ユ槸鍚︽湁鏂扮増鏈彲鐢?
         final isUpdateAvailable = ApplicationInfo.isUpdateAvailable;
 
-        // 添加调试日志
+        // 娣诲姞璋冭瘯鏃ュ織
         // Log.info('[UpdateBanner] Current: ${ApplicationInfo.applicationVersion}, Latest: $latestVersion, Available: $isUpdateAvailable');
 
         if (!isUpdateAvailable) {
           return const SizedBox.shrink();
         }
 
-        // 检查用户是否已经关闭过这个版本的更新提示
+        // 妫€鏌ョ敤鎴锋槸鍚﹀凡缁忓叧闂繃杩欎釜鐗堟湰鐨勬洿鏂版彁绀?
         return FutureBuilder<bool>(
           future: _shouldShowUpdateBanner(latestVersion),
           builder: (context, snapshot) {
@@ -680,7 +667,7 @@ class _SidebarState extends State<_Sidebar> {
   Future<void> _dismissUpdateBanner(String version) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('dismissed_update_version', version);
-    // 触发重建以隐藏横幅
+    // 瑙﹀彂閲嶅缓浠ラ殣钘忔í骞?
     if (mounted) {
       setState(() {});
     }
@@ -706,8 +693,20 @@ class _SidebarState extends State<_Sidebar> {
 class _SidebarSearchButton extends StatelessWidget {
   const _SidebarSearchButton();
 
+  void _openSearch(BuildContext context) {
+    EditorNotification.exitEditing().post();
+    final workspaceBloc = context.read<UserWorkspaceBloc?>();
+    final spaceBloc = context.read<SpaceBloc?>();
+    CommandPalette.of(context).toggle(
+      workspaceBloc: workspaceBloc,
+      spaceBloc: spaceBloc,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final shortcut =
+        Platform.isMacOS ? '${String.fromCharCode(0x2318)}+P' : 'Ctrl+P';
     return FlowyTooltip(
       richMessage: TextSpan(
         children: [
@@ -716,28 +715,48 @@ class _SidebarSearchButton extends StatelessWidget {
             style: context.tooltipTextStyle(),
           ),
           TextSpan(
-            text: Platform.isMacOS ? '⌘+P' : 'Ctrl+P',
+            text: shortcut,
             style: context
                 .tooltipTextStyle()
                 ?.copyWith(color: Theme.of(context).hintColor),
           ),
         ],
       ),
-      child: FlowyButton(
-        onTap: () {
-          // exit editing mode when doing search to avoid the toolbar showing up
-          EditorNotification.exitEditing().post();
-          final workspaceBloc = context.read<UserWorkspaceBloc?>();
-          final spaceBloc = context.read<SpaceBloc?>();
-          CommandPalette.of(context).toggle(
-            workspaceBloc: workspaceBloc,
-            spaceBloc: spaceBloc,
-          );
-        },
-        leftIcon: const FlowySvg(FlowySvgs.search_s),
-        iconPadding: 12.0,
-        margin: const EdgeInsets.only(left: 8.0),
-        text: FlowyText.regular(LocaleKeys.search_label.tr()),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _openSearch(context),
+          child: Container(
+            width: double.infinity,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(
+                color: const Color(0xFFE9E9E9),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                const FlowySvg(
+                  FlowySvgs.search_s,
+                  size: Size.square(16),
+                ),
+                const HSpace(8),
+                Expanded(
+                  child: FlowyText.regular(
+                    '${LocaleKeys.search_label.tr()} ($shortcut)',
+                    fontSize: 14,
+                    color: Theme.of(context).hintColor,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -758,8 +777,20 @@ class _PonyNotesHeader extends StatefulWidget {
 }
 
 class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
+  static const double _syncActionCollapseWidth =
+      HomeSizes.maximumSidebarWidth - 32.0;
+
   final PopoverController _popoverController = PopoverController();
   final PopoverController _headerActionsPopoverController = PopoverController();
+
+  bool _shouldCollapseSyncActions(HomeSettingState state) {
+    if (widget.isDrawerMenu) {
+      return true;
+    }
+
+    final currentWidth = HomeSizes.minimumSidebarWidth + state.resizeOffset;
+    return currentWidth <= _syncActionCollapseWidth;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -816,7 +847,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
             child: Row(
               children: [
                 const HSpace(4),
-                // 使用小马emoji作为图标
+                // 浣跨敤灏忛┈emoji浣滀负鍥炬爣
                 Container(
                   width: 26,
                   height: 26,
@@ -838,70 +869,72 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                   ),
                 ),
                 const HSpace(6),
-                // 小马笔记文字和向下箭头
+                // 灏忛┈绗旇鏂囧瓧鍜屽悜涓嬬澶?
                 Flexible(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: FlowyText.medium(
-                          LocaleKeys.sidebar_appName.tr(),
-                          color: Theme.of(context).colorScheme.tertiary,
-                          overflow: TextOverflow.ellipsis,
-                          fontSize: 15.0,
+                  child: Tooltip(
+                    message: LocaleKeys.sidebar_appName.tr(),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 28),
+                            child: FlowyText.medium(
+                              LocaleKeys.sidebar_appName.tr(),
+                              color: Theme.of(context).colorScheme.tertiary,
+                              overflow: TextOverflow.ellipsis,
+                              fontSize: 15.0,
+                            ),
+                          ),
                         ),
-                      ),
-                      const HSpace(2),
-                      FlowySvg(
-                        FlowySvgs.drop_menu_show_s,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ],
+                        const HSpace(2),
+                        FlowySvg(
+                          FlowySvgs.drop_menu_show_s,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const Spacer(), // 推送按钮到右边
-                // 云同步按钮 (fill header height)
+                const Spacer(), // 鎺ㄩ€佹寜閽埌鍙宠竟
+                // 浜戝悓姝ユ寜閽?(fill header height)
                 ValueListenableBuilder<bool>(
                   valueListenable: FullWindowController.isFullWindow,
                   builder: (context, isFullWindow, _) {
-                    final sidebarWidth = HomeSizes.minimumSidebarWidth +
-                        context.select<HomeSettingBloc, double>(
-                          (bloc) => bloc.state.resizeOffset,
-                        );
-                    final shouldCollapseHeaderActions = widget.isDrawerMenu ||
-                        isFullWindow ||
-                        sidebarWidth <= 286;
-                    if (shouldCollapseHeaderActions) {
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildHeaderActionsMoreButton(context),
-                          const HSpace(6.0),
-                          _buildHeaderFullWindowButton(context, isFullWindow),
-                        ],
-                      );
-                    }
+                    final homeSettingState =
+                        context.select<HomeSettingBloc, HomeSettingState>(
+                      (bloc) => bloc.state,
+                    );
+                    final shouldCollapseSyncActions =
+                        _shouldCollapseSyncActions(homeSettingState);
                     return Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildHeaderActionSlot(
-                          const SidebarCloudSyncButton(),
-                        ),
-                        const HSpace(8.0),
-                        _buildHeaderActionSlot(
-                          const SidebarUploadButton(),
-                        ),
-                        const HSpace(8.0),
-                        _buildHeaderActionSlot(
-                          NotificationButton(
-                            key: ValueKey(widget.userProfile.id),
+                        if (shouldCollapseSyncActions)
+                          _buildHeaderActionsMoreButton(context)
+                        else ...[
+                          _buildHeaderActionSlot(
+                            const SidebarCloudSyncButton(),
                           ),
-                        ),
+                          const HSpace(4.0),
+                          _buildHeaderActionSlot(
+                            const SidebarUploadButton(),
+                          ),
+                          const HSpace(4.0),
+                          _buildHeaderActionSlot(
+                            NotificationButton(
+                              key: ValueKey(widget.userProfile.id),
+                              alwaysShow: true,
+                            ),
+                          ),
+                        ],
+                        const HSpace(8.0),
+                        _buildHeaderFullWindowButton(context, isFullWindow),
                       ],
                     );
                   },
                 ),
-                // 在 Windows 上将收起按钮放在通知右侧
+                // 鍦?Windows 涓婂皢鏀惰捣鎸夐挳鏀惧湪閫氱煡鍙充晶
                 ValueListenableBuilder<bool>(
                   valueListenable: FullWindowController.isFullWindow,
                   builder: (context, isFullWindow, _) {
@@ -910,10 +943,16 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                         isFullWindow) {
                       return const SizedBox.shrink();
                     }
+                    final homeSettingState =
+                        context.select<HomeSettingBloc, HomeSettingState>(
+                      (bloc) => bloc.state,
+                    );
+                    final shouldCollapseSyncActions =
+                        _shouldCollapseSyncActions(homeSettingState);
                     return Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const HSpace(8.0),
+                        HSpace(shouldCollapseSyncActions ? 4.0 : 8.0),
                         SizedBox(
                           height: HomeSizes.workspaceSectionHeight + 8,
                           child: Center(
@@ -956,10 +995,36 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
     );
   }
 
+  Widget _buildHeaderNotificationActionButton(
+    BuildContext context, {
+    Color? iconColor,
+  }) {
+    return SizedBox.square(
+      dimension: 28,
+      child: FlowyButton(
+        useIntrinsicWidth: true,
+        margin: EdgeInsets.zero,
+        text: SvgPicture.asset(
+          'assets/images/icons/sidebar_notification_custom.svg',
+          width: 24,
+          height: 24,
+          colorFilter: ColorFilter.mode(
+            iconColor ?? Theme.of(context).colorScheme.onSurface,
+            BlendMode.srcIn,
+          ),
+        ),
+        onTap: () => context.read<HomeSettingBloc>().add(
+              HomeSettingEvent.collapseNotificationPanel(),
+            ),
+      ),
+    );
+  }
+
   Widget _buildHeaderActionsMoreButton(BuildContext context) {
     return AppFlowyPopover(
       controller: _headerActionsPopoverController,
       direction: PopoverDirection.bottomWithCenterAligned,
+      triggerActions: PopoverTriggerFlags.hover | PopoverTriggerFlags.click,
       clickHandler: PopoverClickHandler.gestureDetector,
       constraints: const BoxConstraints(maxWidth: 180, maxHeight: 72),
       margin: EdgeInsets.zero,
@@ -991,9 +1056,9 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                   const HSpace(18),
                   const SidebarUploadButton(isHover: true),
                   const HSpace(18),
-                  NotificationButton(
-                    key: ValueKey('${widget.userProfile.id}_drawer_more'),
-                    isHover: true,
+                  _buildHeaderNotificationActionButton(
+                    context,
+                    iconColor: Colors.white,
                   ),
                 ],
               ),
@@ -1024,7 +1089,7 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
     bool isFullWindow,
   ) {
     return FlowyTooltip(
-      message: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+      message: isFullWindow ? 'Exit full window' : 'Full window',
       child: SizedBox.square(
         dimension: 28,
         child: FlowyButton(
@@ -1042,9 +1107,6 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
               FullWindowController.exit();
               return;
             }
-            context.read<HomeSettingBloc>().add(
-                  const HomeSettingEvent.changeMenuStatus(MenuStatus.hidden),
-                );
             FullWindowController.enter();
           },
         ),

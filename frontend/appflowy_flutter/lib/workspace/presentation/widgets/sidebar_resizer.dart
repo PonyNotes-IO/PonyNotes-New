@@ -13,6 +13,7 @@ class SidebarResizer extends StatefulWidget {
 class _SidebarResizerState extends State<SidebarResizer> {
   final ValueNotifier<bool> isHovered = ValueNotifier(false);
   final ValueNotifier<bool> isDragging = ValueNotifier(false);
+  double? _dragStartGlobalX;
 
   @override
   void dispose() {
@@ -33,6 +34,7 @@ class _SidebarResizerState extends State<SidebarResizer> {
         behavior: HitTestBehavior.translucent,
         onHorizontalDragStart: (details) {
           isDragging.value = true;
+          _dragStartGlobalX = details.globalPosition.dx;
 
           context
               .read<HomeSettingBloc>()
@@ -40,13 +42,18 @@ class _SidebarResizerState extends State<SidebarResizer> {
         },
         onHorizontalDragUpdate: (details) {
           isDragging.value = true;
+          final dragStartGlobalX =
+              _dragStartGlobalX ?? details.globalPosition.dx;
 
-          context
-              .read<HomeSettingBloc>()
-              .add(HomeSettingEvent.editPanelResized(details.localPosition.dx));
+          context.read<HomeSettingBloc>().add(
+                HomeSettingEvent.editPanelResized(
+                  details.globalPosition.dx - dragStartGlobalX,
+                ),
+              );
         },
         onHorizontalDragEnd: (details) {
           isDragging.value = false;
+          _dragStartGlobalX = null;
 
           context
               .read<HomeSettingBloc>()
@@ -54,6 +61,7 @@ class _SidebarResizerState extends State<SidebarResizer> {
         },
         onHorizontalDragCancel: () {
           isDragging.value = false;
+          _dragStartGlobalX = null;
 
           context
               .read<HomeSettingBloc>()
