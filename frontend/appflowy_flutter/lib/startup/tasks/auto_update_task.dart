@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/shared/version_checker/version_checker.dart';
@@ -26,7 +27,7 @@ class AutoUpdateTask extends LaunchTask {
     await super.initialize(context);
 
     // the auto updater is not supported on mobile
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       return;
     }
 

@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/base/emoji/emoji_picker.dart';
@@ -220,7 +221,7 @@ class _FlowyIconEmojiPickerState extends State<FlowyIconEmojiPicker>
   }
 
   int _getEmojiPerLine(BuildContext context) {
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       return 9;
     }
     final width = MediaQuery.of(context).size.width;

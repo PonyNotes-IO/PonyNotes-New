@@ -41,6 +41,7 @@ import 'package:flowy_infra/file_picker/file_picker_service.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get_it/get_it.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class DependencyResolver {
   static Future<void> resolve(
@@ -90,7 +91,7 @@ void _resolveCommonService(
 
   // theme
   getIt.registerFactory<BaseAppearance>(
-    () => UniversalPlatform.isMobile ? MobileAppearance() : DesktopAppearance(),
+    () => PlatformInfo.isMobile ? MobileAppearance() : DesktopAppearance(),
   );
 
   getIt.registerFactory<FlowyCacheManager>(

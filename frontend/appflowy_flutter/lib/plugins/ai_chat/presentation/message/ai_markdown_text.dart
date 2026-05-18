@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/application/page_style/document_page_style_bloc.dart';
@@ -161,7 +162,7 @@ class _AppFlowyEditorMarkdownState extends State<_AppFlowyEditorMarkdown>
       styleCustomizer: styleCustomizer,
       // the editor is not editable in the chat
       editable: false,
-      alwaysDistributeSimpleTableColumnWidths: UniversalPlatform.isDesktop,
+      alwaysDistributeSimpleTableColumnWidths: PlatformInfo.isDesktopOrTablet,
       customPadding: (node) => EdgeInsets.zero,
     );
     return IntrinsicHeight(
@@ -169,8 +170,8 @@ class _AppFlowyEditorMarkdownState extends State<_AppFlowyEditorMarkdown>
         shrinkWrap: true,
         // the editor is not editable in the chat
         editable: false,
-        disableKeyboardService: UniversalPlatform.isMobile,
-        disableSelectionService: UniversalPlatform.isMobile,
+        disableKeyboardService: PlatformInfo.isMobile,
+        disableSelectionService: PlatformInfo.isMobile,
         editorStyle: editorStyle,
         editorScrollController: scrollController,
         blockComponentBuilders: blockBuilders,
@@ -187,7 +188,7 @@ class _AppFlowyEditorMarkdownState extends State<_AppFlowyEditorMarkdown>
           }
 
           if (!_animations.containsKey(node.id)) {
-            final duration = UniversalPlatform.isMobile
+            final duration = PlatformInfo.isMobile
                 ? const Duration(milliseconds: 800)
                 : const Duration(milliseconds: 1600);
             final controller = AnimationController(

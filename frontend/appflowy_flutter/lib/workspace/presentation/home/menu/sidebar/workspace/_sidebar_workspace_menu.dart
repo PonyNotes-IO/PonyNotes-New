@@ -27,6 +27,7 @@ import 'package:appflowy/shared/settings/show_settings.dart' as settings;
 import 'package:appflowy_popover/appflowy_popover.dart';
 import '../../../../../application/subscription/membership_checker_service.dart';
 import '_sidebar_import_notion.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 @visibleForTesting
 const createWorkspaceButtonKey = ValueKey('createWorkspaceButton');
@@ -121,7 +122,7 @@ class _WorkspacesMenuState extends State<WorkspacesMenu> {
             child: _CreateWorkspaceButton(),
           ),
 
-          // if (UniversalPlatform.isDesktop) ...[
+          // if (PlatformInfo.isDesktopOrTablet) ...[
           //   const Padding(
           //     padding: EdgeInsets.only(left: 6.0, top: 6.0, right: 6.0),
           //     child: _ImportNotionButton(),

@@ -10,6 +10,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 const kMultiImagePlaceholderKey = 'multiImagePlaceholderKey';
 
@@ -174,7 +175,7 @@ class MultiImageBlockComponentState extends State<MultiImageBlockComponent>
       );
     }
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       child = BlockSelectionContainer(
         node: node,
         delegate: this,
@@ -196,7 +197,7 @@ class MultiImageBlockComponentState extends State<MultiImageBlockComponent>
       );
     }
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       if (widget.showMenu && widget.menuBuilder != null) {
         child = MouseRegion(
           onEnter: (_) => showActionsNotifier.value = true,

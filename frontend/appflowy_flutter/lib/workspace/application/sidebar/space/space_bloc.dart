@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/core/config/kv.dart';
 import 'package:appflowy/core/config/kv_keys.dart';
@@ -408,7 +409,7 @@ class SpaceBloc extends Bloc<SpaceEvent, SpaceState> {
             );
 
             // don't open the page automatically on mobile
-            if (UniversalPlatform.isDesktop) {
+            if (PlatformInfo.isDesktopOrTablet) {
               // 如果是空间类型，不设置 lastCreatedPage，让 sidebar 打开空间统一页面
               // 如果是普通文件夹，则打开第一个文档
               if (currentSpace.isSpace) {

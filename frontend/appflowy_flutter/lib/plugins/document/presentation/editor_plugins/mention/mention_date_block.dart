@@ -26,6 +26,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:nanoid/non_secure.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class MentionDateBlock extends StatefulWidget {
   const MentionDateBlock({
@@ -362,7 +363,7 @@ class _MentionDateBlockState extends State<MentionDateBlock> {
     if (!widget.editorState.editable) {
       return;
     }
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       SystemChannels.textInput.invokeMethod('TextInput.hide');
 
       showMobileBottomSheet(

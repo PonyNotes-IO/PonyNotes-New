@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
@@ -33,7 +34,7 @@ class _SimpleTableColumnResizeHandleState
 
   @override
   Widget build(BuildContext context) {
-    return UniversalPlatform.isMobile
+    return PlatformInfo.isMobile
         ? _buildMobileResizeHandle()
         : _buildDesktopResizeHandle();
   }

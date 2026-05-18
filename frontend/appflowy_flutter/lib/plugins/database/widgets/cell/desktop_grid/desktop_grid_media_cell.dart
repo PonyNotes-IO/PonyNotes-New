@@ -20,6 +20,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class GridMediaCellSkin extends IEditableMediaCellSkin {
   const GridMediaCellSkin({this.isMobileRowDetail = false});
@@ -36,7 +37,7 @@ class GridMediaCellSkin extends IEditableMediaCellSkin {
     PopoverController popoverController,
     MediaCellBloc bloc,
   ) {
-    final isMobile = UniversalPlatform.isMobile;
+    final isMobile = PlatformInfo.isMobile;
 
     Widget child = BlocBuilder<MediaCellBloc, MediaCellState>(
       builder: (context, state) {

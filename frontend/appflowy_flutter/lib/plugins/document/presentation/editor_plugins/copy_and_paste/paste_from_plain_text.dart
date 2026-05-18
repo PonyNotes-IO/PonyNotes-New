@@ -3,6 +3,7 @@ import 'package:appflowy/shared/markdown_to_document.dart';
 import 'package:appflowy/shared/patterns/common_patterns.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 extension PasteFromPlainText on EditorState {
   Future<void> pastePlainText(String plainText) async {
@@ -96,7 +97,7 @@ extension PasteFromPlainText on EditorState {
 
   void checkToShowPasteAsMenu(Node node) {
     if (selection == null || !selection!.isCollapsed) return;
-    if (UniversalPlatform.isMobile) return;
+    if (PlatformInfo.isMobile) return;
     final href = _getLinkFromNode(node);
     if (href != null) {
       final context = document.root.context;

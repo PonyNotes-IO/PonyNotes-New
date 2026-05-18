@@ -32,6 +32,7 @@ import 'package:appflowy_editor/appflowy_editor.dart'
         TextInsert,
         TextTransaction,
         paragraphNode;
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/theme_extension.dart';
@@ -112,7 +113,7 @@ class _MentionPageBlockState extends State<MentionPageBlock> {
             );
           }
 
-          if (UniversalPlatform.isMobile) {
+          if (PlatformInfo.isMobile) {
             return _MobileMentionPageBlock(
               view: view,
               content: state.blockContent,
@@ -215,7 +216,7 @@ class _MentionSubPageBlockState extends State<MentionSubPageBlock> {
             return _DeletedPageBlock(textStyle: widget.textStyle);
           }
 
-          if (UniversalPlatform.isMobile) {
+          if (PlatformInfo.isMobile) {
             return _MobileMentionPageBlock(
               view: view,
               showTrashHint: state.isInTrash,
@@ -341,7 +342,7 @@ Future<void> handleMentionBlockTap(
     return;
   }
 
-  if (UniversalPlatform.isMobile) {
+  if (PlatformInfo.isMobile) {
     if (context.mounted && currentViewId != view.id) {
       await context.pushView(
         view,
@@ -376,7 +377,7 @@ Future<void> _handleDoubleTap(
   Node node,
   int index,
 ) async {
-  if (!UniversalPlatform.isMobile) {
+  if (!PlatformInfo.isMobile) {
     return;
   }
 

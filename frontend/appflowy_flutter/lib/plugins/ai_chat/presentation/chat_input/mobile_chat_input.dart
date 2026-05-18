@@ -15,6 +15,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class MobileChatInput extends StatefulWidget {
   const MobileChatInput({
@@ -231,7 +232,7 @@ class _MobileChatInputState extends State<MobileChatInput> {
   }
 
   Future<void> checkForAskingAI() async {
-    if (!UniversalPlatform.isMobile) return;
+    if (!PlatformInfo.isMobile) return;
     final paletteBloc = context.read<CommandPaletteBloc?>(),
         paletteState = paletteBloc?.state;
     if (paletteBloc == null || paletteState == null) return;

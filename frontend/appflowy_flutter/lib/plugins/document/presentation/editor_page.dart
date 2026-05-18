@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
@@ -246,7 +247,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
 
     // on desktop, using jumpTo to scroll to the selection.
     // on mobile, using scrollTo to scroll to the selection, because using jumpTo will break the scroll notification metrics.
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       editorScrollController.itemScrollController.jumpTo(
         index: path.first,
         alignment: 0.5,
@@ -365,8 +366,8 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
       child: AppFlowyEditor(
         editorState: widget.editorState,
         editable: !isViewDeleted && isEditable,
-        disableSelectionService: UniversalPlatform.isMobile && !isEditable,
-        disableKeyboardService: UniversalPlatform.isMobile && !isEditable,
+        disableSelectionService: PlatformInfo.isMobile && !isEditable,
+        disableKeyboardService: PlatformInfo.isMobile && !isEditable,
         editorScrollController: editorScrollController,
         // setup the auto focus parameters
         autoFocus: widget.autoFocus ?? autoFocus,
@@ -392,7 +393,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
         contextMenuItems: customContextMenuItems,
         // customize the header and footer.
         header: widget.header,
-        autoScrollEdgeOffset: UniversalPlatform.isDesktopOrWeb
+        autoScrollEdgeOffset: PlatformInfo.isDesktopOrTabletOrWeb
             ? 250
             : appFlowyEditorAutoScrollEdgeOffset,
         footer: GestureDetector(
@@ -403,7 +404,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
           },
           child: SizedBox(
             width: double.infinity,
-            height: UniversalPlatform.isDesktopOrWeb ? 600 : 400,
+            height: PlatformInfo.isDesktopOrTabletOrWeb ? 600 : 400,
           ),
         ),
         dropTargetStyle: AppFlowyDropTargetStyle(
@@ -419,7 +420,7 @@ class _AppFlowyEditorPageState extends State<AppFlowyEditorPage>
 
     final editorState = widget.editorState;
 
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       return AppFlowyMobileToolbar(
         toolbarHeight: 42.0,
         editorState: editorState,

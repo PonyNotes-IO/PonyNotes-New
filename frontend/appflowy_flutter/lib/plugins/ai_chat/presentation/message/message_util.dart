@@ -8,6 +8,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 /// Opens a message in the right hand sidebar on desktop, and push the page
 /// on mobile
@@ -19,7 +20,7 @@ void openPageFromMessage(BuildContext context, ViewPB? view) {
     );
     return;
   }
-  if (UniversalPlatform.isDesktop) {
+  if (PlatformInfo.isDesktopOrTablet) {
     getIt<TabsBloc>().add(
       TabsEvent.openSecondaryPlugin(
         plugin: view.plugin(),

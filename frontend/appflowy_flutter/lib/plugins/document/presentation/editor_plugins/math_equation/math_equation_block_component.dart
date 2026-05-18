@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class MathEquationBlockKeys {
   const MathEquationBlockKeys._();
@@ -171,7 +172,7 @@ class MathEquationBlockComponentWidgetState
       );
     }
 
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       child = MobileBlockActionButtons(
         node: node,
         editorState: editorState,
@@ -184,7 +185,7 @@ class MathEquationBlockComponentWidgetState
       child: child,
     );
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       child = Stack(
         children: [
           child,

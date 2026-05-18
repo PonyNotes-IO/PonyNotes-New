@@ -4,6 +4,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 /// Builder function for the slash menu item.
 Widget slashMenuItemNameBuilder(
@@ -50,7 +51,7 @@ class SlashMenuItemNameBuilder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = UniversalPlatform.isMobile;
+    final isMobile = PlatformInfo.isMobile;
     return FlowyText.regular(
       name,
       fontSize: isMobile ? 16.0 : 12.0,
@@ -82,7 +83,7 @@ class SlashMenuIconBuilder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = UniversalPlatform.isMobile;
+    final isMobile = PlatformInfo.isMobile;
     return SelectableSvgWidget(
       data: data,
       isSelected: isSelected,

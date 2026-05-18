@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/plugins/database/application/defines.dart';
 import 'package:appflowy/plugins/database/application/field/field_info.dart';
@@ -126,7 +127,7 @@ class BoardBloc extends Bloc<BoardEvent, BoardState> {
             );
 
             final startEditing = position != OrderObjectPositionTypePB.End;
-            final action = UniversalPlatform.isMobile
+            final action = PlatformInfo.isMobile
                 ? DidCreateRowAction.openAsPage
                 : startEditing
                     ? DidCreateRowAction.startEditing

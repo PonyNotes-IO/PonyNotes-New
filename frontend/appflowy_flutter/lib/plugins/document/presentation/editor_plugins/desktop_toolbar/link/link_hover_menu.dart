@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -95,7 +96,7 @@ class _LinkHoverTriggerState extends State<LinkHoverTrigger> {
       width: size.width,
       height: size.height,
     );
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       return GestureDetector(
         onTap: openLink,
         onLongPress: () async {
@@ -200,7 +201,7 @@ class _LinkHoverTriggerState extends State<LinkHoverTrigger> {
   void onToolbarShow() => hoverMenuController.close();
 
   void showLinkHoverMenu() {
-    if (UniversalPlatform.isMobile ||
+    if (PlatformInfo.isMobile ||
         isHoverMenuShowing ||
         toolbarController.isToolbarShowing ||
         !mounted) {
@@ -211,7 +212,7 @@ class _LinkHoverTriggerState extends State<LinkHoverTrigger> {
   }
 
   void showLinkEditMenu() {
-    if (UniversalPlatform.isMobile) return;
+    if (PlatformInfo.isMobile) return;
     keepEditorFocusNotifier.increase();
     hoverMenuController.close();
     editMenuController.show();

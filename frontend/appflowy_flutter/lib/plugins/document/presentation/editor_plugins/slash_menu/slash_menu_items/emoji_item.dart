@@ -8,6 +8,7 @@ import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'slash_menu_item_builder.dart';
 
@@ -40,7 +41,7 @@ extension on EditorState {
   }) async {
     final container = Overlay.of(context);
     menuService.dismiss();
-    if (UniversalPlatform.isMobile || selection == null) {
+    if (PlatformInfo.isMobile || selection == null) {
       return;
     }
 

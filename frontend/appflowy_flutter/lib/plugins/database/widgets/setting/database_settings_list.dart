@@ -7,6 +7,7 @@ import 'package:flowy_infra_ui/style_widget/scrolling/styled_list.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/widgets.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class DatabaseSettingsList extends StatefulWidget {
   const DatabaseSettingsList({
@@ -61,7 +62,7 @@ List<DatabaseSettingAction> actionsForDatabaseLayout(DatabaseLayoutPB? layout) {
       return [
         DatabaseSettingAction.showProperties,
         DatabaseSettingAction.showLayout,
-        if (!UniversalPlatform.isMobile) DatabaseSettingAction.showGroup,
+        if (!PlatformInfo.isMobile) DatabaseSettingAction.showGroup,
       ];
     case DatabaseLayoutPB.Calendar:
       return [

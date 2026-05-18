@@ -6,6 +6,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 typedef SimpleTableColumnWidthMap = Map<String, double>;
 typedef SimpleTableRowAlignMap = Map<String, String>;
@@ -233,7 +234,7 @@ class _SimpleTableBlockWidgetState extends State<SimpleTableBlockWidget>
       alwaysDistributeColumnWidths: widget.alwaysDistributeColumnWidths,
     );
 
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       child = Transform.translate(
         offset: Offset(
           -SimpleTableConstants.tableLeftPadding,
@@ -249,7 +250,7 @@ class _SimpleTableBlockWidgetState extends State<SimpleTableBlockWidget>
       child: child,
     );
 
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       child = Provider.value(
         value: simpleTableContext,
         child: MouseRegion(

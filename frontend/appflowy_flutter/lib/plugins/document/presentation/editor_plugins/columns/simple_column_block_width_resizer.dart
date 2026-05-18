@@ -4,6 +4,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class SimpleColumnBlockWidthResizer extends StatefulWidget {
   const SimpleColumnBlockWidthResizer({
@@ -56,7 +57,7 @@ class _SimpleColumnBlockWidthResizerState
         child: ValueListenableBuilder<bool>(
           valueListenable: isHovering,
           builder: (context, isHovering, child) {
-            if (UniversalPlatform.isMobile) {
+            if (PlatformInfo.isMobile) {
               return const SizedBox.shrink();
             }
 

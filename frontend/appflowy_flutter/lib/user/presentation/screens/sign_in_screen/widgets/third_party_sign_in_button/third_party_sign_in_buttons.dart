@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
@@ -84,7 +85,7 @@ class ThirdPartySignInButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       return _DesktopThirdPartySignIn(
         onSignIn: (type) => _signIn(context, type),
       );

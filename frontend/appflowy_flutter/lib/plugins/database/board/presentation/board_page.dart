@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
@@ -49,7 +50,7 @@ class BoardPageTabBarBuilderImpl extends DatabaseTabBarItemBuilder {
     bool shrinkWrap,
     String? initialRowId,
   ) =>
-      UniversalPlatform.isDesktop
+      PlatformInfo.isDesktopOrTablet
           ? DesktopBoardPage(
               key: _makeValueKey(controller),
               view: view,

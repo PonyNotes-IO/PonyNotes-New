@@ -1,12 +1,10 @@
-import 'package:appflowy/generated/locale_keys.g.dart' show LocaleKeys;
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
 import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy/shared/icon_emoji_picker/tab.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
-import 'package:easy_localization/easy_localization.dart'
-    show StringTranslateExtension;
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra/theme_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
@@ -185,7 +183,7 @@ class _CalloutBlockComponentWidgetState
         ? buildComponent(context)
         : buildComponentWithChildren(context);
 
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       child = Padding(
         padding: EdgeInsets.symmetric(vertical: 2.0),
         child: child,
@@ -200,7 +198,7 @@ class _CalloutBlockComponentWidgetState
     Widget child = Stack(
       children: [
         Positioned.fill(
-          left: UniversalPlatform.isMobile ? 0 : cachedLeft,
+          left: PlatformInfo.isMobile ? 0 : cachedLeft,
           child: Container(
             decoration: BoxDecoration(
               borderRadius: const BorderRadius.all(Radius.circular(6.0)),
@@ -219,7 +217,7 @@ class _CalloutBlockComponentWidgetState
       ],
     );
 
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       child = Padding(
         padding: padding,
         child: child,
@@ -260,7 +258,7 @@ class _CalloutBlockComponentWidgetState
             key: ValueKey(widget.node.id + emoji.emoji),
             enable: editorState.editable,
             title: '',
-            margin: UniversalPlatform.isMobile
+            margin: PlatformInfo.isMobile
                 ? const EdgeInsets.symmetric(vertical: 2.0, horizontal: 10.0)
                 : EdgeInsets.zero,
             emoji: emoji,
@@ -278,7 +276,7 @@ class _CalloutBlockComponentWidgetState
               if (!r.keepOpen) controller?.close();
             },
           ),
-          if (UniversalPlatform.isDesktopOrWeb) const HSpace(6.0),
+          if (PlatformInfo.isDesktopOrTabletOrWeb) const HSpace(6.0),
           Flexible(
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -290,7 +288,7 @@ class _CalloutBlockComponentWidgetState
       ),
     );
 
-    if (UniversalPlatform.isMobile && node.children.isEmpty) {
+    if (PlatformInfo.isMobile && node.children.isEmpty) {
       child = Padding(
         key: blockComponentKey,
         padding: padding,

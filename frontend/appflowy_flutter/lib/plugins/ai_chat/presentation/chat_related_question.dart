@@ -6,6 +6,7 @@ import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'layout_define.dart';
 
@@ -77,7 +78,7 @@ class RelatedQuestionItem extends StatelessWidget {
         ),
       ),
       expandText: false,
-      margin: UniversalPlatform.isMobile
+      margin: PlatformInfo.isMobile
           ? const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0)
           : const EdgeInsets.all(8.0),
       leftIcon: FlowySvg(

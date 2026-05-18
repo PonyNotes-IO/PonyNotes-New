@@ -11,6 +11,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class MInviteMemberByLink extends StatelessWidget {
   const MInviteMemberByLink({super.key});
@@ -99,7 +100,7 @@ class _Description extends StatelessWidget {
               );
         },
         confirmButtonBuilder: (dialogContext) => AFFilledTextButton.destructive(
-          size: UniversalPlatform.isDesktop ? AFButtonSize.m : AFButtonSize.l,
+          size: PlatformInfo.isDesktopOrTablet ? AFButtonSize.m : AFButtonSize.l,
           text: LocaleKeys.settings_appearance_members_reset.tr(),
           onTap: () {
             context.read<WorkspaceMemberBloc>().add(

@@ -4,6 +4,7 @@ import 'package:appflowy/shared/icon_emoji_picker/flowy_icon_emoji_picker.dart';
 import 'package:appflowy_backend/protobuf/flowy-search/result.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 extension GetIcon on ResultIconPB {
   Widget? getIcon({
@@ -14,7 +15,7 @@ extension GetIcon on ResultIconPB {
     final iconValue = value, iconType = ty;
     if (iconType == ResultIconTypePB.Emoji) {
       if (iconValue.isEmpty) return null;
-      if (UniversalPlatform.isMobile) {
+      if (PlatformInfo.isMobile) {
         return Text(
           iconValue,
           strutStyle: StrutStyle(

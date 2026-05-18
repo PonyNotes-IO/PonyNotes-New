@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/plugins/document/presentation/editor_drop_manager.dart';
 import 'package:flutter/material.dart';
@@ -48,7 +49,7 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
   final documentService = DocumentService();
   late final editorState = context.read<EditorState>();
 
-  late EditorDropManagerState? dropManagerState = UniversalPlatform.isMobile
+  late EditorDropManagerState? dropManagerState = PlatformInfo.isMobile
       ? null
       : context.read<EditorDropManagerState?>();
 
@@ -63,7 +64,7 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
 
   @override
   void didChangeDependencies() {
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       dropManagerState = context.read<EditorDropManagerState>();
     }
     super.didChangeDependencies();
@@ -104,7 +105,7 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
       ),
     );
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       return AppFlowyPopover(
         controller: controller,
         direction: PopoverDirection.bottomWithCenterAligned,
@@ -216,7 +217,7 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
       return [
         Flexible(
           child: FlowyText(
-            UniversalPlatform.isDesktop
+            PlatformInfo.isDesktopOrTablet
                 ? isDraggingFiles
                     ? LocaleKeys.document_plugins_image_dropImageToInsert.tr()
                     : LocaleKeys.document_plugins_image_addAnImageDesktop.tr()
@@ -229,7 +230,7 @@ class ImagePlaceholderState extends State<ImagePlaceholder> {
   }
 
   void showUploadImageMenu() {
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       controller.show();
     } else {
       final isLocalMode = _isLocalMode();

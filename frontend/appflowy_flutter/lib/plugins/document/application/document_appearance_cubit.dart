@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/core/config/kv_keys.dart';
 import 'package:appflowy/plugins/document/presentation/editor_style.dart';
@@ -67,7 +68,7 @@ class DocumentAppearanceCubit extends Cubit<DocumentAppearance> {
             fontSize: 16.0,
             fontFamily: defaultFontFamily,
             codeFontFamily: builtInCodeFontFamily,
-            width: UniversalPlatform.isMobile
+            width: PlatformInfo.isMobile
                 ? double.infinity
                 : EditorStyleCustomizer.maxDocumentWidth,
           ),
@@ -201,7 +202,7 @@ class DocumentAppearanceCubit extends Cubit<DocumentAppearance> {
   Future<void> syncWidth(double? width) async {
     final prefs = await SharedPreferences.getInstance();
 
-    width ??= UniversalPlatform.isMobile
+    width ??= PlatformInfo.isMobile
         ? double.infinity
         : EditorStyleCustomizer.maxDocumentWidth;
     width = width.clamp(

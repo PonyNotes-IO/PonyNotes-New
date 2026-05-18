@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/ai/ai.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -63,7 +64,7 @@ class ChatAIMessageBubble extends StatelessWidget {
     );
 
     return !isSelectingMessages && showActions
-        ? UniversalPlatform.isMobile
+        ? PlatformInfo.isMobile
             ? _wrapPopMenu(messageWidget)
             : isLastMessage
                 ? _wrapBottomActions(messageWidget)

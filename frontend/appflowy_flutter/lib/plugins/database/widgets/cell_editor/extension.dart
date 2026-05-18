@@ -6,6 +6,7 @@ import 'package:flowy_infra/theme_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 extension SelectOptionColorExtension on SelectOptionColorPB {
   Color toColor(BuildContext context) {
@@ -102,7 +103,7 @@ class SelectOptionTag extends StatelessWidget {
       decoration: BoxDecoration(
         color: optionColor,
         borderRadius: borderRadius ??
-            BorderRadius.circular(UniversalPlatform.isDesktopOrWeb ? 6 : 11),
+            BorderRadius.circular(PlatformInfo.isDesktopOrTabletOrWeb ? 6 : 11),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

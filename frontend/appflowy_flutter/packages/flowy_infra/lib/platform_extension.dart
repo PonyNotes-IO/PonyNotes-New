@@ -1,30 +1,30 @@
-import 'dart:io';
+import 'dart:io' as io;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 
-extension PlatformExtension on Platform {
-  /// Returns true if the operating system is macOS and not running on Web platform.
+class PlatformInfo {
+  PlatformInfo._();
+
   static bool get isMacOS {
     if (kIsWeb) {
       return false;
     }
-    return Platform.isMacOS;
+    return io.Platform.isMacOS;
   }
 
-  /// Returns true if the operating system is Windows and not running on Web platform.
   static bool get isWindows {
     if (kIsWeb) {
       return false;
     }
-    return Platform.isWindows;
+    return io.Platform.isWindows;
   }
 
-  /// Returns true if the operating system is Linux and not running on Web platform.
   static bool get isLinux {
     if (kIsWeb) {
       return false;
     }
-    return Platform.isLinux;
+    return io.Platform.isLinux;
   }
 
   static bool get isDesktopOrWeb {
@@ -38,14 +38,44 @@ extension PlatformExtension on Platform {
     if (kIsWeb) {
       return false;
     }
-    return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+    return io.Platform.isWindows || io.Platform.isLinux || io.Platform.isMacOS;
+  }
+
+  static bool get isDesktopOrTablet {
+    if (kIsWeb) {
+      return true;
+    }
+    return isDesktop || isTablet;
+  }
+
+  static bool get isDesktopOrTabletOrWeb {
+    return isDesktopOrTablet;
+  }
+
+  static bool get isTablet {
+    if (kIsWeb) {
+      return false;
+    }
+    if (io.Platform.isIOS) {
+      return _isIOSTablet();
+    }
+    if (io.Platform.isAndroid) {
+      return _isAndroidTablet();
+    }
+    return false;
   }
 
   static bool get isMobile {
     if (kIsWeb) {
       return false;
     }
-    return Platform.isAndroid || Platform.isIOS;
+    if (io.Platform.isAndroid) {
+      return !_isAndroidTablet();
+    }
+    if (io.Platform.isIOS) {
+      return !_isIOSTablet();
+    }
+    return io.Platform.isAndroid || io.Platform.isIOS;
   }
 
   static bool get isNotMobile {
@@ -53,5 +83,25 @@ extension PlatformExtension on Platform {
       return false;
     }
     return !isMobile;
+  }
+
+  static bool _isIOSTablet() {
+    return io.Platform.localHostname.contains('iPad') ||
+        io.Platform.operatingSystemVersion.contains('iPad');
+  }
+
+  static bool _isAndroidTablet() {
+    try {
+      final views = WidgetsBinding.instance.platformDispatcher.views;
+      if (views.isNotEmpty) {
+        final view = views.first;
+        final shortestSide = view.physicalSize.shortestSide;
+        final devicePixelRatio = view.devicePixelRatio;
+        final shortestSideInDp = shortestSide / devicePixelRatio;
+        return shortestSideInDp >= 600;
+      }
+    } catch (_) {
+    }
+    return false;
   }
 }

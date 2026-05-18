@@ -14,6 +14,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/style_widget/snap_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class SubPageBlockTransactionHandler extends BlockTransactionHandler {
   SubPageBlockTransactionHandler() : super(blockType: SubPageBlockKeys.type);
@@ -167,7 +168,7 @@ class SubPageBlockTransactionHandler extends BlockTransactionHandler {
                 );
               }
             } else {
-              if (UniversalPlatform.isDesktop) {
+              if (PlatformInfo.isDesktopOrTablet) {
                 getIt<TabsBloc>().openPlugin(view);
               } else {
                 if (context.mounted) {

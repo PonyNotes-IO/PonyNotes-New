@@ -6,6 +6,7 @@ import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class EditorKeyboardInterceptor extends AppFlowyKeyboardServiceInterceptor {
   @override
@@ -16,7 +17,7 @@ class EditorKeyboardInterceptor extends AppFlowyKeyboardServiceInterceptor {
   ) async {
     // Only check on the mobile platform: check if the inserted text is a link, if so, try to paste it as a link preview
     final text = insertion.textInserted;
-    if (UniversalPlatform.isMobile && hrefRegex.hasMatch(text)) {
+    if (PlatformInfo.isMobile && hrefRegex.hasMatch(text)) {
       final result = customPasteCommand.execute(editorState);
       return result == KeyEventResult.handled;
     }
@@ -31,7 +32,7 @@ class EditorKeyboardInterceptor extends AppFlowyKeyboardServiceInterceptor {
   ) async {
     // Only check on the mobile platform: check if the replaced text is a link, if so, try to paste it as a link preview
     final text = replacement.replacementText;
-    if (UniversalPlatform.isMobile && hrefRegex.hasMatch(text)) {
+    if (PlatformInfo.isMobile && hrefRegex.hasMatch(text)) {
       final result = customPasteCommand.execute(editorState);
       return result == KeyEventResult.handled;
     }

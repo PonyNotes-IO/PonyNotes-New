@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_drop_manager.dart';
@@ -264,7 +265,7 @@ class _IconUploaderState extends State<IconUploader> {
   }
 
   Future<void> pickImage() async {
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       // on desktop, the users can pick a image file from folder
       final result = await getIt<FilePickerService>().pickFiles(
         dialogTitle: '',

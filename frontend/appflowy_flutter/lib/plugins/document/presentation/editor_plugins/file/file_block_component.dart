@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
@@ -178,7 +179,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
 
   RenderBox? get _renderBox => context.findRenderObject() as RenderBox?;
 
-  late EditorDropManagerState? dropManagerState = UniversalPlatform.isMobile
+  late EditorDropManagerState? dropManagerState = PlatformInfo.isMobile
       ? null
       : context.read<EditorDropManagerState?>();
 
@@ -295,7 +296,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
 
   @override
   void didChangeDependencies() {
-    if (!UniversalPlatform.isMobile) {
+    if (!PlatformInfo.isMobile) {
       dropManagerState = context.read<EditorDropManagerState?>();
     }
     super.didChangeDependencies();
@@ -383,7 +384,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
       ),
     );
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       if (url == null || url.isEmpty) {
         child = DropTarget(
           enable: dropManagerState?.isDropEnabled == true ||
@@ -469,7 +470,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
       );
     }
 
-    if (!UniversalPlatform.isDesktopOrWeb) {
+    if (!PlatformInfo.isDesktopOrTabletOrWeb) {
       // show a fixed menu on mobile
       child = MobileBlockActionButtons(
         node: node,
@@ -491,7 +492,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
   }
 
   void _openMenu() {
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       controller.show();
       dropManagerState?.add(FileBlockComponent.uploadDragKey);
     } else {
@@ -511,7 +512,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
           ),
         ),
         const HSpace(8),
-        if (UniversalPlatform.isDesktopOrWeb) ...[
+        if (PlatformInfo.isDesktopOrTabletOrWeb) ...[
           ValueListenableBuilder<bool>(
             valueListenable: showActionsNotifier,
             builder: (_, value, __) {
@@ -550,7 +551,7 @@ class FileBlockComponentState extends State<FileBlockComponent>
           ),
           const HSpace(8),
         ],
-        if (UniversalPlatform.isMobile) ...[
+        if (PlatformInfo.isMobile) ...[
           const HSpace(36),
         ],
       ];

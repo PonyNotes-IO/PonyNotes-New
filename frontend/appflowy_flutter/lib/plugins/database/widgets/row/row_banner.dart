@@ -34,6 +34,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:string_validator/string_validator.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '../../../../shared/icon_emoji_picker/tab.dart';
 import '../../../document/presentation/editor_plugins/plugins.dart';
@@ -446,9 +447,9 @@ class RowHeaderToolbar extends StatefulWidget {
 
 class _RowHeaderToolbarState extends State<RowHeaderToolbar> {
   final popoverController = PopoverController();
-  final bool isDesktop = UniversalPlatform.isDesktopOrWeb;
+  final bool isDesktop = PlatformInfo.isDesktopOrTabletOrWeb;
 
-  bool isHidden = UniversalPlatform.isDesktopOrWeb;
+  bool isHidden = PlatformInfo.isDesktopOrTabletOrWeb;
   bool isPopoverOpen = false;
 
   @override

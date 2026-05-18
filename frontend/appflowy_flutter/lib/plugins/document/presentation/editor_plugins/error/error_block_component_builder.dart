@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/base/animated_gesture.dart';
@@ -72,7 +73,7 @@ class _ErrorBlockComponentWidgetState extends State<ErrorBlockComponentWidget>
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: UniversalPlatform.isDesktopOrWeb
+      child: PlatformInfo.isDesktopOrTabletOrWeb
           ? _buildDesktopErrorBlock(context)
           : _buildMobileErrorBlock(context),
     );
@@ -91,7 +92,7 @@ class _ErrorBlockComponentWidgetState extends State<ErrorBlockComponentWidget>
       );
     }
 
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       child = MobileBlockActionButtons(
         node: node,
         editorState: context.read<EditorState>(),

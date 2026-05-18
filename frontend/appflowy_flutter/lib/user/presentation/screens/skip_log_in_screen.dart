@@ -16,6 +16,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class SkipLogInScreen extends StatefulWidget {
   const SkipLogInScreen({super.key});
@@ -45,7 +46,7 @@ class _SkipLogInScreenState extends State<SkipLogInScreen> {
         const Spacer(),
         FlowyLogoTitle(
           title: LocaleKeys.welcomeText.tr(),
-          logoSize: Size.square(UniversalPlatform.isMobile ? 80 : 40),
+          logoSize: Size.square(PlatformInfo.isMobile ? 80 : 40),
         ),
         const VSpace(32),
         GoButton(
@@ -101,7 +102,7 @@ class SkipLoginPageFooter extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (!UniversalPlatform.isMobile) const HSpace(placeholderWidth),
+          if (!PlatformInfo.isMobile) const HSpace(placeholderWidth),
           const Expanded(child: SubscribeButtons()),
           const SizedBox(
             width: placeholderWidth,

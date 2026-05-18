@@ -8,6 +8,7 @@ import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
     show UserProfilePB;
+import 'package:flowy_infra/platform_extension.dart' show  PlatformInfo;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:universal_platform/universal_platform.dart';
@@ -47,7 +48,7 @@ class AuthRouter {
         Log.info('🔵 [AuthRouter] Workspace setting obtained, navigating to home screen');
         // Replace SignInScreen or SkipLogInScreen as root page.
         // If user click back button, it will exit app rather than go back to SignInScreen or SkipLogInScreen
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           Log.info('🔵 [AuthRouter] Navigating to MobileHomeScreen');
           context.go(
             MobileHomeScreen.routeName,
@@ -105,7 +106,7 @@ class SplashRouter {
   void pushHomeScreen(
     BuildContext context,
   ) {
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       context.push(
         MobileHomeScreen.routeName,
       );
@@ -119,7 +120,7 @@ class SplashRouter {
   void goHomeScreen(
     BuildContext context,
   ) {
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       context.go(
         MobileHomeScreen.routeName,
       );

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -392,7 +393,7 @@ class DocumentHeaderToolbar extends StatefulWidget {
 class _DocumentHeaderToolbarState extends State<DocumentHeaderToolbar> {
   final _popoverController = PopoverController();
 
-  bool isHidden = UniversalPlatform.isDesktopOrWeb;
+  bool isHidden = PlatformInfo.isDesktopOrTabletOrWeb;
   bool isPopoverOpen = false;
 
   @override
@@ -418,7 +419,7 @@ class _DocumentHeaderToolbarState extends State<DocumentHeaderToolbar> {
       ),
     );
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       child = MouseRegion(
         opaque: false,
         onEnter: (event) => setHidden(false),
@@ -442,7 +443,7 @@ class _DocumentHeaderToolbarState extends State<DocumentHeaderToolbar> {
         FlowyButton(
           leftIconSize: const Size.square(18),
           onTap: () => widget.onIconOrCoverChanged(
-            cover: UniversalPlatform.isDesktopOrWeb
+            cover: PlatformInfo.isDesktopOrTabletOrWeb
                 ? (CoverType.asset, '1')
                 : (CoverType.color, '0xffe8e0ff'),
           ),
@@ -478,7 +479,7 @@ class _DocumentHeaderToolbarState extends State<DocumentHeaderToolbar> {
           LocaleKeys.document_plugins_cover_addIcon.tr(),
           color: Theme.of(context).hintColor,
         ),
-        onTap: UniversalPlatform.isDesktop
+        onTap: PlatformInfo.isDesktopOrTablet
             ? null
             : () async {
                 final result = await context.push<EmojiIconData>(
@@ -490,7 +491,7 @@ class _DocumentHeaderToolbarState extends State<DocumentHeaderToolbar> {
               },
       );
 
-      if (UniversalPlatform.isDesktop) {
+      if (PlatformInfo.isDesktopOrTablet) {
         child = AppFlowyPopover(
           onClose: () => setState(() => isPopoverOpen = false),
           controller: _popoverController,
@@ -558,7 +559,7 @@ class DocumentCoverState extends State<DocumentCover> {
 
   @override
   Widget build(BuildContext context) {
-    return UniversalPlatform.isDesktopOrWeb
+    return PlatformInfo.isDesktopOrTabletOrWeb
         ? _buildDesktopCover()
         : _buildMobileCover();
   }
@@ -846,10 +847,10 @@ class DeleteCoverButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fillColor = UniversalPlatform.isDesktopOrWeb
+    final fillColor = PlatformInfo.isDesktopOrTabletOrWeb
         ? Theme.of(context).colorScheme.surface.withValues(alpha: 0.5)
         : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5);
-    final svgColor = UniversalPlatform.isDesktopOrWeb
+    final svgColor = PlatformInfo.isDesktopOrTabletOrWeb
         ? Theme.of(context).colorScheme.tertiary
         : Theme.of(context).colorScheme.onPrimary;
     return FlowyIconButton(
@@ -894,7 +895,7 @@ class _DocumentIconState extends State<DocumentIcon> {
   Widget build(BuildContext context) {
     Widget child = EmojiIconWidget(emoji: widget.icon);
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       child = AppFlowyPopover(
         direction: PopoverDirection.bottomWithCenterAligned,
         controller: _popoverController,

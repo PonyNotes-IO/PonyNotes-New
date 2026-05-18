@@ -23,6 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '../../application/row/row_controller.dart';
 import '../../widgets/row/row_detail.dart';
@@ -223,7 +224,7 @@ class _CalendarPageState extends State<CalendarPage> {
       builder: (context, constraints) {
         final paddingLeft =
             context.read<DatabasePluginWidgetBuilderSize>().paddingLeft;
-        EdgeInsets padding = UniversalPlatform.isMobile
+        EdgeInsets padding = PlatformInfo.isMobile
             ? CalendarSize.contentInsetsMobile
             : CalendarSize.contentInsets +
                 const EdgeInsets.symmetric(horizontal: 40);
@@ -242,7 +243,7 @@ class _CalendarPageState extends State<CalendarPage> {
               key: _calendarState,
               controller: _eventController,
               width: constraints.maxWidth,
-              cellAspectRatio: UniversalPlatform.isMobile ? 0.9 : 0.6,
+              cellAspectRatio: PlatformInfo.isMobile ? 0.9 : 0.6,
               startDay: _weekdayFromInt(firstDayOfWeek),
               showBorder: false,
               headerBuilder: _headerNavigatorBuilder,
@@ -276,7 +277,7 @@ class _CalendarPageState extends State<CalendarPage> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: UniversalPlatform.isMobile
+            onTap: PlatformInfo.isMobile
                 ? () => showMobileBottomSheet(
                       context,
                       title: LocaleKeys.calendar_quickJumpYear.tr(),
@@ -303,7 +304,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   DateFormat('MMMM y', context.locale.toLanguageTag())
                       .format(currentMonth),
                 ),
-                if (UniversalPlatform.isMobile) ...[
+                if (PlatformInfo.isMobile) ...[
                   const HSpace(6),
                   const FlowySvg(FlowySvgs.arrow_down_s),
                 ],
@@ -353,7 +354,7 @@ class _CalendarPageState extends State<CalendarPage> {
     final symbols = DateFormat.EEEE(context.locale.toLanguageTag()).dateSymbols;
     String weekDayString = symbols.WEEKDAYS[(day + 1) % 7];
 
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       weekDayString = weekDayString.substring(0, 3);
     }
 
@@ -470,7 +471,7 @@ class _UnscheduledEventsButtonState extends State<UnscheduledEventsButton> {
               ),
               onPressed: () {
                 if (state.unscheduleEvents.isNotEmpty) {
-                  if (UniversalPlatform.isMobile) {
+                  if (PlatformInfo.isMobile) {
                     _showUnscheduledEventsMobile(state.unscheduleEvents);
                   } else {
                     _popoverController.show();
@@ -540,7 +541,7 @@ class UnscheduleEventsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cells = [
-      if (!UniversalPlatform.isMobile)
+      if (!PlatformInfo.isMobile)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           child: FlowyText(
@@ -554,7 +555,7 @@ class UnscheduleEventsList extends StatelessWidget {
         (event) => UnscheduledEventCell(
           event: event,
           onPressed: () {
-            if (UniversalPlatform.isMobile) {
+            if (PlatformInfo.isMobile) {
               context.push(
                 MobileRowDetailPage.routeName,
                 extra: {
@@ -584,7 +585,7 @@ class UnscheduleEventsList extends StatelessWidget {
       shrinkWrap: true,
     );
 
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       return Flexible(child: child);
     }
 
@@ -604,7 +605,7 @@ class UnscheduledEventCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return UniversalPlatform.isMobile
+    return PlatformInfo.isMobile
         ? MobileUnscheduledEventTile(event: event, onPressed: onPressed)
         : DesktopUnscheduledEventTile(event: event, onPressed: onPressed);
   }

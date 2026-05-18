@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/application/document_bloc.dart';
@@ -80,7 +81,7 @@ extension PasteFromImage on EditorState {
 
     if (!defaultImageExtensions.contains(format)) {
       Log.info('unsupported format: $format');
-      if (UniversalPlatform.isMobile) {
+      if (PlatformInfo.isMobile) {
         showToastNotification(
           message: LocaleKeys.document_imageBlock_error_invalidImageFormat.tr(),
         );

@@ -5,6 +5,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 const _enableTableDebugLog = false;
 
@@ -197,10 +198,10 @@ class SimpleTableConstants {
   static const defaultRowHeight = 36.0;
 
   static double get tableHitTestTopPadding =>
-      UniversalPlatform.isDesktop ? 8.0 : 24.0;
+      PlatformInfo.isDesktopOrTablet ? 8.0 : 24.0;
   static double get tableHitTestLeftPadding =>
-      UniversalPlatform.isDesktop ? 0.0 : 24.0;
-  static double get tableLeftPadding => UniversalPlatform.isDesktop ? 8.0 : 0.0;
+      PlatformInfo.isDesktopOrTablet ? 0.0 : 24.0;
+  static double get tableLeftPadding => PlatformInfo.isDesktopOrTablet ? 8.0 : 0.0;
 
   static const tableBottomPadding =
       addRowButtonHeight + 3 * addRowButtonPadding;
@@ -215,7 +216,7 @@ class SimpleTableConstants {
         right: tableRightPadding,
       );
 
-  static double get tablePageOffset => UniversalPlatform.isMobile
+  static double get tablePageOffset => PlatformInfo.isMobile
       ? EditorStyleCustomizer.optionMenuWidth +
           EditorStyleCustomizer.nodeHorizontalPadding * 2
       : EditorStyleCustomizer.optionMenuWidth + 12;
@@ -241,7 +242,7 @@ class SimpleTableConstants {
   static const addColumnAndRowButtonBottomPadding = 2.5 * addRowButtonPadding;
 
   // Table cell
-  static EdgeInsets get cellEdgePadding => UniversalPlatform.isDesktop
+  static EdgeInsets get cellEdgePadding => PlatformInfo.isDesktopOrTablet
       ? const EdgeInsets.symmetric(
           horizontal: 9.0,
           vertical: 2.0,

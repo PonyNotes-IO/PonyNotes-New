@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -230,7 +231,7 @@ class CustomImageBlockComponentState extends State<CustomImageBlockComponent>
       ),
     );
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       child = BlockSelectionContainer(
         node: node,
         delegate: this,
@@ -252,7 +253,7 @@ class CustomImageBlockComponentState extends State<CustomImageBlockComponent>
     }
 
     // show a hover menu on desktop or web
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       if (widget.showMenu && widget.menuBuilder != null) {
         child = MouseRegion(
           onEnter: (_) => showActionsNotifier.value = true,

@@ -3,6 +3,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/base/selec
 import 'package:appflowy/plugins/document/presentation/editor_plugins/base/string_extension.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/code_block/code_language_screen.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
+import 'package:flowy_infra/platform_extension.dart';
 // ignore: implementation_imports
 import 'package:appflowy_editor/src/flutter/scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
@@ -78,7 +79,7 @@ class _CodeBlockLanguageSelectorState extends State<CodeBlockLanguageSelector> {
             fillColor: Colors.transparent,
             hoverColor: Theme.of(context).colorScheme.secondaryContainer,
             onPressed: () async {
-              if (UniversalPlatform.isMobile) {
+              if (PlatformInfo.isMobile) {
                 final language = await context
                     .push<String>(MobileCodeLanguagePickerScreen.routeName);
                 if (language != null) {
@@ -91,7 +92,7 @@ class _CodeBlockLanguageSelectorState extends State<CodeBlockLanguageSelector> {
       ],
     );
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       child = AppFlowyPopover(
         controller: controller,
         direction: PopoverDirection.bottomWithLeftAligned,

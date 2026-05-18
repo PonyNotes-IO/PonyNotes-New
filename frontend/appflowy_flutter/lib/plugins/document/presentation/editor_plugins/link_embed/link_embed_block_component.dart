@@ -18,6 +18,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'link_embed_menu.dart';
 
@@ -348,7 +349,7 @@ class LinkEmbedBlockComponentState
       child: ValueListenableBuilder<bool>(
         valueListenable: showActionsNotifier,
         builder: (context, showActions, child) {
-          if (!showActions || UniversalPlatform.isMobile) {
+          if (!showActions || PlatformInfo.isMobile) {
             return SizedBox.shrink();
           }
           return LinkEmbedMenu(
@@ -468,7 +469,7 @@ class LinkEmbedBlockComponentState
           )
         : GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: !UniversalPlatform.isMobile
+            onTap: !PlatformInfo.isMobile
                 ? null
                 : () =>
                     afLaunchUrlString(url, addingHttpSchemeWhenFailed: true),

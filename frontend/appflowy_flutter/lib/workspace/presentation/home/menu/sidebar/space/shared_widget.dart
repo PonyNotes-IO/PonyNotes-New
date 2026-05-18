@@ -24,6 +24,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class SpacePermissionSwitch extends StatefulWidget {
   const SpacePermissionSwitch({
@@ -251,7 +252,7 @@ class SpaceCancelOrConfirmButton extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         AFOutlinedTextButton.normal(
-          size: UniversalPlatform.isDesktop ? AFButtonSize.m : AFButtonSize.l,
+          size: PlatformInfo.isDesktopOrTablet ? AFButtonSize.m : AFButtonSize.l,
           text: cancelButtonName ?? LocaleKeys.button_cancel.tr(),
           textStyle: theme.textStyle.body.standard(
             color: theme.textColorScheme.primary,

@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_chat_core/flutter_chat_core.dart';
 import 'package:flutter_chat_ui/flutter_chat_ui.dart' hide ChatMessage;
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class LoadChatMessageStatusReady extends StatelessWidget {
   const LoadChatMessageStatusReady({
@@ -122,7 +123,7 @@ class LoadChatMessageStatusReady extends StatelessWidget {
   Widget _wrapConstraints(Widget child) {
     return Container(
       constraints: const BoxConstraints(maxWidth: 784),
-      margin: UniversalPlatform.isDesktop
+      margin: PlatformInfo.isDesktopOrTablet
           ? const EdgeInsets.symmetric(horizontal: 60.0)
           : null,
       child: child,

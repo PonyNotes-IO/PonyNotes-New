@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:reorderables/reorderables.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '../../layout/sizes.dart';
 import 'desktop_field_cell.dart';
@@ -126,7 +127,7 @@ class _GridHeaderState extends State<_GridHeader> {
             ),
             draggingWidgetOpacity: 0,
             header: _cellLeading(),
-            needsLongPressDraggable: UniversalPlatform.isMobile,
+            needsLongPressDraggable: PlatformInfo.isMobile,
             footer: _CellTrailing(viewId: widget.viewId),
             onReorder: (int oldIndex, int newIndex) {
               context

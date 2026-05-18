@@ -12,6 +12,7 @@ import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class AppFlowyErrorPage extends StatelessWidget {
   const AppFlowyErrorPage({
@@ -23,7 +24,7 @@ class AppFlowyErrorPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       return _MobileSyncErrorPage(error: error);
     } else {
       return _DesktopSyncErrorPage(error: error);

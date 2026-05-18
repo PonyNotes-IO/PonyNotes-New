@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'setting_appflowy_cloud.dart';
 
@@ -95,7 +96,7 @@ class CloudTypeSwitcher extends StatelessWidget {
     final values = AuthenticatorType.values.where((element) {
       return isDevelopMode || element != AuthenticatorType.appflowyCloudDevelop;
     }).toList();
-    return UniversalPlatform.isDesktopOrWeb
+    return PlatformInfo.isDesktopOrTabletOrWeb
         ? SettingsDropdown(
             selectedOption: cloudType,
             onChanged: (type) {
@@ -202,7 +203,7 @@ class _CloudServerSwitcher extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return UniversalPlatform.isDesktopOrWeb
+    return PlatformInfo.isDesktopOrTabletOrWeb
         ? Row(
             children: [
               Expanded(

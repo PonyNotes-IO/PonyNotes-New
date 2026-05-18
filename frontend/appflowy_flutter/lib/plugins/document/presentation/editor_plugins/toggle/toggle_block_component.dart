@@ -6,6 +6,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class ToggleListBlockKeys {
   const ToggleListBlockKeys._();
@@ -198,7 +199,7 @@ class _ToggleListBlockComponentWidgetState
             left: cachedLeft,
             top: padding.top,
             child: Container(
-              width: UniversalPlatform.isDesktop ? double.infinity : null,
+              width: PlatformInfo.isDesktopOrTablet ? double.infinity : null,
               color: backgroundColor,
             ),
           ),
@@ -300,7 +301,7 @@ class _ToggleListBlockComponentWidgetState
     }
 
     return Padding(
-      padding: UniversalPlatform.isMobile
+      padding: PlatformInfo.isMobile
           ? const EdgeInsets.symmetric(horizontal: 26.0)
           : indentPadding,
       child: FlowyButton(
@@ -358,7 +359,7 @@ class _ToggleListBlockComponentWidgetState
   }
 
   Widget _buildExpandIcon() {
-    double buttonHeight = UniversalPlatform.isDesktop ? 22.0 : 26.0;
+    double buttonHeight = PlatformInfo.isDesktopOrTablet ? 22.0 : 26.0;
     final textDirection = calculateTextDirection(
       layoutDirection: Directionality.maybeOf(context),
     );

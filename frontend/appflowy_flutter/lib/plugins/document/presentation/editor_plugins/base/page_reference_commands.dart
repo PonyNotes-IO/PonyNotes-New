@@ -8,6 +8,7 @@ import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 const _bracketChar = '[';
 const _plusChar = '+';
@@ -114,7 +115,7 @@ Future<bool> inlinePageReferenceCommandHandler(
   if (context.mounted) {
     keepEditorFocusNotifier.increase();
     selectionMenuService?.dismiss();
-    selectionMenuService = UniversalPlatform.isMobile
+    selectionMenuService = PlatformInfo.isMobile
         ? MobileInlineActionsMenu(
             context: service.context!,
             editorState: editorState,

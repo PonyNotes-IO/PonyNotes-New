@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class EmbedImageUrlWidget extends StatefulWidget {
   const EmbedImageUrlWidget({
@@ -38,7 +39,7 @@ class _EmbedImageUrlWidgetState extends State<EmbedImageUrlWidget> {
     return Column(
       children: [
         const VSpace(12),
-        UniversalPlatform.isDesktop
+        PlatformInfo.isDesktopOrTablet
             ? textField
             : SizedBox(
                 height: 42,
@@ -53,7 +54,7 @@ class _EmbedImageUrlWidgetState extends State<EmbedImageUrlWidget> {
         ],
         const VSpace(20),
         SizedBox(
-          height: UniversalPlatform.isMobile ? 36 : 32,
+          height: PlatformInfo.isMobile ? 36 : 32,
           width: 300,
           child: FlowyButton(
             backgroundColor: Theme.of(context).colorScheme.primary,
@@ -61,16 +62,16 @@ class _EmbedImageUrlWidgetState extends State<EmbedImageUrlWidget> {
                 Theme.of(context).colorScheme.primary.withValues(alpha: 0.9),
             showDefaultBoxDecorationOnMobile: true,
             radius:
-                UniversalPlatform.isMobile ? BorderRadius.circular(8) : null,
+                PlatformInfo.isMobile ? BorderRadius.circular(8) : null,
             margin: const EdgeInsets.all(5),
             text: FlowyText(
               LocaleKeys.document_imageBlock_embedLink_label.tr(),
               lineHeight: 1,
               textAlign: TextAlign.center,
-              color: UniversalPlatform.isMobile
+              color: PlatformInfo.isMobile
                   ? null
                   : Theme.of(context).colorScheme.onPrimary,
-              fontSize: UniversalPlatform.isMobile ? 14 : null,
+              fontSize: PlatformInfo.isMobile ? 14 : null,
             ),
             onTap: submit,
           ),

@@ -3,6 +3,7 @@ import 'package:flowy_infra/theme_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 final kFirstDay = DateTime.utc(1970);
 final kLastDay = DateTime.utc(2100);
@@ -61,7 +62,7 @@ class _DatePickerState extends State<DatePicker> {
       shape: BoxShape.circle,
     );
 
-    final calendarStyle = UniversalPlatform.isMobile
+    final calendarStyle = PlatformInfo.isMobile
         ? _CalendarStyle.mobile(
             dowTextStyle: textStyle.copyWith(
               color: Theme.of(context).hintColor,

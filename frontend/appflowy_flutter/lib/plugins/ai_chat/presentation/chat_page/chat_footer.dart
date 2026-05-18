@@ -1,4 +1,5 @@
 import 'package:appflowy/ai/ai.dart';
+import 'package:flowy_infra/platform_extension.dart';
 // PonyNotes: 添加AIPromptInputBloc导入以获取深度思考和联网搜索状态
 import 'package:appflowy/ai/service/ai_prompt_input_bloc.dart';
 import 'package:appflowy/plugins/ai_chat/application/ai_chat_prelude.dart';
@@ -59,7 +60,7 @@ class _ChatFooterState extends State<ChatFooter> {
                     builder: (context, canSendMessage) {
                       final chatBloc = context.read<ChatBloc>();
 
-                      return UniversalPlatform.isDesktop
+                      return PlatformInfo.isDesktopOrTablet
                           ? _buildDesktopInput(
                         context,
                         chatBloc,

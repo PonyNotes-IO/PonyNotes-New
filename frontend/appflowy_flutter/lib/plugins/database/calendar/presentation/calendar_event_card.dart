@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '../application/calendar_bloc.dart';
 import 'calendar_event_editor.dart';
@@ -84,7 +85,7 @@ class _EventCardState extends State<EventCard> {
       cellBuilder: cellBuilder,
       isCompact: true,
       onTap: (context) {
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           context.push(
             MobileRowDetailPage.routeName,
             extra: {

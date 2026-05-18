@@ -7,6 +7,7 @@ import 'package:flowy_infra/theme_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class ChatWelcomePage extends StatelessWidget {
   const ChatWelcomePage({
@@ -56,8 +57,8 @@ class ChatWelcomePage extends StatelessWidget {
           fontSize: 15,
           LocaleKeys.chat_questionDetail.tr(args: [userProfile.name]),
         ),
-        UniversalPlatform.isDesktop ? const VSpace(32 - 16) : const VSpace(24),
-        ...UniversalPlatform.isDesktop
+        PlatformInfo.isDesktopOrTablet ? const VSpace(32 - 16) : const VSpace(24),
+        ...PlatformInfo.isDesktopOrTablet
             ? buildDesktopSampleQuestions(context)
             : buildMobileSampleQuestions(context),
       ],
@@ -151,7 +152,7 @@ class WelcomeSampleQuestion extends StatelessWidget {
           padding: WidgetStatePropertyAll(
             EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: UniversalPlatform.isDesktop ? 8 : 0,
+              vertical: PlatformInfo.isDesktopOrTablet ? 8 : 0,
             ),
           ),
           backgroundColor: WidgetStateProperty.resolveWith<Color?>((state) {

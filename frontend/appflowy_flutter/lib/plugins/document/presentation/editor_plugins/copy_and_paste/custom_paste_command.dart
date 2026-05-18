@@ -17,6 +17,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:string_validator/string_validator.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 /// - support
 ///   - desktop
@@ -163,7 +164,7 @@ Future<bool> _pasteAsLinkPreview(
   EditorState editorState,
   String? text,
 ) async {
-  final isMobile = UniversalPlatform.isMobile;
+  final isMobile = PlatformInfo.isMobile;
   // the url should contain a protocol
   if (text == null || !isURL(text, {'require_protocol': true})) {
     return false;

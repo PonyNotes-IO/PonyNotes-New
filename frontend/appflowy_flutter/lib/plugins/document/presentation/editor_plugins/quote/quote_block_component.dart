@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
@@ -161,8 +162,8 @@ class _QuoteBlockComponentWidgetState extends State<QuoteBlockComponentWidget>
     final Widget child = Stack(
       children: [
         Positioned.fill(
-          left: UniversalPlatform.isMobile ? padding.left : cachedLeft,
-          right: UniversalPlatform.isMobile ? padding.right : 0,
+          left: PlatformInfo.isMobile ? padding.left : cachedLeft,
+          right: PlatformInfo.isMobile ? padding.right : 0,
           child: Container(
             color: backgroundColor,
           ),
@@ -273,7 +274,7 @@ class _QuoteBlockComponentWidgetState extends State<QuoteBlockComponentWidget>
       final renderObject = layoutBuilderKey.currentContext?.findRenderObject();
       double height = _quoteBlockHeightCache[node.id] ?? 0;
       if (renderObject != null && renderObject is RenderBox) {
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           height = renderObject.size.height - padding.top;
         } else {
           height = renderObject.size.height - padding.top * 2;

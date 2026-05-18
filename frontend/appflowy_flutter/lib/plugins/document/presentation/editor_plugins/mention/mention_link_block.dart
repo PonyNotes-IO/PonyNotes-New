@@ -19,6 +19,7 @@ import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'mention_link_error_preview.dart';
 import 'mention_link_preview.dart';
@@ -144,7 +145,7 @@ class _MentionLinkBlockState extends State<MentionLinkBlock> {
   Widget build(BuildContext context) {
     final child = buildIconWithTitle(context);
 
-    if (UniversalPlatform.isMobile) return child;
+    if (PlatformInfo.isMobile) return child;
 
     return AppFlowyPopover(
       key: ValueKey(showAtBottom),

@@ -50,6 +50,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sheet/route.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '../../shared/icon_emoji_picker/tab.dart';
 import 'af_navigator_observer.dart';
@@ -67,10 +68,10 @@ GoRouter generateRouter(Widget child) {
       _signInScreenRoute(),
       _skipLogInScreenRoute(),
       _workspaceErrorScreenRoute(),
-      // Desktop only
-      if (UniversalPlatform.isDesktop) _desktopHomeScreenRoute(),
+      // Desktop and tablet only
+      if (PlatformInfo.isDesktopOrTablet) _desktopHomeScreenRoute(),
       // Mobile only
-      if (UniversalPlatform.isMobile) ...[
+      if (PlatformInfo.isMobile) ...[
         // settings
         _mobileHomeSettingPageRoute(),
         _mobileCloudSettingAppFlowyCloudPageRoute(),
@@ -890,7 +891,7 @@ GoRoute _rootRoute(Widget child) {
           }
           // 检查用户是否需要绑定手机号（第三方登录但未绑定手机号）
           // 如果需要绑定手机号，不重定向，让 SplashScreen 处理
-          if (isAppFlowyCloudEnabled && !UniversalPlatform.isMobile) {
+          if (isAppFlowyCloudEnabled && !PlatformInfo.isMobile) {
             try {
               final profileResult = await UserBackendService.getCurrentUserProfile();
               final profile = profileResult.fold(
@@ -913,7 +914,7 @@ GoRoute _rootRoute(Widget child) {
         },
         (error) async => null,
       );
-      if (routeName != null && !UniversalPlatform.isMobile) return routeName;
+      if (routeName != null && !PlatformInfo.isMobile) return routeName;
 
       return null;
     },

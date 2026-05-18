@@ -2,6 +2,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'emoji_menu.dart';
 
@@ -34,7 +35,7 @@ Future<bool> emojiCommandHandler(
 ) async {
   final selection = editorState.selection;
 
-  if (UniversalPlatform.isMobile || selection == null) {
+  if (PlatformInfo.isMobile || selection == null) {
     return false;
   }
 

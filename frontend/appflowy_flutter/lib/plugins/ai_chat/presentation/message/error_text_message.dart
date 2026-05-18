@@ -6,6 +6,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class ChatErrorMessageWidget extends StatefulWidget {
   const ChatErrorMessageWidget({
@@ -41,7 +42,7 @@ class _ChatErrorMessageWidgetState extends State<ChatErrorMessageWidget> {
     return Center(
       child: Container(
         margin: const EdgeInsets.only(top: 16.0, bottom: 24.0) +
-            (UniversalPlatform.isMobile
+            (PlatformInfo.isMobile
                 ? const EdgeInsets.symmetric(horizontal: 16)
                 : EdgeInsets.zero),
         padding: const EdgeInsets.all(8.0),
@@ -51,7 +52,7 @@ class _ChatErrorMessageWidgetState extends State<ChatErrorMessageWidget> {
               : const Color(0x80591734),
           borderRadius: const BorderRadius.all(Radius.circular(8.0)),
         ),
-        constraints: UniversalPlatform.isDesktop
+        constraints: PlatformInfo.isDesktopOrTablet
             ? const BoxConstraints(maxWidth: 480)
             : null,
         child: Row(

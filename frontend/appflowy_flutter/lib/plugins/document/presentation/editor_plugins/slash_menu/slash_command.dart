@@ -4,6 +4,7 @@ import 'package:appflowy/plugins/document/presentation/editor_configuration.dart
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 typedef SlashMenuItemsBuilder = List<SelectionMenuItem> Function(
   EditorState editorState,
@@ -97,7 +98,7 @@ Future<bool> _showSlashMenu(
   if (context != null && context.mounted) {
     final isLight = Theme.of(context).brightness == Brightness.light;
     _selectionMenuService?.dismiss();
-    _selectionMenuService = UniversalPlatform.isMobile
+    _selectionMenuService = PlatformInfo.isMobile
         ? MobileSelectionMenu(
             context: context,
             editorState: editorState,

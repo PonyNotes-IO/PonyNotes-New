@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class MobileMemberList extends StatelessWidget {
   const MobileMemberList({
@@ -79,7 +80,7 @@ class _MemberItem extends StatelessWidget {
 
     Widget child;
 
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       child = Row(
         children: [
           Expanded(

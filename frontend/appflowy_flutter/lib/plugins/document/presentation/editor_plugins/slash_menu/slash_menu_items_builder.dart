@@ -4,6 +4,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
 import 'package:appflowy_backend/protobuf/flowy-folder/protobuf.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'slash_menu_items/mobile_items.dart';
 import 'slash_menu_items/slash_menu_items.dart';
@@ -18,7 +19,7 @@ List<SelectionMenuItem> slashMenuItemsBuilder({
   ViewPB? view,
 }) {
   final isInTable = node != null && node.parentTableCellNode != null;
-  final isMobile = UniversalPlatform.isMobile;
+  final isMobile = PlatformInfo.isMobile;
   bool isEmpty = false;
   if (editorState == null || editorState.isEmptyForContinueWriting()) {
     if (view == null || view.name.isEmpty) {

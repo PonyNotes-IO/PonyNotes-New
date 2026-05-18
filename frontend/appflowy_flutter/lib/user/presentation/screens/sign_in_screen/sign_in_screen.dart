@@ -7,7 +7,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class SignInScreen extends StatelessWidget {
   const SignInScreen({super.key});
@@ -21,7 +21,7 @@ class SignInScreen extends StatelessWidget {
       child: BlocConsumer<SignInBloc, SignInState>(
         listener: _showSignInError,
         builder: (context, state) {
-          return UniversalPlatform.isDesktop
+          return PlatformInfo.isDesktopOrTablet
               ? const DesktopSignInScreen()
               : const MobileSignInScreen();
         },

@@ -17,6 +17,7 @@ import 'package:flowy_infra_ui/style_widget/text_field.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class FileUploadMenu extends StatefulWidget {
   const FileUploadMenu({
@@ -56,7 +57,7 @@ class _FileUploadMenuState extends State<FileUploadMenu> {
               labelPadding: EdgeInsets.zero,
               padding: EdgeInsets.zero,
               overlayColor: WidgetStatePropertyAll(
-                UniversalPlatform.isDesktop
+                PlatformInfo.isDesktopOrTablet
                     ? Theme.of(context).colorScheme.secondary
                     : Colors.transparent,
               ),
@@ -104,7 +105,7 @@ class _Tab extends StatelessWidget {
         left: 12.0,
         right: 12.0,
         bottom: 8.0,
-        top: UniversalPlatform.isMobile ? 0 : 8.0,
+        top: PlatformInfo.isMobile ? 0 : 8.0,
       ),
       child: FlowyText.semibold(
         title,
@@ -136,9 +137,9 @@ class _FileUploadLocalState extends State<_FileUploadLocal> {
   @override
   Widget build(BuildContext context) {
     final constraints =
-        UniversalPlatform.isMobile ? const BoxConstraints(minHeight: 92) : null;
+        PlatformInfo.isMobile ? const BoxConstraints(minHeight: 92) : null;
 
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       return Padding(
         padding: const EdgeInsets.all(12),
         child: SizedBox(
@@ -298,7 +299,7 @@ class _FileUploadNetworkState extends State<_FileUploadNetwork> {
   @override
   Widget build(BuildContext context) {
     final constraints =
-        UniversalPlatform.isMobile ? const BoxConstraints(minHeight: 92) : null;
+        PlatformInfo.isMobile ? const BoxConstraints(minHeight: 92) : null;
 
     return Container(
       padding: const EdgeInsets.all(16),

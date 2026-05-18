@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:universal_platform/universal_platform.dart';
 
@@ -29,7 +30,7 @@ class ChatMessageHeightManager {
   final Map<String, double> _heightCache = <String, double>{};
 
   double get defaultScreenOffset {
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       return MessageHeightConstants.defaultMobileScreenOffset;
     }
     return MessageHeightConstants.defaultDesktopScreenOffset;

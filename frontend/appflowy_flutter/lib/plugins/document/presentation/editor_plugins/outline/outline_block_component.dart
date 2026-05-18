@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/document/presentation/editor_plugins/actions/mobile_block_action_buttons.dart';
@@ -128,7 +129,7 @@ class _OutlineBlockWidgetState extends State<OutlineBlockWidget>
           child: child,
         );
 
-        if (UniversalPlatform.isDesktopOrWeb) {
+        if (PlatformInfo.isDesktopOrTabletOrWeb) {
           if (widget.showActions && widget.actionBuilder != null) {
             child = BlockComponentActionWrapper(
               node: widget.node,
@@ -206,7 +207,7 @@ class _OutlineBlockWidgetState extends State<OutlineBlockWidget>
       constraints: const BoxConstraints(
         minHeight: 40.0,
       ),
-      padding: UniversalPlatform.isMobile ? EdgeInsets.zero : padding,
+      padding: PlatformInfo.isMobile ? EdgeInsets.zero : padding,
       child: Container(
         padding: const EdgeInsets.symmetric(
           vertical: 2.0,

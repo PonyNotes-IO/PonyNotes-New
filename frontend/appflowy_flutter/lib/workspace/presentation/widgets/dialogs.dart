@@ -15,6 +15,7 @@ import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:toastification/toastification.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 export 'package:flowy_infra_ui/widget/dialog/styled_dialogs.dart';
 export 'package:toastification/toastification.dart';
@@ -472,7 +473,7 @@ ToastificationItem showToastNotification({
     autoCloseDuration: const Duration(milliseconds: 3000),
     callbacks: callbacks ?? const ToastificationCallbacks(),
     builder: (_, item) {
-      return UniversalPlatform.isMobile
+      return PlatformInfo.isMobile
           ? Transform.translate(
               offset: offset,
               child: _MobileToast(

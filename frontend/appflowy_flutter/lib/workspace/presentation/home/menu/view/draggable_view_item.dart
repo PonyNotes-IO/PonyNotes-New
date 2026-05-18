@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 enum DraggableHoverPosition {
   none,
@@ -57,7 +58,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
     // add top border if the draggable item is on the top of the list
     // highlight the draggable item if the draggable item is on the center
     // add bottom border if the draggable item is on the bottom of the list
-    final child = UniversalPlatform.isMobile
+    final child = PlatformInfo.isMobile
         ? _buildMobileDraggableItem()
         : _buildDesktopDraggableItem();
 
@@ -186,7 +187,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
   }
 
   void _updatePosition(DraggableHoverPosition position) {
-    if (UniversalPlatform.isMobile && position != this.position) {
+    if (PlatformInfo.isMobile && position != this.position) {
       HapticFeedback.mediumImpact();
     }
     setState(() => this.position = position);

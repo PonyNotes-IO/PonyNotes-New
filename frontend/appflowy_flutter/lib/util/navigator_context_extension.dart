@@ -3,13 +3,14 @@ import 'package:go_router/go_router.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:appflowy/mobile/presentation/home/mobile_home_page.dart';
 import 'package:appflowy/workspace/presentation/home/desktop_home_screen.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 extension NavigatorContext on BuildContext {
   void popToHome() {
     // 使用 GoRouter 的 go 方法导航到首页，而不是 popUntil
     // 这样可以避免路由栈为空的问题
     try {
-      if (UniversalPlatform.isMobile) {
+      if (PlatformInfo.isMobile) {
         // 移动端导航到 MobileHomeScreen
         go(MobileHomeScreen.routeName);
       } else {

@@ -5,6 +5,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '../../service/ai_entities.dart';
 import 'layout_define.dart';
@@ -169,13 +170,13 @@ class ChangeFormatBar extends StatelessWidget {
   }
 
   double get _buttonSize {
-    return UniversalPlatform.isMobile
+    return PlatformInfo.isMobile
         ? MobileAIPromptSizes.predefinedFormatButtonHeight
         : DesktopAIPromptSizes.predefinedFormatButtonHeight;
   }
 
   double get _iconSize {
-    return UniversalPlatform.isMobile
+    return PlatformInfo.isMobile
         ? MobileAIPromptSizes.predefinedFormatIconHeight
         : DesktopAIPromptSizes.predefinedFormatIconHeight;
   }

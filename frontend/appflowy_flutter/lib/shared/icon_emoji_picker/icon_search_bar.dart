@@ -5,6 +5,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_emoji_mart/flutter_emoji_mart.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'colors.dart';
 
@@ -41,7 +42,7 @@ class _IconSearchBarState extends State<IconSearchBar> {
     return Padding(
       padding: EdgeInsets.symmetric(
         vertical: 12.0,
-        horizontal: UniversalPlatform.isDesktopOrWeb ? 0.0 : 8.0,
+        horizontal: PlatformInfo.isDesktopOrTabletOrWeb ? 0.0 : 8.0,
       ),
       child: Row(
         children: [

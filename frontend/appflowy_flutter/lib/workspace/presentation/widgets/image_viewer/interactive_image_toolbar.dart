@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class InteractiveImageToolbar extends StatelessWidget {
   const InteractiveImageToolbar({
@@ -162,7 +163,7 @@ class InteractiveImageToolbar extends StatelessWidget {
                         Navigator.of(context).pop();
                       },
                     ),
-                  if (!UniversalPlatform.isMobile) ...[
+                  if (!PlatformInfo.isMobile) ...[
                     _ToolbarItem(
                       tooltip: currentImage.isNotInternal
                           ? LocaleKeys

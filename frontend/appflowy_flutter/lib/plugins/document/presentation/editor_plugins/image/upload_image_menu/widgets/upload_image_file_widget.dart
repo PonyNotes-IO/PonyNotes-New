@@ -10,6 +10,7 @@ import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class UploadImageFileWidget extends StatelessWidget {
   const UploadImageFileWidget({
@@ -27,7 +28,7 @@ class UploadImageFileWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget child = FlowyButton(
       showDefaultBoxDecorationOnMobile: true,
-      radius: UniversalPlatform.isMobile ? BorderRadius.circular(8.0) : null,
+      radius: PlatformInfo.isMobile ? BorderRadius.circular(8.0) : null,
       text: Container(
         margin: const EdgeInsets.all(4.0),
         alignment: Alignment.center,
@@ -38,7 +39,7 @@ class UploadImageFileWidget extends StatelessWidget {
       onTap: () => _uploadImage(context),
     );
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       child = FlowyHover(child: child);
     } else {
       child = Padding(
@@ -51,7 +52,7 @@ class UploadImageFileWidget extends StatelessWidget {
   }
 
   Future<void> _uploadImage(BuildContext context) async {
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       // on desktop, the users can pick a image file from folder
       final result = await getIt<FilePickerService>().pickFiles(
         dialogTitle: '',

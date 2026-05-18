@@ -8,6 +8,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class WorkspaceIcon extends StatefulWidget {
   const WorkspaceIcon({
@@ -84,7 +85,7 @@ class _WorkspaceIconState extends State<WorkspaceIcon> {
   }
 
   Widget _buildEditableIcon(Widget child) {
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       return AppFlowyPopover(
         offset: const Offset(0, 8),
         controller: controller,

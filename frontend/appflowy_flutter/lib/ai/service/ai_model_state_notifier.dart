@@ -8,6 +8,7 @@ import 'package:appflowy_backend/protobuf/flowy-ai/entities.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 typedef OnModelStateChangedCallback = void Function(AIModelState state);
 typedef OnAvailableModelsChangedCallback = void Function(
@@ -42,7 +43,7 @@ class AIModelState {
 class AIModelStateNotifier {
   AIModelStateNotifier({required this.objectId})
       : _localAIListener =
-            UniversalPlatform.isDesktop ? LocalAIStateListener() : null,
+            PlatformInfo.isDesktopOrTablet ? LocalAIStateListener() : null,
         _aiModelSwitchListener = AIModelSwitchListener(objectId: objectId) {
     _startListening();
     _init();
@@ -65,7 +66,7 @@ class AIModelStateNotifier {
 
   /// Starts platform-specific listeners
   void _startListening() {
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       _localAIListener?.start(
         stateCallback: (state) async {
           _localAIState = state;
@@ -78,7 +79,7 @@ class AIModelStateNotifier {
       onUpdateSelectedModel: (model) async {
         _selectedModel = model;
         _updateAll();
-        if (model.isLocal && UniversalPlatform.isDesktop) {
+        if (model.isLocal && PlatformInfo.isDesktopOrTablet) {
           await _loadLocalState();
           _updateAll();
         }
@@ -88,7 +89,7 @@ class AIModelStateNotifier {
 
   Future<void> _init() async {
     await Future.wait([
-      if (UniversalPlatform.isDesktop) _loadLocalState(),
+      if (PlatformInfo.isDesktopOrTablet) _loadLocalState(),
       _loadModelSelection(),
     ]);
     _updateAll();
@@ -174,7 +175,7 @@ class AIModelStateNotifier {
 
   /// Core logic computing the state from local and selection data
   AIModelState _computeState() {
-    if (UniversalPlatform.isMobile) return _defaultState();
+    if (PlatformInfo.isMobile) return _defaultState();
 
     if (_modelSelection == null || _localAIState == null) {
       return _defaultState();

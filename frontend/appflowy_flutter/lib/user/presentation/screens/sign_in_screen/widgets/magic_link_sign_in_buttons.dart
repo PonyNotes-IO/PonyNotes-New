@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:string_validator/string_validator.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class SignInWithMagicLinkButtons extends StatefulWidget {
   const SignInWithMagicLinkButtons({super.key});
@@ -35,7 +36,7 @@ class _SignInWithMagicLinkButtonsState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          height: UniversalPlatform.isMobile ? 38.0 : 48.0,
+          height: PlatformInfo.isMobile ? 38.0 : 48.0,
           child: FlowyTextField(
             autoFocus: false,
             focusNode: _focusNode,
@@ -98,7 +99,7 @@ class _ConfirmButton extends StatelessWidget {
           LoginType.signIn => LocaleKeys.signIn_signInWithMagicLink.tr(),
           LoginType.signUp => LocaleKeys.signIn_signUpWithMagicLink.tr(),
         };
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           return ElevatedButton(
             style: ElevatedButton.styleFrom(
               minimumSize: const Size(double.infinity, 32),

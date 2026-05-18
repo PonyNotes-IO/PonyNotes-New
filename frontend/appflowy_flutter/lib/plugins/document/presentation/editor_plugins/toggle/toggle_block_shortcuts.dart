@@ -3,6 +3,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/toggle/tog
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 const _greater = '>';
 
@@ -163,7 +164,7 @@ final CommandShortcutEvent toggleToggleListCommand = CommandShortcutEvent(
 );
 
 CommandShortcutEventHandler _toggleToggleListCommandHandler = (editorState) {
-  if (UniversalPlatform.isMobile) {
+  if (PlatformInfo.isMobile) {
     assert(false, 'enter key is not supported on mobile platform.');
     return KeyEventResult.ignored;
   }

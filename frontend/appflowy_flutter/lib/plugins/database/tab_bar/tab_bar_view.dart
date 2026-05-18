@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/core/config/kv.dart';
 import 'package:appflowy/core/config/kv_keys.dart';
@@ -171,7 +172,7 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (UniversalPlatform.isMobile) const VSpace(12),
+                  if (PlatformInfo.isMobile) const VSpace(12),
                   ValueListenableBuilder<bool>(
                     valueListenable: state
                         .tabBarControllerByViewId[state.parentView.id]!
@@ -182,7 +183,7 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                         return const SizedBox.shrink();
                       }
 
-                      Widget child = UniversalPlatform.isDesktop
+                      Widget child = PlatformInfo.isDesktopOrTablet
                           ? const TabBarHeader()
                           : const MobileTabBarHeader();
 
@@ -203,7 +204,7 @@ class _DatabaseTabBarViewState extends State<DatabaseTabBarView> {
                         );
                       }
 
-                      if (UniversalPlatform.isDesktop) {
+                      if (PlatformInfo.isDesktopOrTablet) {
                         child = Container(
                           padding: EdgeInsets.fromLTRB(
                             horizontalPadding + paddingLeft,

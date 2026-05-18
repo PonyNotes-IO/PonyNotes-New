@@ -5,6 +5,7 @@ import 'package:appflowy/plugins/inline_actions/inline_actions_result.dart';
 import 'package:appflowy/plugins/inline_actions/inline_actions_service.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 const inlineActionCharacter = '@';
 
@@ -58,7 +59,7 @@ Future<bool> inlineActionsCommandHandler(
   if (service.context != null) {
     keepEditorFocusNotifier.increase();
     selectionMenuService?.dismiss();
-    selectionMenuService = UniversalPlatform.isMobile
+    selectionMenuService = PlatformInfo.isMobile
         ? MobileInlineActionsMenu(
             context: service.context!,
             editorState: editorState,

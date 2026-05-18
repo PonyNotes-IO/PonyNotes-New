@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class ChatEditorStyleCustomizer extends EditorStyleCustomizer {
   ChatEditorStyleCustomizer({
@@ -123,7 +124,7 @@ class ChatEditorStyleCustomizer extends EditorStyleCustomizer {
 
   @override
   TextStyle calloutBlockStyleBuilder() {
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       final afThemeExtension = AFThemeExtension.of(context);
       final pageStyle = context.read<DocumentPageStyleBloc>().state;
       final fontFamily = pageStyle.fontFamily ?? defaultFontFamily;

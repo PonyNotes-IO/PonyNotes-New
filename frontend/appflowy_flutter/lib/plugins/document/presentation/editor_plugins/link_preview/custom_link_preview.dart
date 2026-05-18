@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'custom_link_parser.dart';
 
@@ -55,7 +56,7 @@ class CustomLinkPreviewWidget extends StatelessWidget {
         16.0;
     final isInDarkCallout = node.parent?.type == CalloutBlockKeys.type &&
         !Theme.of(context).isLightMode;
-    final (fontSize, width) = UniversalPlatform.isDesktopOrWeb
+    final (fontSize, width) = PlatformInfo.isDesktopOrTabletOrWeb
         ? (documentFontSize, 160.0)
         : (documentFontSize - 2, 120.0);
     final Widget child = Container(
@@ -121,7 +122,7 @@ class CustomLinkPreviewWidget extends StatelessWidget {
       ),
     );
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       return MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
@@ -172,7 +173,7 @@ class CustomLinkPreviewWidget extends StatelessWidget {
     final theme = AppFlowyTheme.of(context),
         fillScheme = theme.fillColorScheme,
         iconScheme = theme.iconColorScheme;
-    final width = UniversalPlatform.isDesktopOrWeb ? 160.0 : 120.0;
+    final width = PlatformInfo.isDesktopOrTabletOrWeb ? 160.0 : 120.0;
     return ClipRRect(
       borderRadius: const BorderRadius.only(
         topLeft: Radius.circular(16.0),

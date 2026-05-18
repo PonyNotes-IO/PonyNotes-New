@@ -3,6 +3,7 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class SimpleTableBorderBuilder {
   SimpleTableBorderBuilder({
@@ -172,13 +173,13 @@ class SimpleTableBorderBuilder {
 
     bool isHitCurrentCell = false;
 
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       // On desktop, we use the dragging column index to determine the highlight border
       // Check if the hovering table cell column index hit the current node column index
       isHitCurrentCell =
           simpleTableContext.hoveringTableCell.value?.columnIndex ==
               node.columnIndex;
-    } else if (UniversalPlatform.isMobile) {
+    } else if (PlatformInfo.isMobile) {
       // On mobile, we use the isReorderingHitIndex to determine the highlight border
       isHitCurrentCell =
           simpleTableContext.isReorderingHitIndex.value == node.columnIndex;
@@ -223,12 +224,12 @@ class SimpleTableBorderBuilder {
 
     bool isHitCurrentCell = false;
 
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       // On desktop, we use the dragging row index to determine the highlight border
       // Check if the hovering table cell row index hit the current node row index
       isHitCurrentCell =
           simpleTableContext.hoveringTableCell.value?.rowIndex == node.rowIndex;
-    } else if (UniversalPlatform.isMobile) {
+    } else if (PlatformInfo.isMobile) {
       // On mobile, we use the isReorderingHitIndex to determine the highlight border
       isHitCurrentCell =
           simpleTableContext.isReorderingHitIndex.value == node.rowIndex;

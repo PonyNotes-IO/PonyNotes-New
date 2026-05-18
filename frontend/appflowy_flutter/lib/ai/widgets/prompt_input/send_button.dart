@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'layout_define.dart';
 
@@ -76,13 +77,13 @@ class PromptInputSendButton extends StatelessWidget {
   }
 
   double get _buttonSize {
-    return UniversalPlatform.isMobile
+    return PlatformInfo.isMobile
         ? MobileAIPromptSizes.sendButtonSize
         : DesktopAIPromptSizes.actionBarSendButtonSize;
   }
 
   double get _iconSize {
-    return UniversalPlatform.isMobile
+    return PlatformInfo.isMobile
         ? MobileAIPromptSizes.sendButtonSize
         : DesktopAIPromptSizes.actionBarSendButtonIconSize;
   }

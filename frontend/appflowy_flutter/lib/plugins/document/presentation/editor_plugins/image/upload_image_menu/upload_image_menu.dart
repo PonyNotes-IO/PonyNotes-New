@@ -11,6 +11,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'widgets/embed_image_url_widget.dart';
 
@@ -79,7 +80,7 @@ class _UploadImageMenuState extends State<UploadImageMenu> {
             indicatorSize: TabBarIndicatorSize.label,
             isScrollable: true,
             overlayColor: WidgetStatePropertyAll(
-              UniversalPlatform.isDesktop
+              PlatformInfo.isDesktopOrTablet
                   ? Theme.of(context).colorScheme.secondary
                   : Colors.transparent,
             ),
@@ -91,11 +92,11 @@ class _UploadImageMenuState extends State<UploadImageMenu> {
                     left: 12.0,
                     right: 12.0,
                     bottom: 8.0,
-                    top: UniversalPlatform.isMobile ? 0 : 8.0,
+                    top: PlatformInfo.isMobile ? 0 : 8.0,
                   ),
                   child: FlowyText(e.description),
                 );
-                if (UniversalPlatform.isDesktop) {
+                if (PlatformInfo.isDesktopOrTablet) {
                   return FlowyHover(
                     style: const HoverStyle(borderRadius: BorderRadius.zero),
                     child: child,
@@ -114,7 +115,7 @@ class _UploadImageMenuState extends State<UploadImageMenu> {
 
   Widget _buildTab() {
     final constraints =
-        UniversalPlatform.isMobile ? const BoxConstraints(minHeight: 92) : null;
+        PlatformInfo.isMobile ? const BoxConstraints(minHeight: 92) : null;
     final type = values[currentTabIndex];
     switch (type) {
       case UploadImageType.local:
@@ -122,7 +123,7 @@ class _UploadImageMenuState extends State<UploadImageMenu> {
           allowMultipleImages: widget.allowMultipleImages,
           onPickFiles: widget.onSelectedLocalImages,
         );
-        if (UniversalPlatform.isDesktop) {
+        if (PlatformInfo.isDesktopOrTablet) {
           child = Padding(
             padding: const EdgeInsets.all(8.0),
             child: Container(
@@ -167,7 +168,7 @@ class _UploadImageMenuState extends State<UploadImageMenu> {
         );
       case UploadImageType.color:
         final theme = Theme.of(context);
-        final padding = UniversalPlatform.isMobile
+        final padding = PlatformInfo.isMobile
             ? const EdgeInsets.all(16.0)
             : const EdgeInsets.all(8.0);
         return Container(

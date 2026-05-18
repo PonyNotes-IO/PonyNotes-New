@@ -8,6 +8,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
 import 'package:appflowy/plugins/document/presentation/editor_style.dart';
 import 'package:appflowy_editor/appflowy_editor.dart'
     hide QuoteBlockComponentBuilder, quoteNode, QuoteBlockKeys;
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:appflowy_editor_plugins/appflowy_editor_plugins.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:flowy_infra/theme_extension.dart';
@@ -107,7 +108,7 @@ BlockComponentConfiguration _buildDefaultConfiguration(
 }) {
   final configuration = BlockComponentConfiguration(
     padding: (node) {
-      if (UniversalPlatform.isMobile) {
+      if (PlatformInfo.isMobile) {
         final pageStyle = context.read<DocumentPageStyleBloc>().state;
         final factor = pageStyle.fontLayout.factor;
         final top = pageStyle.lineHeightLayout.padding * factor;
@@ -133,14 +134,14 @@ BlockComponentConfiguration _buildDefaultConfiguration(
       double padding = 26.0;
 
       // only add indent padding for the top level node to align the children
-      if (UniversalPlatform.isMobile && node.level == 1) {
+      if (PlatformInfo.isMobile && node.level == 1) {
         padding += EditorStyleCustomizer.nodeHorizontalPadding - 4;
       }
 
       // in the quote block, we reduce the indent padding for the first level block.
       //  So we have to add more padding for the second level to avoid the drag menu overlay the quote icon.
       if (node.parent?.type == QuoteBlockKeys.type &&
-          UniversalPlatform.isDesktop) {
+          PlatformInfo.isDesktopOrTablet) {
         padding += 22;
       }
 
@@ -206,7 +207,7 @@ void _customBlockOptionActions(
     final builder = entry.value;
     final actions = _buildOptionActions(context, entry.key);
 
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       builder.showActions = (node) {
         final parentTableNode = node.parentTableNode;
         // disable the option action button in table cell to avoid the misalignment issue
@@ -454,7 +455,7 @@ SimpleTableBlockComponentBuilder _buildSimpleTableBlockComponentBuilder(
   final copiedConfiguration = configuration.copyWith(
     padding: (node) {
       final padding = configuration.padding(node);
-      if (UniversalPlatform.isDesktop) {
+      if (PlatformInfo.isDesktopOrTablet) {
         return padding;
       } else {
         return padding;
@@ -622,7 +623,7 @@ QuoteBlockComponentBuilder _buildQuoteBlockComponentBuilder(
         configuration: configuration,
       ),
       indentPadding: (node, textDirection) {
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           return configuration.indentPadding(node, textDirection);
         }
 
@@ -657,7 +658,7 @@ HeadingBlockComponentBuilder _buildHeadingBlockComponentBuilder(
           return customHeadingPadding.call(node);
         }
 
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           final pageStyle = context.read<DocumentPageStyleBloc>().state;
           final factor = pageStyle.fontLayout.factor;
           final headingPaddings =
@@ -807,7 +808,7 @@ DatabaseViewBlockComponentBuilder _buildDatabaseViewBlockComponentBuilder(
   return DatabaseViewBlockComponentBuilder(
     configuration: configuration.copyWith(
       padding: (node) {
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           return configuration.padding(node);
         }
         return const EdgeInsets.symmetric(vertical: 10);
@@ -824,7 +825,7 @@ CalloutBlockComponentBuilder _buildCalloutBlockComponentBuilder(
   return CalloutBlockComponentBuilder(
     configuration: configuration.copyWith(
       padding: (node) {
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           return configuration.padding(node);
         }
         return const EdgeInsets.symmetric(vertical: 10);
@@ -912,7 +913,7 @@ ToggleListBlockComponentBuilder _buildToggleListBlockComponentBuilder(
           return customHeadingPadding(node);
         }
 
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           final pageStyle = context.read<DocumentPageStyleBloc>().state;
           final factor = pageStyle.fontLayout.factor;
           final headingPaddings =
@@ -968,7 +969,7 @@ OutlineBlockComponentBuilder _buildOutlineBlockComponentBuilder(
       placeholderTextStyle: (node, {TextSpan? textSpan}) =>
           styleCustomizer.outlineBlockPlaceholderStyleBuilder(),
       padding: (node) {
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           return configuration.padding(node);
         }
         return const EdgeInsets.only(top: 12.0, bottom: 4.0);
@@ -984,7 +985,7 @@ CustomLinkPreviewBlockComponentBuilder _buildLinkPreviewBlockComponentBuilder(
   return CustomLinkPreviewBlockComponentBuilder(
     configuration: configuration.copyWith(
       padding: (node) {
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           return configuration.padding(node);
         }
         return const EdgeInsets.symmetric(vertical: 10);
@@ -1012,7 +1013,7 @@ SubPageBlockComponentBuilder _buildSubPageBlockComponentBuilder(
       textStyle: (node, {TextSpan? textSpan}) =>
           styleCustomizer.subPageBlockTextStyleBuilder(),
       padding: (node) {
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           return const EdgeInsets.symmetric(horizontal: 18);
         }
         return configuration.padding(node);
@@ -1028,7 +1029,7 @@ SimpleColumnsBlockComponentBuilder _buildSimpleColumnsBlockComponentBuilder(
   return SimpleColumnsBlockComponentBuilder(
     configuration: configuration.copyWith(
       padding: (node) {
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           return configuration.padding(node);
         }
 

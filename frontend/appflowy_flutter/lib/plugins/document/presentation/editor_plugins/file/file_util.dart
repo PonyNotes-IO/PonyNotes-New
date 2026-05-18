@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/core/helpers/url_launcher.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -155,7 +156,7 @@ Future<void> downloadMediaFile(
     // token 已经是 access_token 字符串，不需要解析
     final token = userProfile.token;
 
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       onDownloadBegin?.call();
 
       final response =

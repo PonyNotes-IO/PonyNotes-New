@@ -17,6 +17,7 @@ import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '../cell/card_cell_builder.dart';
 import '../cell/card_cell_skeleton/card_cell.dart';
@@ -130,7 +131,7 @@ class _RowCardState extends State<RowCard> {
             widget.onEndEditing();
           }
         },
-        child: UniversalPlatform.isMobile ? _mobile() : _desktop(),
+        child: PlatformInfo.isMobile ? _mobile() : _desktop(),
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -292,7 +293,7 @@ class ToggleHiddenFieldsVisibilityButton extends StatelessWidget {
                 namedArgs: {'count': '${state.numHiddenFields}'},
               );
         final quarterTurns = state.showHiddenFields ? 1 : 3;
-        return UniversalPlatform.isDesktopOrWeb
+        return PlatformInfo.isDesktopOrTabletOrWeb
             ? _desktop(context, text, quarterTurns)
             : _mobile(context, text, quarterTurns);
       },

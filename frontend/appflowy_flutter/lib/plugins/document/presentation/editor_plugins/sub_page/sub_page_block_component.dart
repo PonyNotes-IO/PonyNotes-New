@@ -22,6 +22,7 @@ import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 Node subPageNode({String? viewId}) {
   return Node(
@@ -301,7 +302,7 @@ class SubPageBlockComponentState extends State<SubPageBlockComponent>
           );
         }
 
-        if (UniversalPlatform.isMobile) {
+        if (PlatformInfo.isMobile) {
           child = Padding(
             padding: padding,
             child: child,
@@ -399,7 +400,7 @@ class SubPageBlockComponentState extends State<SubPageBlockComponent>
   void _openSubPage({
     required ViewPB view,
   }) {
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       final isInDatabase =
           context.read<SharedEditorContext>().isInDatabaseRowPage;
       if (isInDatabase) {
@@ -412,7 +413,7 @@ class SubPageBlockComponentState extends State<SubPageBlockComponent>
           view: view,
         ),
       );
-    } else if (UniversalPlatform.isMobile) {
+    } else if (PlatformInfo.isMobile) {
       context.pushView(view);
     }
   }

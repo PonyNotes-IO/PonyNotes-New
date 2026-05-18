@@ -118,17 +118,20 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Container(
+        child: SizedBox(
           width: 500,
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.all(40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          height: MediaQuery.of(context).size.height * 0.8,
+          child: Container(
+            decoration: BoxDecoration(
+              color: colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.all(40),
+            child: SingleChildScrollView(
+              child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               // 标题和验证码登录按钮行
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -345,6 +348,8 @@ class _PasswordLoginDialogState extends State<PasswordLoginDialog> {
                 },
               ),
             ],
+              ),
+            ),
           ),
         ),
       ),

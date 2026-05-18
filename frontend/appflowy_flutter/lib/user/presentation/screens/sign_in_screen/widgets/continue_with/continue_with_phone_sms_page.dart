@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/user/application/sign_in_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -91,7 +92,7 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
               Expanded(
                 child: Center(
                   child: Container(
-                    width: UniversalPlatform.isDesktop ? 450 : double.infinity,
+                    width: PlatformInfo.isDesktopOrTablet ? 450 : double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,7 +191,7 @@ class _ContinueWithPhoneSmsPageState extends State<ContinueWithPhoneSmsPage> {
   Widget _buildVerificationCodeInputs() {
     const spacing = 12.0;
     // 桌面端固定每个方块 56px，移动端按屏幕宽度自适应
-    final inputWidth = UniversalPlatform.isDesktop
+    final inputWidth = PlatformInfo.isDesktopOrTablet
         ? 56.0
         : (MediaQuery.of(context).size.width - (5 * spacing) - 40) / 6;
 

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class SimpleTableCellBlockKeys {
   const SimpleTableCellBlockKeys._();
@@ -187,7 +188,7 @@ class SimpleTableCellBlockWidgetState extends State<SimpleTableCellBlockWidget>
       ],
     );
 
-    if (UniversalPlatform.isDesktop) {
+    if (PlatformInfo.isDesktopOrTablet) {
       child = MouseRegion(
         hitTestBehavior: HitTestBehavior.opaque,
         onEnter: (event) => simpleTableContext!.hoveringTableCell.value = node,
@@ -203,7 +204,7 @@ class SimpleTableCellBlockWidgetState extends State<SimpleTableCellBlockWidget>
       return const SizedBox.shrink();
     }
 
-    return UniversalPlatform.isDesktop
+    return PlatformInfo.isDesktopOrTablet
         ? _buildDesktopCell()
         : _buildMobileCell();
   }
@@ -436,7 +437,7 @@ class SimpleTableCellBlockWidgetState extends State<SimpleTableCellBlockWidget>
     final tableNode = node.parentTableNode;
 
     // the table action menu is only available on mobile platform.
-    if (tableNode == null || UniversalPlatform.isDesktop) {
+    if (tableNode == null || PlatformInfo.isDesktopOrTablet) {
       return const SizedBox.shrink();
     }
 
@@ -548,7 +549,7 @@ class SimpleTableCellBlockWidgetState extends State<SimpleTableCellBlockWidget>
   /// If the cell is hit, set the isReorderingCell to true.
   void _onReorderingOffsetChanged() {
     final simpleTableContext = this.simpleTableContext;
-    if (UniversalPlatform.isDesktop || simpleTableContext == null) {
+    if (PlatformInfo.isDesktopOrTablet || simpleTableContext == null) {
       return;
     }
 

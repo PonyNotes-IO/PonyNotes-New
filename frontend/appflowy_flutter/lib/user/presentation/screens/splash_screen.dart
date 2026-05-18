@@ -17,6 +17,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class SplashScreen extends StatefulWidget {
   /// Root Page of the app.
@@ -240,7 +241,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
   void _handleUnauthenticated(BuildContext context, Unauthenticated result) {
     // replace Splash screen as root page
-    if (isAuthEnabled || UniversalPlatform.isMobile) {
+    if (isAuthEnabled || PlatformInfo.isMobile) {
       context.go(SignInScreen.routeName);
     } else {
       // if the env is not configured, we will skip to the 'skip login screen'.
@@ -255,7 +256,7 @@ class Body extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       alignment: Alignment.center,
-      child: UniversalPlatform.isMobile
+      child: PlatformInfo.isMobile
           ? const _MobileSplashBody()
           : const _DesktopSplashBody(),
     );

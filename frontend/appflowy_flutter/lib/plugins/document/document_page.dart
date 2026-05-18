@@ -37,6 +37,7 @@ import 'package:universal_platform/universal_platform.dart';
 import 'package:appflowy/plugins/document/presentation/document_collaborators.dart';
 import 'package:appflowy/plugins/shared/share/share_button.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '../../startup/plugin/plugin.dart';
 
@@ -244,7 +245,7 @@ class _DocumentPageState extends State<DocumentPage>
     initialSelection ??= _calculateInitialSelection(editorState);
 
     final Widget child;
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       child = BlocBuilder<DocumentPageStyleBloc, DocumentPageStyleState>(
         builder: (context, styleState) => AppFlowyEditorPage(
           editorState: editorState,
@@ -285,7 +286,7 @@ class _DocumentPageState extends State<DocumentPage>
       );
     }
 
-    if (state.isDeleted && UniversalPlatform.isDesktop) {
+    if (state.isDeleted && PlatformInfo.isDesktopOrTablet) {
       final shouldHandleDeletedInSpaceHub =
           _shouldHandleDeletedInSpaceHub(context);
       if (shouldHandleDeletedInSpaceHub && !_handledDeletedInSpaceHub) {
@@ -322,7 +323,7 @@ class _DocumentPageState extends State<DocumentPage>
             // Top bar with back button and actions
             _buildTopBar(context),
             // the banner only shows on desktop
-            if (state.isDeleted && UniversalPlatform.isDesktop)
+            if (state.isDeleted && PlatformInfo.isDesktopOrTablet)
               buildBanner(context),
             Expanded(child: child),
           ],
@@ -512,7 +513,7 @@ class _DocumentPageState extends State<DocumentPage>
       return const SizedBox.shrink();
     }
 
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       return DocumentImmersiveCover(
         fixedTitle: widget.fixedTitle,
         view: widget.view,

@@ -26,6 +26,7 @@ import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra/theme.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/gestures.dart';
@@ -46,6 +47,45 @@ class InitAppWidgetTask extends LaunchTask {
   @override
   LaunchTaskType get type => LaunchTaskType.appLauncher;
 
+  void _setPreferredOrientations() {
+    if (UniversalPlatform.isIOS || UniversalPlatform.isAndroid) {
+      if (_isTablet()) {
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+      } else {
+        SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+          DeviceOrientation.portraitDown,
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ]);
+      }
+    }
+  }
+
+  bool _isTablet() {
+    if (UniversalPlatform.isIOS) {
+      return Platform.localHostname.contains('iPad') ||
+          Platform.operatingSystemVersion.contains('iPad');
+    }
+    if (UniversalPlatform.isAndroid) {
+      try {
+        final views = WidgetsBinding.instance.platformDispatcher.views;
+        if (views.isNotEmpty) {
+          final view = views.first;
+          final shortestSide = view.physicalSize.shortestSide;
+          final devicePixelRatio = view.devicePixelRatio;
+          final shortestSideInDp = shortestSide / devicePixelRatio;
+          return shortestSideInDp >= 600;
+        }
+      } catch (_) {
+      }
+    }
+    return false;
+  }
+
   @override
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
@@ -56,6 +96,8 @@ class InitAppWidgetTask extends LaunchTask {
     // 设置最大缓存图片数量为 1000 张，最大内存为 200MB
     PaintingBinding.instance.imageCache.maximumSize = 1000;
     PaintingBinding.instance.imageCache.maximumSizeBytes = 200 * 1024 * 1024; // 200MB
+
+    _setPreferredOrientations();
 
     await NotificationService.initialize();
 
@@ -204,7 +246,7 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
           final action = state.action;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (action?.type == ActionType.openView &&
-                UniversalPlatform.isDesktop) {
+                PlatformInfo.isDesktopOrTablet) {
               final view =
                   action!.arguments?[ActionArgumentKeys.view] as ViewPB?;
               final nodePath = action.arguments?[ActionArgumentKeys.nodePath];
@@ -219,7 +261,7 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
                 );
               }
             } else if (action?.type == ActionType.openRow &&
-                UniversalPlatform.isMobile) {
+                PlatformInfo.isMobile) {
               final view = action!.arguments?[ActionArgumentKeys.view];
               if (view != null) {
                 final view = action.arguments?[ActionArgumentKeys.view];
@@ -281,7 +323,7 @@ class _ApplicationWidgetState extends State<ApplicationWidget> {
                           ),
                           child: overlayManagerBuilder(
                             context,
-                            !UniversalPlatform.isMobile &&
+                            !PlatformInfo.isMobile &&
                                     FeatureFlag.search.isOn
                                 ? CommandPalette(
                                     notifier: _commandPaletteNotifier,

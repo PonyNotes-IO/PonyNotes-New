@@ -11,6 +11,7 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'operations/ai_writer_cubit.dart';
 import 'operations/ai_writer_entities.dart';
@@ -121,7 +122,7 @@ class _AIWriterBlockComponentState extends State<AiWriterBlockComponent> {
 
   @override
   Widget build(BuildContext context) {
-    if (UniversalPlatform.isMobile) {
+    if (PlatformInfo.isMobile) {
       return const SizedBox.shrink();
     }
 

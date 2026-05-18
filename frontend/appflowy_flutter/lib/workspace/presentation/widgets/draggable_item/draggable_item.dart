@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 /// This value is used to disable the auto scroll when dragging.
 ///
@@ -151,7 +152,7 @@ class _Draggable<T extends Object> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return UniversalPlatform.isMobile
+    return PlatformInfo.isMobile
         ? LongPressDraggable<T>(
             data: data,
             feedback: feedback,

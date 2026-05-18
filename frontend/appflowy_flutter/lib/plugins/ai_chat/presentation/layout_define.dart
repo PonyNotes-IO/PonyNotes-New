@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class AIChatUILayout {
   const AIChatUILayout._();
 
   static EdgeInsets safeAreaInsets(BuildContext context) {
     final query = MediaQuery.of(context);
-    return UniversalPlatform.isMobile
+    return PlatformInfo.isMobile
         ? EdgeInsets.fromLTRB(
             query.padding.left,
             0,
@@ -16,7 +17,7 @@ class AIChatUILayout {
         : const EdgeInsets.only(bottom: 24);
   }
 
-  static EdgeInsets get messageMargin => UniversalPlatform.isMobile
+  static EdgeInsets get messageMargin => PlatformInfo.isMobile
       ? const EdgeInsets.symmetric(horizontal: 16)
       : EdgeInsets.zero;
 }

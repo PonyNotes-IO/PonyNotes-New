@@ -2,6 +2,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/plugins.da
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:markdown/markdown.dart' as md;
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class MarkdownSimpleTableParser extends CustomMarkdownParser {
   const MarkdownSimpleTableParser({
@@ -107,7 +108,7 @@ class MarkdownSimpleTableParser extends CustomMarkdownParser {
       simpleTableBlockNode(
         children: rows,
         enableHeaderRow: true,
-        columnWidths: UniversalPlatform.isMobile || tableWidth == null
+        columnWidths: PlatformInfo.isMobile || tableWidth == null
             ? null
             : {for (var i = 0; i < th.length; i++) i.toString(): tableWidth!},
       ),

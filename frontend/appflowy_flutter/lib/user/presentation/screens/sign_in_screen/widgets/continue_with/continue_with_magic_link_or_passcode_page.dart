@@ -11,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '../../../../../../generated/locale_keys.g.dart';
 import 'set_password_page.dart';
@@ -358,7 +359,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
               Expanded(
                 child: Center(
                   child: Container(
-                    width: UniversalPlatform.isDesktop ? 450 : double.infinity,
+                    width: PlatformInfo.isDesktopOrTablet ? 450 : double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -455,7 +456,7 @@ class _ContinueWithMagicLinkOrPasscodePageState
     const spacing = 12.0;
     final screenWidth = MediaQuery.of(context).size.width;
     final calculatedWidth = (screenWidth - (5 * spacing) - 40) / 6;
-    final inputWidth = UniversalPlatform.isDesktop ? 56.0 : calculatedWidth;
+    final inputWidth = PlatformInfo.isDesktopOrTablet ? 56.0 : calculatedWidth;
     // 根据深色/浅色模式适配背景色
     final inputBackgroundColor = theme.brightness == Brightness.light
         ? appTheme.badgeColorScheme.color19Light1

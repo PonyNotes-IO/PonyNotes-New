@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:talker/talker.dart';
 import 'package:talker_bloc_logger/talker_bloc_logger.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 class DebugTask extends LaunchTask {
   DebugTask();
@@ -16,7 +17,7 @@ class DebugTask extends LaunchTask {
     await super.initialize(context);
 
     // hide the keyboard on mobile
-    if (UniversalPlatform.isMobile && kDebugMode) {
+    if (PlatformInfo.isMobile && kDebugMode) {
       await SystemChannels.textInput.invokeMethod('TextInput.hide');
     }
 

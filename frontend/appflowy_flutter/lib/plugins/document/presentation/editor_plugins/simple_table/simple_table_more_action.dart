@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -271,11 +272,11 @@ class _SimpleTableMoreActionMenuState extends State<SimpleTableMoreActionMenu> {
   Widget build(BuildContext context) {
     return Align(
       alignment: widget.type == SimpleTableMoreActionType.row
-          ? UniversalPlatform.isDesktop
+          ? PlatformInfo.isDesktopOrTablet
               ? Alignment.centerLeft
               : Alignment.centerRight
           : Alignment.topCenter,
-      child: UniversalPlatform.isDesktop
+      child: PlatformInfo.isDesktopOrTablet
           ? _buildDesktopMenu()
           : _buildMobileMenu(),
     );

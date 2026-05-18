@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flowy_infra/platform_extension.dart';
 
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
@@ -73,7 +74,7 @@ class MultiImagePlaceholderState extends State<MultiImagePlaceholder> {
               ),
               const HSpace(10),
               FlowyText(
-                UniversalPlatform.isDesktop
+                PlatformInfo.isDesktopOrTablet
                     ? isDraggingFiles
                         ? LocaleKeys.document_plugins_image_dropImageToInsert
                             .tr()
@@ -88,7 +89,7 @@ class MultiImagePlaceholderState extends State<MultiImagePlaceholder> {
       ),
     );
 
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       return AppFlowyPopover(
         controller: controller,
         direction: PopoverDirection.bottomWithCenterAligned,
@@ -166,7 +167,7 @@ class MultiImagePlaceholderState extends State<MultiImagePlaceholder> {
   }
 
   void showUploadImageMenu() {
-    if (UniversalPlatform.isDesktopOrWeb) {
+    if (PlatformInfo.isDesktopOrTabletOrWeb) {
       controller.show();
     } else {
       final isLocalMode = _isLocalMode();

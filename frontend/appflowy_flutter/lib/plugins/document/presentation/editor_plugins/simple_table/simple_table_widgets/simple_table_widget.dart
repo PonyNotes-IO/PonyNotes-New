@@ -2,6 +2,7 @@ import 'package:appflowy/plugins/document/presentation/editor_plugins/simple_tab
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:universal_platform/universal_platform.dart';
+import 'package:flowy_infra/platform_extension.dart';
 
 import '_desktop_simple_table_widget.dart';
 import '_mobile_simple_table_widget.dart';
@@ -60,7 +61,7 @@ class SimpleTableWidget extends StatefulWidget {
 class _SimpleTableWidgetState extends State<SimpleTableWidget> {
   @override
   Widget build(BuildContext context) {
-    return UniversalPlatform.isDesktop
+    return PlatformInfo.isDesktopOrTablet
         ? DesktopSimpleTableWidget(
             simpleTableContext: widget.simpleTableContext,
             node: widget.node,
