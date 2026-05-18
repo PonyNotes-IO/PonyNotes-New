@@ -4,6 +4,7 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:douyin_login/douyin.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:universal_platform/universal_platform.dart';
@@ -36,14 +37,12 @@ class DouYinLoginService {
   Future<FlowyResult<String, String>> getAuthorizationCode() async {
     try {
       
-      if (UniversalPlatform.isAndroid || UniversalPlatform.isIOS) {
-        // Mobile platform - should use DouYin SDK
-        return await _getCodeFromMobileSDK();
-      } else if (UniversalPlatform.isWindows || 
-                 UniversalPlatform.isMacOS || 
-                 UniversalPlatform.isLinux) {
+      if (PlatformInfo.isDesktopOrTablet) {
         // Desktop platform - use web-based authorization or QR code
         return await _getCodeFromDesktop();
+      } else if (PlatformInfo.isMobile) {
+        // Mobile platform - should use DouYin SDK
+        return await _getCodeFromMobileSDK();
       } else {
         return FlowyResult.failure(
           'DouYin login is not supported on this platform',

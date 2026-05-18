@@ -23,6 +23,7 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -942,9 +943,7 @@ class _CustomThirdPartyButtons extends StatelessWidget {
                       if (!_checkTermsAgreement(context)) {
                         return;
                       }
-                      if (UniversalPlatform.isWindows ||
-                          UniversalPlatform.isMacOS ||
-                          UniversalPlatform.isLinux) {
+                      if (PlatformInfo.isDesktopOrTablet) {
                         final code = await showWeChatWebViewDialog(context);
                         if (code != null && context.mounted) {
                           context
@@ -972,9 +971,7 @@ class _CustomThirdPartyButtons extends StatelessWidget {
                       if (!_checkTermsAgreement(context)) {
                         return;
                       }
-                      if (UniversalPlatform.isWindows ||
-                          UniversalPlatform.isMacOS ||
-                          UniversalPlatform.isLinux) {
+                      if (PlatformInfo.isDesktopOrTablet) {
                         final code = await showDouYinWebViewDialog(context);
                         if (code != null && context.mounted) {
                           context

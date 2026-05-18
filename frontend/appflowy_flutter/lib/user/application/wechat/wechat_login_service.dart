@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-error/errors.pb.dart';
 import 'package:appflowy_result/appflowy_result.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:fluwx/fluwx.dart' as fluwx;
@@ -30,14 +31,12 @@ class WeChatLoginService {
   Future<FlowyResult<String, String>> getAuthorizationCode() async {
     try {
       
-      if (UniversalPlatform.isAndroid || UniversalPlatform.isIOS) {
-        // Mobile platform - should use WeChat SDK
-        return await _getCodeFromMobileSDK();
-      } else if (UniversalPlatform.isWindows || 
-                 UniversalPlatform.isMacOS || 
-                 UniversalPlatform.isLinux) {
+      if (PlatformInfo.isDesktopOrTablet) {
         // Desktop platform - use web-based authorization or QR code
         return await _getCodeFromDesktop();
+      } else if (PlatformInfo.isMobile) {
+        // Mobile platform - should use WeChat SDK
+        return await _getCodeFromMobileSDK();
       } else {
         return FlowyResult.failure(
           'WeChat login is not supported on this platform',
