@@ -61,7 +61,7 @@ PODS:
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
-  - Sparkle (2.8.1)
+  - Sparkle (2.9.1)
   - sqflite_darwin (0.0.4):
     - Flutter
     - FlutterMacOS
@@ -214,7 +214,7 @@ SPEC CHECKSUMS:
   screen_retriever_macos: 452e51764a9e1cdb74b3c541238795849f21557f
   share_plus: 510bf0af1a42cd602274b4629920c9649c52f4cc
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
-  Sparkle: a346a4341537c625955751ed3ae4b340b68551fa
+  Sparkle: a4115cd9a339b297a61163256e6954d9e35297ce
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
   super_native_extensions: c2795d6d9aedf4a79fae25cb6160b71b50549189
   url_launcher_macos: 0fba8ddabfc33ce0a9afe7c5fef5aab3d8d2d673
@@ -222,6 +222,6 @@ SPEC CHECKSUMS:
   webview_flutter_wkwebview: 1821ceac936eba6f7984d89a9f3bcb4dea99ebb2
   window_manager: e8d0b1431ab6c454f2b5c9ae26004bbfa43469aa
 
-PODFILE CHECKSUM: bfe4b0d649111d89369f724a27874b3f014d9881
+PODFILE CHECKSUM: c366fc7cd87a2af621365daffd86940ea5fd62f0
 
 COCOAPODS: 1.16.2
