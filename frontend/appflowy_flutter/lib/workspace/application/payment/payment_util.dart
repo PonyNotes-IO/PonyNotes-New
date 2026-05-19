@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:appflowy/startup/tasks/app_widget.dart';
 import 'package:appflowy_backend/log.dart';
+import 'package:flowy_infra/platform_extension.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
@@ -55,7 +59,14 @@ class PaymentPlatformSupport {
       ];
     }
 
-    return [];
+    if (PlatformInfo.isDesktopOrTablet) {
+      return [PaymentMethod.wechatPay];
+    }
+
+    return [
+      PaymentMethod.wechatPay,
+      PaymentMethod.alipay,
+    ];
   }
 
   static bool get isApplePayAvailable =>
@@ -401,15 +412,74 @@ class PaymentUtil {
       //   }
       // }
       final uri = Uri.parse(payUrl);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-          Log.info('[PaymentUtil] Opened payment URL in browser: $payUrl');
-        } else {
+
+      if (PlatformInfo.isTablet) {
+        await _showTabletPaymentWebView(uri.toString());
+        Log.info('[PaymentUtil] Opened payment URL in in-app webview: $payUrl');
+      } else {
+        if (!await canLaunchUrl(uri)) {
           Log.error('[PaymentUtil] Cannot launch URL: $payUrl');
+          return;
         }
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        Log.info('[PaymentUtil] Opened payment URL in browser: $payUrl');
+      }
     } catch (e, s) {
       Log.error('[PaymentUtil] Failed to open payment in browser: $e\n$s');
     }
+  }
+
+  static Future<void> _showTabletPaymentWebView(String payUrl) async {
+    final context = AppGlobals.rootNavKey.currentContext;
+    if (context == null) {
+      Log.error('[PaymentUtil] No context available to show payment webview');
+      return;
+    }
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(20),
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: MediaQuery.of(context).size.height * 0.9,
+            child: InAppWebView(
+              initialUrlRequest: URLRequest(url: WebUri(payUrl)),
+              initialOptions: InAppWebViewGroupOptions(
+                crossPlatform: InAppWebViewOptions(
+                  javaScriptEnabled: true,
+                  useShouldOverrideUrlLoading: true,
+                  mediaPlaybackRequiresUserGesture: false,
+                ),
+                ios: IOSInAppWebViewOptions(
+                  allowsInlineMediaPlayback: true,
+                  allowsBackForwardNavigationGestures: true,
+                ),
+              ),
+              onLoadStart: (controller, url) {
+                Log.info('[PaymentUtil] Payment webview loading: $url');
+              },
+              onLoadStop: (controller, url) {
+                Log.info('[PaymentUtil] Payment webview loaded: $url');
+              },
+              onReceivedError: (controller, request, error) {
+                Log.error('[PaymentUtil] Payment webview error: $error');
+              },
+              shouldOverrideUrlLoading: (controller, navigationAction) async {
+                final url = navigationAction.request.url?.toString();
+                if (url != null && url.startsWith('ponynotes://')) {
+                  Navigator.of(context).pop();
+                  return NavigationActionPolicy.CANCEL;
+                }
+                return NavigationActionPolicy.ALLOW;
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
