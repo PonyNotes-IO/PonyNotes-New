@@ -1,11 +1,16 @@
 import 'dart:io' as io;
 
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show WidgetsBinding;
 
 class PlatformInfo {
   PlatformInfo._();
+
+  static bool? _isTabletValue;
+
+  static void setIsTablet(bool value) {
+    _isTabletValue = value;
+  }
 
   static bool get isMacOS {
     if (kIsWeb) {
@@ -57,11 +62,11 @@ class PlatformInfo {
     if (kIsWeb) {
       return false;
     }
+    if (_isTabletValue != null) {
+      return _isTabletValue!;
+    }
     if (io.Platform.isIOS) {
-      _isIOSTablet().then((value){
-        return value;
-      });
-      return false;
+      return _isIOSTablet();
     }
     if (io.Platform.isAndroid) {
       return _isAndroidTablet();
@@ -73,14 +78,14 @@ class PlatformInfo {
     if (kIsWeb) {
       return false;
     }
+    if (_isTabletValue != null) {
+      return (io.Platform.isAndroid || io.Platform.isIOS) && !_isTabletValue!;
+    }
     if (io.Platform.isAndroid) {
       return !_isAndroidTablet();
     }
     if (io.Platform.isIOS) {
-      _isIOSTablet().then((value){
-        return value;
-      });
-      return false;
+      return !_isIOSTablet();
     }
     return io.Platform.isAndroid || io.Platform.isIOS;
   }
@@ -92,12 +97,15 @@ class PlatformInfo {
     return !isMobile;
   }
 
-  static Future<bool> _isIOSTablet() async {
+  static bool _isIOSTablet() {
     try {
-      DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-      if (iosInfo.model.contains('iPad')) {
-        return true;
+      final views = WidgetsBinding.instance.platformDispatcher.views;
+      if (views.isNotEmpty) {
+        final view = views.first;
+        final shortestSide = view.physicalSize.shortestSide;
+        final devicePixelRatio = view.devicePixelRatio;
+        final shortestSideInDp = shortestSide / devicePixelRatio;
+        return shortestSideInDp >= 550;
       }
     } catch (_) {
     }

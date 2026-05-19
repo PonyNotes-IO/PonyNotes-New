@@ -152,7 +152,8 @@ class _Draggable<T extends Object> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PlatformInfo.isMobile
+    final isMobileOrTablet = PlatformInfo.isMobile || PlatformInfo.isTablet;
+    return isMobileOrTablet
         ? LongPressDraggable<T>(
             data: data,
             feedback: feedback,

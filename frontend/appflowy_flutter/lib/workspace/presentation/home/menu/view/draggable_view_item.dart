@@ -58,7 +58,9 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
     // add top border if the draggable item is on the top of the list
     // highlight the draggable item if the draggable item is on the center
     // add bottom border if the draggable item is on the bottom of the list
-    final child = PlatformInfo.isMobile
+    // 在移动端和平板端使用移动端逻辑，避免滑动被识别为拖动
+    final isMobileOrTablet = PlatformInfo.isMobile || PlatformInfo.isTablet;
+    final child = isMobileOrTablet
         ? _buildMobileDraggableItem()
         : _buildDesktopDraggableItem();
 

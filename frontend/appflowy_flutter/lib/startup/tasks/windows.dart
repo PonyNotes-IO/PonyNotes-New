@@ -23,11 +23,12 @@ class InitAppWindowTask extends LaunchTask with WindowListener {
   Future<void> initialize(LaunchContext context) async {
     await super.initialize(context);
 
-    // Don't initialize in tests or on web
     if (context.env.isTest || UniversalPlatform.isWeb) {
       return;
     }
 
+    WidgetsFlutterBinding.ensureInitialized();
+    
     if (UniversalPlatform.isMobile) {
       final scale = await windowSizeManager.getScaleFactor();
       ScaledWidgetsFlutterBinding.instance.scaleFactor = (_) => scale;

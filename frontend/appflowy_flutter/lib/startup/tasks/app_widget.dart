@@ -72,14 +72,12 @@ class InitAppWidgetTask extends LaunchTask {
     await super.initialize(context);
 
     WidgetsFlutterBinding.ensureInitialized();
+    
+    _setPreferredOrientations();
 
-    // 配置 Flutter ImageCache 内存限制，防止内存溢出
-    // 设置最大缓存图片数量为 1000 张，最大内存为 200MB
     PaintingBinding.instance.imageCache.maximumSize = 1000;
     PaintingBinding.instance.imageCache.maximumSizeBytes =
-        200 * 1024 * 1024; // 200MB
-
-    _setPreferredOrientations();
+        200 * 1024 * 1024;
 
     await NotificationService.initialize();
 

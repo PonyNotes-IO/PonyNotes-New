@@ -174,6 +174,9 @@ class FlowyRunner {
           // The DeviceOrApplicationInfoTask should be placed before the AppWidgetTask to fetch the app information.
           // It is unable to get the device information from the test environment.
           const ApplicationInfoTask(),
+          // Detect tablet device and set PlatformInfo.isTablet
+          // Should be after ApplicationInfoTask to use DeviceInfoPlugin results
+          const TabletDetectionTask(),
           AutoExportDebugLogsTask(),
           // The auto update task should be placed after the ApplicationInfoTask to fetch the latest version.
           if (!mode.isIntegrationTest) AutoUpdateTask(),
