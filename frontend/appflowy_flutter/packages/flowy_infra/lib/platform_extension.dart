@@ -1,5 +1,6 @@
 import 'dart:io' as io;
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show WidgetsBinding;
 
@@ -57,7 +58,10 @@ class PlatformInfo {
       return false;
     }
     if (io.Platform.isIOS) {
-      return _isIOSTablet();
+      _isIOSTablet().then((value){
+        return value;
+      });
+      return false;
     }
     if (io.Platform.isAndroid) {
       return _isAndroidTablet();
@@ -73,7 +77,10 @@ class PlatformInfo {
       return !_isAndroidTablet();
     }
     if (io.Platform.isIOS) {
-      return !_isIOSTablet();
+      _isIOSTablet().then((value){
+        return value;
+      });
+      return false;
     }
     return io.Platform.isAndroid || io.Platform.isIOS;
   }
@@ -85,9 +92,16 @@ class PlatformInfo {
     return !isMobile;
   }
 
-  static bool _isIOSTablet() {
-    return io.Platform.localHostname.contains('iPad') ||
-        io.Platform.operatingSystemVersion.contains('iPad');
+  static Future<bool> _isIOSTablet() async {
+    try {
+      DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+      if (iosInfo.model.contains('iPad')) {
+        return true;
+      }
+    } catch (_) {
+    }
+    return false;
   }
 
   static bool _isAndroidTablet() {

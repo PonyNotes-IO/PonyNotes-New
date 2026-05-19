@@ -20,6 +20,7 @@ dependencies:
   file_picker: ^10.3.10
   file: ^7.0.0
   analyzer: ^6.4.1
+  device_info_plus: ^11.2.2
 
 dev_dependencies:
   build_runner: ^2.4.9

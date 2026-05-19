@@ -51,7 +51,7 @@ class InitAppWidgetTask extends LaunchTask {
 
   void _setPreferredOrientations() {
     if (UniversalPlatform.isIOS || UniversalPlatform.isAndroid) {
-      if (_isTablet()) {
+      if (PlatformInfo.isTablet) {
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.landscapeLeft,
           DeviceOrientation.landscapeRight,
@@ -65,27 +65,6 @@ class InitAppWidgetTask extends LaunchTask {
         ]);
       }
     }
-  }
-
-  bool _isTablet() {
-    if (UniversalPlatform.isIOS) {
-      return Platform.localHostname.contains('iPad') ||
-          Platform.operatingSystemVersion.contains('iPad');
-    }
-    if (UniversalPlatform.isAndroid) {
-      try {
-        final views = WidgetsBinding.instance.platformDispatcher.views;
-        if (views.isNotEmpty) {
-          final view = views.first;
-          final shortestSide = view.physicalSize.shortestSide;
-          final devicePixelRatio = view.devicePixelRatio;
-          final shortestSideInDp = shortestSide / devicePixelRatio;
-          return shortestSideInDp >= 600;
-        }
-      } catch (_) {
-      }
-    }
-    return false;
   }
 
   @override
