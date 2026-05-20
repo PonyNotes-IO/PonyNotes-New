@@ -1799,28 +1799,28 @@ class _UpgradePlanBody extends StatelessWidget {
     final benefits = [
       {
         'label': '小马AI',
-        'iconLight': FlowySvgs.icon_rights_ai_xl,
-        'iconDark': FlowySvgs.icon_rights_ai_xl,
+        'iconLight': FlowySvgs.m_rights_ai_xl,
+        'iconDark': FlowySvgs.md_rights_ai_xl,
       },
       {
         'label': '小马日历',
-        'iconLight': FlowySvgs.icon_rights_calendar_xl,
-        'iconDark': FlowySvgs.icon_rights_calendar_xl,
+        'iconLight': FlowySvgs.m_rights_calender_xl,
+        'iconDark': FlowySvgs.md_rights_calender_xl,
       },
       {
         'label': '云端同步',
-        'iconLight': FlowySvgs.icon_rights_cloud_xl,
-        'iconDark': FlowySvgs.icon_rights_cloud_xl,
+        'iconLight': FlowySvgs.m_rights_cloud_xl,
+        'iconDark': FlowySvgs.md_rights_cloud_xl,
       },
       {
         'label': '小马收藏夹',
-        'iconLight': FlowySvgs.icon_rights_collect_xl,
-        'iconDark': FlowySvgs.icon_rights_collect_xl,
+        'iconLight': FlowySvgs.m_rights_collect_xl,
+        'iconDark': FlowySvgs.md_rights_collect_xl,
       },
       {
         'label': '云端空间',
-        'iconLight': FlowySvgs.icon_rights_storage_xl,
-        'iconDark': FlowySvgs.icon_rights_storage_xl,
+        'iconLight': FlowySvgs.m_rights_storage_xl,
+        'iconDark': FlowySvgs.md_rights_storage_xl,
       },
     ];
 
