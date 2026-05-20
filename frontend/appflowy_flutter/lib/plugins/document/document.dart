@@ -30,8 +30,6 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../workspace/presentation/home/full_window_controller.dart';
-
 class DocumentPluginBuilder extends PluginBuilder {
   @override
   Plugin build(dynamic data) {
@@ -184,11 +182,12 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
   @override
   Widget get leftBarItem {
     return FutureBuilder<List<ViewPB>>(
-      future: ViewBackendService.getViewAncestors(view.id).then((result) => result.fold((s) => s.items, (f) => [])),
+      future: ViewBackendService.getViewAncestors(view.id)
+          .then((result) => result.fold((s) => s.items, (f) => [])),
       builder: (context, snapshot) {
         final ancestors = snapshot.data ?? [];
         final hasParent = ancestors.length > 2; // workspace + parent + current
-        
+
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -205,7 +204,8 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
                     final parentView = ancestors[ancestors.length - 2];
                     // Validate parentView before opening
                     if (parentView.id.isEmpty) {
-                      Log.warn('Back navigation skipped: parentView has empty id');
+                      Log.warn(
+                          'Back navigation skipped: parentView has empty id');
                       showToastNotification(
                         message: '无法返回上级：视图数据不完整',
                         type: ToastificationType.warning,
@@ -278,27 +278,6 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
           ),
           const HSpace(10),
           MoreViewActions(view: view, viewInfoBloc: bloc),
-          const HSpace(10),
-          //全局全窗口切换按钮（应用于所有视图）
-          ValueListenableBuilder<bool>(
-            valueListenable: FullWindowController.isFullWindow,
-            builder: (context, isFullWindow, _) {
-              return FlowyIconButton(
-                width: 28,
-                height: 28,
-                tooltipText: isFullWindow ? '退出全窗口显示' : '全窗口显示',
-                radius: const BorderRadius.all(Radius.circular(999)),
-                icon: Icon(
-                  isFullWindow
-                      ? Icons.fullscreen_exit_rounded
-                      : Icons.fullscreen_rounded,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-                onPressed: FullWindowController.toggle,
-              );
-            },
-          ),
         ],
       ),
     );
