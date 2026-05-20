@@ -84,7 +84,7 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
       padding: EdgeInsets.zero,
       onTap: (context) => context.pop(),
       child: _ImmersiveAppBarButton(
-        icon: FlowySvgs.m_app_bar_back_s,
+        icon: FlowySvgs.mobile_return_s,
         dimension: 30.0,
         iconPadding: 3.0,
         iconSize: const Size(7, 12),

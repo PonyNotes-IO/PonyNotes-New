@@ -95,7 +95,7 @@ class BottomSheetBackButton extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(horizontal: 16.0),
         child: FlowySvg(
-          FlowySvgs.m_app_bar_back_s,
+          FlowySvgs.mobile_return_s,
           size: const Size(7, 12),
         ),
       ),

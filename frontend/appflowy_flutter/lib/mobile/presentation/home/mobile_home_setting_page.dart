@@ -245,7 +245,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
                 }
               },
               icon: FlowySvg(
-                FlowySvgs.m_app_bar_back_s,
+                FlowySvgs.mobile_return_s,
                 size: const Size(7, 12),
                 color: afTheme.iconColorScheme.primary,
               ),
@@ -1575,7 +1575,7 @@ class _MobileUpgradePlanPageState extends State<_MobileUpgradePlanPage> {
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     icon: FlowySvg(
-                      FlowySvgs.m_app_bar_back_s,
+                      FlowySvgs.mobile_return_s,
                       size: const Size(7, 12),
                       color: theme.iconColorScheme.primary,
                     ),

@@ -86,7 +86,7 @@ class MobileAppBar extends StatelessWidget implements PreferredSizeWidget {
         return IconButton(
           onPressed: onBackPressed ?? () => Navigator.pop(context),
           icon: FlowySvg(
-            FlowySvgs.m_app_bar_back_s,
+            FlowySvgs.mobile_return_s,
             size: const Size(7, 12),
             color: AppFlowyTheme.of(context).iconColorScheme.primary,
           ),
