@@ -73,7 +73,7 @@ enum BottomNavigationBarItemType {
       search =>
         const FlowySvg(FlowySvgs.m_home_search_icon_active_m, blendMode: null),
       askAI => const _AskAIcon(),
-      add => const FlowySvg(FlowySvgs.m_home_add_m, blendMode: null),
+      add => const FlowySvg(FlowySvgs.m_home_add_active_m, blendMode: null),
       notification => const _NotificationNavigationBarItemIcon(isActive: true),
     };
   }
