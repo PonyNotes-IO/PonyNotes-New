@@ -40,7 +40,7 @@ class MobileNotificationPageHeader extends StatelessWidget {
               }
             },
             icon: FlowySvg(
-              FlowySvgs.mobile_return_s,
+              FlowySvgs.m_app_bar_back_s,
               size: const Size(7, 12),
               color: afTheme.iconColorScheme.primary,
             ),

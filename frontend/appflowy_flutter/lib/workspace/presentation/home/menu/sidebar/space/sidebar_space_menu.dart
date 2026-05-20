@@ -146,7 +146,6 @@ class _SidebarSpaceMenuItemState extends State<SidebarSpaceMenuItem> {
                     : (_isHovered ? _buildActionButton(context, space) : null)),
             onTap: () {
               context.read<SpaceBloc>().add(SpaceEvent.open(space: space));
-              SpaceHubMiddlePanelController.reveal(space.id);
               context.read<TabsBloc>().openPlugin(space);
               PopoverContainer.of(context).close();
             },

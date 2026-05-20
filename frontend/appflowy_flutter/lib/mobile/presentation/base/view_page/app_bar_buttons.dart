@@ -47,7 +47,8 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
       builder: (_, opacity, __) => Container(
         height: 44,
         decoration: BoxDecoration(
-          color: AppBarTheme.of(context).backgroundColor
+          color: AppBarTheme.of(context)
+              .backgroundColor
               ?.withValues(alpha: opacity),
         ),
         child: SafeArea(
@@ -55,7 +56,8 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
           child: Row(
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 4.0, bottom: 4.0, left: 12.0),
+                padding:
+                    const EdgeInsets.only(top: 4.0, bottom: 4.0, left: 12.0),
                 child: _buildAppBarBackButton(context),
               ),
               const SizedBox(width: 4),
@@ -82,7 +84,7 @@ class MobileViewPageImmersiveAppBar extends StatelessWidget
       padding: EdgeInsets.zero,
       onTap: (context) => context.pop(),
       child: _ImmersiveAppBarButton(
-        icon: FlowySvgs.mobile_return_s,
+        icon: FlowySvgs.m_app_bar_back_s,
         dimension: 30.0,
         iconPadding: 3.0,
         iconSize: const Size(7, 12),

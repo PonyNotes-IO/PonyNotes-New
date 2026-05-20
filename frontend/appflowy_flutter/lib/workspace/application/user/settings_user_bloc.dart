@@ -49,7 +49,7 @@ class SettingsUserViewBloc extends Bloc<SettingsUserEvent, SettingsUserState> {
           updateUserIcon: (String iconUrl) {
             _userService.updateUserProfile(iconUrl: iconUrl).then((result) {
               result.fold(
-                (l) => null,
+                (l) => _loadUserProfile(),
                 (err) => Log.error(err),
               );
             });

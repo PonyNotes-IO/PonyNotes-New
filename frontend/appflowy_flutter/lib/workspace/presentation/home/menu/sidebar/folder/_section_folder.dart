@@ -287,7 +287,6 @@ class _SectionFolderState extends State<SectionFolder> {
                   // 使用 SpaceBloc 打开空间（加载空间下的文档列表）
                   final spaceBloc = context.read<SpaceBloc>();
                   spaceBloc.add(SpaceEvent.open(space: view));
-                  SpaceHubMiddlePanelController.reveal(view.id);
 
                   // 打开空间统一页面插件
                   if (HardwareKeyboard.instance.isControlPressed) {

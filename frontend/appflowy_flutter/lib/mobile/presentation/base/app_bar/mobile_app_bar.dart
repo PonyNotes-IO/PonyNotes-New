@@ -73,10 +73,7 @@ class MobileAppBar extends StatelessWidget implements PreferredSizeWidget {
                 textAlign: centerTitle ? TextAlign.center : TextAlign.center,
               ),
             ),
-            if (actions != null)
-              ...actions!
-            else
-              const SizedBox(width: 48),
+            if (actions != null) ...actions! else const SizedBox(width: 48),
           ],
         ),
       ),
@@ -89,7 +86,7 @@ class MobileAppBar extends StatelessWidget implements PreferredSizeWidget {
         return IconButton(
           onPressed: onBackPressed ?? () => Navigator.pop(context),
           icon: FlowySvg(
-            FlowySvgs.mobile_return_s,
+            FlowySvgs.m_app_bar_back_s,
             size: const Size(7, 12),
             color: AppFlowyTheme.of(context).iconColorScheme.primary,
           ),

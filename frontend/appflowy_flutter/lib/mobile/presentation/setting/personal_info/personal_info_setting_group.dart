@@ -1,5 +1,6 @@
 import 'dart:io' as io;
 
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/setting/personal_info/edit_username_bottom_sheet.dart';
@@ -10,6 +11,7 @@ import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_trai
 import 'package:appflowy/plugins/document/presentation/editor_plugins/image/image_util.dart';
 import 'package:appflowy/shared/appflowy_network_image.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/util/built_in_svgs.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy/user/application/auth/auth_service.dart';
 import 'package:appflowy/user/application/password/password_bloc.dart';
@@ -18,6 +20,7 @@ import 'package:appflowy/workspace/application/user/prelude.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -60,10 +63,12 @@ class PersonalInfoSettingGroup extends StatelessWidget {
             children: [
               const SizedBox(height: 24),
               // Avatar section
-              Builder(
-                builder: (ctx) => _AvatarSection(
-                  iconUrl: profile.iconUrl,
-                  name: profile.name,
+              BlocBuilder<SettingsUserViewBloc, SettingsUserState>(
+                buildWhen: (prev, curr) =>
+                    prev.userProfile.iconUrl != curr.userProfile.iconUrl,
+                builder: (ctx, state) => _AvatarSection(
+                  iconUrl: state.userProfile.iconUrl,
+                  name: state.userProfile.name,
                   onAvatarChanged: (url) {
                     ctx.read<SettingsUserViewBloc>().add(
                       SettingsUserEvent.updateUserIcon(iconUrl: url),
@@ -268,6 +273,22 @@ class _AvatarSection extends StatelessWidget {
   }
 
   Widget _buildAvatarImage() {
+    // Normalize: try to convert Unicode code point string (e.g. '1F43D') to emoji char (e.g. '🐻')
+    String emojiChar = iconUrl;
+    // Only convert if it looks like a hex code point string (all uppercase hex letters, e.g. '1F43D')
+    if (emojiChar.contains(RegExp(r'^[0-9A-Fa-f]+$'))) {
+      final codePoint = int.tryParse(emojiChar, radix: 16);
+      if (codePoint != null) {
+        emojiChar = String.fromCharCode(codePoint);
+      }
+    }
+    if (builtInSVGIcons.contains(emojiChar)) {
+      return FlowySvg(
+        FlowySvgData('emoji/$emojiChar'),
+        size: const Size.square(80),
+        blendMode: null,
+      );
+    }
     if (iconUrl.startsWith('http://') || iconUrl.startsWith('https://')) {
       return FlowyNetworkImage(
         url: iconUrl,
@@ -275,27 +296,50 @@ class _AvatarSection extends StatelessWidget {
         height: 80,
       );
     }
+    // Short string without path separators -> treat as emoji character
+    if (iconUrl.length <= 10 && !iconUrl.contains('/') && !iconUrl.contains('\\')) {
+      return Center(
+        child: Container(
+          width: 80,
+          height: 80,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: FlowyText(
+              iconUrl,
+              fontSize: 48,
+            ),
+          ),
+        ),
+      );
+    }
     return Image.file(
       io.File(iconUrl),
       width: 80,
       height: 80,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => AFAvatar(
-        name: name,
-        size: AFAvatarSize.xl,
-      ),
+      errorBuilder: (ctx, _, __) => _buildDefaultAvatar(ctx),
     );
   }
 
   Widget _buildDefaultAvatar(BuildContext context) {
-    final theme = AppFlowyTheme.of(context);
     return Center(
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : 'U',
-        style: TextStyle(
-          fontSize: 32,
-          fontWeight: FontWeight.w600,
-          color: theme.textColorScheme.primary,
+      child: Container(
+        width: 80,
+        height: 80,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Text(
+            name.isNotEmpty ? name[0].toUpperCase() : 'U',
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
         ),
       ),
     );
