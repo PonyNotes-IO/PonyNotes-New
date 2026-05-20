@@ -41,6 +41,13 @@ abstract class HomeStackDelegate {
   void didDeleteStackWidget(ViewPB view, int? index);
 }
 
+
+Color homeContentBackgroundColor(BuildContext context) {
+  return Theme.of(context).isLightMode
+      ? const Color(0xFFFFFFFF)
+      : const Color(0xFF000000);
+}
+
 class HomeStack extends StatefulWidget {
   const HomeStack({
     super.key,
@@ -189,11 +196,80 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     );
   }
 
-  Widget _buildToggleMenuButton(BuildContext context) {
-    if (context.read<HomeSettingBloc>().isMenuExpanded) {
-      return const SizedBox.shrink();
+  Widget _buildTitleBarControls(BuildContext context) {
+    return SizedBox(
+      height: HomeSizes.topBarHeight,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildToggleMenuButton(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFullWindowOverlayActions(
+    BuildContext context,
+    TabsState state,
+  ) {
+    Widget? fullWindowMoreItem;
+    if (state.currentIndex >= 0 &&
+        state.currentIndex < state.pageManagers.length) {
+      final pm = state.pageManagers[state.currentIndex];
+      final currentMoreItem = pm.plugin.widgetBuilder.fullWindowMoreItem;
+      if (currentMoreItem != null) {
+        fullWindowMoreItem = ChangeNotifierProvider.value(
+          value: pm.notifier,
+          child: Consumer<PageNotifier>(
+            builder: (_, notifier, __) =>
+                notifier.plugin.widgetBuilder.fullWindowMoreItem ??
+                const SizedBox.shrink(),
+          ),
+        );
+      }
     }
 
+    return Positioned(
+      top: 12,
+      right: 12,
+      child: SafeArea(
+        child: Material(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.94),
+          elevation: 8,
+          shadowColor: Colors.black.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(999),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (fullWindowMoreItem != null) ...[
+                const HSpace(4),
+                fullWindowMoreItem,
+              ],
+              FlowyTooltip(
+                message: '退出应用内全屏',
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    splashRadius: 20,
+                    iconSize: 22,
+                    icon: Icon(
+                      Icons.fullscreen_exit_rounded,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    onPressed: FullWindowController.exit,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleMenuButton(BuildContext context) {
     final textSpan = TextSpan(
       children: [
         TextSpan(
@@ -232,6 +308,37 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildFullWindowButton(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: FullWindowController.isFullWindow,
+      builder: (context, isFullWindow, _) {
+        return FlowyTooltip(
+          message: isFullWindow ? '退出应用内全屏' : '应用内全屏',
+          child: FlowyHover(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                splashRadius: 16,
+                iconSize: 18,
+                icon: Icon(
+                  isFullWindow
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                onPressed: () {
+                  FullWindowController.toggle();
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

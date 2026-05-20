@@ -17,17 +17,20 @@ class SuggestionActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SeparatedRow(
-      mainAxisSize: MainAxisSize.min,
-      separatorBuilder: () => const HSpace(4.0),
-      children: _getSuggestedActions()
-          .map(
-            (action) => SuggestionActionButton(
-              action: action,
-              onTap: () => onTap(action),
-            ),
-          )
-          .toList(),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SeparatedRow(
+        mainAxisSize: MainAxisSize.min,
+        separatorBuilder: () => const HSpace(6.0),
+        children: _getSuggestedActions()
+            .map(
+              (action) => SuggestionActionButton(
+                action: action,
+                onTap: () => onTap(action),
+              ),
+            )
+            .toList(),
+      ),
     );
   }
 
@@ -89,8 +92,11 @@ class SuggestionActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 28,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minWidth: 64,
+        minHeight: 32,
+      ),
       child: FlowyButton(
         text: FlowyText(
           action.i18n,
@@ -99,10 +105,11 @@ class SuggestionActionButton extends StatelessWidget {
         leftIcon: action.buildIcon(context),
         iconPadding: 4.0,
         margin: const EdgeInsets.symmetric(
-          horizontal: 6.0,
-          vertical: 4.0,
+          horizontal: 8.0,
+          vertical: 6.0,
         ),
         onTap: onTap,
+        expandText: false,
         useIntrinsicWidth: true,
       ),
     );

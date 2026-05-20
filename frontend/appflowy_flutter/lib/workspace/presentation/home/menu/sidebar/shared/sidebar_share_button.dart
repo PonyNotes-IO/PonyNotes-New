@@ -1,19 +1,28 @@
-import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/features/share_tab/data/repositories/rust_share_with_user_repository_impl.dart';
 import 'package:appflowy/features/share_tab/logic/share_section_refresh_notifier.dart';
+import 'package:appflowy/features/share_tab/logic/share_tab_bloc.dart';
 import 'package:appflowy/features/shared_section/data/repositories/rust_shared_pages_repository_impl.dart';
 import 'package:appflowy/features/shared_section/logic/shared_section_bloc.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy/plugins/database/application/tab_bar_bloc.dart';
+import 'package:appflowy/plugins/database/calendar/application/calendar_unsaved_guard.dart';
+import 'package:appflowy/plugins/shared/share/_shared.dart';
+import 'package:appflowy/plugins/shared/share/share_bloc.dart';
+import 'package:appflowy/plugins/shared/share/share_menu.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/user/application/user_service.dart';
+import 'package:appflowy/workspace/application/sidebar/space/space_bloc.dart';
 import 'package:appflowy/workspace/application/tabs/tabs_bloc.dart';
+import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -33,6 +42,7 @@ class SidebarShareButton extends StatefulWidget {
 class _SidebarShareButtonState extends State<SidebarShareButton>
     with WidgetsBindingObserver {
   bool _isExpanded = false;
+  bool _isDragHovering = false;
   List<ViewPB> _userSharedNotes = [];
   bool _isLoading = false;
   bool _isRefreshing = false;
@@ -46,7 +56,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _workspaceId = 
+    _workspaceId =
         context.read<UserWorkspaceBloc>().state.currentWorkspace?.workspaceId ??
             '';
     _sharedSectionBloc = _createSharedSectionBloc(_workspaceId);
@@ -93,6 +103,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     setState(() {
       _workspaceId = newWorkspaceId;
       _isExpanded = false;
+      _isDragHovering = false;
       _isLoading = false;
       _isRefreshing = false;
       _userSharedNotes = [];
@@ -102,14 +113,12 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   }
 
   void _refreshSharedData() {
-    // 限流：避免短时间内频繁刷新
     final now = DateTime.now();
     if (now.difference(_lastRefreshTime) < _minRefreshInterval) {
       return;
     }
     _lastRefreshTime = now;
-    
-    // 只有在展开状态时才刷新数据，避免不必要的网络请求
+
     if (_isExpanded) {
       _loadUserSharedNotes(showLoading: false);
     }
@@ -117,7 +126,6 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   }
 
   Future<void> _loadUserSharedNotes({bool showLoading = true}) async {
-    // 避免重复加载
     if (_isLoading || _isRefreshing) {
       return;
     }
@@ -127,13 +135,12 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     } else {
       setState(() => _isRefreshing = true);
     }
-    
+
     try {
       final cloudEnv = getIt<AppFlowyCloudSharedEnv>();
-      final baseUrl =
-          cloudEnv.appflowyCloudConfig.base_url.isNotEmpty
-              ? cloudEnv.appflowyCloudConfig.base_url
-              : 'http://localhost:8000';
+      final baseUrl = cloudEnv.appflowyCloudConfig.base_url.isNotEmpty
+          ? cloudEnv.appflowyCloudConfig.base_url
+          : 'http://localhost:8000';
 
       final profileResult = await UserBackendService.getCurrentUserProfile();
       final userProfile = profileResult.fold(
@@ -145,19 +152,26 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
 
       final token = userProfile.token;
       if (token.isEmpty) {
-        Log.warn('[_loadSharedNotes] Token is empty, user may be in offline mode');
-        if (!showLoading) setState(() => _isRefreshing = false);
+        Log.warn(
+          '[_loadUserSharedNotes] Token is empty, user may be in offline mode',
+        );
+        if (!showLoading) {
+          setState(() => _isRefreshing = false);
+        }
         setState(() => _isLoading = false);
         return;
       }
 
-      // 提取 access_token（可能是 JSON 格式）
       final accessToken = _extractAccessToken(token);
       if (accessToken == null || accessToken.isEmpty) {
         Log.error('Failed to extract access_token from token');
+        setState(() {
+          _isLoading = false;
+          _isRefreshing = false;
+        });
         return;
       }
-      
+
       List<ViewPB> sentNotes = [];
       try {
         sentNotes = await _fetchCollaborations(
@@ -168,6 +182,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       } catch (e) {
         Log.warn('fetch sent collaborations failed (non-fatal): $e');
       }
+
       List<ViewPB> receivedNotes = [];
       try {
         receivedNotes = await _fetchCollaborations(
@@ -179,13 +194,14 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         Log.warn('fetch received collaborations failed (non-fatal): $e');
       }
 
-      final Map<String, ViewPB> combinedMap = {};
+      final combinedMap = <String, ViewPB>{};
       for (final view in [...sentNotes, ...receivedNotes]) {
         if (view.id.isEmpty) {
           continue;
         }
         combinedMap.putIfAbsent(view.id, () => view);
       }
+
       final combined = combinedMap.values.toList()
         ..sort((a, b) => b.createTime.toInt() - a.createTime.toInt());
 
@@ -193,16 +209,16 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         return;
       }
 
-      // 加载详细信息（包括标题，但保留 API 返回的 layout）
       final updatedViews = await _loadViewDetails(combined);
-
       if (!mounted) {
         return;
       }
 
-      // 对 layout=0 的视图，从 share-info 接口获取正确的布局类型（兼容旧记录）
-      final enrichedViews = await _enrichViewLayouts(updatedViews, baseUrl, accessToken);
-
+      final enrichedViews = await _enrichViewLayouts(
+        updatedViews,
+        baseUrl,
+        accessToken,
+      );
       if (!mounted) {
         return;
       }
@@ -214,6 +230,9 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       });
     } catch (e) {
       Log.error('Exception in _loadUserSharedNotes: $e');
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _userSharedNotes = [];
         _isLoading = false;
@@ -222,35 +241,27 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     }
   }
 
-  /// 从 token 字段中提取 access_token
-  /// 如果 token 是 JSON 格式，则解析并提取 access_token
-  /// 否则直接返回 token
   String? _extractAccessToken(String token) {
     if (token.isEmpty) {
       return null;
     }
 
     final trimmedToken = token.trim();
-
-    // 检查是否是 JSON 格式（以 { 开头）
     if (trimmedToken.startsWith('{')) {
       try {
         final tokenMap = jsonDecode(trimmedToken) as Map<String, dynamic>;
         final accessToken = tokenMap['access_token'] as String?;
         if (accessToken != null && accessToken.isNotEmpty) {
-          Log.info('Extracted access_token from JSON token');
           return accessToken;
-        } else {
-          Log.error('access_token not found in JSON token');
-          return null;
         }
+        Log.error('access_token not found in JSON token');
+        return null;
       } catch (e) {
         Log.error('Failed to parse token as JSON: $e');
         return null;
       }
     }
 
-    // 如果不是 JSON，直接返回 token
     return trimmedToken;
   }
 
@@ -279,7 +290,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       }
 
       if (response.statusCode != 200) {
-        var message = '加载失败：HTTP ${response.statusCode}';
+        var message = '加载失败: HTTP ${response.statusCode}';
         final body = response.body;
         if (body.isNotEmpty) {
           try {
@@ -332,38 +343,29 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         continue;
       }
 
-      // 根据新的 API 响应结构，使用 oid 作为 viewId
-      final oid = (entry['oid'] ?? entry['object_id'] ?? entry['objectId'] ?? '')
-          .toString();
+      final oid =
+          (entry['oid'] ?? entry['object_id'] ?? entry['objectId'] ?? '')
+              .toString();
       if (oid.isEmpty) {
         continue;
       }
 
-      // 解析创建时间
       final timestampRaw = entry['created_at'] ?? entry['createdAt'];
       final createdSeconds = _parseTimestampSeconds(timestampRaw);
-
-      // 获取视图名称，如果 API 返回了 name 字段则使用，否则使用临时标题
       final name = (entry['name'] ?? '').toString();
       final displayName = name.isNotEmpty ? name : '加载中...';
 
-      // 解析视图布局类型（0=文档, 1=网格, 2=看板, 3=日历）
       final viewLayoutRaw = entry['view_layout'] ?? entry['viewLayout'] ?? 0;
-      final viewLayoutInt = viewLayoutRaw is int ? viewLayoutRaw : (int.tryParse(viewLayoutRaw.toString()) ?? 0);
-      ViewLayoutPB viewLayout;
-      switch (viewLayoutInt) {
-        case 1:
-          viewLayout = ViewLayoutPB.Grid;
-          break;
-        case 2:
-          viewLayout = ViewLayoutPB.Board;
-          break;
-        case 3:
-          viewLayout = ViewLayoutPB.Calendar;
-          break;
-        default:
-          viewLayout = ViewLayoutPB.Document;
-      }
+      final viewLayoutInt = viewLayoutRaw is int
+          ? viewLayoutRaw
+          : (int.tryParse(viewLayoutRaw.toString()) ?? 0);
+
+      final viewLayout = switch (viewLayoutInt) {
+        1 => ViewLayoutPB.Grid,
+        2 => ViewLayoutPB.Board,
+        3 => ViewLayoutPB.Calendar,
+        _ => ViewLayoutPB.Document,
+      };
 
       final view = ViewPB()
         ..id = oid
@@ -376,15 +378,12 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     return views;
   }
 
-  /// 异步加载笔记的详细信息（包括标题）
-  /// 注意：保留从 API 获取的 layout 信息，因为 ViewBackendService 对跨工作区共享视图可能失败
   Future<List<ViewPB>> _loadViewDetails(List<ViewPB> views) async {
     if (views.isEmpty) {
       return views;
     }
 
     final updatedViews = <ViewPB>[];
-
     for (final view in views) {
       if (view.id.isEmpty) {
         updatedViews.add(view);
@@ -396,7 +395,6 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         viewResult.fold(
           (detailedView) {
             if (detailedView.name.isNotEmpty) {
-              // Preserve the API-derived layout; only take the name from local cache
               final enriched = ViewPB()
                 ..id = view.id
                 ..name = detailedView.name
@@ -407,8 +405,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
               updatedViews.add(view);
             }
           },
-          (error) {
-            // 获取失败时保持原视图（包含从 API 获取的 layout 信息）
+          (_) {
             updatedViews.add(view);
           },
         );
@@ -421,8 +418,6 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
     return updatedViews;
   }
 
-  /// For views whose layout is still Document (view_layout=0 from old DB records),
-  /// query /api/collab/share-info to retrieve the correct layout from the invite template.
   Future<List<ViewPB>> _enrichViewLayouts(
     List<ViewPB> views,
     String baseUrl,
@@ -434,6 +429,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
         result.add(view);
         continue;
       }
+
       try {
         final uri = Uri.parse(baseUrl).replace(
           path: '/api/collab/share-info',
@@ -446,6 +442,7 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
             'Authorization': 'Bearer $accessToken',
           },
         ).timeout(const Duration(seconds: 5));
+
         if (response.statusCode == 200) {
           final decoded = jsonDecode(response.body);
           if (decoded is Map<String, dynamic>) {
@@ -456,20 +453,12 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
                   ? layoutRaw
                   : (int.tryParse(layoutRaw.toString()) ?? 0);
               if (layoutInt > 0) {
-                ViewLayoutPB correctedLayout;
-                switch (layoutInt) {
-                  case 1:
-                    correctedLayout = ViewLayoutPB.Grid;
-                    break;
-                  case 2:
-                    correctedLayout = ViewLayoutPB.Board;
-                    break;
-                  case 3:
-                    correctedLayout = ViewLayoutPB.Calendar;
-                    break;
-                  default:
-                    correctedLayout = ViewLayoutPB.Document;
-                }
+                final correctedLayout = switch (layoutInt) {
+                  1 => ViewLayoutPB.Grid,
+                  2 => ViewLayoutPB.Board,
+                  3 => ViewLayoutPB.Calendar,
+                  _ => ViewLayoutPB.Document,
+                };
                 final corrected = ViewPB()
                   ..id = view.id
                   ..name = view.name
@@ -484,8 +473,10 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       } catch (e) {
         Log.warn('Failed to enrich layout for ${view.id}: $e');
       }
+
       result.add(view);
     }
+
     return result;
   }
 
@@ -511,6 +502,102 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
       }
     }
     return DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  }
+
+  bool _canAcceptDraggedView(ViewPB view) {
+    return !view.isSpace;
+  }
+
+  Future<void> _openSharePanelForView(ViewPB view) async {
+    final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
+    final workspace = userWorkspaceBloc.state.currentWorkspace;
+    final workspaceId = workspace?.workspaceId ?? '';
+    final workspaceType = workspace?.workspaceType;
+    final shareBloc = getIt<ShareBloc>(param1: view)
+      ..add(const ShareEvent.initial());
+    final shareTabBloc = ShareTabBloc(
+      repository: RustShareWithUserRepositoryImpl(),
+      pageId: view.id,
+      workspaceId: workspaceId,
+    );
+    DatabaseTabBarBloc? databaseBloc;
+
+    if (workspaceType != WorkspaceTypePB.LocalW) {
+      shareTabBloc.add(ShareTabEvent.initialize());
+    }
+
+    if (view.layout.isDatabaseView) {
+      databaseBloc = DatabaseTabBarBloc(
+        view: view,
+        compactModeId: view.id,
+        enableCompactMode: false,
+      )..add(const DatabaseTabBarEvent.initial());
+    }
+
+    try {
+      final tabs = await _buildShareTabsForView(
+        view: view,
+        workspaceType: workspaceType,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      await openShareSettingsDialog(
+        context: context,
+        tabs: tabs,
+        shareBloc: shareBloc,
+        userWorkspaceBloc: userWorkspaceBloc,
+        shareWithUserBloc: shareTabBloc,
+        databaseBloc: databaseBloc,
+      );
+    } finally {
+      await databaseBloc?.close();
+      await shareTabBloc.close();
+      await shareBloc.close();
+    }
+  }
+
+  Future<List<ShareMenuTab>> _buildShareTabsForView({
+    required ViewPB view,
+    required WorkspaceTypePB? workspaceType,
+  }) async {
+    if (workspaceType == WorkspaceTypePB.LocalW) {
+      return const [];
+    }
+
+    final spacePermission = await _getSpacePermission(view);
+    final tabs = <ShareMenuTab>[];
+    if (spacePermission != SpacePermission.private) {
+      tabs.add(ShareMenuTab.share);
+    }
+    tabs.add(ShareMenuTab.publish);
+    return tabs;
+  }
+
+  Future<SpacePermission> _getSpacePermission(ViewPB view) async {
+    try {
+      if (view.isSpace) {
+        return view.spacePermission;
+      }
+
+      final ancestorsResult =
+          await ViewBackendService.getViewAncestors(view.id);
+      return ancestorsResult.fold(
+        (ancestors) {
+          for (final ancestor in ancestors.items) {
+            if (ancestor.isSpace) {
+              return ancestor.spacePermission;
+            }
+          }
+          return SpacePermission.publicToAll;
+        },
+        (_) => SpacePermission.publicToAll,
+      );
+    } catch (e) {
+      Log.error('Failed to resolve share space permission for ${view.id}: $e');
+      return SpacePermission.publicToAll;
+    }
   }
 
   @override
@@ -539,46 +626,63 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: SizedBox(
-                      height: 44,
-                      child: Stack(
-                        children: [
-                          AFGhostIconTextButton.primary(
+                    child: DragTarget<ViewPB>(
+                      onWillAcceptWithDetails: (details) {
+                        final canAccept = _canAcceptDraggedView(details.data);
+                        if (canAccept && !_isDragHovering) {
+                          setState(() => _isDragHovering = true);
+                        }
+                        return canAccept;
+                      },
+                      onLeave: (_) {
+                        if (_isDragHovering) {
+                          setState(() => _isDragHovering = false);
+                        }
+                      },
+                      onAcceptWithDetails: (details) async {
+                        setState(() {
+                          _isDragHovering = false;
+                          _isExpanded = true;
+                        });
+                        unawaited(_loadUserSharedNotes(showLoading: false));
+                        await _openSharePanelForView(details.data);
+                      },
+                      builder: (context, candidateData, rejectedData) {
+                        final isActive =
+                            _isDragHovering || candidateData.isNotEmpty;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 120),
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withValues(alpha: 0.10)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(
+                              theme.borderRadius.s,
+                            ),
+                          ),
+                          child: AFGhostIconTextButton.primary(
                             text: '共享',
                             mainAxisAlignment: MainAxisAlignment.start,
                             size: AFButtonSize.l,
                             onTap: () {
                               setState(() => _isExpanded = !_isExpanded);
                               if (_isExpanded) {
-                                // 展开时加载数据，但不显示加载状态
                                 _loadUserSharedNotes(showLoading: false);
                               }
                             },
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 10,
-                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
                             borderRadius: theme.borderRadius.s,
-                            iconBuilder: (context, isHover, disabled) => SizedBox.shrink()
+                            iconBuilder: (context, isHover, disabled) =>
+                                const SizedBox.shrink(),
+                            showExpandArrow: true,
+                            isExpanded: _isExpanded,
                           ),
-                          Positioned(
-                            right: 12,
-                            top: 0,
-                            bottom: 0,
-                            child: Center(
-                              child: Icon(
-                                _isExpanded
-                                    ? Icons.keyboard_arrow_down
-                                    : Icons.keyboard_arrow_right,
-                                size: 16,
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.color,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
                   ),
                   if (_isExpanded)
@@ -600,57 +704,52 @@ class _SidebarShareButtonState extends State<SidebarShareButton>
   }
 
   Widget _buildUserSharedNotesList(BuildContext context) {
-    // 始终显示笔记列表，即使正在加载数据，避免 UI 闪烁
-    // 只有在首次加载且数据为空时才显示加载指示器
     if (_isLoading && _userSharedNotes.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(8.0),
         child: Center(child: CircularProgressIndicator.adaptive()),
       );
     }
-    
+
     if (_userSharedNotes.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.only(left: 20.0, right: 8.0, top: 6.0, bottom: 6.0),
+        padding: const EdgeInsets.only(
+          left: 20.0,
+          right: 8.0,
+          top: 6.0,
+          bottom: 6.0,
+        ),
         child: FlowyText.small(
-          '暂无分享的笔记',
+          '暂无共享的笔记',
           color: Theme.of(context).colorScheme.outline,
         ),
       );
     }
-    
+
     return Column(
       children: _userSharedNotes.map((view) {
-        // 根据视图布局类型选择图标
-        final FlowySvgData iconData;
-        switch (view.layout) {
-          case ViewLayoutPB.Grid:
-            iconData = FlowySvgs.grid_s;
-            break;
-          case ViewLayoutPB.Board:
-            iconData = FlowySvgs.board_s;
-            break;
-          case ViewLayoutPB.Calendar:
-            iconData = FlowySvgs.date_s;
-            break;
-          default:
-            iconData = FlowySvgs.document_s;
-        }
+        final iconData = switch (view.layout) {
+          ViewLayoutPB.Grid => FlowySvgs.grid_s,
+          ViewLayoutPB.Board => FlowySvgs.board_s,
+          ViewLayoutPB.Calendar => FlowySvgs.date_s,
+          _ => FlowySvgs.document_s,
+        };
+
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 2.0),
           child: InkWell(
             borderRadius: BorderRadius.circular(6.0),
             onTap: () {
-              // 若当前在日历且存在未保存的新建/编辑，先弹窗确认再离开
               CalendarUnsavedGuard.instance.maybeConfirmLeave(
                 context,
-                () {
-                  context.read<TabsBloc>().openPlugin(view);
-                },
+                () => context.read<TabsBloc>().openPlugin(view),
               );
             },
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12.0,
+                vertical: 8.0,
+              ),
               child: Row(
                 children: [
                   FlowySvg(

@@ -14,6 +14,82 @@ import '../../../generated/flowy_svgs.g.dart';
 import '../../../generated/locale_keys.g.dart';
 import '../../../workspace/presentation/widgets/dialogs.dart';
 
+Future<void> openShareSettingsDialog({
+  required BuildContext context,
+  required List<ShareMenuTab> tabs,
+  required ShareBloc shareBloc,
+  required UserWorkspaceBloc userWorkspaceBloc,
+  required ShareTabBloc shareWithUserBloc,
+  DatabaseTabBarBloc? databaseBloc,
+  PageAccessLevelBloc? pageAccessLevelBloc,
+}) async {
+  if (pageAccessLevelBloc != null &&
+      !pageAccessLevelBloc.state.isLoadingLockStatus &&
+      pageAccessLevelBloc.state.isReadOnly) {
+    showToastNotification(
+      message: '该文档为只读内容，不能再次共享或发布',
+      type: ToastificationType.warning,
+    );
+    return;
+  }
+
+  if (tabs.isEmpty) {
+    final isGuestMode =
+        userWorkspaceBloc.state.currentWorkspace?.workspaceType ==
+            WorkspaceTypePB.LocalW;
+    showToastNotification(
+      message:
+          isGuestMode ? '快速开始，无法分享和发布。如需分享和发布，请登录/注册' : '该文档为只读内容，不能再次共享或发布',
+      type: ToastificationType.warning,
+    );
+    return;
+  }
+
+  shareBloc.add(const ShareEvent.updatePublishStatus());
+  try {
+    await shareBloc.stream
+        .firstWhere((state) => state.viewId == shareBloc.view.id);
+  } catch (_) {
+    // Keep current state when the refresh stream is interrupted.
+  }
+
+  if (!context.mounted) {
+    return;
+  }
+
+  if (!shareBloc.state.enablePublish) {
+    showToastNotification(
+      message: '当前笔记未同步到云端，无法生成分享链接',
+      description: '请先在设置中连接云服务并开启同步，然后再尝试分享此笔记。',
+      type: ToastificationType.warning,
+    );
+    return;
+  }
+
+  shareWithUserBloc.add(ShareTabEvent.loadSharedUsers());
+
+  await showDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.35),
+    builder: (dialogContext) {
+      return MultiBlocProvider(
+        providers: [
+          if (databaseBloc != null) BlocProvider.value(value: databaseBloc),
+          BlocProvider.value(value: shareBloc),
+          BlocProvider.value(value: userWorkspaceBloc),
+          BlocProvider.value(value: shareWithUserBloc),
+          if (pageAccessLevelBloc != null)
+            BlocProvider.value(value: pageAccessLevelBloc),
+        ],
+        child: ShareSettingsDialog(
+          tabs: tabs,
+          viewName: shareBloc.state.viewName,
+        ),
+      );
+    },
+  );
+}
+
 class ShareMenuButton extends StatelessWidget {
   const ShareMenuButton({
     super.key,
@@ -25,9 +101,10 @@ class ShareMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: FlowySvg(FlowySvgs.icon_share_m,
+      icon: FlowySvg(
+        FlowySvgs.icon_share_m,
         size: const Size.square(18),
-        color:Theme.of(context).colorScheme.onSurface,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
       tooltip: LocaleKeys.shareAction_buttonText.tr(),
       padding: const EdgeInsets.all(8),
@@ -40,45 +117,6 @@ class ShareMenuButton extends StatelessWidget {
   }
 
   Future<void> _openShareSettings(BuildContext context) async {
-    try {
-      final pageAccessLevelBloc = context.read<PageAccessLevelBloc>();
-      if (!pageAccessLevelBloc.state.isLoadingLockStatus &&
-          pageAccessLevelBloc.state.isReadOnly) {
-        showToastNotification(
-          message: '该文档为只读内容，不能再次共享或发布',
-          type: ToastificationType.warning,
-        );
-        return;
-      }
-    } catch (_) {
-      // 当前场景可能没有注入 PageAccessLevelBloc，忽略并继续
-    }
-
-    if (tabs.isEmpty) {
-      final userWorkspaceBloc = context.read<UserWorkspaceBloc?>();
-      final isGuestMode = userWorkspaceBloc?.state.currentWorkspace?.workspaceType ==
-          WorkspaceTypePB.LocalW;
-      showToastNotification(
-        message: isGuestMode
-            ? '快速开始，无法分享和发布。如需分享和发布，请登录/注册'
-            : '该文档为只读内容，不能再次共享或发布',
-        type: ToastificationType.warning,
-      );
-      return;
-    }
-
-    final enableCloudShare =
-        context.read<ShareBloc?>()?.state.enablePublish ?? false;
-
-    // 当前工作区未连接云服务或不支持发布，同步状态未知，阻止分享
-    if (!enableCloudShare) {
-      showToastNotification(
-        message: '当前笔记未同步到云端，无法生成分享链接',
-        description: '请先在设置中连接云服务并开启同步，然后再尝试分享此笔记。',
-        type: ToastificationType.warning,
-      );
-      return;
-    }
     final shareBloc = context.read<ShareBloc>();
     final databaseBloc = context.read<DatabaseTabBarBloc?>();
     final userWorkspaceBloc = context.read<UserWorkspaceBloc>();
@@ -90,29 +128,14 @@ class ShareMenuButton extends StatelessWidget {
       pageAccessLevelBloc = null;
     }
 
-    shareBloc.add(const ShareEvent.updatePublishStatus());
-    shareWithUserBloc.add(ShareTabEvent.loadSharedUsers());
-
-    await showDialog<void>(
+    await openShareSettingsDialog(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.35),
-      builder: (dialogContext) {
-        return MultiBlocProvider(
-          providers: [
-            if (databaseBloc != null)
-              BlocProvider.value(value: databaseBloc),
-            BlocProvider.value(value: shareBloc),
-            BlocProvider.value(value: userWorkspaceBloc),
-            BlocProvider.value(value: shareWithUserBloc),
-            if (pageAccessLevelBloc != null)
-              BlocProvider.value(value: pageAccessLevelBloc),
-          ],
-          child: ShareSettingsDialog(
-            tabs: tabs,
-            viewName: shareBloc.state.viewName,
-          ),
-        );
-      },
+      tabs: tabs,
+      shareBloc: shareBloc,
+      userWorkspaceBloc: userWorkspaceBloc,
+      shareWithUserBloc: shareWithUserBloc,
+      databaseBloc: databaseBloc,
+      pageAccessLevelBloc: pageAccessLevelBloc,
     );
   }
 }

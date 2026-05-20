@@ -1,6 +1,7 @@
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
+import 'package:appflowy/workspace/presentation/home/menu/view/cross_space_move.dart';
 import 'package:appflowy/workspace/presentation/widgets/draggable_item/draggable_item.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/log.dart';
@@ -111,7 +112,8 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
             height: kDraggableViewItemDividerHeight,
             thickness: kDraggableViewItemDividerHeight,
             color: position == DraggableHoverPosition.top
-                ? widget.topHighlightColor ?? Theme.of(context).colorScheme.primary
+                ? widget.topHighlightColor ??
+                    Theme.of(context).colorScheme.primary
                 : Colors.transparent,
           ),
         DecoratedBox(
@@ -119,7 +121,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
             borderRadius: BorderRadius.circular(6.0),
             color: position == DraggableHoverPosition.center
                 ? widget.centerHighlightColor ??
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)
+                    Theme.of(context).colorScheme.primary.withValues(alpha: 0.5)
                 : Colors.transparent,
           ),
           child: widget.child,
@@ -128,7 +130,8 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
           height: kDraggableViewItemDividerHeight,
           thickness: kDraggableViewItemDividerHeight,
           color: position == DraggableHoverPosition.bottom
-              ? widget.bottomHighlightColor ?? Theme.of(context).colorScheme.primary
+              ? widget.bottomHighlightColor ??
+                  Theme.of(context).colorScheme.primary
               : Colors.transparent,
         ),
       ],
@@ -192,8 +195,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
   }
 
   void _move(ViewPB from, ViewPB to) {
-    if (position == DraggableHoverPosition.center &&
-        to.layout.isDatabaseView) {
+    if (position == DraggableHoverPosition.center && to.layout.isDatabaseView) {
       // not support moving into a database view (Grid/Board/Calendar)
       return;
     }
@@ -214,17 +216,19 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
         context.read<ViewBloc>().add(
               ViewEvent.move(
                 from,
-                position == DraggableHoverPosition.center ? to.id : to.parentViewId,
+                position == DraggableHoverPosition.center
+                    ? to.id
+                    : to.parentViewId,
                 position == DraggableHoverPosition.bottom ? to.id : null,
                 fromSection,
                 toSection,
               ),
             );
-        
+
         // 延迟执行刷新操作，确保后端操作完成
         Future.delayed(const Duration(milliseconds: 300), () {
           if (context.mounted) {
-            _refreshViews(context, from, to);
+            _refreshViews(from, to);
           }
         });
         break;
@@ -234,8 +238,10 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
   }
 
   // 刷新视图，确保移动操作后UI能正确更新
-  void _refreshViews(BuildContext context, ViewPB from, ViewPB to) {
+  void _refreshViews(ViewPB from, ViewPB to) {
     try {
+      refreshSidebarMoveState(context);
+
       // 1. 尝试刷新 SpaceBloc（管理空间相关视图）
       try {
         final spaceBloc = context.read<SpaceBloc>();
@@ -247,7 +253,7 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
       } catch (_) {
         // 忽略错误，SpaceBloc 可能不存在
       }
-      
+
       // 2. 尝试刷新 SidebarSectionsBloc（管理根级别视图）
       try {
         final sidebarSectionsBloc = context.read<SidebarSectionsBloc>();
@@ -260,13 +266,14 @@ class _DraggableViewItemState extends State<DraggableViewItem> {
       } catch (_) {
         // 忽略错误，SidebarSectionsBloc 可能不存在
       }
-      
+
       // 3. 刷新当前 ViewBloc
       try {
         final currentViewBloc = context.read<ViewBloc>();
         if (!currentViewBloc.isClosed) {
           // 触发当前视图的刷新
-          currentViewBloc.add(ViewEvent.viewDidUpdate(FlowyResult.success(widget.view)));
+          currentViewBloc
+              .add(ViewEvent.viewDidUpdate(FlowyResult.success(widget.view)));
           Log.info('Refreshing current ViewBloc');
         }
       } catch (_) {

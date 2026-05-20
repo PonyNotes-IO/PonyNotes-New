@@ -1069,10 +1069,11 @@ class _SpaceDocumentList extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.start,
                   size: AFButtonSize.l,
                   onTap: () => _createNewNote(context),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 8,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
                     vertical: 10,
                   ),
+                  mainAxisAlignment: MainAxisAlignment.start,
                   borderRadius: theme.borderRadius.s,
                   iconBuilder: (context, isHover, disabled) => FlowySvg(
                     FlowySvgs.view_item_add_s,
@@ -1130,10 +1131,11 @@ class _SpaceDocumentList extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.start,
                 size: AFButtonSize.xl,
                 onTap: () => _createNewNote(context),
-                padding: EdgeInsets.symmetric(
-                  horizontal: 8,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
                   vertical: 10,
                 ),
+                mainAxisAlignment: MainAxisAlignment.start,
                 borderRadius: theme.borderRadius.s,
                 iconBuilder: (context, isHover, disabled) => FlowySvg(
                   FlowySvgs.view_item_add_s,

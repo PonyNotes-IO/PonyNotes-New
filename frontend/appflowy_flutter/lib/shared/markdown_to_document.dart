@@ -14,12 +14,43 @@ Document customMarkdownToDocument(
   String markdown, {
   double? tableWidth,
 }) {
+  final normalizedMarkdown = _normalizeMathDelimiters(markdown);
   return markdownToDocument(
-    markdown,
+    normalizedMarkdown,
     markdownParsers: [
+      const MarkdownMathBlockParser(),
       const MarkdownCodeBlockParser(),
       MarkdownSimpleTableParser(tableWidth: tableWidth),
     ],
+    inlineSyntaxes: [
+      MarkdownInlineMathSyntax(),
+    ],
+  );
+}
+
+String _normalizeMathDelimiters(String markdown) {
+  // Normalize common AI LaTeX delimiters before Markdown consumes escapes.
+  // 在 Markdown 解析前归一化 AI 常见 LaTeX 分隔符，避免 \[...\] 变成普通方括号文本。
+  final withDisplayMath = markdown.replaceAllMapped(
+    RegExp(r'\\\[(.*?)\\\]', dotAll: true),
+    (match) {
+      final formula = match.group(1)?.trim();
+      if (formula == null || formula.isEmpty) {
+        return match.group(0)!;
+      }
+      return '\n\n\$\$\n$formula\n\$\$\n\n';
+    },
+  );
+
+  return withDisplayMath.replaceAllMapped(
+    RegExp(r'\\\((.*?)\\\)'),
+    (match) {
+      final formula = match.group(1)?.trim();
+      if (formula == null || formula.isEmpty) {
+        return match.group(0)!;
+      }
+      return '\$$formula\$';
+    },
   );
 }
 

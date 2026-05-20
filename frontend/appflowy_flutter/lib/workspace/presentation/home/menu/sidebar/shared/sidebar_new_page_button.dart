@@ -41,6 +41,7 @@ class _SidebarNewPageButtonState extends State<SidebarNewPageButton> {
       height: HomeSizes.newPageSectionHeight,
       child: FlowyButton(
         onTap: () async => _createNewPage(),
+        mainAxisAlignment: MainAxisAlignment.start,
         leftIcon: const FlowySvg(
           FlowySvgs.new_app_m,
           blendMode: null,
