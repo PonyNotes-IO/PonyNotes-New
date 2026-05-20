@@ -150,7 +150,8 @@ class FlowyRunner {
         InitAppWindowTask(),
         // Init Rust SDK - must be initialized first to ensure platform channels work
         InitRustSDKTask(),
-
+        // init media_kit for video/audio playback
+        const InitMediaKitTask(),
         // localization - moved after Rust SDK to ensure platform channels are ready
         const InitLocalizationTask(),
         
@@ -166,8 +167,6 @@ class FlowyRunner {
 
         // Initialize notification service and check permissions
         const NotificationServiceTask(),
-        // init media_kit for video/audio playback
-        const InitMediaKitTask(),
         // init the app widget
         // ignore in test mode
         if (!mode.isUnitTest) ...[
