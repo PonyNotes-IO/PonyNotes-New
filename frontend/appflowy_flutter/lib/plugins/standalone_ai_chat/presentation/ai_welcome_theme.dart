@@ -6,13 +6,15 @@ import 'package:flutter/material.dart';
 class AIWelcomeTheme {
   /// 动态颜色配置 - 根据当前主题返回相应颜色
   static Color backgroundColor(BuildContext context) =>
-      AppFlowyTheme.of(context).surfaceContainerColorScheme.layer01;
+      Theme.of(context).brightness == Brightness.light
+          ? const Color(0xFFFFFFFF)
+          : const Color(0xFF000000);
   static Color primaryTextColor(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface;
   static Color secondaryTextColor(BuildContext context) =>
       Theme.of(context).colorScheme.onSurfaceVariant;
   static Color placeholderTextColor(BuildContext context) =>
-      Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7);
+      Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7);
   static Color borderColor(BuildContext context) =>
       Theme.of(context).colorScheme.outline;
   static Color inputBorderColor(BuildContext context) =>
@@ -26,7 +28,7 @@ class AIWelcomeTheme {
   static Color avatarIconColor(BuildContext context) =>
       Theme.of(context).colorScheme.onPrimaryContainer;
   static Color tooltipTextColor(BuildContext context) =>
-      Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8);
+      Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.8);
   static Color modelSelectorTextColor(BuildContext context) =>
       Theme.of(context).colorScheme.onSurfaceVariant;
   static Color dropdownBackgroundColor(BuildContext context) =>
@@ -54,8 +56,7 @@ class AIWelcomeTheme {
 
   /// 尺寸配置（基于设计图CSS）
   static const double avatarSize = 60.0; // group_1: 60x60
-  static const double containerBorderRadius =
-      10.0; // block_3: border-radius: 10px
+  static const double containerBorderRadius = 18.0; // block_3: border-radius
   static const double buttonBorderRadius = 4.0; // block_4: border-radius: 4px
   static const double iconSize = 30.0; // label_5-8: 25x25
   static const double sendButtonSize = 35.0; // label_9: 35x35
@@ -132,7 +133,7 @@ class AIWelcomeTheme {
         color: backgroundColor(context),
         borderRadius:
             const BorderRadius.all(Radius.circular(containerBorderRadius)),
-        border: Border.all(color: borderColor(context), width: 1.0),
+        border: Border.all(color: borderColor(context)),
       );
 
   /// 模型选择按钮样式
@@ -141,7 +142,7 @@ class AIWelcomeTheme {
         color: backgroundColor(context),
         borderRadius:
             const BorderRadius.all(Radius.circular(buttonBorderRadius)),
-        border: Border.all(color: inputBorderColor(context), width: 1.0),
+        border: Border.all(color: inputBorderColor(context)),
       );
 
   /// 分隔线样式
@@ -157,7 +158,7 @@ class AIWelcomeTheme {
         border: Border.all(color: dropdownBorderColor(context)),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.shadow.withOpacity(0.1),
+            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -169,7 +170,7 @@ class AIWelcomeTheme {
       BoxDecoration(
         color: containerColor(context),
         border: Border(
-          bottom: BorderSide(color: borderColor(context), width: 1),
+          bottom: BorderSide(color: borderColor(context)),
         ),
       );
 
