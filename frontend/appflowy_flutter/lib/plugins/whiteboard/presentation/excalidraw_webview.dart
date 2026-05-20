@@ -693,9 +693,9 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
           }
 
           .App-toolbar {
-            min-height: 73px !important;
-            padding: 10px 16px !important;
-            gap: 10px !important;
+            min-height: 49px !important;
+            padding: 7px 11px !important;
+            gap: 7px !important;
             align-items: center !important;
             background: rgba(255, 255, 255, 0.96) !important;
             border-bottom: 1px solid rgba(17, 24, 39, 0.08) !important;
@@ -710,16 +710,16 @@ class ExcalidrawWebViewState extends State<ExcalidrawWebView> {
             display: inline-flex !important;
             visibility: visible !important;
             opacity: 1 !important;
-            min-width: 44px !important;
-            min-height: 44px !important;
-            border-radius: 10px !important;
+            min-width: 30px !important;
+            min-height: 30px !important;
+            border-radius: 7px !important;
             align-items: center !important;
             justify-content: center !important;
           }
 
           .App-toolbar svg {
-            width: 23px !important;
-            height: 23px !important;
+            width: 15px !important;
+            height: 15px !important;
           }
 
           html,

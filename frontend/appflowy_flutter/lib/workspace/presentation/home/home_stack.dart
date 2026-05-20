@@ -44,8 +44,8 @@ abstract class HomeStackDelegate {
 
 Color homeContentBackgroundColor(BuildContext context) {
   return Theme.of(context).isLightMode
-      ? const Color(0xFFF7F8FB)
-      : const Color(0xFF20232A);
+      ? const Color(0xFFFFFFFF)
+      : const Color(0xFF000000);
 }
 
 class HomeStack extends StatefulWidget {
@@ -242,7 +242,8 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     TabsState state,
   ) {
     Widget? fullWindowMoreItem;
-    if (state.currentIndex >= 0 && state.currentIndex < state.pageManagers.length) {
+    if (state.currentIndex >= 0 &&
+        state.currentIndex < state.pageManagers.length) {
       final pm = state.pageManagers[state.currentIndex];
       final currentMoreItem = pm.plugin.widgetBuilder.fullWindowMoreItem;
       if (currentMoreItem != null) {
@@ -274,7 +275,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
                 fullWindowMoreItem,
               ],
               FlowyTooltip(
-                message: 'Exit full window',
+                message: '退出应用内全屏',
                 child: SizedBox(
                   width: 40,
                   height: 40,
@@ -345,7 +346,7 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
       valueListenable: FullWindowController.isFullWindow,
       builder: (context, isFullWindow, _) {
         return FlowyTooltip(
-          message: isFullWindow ? '退出全窗口显示' : '全窗口显示',
+          message: isFullWindow ? '退出应用内全屏' : '应用内全屏',
           child: FlowyHover(
             child: SizedBox(
               width: 28,
