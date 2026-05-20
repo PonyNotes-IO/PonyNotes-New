@@ -99,6 +99,7 @@ class _ResizableImageState extends State<ResizableImage> {
 
   late double imageWidth;
   double? imageHeight;
+  double _layoutMaxWidth = double.infinity;
   @visibleForTesting
   bool onFocus = false;
 
@@ -153,21 +154,30 @@ class _ResizableImageState extends State<ResizableImage> {
     required double maxWidth,
   }) {
     final minManualWidth = _minimumResizeWidth(aspectRatio);
-    final resizedWidth =
-        (imageWidth - moveDistanceX).clamp(minManualWidth, imageWidth);
-
-    if (maxWidth.isFinite && maxWidth > 0) {
-      return min(resizedWidth.toDouble(), maxWidth);
-    }
+    final maxManualWidth = _maximumResizeWidth(maxWidth, minManualWidth);
+    final resizedWidth = (imageWidth - moveDistanceX)
+        .clamp(minManualWidth, maxManualWidth)
+        .toDouble();
     return resizedWidth.toDouble();
+  }
+
+  double _maximumResizeWidth(double maxWidth, double minManualWidth) {
+    if (maxWidth.isFinite && maxWidth > 0) {
+      return max(maxWidth, minManualWidth);
+    }
+    return max(imageWidth, minManualWidth);
   }
 
   void _commitProportionalResize() {
     final aspectRatio = _aspectRatio;
     final minManualWidth = _minimumResizeWidth(aspectRatio);
+    final maxManualWidth = _maximumResizeWidth(
+      _layoutMaxWidth,
+      minManualWidth,
+    );
 
     imageWidth = (imageWidth - moveDistanceX)
-        .clamp(minManualWidth, imageWidth)
+        .clamp(minManualWidth, maxManualWidth)
         .toDouble();
     imageHeight = imageWidth / aspectRatio;
 
@@ -183,6 +193,7 @@ class _ResizableImageState extends State<ResizableImage> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        _layoutMaxWidth = constraints.maxWidth;
         final aspectRatio = _aspectRatio;
         final currentWidth = _previewImageWidth(
           aspectRatio: aspectRatio,
