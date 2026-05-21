@@ -580,6 +580,7 @@ class PasswordHttpService {
   Future<FlowyResult<Map<String, dynamic>, FlowyError>> signInWithThirdParty({
     required String platform,
     required String code,
+    String? platformType,
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/token?grant_type=third_party');
@@ -587,6 +588,7 @@ class PasswordHttpService {
       final body = <String, dynamic>{
         'platform': platform,
         'code': code,
+        if (platformType != null) 'platform_type': platformType,
       };
 
       final response = await client.post(
@@ -627,18 +629,23 @@ class PasswordHttpService {
         }
 
         ErrorCode errorCode = ErrorCode.Internal;
+        String errorMsg = 'Third party login failed';
 
         if (response.statusCode == 400) {
-          // Invalid credentials or code
           errorCode = ErrorCode.UserUnauthorized;
+          errorMsg = errorBody['msg'] ?? errorBody['error_description'] ?? 'Invalid credentials or authorization code';
         } else if (response.statusCode == 422) {
           errorCode = ErrorCode.InvalidParams;
+          errorMsg = errorBody['msg'] ?? errorBody['error_description'] ?? 'Invalid parameters';
+        } else if (response.statusCode == 500) {
+          errorCode = ErrorCode.Internal;
+          errorMsg = errorBody['msg'] ?? errorBody['error_description'] ?? 'Server error, please try again later';
         }
 
         return FlowyResult.failure(
           FlowyError(
             code: errorCode,
-            msg: errorBody['msg'] ?? errorBody['error_description'] ?? 'Third party login failed',
+            msg: errorMsg,
           ),
         );
       }

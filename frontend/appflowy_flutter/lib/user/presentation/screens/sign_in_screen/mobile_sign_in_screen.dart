@@ -1,7 +1,13 @@
+// ignore_for_file: undefined_getter
+
 import 'package:appflowy/env/cloud_env.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/generated/locale_keys.g.dart';
+import 'package:appflowy/user/application/douyin/douyin_login_service.dart';
 import 'package:appflowy/user/application/sign_in_bloc.dart';
+import 'package:appflowy/user/presentation/router.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/continue_with/mobile_phone_login_form.dart';
+import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/phone_bind_screen.dart';
 import 'package:appflowy/user/presentation/screens/sign_in_screen/widgets/third_party_sign_in_button/third_party_sign_in_buttons.dart';
 import 'package:appflowy/user/presentation/widgets/flowy_logo_title.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
@@ -9,6 +15,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:appflowy/startup/startup.dart';
 
 import '../../../../workspace/presentation/widgets/dialogs.dart';
 import 'widgets/agreement/terms_and_conditions_section.dart';
@@ -25,79 +32,87 @@ class MobileSignInScreen extends StatefulWidget {
 
 class _MobileSignInScreenState extends State<MobileSignInScreen> {
   bool _agreedToTerms = false;
+  bool _phoneDialogOpen = false;
+  bool _phoneBindingCancelled = false;
+  bool _isNavigatingToHome = false;
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<SignInBloc, SignInState>(
-      builder: (context, state) {
-        final theme = AppFlowyTheme.of(context);
-        return Scaffold(
-          resizeToAvoidBottomInset: false,
-          body: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 30),
-              child: Column(
-                children: [
-                  VSpace(40),
-                  // Logo and welcome text
-                  FlowyLogoTitle(
-                    title: LocaleKeys.welcomeToPonyNotes.tr(),
-                    logoSize: Size.square(60),
-                  ),
-                  VSpace(40),
+    return BlocListener<SignInBloc, SignInState>(
+      listener: (context, state) {
+        _handleSignInStateChange(context, state);
+      },
+      child: BlocBuilder<SignInBloc, SignInState>(
+        builder: (context, state) {
+          final theme = AppFlowyTheme.of(context);
+          return Scaffold(
+            resizeToAvoidBottomInset: false,
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 30),
+                child: Column(
+                  children: [
+                    VSpace(40),
+                    // Logo and welcome text
+                    FlowyLogoTitle(
+                      title: LocaleKeys.welcomeToPonyNotes.tr(),
+                      logoSize: Size.square(60),
+                    ),
+                    VSpace(40),
 
-                  // Phone input and login button
-                  MobilePhoneLoginForm(
-                    onAgreeChanged: (value) {
-                      setState(() {
-                        _agreedToTerms = value;
-                      });
-                    },
-                    initialAgreed: _agreedToTerms,
-                  ),
-                  const SizedBox(height: 12),
+                    // Phone input and login button
+                    MobilePhoneLoginForm(
+                      onAgreeChanged: (value) {
+                        setState(() {
+                          _agreedToTerms = value;
+                        });
+                      },
+                      initialAgreed: _agreedToTerms,
+                    ),
+                    const SizedBox(height: 12),
 
-                  QuickStartButton(
-                    onTap: () {
-                      context
-                          .read<SignInBloc>()
-                          .add(const SignInEvent.signInAsGuest());
-                    },
-                    checkTermsAgreement: () {
-                      if (!_agreedToTerms) {
-                        showToastNotification(
-                          message: "请先同意用户协议和隐私政策",
-                          type: ToastificationType.error,
-                        );
-                        return false;
-                      }
-                      return true;
-                    },
-                  ),
-                  const SizedBox(height: 16),
+                    QuickStartButton(
+                      onTap: () {
+                        context
+                            .read<SignInBloc>()
+                            .add(const SignInEvent.signInAsGuest());
+                      },
+                      checkTermsAgreement: () {
+                        if (!_agreedToTerms) {
+                          showToastNotification(
+                            message: "请先同意用户协议和隐私政策",
+                            type: ToastificationType.error,
+                          );
+                          return false;
+                        }
+                        return true;
+                      },
+                    ),
+                    const SizedBox(height: 16),
 
-                  const Spacer(),
+                    const Spacer(),
 
-                  // 第三方登录按钮
-                  _buildThirdPartyButtons(context),
+                    // 第三方登录按钮
+                    _buildThirdPartyButtons(context),
 
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  // Agreement checkbox
-                  TermsAndConditionsSection(
-                    agreedToTerms: _agreedToTerms,
-                    onAgreedToTermsChanged: (value) {
-                      setState(() {
-                        _agreedToTerms = value;
-                      });
-                    },
-                  ),
-                ],
+                    // Agreement checkbox
+                    TermsAndConditionsSection(
+                      agreedToTerms: _agreedToTerms,
+                      onAgreedToTermsChanged: (value) {
+                        setState(() {
+                          _agreedToTerms = value;
+                        });
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -137,22 +152,23 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularIconButton(
-              icon: Image.asset(
-                "assets/images/login/icon_login_wx.png",
-                width: 28,
-                height: 28,
+            IconButton(
+              icon: FlowySvg(
+                FlowySvgs.icon_login_wx_xl, blendMode:null
               ),
-              onTap: () => _signInWithWeChat(context),
+              iconSize: 40,
+              onPressed: () {
+                _signInWithWeChat(context);
+              },
             ),
             const SizedBox(width: 24),
-            CircularIconButton(
-              icon: Image.asset(
-                "assets/images/login/icon_login_dy.png",
-                width: 28,
-                height: 28,
+            IconButton(
+              icon: FlowySvg(
+                FlowySvgs.icon_login_dy_xl,
+                  blendMode:null
               ),
-              onTap: () => _signInWithDouYin(context),
+              iconSize: 40,
+              onPressed: () => _signInWithDouYin(context),
             ),
           ],
         ),
@@ -179,6 +195,223 @@ class _MobileSignInScreenState extends State<MobileSignInScreen> {
       );
       return;
     }
+
+    // 检查抖音是否安装
+    final isInstalled = await DouYinLoginService.instance.isDouYinInstalled();
+    if (!isInstalled) {
+      showToastNotification(
+        message: '请先安装抖音App',
+        type: ToastificationType.error,
+      );
+      return;
+    }
+
     context.read<SignInBloc>().add(const SignInEvent.signInWithDouYin());
+  }
+
+  Future<void> _handleSignInStateChange(BuildContext context, SignInState state) async {
+    // 检查是否需要绑定手机号（第三方登录但未绑定手机号）
+    final dynamic dynState = state;
+    final needBind = (dynState.requiresPhoneBinding == true) ||
+        state.toString().contains('requiresPhoneBinding: true');
+    if (needBind && !_phoneDialogOpen) {
+      _phoneDialogOpen = true;
+      _phoneBindingCancelled = false;
+      final signInBloc = context.read<SignInBloc>();
+      final profile = await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => BlocProvider.value(
+            value: signInBloc,
+            child: const PhoneBindScreen(),
+          ),
+        ),
+      );
+      _phoneDialogOpen = false;
+
+      if (profile != null) {
+        if (!context.mounted || _isNavigatingToHome) {
+          return;
+        }
+
+        _isNavigatingToHome = true;
+
+        try {
+          final signInBloc = context.read<SignInBloc>();
+          if (!signInBloc.isClosed) {
+            signInBloc.add(SignInEvent.phoneBindingComplete(profile));
+          }
+        } catch (e) {
+          // SignInBloc 不可用，直接导航
+        }
+
+        final rootNavigator = Navigator.of(context, rootNavigator: true);
+        if (rootNavigator != null) {
+          final rootContext = rootNavigator.context;
+          if (rootContext.mounted) {
+            getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+          }
+        }
+      } else {
+        _phoneBindingCancelled = true;
+        showToastNotification(
+          message: '请先绑定手机号再继续',
+          type: ToastificationType.info,
+        );
+        if (context.mounted) {
+          context.read<SignInBloc>().add(SignInEvent.clearPhoneBindingRequirement());
+          context.read<SignInBloc>().add(const SignInEvent.reset());
+        }
+      }
+
+      if (context.mounted) {
+        context.read<SignInBloc>().add(SignInEvent.clearPhoneBindingRequirement());
+      }
+      return;
+    }
+
+    if (_phoneBindingCancelled && state.successOrFail == null) {
+      return;
+    }
+
+    final successOrFail = state.successOrFail;
+    if (successOrFail != null) {
+      if (successOrFail.isSuccess) {
+        successOrFail.onSuccess((userProfile) async {
+          if (!context.mounted) {
+            return;
+          }
+
+          if (_phoneBindingCancelled) {
+            if (context.mounted) {
+              try {
+                final signInBloc = context.read<SignInBloc>();
+                if (!signInBloc.isClosed) {
+                  signInBloc.add(const SignInEvent.reset());
+                }
+              } catch (e) {
+                // SignInBloc 不可用或已关闭，忽略
+              }
+            }
+            return;
+          }
+
+          final needBind = (state.requiresPhoneBinding == true);
+          if (needBind && _needBindPhone(userProfile.phone) && !_phoneDialogOpen) {
+            _phoneDialogOpen = true;
+            _phoneBindingCancelled = false;
+            final signInBloc = context.read<SignInBloc>();
+            final profile = await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => BlocProvider.value(
+                  value: signInBloc,
+                  child: const PhoneBindScreen(),
+                ),
+              ),
+            );
+            _phoneDialogOpen = false;
+            if (profile != null) {
+              if (!context.mounted) {
+                return;
+              }
+              final rootNavigator = Navigator.of(context, rootNavigator: true);
+              if (rootNavigator != null) {
+                final rootContext = rootNavigator.context;
+                if (rootContext.mounted) {
+                  getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                }
+              }
+            } else {
+              _phoneBindingCancelled = true;
+              showToastNotification(
+                message: '请先绑定手机号再继续',
+                type: ToastificationType.info,
+              );
+              if (context.mounted) {
+                context.read<SignInBloc>().add(SignInEvent.clearPhoneBindingRequirement());
+                context.read<SignInBloc>().add(const SignInEvent.reset());
+              }
+            }
+            return;
+          }
+
+          if (_phoneBindingCancelled) {
+            return;
+          }
+
+          if (_needBindPhone(userProfile.phone)) {
+            if (!_phoneDialogOpen) {
+              _phoneDialogOpen = true;
+              _phoneBindingCancelled = false;
+              final signInBloc = context.read<SignInBloc>();
+              final profile = await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => BlocProvider.value(
+                    value: signInBloc,
+                    child: const PhoneBindScreen(),
+                  ),
+                ),
+              );
+              _phoneDialogOpen = false;
+              if (profile != null) {
+                if (!context.mounted) {
+                  return;
+                }
+                final rootNavigator = Navigator.of(context, rootNavigator: true);
+                if (rootNavigator != null) {
+                  final rootContext = rootNavigator.context;
+                  if (rootContext.mounted) {
+                    getIt<AuthRouter>().goHomeScreen(rootContext, profile);
+                  }
+                }
+              } else {
+                _phoneBindingCancelled = true;
+                showToastNotification(
+                  message: '请先绑定手机号再继续',
+                  type: ToastificationType.info,
+                );
+                if (context.mounted) {
+                  context.read<SignInBloc>().add(SignInEvent.clearPhoneBindingRequirement());
+                  context.read<SignInBloc>().add(const SignInEvent.reset());
+                }
+              }
+              return;
+            } else {
+              return;
+            }
+          }
+
+          if (_phoneBindingCancelled) {
+            return;
+          }
+
+          if (!context.mounted) {
+            return;
+          }
+          final rootNavigator = Navigator.of(context, rootNavigator: true);
+          final rootContext = rootNavigator?.context;
+          if (rootContext == null || !rootContext.mounted) {
+            return;
+          }
+          if (rootContext.mounted) {
+            getIt<AuthRouter>().goHomeScreen(rootContext, userProfile);
+          }
+        });
+      } else {
+        successOrFail.onFailure((error) {
+          if (context.mounted) {
+            showToastNotification(
+              message: error.msg,
+              type: ToastificationType.error,
+            );
+          }
+        });
+      }
+    }
+  }
+
+  bool _needBindPhone(String? phone) {
+    if (phone == null) return false;
+    if (phone.isEmpty) return false;
+    return phone.startsWith('+86temp');
   }
 }

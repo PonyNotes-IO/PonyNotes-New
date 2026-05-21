@@ -19,6 +19,7 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
 import 'package:fixnum/fixnum.dart';
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -907,6 +908,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     final loginResult = await passwordService!.signInWithThirdParty(
       platform: 'weixin',
       code: code,
+      platformType: kIsWeb ? 'web' : (PlatformInfo.isDesktopOrTablet ? 'desktop' : 'mobile'),
     );
 
     emit(
@@ -1024,6 +1026,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
     final loginResult = await passwordService!.signInWithThirdParty(
       platform: 'douyin',
       code: code,
+      platformType: kIsWeb ? 'web' : (PlatformInfo.isDesktopOrTablet ? 'desktop' : 'mobile'),
     );
 
     emit(
