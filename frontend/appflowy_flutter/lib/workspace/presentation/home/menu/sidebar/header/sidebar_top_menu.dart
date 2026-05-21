@@ -103,8 +103,11 @@ class SidebarTopMenu extends StatelessWidget {
               child: FlowyHover(
                 child: SizedBox(
                   width: 24,
+                  height: 24,
                   child: FlowySvg(
-                    FlowySvgs.double_back_arrow_m,
+                    Platform.isMacOS
+                        ? FlowySvgs.sidebar_toggle_macos_m
+                        : FlowySvgs.double_back_arrow_m,
                     color: theme.iconColorScheme.secondary,
                   ),
                 ),
