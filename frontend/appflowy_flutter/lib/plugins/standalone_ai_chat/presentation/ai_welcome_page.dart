@@ -9,6 +9,7 @@ import 'package:appflowy_result/appflowy_result.dart';
 import 'package:fixnum/fixnum.dart' as fixnum;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import '../models/chat_image.dart';
 import 'ai_welcome_theme.dart';
@@ -40,31 +41,47 @@ class AIWelcomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AIWelcomeTheme.backgroundColor(context),
+      resizeToAvoidBottomInset: UniversalPlatform.isMobile,
       body: ColoredBox(
         color: AIWelcomeTheme.backgroundColor(context),
-        child: SizedBox.expand(
-          child: Column(
-            children: [
-              // 顶部头像和欢迎文字区域 / Header section.
-              AIWelcomeHeader(
-                onChatHistoryTap: onChatHistoryTap,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              reverse: true,
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
               ),
-              // 输入交互区域和使用提示 / Input area and usage hint.
-              AIInputArea(
-                onMessageSent: onMessageSent,
-                onChatHistoryTap: onChatHistoryTap,
-              ),
-              const Spacer(),
-              // 底部提示文字 / Footer disclaimer.
-              Container(
-                margin: const EdgeInsets.only(bottom: 64),
-                child: Text(
-                  '内容由 AI 生成，请仔细甄别',
-                  style: AIWelcomeTheme.tooltipStyle(context),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
+                ),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      // 顶部头像和欢迎文字区域 / Header section.
+                      AIWelcomeHeader(
+                        onChatHistoryTap: onChatHistoryTap,
+                      ),
+                      // 输入交互区域和使用提示 / Input area and usage hint.
+                      AIInputArea(
+                        onMessageSent: onMessageSent,
+                        onChatHistoryTap: onChatHistoryTap,
+                      ),
+                      const Spacer(),
+                      // 底部提示文字 / Footer disclaimer.
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 64),
+                        child: Text(
+                          '内容由 AI 生成，请仔细甄别',
+                          style: AIWelcomeTheme.tooltipStyle(context),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

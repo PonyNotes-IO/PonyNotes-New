@@ -445,36 +445,71 @@ class PaymentUtil {
           child: SizedBox(
             width: MediaQuery.of(context).size.width * 0.9,
             height: MediaQuery.of(context).size.height * 0.9,
-            child: InAppWebView(
-              initialUrlRequest: URLRequest(url: WebUri(payUrl)),
-              initialOptions: InAppWebViewGroupOptions(
-                crossPlatform: InAppWebViewOptions(
-                  javaScriptEnabled: true,
-                  useShouldOverrideUrlLoading: true,
-                  mediaPlaybackRequiresUserGesture: false,
+            child: Column(
+              children: [
+                // 顶部标题栏，包含关闭按钮
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Theme.of(context).dividerColor,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text(
+                        '支付',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                      ),
+                    ],
+                  ),
                 ),
-                ios: IOSInAppWebViewOptions(
-                  allowsInlineMediaPlayback: true,
-                  allowsBackForwardNavigationGestures: true,
+                // WebView 内容区域
+                Expanded(
+                  child: InAppWebView(
+                    initialUrlRequest: URLRequest(url: WebUri(payUrl)),
+                    initialOptions: InAppWebViewGroupOptions(
+                      crossPlatform: InAppWebViewOptions(
+                        javaScriptEnabled: true,
+                        useShouldOverrideUrlLoading: true,
+                        mediaPlaybackRequiresUserGesture: false,
+                      ),
+                      ios: IOSInAppWebViewOptions(
+                        allowsInlineMediaPlayback: true,
+                        allowsBackForwardNavigationGestures: true,
+                      ),
+                    ),
+                    onLoadStart: (controller, url) {
+                      Log.info('[PaymentUtil] Payment webview loading: $url');
+                    },
+                    onLoadStop: (controller, url) {
+                      Log.info('[PaymentUtil] Payment webview loaded: $url');
+                    },
+                    onReceivedError: (controller, request, error) {
+                      Log.error('[PaymentUtil] Payment webview error: $error');
+                    },
+                    shouldOverrideUrlLoading: (controller, navigationAction) async {
+                      final url = navigationAction.request.url?.toString();
+                      if (url != null && url.startsWith('ponynotes://')) {
+                        Navigator.of(context).pop();
+                        return NavigationActionPolicy.CANCEL;
+                      }
+                      return NavigationActionPolicy.ALLOW;
+                    },
+                  ),
                 ),
-              ),
-              onLoadStart: (controller, url) {
-                Log.info('[PaymentUtil] Payment webview loading: $url');
-              },
-              onLoadStop: (controller, url) {
-                Log.info('[PaymentUtil] Payment webview loaded: $url');
-              },
-              onReceivedError: (controller, request, error) {
-                Log.error('[PaymentUtil] Payment webview error: $error');
-              },
-              shouldOverrideUrlLoading: (controller, navigationAction) async {
-                final url = navigationAction.request.url?.toString();
-                if (url != null && url.startsWith('ponynotes://')) {
-                  Navigator.of(context).pop();
-                  return NavigationActionPolicy.CANCEL;
-                }
-                return NavigationActionPolicy.ALLOW;
-              },
+              ],
             ),
           ),
         );
