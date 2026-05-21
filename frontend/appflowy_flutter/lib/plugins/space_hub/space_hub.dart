@@ -606,16 +606,11 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         final menuStatus = context.select<HomeSettingBloc, MenuStatus>(
           (bloc) => bloc.state.menuStatus,
         );
-        final shouldApplyTopPadding =
-            !isFullWindow && menuStatus != MenuStatus.expanded;
-        final contentTopPadding = shouldApplyTopPadding
-            ? HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding
-            : 0.0;
         final useFloatingDocumentList =
             !isFullWindow && menuStatus != MenuStatus.expanded;
         final documentListPanel = Padding(
           padding: useFloatingDocumentList
-              ? EdgeInsets.only(top: contentTopPadding + 12, bottom: 12)
+              ? EdgeInsets.only(top: HomeSizes.topBarHeight, bottom: 12)
               : EdgeInsets.zero,
           child: ClipRRect(
             borderRadius: useFloatingDocumentList
@@ -939,7 +934,7 @@ class _SpaceDocumentList extends StatelessWidget {
         children: [
           // 头部：空间名称 + 新增文档按钮
           _buildHeader(context, spaceBloc),
-          VSpace(12),
+          VSpace(4),
           // 文档列表
           Expanded(
             child: spaceBloc != null
@@ -953,7 +948,7 @@ class _SpaceDocumentList extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context, SpaceBloc? spaceBloc) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 4),
       // decoration: BoxDecoration(
       //   border: Border(
       //     bottom: BorderSide(color: Theme.of(context).dividerColor),

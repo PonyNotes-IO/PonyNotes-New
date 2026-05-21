@@ -84,9 +84,8 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
             );
             final shouldApplyTopPadding =
                 !isFullWindow && menuStatus != MenuStatus.expanded;
-            final contentTopPadding = shouldApplyTopPadding
-                ? HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding
-                : 0.0;
+            final contentTopPadding =
+                shouldApplyTopPadding ? HomeSizes.topBarHeight : 0.0;
 
             return Container(
               width: double.infinity,
