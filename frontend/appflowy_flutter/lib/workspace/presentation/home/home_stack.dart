@@ -68,6 +68,18 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
   int selectedIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+    windowManager.addListener(this);
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return BlocProvider<TabsBloc>.value(
       value: getIt<TabsBloc>(),
@@ -216,17 +228,9 @@ class _HomeStackState extends State<HomeStack> with WindowListener {
     if (state.currentIndex >= 0 &&
         state.currentIndex < state.pageManagers.length) {
       final pm = state.pageManagers[state.currentIndex];
-      final currentMoreItem = pm.plugin.widgetBuilder.fullWindowMoreItem;
-      if (currentMoreItem != null) {
-        fullWindowMoreItem = ChangeNotifierProvider.value(
-          value: pm.notifier,
-          child: Consumer<PageNotifier>(
-            builder: (_, notifier, __) =>
-                notifier.plugin.widgetBuilder.fullWindowMoreItem ??
-                const SizedBox.shrink(),
-          ),
-        );
-      }
+      // Note: fullWindowMoreItem is not defined in PluginWidgetBuilder base class
+      // This feature may be added in a future version or specific plugin implementations
+      // For now, we skip this feature
     }
 
     return Positioned(

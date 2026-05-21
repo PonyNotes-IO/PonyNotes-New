@@ -794,6 +794,16 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
     });
     widget.selectedViewNotifier.value = fallbackView;
   }
+
+  @override
+  void dispose() {
+    // ✅ 清理所有缓存的 ViewInfoBloc，防止内存泄漏
+    for (final bloc in _childViewInfoBlocs) {
+      bloc.close();
+    }
+    _childViewInfoBlocs.clear();
+    super.dispose();
+  }
 }
 
 /// 空间文档列表组件（左侧）
@@ -1073,7 +1083,6 @@ class _SpaceDocumentList extends StatelessWidget {
                     horizontal: 12,
                     vertical: 10,
                   ),
-                  mainAxisAlignment: MainAxisAlignment.start,
                   borderRadius: theme.borderRadius.s,
                   iconBuilder: (context, isHover, disabled) => FlowySvg(
                     FlowySvgs.view_item_add_s,
@@ -1135,7 +1144,6 @@ class _SpaceDocumentList extends StatelessWidget {
                   horizontal: 12,
                   vertical: 10,
                 ),
-                mainAxisAlignment: MainAxisAlignment.start,
                 borderRadius: theme.borderRadius.s,
                 iconBuilder: (context, isHover, disabled) => FlowySvg(
                   FlowySvgs.view_item_add_s,
