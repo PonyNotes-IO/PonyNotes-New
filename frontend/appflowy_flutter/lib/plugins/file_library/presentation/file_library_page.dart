@@ -5,11 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:intl/intl.dart';
 import 'package:collection/collection.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/media_entities.pbenum.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/dispatch/dispatch.dart';
@@ -105,29 +103,6 @@ class _FileLibraryPageState extends State<FileLibraryPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Visibility(
-                          visible: shouldApplyTopPadding,
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: FlowyIconButton(
-                              width: 24,
-                              tooltipText: LocaleKeys.sideBar_openSidebar.tr(),
-                              radius: const BorderRadius.all(Radius.circular(8.0)),
-                              icon: const FlowySvg(
-                                FlowySvgs.show_menu_s,
-                                size: Size.square(16),
-                              ),
-                              onPressed: () {
-                                if (FullWindowController.isFullWindow.value) {
-                                  FullWindowController.exit();
-                                }
-                                context.read<HomeSettingBloc>().add(
-                                  HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
                         // 顶部标题
                         Container(
                           height: 50,

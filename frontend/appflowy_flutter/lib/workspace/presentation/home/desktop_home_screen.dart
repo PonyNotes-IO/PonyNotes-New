@@ -279,6 +279,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
           valueListenable: FullWindowController.isFullWindow,
           builder: (context, isFullWindow, _) {
             return _layoutWidgets(
+              buildContext: context,
               layout: layout,
               homeStack: homeStack,
               sidebar: sidebar,
@@ -337,6 +338,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
   }
 
   Widget _layoutWidgets({
+    required BuildContext buildContext,
     required HomeLayout layout,
     required Widget sidebar,
     required Widget homeStack,
@@ -399,7 +401,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
           Positioned.fill(
             child: Listener(
               behavior: HitTestBehavior.opaque,
-              onPointerDown: (_) => context.read<HomeSettingBloc>().add(
+              onPointerDown: (_) => buildContext.read<HomeSettingBloc>().add(
                     const HomeSettingEvent.changeMenuStatus(MenuStatus.hidden),
                   ),
               child: ColoredBox(
@@ -465,7 +467,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                 padding: const EdgeInsets.only(top: 12.0, right: 14.0),
                 child: Listener(
                   behavior: HitTestBehavior.translucent,
-                  onPointerDown: (_) => context.read<HomeSettingBloc>().add(
+                  onPointerDown: (_) => buildContext.read<HomeSettingBloc>().add(
                         const HomeSettingEvent.changeMenuStatus(
                           MenuStatus.expanded,
                         ),
@@ -476,7 +478,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                       height: 24,
                       child: FlowySvg(
                         FlowySvgs.sidebar_toggle_macos_m,
-                        color: AppFlowyTheme.of(context)
+                        color: AppFlowyTheme.of(buildContext)
                             .iconColorScheme
                             .secondary,
                       ),

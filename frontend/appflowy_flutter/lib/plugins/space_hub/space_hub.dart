@@ -629,31 +629,6 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Visibility(
-                    visible: shouldApplyTopPadding,
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: FlowyIconButton(
-                        width: 24,
-                        tooltipText: LocaleKeys.sideBar_closeSidebar.tr(),
-                        radius: const BorderRadius.all(Radius.circular(8.0)),
-                        icon: const FlowySvg(
-                          FlowySvgs.show_menu_s,
-                          size: Size.square(16),
-                        ),
-                        onPressed: () {
-                          if (FullWindowController.isFullWindow.value) {
-                            FullWindowController.exit();
-                          }
-                          context.read<HomeSettingBloc>().add(
-                                const HomeSettingEvent.changeMenuStatus(
-                                  MenuStatus.expanded,
-                                ),
-                              );
-                        },
-                      ),
-                    ),
-                  ),
                   Expanded(
                     child: _SpaceDocumentList(
                       spaceView: widget.spaceView,
