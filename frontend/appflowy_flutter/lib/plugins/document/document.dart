@@ -18,6 +18,7 @@ import 'package:appflowy/workspace/presentation/widgets/dialogs.dart'
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
@@ -276,7 +277,27 @@ class DocumentPluginWidgetBuilder extends PluginWidgetBuilder
             key: ValueKey('favorite_button_${view.id}'),
             view: view,
           ),
-          const HSpace(10),
+          const HSpace(4),
+          ValueListenableBuilder<bool>(
+            valueListenable: FullWindowController.isFullWindow,
+            builder: (context, isFullWindow, _) {
+              return SizedBox.square(
+                dimension: 28,
+                child: FlowyButton(
+                  margin: EdgeInsets.zero,
+                  text: Icon(
+                    isFullWindow
+                        ? Icons.fullscreen_exit_rounded
+                        : Icons.fullscreen_rounded,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  onTap: FullWindowController.toggle,
+                ),
+              );
+            },
+          ),
+          const HSpace(4),
           MoreViewActions(view: view, viewInfoBloc: bloc),
         ],
       ),

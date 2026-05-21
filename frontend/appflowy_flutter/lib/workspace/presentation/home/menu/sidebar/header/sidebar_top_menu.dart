@@ -2,14 +2,11 @@ import 'dart:io' show Platform;
 
 import 'package:appflowy/core/frameless_window.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/workspace/application/home/home_setting_bloc.dart';
 import 'package:appflowy/workspace/application/menu/sidebar_sections_bloc.dart';
 import 'package:appflowy/workspace/presentation/home/home_sizes.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
-import 'package:flowy_infra_ui/widget/flowy_tooltip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:universal_platform/universal_platform.dart';
@@ -67,25 +64,6 @@ class SidebarTopMenu extends StatelessWidget {
 
   Widget _buildCollapseMenuButton(BuildContext context) {
     if (Platform.isWindows) return const SizedBox.shrink();
-    final settingState = context.read<HomeSettingBloc?>()?.state;
-    final isNotificationPanelCollapsed =
-        settingState?.isNotificationPanelCollapsed ?? true;
-
-    final textSpan = TextSpan(
-      children: [
-        TextSpan(
-          text: LocaleKeys.sideBar_closeSidebar.tr(),
-          style: context.tooltipTextStyle(),
-        ),
-        if (isNotificationPanelCollapsed)
-          TextSpan(
-            text: '\n${Platform.isMacOS ? '⌘+.' : 'Ctrl+\\'}',
-            style: context
-                .tooltipTextStyle()
-                ?.copyWith(color: Theme.of(context).hintColor),
-          ),
-      ],
-    );
     final theme = AppFlowyTheme.of(context);
 
     return ValueListenableBuilder(
@@ -94,22 +72,19 @@ class SidebarTopMenu extends StatelessWidget {
         opacity: value ? 1 : 0,
         child: Padding(
           padding: const EdgeInsets.only(top: 12.0, right: 6.0),
-          child: FlowyTooltip(
-            richMessage: textSpan,
-            child: Listener(
-              behavior: HitTestBehavior.translucent,
-              onPointerDown: (_) =>
-                  context.read<HomeSettingBloc>().collapseMenu(),
-              child: FlowyHover(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: FlowySvg(
-                    Platform.isMacOS
-                        ? FlowySvgs.sidebar_toggle_macos_m
-                        : FlowySvgs.double_back_arrow_m,
-                    color: theme.iconColorScheme.secondary,
-                  ),
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) =>
+                context.read<HomeSettingBloc>().collapseMenu(),
+            child: FlowyHover(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: FlowySvg(
+                  Platform.isMacOS
+                      ? FlowySvgs.sidebar_toggle_macos_m
+                      : FlowySvgs.double_back_arrow_m,
+                  color: theme.iconColorScheme.secondary,
                 ),
               ),
             ),

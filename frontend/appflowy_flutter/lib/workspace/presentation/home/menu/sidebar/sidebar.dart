@@ -707,22 +707,7 @@ class _SidebarSearchButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final shortcut =
         Platform.isMacOS ? '${String.fromCharCode(0x2318)}+P' : 'Ctrl+P';
-    return FlowyTooltip(
-      richMessage: TextSpan(
-        children: [
-          TextSpan(
-            text: '${LocaleKeys.search_sidebarSearchIcon.tr()}\n',
-            style: context.tooltipTextStyle(),
-          ),
-          TextSpan(
-            text: shortcut,
-            style: context
-                .tooltipTextStyle()
-                ?.copyWith(color: Theme.of(context).hintColor),
-          ),
-        ],
-      ),
-      child: MouseRegion(
+    return MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -757,7 +742,6 @@ class _SidebarSearchButton extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }
@@ -928,8 +912,6 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
                             ),
                           ),
                         ],
-                        const HSpace(8.0),
-                        _buildHeaderFullWindowButton(context, isFullWindow),
                       ],
                     );
                   },
@@ -1088,28 +1070,25 @@ class _PonyNotesHeaderState extends State<_PonyNotesHeader> {
     BuildContext context,
     bool isFullWindow,
   ) {
-    return FlowyTooltip(
-      message: isFullWindow ? 'Exit full window' : 'Full window',
-      child: SizedBox.square(
-        dimension: 28,
-        child: FlowyButton(
-          useIntrinsicWidth: true,
-          margin: EdgeInsets.zero,
-          text: Icon(
-            isFullWindow
-                ? Icons.fullscreen_exit_rounded
-                : Icons.fullscreen_rounded,
-            size: 20,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-          onTap: () {
-            if (FullWindowController.isFullWindow.value) {
-              FullWindowController.exit();
-              return;
-            }
-            FullWindowController.enter();
-          },
+    return SizedBox.square(
+      dimension: 28,
+      child: FlowyButton(
+        useIntrinsicWidth: true,
+        margin: EdgeInsets.zero,
+        text: Icon(
+          isFullWindow
+              ? Icons.fullscreen_exit_rounded
+              : Icons.fullscreen_rounded,
+          size: 20,
+          color: Theme.of(context).colorScheme.onSurface,
         ),
+        onTap: () {
+          if (FullWindowController.isFullWindow.value) {
+            FullWindowController.exit();
+            return;
+          }
+          FullWindowController.enter();
+        },
       ),
     );
   }

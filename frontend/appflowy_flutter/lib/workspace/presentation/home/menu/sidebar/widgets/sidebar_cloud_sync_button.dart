@@ -443,28 +443,24 @@ class _SidebarCloudSyncButtonState extends State<SidebarCloudSyncButton>
         children: [
           Positioned(
             left: 0,
-            child: Tooltip(
-              message: labelText,
-              waitDuration: const Duration(milliseconds: 300),
-              child: FlowyButton(
-                useIntrinsicWidth: true,
-                margin: EdgeInsets.zero,
-                text: folderSyncState != null && folderSyncState.isSyncing
-                    ? RotationTransition(
-                        turns: _rotationController,
-                        child: FlowySvg(
-                          iconData,
-                          color: widget.isHover ? Colors.white : iconColor,
-                          opacity: 1.0,
-                        ),
-                      )
-                    : FlowySvg(
+            child: FlowyButton(
+              useIntrinsicWidth: true,
+              margin: EdgeInsets.zero,
+              text: folderSyncState != null && folderSyncState.isSyncing
+                  ? RotationTransition(
+                      turns: _rotationController,
+                      child: FlowySvg(
                         iconData,
                         color: widget.isHover ? Colors.white : iconColor,
                         opacity: 1.0,
                       ),
-                onTap: onTap,
-              ),
+                    )
+                  : FlowySvg(
+                      iconData,
+                      color: widget.isHover ? Colors.white : iconColor,
+                      opacity: 1.0,
+                    ),
+              onTap: onTap,
             ),
           ),
           if (hasWarning) _buildWarningDot(membershipStatus),

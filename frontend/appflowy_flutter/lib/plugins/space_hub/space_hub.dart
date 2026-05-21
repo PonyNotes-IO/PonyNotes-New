@@ -205,7 +205,27 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
                       key: ValueKey('favorite_button_${selectedView.id}'),
                       view: selectedView,
                     ),
-                    const HSpace(10),
+                    const HSpace(4),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: FullWindowController.isFullWindow,
+                      builder: (context, isFullWindow, _) {
+                        return SizedBox.square(
+                          dimension: 28,
+                          child: FlowyButton(
+                            margin: EdgeInsets.zero,
+                            text: Icon(
+                              isFullWindow
+                                  ? Icons.fullscreen_exit_rounded
+                                  : Icons.fullscreen_rounded,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                            onTap: FullWindowController.toggle,
+                          ),
+                        );
+                      },
+                    ),
+                    const HSpace(4),
                     MoreViewActions(
                       view: selectedView,
                       viewInfoBloc: effectiveViewInfoBloc,
