@@ -167,46 +167,39 @@ class _MobileHomeTrashPageState extends State<MobileHomeTrashPage> {
           }).toList();
 
           return Scaffold(
-            appBar: AppBar(
-              leading: const AppBarBackButton(),
-              title: const Text('垃圾箱'),
-              centerTitle: true,
-              actions: [
-                state.objects.isEmpty
-                    ? const SizedBox.shrink()
-                    : IconButton(
-                        splashRadius: 20,
-                        icon: const Icon(Icons.more_horiz),
-                        onPressed: () {
-                          final trashBloc = context.read<TrashBloc>();
-                          showMobileBottomSheet(
-                            context,
-                            showHeader: true,
-                            showCloseButton: true,
-                            showDragHandle: true,
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-                            title: LocaleKeys.trash_mobile_actions.tr(),
-                            builder: (_) => Column(
-                              children: [
-                                _TrashActionAllButton(
-                                  trashBloc: trashBloc,
-                                ),
-                                const SizedBox(
-                                  height: 12,
-                                ),
-                                _TrashActionAllButton(
-                                  trashBloc: trashBloc,
-                                  type: _TrashActionType.restoreAll,
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-              ],
-            ),
             body: Column(
               children: [
+                SafeArea(
+                  bottom: false,
+                  child: _TrashAppBar(
+                    title: '垃圾箱',
+                    onBack: () => Navigator.of(context).maybePop(),
+                    showMoreButton: state.objects.isNotEmpty,
+                    onMorePressed: state.objects.isEmpty
+                        ? null
+                        : () {
+                            final trashBloc = context.read<TrashBloc>();
+                            showMobileBottomSheet(
+                              context,
+                              showHeader: true,
+                              showCloseButton: true,
+                              showDragHandle: true,
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                              title: LocaleKeys.trash_mobile_actions.tr(),
+                              builder: (_) => Column(
+                                children: [
+                                  _TrashActionAllButton(trashBloc: trashBloc),
+                                  const SizedBox(height: 12),
+                                  _TrashActionAllButton(
+                                    trashBloc: trashBloc,
+                                    type: _TrashActionType.restoreAll,
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                  ),
+                ),
                 _TrashSearchBar(
                   controller: _searchController,
                   onChanged: (value) {
@@ -299,6 +292,73 @@ class _TrashSearchBar extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _TrashAppBar extends StatelessWidget {
+  const _TrashAppBar({
+    required this.title,
+    required this.onBack,
+    required this.showMoreButton,
+    required this.onMorePressed,
+  });
+
+  final String title;
+  final VoidCallback onBack;
+  final bool showMoreButton;
+  final VoidCallback? onMorePressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final afTheme = AppFlowyTheme.of(context);
+    final theme = Theme.of(context);
+
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        border: Border(
+          bottom: BorderSide(
+            color: theme.dividerColor.withValues(alpha: 0.5),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onBack,
+            icon: FlowySvg(
+              FlowySvgs.mobile_return_s,
+              size: const Size(7, 12),
+              color: afTheme.iconColorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              title,
+              style: afTheme.textStyle.heading4.standard(
+                color: afTheme.textColorScheme.primary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          if (showMoreButton)
+            IconButton(
+              onPressed: onMorePressed,
+              icon: FlowySvg(
+                FlowySvgs.three_dots_s,
+                size: const Size.square(24),
+                color: afTheme.iconColorScheme.primary,
+              ),
+            )
+          else
+            const SizedBox(width: 48),
+        ],
       ),
     );
   }
