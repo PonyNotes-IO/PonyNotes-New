@@ -35,8 +35,12 @@ import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart'
 import 'package:appflowy_result/appflowy_result.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:appflowy/generated/flowy_svgs.g.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flowy_infra/size.dart';
+import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/container.dart';
+import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sized_context/sized_context.dart';
@@ -48,6 +52,7 @@ import '../widgets/edit_panel/edit_panel.dart';
 import '../widgets/sidebar_resizer.dart';
 import 'full_window_controller.dart';
 import 'home_layout.dart';
+import 'home_sizes.dart';
 import 'home_stack.dart';
 import 'menu/sidebar/slider_menu_hover_trigger.dart';
 import 'menu/sidebar/space/shared_widget.dart';
@@ -274,6 +279,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
           valueListenable: FullWindowController.isFullWindow,
           builder: (context, isFullWindow, _) {
             return _layoutWidgets(
+              buildContext: context,
               layout: layout,
               homeStack: homeStack,
               sidebar: sidebar,
@@ -332,6 +338,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
   }
 
   Widget _layoutWidgets({
+    required BuildContext buildContext,
     required HomeLayout layout,
     required Widget sidebar,
     required Widget homeStack,
@@ -394,7 +401,7 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
           Positioned.fill(
             child: Listener(
               behavior: HitTestBehavior.opaque,
-              onPointerDown: (_) => context.read<HomeSettingBloc>().add(
+              onPointerDown: (_) => buildContext.read<HomeSettingBloc>().add(
                     const HomeSettingEvent.changeMenuStatus(MenuStatus.hidden),
                   ),
               child: ColoredBox(
@@ -440,11 +447,46 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
             ),
           ),
         ),
-        if (!isSliderbarShowing && !isFullWindow)
+        // Windows: floating slider button
+        if (!isSliderbarShowing && !isFullWindow && Platform.isWindows)
           Positioned(
             left: 6,
-            top: Platform.isWindows ? 56 : 12,
+            top: 56,
             child: sliderHoverTrigger,
+          ),
+        // macOS: sidebar toggle icon in traffic-lights row (same position as collapse button)
+        if (!isSliderbarShowing && !isFullWindow && Platform.isMacOS)
+          Positioned(
+            left: 0,
+            top: 0,
+            width: layout.menuWidth,
+            height: HomeSizes.topBarHeight,
+            child: Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 12.0, right: 14.0),
+                child: Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: (_) => buildContext.read<HomeSettingBloc>().add(
+                        const HomeSettingEvent.changeMenuStatus(
+                          MenuStatus.expanded,
+                        ),
+                      ),
+                  child: FlowyHover(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: FlowySvg(
+                        FlowySvgs.sidebar_toggle_macos_m,
+                        color: AppFlowyTheme.of(buildContext)
+                            .iconColorScheme
+                            .secondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
       ],
     );

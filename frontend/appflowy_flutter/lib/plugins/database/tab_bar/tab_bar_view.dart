@@ -18,6 +18,7 @@ import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/view/view_bloc.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view_info/view_info_bloc.dart';
+import 'package:appflowy/workspace/presentation/home/full_window_controller.dart';
 import 'package:appflowy/workspace/presentation/home/home_stack.dart';
 import 'package:appflowy/workspace/presentation/widgets/favorite_button.dart';
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/more_view_actions.dart';
@@ -27,7 +28,6 @@ import 'package:appflowy_backend/log.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
-import 'package:flowy_infra_ui/widget/spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
@@ -491,6 +491,26 @@ class DatabasePluginWidgetBuilder extends PluginWidgetBuilder {
           ShareButton(key: ValueKey(view.id), view: view),
           const HSpace(10),
           ViewFavoriteButton(view: view),
+          const HSpace(4),
+          ValueListenableBuilder<bool>(
+            valueListenable: FullWindowController.isFullWindow,
+            builder: (context, isFullWindow, _) {
+              return SizedBox.square(
+                dimension: 28,
+                child: FlowyButton(
+                  margin: EdgeInsets.zero,
+                  text: Icon(
+                    isFullWindow
+                        ? Icons.fullscreen_exit_rounded
+                        : Icons.fullscreen_rounded,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  onTap: FullWindowController.toggle,
+                ),
+              );
+            },
+          ),
           const HSpace(4),
           MoreViewActions(view: view),
         ],

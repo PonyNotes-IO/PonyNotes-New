@@ -176,27 +176,27 @@ class HandwritingSaberPluginWidgetBuilder extends PluginWidgetBuilder {
             view: view,
           ),
           const HSpace(4),
-          MoreViewActions(view: view),
-          const HSpace(10),
           ValueListenableBuilder<bool>(
             valueListenable: FullWindowController.isFullWindow,
             builder: (context, isFullWindow, _) {
-              return FlowyIconButton(
-                width: 28,
-                height: 28,
-                tooltipText: isFullWindow ? '退出全窗口显示' : '全窗口显示',
-                radius: const BorderRadius.all(Radius.circular(999)),
-                icon: Icon(
-                  isFullWindow
-                      ? Icons.fullscreen_exit_rounded
-                      : Icons.fullscreen_rounded,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.onSurface,
+              return SizedBox.square(
+                dimension: 28,
+                child: FlowyButton(
+                  margin: EdgeInsets.zero,
+                  text: Icon(
+                    isFullWindow
+                        ? Icons.fullscreen_exit_rounded
+                        : Icons.fullscreen_rounded,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  onTap: FullWindowController.toggle,
                 ),
-                onPressed: FullWindowController.toggle,
               );
             },
           ),
+          const HSpace(4),
+          MoreViewActions(view: view),
         ],
       ),
     );

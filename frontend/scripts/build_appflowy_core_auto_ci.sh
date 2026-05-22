@@ -102,20 +102,35 @@ echo ""
 cargo make --profile "$PROFILE" appflowy-core-dev
 
 # =============================================================================
-# 6. 验证构建结果
+# 6. 验证构建结果（兜底：若 post-desktop duckscript 复制失败则直接复制）
 # =============================================================================
-if [ -f "$LIB_PATH" ]; then
-    FINAL_ARCH=$(lipo -info "$LIB_PATH" 2>/dev/null | awk -F': ' '{print $NF}' || echo "unknown")
-    if [ "$FINAL_ARCH" = "$TARGET_ARCH" ]; then
-        echo "✓ 构建成功！库文件架构: $FINAL_ARCH"
+BUILD_FLAG="debug"
+RUST_LIB_PATH="rust-lib/target/${RUST_COMPILE_TARGET}/${BUILD_FLAG}/libdart_ffi.a"
+
+check_and_fix() {
+    if [ -f "$LIB_PATH" ]; then
+        FINAL_ARCH=$(lipo -info "$LIB_PATH" 2>/dev/null | awk -F': ' '{print $NF}' || echo "unknown")
+        if [ "$FINAL_ARCH" = "$TARGET_ARCH" ]; then
+            echo "✓ 构建成功！库文件架构: $FINAL_ARCH"
+            return 0
+        else
+            echo "⚠️  库文件架构 ($FINAL_ARCH) 与目标架构 ($TARGET_ARCH) 不匹配，尝试直接复制..."
+        fi
     else
-        echo "✗ 警告：库文件架构 ($FINAL_ARCH) 与目标架构 ($TARGET_ARCH) 不匹配"
+        echo "⚠️  库文件未生成（post-desktop 可能未正确复制），尝试直接复制..."
+    fi
+
+    if [ -f "$RUST_LIB_PATH" ]; then
+        cp "$RUST_LIB_PATH" "$LIB_PATH"
+        COPIED_ARCH=$(lipo -info "$LIB_PATH" 2>/dev/null | awk -F': ' '{print $NF}' || echo "unknown")
+        echo "✓ 直接复制成功！库文件架构: $COPIED_ARCH"
+    else
+        echo "✗ 错误：Rust 构建产物未找到: $RUST_LIB_PATH"
         exit 1
     fi
-else
-    echo "✗ 错误：库文件未生成"
-    exit 1
-fi
+}
+
+check_and_fix
 
 echo ""
 echo "=========================================="

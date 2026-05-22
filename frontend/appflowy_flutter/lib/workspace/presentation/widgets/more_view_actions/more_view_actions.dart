@@ -2,7 +2,6 @@ import 'package:appflowy/features/page_access_level/logic/page_access_level_bloc
 import 'package:appflowy/features/share_tab/data/models/share_access_level.dart';
 import 'package:appflowy/features/workspace/logic/workspace_bloc.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
-import 'package:appflowy/generated/locale_keys.g.dart';
 import 'package:appflowy/plugins/handwriting_saber/presentation/handwriting_export_action.dart';
 import 'package:appflowy/plugins/whiteboard/presentation/whiteboard_export_action.dart';
 import 'package:appflowy/shared/feature_flags.dart';
@@ -20,7 +19,6 @@ import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widget
 import 'package:appflowy/workspace/presentation/widgets/more_view_actions/widgets/view_meta_info.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:appflowy_backend/protobuf/flowy-user/protobuf.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
 import 'package:flutter/material.dart';
@@ -300,21 +298,18 @@ class _ThreeDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FlowyTooltip(
-      message: LocaleKeys.moreAction_moreOptions.tr(),
-      child: FlowyHover(
-        style: HoverStyle(
-          foregroundColorOnHover: Theme.of(context).colorScheme.onPrimary,
-        ),
-        builder: (context, isHovering) => Padding(
-          padding: const EdgeInsets.all(6),
-          child: FlowySvg(
-            FlowySvgs.three_dots_s,
-            size: const Size.square(18),
-            color: isHovering
-                ? Theme.of(context).colorScheme.onSurface
-                : Theme.of(context).iconTheme.color,
-          ),
+    return FlowyHover(
+      style: HoverStyle(
+        foregroundColorOnHover: Theme.of(context).colorScheme.onPrimary,
+      ),
+      builder: (context, isHovering) => Padding(
+        padding: const EdgeInsets.all(6),
+        child: FlowySvg(
+          FlowySvgs.three_dots_s,
+          size: const Size.square(18),
+          color: isHovering
+              ? Theme.of(context).colorScheme.onSurface
+              : Theme.of(context).iconTheme.color,
         ),
       ),
     );

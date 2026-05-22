@@ -192,7 +192,27 @@ class SpaceHubPluginWidgetBuilder extends PluginWidgetBuilder
                       key: ValueKey('favorite_button_${selectedView.id}'),
                       view: selectedView,
                     ),
-                    const HSpace(10),
+                    const HSpace(4),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: FullWindowController.isFullWindow,
+                      builder: (context, isFullWindow, _) {
+                        return SizedBox.square(
+                          dimension: 28,
+                          child: FlowyButton(
+                            margin: EdgeInsets.zero,
+                            text: Icon(
+                              isFullWindow
+                                  ? Icons.fullscreen_exit_rounded
+                                  : Icons.fullscreen_rounded,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.onSurface,
+                            ),
+                            onTap: FullWindowController.toggle,
+                          ),
+                        );
+                      },
+                    ),
+                    const HSpace(4),
                     MoreViewActions(
                         view: selectedView,
                         viewInfoBloc: effectiveViewInfoBloc),
@@ -486,11 +506,59 @@ class _SpaceHubContentState extends State<_SpaceHubContent> {
         final menuStatus = context.select<HomeSettingBloc, MenuStatus>(
           (bloc) => bloc.state.menuStatus,
         );
+
         final shouldApplyTopPadding =
             !isFullWindow && menuStatus != MenuStatus.expanded;
         final contentTopPadding = shouldApplyTopPadding
             ? HomeSizes.topBarHeight + HomeInsets.topBarTitleVerticalPadding
             : 0.0;
+        final useFloatingDocumentList =
+            !isFullWindow && menuStatus != MenuStatus.expanded;
+        final documentListPanel = Padding(
+          padding: useFloatingDocumentList
+              ? EdgeInsets.only(top: HomeSizes.topBarHeight, bottom: 12)
+              : EdgeInsets.zero,
+          child: ClipRRect(
+            borderRadius: useFloatingDocumentList
+                ? const BorderRadius.horizontal(
+                    right: Radius.circular(14),
+                  )
+                : BorderRadius.zero,
+            child: Container(
+              color: homeContentBackgroundColor(context),
+              width: _leftPanelWidth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: _SpaceDocumentList(
+                      spaceView: widget.spaceView,
+                      selectedView: _selectedView,
+                      onViewSelectedWithRecent: (view) {
+                        setState(() {
+                          _selectedView = view;
+                        });
+                        // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+                        widget.selectedViewNotifier.value = view;
+                        // 添加到最近访问
+                        _addToRecentViews(view.id);
+                      },
+                      onViewCreated: (view) {
+                        setState(() {
+                          _selectedView = view;
+                        });
+                        // 更新共享的选中视图状态，以便 rightBarItem 可以访问
+                        widget.selectedViewNotifier.value = view;
+                        // 添加到最近访问
+                        _addToRecentViews(view.id);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -839,7 +907,7 @@ class _SpaceDocumentList extends StatelessWidget {
         children: [
           // 头部：空间名称 + 新增文档按钮
           _buildHeader(context, spaceBloc),
-          VSpace(12),
+          VSpace(4),
           // 文档列表
           Expanded(
             child: spaceBloc != null
@@ -853,7 +921,7 @@ class _SpaceDocumentList extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context, SpaceBloc? spaceBloc) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 4),
       // decoration: BoxDecoration(
       //   border: Border(
       //     bottom: BorderSide(color: Theme.of(context).dividerColor),
