@@ -210,9 +210,9 @@ class _MobileHomeTrashPageState extends State<MobileHomeTrashPage> {
                 ),
                 Expanded(
                   child: filteredObjects.isEmpty
-                      ? state.objects.isEmpty
-                          ? const _EmptyTrashBin()
-                          : const _NoSearchResult()
+                      ? (_searchQuery.isNotEmpty
+                          ? const _NoSearchResult()
+                          : const _EmptyTrashBin())
                       : _DeletedFilesListView(objects: filteredObjects),
                 ),
                 if (filteredObjects.isNotEmpty) _TrashAutoDeleteHint(),
@@ -236,6 +236,19 @@ class _TrashSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = AppFlowyTheme.of(context);
+    final showCancelIcon = controller.text.isNotEmpty;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10.0)),
+      borderSide: BorderSide(color: theme.borderColorScheme.primary),
+    );
+    final enableBorder = border.copyWith(
+      borderSide: BorderSide(color: theme.borderColorScheme.themeThick),
+    );
+    final hintStyle = theme.textStyle.heading4.standard(
+      color: theme.textColorScheme.tertiary,
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: ValueListenableBuilder<TextEditingValue>(
@@ -244,19 +257,29 @@ class _TrashSearchBar extends StatelessWidget {
           return TextField(
             controller: controller,
             onChanged: onChanged,
+            style: theme.textStyle.heading4.standard(
+              color: theme.textColorScheme.primary,
+            ),
             decoration: InputDecoration(
               hintText: '搜索被移入垃圾箱的页面',
+              hintStyle: hintStyle,
               isDense: true,
+              contentPadding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+              border: border,
+              enabledBorder: border,
+              focusedBorder: enableBorder,
               prefixIconConstraints: BoxConstraints.loose(const Size(38, 40)),
               prefixIcon: Padding(
                 padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
                 child: FlowySvg(
                   FlowySvgs.m_home_search_icon_m,
-                  color: AppFlowyTheme.of(context).iconColorScheme.secondary,
+                  color: theme.iconColorScheme.secondary,
                   size: const Size.square(20),
                 ),
               ),
-              suffixIcon: value.text.isNotEmpty
+              suffixIconConstraints:
+                  showCancelIcon ? BoxConstraints.loose(const Size(34, 40)) : null,
+              suffixIcon: showCancelIcon
                   ? GestureDetector(
                       onTap: () {
                         controller.clear();
@@ -266,29 +289,12 @@ class _TrashSearchBar extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(4, 10, 8, 10),
                         child: FlowySvg(
                           FlowySvgs.search_clear_m,
-                          color: AppFlowyTheme.of(context)
-                              .iconColorScheme
-                              .tertiary,
+                          color: theme.iconColorScheme.tertiary,
                           size: const Size.square(20),
                         ),
                       ),
                     )
                   : null,
-              contentPadding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
-              filled: true,
-              fillColor: const Color(0xFFF9F9F9),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(24),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(24),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(24),
-                borderSide: BorderSide.none,
-              ),
             ),
           );
         },
