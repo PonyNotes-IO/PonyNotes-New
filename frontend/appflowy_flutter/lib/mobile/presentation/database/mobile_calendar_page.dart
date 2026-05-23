@@ -240,9 +240,8 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           children: [
             _buildMonthHeader(),
             _buildCalendar(),
-            _buildDateTitle(),
             Expanded(
-              child: _buildContentList(),
+              child: _buildContentCard(),
             ),
           ],
         ),
@@ -369,7 +368,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   Widget _buildDateTitle() {
     if (_selectedDay == null) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Text(
         '${_selectedDay!.year}年${_selectedDay!.month}月${_selectedDay!.day}日',
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -383,27 +382,44 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
     // TODO: 显示新建日程对话框
   }
 
-  Widget _buildContentList() {
+  Widget _buildContentCard() {
     if (_isLoadingNotes) {
       return const Center(child: CircularProgressIndicator());
     }
 
     final schedules = _getSchedulesForDate();
 
-    if (_notesForDate.isEmpty && schedules.isEmpty) {
-      return _buildEmptyState();
-    }
-
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       children: [
-        // 笔记列表
-        ..._notesForDate.map((note) => _buildNoteItem(note)),
-        if (_notesForDate.isNotEmpty && schedules.isNotEmpty)
-          const SizedBox(height: 16),
-        // 日程列表
-        ...schedules.map((schedule) => _buildScheduleItem(schedule)),
-        const SizedBox(height: 32),
+        Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDateTitle(),
+              if (_notesForDate.isEmpty && schedules.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: _buildEmptyState(),
+                )
+              else ...[
+                if (_notesForDate.isNotEmpty) ...[
+                  ..._notesForDate.map((note) => _buildNoteItem(note)),
+                  if (schedules.isNotEmpty) const Divider(height: 1),
+                ],
+                ...schedules.map((schedule) => _buildScheduleItem(schedule)),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -411,9 +427,8 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   Widget _buildNoteItem(ViewPB note) {
     return InkWell(
       onTap: () => _onNoteTap(note),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         child: Row(
           children: [
             note.defaultIcon(size: const Size(24, 24)),
@@ -442,9 +457,8 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   Widget _buildScheduleItem(ScheduleItem schedule) {
     return InkWell(
       onTap: () => _onScheduleTap(schedule),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         child: Row(
           children: [
             Container(
