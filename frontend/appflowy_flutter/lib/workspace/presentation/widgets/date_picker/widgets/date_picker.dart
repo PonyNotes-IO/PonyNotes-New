@@ -24,6 +24,7 @@ class DatePicker extends StatefulWidget {
     this.rowHeight,
     this.dowHeight,
     this.dowBottomPadding,
+    this.topPadding,
   });
 
   final bool isRange;
@@ -59,6 +60,9 @@ class DatePicker extends StatefulWidget {
   /// Custom bottom padding for day-of-week row (mobile)
   final double? dowBottomPadding;
 
+  /// Custom top padding for calendar (mobile)
+  final double? topPadding;
+
   @override
   State<DatePicker> createState() => _DatePickerState();
 }
@@ -89,9 +93,10 @@ class _DatePickerState extends State<DatePicker> {
     // Use custom heights if provided, otherwise use style defaults
     final rowHeight = widget.rowHeight ?? calendarStyle.rowHeight;
     final dowHeight = widget.dowHeight ?? calendarStyle.dowHeight;
+    final topPadding = widget.topPadding ?? 0.0;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: EdgeInsets.only(left: 16.0, right: 16.0, top: topPadding),
       child: TableCalendar(
         firstDay: kFirstDay,
         lastDay: kLastDay,

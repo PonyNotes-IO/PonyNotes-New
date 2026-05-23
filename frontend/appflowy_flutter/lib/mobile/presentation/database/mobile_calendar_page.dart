@@ -250,7 +250,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
 
   Widget _buildMonthHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
         children: [
           Expanded(
@@ -262,12 +262,12 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.chevron_left),
+            icon: const Icon(Icons.chevron_left, size: 20),
             onPressed: () => _changeMonth(-1),
             tooltip: '上一月',
           ),
           IconButton(
-            icon: const Icon(Icons.chevron_right),
+            icon: const Icon(Icons.chevron_right, size: 20),
             onPressed: () => _changeMonth(1),
             tooltip: '下一月',
           ),
@@ -304,6 +304,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
         rowHeight: 36,
         dowHeight: 28,
         dowBottomPadding: 2,
+        topPadding: 4,
       ),
     );
   }
