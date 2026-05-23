@@ -2,7 +2,6 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
-import 'package:appflowy/plugins/database/calendar/presentation/widgets/schedule_sidebar_content.dart';
 import 'package:appflowy/startup/startup.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
@@ -12,7 +11,6 @@ import 'package:flowy_infra/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
 /// Mobile Calendar Page - Simplified full screen calendar for mobile
 class MobileCalendarPage extends StatefulWidget {
@@ -31,8 +29,8 @@ class MobileCalendarPage extends StatefulWidget {
 
 class _MobileCalendarPageState extends State<MobileCalendarPage> {
   late DateTime _focusedDay;
-  late DateTime? _selectedDay;
-  late ScheduleModel _scheduleModel;
+  DateTime? _selectedDay;
+  final ScheduleModel _scheduleModel = ScheduleModel();
   String? _currentViewId;
   bool _isLoadingNotes = false;
   List<ViewPB> _notesForDate = [];
@@ -43,9 +41,15 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
     super.initState();
     _focusedDay = widget.initialDate ?? DateTime.now();
     _selectedDay = _focusedDay;
-    _scheduleModel = ScheduleModel();
     _initializeCalendarView();
     _loadNotesForDate();
+    _scheduleModel.addListener(_onSchedulesChanged);
+  }
+
+  void _onSchedulesChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _initializeCalendarView() async {
@@ -56,7 +60,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
       await result.fold(
         (view) async {
           if (mounted) {
-            setState(() => _currentViewId = view.id);
+            _currentViewId = view.id;
             _scheduleModel.setViewId(view.id);
           }
         },
@@ -69,7 +73,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           createResult.fold(
             (view) {
               if (mounted) {
-                setState(() => _currentViewId = view.id);
+                _currentViewId = view.id;
                 _scheduleModel.setViewId(view.id);
               }
             },
@@ -82,6 +86,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
 
   @override
   void dispose() {
+    _scheduleModel.removeListener(_onSchedulesChanged);
     _scheduleModel.dispose();
     super.dispose();
   }
@@ -131,27 +136,21 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           notesForDate.sort((a, b) => b.createTime.compareTo(a.createTime));
 
           if (mounted) {
-            setState(() {
-              _notesForDate = notesForDate;
-              _isLoadingNotes = false;
-            });
+            _notesForDate = notesForDate;
+            _isLoadingNotes = false;
           }
         },
         (error) {
           if (mounted) {
-            setState(() {
-              _notesForDate = [];
-              _isLoadingNotes = false;
-            });
+            _notesForDate = [];
+            _isLoadingNotes = false;
           }
         },
       );
     } catch (_) {
       if (mounted) {
-        setState(() {
-          _notesForDate = [];
-          _isLoadingNotes = false;
-        });
+        _notesForDate = [];
+        _isLoadingNotes = false;
       }
     }
   }
@@ -192,7 +191,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
       context,
       showDragHandle: true,
       showHeader: true,
-      title: schedule.title,
+      title: schedule.title.isNotEmpty ? schedule.title : '日程详情',
       builder: (ctx) => Container(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -200,14 +199,9 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (schedule.description.isNotEmpty) ...[
-              Text(
-                schedule.title,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
               Text(schedule.description),
+              const SizedBox(height: 16),
             ],
-            const SizedBox(height: 16),
             Text(
               '开始: ${_formatTime(schedule.startTime)}',
               style: Theme.of(context).textTheme.bodyMedium,
@@ -225,6 +219,11 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
 
   String _formatTime(DateTime time) {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  List<ScheduleItem> _getSchedulesForDate() {
+    if (_currentViewId == null || _selectedDay == null) return [];
+    return _scheduleModel.getSchedulesForDate(_selectedDay!);
   }
 
   @override
@@ -320,7 +319,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           ),
           const Spacer(),
           TextButton.icon(
-            onPressed: () => _showCreateScheduleDialog(),
+            onPressed: _showCreateScheduleDialog,
             icon: const Icon(Icons.add, size: 18),
             label: const Text('新建日程'),
           ),
@@ -338,36 +337,23 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final schedules = _currentViewId != null
-        ? _scheduleModel.getSchedulesForDate(_selectedDay ?? DateTime.now())
-        : <ScheduleItem>[];
+    final schedules = _getSchedulesForDate();
 
     if (_notesForDate.isEmpty && schedules.isEmpty) {
       return _buildEmptyState();
     }
 
-    return SingleChildScrollView(
+    return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_notesForDate.isNotEmpty) ...[
-            ..._notesForDate.map((note) => _buildNoteItem(note)),
-            const SizedBox(height: 16),
-          ],
-          if (schedules.isNotEmpty) ...[
-            ChangeNotifierProvider<ScheduleModel>.value(
-              value: _scheduleModel,
-              child: ScheduleSidebarContent(
-                databaseViewId: _currentViewId ?? '',
-                onScheduleTap: _onScheduleTap,
-                selectedDate: _selectedDay ?? DateTime.now(),
-              ),
-            ),
-          ],
-          const SizedBox(height: 32),
-        ],
-      ),
+      children: [
+        // 笔记列表
+        ..._notesForDate.map((note) => _buildNoteItem(note)),
+        if (_notesForDate.isNotEmpty && schedules.isNotEmpty)
+          const SizedBox(height: 16),
+        // 日程列表
+        ...schedules.map((schedule) => _buildScheduleItem(schedule)),
+        const SizedBox(height: 32),
+      ],
     );
   }
 
@@ -395,6 +381,53 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
                   ),
             ),
             const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScheduleItem(ScheduleItem schedule) {
+    return InkWell(
+      onTap: () => _onScheduleTap(schedule),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 40,
+              decoration: BoxDecoration(
+                color: schedule.isCompleted ? Colors.grey : Colors.green,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    schedule.title.isNotEmpty ? schedule.title : schedule.description,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          decoration: schedule.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                        ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${_formatTime(schedule.startTime)} - ${_formatTime(schedule.endTime)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                  ),
+                ],
+              ),
+            ),
             const Icon(Icons.chevron_right, size: 20),
           ],
         ),
