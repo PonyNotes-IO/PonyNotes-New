@@ -258,26 +258,109 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   void _showAddMenu() {
     showMobileBottomSheet(
       context,
-      showDragHandle: true,
-      showHeader: true,
-      title: '新建',
+      showDragHandle: false,
+      showHeader: false,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       builder: (ctx) => Container(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildAddMenuItem(
-              icon: Icons.schedule,
-              label: '新建日程',
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _showCreateScheduleDialog();
-              },
-            ),
-          ],
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 8),
+                width: 36,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor,
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildActionSheetItem(
+                label: '新建日记页',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _createNewNote();
+                },
+              ),
+              _buildDivider(),
+              _buildActionSheetItem(
+                label: '新建日程',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _showCreateScheduleDialog();
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildDivider(),
+              _buildActionSheetItem(
+                label: '取消',
+                isCancel: true,
+                onTap: () => Navigator.of(ctx).pop(),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildDivider() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      height: 0.5,
+      color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+    );
+  }
+
+  Widget _buildActionSheetItem({
+    required String label,
+    required VoidCallback onTap,
+    bool isCancel = false,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuButton({
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyLarge,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _createNewNote() async {
+    // TODO: 实现新建日记页的逻辑
   }
 
   Widget _buildAddMenuItem({
