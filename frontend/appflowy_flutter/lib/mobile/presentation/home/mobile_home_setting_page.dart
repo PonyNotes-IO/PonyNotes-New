@@ -22,7 +22,9 @@ import 'package:appflowy/mobile/presentation/setting/storage/storage_setting_gro
 import 'package:appflowy/mobile/presentation/setting/support_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/user_session_setting_group.dart';
 import 'package:appflowy/mobile/presentation/setting/workspace/workspace_setting_group.dart';
+import 'package:appflowy/mobile/presentation/setting/workspace/mobile_space_management_page.dart';
 import 'package:appflowy/mobile/presentation/widgets/widgets.dart';
+import 'package:appflowy/mobile/presentation/setting/widgets/mobile_setting_item_widget.dart';
 import 'package:appflowy/shared/appflowy_cache_manager.dart';
 import 'package:appflowy/shared/feature_flags.dart';
 import 'package:appflowy/startup/startup.dart';
@@ -354,7 +356,7 @@ class _MobileHomeSettingPageState extends State<MobileHomeSettingPage> {
               MobileSettingsSection.workspace =>
                 const SizedBox.shrink(), // handled above
               MobileSettingsSection.workspaceManagement =>
-                WorkspaceSettingGroup(),
+                const MobileSpaceManagementPage(showAppBar: false),
               MobileSettingsSection.member => WorkspaceSettingGroup(),
               MobileSettingsSection.sharing => _ComingSoonGroup(
                   title: '共享发布',
