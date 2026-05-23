@@ -41,8 +41,11 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
     super.initState();
     _focusedDay = widget.initialDate ?? DateTime.now();
     _selectedDay = _focusedDay;
-    _initializeCalendarView();
-    _loadNotesForDate();
+    // 延迟初始化数据库，避免阻塞 UI
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeCalendarView();
+      _loadNotesForDate();
+    });
     _scheduleModel.addListener(_onSchedulesChanged);
   }
 
@@ -237,10 +240,64 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
           children: [
             _buildMonthHeader(),
             _buildCalendar(),
-            const Divider(height: 1),
             _buildDateTitle(),
             Expanded(
               child: _buildContentList(),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddMenu,
+        backgroundColor: const Color(0xFFFF6B35),
+        elevation: 4,
+        child: const Icon(Icons.add, color: Colors.white, size: 28),
+      ),
+    );
+  }
+
+  void _showAddMenu() {
+    showMobileBottomSheet(
+      context,
+      showDragHandle: true,
+      showHeader: true,
+      title: '新建',
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildAddMenuItem(
+              icon: Icons.schedule,
+              label: '新建日程',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _showCreateScheduleDialog();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddMenuItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        child: Row(
+          children: [
+            Icon(icon, size: 24),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodyLarge,
             ),
           ],
         ),
@@ -313,21 +370,11 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
     if (_selectedDay == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Text(
-            '${_selectedDay!.year}年${_selectedDay!.month}月${_selectedDay!.day}日',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const Spacer(),
-          TextButton.icon(
-            onPressed: _showCreateScheduleDialog,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('新建日程'),
-          ),
-        ],
+      child: Text(
+        '${_selectedDay!.year}年${_selectedDay!.month}月${_selectedDay!.day}日',
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
       ),
     );
   }

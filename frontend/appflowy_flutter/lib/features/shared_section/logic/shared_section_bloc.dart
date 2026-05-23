@@ -45,6 +45,9 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
 
   Timer? _pollingTimer;
 
+  // 防抖标志，避免重复触发刷新
+  bool _isRefreshing = false;
+
   @override
   Future<void> close() async {
     await _folderNotificationListener?.stop();
@@ -92,24 +95,39 @@ class SharedSectionBloc extends Bloc<SharedSectionEvent, SharedSectionState> {
     SharedSectionRefreshEvent event,
     Emitter<SharedSectionState> emit,
   ) async {
-    final result = await repository.getSharedPages();
+    // 如果正在加载中，跳过本次刷新
+    if (state.isLoading) {
+      return;
+    }
 
-    result.fold(
-      (pages) {
-        emit(
-          state.copyWith(
-            sharedPages: pages,
-          ),
-        );
-      },
-      (error) {
-        emit(
-          state.copyWith(
-            errorMessage: error.msg,
-          ),
-        );
-      },
-    );
+    // 使用 compute-style 防抖：如果在等待中，不重复触发
+    if (_isRefreshing) {
+      return;
+    }
+    _isRefreshing = true;
+
+    try {
+      final result = await repository.getSharedPages();
+
+      result.fold(
+        (pages) {
+          emit(
+            state.copyWith(
+              sharedPages: pages,
+            ),
+          );
+        },
+        (error) {
+          emit(
+            state.copyWith(
+              errorMessage: error.msg,
+            ),
+          );
+        },
+      );
+    } finally {
+      _isRefreshing = false;
+    }
   }
 
   void _onUpdateSharedPages(
