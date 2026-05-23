@@ -21,6 +21,8 @@ class DatePicker extends StatefulWidget {
     this.onRangeSelected,
     this.onCalendarCreated,
     this.onPageChanged,
+    this.rowHeight,
+    this.dowHeight,
   });
 
   final bool isRange;
@@ -46,6 +48,12 @@ class DatePicker extends StatefulWidget {
   final void Function(PageController pageController)? onCalendarCreated;
 
   final void Function(DateTime focusedDay)? onPageChanged;
+
+  /// Custom row height for compact calendar (mobile)
+  final double? rowHeight;
+
+  /// Custom day of week height for compact calendar (mobile)
+  final double? dowHeight;
 
   @override
   State<DatePicker> createState() => _DatePickerState();
@@ -74,15 +82,19 @@ class _DatePickerState extends State<DatePicker> {
             selectedColor: Theme.of(context).colorScheme.primary,
           );
 
+    // Use custom heights if provided, otherwise use style defaults
+    final rowHeight = widget.rowHeight ?? calendarStyle.rowHeight;
+    final dowHeight = widget.dowHeight ?? calendarStyle.dowHeight;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: TableCalendar(
         firstDay: kFirstDay,
         lastDay: kLastDay,
         focusedDay: widget.focusedDay,
-        rowHeight: calendarStyle.rowHeight,
+        rowHeight: rowHeight,
         calendarFormat: _calendarFormat,
-        daysOfWeekHeight: calendarStyle.dowHeight,
+        daysOfWeekHeight: dowHeight,
         rangeSelectionMode: widget.isRange
             ? RangeSelectionMode.enforced
             : RangeSelectionMode.disabled,

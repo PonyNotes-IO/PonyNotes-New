@@ -290,7 +290,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
 
   Widget _buildCalendar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: DatePicker(
         isRange: false,
         focusedDay: _focusedDay,
@@ -301,6 +301,8 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
             _focusedDay = focusedDay;
           });
         },
+        rowHeight: 36,
+        dowHeight: 28,
       ),
     );
   }
