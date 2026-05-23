@@ -23,6 +23,7 @@ class DatePicker extends StatefulWidget {
     this.onPageChanged,
     this.rowHeight,
     this.dowHeight,
+    this.dowBottomPadding,
   });
 
   final bool isRange;
@@ -54,6 +55,9 @@ class DatePicker extends StatefulWidget {
 
   /// Custom day of week height for compact calendar (mobile)
   final double? dowHeight;
+
+  /// Custom bottom padding for day-of-week row (mobile)
+  final double? dowBottomPadding;
 
   @override
   State<DatePicker> createState() => _DatePickerState();
@@ -144,8 +148,9 @@ class _DatePickerState extends State<DatePicker> {
           dowBuilder: (context, day) {
             final locale = context.locale.toLanguageTag();
             final label = DateFormat.E(locale).format(day);
+            final bottomPadding = widget.dowBottomPadding ?? 8.0;
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
+              padding: EdgeInsets.only(bottom: bottomPadding),
               child: Center(
                 child: Text(label, style: calendarStyle.dowTextStyle),
               ),

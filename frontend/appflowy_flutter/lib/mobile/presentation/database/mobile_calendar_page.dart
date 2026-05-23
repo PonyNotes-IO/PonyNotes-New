@@ -303,6 +303,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
         },
         rowHeight: 36,
         dowHeight: 28,
+        dowBottomPadding: 2,
       ),
     );
   }
