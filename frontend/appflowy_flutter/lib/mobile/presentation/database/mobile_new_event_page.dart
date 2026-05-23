@@ -3,6 +3,7 @@ import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_she
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 
 class MobileNewEventPage extends StatefulWidget {
@@ -156,105 +157,131 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: theme.colorScheme.surface,
+        backgroundColor: theme.scaffoldBackgroundColor,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        leading: const SizedBox.shrink(),
-        leadingWidth: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.close,
+            color: AppFlowyTheme.of(context).iconColorScheme.primary,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        leadingWidth: 56,
         automaticallyImplyLeading: false,
-        title: const Text('新建日程'),
+        title: Text(
+          '新建日程',
+          style: AppFlowyTheme.of(context).textStyle.heading4.standard(
+            color: AppFlowyTheme.of(context).textColorScheme.primary,
+          ),
+        ),
         centerTitle: true,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              '取消',
-              style: TextStyle(color: theme.colorScheme.onSurface),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              if (saveEvent()) {
-                // saveEvent will handle navigation
-              }
-            },
-            child: Text(
-              '保存',
-              style: TextStyle(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
-            // 顶部时间选择区域
-            Container(
-              padding: const EdgeInsets.all(20),
+            Expanded(
               child: Column(
                 children: [
-                  const SizedBox(height: 20),
-                  // 时间选择器
-                  _isAllDay ? _buildAllDayDatePicker(theme) : _buildTimeRangePicker(theme),
-                  const SizedBox(height: 40),
+                  // 顶部时间选择区域
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 20),
+                        // 时间选择器
+                        _isAllDay ? _buildAllDayDatePicker(theme) : _buildTimeRangePicker(theme),
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
+
+                  // 选项列表
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      children: [
+                        // 全天选项
+                        _buildOptionItem(
+                          icon: FlowySvgs.icon_time_calendar_lg,
+                          title: '全天',
+                          value: '',
+                          trailing: _buildSwitch(value: _isAllDay, onChanged: (value) {
+                            setState(() {
+                              _isAllDay = value;
+                              if (_isAllDay) {
+                                _startDate = _endDate;
+                                _startTime = const TimeOfDay(hour: 0, minute: 0);
+                                _endTime = const TimeOfDay(hour: 23, minute: 59);
+                              } else {
+                                _startTime = TimeOfDay.now();
+                                _endTime = TimeOfDay(hour: _startTime.hour + 1, minute: _startTime.minute);
+                              }
+                            });
+                          }),
+                          onTap: null,
+                        ),
+
+                        // 准时选项
+                        _buildOptionItem(
+                          icon: FlowySvgs.icon_alarm_clock_m,
+                          title: _getReminderOptionLabel(),
+                          value: '',
+                          onTap: () => _showReminderDialog(),
+                        ),
+
+                        // 日程重复选项
+                        _buildOptionItem(
+                          icon: FlowySvgs.icon_repeat_calender_m,
+                          title: _getRepeatLabel(),
+                          value: '',
+                          onTap: () => _showRepeatDialog(),
+                        ),
+
+                        // 添加说明选项
+                        _buildOptionItem(
+                          icon: FlowySvgs.icon_edit_m,
+                          title: _description.isEmpty ? '添加说明' : _description,
+                          value: '',
+                          onTap: () => _showDescriptionDialog(),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
 
-            // 选项列表
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  // 全天选项
-                  _buildOptionItem(
-                    icon: FlowySvgs.icon_time_calendar_lg,
-                    title: '全天',
-                    value: '',
-                    trailing: _buildSwitch(value: _isAllDay, onChanged: (value) {
-                      setState(() {
-                        _isAllDay = value;
-                        if (_isAllDay) {
-                          _startDate = _endDate;
-                          _startTime = const TimeOfDay(hour: 0, minute: 0);
-                          _endTime = const TimeOfDay(hour: 23, minute: 59);
-                        } else {
-                          _startTime = TimeOfDay.now();
-                          _endTime = TimeOfDay(hour: _startTime.hour + 1, minute: _startTime.minute);
-                        }
-                      });
-                    }),
-                    onTap: null,
+            // 底部保存按钮
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    if (saveEvent()) {
+                      // saveEvent will handle navigation
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    elevation: 0,
                   ),
-
-                  // 准时选项
-                  _buildOptionItem(
-                    icon: FlowySvgs.icon_alarm_clock_m,
-                    title: _getReminderOptionLabel(),
-                    value: '',
-                    onTap: () => _showReminderDialog(),
+                  child: const Text(
+                    '保存',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-
-                  // 日程重复选项
-                  _buildOptionItem(
-                    icon: FlowySvgs.icon_repeat_calender_m,
-                    title: _getRepeatLabel(),
-                    value: '',
-                    onTap: () => _showRepeatDialog(),
-                  ),
-
-                  // 添加说明选项
-                  _buildOptionItem(
-                    icon: FlowySvgs.icon_edit_m,
-                    title: _description.isEmpty ? '添加说明' : _description,
-                    value: '',
-                    onTap: () => _showDescriptionDialog(),
-                  ),
-                ],
+                ),
               ),
             ),
           ],
