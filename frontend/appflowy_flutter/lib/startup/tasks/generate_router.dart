@@ -8,6 +8,7 @@ import 'package:appflowy/mobile/presentation/database/date_picker/mobile_date_pi
 import 'package:appflowy/mobile/presentation/database/field/mobile_create_field_screen.dart';
 import 'package:appflowy/mobile/presentation/database/field/mobile_edit_field_screen.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_calendar_events_screen.dart';
+import 'package:appflowy/mobile/presentation/database/mobile_calendar_page.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_calendar_screen.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_grid_screen.dart';
 import 'package:appflowy/mobile/presentation/favorite/mobile_favorite_page.dart';
@@ -91,6 +92,7 @@ GoRouter generateRouter(Widget child) {
         _mobileGridScreenRoute(),
         _mobileBoardScreenRoute(),
         _mobileCalendarScreenRoute(),
+        _mobileCalendarPageRoute(),
         _mobileChatScreenRoute(),
         _mobileAIWelcomeScreenRoute(),
         // card detail page
@@ -822,6 +824,18 @@ GoRoute _mobileCalendarScreenRoute() {
           id: id,
           title: title,
         ),
+      );
+    },
+  );
+}
+
+GoRoute _mobileCalendarPageRoute() {
+  return GoRoute(
+    path: MobileCalendarPage.routeName,
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    pageBuilder: (context, state) {
+      return MaterialExtendedPage(
+        child: const MobileCalendarPage(),
       );
     },
   );

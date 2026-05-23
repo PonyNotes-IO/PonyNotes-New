@@ -47,6 +47,12 @@ class MobileHomePageHeader extends StatelessWidget {
                       ? _MobileWorkspace(userProfile: userProfile)
                       : _MobileUser(userProfile: userProfile),
                 ),
+                const HSpace(8.0),
+                _CalendarButton(
+                  onPressed: () {
+                    context.push('/mobile_calendar');
+                  },
+                ),
                 HomePageSettingsPopupMenu(
                   userProfile: userProfile,
                 ),
@@ -249,6 +255,29 @@ class _UserIcon extends StatelessWidget {
           }
         }
       },
+    );
+  }
+}
+
+class _CalendarButton extends StatelessWidget {
+  const _CalendarButton({
+    required this.onPressed,
+  });
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FlowyButton(
+      useIntrinsicWidth: true,
+      onTap: onPressed,
+      text: const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: FlowySvg(
+          FlowySvgs.m_calendar_thumbnail_m,
+          size: Size.square(20),
+        ),
+      ),
     );
   }
 }

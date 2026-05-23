@@ -1242,9 +1242,15 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
     return ValueListenableBuilder<bool>(
       valueListenable: FullWindowController.isFullWindow,
       builder: (context, isFullWindow, _) {
-        final menuStatus = context.select<HomeSettingBloc, MenuStatus>(
-          (bloc) => bloc.state.menuStatus,
-        );
+        // 移动端可能没有 HomeSettingBloc，使用默认值
+        MenuStatus menuStatus = MenuStatus.expanded;
+        try {
+          menuStatus = context.select<HomeSettingBloc, MenuStatus>(
+            (bloc) => bloc.state.menuStatus,
+          );
+        } catch (_) {
+          // HomeSettingBloc not available (mobile mode)
+        }
         final shouldApplyTopPadding =
             !isFullWindow && menuStatus != MenuStatus.expanded;
         final contentTopPadding = shouldApplyTopPadding
@@ -1285,9 +1291,13 @@ class _CalendarMainPanelState extends State<CalendarMainPanel> {
                               if (FullWindowController.isFullWindow.value) {
                                 FullWindowController.exit();
                               }
-                              context.read<HomeSettingBloc>().add(
-                                HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
-                              );
+                              try {
+                                context.read<HomeSettingBloc>().add(
+                                  HomeSettingEvent.changeMenuStatus(MenuStatus.expanded),
+                                );
+                              } catch (_) {
+                                // HomeSettingBloc not available (mobile mode)
+                              }
                             },
                           ),
                         ),
