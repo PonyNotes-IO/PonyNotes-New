@@ -250,7 +250,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
 
   Widget _buildMonthHeader() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: Row(
         children: [
           Expanded(
@@ -304,7 +304,7 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
         rowHeight: 36,
         dowHeight: 28,
         dowBottomPadding: 2,
-        topPadding: 4,
+        topPadding: 0,
       ),
     );
   }
