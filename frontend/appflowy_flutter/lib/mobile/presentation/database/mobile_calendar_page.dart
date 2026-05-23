@@ -1,11 +1,14 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/base/app_bar/mobile_app_bar.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
+import 'package:appflowy/mobile/presentation/database/mobile_new_event_page.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
 import 'package:appflowy/startup/startup.dart';
+import 'package:appflowy/user/application/reminder/reminder_extension.dart';
 import 'package:appflowy/workspace/application/view/view_ext.dart';
 import 'package:appflowy/workspace/application/view/view_service.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/date_picker.dart';
+import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy_backend/protobuf/flowy-folder/view.pb.dart';
 import 'package:flowy_infra/uuid.dart';
 import 'package:flutter/material.dart';
@@ -462,7 +465,52 @@ class _MobileCalendarPageState extends State<MobileCalendarPage> {
   }
 
   void _showCreateScheduleDialog() {
-    // TODO: 显示新建日程对话框
+    final selectedDate = _selectedDay ?? DateTime.now();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => MobileNewEventPage(
+          selectedDate: selectedDate,
+          scheduleModel: _scheduleModel,
+          onEventCreated: () {
+            // 刷新列表
+            _loadNotesForDate();
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDialogDivider() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      height: 0.5,
+      color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+    );
+  }
+
+  Widget _buildDialogItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurface),
+            const SizedBox(width: 12),
+            Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            const Spacer(),
+            Text(value, style: Theme.of(context).textTheme.bodyMedium),
+            if (onTap != null)
+              Icon(Icons.chevron_right, size: 20, color: Theme.of(context).colorScheme.onSurface),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildContentCard() {

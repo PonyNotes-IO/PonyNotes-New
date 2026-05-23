@@ -10,6 +10,7 @@ import 'package:appflowy/mobile/presentation/database/field/mobile_edit_field_sc
 import 'package:appflowy/mobile/presentation/database/mobile_calendar_events_screen.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_calendar_page.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_calendar_screen.dart';
+import 'package:appflowy/mobile/presentation/database/mobile_new_event_page.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_grid_screen.dart';
 import 'package:appflowy/mobile/presentation/favorite/mobile_favorite_page.dart';
 import 'package:appflowy/mobile/presentation/notifications/mobile_notifications_multiple_select_page.dart';
@@ -93,6 +94,7 @@ GoRouter generateRouter(Widget child) {
         _mobileBoardScreenRoute(),
         _mobileCalendarScreenRoute(),
         _mobileCalendarPageRoute(),
+        _mobileNewEventPageRoute(),
         _mobileChatScreenRoute(),
         _mobileAIWelcomeScreenRoute(),
         // card detail page
@@ -836,6 +838,25 @@ GoRoute _mobileCalendarPageRoute() {
     pageBuilder: (context, state) {
       return MaterialExtendedPage(
         child: const MobileCalendarPage(),
+      );
+    },
+  );
+}
+
+GoRoute _mobileNewEventPageRoute() {
+  return GoRoute(
+    parentNavigatorKey: AppGlobals.rootNavKey,
+    path: '/mobile/new_event',
+    pageBuilder: (context, state) {
+      final extra = state.extra as Map<String, dynamic>?;
+      final selectedDate = extra?['selectedDate'] as DateTime? ?? DateTime.now();
+      final scheduleModel = extra?['scheduleModel'] as dynamic;
+
+      return MaterialExtendedPage(
+        child: MobileNewEventPage(
+          selectedDate: selectedDate,
+          scheduleModel: scheduleModel,
+        ),
       );
     },
   );
