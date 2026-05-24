@@ -170,7 +170,7 @@ class DouYinLoginService {
 
   void authorResultState(Completer<String> codeCompleter) {
     _douyinPlugin.respStream().listen((response) {
-      if (response.code == '0') {
+      if (response.code == 0) {
         // Login success
         final authCode = response.authCode;
         if (authCode != null && authCode.isNotEmpty) {
