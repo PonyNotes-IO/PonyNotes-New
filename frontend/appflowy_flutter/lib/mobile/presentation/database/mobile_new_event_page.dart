@@ -3,6 +3,7 @@ import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_she
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
+import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
 
@@ -47,7 +48,16 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
+  String _getWeekday(int weekday) {
+    const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
+    return weekdays[weekday - 1];
+  }
+
   String _formatDate(DateTime date) {
+    return '${date.month}月${date.day}日';
+  }
+
+  String _formatAllDayDate(DateTime date) {
     final today = DateTime.now();
     if (date.year == today.year && date.month == today.month && date.day == today.day) {
       return '今天';
@@ -293,36 +303,76 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
   Widget _buildTimeRangePicker(ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
 
-    return GestureDetector(
-      onTap: () => _showTimePickerDialog(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // 开始时间
-            _buildTimeButton(
-              time: _formatTime(_startTime),
-              label: '开始',
-              theme: theme,
-              isDark: isDark,
+    return SizedBox(
+      height: 80,
+      child: Row(
+        children: [
+          // 开始时间
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _showTimePickerDialog(isStartTime: true),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _formatTime(_startTime),
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w300,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatAllDayDate(_startDate),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(width: 20),
-            Icon(
+          ),
+
+          // 箭头
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Icon(
               Icons.arrow_forward,
-              color: isDark ? Colors.white54 : Colors.black54,
-              size: 20,
+              color: isDark ? Colors.grey[600]!.withValues(alpha: 0.4) : Colors.grey[400]!.withValues(alpha: 0.4),
+              size: 24,
             ),
-            const SizedBox(width: 20),
-            // 结束时间
-            _buildTimeButton(
-              time: _formatTime(_endTime),
-              label: '结束',
-              theme: theme,
-              isDark: isDark,
+          ),
+
+          // 结束时间
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _showTimePickerDialog(isStartTime: false),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _formatTime(_endTime),
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w300,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatDate(_endDate),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -330,57 +380,48 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
   Widget _buildAllDayDatePicker(ThemeData theme) {
     final isDark = theme.brightness == Brightness.dark;
 
-    return GestureDetector(
-      onTap: () => _showDatePickerDialog(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              _formatDate(_startDate),
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white : Colors.black87,
+    return SizedBox(
+      height: 80,
+      child: Row(
+        children: [
+          // 左侧占位，保持与时间区间选择器布局一致
+          const Expanded(
+            child: SizedBox(),
+          ),
+          // 中间显示内容，居中展示
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _showDatePickerDialog(),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _formatAllDayDate(_startDate),
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w300,
+                      color: isDark ? Colors.white : Colors.black87,
+                    ),
+                    softWrap: false,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '周${_getWeekday(_startDate.weekday)}  全天',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 12),
-            Icon(
-              Icons.keyboard_arrow_down,
-              color: isDark ? Colors.white54 : Colors.black54,
-            ),
-          ],
-        ),
+          ),
+          // 右侧占位，保持对称
+          const Expanded(
+            child: SizedBox(),
+          ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildTimeButton({
-    required String time,
-    required String label,
-    required ThemeData theme,
-    required bool isDark,
-  }) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: isDark ? Colors.white54 : Colors.black45,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          time,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w500,
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-      ],
     );
   }
 
@@ -433,23 +474,31 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
   }
 
   Widget _buildSwitch({required bool value, required ValueChanged<bool> onChanged}) {
-    return Switch(
+    return Toggle(
       value: value,
       onChanged: onChanged,
+      style: const ToggleStyle.mobile(),
+      activeBackgroundColor: Theme.of(context).colorScheme.primary,
+      padding: EdgeInsets.zero,
     );
   }
 
-  void _showTimePickerDialog() {
+  void _showTimePickerDialog({bool isStartTime = true}) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => _TimePickerDialog(
         initialStartTime: _startTime,
         initialEndTime: _endTime,
-        onSave: (startTime, endTime) {
+        initialStartDate: _startDate,
+        initialEndDate: _endDate,
+        isStartTime: isStartTime,
+        onSave: (startTime, endTime, startDate, endDate) {
           setState(() {
             _startTime = startTime;
             _endTime = endTime;
+            _startDate = startDate;
+            _endDate = endDate;
           });
         },
       ),
@@ -546,11 +595,17 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
 class _TimePickerDialog extends StatefulWidget {
   final TimeOfDay initialStartTime;
   final TimeOfDay initialEndTime;
-  final void Function(TimeOfDay start, TimeOfDay end) onSave;
+  final DateTime initialStartDate;
+  final DateTime initialEndDate;
+  final bool isStartTime;
+  final void Function(TimeOfDay start, TimeOfDay end, DateTime startDate, DateTime endDate) onSave;
 
   const _TimePickerDialog({
     required this.initialStartTime,
     required this.initialEndTime,
+    required this.initialStartDate,
+    required this.initialEndDate,
+    this.isStartTime = true,
     required this.onSave,
   });
 
@@ -561,50 +616,72 @@ class _TimePickerDialog extends StatefulWidget {
 class _TimePickerDialogState extends State<_TimePickerDialog> {
   late TimeOfDay _startTime;
   late TimeOfDay _endTime;
+  late DateTime _startDate;
+  late DateTime _endDate;
+  late bool _isStartTime;
 
   @override
   void initState() {
     super.initState();
     _startTime = widget.initialStartTime;
     _endTime = widget.initialEndTime;
+    _startDate = widget.initialStartDate;
+    _endDate = widget.initialEndDate;
+    _isStartTime = widget.isStartTime;
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('选择时间'),
+      title: Text(_isStartTime ? '开始时间' : '结束时间'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // 日期选择
           ListTile(
-            title: const Text('开始时间'),
+            title: const Text('日期'),
             trailing: Text(
-              '${_startTime.hour.toString().padLeft(2, '0')}:${_startTime.minute.toString().padLeft(2, '0')}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+              '${_isStartTime ? _startDate.month : _endDate.month}月${_isStartTime ? _startDate.day : _endDate.day}日',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
             onTap: () async {
-              final time = await showTimePicker(
+              final date = await showDatePicker(
                 context: context,
-                initialTime: _startTime,
+                initialDate: _isStartTime ? _startDate : _endDate,
+                firstDate: DateTime(2000),
+                lastDate: DateTime(2100),
               );
-              if (time != null) {
-                setState(() => _startTime = time);
+              if (date != null) {
+                setState(() {
+                  if (_isStartTime) {
+                    _startDate = date;
+                  } else {
+                    _endDate = date;
+                  }
+                });
               }
             },
           ),
+          // 时间选择
           ListTile(
-            title: const Text('结束时间'),
+            title: const Text('时间'),
             trailing: Text(
-              '${_endTime.hour.toString().padLeft(2, '0')}:${_endTime.minute.toString().padLeft(2, '0')}',
+              '${(_isStartTime ? _startTime : _endTime).hour.toString().padLeft(2, '0')}:${(_isStartTime ? _startTime : _endTime).minute.toString().padLeft(2, '0')}',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
             ),
             onTap: () async {
               final time = await showTimePicker(
                 context: context,
-                initialTime: _endTime,
+                initialTime: _isStartTime ? _startTime : _endTime,
               );
               if (time != null) {
-                setState(() => _endTime = time);
+                setState(() {
+                  if (_isStartTime) {
+                    _startTime = time;
+                  } else {
+                    _endTime = time;
+                  }
+                });
               }
             },
           ),
@@ -617,7 +694,7 @@ class _TimePickerDialogState extends State<_TimePickerDialog> {
         ),
         TextButton(
           onPressed: () {
-            widget.onSave(_startTime, _endTime);
+            widget.onSave(_startTime, _endTime, _startDate, _endDate);
             Navigator.pop(context);
           },
           child: const Text('保存'),
