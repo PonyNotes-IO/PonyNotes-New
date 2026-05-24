@@ -1,11 +1,16 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
+import 'package:appflowy/mobile/presentation/database/mobile_reminder_page.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
+import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
+import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
+import 'package:appflowy_backend/protobuf/flowy-user/date_time.pbenum.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class MobileNewEventPage extends StatefulWidget {
   final DateTime selectedDate;
@@ -522,18 +527,26 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
   }
 
   void _showReminderDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _ReminderDialog(
-        initialOption: _reminderOption,
-        onSave: (option) {
-          setState(() {
-            _reminderOption = option;
-          });
-        },
+    final timeFormat =
+        context.read<AppearanceSettingsCubit?>()?.state.timeFormat ==
+                UserTimeFormatPB.TwelveHour
+            ? TimeFormatPB.TwelveHour
+            : TimeFormatPB.TwentyFourHour;
+    Navigator.of(context).push<ReminderOption>(
+      MaterialPageRoute(
+        builder: (context) => MobileReminderPage(
+          initialOption: _reminderOption,
+          isAllDay: _isAllDay,
+          timeFormat: timeFormat,
+        ),
       ),
-    );
+    ).then((result) {
+      if (result != null) {
+        setState(() {
+          _reminderOption = result;
+        });
+      }
+    });
   }
 
   void _showRepeatDialog() {
@@ -556,36 +569,131 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
 
   void _showDescriptionDialog() {
     final controller = TextEditingController(text: _description);
+    final theme = Theme.of(context);
 
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('添加说明'),
-        content: TextField(
-          controller: controller,
-          maxLines: 4,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '请输入日程说明...',
-            border: OutlineInputBorder(),
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 标题栏
+              Row(
+                children: [
+                  Icon(
+                    Icons.edit_note,
+                    color: theme.colorScheme.primary,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '添加说明',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: theme.textTheme.titleLarge?.color,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              // 输入框
+              TextField(
+                controller: controller,
+                maxLines: 4,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
+                decoration: InputDecoration(
+                  hintText: '请输入日程说明...',
+                  hintStyle: TextStyle(
+                    color: theme.hintColor,
+                    fontSize: 16,
+                  ),
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: theme.dividerColor.withValues(alpha: 0.5),
+                      width: 1,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: theme.colorScheme.primary,
+                      width: 2,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.all(16),
+                ),
+                autofocus: true,
+              ),
+              const SizedBox(height: 24),
+              // 按钮栏
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      '取消',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _description = controller.text;
+                      });
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Text(
+                      '保存',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _description = controller.text;
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('保存'),
-          ),
-        ],
       ),
     );
   }
@@ -760,65 +868,6 @@ class _DatePickerDialogState extends State<_DatePickerDialog> {
   }
 }
 
-// 提醒选择对话框
-class _ReminderDialog extends StatefulWidget {
-  final ReminderOption initialOption;
-  final void Function(ReminderOption option) onSave;
-
-  const _ReminderDialog({
-    required this.initialOption,
-    required this.onSave,
-  });
-
-  @override
-  State<_ReminderDialog> createState() => _ReminderDialogState();
-}
-
-class _ReminderDialogState extends State<_ReminderDialog> {
-  late ReminderOption _option;
-
-  @override
-  void initState() {
-    super.initState();
-    _option = widget.initialOption;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('选择提醒'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: ReminderOption.values.map((option) {
-          return RadioListTile<ReminderOption>(
-            title: Text(option == ReminderOption.none ? '无' : option.name),
-            value: option,
-            groupValue: _option,
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _option = value);
-              }
-            },
-          );
-        }).toList(),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        TextButton(
-          onPressed: () {
-            widget.onSave(_option);
-            Navigator.pop(context);
-          },
-          child: const Text('保存'),
-        ),
-      ],
-    );
-  }
-}
-
 // 重复选择对话框
 class _RepeatDialog extends StatefulWidget {
   final int initialType;
@@ -840,13 +889,21 @@ class _RepeatDialogState extends State<_RepeatDialog> {
   String? _customSummary;
 
   final _repeatOptions = [
-    {'type': 0, 'label': '无'},
-    {'type': 1, 'label': '每天'},
-    {'type': 2, 'label': '每周'},
-    {'type': 3, 'label': '每月'},
-    {'type': 4, 'label': '每年'},
-    {'type': 5, 'label': '工作日'},
+    const MapEntry(0, '无'),
+    const MapEntry(1, '每天'),
+    const MapEntry(2, '每周'),
+    const MapEntry(3, '每年'),
+    const MapEntry(4, '法定工作日'),
   ];
+
+  String _getCustomSummaryLabel() {
+    if (_customSummary == null || _customSummary!.isEmpty) return '';
+    try {
+      return _customSummary!;
+    } catch (_) {
+      return '';
+    }
+  }
 
   @override
   void initState() {
@@ -857,36 +914,109 @@ class _RepeatDialogState extends State<_RepeatDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('选择重复'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: _repeatOptions.map((option) {
-          return RadioListTile<int>(
-            title: Text(option['label'] as String),
-            value: option['type'] as int,
-            groupValue: _type,
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _type = value);
-              }
-            },
-          );
-        }).toList(),
+    final theme = Theme.of(context);
+
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 标题栏
+            Row(
+              children: [
+                Icon(
+                  Icons.repeat,
+                  color: theme.colorScheme.primary,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '任务重复',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: theme.textTheme.titleLarge?.color,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    widget.onSave(_type, _customSummary);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    '保存',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // 选项列表
+            ..._repeatOptions.map((entry) {
+              final isSelected = _type == entry.key;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      setState(() => _type = entry.key);
+                    },
+                    child: Container(
+                      height: 48,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          Radio<int>(
+                            value: entry.key,
+                            groupValue: _type,
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() => _type = value);
+                              }
+                            },
+                            activeColor: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              entry.value,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
         ),
-        TextButton(
-          onPressed: () {
-            widget.onSave(_type, _customSummary);
-            Navigator.pop(context);
-          },
-          child: const Text('保存'),
-        ),
-      ],
+      ),
     );
   }
 }
