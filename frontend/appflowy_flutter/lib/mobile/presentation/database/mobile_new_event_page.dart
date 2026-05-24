@@ -2,15 +2,11 @@ import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_reminder_page.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
-import 'package:appflowy/workspace/application/settings/appearance/appearance_cubit.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
-import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
-import 'package:appflowy_backend/protobuf/flowy-user/date_time.pbenum.dart';
 import 'package:appflowy_ui/appflowy_ui.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 class MobileNewEventPage extends StatefulWidget {
   final DateTime selectedDate;
@@ -527,17 +523,10 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
   }
 
   void _showReminderDialog() {
-    final timeFormat =
-        context.read<AppearanceSettingsCubit?>()?.state.timeFormat ==
-                UserTimeFormatPB.TwelveHour
-            ? TimeFormatPB.TwelveHour
-            : TimeFormatPB.TwentyFourHour;
     Navigator.of(context).push<ReminderOption>(
       MaterialPageRoute(
         builder: (context) => MobileReminderPage(
           initialOption: _reminderOption,
-          isAllDay: _isAllDay,
-          timeFormat: timeFormat,
         ),
       ),
     ).then((result) {
