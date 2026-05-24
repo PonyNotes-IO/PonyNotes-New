@@ -476,7 +476,7 @@ class _SidebarState extends State<_Sidebar> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // top menu (hide on Windows)
-            !Platform.isWindows
+            Platform.isMacOS
                 ? Padding(
                     padding: menuHorizontalInset,
                     child: SidebarTopMenu(

@@ -41,6 +41,7 @@ import 'package:flowy_infra/size.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/container.dart';
 import 'package:flowy_infra_ui/style_widget/hover.dart';
+import 'package:flowy_infra/platform_extension.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:sized_context/sized_context.dart';
@@ -86,6 +87,8 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isTablet = PlatformInfo.isTablet;
+    
     return FutureBuilder<List<FlowyResult>>(
       future: _initFuture,
       builder: (context, snapshots) {
@@ -152,77 +155,81 @@ class _DesktopHomeScreenState extends State<DesktopHomeScreen> {
                   );
                 },
               ),
-              body: BlocListener<HomeBloc, HomeState>(
-                listenWhen: (previous, current) =>
-                    previous.latestView != current.latestView,
-                listener: (context, state) {
-                  final view = state.latestView;
-                  if (view != null) {
-                    final currentPageManager =
-                        context.read<TabsBloc>().state.currentPageManager;
+              body: SafeArea(
+                top: isTablet,
+                bottom: isTablet,
+                child: BlocListener<HomeBloc, HomeState>(
+                  listenWhen: (previous, current) =>
+                      previous.latestView != current.latestView,
+                  listener: (context, state) {
+                    final view = state.latestView;
+                    if (view != null) {
+                      final currentPageManager =
+                          context.read<TabsBloc>().state.currentPageManager;
 
-                    if (currentPageManager.plugin.pluginType ==
-                        PluginType.blank) {
-                      if (view.id.isEmpty) {
-                        Log.error(
-                          'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
-                        );
-                      } else {
-                        getIt<TabsBloc>().openPlugin(view);
-                      }
-                    }
-
-                    _switchToSpace(view);
-                  }
-                },
-                child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
-                  buildWhen: (previous, current) => previous != current,
-                  builder: (context, state) => BlocProvider(
-                    create: (_) => UserWorkspaceBloc(
-                      userProfile: userProfile,
-                      repository: RustWorkspaceRepositoryImpl(
-                        userId: userProfile.id,
-                      ),
-                    )
-                      ..add(UserWorkspaceEvent.initialize())
-                      ..add(UserWorkspaceEvent.fetchWorkspaces()),
-                    child: BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
-                      listenWhen: (previous, current) =>
-                          previous.currentWorkspace !=
-                              current.currentWorkspace ||
-                          previous.workspaces.length !=
-                              current.workspaces.length ||
-                          _workspacesChanged(
-                            previous.workspaces,
-                            current.workspaces,
-                          ) ||
-                          (previous.actionResult?.actionType ==
-                                  WorkspaceActionType.create &&
-                              current.actionResult?.actionType ==
-                                  WorkspaceActionType.create &&
-                              previous.actionResult?.isLoading !=
-                                  current.actionResult?.isLoading),
-                      listener: (context, state) {
-                        if (!context.mounted) {
-                          return;
+                      if (currentPageManager.plugin.pluginType ==
+                          PluginType.blank) {
+                        if (view.id.isEmpty) {
+                          Log.error(
+                            'DesktopHomeScreen: latestView.id is empty, skip opening plugin',
+                          );
+                        } else {
+                          getIt<TabsBloc>().openPlugin(view);
                         }
+                      }
 
-                        CommandPalette.maybeOf(context)?.updateBlocs(
-                          workspaceBloc: context.read<UserWorkspaceBloc?>(),
-                          spaceBloc: context.read<SpaceBloc?>(),
-                        );
+                      _switchToSpace(view);
+                    }
+                  },
+                  child: BlocBuilder<HomeSettingBloc, HomeSettingState>(
+                    buildWhen: (previous, current) => previous != current,
+                    builder: (context, state) => BlocProvider(
+                      create: (_) => UserWorkspaceBloc(
+                        userProfile: userProfile,
+                        repository: RustWorkspaceRepositoryImpl(
+                          userId: userProfile.id,
+                        ),
+                      )
+                        ..add(UserWorkspaceEvent.initialize())
+                        ..add(UserWorkspaceEvent.fetchWorkspaces()),
+                      child: BlocListener<UserWorkspaceBloc, UserWorkspaceState>(
+                        listenWhen: (previous, current) =>
+                            previous.currentWorkspace !=
+                                current.currentWorkspace ||
+                            previous.workspaces.length !=
+                                current.workspaces.length ||
+                            _workspacesChanged(
+                              previous.workspaces,
+                              current.workspaces,
+                            ) ||
+                            (previous.actionResult?.actionType ==
+                                        WorkspaceActionType.create &&
+                                    current.actionResult?.actionType ==
+                                        WorkspaceActionType.create &&
+                                    previous.actionResult?.isLoading !=
+                                        current.actionResult?.isLoading),
+                        listener: (context, state) {
+                          if (!context.mounted) {
+                            return;
+                          }
 
-                        _checkAndHandleWorkspaceRemoved(context, state);
-                      },
-                      child: _WorkspaceLifecycleRefresher(
-                        child: HomeHotKeys(
-                          userProfile: userProfile,
-                          child: FlowyContainer(
-                            Theme.of(context).colorScheme.surface,
-                            child: _buildBody(
-                              context,
-                              userProfile,
-                              workspaceLatest,
+                          CommandPalette.maybeOf(context)?.updateBlocs(
+                            workspaceBloc: context.read<UserWorkspaceBloc?>(),
+                            spaceBloc: context.read<SpaceBloc?>(),
+                          );
+
+                          _checkAndHandleWorkspaceRemoved(context, state);
+                        },
+                        child: _WorkspaceLifecycleRefresher(
+                          child: HomeHotKeys(
+                            userProfile: userProfile,
+                            child: FlowyContainer(
+                              Theme.of(context).colorScheme.surface,
+                              child: _buildBody(
+                                context,
+                                userProfile,
+                                workspaceLatest,
+                              ),
                             ),
                           ),
                         ),
