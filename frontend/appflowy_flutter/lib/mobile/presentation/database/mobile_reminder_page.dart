@@ -238,6 +238,92 @@ class _MobileReminderPageState extends State<MobileReminderPage> {
     );
   }
 
+  Widget _buildOptionList(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.dividerColor.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: _options.map((option) {
+          return _buildOptionItem(option, theme);
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildOptionItem(ReminderOption option, ThemeData theme) {
+    final isSelected = _selectedOption == option;
+
+    return GestureDetector(
+      onTap: () {
+        if (option == ReminderOption.custom) {
+          setState(() {
+            _selectedOption = option;
+          });
+          _showCustomTimePicker();
+        } else {
+          setState(() {
+            _selectedOption = option;
+          });
+        }
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            // 圆形单选指示器
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : theme.dividerColor,
+                  width: isSelected ? 2 : 1.5,
+                ),
+              ),
+              child: isSelected
+                  ? Center(
+                      child: Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 14),
+            // 选项文字
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _getOptionLabel(option),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: theme.textTheme.bodyLarge?.color,
+                    fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -253,58 +339,8 @@ class _MobileReminderPageState extends State<MobileReminderPage> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: theme.dividerColor.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: _options.map((option) {
-                    final isSelected = _selectedOption == option;
-
-                    return InkWell(
-                      onTap: () {
-                        if (option == ReminderOption.custom) {
-                          setState(() {
-                            _selectedOption = option;
-                          });
-                          _showCustomTimePicker();
-                        } else {
-                          setState(() {
-                            _selectedOption = option;
-                          });
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                _getOptionLabel(option),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: theme.textTheme.bodyLarge?.color,
-                                ),
-                              ),
-                            ),
-                            if (isSelected)
-                              Icon(
-                                Icons.check,
-                                color: theme.colorScheme.primary,
-                                size: 24,
-                              ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
+              // 选项列表
+              _buildOptionList(theme),
               const Spacer(),
               const SizedBox(height: 20),
               SizedBox(
