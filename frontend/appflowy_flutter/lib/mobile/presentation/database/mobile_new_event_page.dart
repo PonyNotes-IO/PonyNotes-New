@@ -766,58 +766,58 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
 
   void _showDescriptionDialog() {
     final controller = TextEditingController(text: _description);
-    final theme = Theme.of(context);
+    final theme = AppFlowyTheme.of(context);
+    final materialTheme = Theme.of(context);
 
     showDialog(
       context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 标题栏
-              Row(
+      barrierColor: theme.surfaceColorScheme.overlay,
+      builder: (ctx) => AFModal(
+        constraints: const BoxConstraints(maxWidth: 340),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AFModalHeader(
+              leading: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.edit_note,
-                    color: theme.colorScheme.primary,
-                    size: 24,
+                  FlowySvg(
+                    FlowySvgs.icon_edit_m,
+                    size: const Size.square(20),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      '添加说明',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: theme.textTheme.titleLarge?.color,
-                      ),
-                    ),
-                  ),
+                  const SizedBox(width: 8),
+                  const Text('添加说明'),
                 ],
               ),
-              const SizedBox(height: 20),
-              // 输入框
-              TextField(
+              trailing: [
+                AFGhostButton.normal(
+                  onTap: () => Navigator.of(ctx).pop(),
+                  padding: EdgeInsets.all(theme.spacing.xs),
+                  builder: (context, isHovering, disabled) {
+                    return FlowySvg(
+                      FlowySvgs.toast_close_s,
+                      size: const Size.square(20),
+                    );
+                  },
+                ),
+              ],
+            ),
+            AFModalBody(
+              child: TextField(
                 controller: controller,
                 maxLines: 4,
                 style: TextStyle(
                   fontSize: 16,
-                  color: theme.textTheme.bodyMedium?.color,
+                  color: theme.textColorScheme.primary,
                 ),
                 decoration: InputDecoration(
                   hintText: '请输入日程说明...',
                   hintStyle: TextStyle(
-                    color: theme.hintColor,
+                    color: materialTheme.hintColor,
                     fontSize: 16,
                   ),
                   filled: true,
-                  fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                  fillColor: materialTheme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -825,14 +825,14 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
-                      color: theme.dividerColor.withValues(alpha: 0.5),
+                      color: materialTheme.dividerColor.withValues(alpha: 0.5),
                       width: 1,
                     ),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
-                      color: theme.colorScheme.primary,
+                      color: materialTheme.colorScheme.primary,
                       width: 2,
                     ),
                   ),
@@ -840,56 +840,26 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
                 ),
                 autofocus: true,
               ),
-              const SizedBox(height: 24),
-              // 按钮栏
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      '取消',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _description = controller.text;
-                      });
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: Text(
-                      '保存',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            ),
+            AFModalFooter(
+              trailing: [
+                AFOutlinedTextButton.normal(
+                  text: '取消',
+                  onTap: () => Navigator.of(ctx).pop(),
+                ),
+                const SizedBox(width: 8),
+                AFFilledTextButton.primary(
+                  text: '保存',
+                  onTap: () {
+                    setState(() {
+                      _description = controller.text;
+                    });
+                    Navigator.of(ctx).pop();
+                  },
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
