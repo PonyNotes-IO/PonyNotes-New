@@ -1,14 +1,13 @@
 import 'dart:convert';
 import 'package:appflowy/util/int64_extension.dart';
+import 'package:appflowy/mobile/presentation/database/mobile_repeat_page.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/workspace/presentation/widgets/toggle/toggle.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
-import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/repeat_selector.dart';
 import 'widgets/reminder_selection_dialog.dart';
 import 'package:appflowy_backend/protobuf/flowy-database2/protobuf.dart';
 import 'package:flowy_infra_ui/flowy_infra_ui.dart';
@@ -850,7 +849,7 @@ class _EditEventPageState extends State<EditEventPage> {
                       ),
                     ),
                     onTap: () {
-                      _showRepeatDialog();
+                      _showRepeatPage();
                     },
                     horizontalTitleGap: 8.0,
                     minLeadingWidth: 0,
@@ -1109,34 +1108,35 @@ class _EditEventPageState extends State<EditEventPage> {
     );
   }
 
-  void _showRepeatDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => RepeatSelectionDialog(
-        currentType: _repeatType,
-        currentCustomSummary: _repeatCustomSummary,
-        onSave: ({required int type, String? customSummary}) {
-          setState(() {
-            if (type == 0) {
-              _repeatType = 0;
-              _repeatLabel = '任务重复';
-              _repeatCustomSummary = null;
-            } else if (type == 99) {
-              _repeatType = 99;
-              _repeatCustomSummary = customSummary;
-              // 从 JSON 中提取显示文本
-              _repeatLabel = _extractSummaryFromJson(customSummary ?? '自定义');
-            } else {
-              _repeatType = type;
-              _repeatCustomSummary = null;
-              _repeatLabel = _repeatTypeName(type);
-            }
-          });
-          _notifyUnsavedConfig();
-        },
+  void _showRepeatPage() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MobileRepeatPage(
+          initialType: _repeatType,
+          initialCustomSummary: _repeatCustomSummary,
+        ),
       ),
     );
+    if (result != null) {
+      setState(() {
+        final type = result['type'] as int;
+        if (type == 0) {
+          _repeatType = 0;
+          _repeatLabel = '任务重复';
+          _repeatCustomSummary = null;
+        } else if (type == 99) {
+          _repeatType = 99;
+          _repeatCustomSummary = result['customSummary'] as String?;
+          _repeatLabel = _extractSummaryFromJson(_repeatCustomSummary ?? '');
+        } else {
+          _repeatType = type;
+          _repeatCustomSummary = null;
+          _repeatLabel = _repeatTypeName(type);
+        }
+      });
+      _notifyUnsavedConfig();
+    }
   }
 
   String _repeatTypeName(int t) {

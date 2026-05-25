@@ -1,6 +1,7 @@
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_reminder_page.dart';
+import 'package:appflowy/mobile/presentation/database/mobile_repeat_page.dart';
 import 'package:appflowy/plugins/database/calendar/models/schedule_model.dart';
 import 'package:appflowy/workspace/presentation/widgets/date_picker/widgets/reminder_selector.dart';
 import 'package:appflowy/workspace/presentation/widgets/dialogs.dart';
@@ -248,7 +249,7 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
                           icon: FlowySvgs.icon_repeat_calender_m,
                           title: _getRepeatLabel(),
                           value: '',
-                          onTap: () => _showRepeatDialog(),
+                          onTap: () => _showRepeatPage(),
                         ),
 
                         // 添加说明选项
@@ -538,22 +539,23 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
     });
   }
 
-  void _showRepeatDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _RepeatDialog(
-        initialType: _repeatType,
-        initialCustomSummary: _repeatCustomSummary,
-        onSave: (type, customSummary) {
-          setState(() {
-            _repeatType = type;
-            _repeatCustomSummary = customSummary;
-            _repeatLabel = _getRepeatLabel();
-          });
-        },
+  void _showRepeatPage() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MobileRepeatPage(
+          initialType: _repeatType,
+          initialCustomSummary: _repeatCustomSummary,
+        ),
       ),
     );
+    if (result != null) {
+      setState(() {
+        _repeatType = result['type'] as int;
+        _repeatCustomSummary = result['customSummary'] as String?;
+        _repeatLabel = _getRepeatLabel();
+      });
+    }
   }
 
   void _showDescriptionDialog() {
