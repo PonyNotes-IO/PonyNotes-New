@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:appflowy/generated/flowy_svgs.g.dart';
 import 'package:appflowy/mobile/presentation/bottom_sheet/show_mobile_bottom_sheet.dart';
 import 'package:appflowy/mobile/presentation/database/mobile_reminder_page.dart';
@@ -74,18 +76,36 @@ class _MobileNewEventPageState extends State<MobileNewEventPage> {
     return _reminderOption.label;
   }
 
+  String _extractSummaryFromJson(String? jsonStr) {
+    if (jsonStr == null || jsonStr.isEmpty) {
+      return '自定义';
+    }
+    try {
+      final data = jsonDecode(jsonStr);
+      if (data is Map && data.containsKey('summary')) {
+        final summary = data['summary'];
+        if (summary is String && summary.isNotEmpty) {
+          return summary;
+        }
+      }
+      return '自定义';
+    } catch (e) {
+      return jsonStr;
+    }
+  }
+
   String _getRepeatLabel() {
     if (_repeatType == 0) return '任务重复';
-    if (_repeatType == 99) return _repeatCustomSummary ?? '自定义';
+    if (_repeatType == 99) return _extractSummaryFromJson(_repeatCustomSummary);
     switch (_repeatType) {
       case 1:
         return '每天';
       case 2:
         return '每周';
       case 3:
-        return '每月';
-      case 4:
         return '每年';
+      case 4:
+        return '法定工作日';
       case 5:
         return '工作日';
       default:

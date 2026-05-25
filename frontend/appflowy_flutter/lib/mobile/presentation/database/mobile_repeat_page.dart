@@ -329,11 +329,11 @@ class _CustomRepeatEditorState extends State<_CustomRepeatEditor> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
+      child: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -386,12 +386,12 @@ class _CustomRepeatEditorState extends State<_CustomRepeatEditor> {
               ),
             ),
             const Divider(height: 1),
-            // 内容区域
-            SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 16),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 16),
                   // 周期预览
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -569,6 +569,7 @@ class _CustomRepeatEditorState extends State<_CustomRepeatEditor> {
                   const SizedBox(height: 20),
                 ],
               ),
+            ),
             ),
           ],
         ),
