@@ -38,13 +38,6 @@ class _MobileReminderPageState extends State<MobileReminderPage> {
   }
 
   String _getOptionLabel(ReminderOption option) {
-    if (option == ReminderOption.custom) {
-      // 只有在用户确认过自定义时间后才显示具体时间
-      if (_hasCustomTimeSet) {
-        return option.label; // 显示"提前X天X小时X分钟"
-      }
-      return '自定义'; // 未设置时显示"自定义"
-    }
     return option.label;
   }
 
@@ -258,10 +251,11 @@ class _MobileReminderPageState extends State<MobileReminderPage> {
 
   Widget _buildOptionItem(ReminderOption option, ThemeData theme) {
     final isSelected = _selectedOption == option;
+    final isCustomOption = option == ReminderOption.custom;
 
     return GestureDetector(
       onTap: () {
-        if (option == ReminderOption.custom) {
+        if (isCustomOption) {
           setState(() {
             _selectedOption = option;
           });
@@ -276,11 +270,13 @@ class _MobileReminderPageState extends State<MobileReminderPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 圆形单选指示器
             Container(
               width: 22,
               height: 22,
+              margin: const EdgeInsets.only(top: 2),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
@@ -306,16 +302,42 @@ class _MobileReminderPageState extends State<MobileReminderPage> {
             const SizedBox(width: 14),
             // 选项文字
             Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _getOptionLabel(option),
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: theme.textTheme.bodyLarge?.color,
-                    fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          isCustomOption ? '自定义' : _getOptionLabel(option),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: theme.textTheme.bodyLarge?.color,
+                            fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      if (isCustomOption)
+                        Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 20,
+                          color: theme.textTheme.bodySmall?.color,
+                        ),
+                    ],
                   ),
-                ),
+                  if (isCustomOption && _hasCustomTimeSet)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        option.label,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: theme.textTheme.bodyMedium?.color,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
