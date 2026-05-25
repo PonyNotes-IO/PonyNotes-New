@@ -43,60 +43,85 @@ class _MobileReminderPageState extends State<MobileReminderPage> {
         title: '设置提醒',
         showBackButton: true,
         onBackPressed: () => Navigator.pop(context),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: TextButton(
-              onPressed: () {
-                Navigator.pop(context, _selectedOption);
-              },
-              child: Text(
-                '保存',
-                style: TextStyle(
-                  color: theme.colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          children: _options.map((option) {
-            final isSelected = _selectedOption == option;
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: theme.dividerColor.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: _options.map((option) {
+                    final isSelected = _selectedOption == option;
 
-            return InkWell(
-              onTap: () {
-                setState(() {
-                  _selectedOption = option;
-                });
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        option.label,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: theme.textTheme.bodyLarge?.color,
+                    return InkWell(
+                      onTap: () {
+                        setState(() {
+                          _selectedOption = option;
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                option.label,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: theme.textTheme.bodyLarge?.color,
+                                ),
+                              ),
+                            ),
+                            if (isSelected)
+                              Icon(
+                                Icons.check,
+                                color: theme.colorScheme.primary,
+                                size: 24,
+                              ),
+                          ],
                         ),
                       ),
-                    ),
-                    if (isSelected)
-                      Icon(
-                        Icons.check,
-                        color: theme.colorScheme.primary,
-                        size: 24,
-                      ),
-                  ],
+                    );
+                  }).toList(),
                 ),
               ),
-            );
-          }).toList(),
+              const Spacer(),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context, _selectedOption);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    '保存',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
